@@ -339,7 +339,8 @@
   color: var(--color-accent);
   font-size: 0.7rem;
 }
-.list-resume-link[disabled] {
+.list-resume-link[disabled],
+.list-resume-link.is-disabled {
   pointer-events: none;
   color: var(--color-muted);
 }
@@ -4284,10 +4285,9 @@
 /* Shared API/mock featured presentation. The data source changes the content, never the layout. */
 .featured-market-hero {
   display: grid;
-  width: min(100%, 42.5rem);
-  max-width: 42.5rem;
-  justify-self: start;
-  justify-items: stretch;
+  width: 100%;
+  max-width: 48rem;
+  justify-items: center;
   gap: 1.25rem;
 }
 .featured-showcase,
@@ -4327,13 +4327,11 @@
 .featured-showcase__surface {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
   width: 100%;
   height: 100%;
   min-height: 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  place-items: center;
   overflow: hidden;
   border: 1px solid rgba(151, 255, 226, 0.16);
   border-radius: 10px;
@@ -4383,14 +4381,11 @@
   z-index: 2;
   display: block;
   width: auto;
-  height: auto;
-  max-width: 72%;
-  max-height: 84%;
-  border-radius: 3px;
+  height: 100%;
+  max-width: 82%;
+  max-height: 95%;
   object-fit: contain;
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.5);
   filter: saturate(1.04) contrast(1.02);
-  transform: translateY(-0.2rem);
 }
 .featured-showcase__pedestal {
   position: absolute;
@@ -4452,39 +4447,35 @@
   min-height: 14.5rem;
   max-width: 28.75rem;
   flex-direction: column;
-  padding: 0.875rem;
-  overflow: hidden;
+  padding: 1.25rem;
 }
 .featured-static-panel h2 {
-  margin-top: 0.12rem;
+  margin-top: 0.28rem;
   font-family: var(--font-display);
-  font-size: 1rem;
-  line-height: 1.15;
+  font-size: 1.35rem;
   font-weight: 750;
   letter-spacing: -0.045em;
 }
 .featured-static-panel__subtitle {
-  margin-top: 0.04rem;
+  margin-top: 0.08rem;
   color: var(--color-subtle);
-  font-size: 0.625rem;
-  line-height: 1.25;
+  font-size: 0.78rem;
 }
 .featured-static-panel__price {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.4rem;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
 }
 .featured-static-panel__price strong {
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  line-height: 1;
+  font-size: 1.6rem;
   letter-spacing: -0.05em;
 }
 .featured-static-panel__price span {
   color: var(--color-accent);
-  font-size: 0.625rem;
+  font-size: 0.76rem;
   font-weight: 750;
 }
 .featured-static-panel__price small {
@@ -4494,9 +4485,9 @@
 }
 .featured-static-panel__chart {
   position: relative;
-  flex: 0 0 3.85rem;
-  height: 3.85rem;
-  margin-top: 0.45rem;
+  flex: 0 0 5.6rem;
+  height: 5.6rem;
+  margin-top: 0.65rem;
   overflow: hidden;
   border-top: 1px solid rgba(137, 167, 180, 0.1);
   border-bottom: 1px solid rgba(137, 167, 180, 0.1);
@@ -4516,33 +4507,33 @@
   position: absolute;
   right: 0.35rem;
   color: var(--color-muted);
-  font-size: 0.46rem;
+  font-size: 0.58rem;
   font-weight: 650;
 }
 .featured-static-panel__price-label--high {
-  top: 0.3rem;
+  top: 0.55rem;
 }
 .featured-static-panel__price-label--middle {
-  top: 1.55rem;
+  top: 2.3rem;
 }
 .featured-static-panel__price-label--low {
-  bottom: 0.3rem;
+  bottom: 0.55rem;
 }
 .featured-static-panel__ranges {
   display: flex;
   flex: none;
   align-items: center;
   justify-content: space-between;
-  gap: 0.22rem;
-  margin-top: 0.2rem;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
   color: var(--color-muted);
-  font-size: 0.46rem;
+  font-size: 0.56rem;
   font-weight: 700;
 }
 .featured-static-panel__ranges span {
   display: grid;
-  min-width: 1.3rem;
-  min-height: 0.9rem;
+  min-width: 1.65rem;
+  min-height: 1.12rem;
   place-items: center;
   border-radius: 999px;
 }
@@ -4554,26 +4545,26 @@
 .featured-static-panel__stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.7rem;
   margin-top: auto;
-  padding-top: 0.35rem;
+  padding-top: 0.65rem;
 }
 .featured-static-panel__stats div {
   min-width: 0;
 }
 .featured-static-panel__stats dt {
   color: var(--color-muted);
-  font-size: 0.43rem;
+  font-size: 0.58rem;
   font-weight: 650;
   letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 .featured-static-panel__stats dd {
-  margin: 0.08rem 0 0;
+  margin: 0.22rem 0 0;
   color: var(--color-foreground);
-  font-size: 0.58rem;
+  font-size: 0.73rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.3;
 }
 .hero-copy__headline span {
   display: block;
@@ -4738,9 +4729,9 @@
 }
 @media (min-width: 768px) {
   .featured-market-hero {
-    grid-template-columns: 14.5rem minmax(0, 26.75rem);
+    grid-template-columns: minmax(13rem, 14.5rem) minmax(0, 1fr);
     align-items: stretch;
-    gap: 1.25rem;
+    gap: 1.75rem;
   }
   .featured-showcase,
   .featured-static-panel {
@@ -4757,7 +4748,7 @@
     gap: 1.75rem;
   }
   .featured-market-hero {
-    max-width: 42.5rem;
+    max-width: 48rem;
   }
 }
 @media (min-width: 1800px) {
@@ -4771,9 +4762,9 @@
     gap: 2rem;
   }
   .featured-market-hero {
-    max-width: 42.5rem;
-    grid-template-columns: 14.5rem minmax(0, 26.75rem);
-    gap: 1.25rem;
+    max-width: 60rem;
+    grid-template-columns: 17.5rem minmax(0, 1fr);
+    gap: 2rem;
   }
 }
 
@@ -17529,36 +17520,36 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 }
 
 .portfolio-kpi {
-  position: relative;
-  display: block;
-  min-height: 7.5rem;
-  padding: 1.1rem 4.55rem 1.05rem 1.1rem;
+  display: flex;
+  min-height: 6.65rem;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem 1.05rem;
 }
 
 .portfolio-kpi__icon {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  display: flex;
+  position: static;
+  display: grid;
+  flex: 0 0 auto;
   box-sizing: border-box;
-  width: 2.5rem;
-  height: 2.5rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(49, 213, 170, 0.2);
-  border-radius: 0.62rem;
-  background: linear-gradient(145deg, rgba(30, 92, 76, 0.38), rgba(12, 29, 30, 0.55));
-  color: #39d9ad;
+  width: 2.3rem;
+  height: 2.3rem;
+  place-items: center;
+  border: 1px solid rgba(46, 216, 165, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(17, 142, 110, 0.14);
+  color: #2ce0aa;
 }
 
 .portfolio-kpi__icon svg {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1rem;
+  height: 1rem;
   stroke-width: 1.75;
 }
 
 .portfolio-kpi__content {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
   padding: 0 !important;
   align-content: start;
@@ -17726,8 +17717,8 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   }
 
   .portfolio-kpi {
-    min-height: 7.3rem;
-    padding-right: 4.35rem;
+    min-height: 6.65rem;
+    padding: 1rem 1.05rem;
   }
 
   .portfolio-empty-state--allocation {

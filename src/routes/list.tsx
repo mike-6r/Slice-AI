@@ -293,17 +293,20 @@ export function SubmissionPage() {
                     ? "Ready to save as a draft."
                     : "Add a title and category to save your draft."}
                 </p>
-                <Link
-                  to="/submissions/$id"
-                  params={{ id: drafts.data?.items[0]?.id ?? "" }}
-                  disabled={!drafts.data?.items[0]}
-                  className="list-resume-link"
-                >
-                  {drafts.data?.items[0]
-                    ? `Resume: ${submissionName(drafts.data.items[0].declaredMetadata)}`
-                    : SUBMISSION_EMPTY.drafts}
-                  <ChevronRight aria-hidden="true" />
-                </Link>
+                {drafts.data?.items[0] ? (
+                  <Link
+                    to="/submissions/$id"
+                    params={{ id: drafts.data.items[0].id }}
+                    className="list-resume-link"
+                  >
+                    {`Resume: ${submissionName(drafts.data.items[0].declaredMetadata)}`}
+                    <ChevronRight aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <p className="list-resume-link is-disabled" aria-disabled="true">
+                    {SUBMISSION_EMPTY.drafts}
+                  </p>
+                )}
               </Panel>
             </div>
             <aside className="list-preview-stack">

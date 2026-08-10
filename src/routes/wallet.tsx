@@ -772,9 +772,13 @@ function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPa
 function PlaidLinkControl({ refreshWallet }: { refreshWallet: () => void }) {
   const services = useAppServices();
   const [token, setToken] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<unknown>(null);
   const tokenRequest = useMutation({
     mutationFn: services.providers.createBankLinkToken,
-    onSuccess: (result) => setToken(result.linkToken),
+    onSuccess: (result) => {
+      setLinkError(null);
+      setToken(result.linkToken);
+    },
   });
   const exchange = useMutation({
     mutationFn: services.providers.exchangeBankLinkPublicToken,
@@ -784,35 +788,78 @@ function PlaidLinkControl({ refreshWallet }: { refreshWallet: () => void }) {
       toast.success(result.replayed ? "Bank connection already saved." : "Bank account connected.");
     },
   });
+  const currentError = tokenRequest.error ?? exchange.error ?? linkError;
+  return (
+    <div className="wallet-bank-connect">
+      {token ? (
+        <PlaidLinkSession
+          token={token}
+          exchange={(publicToken) => exchange.mutate(publicToken)}
+          close={() => setToken(null)}
+          reportError={setLinkError}
+          busy={exchange.isPending}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={tokenRequest.isPending || exchange.isPending}
+          onClick={() => {
+            setLinkError(null);
+            tokenRequest.mutate();
+          }}
+        >
+          <Landmark aria-hidden="true" />
+          {tokenRequest.isPending
+            ? "Preparing secure connection…"
+            : exchange.isPending
+              ? "Saving connection…"
+              : "Connect bank"}
+          <ArrowRight aria-hidden="true" />
+        </button>
+      )}
+      {currentError ? <InlineError error={currentError} /> : null}
+    </div>
+  );
+}
+
+/** Load Plaid Link only after a user has explicitly requested a connection. */
+function PlaidLinkSession({
+  token,
+  exchange,
+  close,
+  reportError,
+  busy,
+}: {
+  token: string;
+  exchange: (publicToken: string) => void;
+  close: () => void;
+  reportError: (error: unknown) => void;
+  busy: boolean;
+}) {
   const { open, ready, error } = usePlaidLink({
     token,
-    onSuccess: (publicToken) => exchange.mutate(publicToken),
-    onExit: (linkError) => {
-      setToken(null);
-      if (linkError) toast.error("Bank Link could not complete. No bank account was connected.");
+    onSuccess: exchange,
+    onExit: (exitError) => {
+      close();
+      if (exitError) {
+        reportError(exitError);
+        toast.error("Bank Link could not complete. No bank account was connected.");
+      }
     },
   });
   useEffect(() => {
-    if (token && ready) open();
-  }, [open, ready, token]);
-  const currentError = tokenRequest.error ?? exchange.error;
+    if (error) reportError(error);
+  }, [error, reportError]);
+  useEffect(() => {
+    if (ready && !busy) open();
+  }, [busy, open, ready]);
+
   return (
-    <div className="wallet-bank-connect">
-      <button
-        type="button"
-        disabled={tokenRequest.isPending || exchange.isPending || Boolean(token && !ready)}
-        onClick={() => tokenRequest.mutate()}
-      >
-        <Landmark aria-hidden="true" />
-        {tokenRequest.isPending
-          ? "Preparing secure connection…"
-          : exchange.isPending
-            ? "Saving connection…"
-            : "Connect bank"}
-        <ArrowRight aria-hidden="true" />
-      </button>
-      {currentError || error ? <InlineError error={currentError ?? error} /> : null}
-    </div>
+    <button type="button" disabled>
+      <Landmark aria-hidden="true" />
+      {busy ? "Saving connection…" : "Opening secure connection…"}
+      <ArrowRight aria-hidden="true" />
+    </button>
   );
 }
 

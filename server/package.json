@@ -21,6 +21,11 @@
     "qa:community": "ts-node src/scripts/manual-community-governance-distribution-qa.ts",
     "qa:providers": "ts-node src/scripts/manual-provider-qa.ts",
     "qa:load": "ts-node src/scripts/local-load-check.ts",
+    "staging:demo:setup": "ts-node src/scripts/setup-staging-demo.ts",
+    "staging:demo:preflight": "ts-node src/scripts/preflight-staging-demo.ts",
+    "staging:demo:refresh": "ts-node src/scripts/refresh-staging-demo.ts",
+    "staging:demo:create-disposable-user": "ts-node src/scripts/create-staging-demo-disposable-user.ts",
+    "staging:demo:verify-auth": "ts-node src/scripts/verify-staging-demo-auth.ts",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:status": "prisma migrate status"

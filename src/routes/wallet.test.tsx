@@ -19,13 +19,17 @@ import {
   walletAccessPresentation,
 } from "./-wallet-presentation";
 
+const { usePlaidLinkSpy } = vi.hoisted(() => ({
+  usePlaidLinkSpy: vi.fn(() => ({ open: vi.fn(), ready: false, error: null })),
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }));
 vi.mock("@/auth/use-session", () => ({ useSession: () => ({ isAuthenticated: true }) }));
 vi.mock("react-plaid-link", () => ({
-  usePlaidLink: () => ({ open: vi.fn(), ready: false, error: null }),
+  usePlaidLink: usePlaidLinkSpy,
 }));
 
 import { Wallet } from "./wallet";
@@ -107,6 +111,12 @@ function renderWallet({
 }
 
 describe("Document 016 wallet UI", () => {
+  it("does not initialize Plaid Link until the customer requests a bank connection", () => {
+    usePlaidLinkSpy.mockClear();
+    renderWallet({ banks: [], movements: { items: [], nextCursor: null } });
+    expect(usePlaidLinkSpy).not.toHaveBeenCalled();
+  });
+
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
     const html = renderWallet();
     expect(html).toContain("Cash and money movements");
