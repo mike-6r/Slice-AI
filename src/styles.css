@@ -2204,7 +2204,7 @@
 }
 
 .portfolio-hero > div > span,
-.portfolio-kpi > span,
+.portfolio-kpi__content > span,
 .portfolio-table-wrap thead,
 .portfolio-alerts-panel small,
 .portfolio-panel h2 + small {
@@ -18531,7 +18531,7 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  padding: 0 !important;
+  padding: 0 0 0 3.1rem !important;
 }
 
 .portfolio-kpi p {

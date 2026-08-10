@@ -171,7 +171,9 @@ function PortfolioKpi({
 }) {
   return (
     <article className="portfolio-kpi">
-      <span className="portfolio-kpi__icon">{icon}</span>
+      <span className="wallet-kpi__icon" aria-hidden="true">
+        {icon}
+      </span>
       <div className="portfolio-kpi__content">
         <p>{label}</p>
         <strong>{value}</strong>
