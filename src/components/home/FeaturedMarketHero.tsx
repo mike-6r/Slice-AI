@@ -72,6 +72,9 @@ export function FeaturedMarketHero() {
             <circle cx="360" cy="10" r="3.2" fill="#22d3a5" />
           </svg>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--high">
+            &pound;25K
+          </span>
+          <span className="featured-static-panel__price-label featured-static-panel__price-label--upper-middle">
             &pound;24K
           </span>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--middle">
