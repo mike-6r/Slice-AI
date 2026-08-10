@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Activity,
   ArrowDownRight,
   ArrowUpRight,
+  BanknoteArrowDown,
   ChartNoAxesCombined,
   CircleGauge,
   Clock3,
   Landmark,
+  Layers3,
   LockKeyhole,
   RefreshCw,
-  Wallet,
+  WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -111,7 +112,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       <PortfolioKpi
         label="Portfolio value"
         value={portfolioValueLabel(summary)}
-        icon={<CircleGauge aria-hidden="true" />}
+        icon={<Layers3 aria-hidden="true" />}
         detail={
           summary.valuationStatus === "FULL"
             ? "No trend data"
@@ -121,7 +122,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       <PortfolioKpi
         label="Available cash"
         value={formatPortfolioMoney(summary.cash.availableMinor)}
-        icon={<Wallet aria-hidden="true" />}
+        icon={<WalletCards aria-hidden="true" />}
         detail="Authoritative available cash"
       />
       <PortfolioKpi
@@ -133,7 +134,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       <PortfolioKpi
         label="Total return"
         value="Unavailable"
-        icon={<Activity aria-hidden="true" />}
+        icon={<BanknoteArrowDown aria-hidden="true" />}
         detail="No return history available"
       />
     </section>
