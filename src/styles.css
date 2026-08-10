@@ -3395,20 +3395,20 @@
 /* Secure signup and onboarding: shares the dark Slice shell, with a focused editorial
  * treatment for account creation rather than a standalone application aesthetic. */
 .signup-page {
-  width: min(calc(100% - 3rem), 78rem);
+  width: min(calc(100% - 3rem), 72rem);
   margin-inline: auto;
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(25rem, 0.75fr);
-  gap: clamp(2rem, 7vw, 7rem);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(23rem, 24rem);
+  gap: clamp(2.5rem, 5vw, 5rem);
+  align-items: start;
   min-height: calc(100vh - 13rem);
   padding-block: clamp(3rem, 6vw, 5.25rem);
 }
 
 .signup-hero {
   position: relative;
-  max-width: 33rem;
-  min-height: clamp(35rem, 46vw, 44rem);
+  max-width: 36rem;
+  min-height: clamp(31rem, 37vw, 34rem);
   isolation: isolate;
 }
 .signup-hero > :not(.signup-collectible) {
@@ -3418,7 +3418,7 @@
 .signup-hero__title {
   margin-top: 0.75rem;
   font-family: var(--font-display);
-  font-size: clamp(3.25rem, 6vw, 5.7rem);
+  font-size: clamp(3rem, 4.6vw, 4.5rem);
   font-weight: 750;
   line-height: 0.92;
   letter-spacing: -0.068em;
@@ -3480,10 +3480,10 @@
 }
 .signup-collectible {
   position: absolute;
-  right: clamp(-5rem, -3vw, -1rem);
-  bottom: -2rem;
+  right: -4rem;
+  bottom: 0.5rem;
   z-index: 0;
-  width: clamp(22.5rem, 34vw, 35rem);
+  width: clamp(17rem, 19vw, 20rem);
   margin: 0;
   pointer-events: none;
 }
