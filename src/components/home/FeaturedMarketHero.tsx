@@ -1,4 +1,4 @@
-const FEATURED_DISPLAY_IMAGE = "/images/signup-collectible-display.png";
+import featuredDisplayImage from "@/assets/signup-collectible-display.png";
 
 /**
  * Editorial homepage art direction. This deliberately does not read or imply
@@ -15,7 +15,7 @@ export function FeaturedMarketHero() {
         <div className="featured-showcase__surface">
           <img
             className="featured-showcase__image"
-            src={FEATURED_DISPLAY_IMAGE}
+            src={featuredDisplayImage}
             alt="1999 Charizard Base Set Holo displayed in a protective illuminated case"
             decoding="async"
           />

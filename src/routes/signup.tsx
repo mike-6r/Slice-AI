@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/api/http-client";
+import signupCollectibleDisplay from "@/assets/signup-collectible-display.png";
 import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import { safeReturnIntent } from "@/auth/return-intent";
 import { session } from "@/auth/session";
@@ -167,7 +168,7 @@ function SignupPage() {
           />
         </ul>
         <div className="signup-collectible" aria-hidden="true">
-          <img src="/images/signup-collectible-display.png" alt="" decoding="async" />
+          <img src={signupCollectibleDisplay} alt="" decoding="async" />
         </div>
       </section>
 
