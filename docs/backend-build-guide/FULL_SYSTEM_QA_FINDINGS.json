@@ -1,0 +1,68 @@
+{
+  "runDate": "2026-08-09",
+  "scope": "Documents 001-018 local full-system QA",
+  "summary": {
+    "pass": 16,
+    "partial": 1,
+    "deferred": 1,
+    "external": 1,
+    "fail": 0
+  },
+  "finalRerun": {
+    "date": "2026-08-09",
+    "status": "PASS",
+    "internalBlockers": 0,
+    "internalHighFindings": 0,
+    "remaining": ["FSQA-003", "FSQA-006"]
+  },
+  "findings": [
+    {
+      "id": "FSQA-001",
+      "severity": "NONE",
+      "area": "D15 customer and operations UX",
+      "status": "CLOSED",
+      "evidence": "Authenticated GET /v1/sale-proposals now returns a bounded viewer-aware safe summary projection with status, asset and immutable-snapshot relevance filters. The API-mode /governance route discovers active, eligible and closed proposals; eligible owners can create drafts; existing detail/vote supports authoritative refetch and replacement; ADMIN users receive existing permission-guarded open/close controls only. Focused governance coverage passed (7 PostgreSQL integration and 3 HTTP E2E tests), qa:community passed with zero residuals, and the scoped browser fixture creates/removes published custody, ownership snapshot and OPEN proposal state.",
+      "recommendedAction": "No further D15 governance frontend remediation is required. Retain the host-browser/staging visual QA item separately."
+    },
+    {
+      "id": "FSQA-002",
+      "severity": "NONE",
+      "area": "D10-D11 operations UX",
+      "status": "CLOSED",
+      "evidence": "API-mode frontend now provides the owner-scoped /list and /submissions/:id D10 workflow (create, edit/version refresh, evidence upload intent with real presigned-target completion path, remove, submit/resubmit and confirmed cancel); /operations/submissions provides the existing reviewer queue, claim and decision transitions. A new bounded staff-only GET /v1/admin/assets/operations projection makes the existing D11 lifecycle authority usable at /operations/assets for valuation, custody, coverage, readiness and publication. Customer/staff separation remains server-authorized. Focused D10/D11 HTTP E2E passed (5 suites / 11 tests), lifecycle QA passed with scoped cleanup, and frontend 12 suites / 45 tests passed without exposing storage, scanner, provider, facility or review identities.",
+      "recommendedAction": "No further D10/D11 frontend remediation is required. Retain browser/staging visual QA separately."
+    },
+    {
+      "id": "FSQA-003",
+      "severity": "MEDIUM",
+      "area": "Interactive browser QA",
+      "status": "TOOLING_LIMITATION",
+      "evidence": "On 2026-08-09 the local API (/health and /ready) and Vite API-mode application were healthy. The attached Codex in-app browser could render 127.0.0.1:5173, authenticate the scoped customer fixture, restore its session after hydration, and showed no JavaScript errors in a limited smoke check. It is not an attached host Chrome, Edge or Firefox browser, so it cannot certify the required named-browser matrix. The scoped two-account setup and cleanup procedure are documented in FSQA-003_HOST_BROWSER_QA_RUNBOOK.md.",
+      "recommendedAction": "Run the documented browser matrix in named host Chrome/Chromium and Edge (and Firefox where available), returning screenshots, control results and console/network evidence before closing FSQA-003."
+    },
+    {
+      "id": "FSQA-004",
+      "severity": "NONE",
+      "area": "Legacy frontend source",
+      "status": "CLOSED",
+      "evidence": "QA remediation #3 removed the unreachable legacy home, listing, market repository, duplicate model and DemoStateProvider source. AppServicesProvider now dynamically loads mocks only when VITE_DATA_SOURCE=mock is explicitly selected; API mode creates HTTP repositories without importing or falling back to mock data. The live market presentation maps only the authoritative market valuation field.",
+      "recommendedAction": "Retain only the explicit mock-mode adapter and its tests; do not reintroduce demo imports into API routes."
+    },
+    {
+      "id": "FSQA-005",
+      "severity": "NONE",
+      "area": "Project-control metadata",
+      "status": "CLOSED",
+      "evidence": "QA remediation #3 reconciled project-state.json and the current QA controls with durable notifications/SSE, 40 migrations, frontend 12 suites / 45 tests, backend 29 unit suites / 125 tests, 27 integration suites / 106 tests and 27 HTTP E2E suites / 73 tests. Historical snapshots remain preserved as historical evidence.",
+      "recommendedAction": "Update the current-status sections whenever verified counts change; preserve dated historical snapshots."
+    },
+    {
+      "id": "FSQA-006",
+      "severity": "EXTERNAL_DEPENDENCY",
+      "area": "D16 provider and launch certification",
+      "status": "PENDING_EXTERNAL",
+      "evidence": "Local deterministic provider lifecycle QA passes, but Bridge and Plaid sandbox certification, BlockchainAnalysis.io account certification, and human security/legal/operations/product launch approvals are unavailable locally.",
+      "recommendedAction": "Keep PROVIDERS_PRODUCTION_ENABLED=false and complete certifications and documented launch approval before production."
+    }
+  ]
+}

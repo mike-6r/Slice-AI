@@ -1,0 +1,40 @@
+faq:
+  investing: "Slice provides collectible marketplace information and community context. Nothing in Discord is financial advice, an offer, or a guarantee of future value."
+  selling: "Seller availability, listing eligibility, order handling, and payout details are confirmed through the official Slice platform or private support."
+  fees: "Any applicable fees are shown by Slice in the relevant official flow. Discord does not estimate fees."
+  withdrawals: "Withdrawal availability and status are account-specific. Use the official Slice platform or open a private ticket."
+  ownership: "Ownership records are maintained by Slice as the authoritative system. Do not rely on Discord messages as ownership records."
+  voting: "Voting or participation programs appear only when Slice makes them available for an eligible collectible or account."
+  fractional: "Fractional ownership availability depends on the collectible, offer structure, and eligibility rules set by Slice."
+  security: "Never share passwords, private keys, seed phrases, banking passwords, Discord tokens, API keys, or identity documents in Discord."
+  verification: "Identity verification happens only through official Slice flows. Staff will not collect identity documents inside Discord."
+  deposits: "Deposit instructions and availability are shown only by Slice. If something looks suspicious, stop and open a private ticket."
+  marketplace: "Marketplace details are sourced from Slice and may change as listings, availability, demand, and platform rules evolve."
+messages:
+  account:
+    title: "Account Link"
+    description: |
+      **Slice account:** {status}
+      **Verification:** {reason}
+
+      Use the official Slice platform for account, identity, deposit, withdrawal, or transaction actions.
+    color: info
+  roles:
+    title: "Notification Roles"
+    description: "Use the persistent `#roles` panel to choose listing, price, auction, giveaway, news, market brief, and platform update alerts."
+    color: info
+  faq:
+    title: "Slice FAQ"
+    description: "{reason}"
+    color: info
+  faq_unavailable:
+    title: "FAQ Topic Unavailable"
+    description: "That topic is not available yet. Try `/faq` without a topic or open a private support ticket."
+    color: warning
+  support:
+    title: "Slice Support"
+    description: |
+      **Start with `#create-a-ticket` for private help.**
+
+      Use tickets for account access, verification, deposits, withdrawals, marketplace issues, seller support, reports, technical problems, partnerships, or security concerns.
+    color: info

@@ -1,0 +1,345 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { z } from 'zod';
+import {
+  AccessTokenGuard,
+  type AuthenticatedRequest,
+} from '../../identity/auth/access-token.guard';
+import { PermissionGuard } from '../../identity/access/permission.guard';
+import { RequirePermission } from '../../identity/access/permission.decorator';
+import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
+import { SubmissionService } from '../application/submission.service';
+
+const id = z.string().min(1).max(128);
+const metadata = z.record(z.unknown()).nullable().optional();
+const draft = z
+  .object({
+    categoryId: id,
+    setId: id.nullable().optional(),
+    gradeScaleEntryId: id.nullable().optional(),
+    declaredMetadata: metadata,
+  })
+  .strict();
+const draftPatch = draft.extend({ version: z.number().int().min(1) }).strict();
+const uploadIntent = z
+  .object({
+    slot: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+    // Type and size policy is enforced in the application service so clients
+    // receive the documented media-specific error contracts.
+    mimeType: z.string().min(1).max(128),
+    sizeBytes: z.number().int().min(1),
+    originalFilename: z.string().min(1).max(255),
+  })
+  .strict();
+const complete = z
+  .object({
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    version: z.number().int().min(1),
+  })
+  .strict();
+const version = z.object({ version: z.coerce.number().int().min(1) }).strict();
+const decision = z
+  .object({
+    reasonCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+    note: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict();
+const queueQuery = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+const ownerListQuery = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+
+@Controller()
+export class SubmissionController {
+  constructor(
+    private readonly submissions: SubmissionService,
+    private readonly limiter: ControlRateLimitService,
+  ) {}
+
+  @Post('submissions')
+  @UseGuards(AccessTokenGuard)
+  create(
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.create(
+        req.actor!,
+        parse(draft, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Get('submissions')
+  @UseGuards(AccessTokenGuard)
+  list(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const input = parse(ownerListQuery, query);
+    return this.submissions.listOwned(
+      req.actor!,
+      input.cursor,
+      input.limit ?? 25,
+    );
+  }
+  @Get('submissions/:id')
+  @UseGuards(AccessTokenGuard)
+  get(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+    return this.submissions.getOwned(req.actor!, submissionId);
+  }
+  @Patch('submissions/:id')
+  @UseGuards(AccessTokenGuard)
+  update(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.update(
+        req.actor!,
+        submissionId,
+        parse(draftPatch, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('submissions/:id/media/upload-intents')
+  @UseGuards(AccessTokenGuard)
+  intent(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.uploadIntent(
+        req.actor!,
+        submissionId,
+        parse(uploadIntent, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('submissions/:id/media/:mediaId/complete')
+  @UseGuards(AccessTokenGuard)
+  complete(
+    @Param('id') submissionId: string,
+    @Param('mediaId') mediaId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.completeMedia(
+        req.actor!,
+        submissionId,
+        mediaId,
+        parse(complete, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Delete('submissions/:id/media/:mediaId')
+  @UseGuards(AccessTokenGuard)
+  removeMedia(
+    @Param('id') submissionId: string,
+    @Param('mediaId') mediaId: string,
+    @Query() query: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.deleteMedia(
+        req.actor!,
+        submissionId,
+        mediaId,
+        parse(version, query).version,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('submissions/:id/submit')
+  @UseGuards(AccessTokenGuard)
+  submit(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.submit(
+        req.actor!,
+        submissionId,
+        parse(version, body).version,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('submissions/:id/cancel')
+  @UseGuards(AccessTokenGuard)
+  cancel(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.cancel(
+        req.actor!,
+        submissionId,
+        parse(version, body).version,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  @Get('reviews/submissions')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  queue(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const input = parse(queueQuery, query);
+    return this.submissions.queue(req.actor!, input.cursor, input.limit ?? 25);
+  }
+  @Get('reviews/submissions/:id')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  detail(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+    return this.submissions.reviewDetail(req.actor!, submissionId);
+  }
+  @Post('reviews/submissions/:id/claim')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  claim(
+    @Param('id') submissionId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.claim(
+        req.actor!,
+        submissionId,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/request-changes')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  changes(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.decide(
+        req.actor!,
+        submissionId,
+        'CHANGES_REQUESTED',
+        parse(decision, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/approve')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  approve(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.decide(
+        req.actor!,
+        submissionId,
+        'APPROVED',
+        parse(decision, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/reject')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  reject(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.decide(
+        req.actor!,
+        submissionId,
+        'REJECTED',
+        parse(decision, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  private async write(
+    req: AuthenticatedRequest,
+    key: string | undefined,
+    action: () => Promise<unknown>,
+  ) {
+    if (!key || !/^[\x21-\x7e]{1,128}$/.test(key))
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    await this.limiter.enforce(
+      'submissionMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return action();
+  }
+}
+
+function parse<T>(schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success)
+    throw new BadRequestException({
+      code: 'VALIDATION_FAILED',
+      message: 'Request validation failed.',
+      fieldErrors: result.error.flatten().fieldErrors,
+    });
+  return result.data;
+}

@@ -1,0 +1,76 @@
+xp:
+  minimum: 10
+  maximum: 20
+  cooldown_seconds: 60
+  minimum_message_length: 12
+daily:
+  reward: 25
+reputation:
+  cooldown_hours: 24
+milestones: [5, 10, 20, 30, 50]
+achievements:
+  - { key: FIRST_MESSAGE, name: "First Signal", description: "Earn XP from your first eligible community message.", category: "Community", icon: "✦" }
+  - { key: ACTIVE_MEMBER, name: "Active Collector", description: "Contribute 50 eligible community messages.", category: "Community", icon: "◇" }
+  - { key: CONVERSATION_STARTER, name: "Conversation Starter", description: "Contribute 250 eligible community messages.", category: "Community", icon: "◆" }
+  - { key: LEVEL_5, name: "Level 5", description: "Reach level 5.", category: "Level", icon: "▲" }
+  - { key: LEVEL_10, name: "Level 10", description: "Reach level 10.", category: "Level", icon: "▲" }
+  - { key: LEVEL_25, name: "Level 25", description: "Reach level 25.", category: "Level", icon: "▲" }
+  - { key: LEVEL_50, name: "Level 50", description: "Reach level 50.", category: "Level", icon: "▲" }
+  - { key: HELPFUL_5, name: "Helpful", description: "Receive 5 reputation.", category: "Reputation", icon: "♥" }
+  - { key: TRUSTED_25, name: "Trusted", description: "Receive 25 reputation.", category: "Reputation", icon: "✓" }
+  - { key: COMMUNITY_PILLAR_100, name: "Community Pillar", description: "Receive 100 reputation.", category: "Reputation", icon: "✹" }
+messages:
+  guild_only:
+    title: "Server Only"
+    description: "Community progression is available only inside a Slice server."
+    color: error
+  reputation_invalid:
+    title: "Reputation Unavailable"
+    description: "Choose another human community member."
+    color: error
+  reputation_sent:
+    title: "Reputation Sent"
+    description: "<@{user}> now has **{reputation}** community reputation."
+    color: success
+  reputation_unavailable:
+    title: "Reputation Unavailable"
+    description: "You have already used your reputation grant recently, or reputation is disabled."
+    color: error
+  daily_claimed:
+    title: "Daily XP Claimed"
+    description: "You received **{amount} XP**. Current streak: **{streak}** day(s)."
+    color: success
+  daily_unavailable:
+    title: "Daily Unavailable"
+    description: "Your daily claim is not available yet, or daily rewards are disabled."
+    color: error
+  leaderboard:
+    title: "{reason} Leaderboard"
+    description: "{status}"
+    color: info
+  achievements:
+    title: "{username}'s Achievements"
+    description: "{reason}\n\n**{count} unlocked**"
+    color: info
+  reputation:
+    title: "{username}'s Reputation"
+    description: "**{reputation}** community reputation\nPublic community rank: **#{rank}**"
+    color: info
+  level:
+    title: "{username}'s Slice Progression"
+    description: |
+      **Level:** {level}
+      **XP:** {xp}
+      **Progress:** {reason}
+      **Reputation:** {reputation}
+      **Rank:** #{rank}
+      **Achievements:** {count}
+    color: info
+  level_up:
+    title: "Level Up"
+    description: "<@{user}> reached **Level {level}** in the Slice community."
+    color: success
+  achievement:
+    title: "Achievement Unlocked"
+    description: "<@{user}> unlocked **{count}** community achievement(s)."
+    color: info

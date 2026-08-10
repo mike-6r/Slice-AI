@@ -1,0 +1,21 @@
+name: Slice
+footer:
+  text: "Slice AI | Collectibles, market signals, and private support"
+colors:
+  info: "#27D7B1"
+  success: "#36E39A"
+  warning: "#F6C85F"
+  error: "#F56B6B"
+  staff: "#8E7CFF"
+images: {}
+emojis:
+  success: "✅"
+  warning: "⚠️"
+  ticket: "🎫"
+  market: "📈"
+  collectible: "💎"
+  security: "🔒"
+  support: "🛟"
+  update: "📣"
+  watchlist: "👀"
+  seller: "🏷️"

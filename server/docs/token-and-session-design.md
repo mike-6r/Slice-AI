@@ -1,0 +1,3 @@
+# Token and session design
+
+Planned runtime design: short-lived access tokens and server-tracked hashed refresh tokens with session/family IDs. Rotation marks the prior refresh session rotated; reuse triggers family revocation. Logout revokes one session; suspension and closure revoke relevant sessions. PostgreSQL is required for durable session/replay state and Redis is required for scalable revocation/cache/rate-limit concerns. The implemented pure rules cover expiry, account restrictions, replay and revocation decisions only. Cookie storage needs CSRF protections; bearer storage is exposed to XSS, so clients must not persist secrets unsafely. Secret rotation, device metadata, concurrent-refresh locking and recovery need runtime validation.

@@ -1,0 +1,13 @@
+common:
+  interaction_unavailable:
+    title: "Interaction Unavailable"
+    description: "Reference: {reference}"
+    color: error
+  guild_only:
+    title: "Server Only"
+    description: "This command is available only inside a Slice server."
+    color: error
+  configuration_reloaded:
+    title: "Configuration Reloaded"
+    description: "Safe presentation settings were reloaded. Restart the bot only for environment, credential, or deployment changes."
+    color: success

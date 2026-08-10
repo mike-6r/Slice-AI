@@ -1,0 +1,6 @@
+CREATE TYPE "DiscordModerationAction" AS ENUM ('WARN','NOTE','TIMEOUT','UNTIMEOUT','KICK','BAN','UNBAN','MESSAGE_DELETE','AUTOMOD_BLOCK','SCAM_BLOCK');
+CREATE TYPE "DiscordModerationSource" AS ENUM ('MANUAL','AUTOMOD','ANTI_SCAM','SYSTEM');
+CREATE TYPE "DiscordModerationStatus" AS ENUM ('PENDING','ENFORCED','FAILED','REVERSED');
+CREATE TABLE "DiscordModerationCase" ("id" TEXT NOT NULL,"guildId" TEXT NOT NULL,"caseNumber" INTEGER NOT NULL,"targetDiscordUserId" TEXT NOT NULL,"moderatorDiscordUserId" TEXT,"action" "DiscordModerationAction" NOT NULL,"source" "DiscordModerationSource" NOT NULL,"status" "DiscordModerationStatus" NOT NULL DEFAULT 'PENDING',"reason" TEXT NOT NULL,"expiresAt" TIMESTAMP(3),"relatedMessageId" TEXT,"relatedChannelId" TEXT,"evidenceExcerpt" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "DiscordModerationCase_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "DiscordModerationCase_guildId_caseNumber_key" ON "DiscordModerationCase"("guildId","caseNumber");
+CREATE INDEX "DiscordModerationCase_guildId_targetDiscordUserId_createdAt_idx" ON "DiscordModerationCase"("guildId","targetDiscordUserId","createdAt");

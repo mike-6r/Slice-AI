@@ -1,0 +1,3 @@
+# Identity and authentication architecture
+
+Documents 001–004 provide the identity foundation: validated Nest HTTP contracts, PostgreSQL Prisma repositories and transactions, opaque refresh-session persistence, JWT access guards, transactional audit/idempotency records, Redis-backed auth abuse limits, and the eight self-service authentication/profile endpoints. Refresh credentials are transport-private HttpOnly cookies; replay rotates once and revokes the family. Revoked access sessions can only replay a completed, fingerprint-matching logout-all request. Production requires Secure refresh cookies and trusted proxy behavior is an explicit hop count. No provider, KYC, catalogue, ownership, trading, or Phase 3 domain is implemented.

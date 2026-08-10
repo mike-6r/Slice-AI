@@ -1,0 +1,37 @@
+# API blueprint
+
+## Document 018 Phase 3 operational boundary (2026-08-08)
+
+No public product endpoint was added. Production configuration can fail-close new-risk trading,
+deposit, withdrawal, realtime and listing requests with canonical `FEATURE_DISABLED` / HTTP 503;
+safe reads, cancellation, reconciliation and signed inbound recovery webhooks remain available.
+Operational controls do not weaken existing authentication, authorization, idempotency, rate-limit or
+safe-DTO boundaries.
+
+Planned product APIs use `/v1`; completed infrastructure routes are `GET /health` and `GET /ready`. JSON is camelCase; UTC dates are ISO 8601; money is `{minor:"integer-string",currency:"GBP"}`; ownership units are integer strings; ratios are basis points; pages are `{items,nextCursor,hasMore}`. Errors use the 001 canonical envelope. Mutations are authenticated, authorized, audited and idempotent unless their owning prompt explicitly justifies otherwise.
+
+| Primary owner | Endpoint family                                                                                         | Contract boundary                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 001           | `GET /health`                                                                                           | safe dependency-free liveness; no topology, environment or secrets                                                                                                  |
+| 002           | `GET /ready`                                                                                            | dependency readiness; returns 200 only while PostgreSQL and Redis are up, and safe 503 output during either outage; verified against local containers on 2026-08-06 |
+| 004           | `POST /v1/auth/signup                                                                                   | login                                                                                                                                                               | refresh                                                                                                                        | logout | logout-all`, `GET /v1/session`, `GET /v1/me`, `PATCH /v1/me/profile` | opaque refresh cookie, short access token, self profile |
+| 005           | `POST /v1/admin/users/:id/status`, `POST                                                                | DELETE /v1/admin/users/:id/roles`, `GET /v1/admin/audit-events`, `GET /v1/admin/users/:id/status-history`                                                           | verified deny-by-default permissions, global scoped grants, redacted audit reads, durable idempotency and Redis control limits |
+| 006           | categories, sets, grading companies/grades, catalogue asset metadata and admin reference mutations      | public published projection; admin reference authority                                                                                                              |
+| 007           | `/v1/market/assets`, detail/history/similar, summary/movers                                             | public cursor/filter/sort; source/status/asOf; trading reads are explicitly empty until 014                                                                         |
+| 008           | collectors/holdings, Vault feed/summary, `/v1/me/portfolio`, watchlist and notifications                | public visibility policy; self-only private resources; portfolio authority labelled                                                                                 |
+| 009           | no new API                                                                                              | consumes 004,006–008 through frontend HTTP repositories                                                                                                             |
+| 010           | `/v1/submissions`, secure media intents/completion, reviewer queue/decisions                            | COMPLETE 2026-08-07: owner/reviewer isolation, versioned transitions, private evidence; approval is handoff only and never publication |
+| 011           | seller lifecycle status; handoff, custody transition, valuation decision, coverage, readiness and publish | privileged separated roles, recent-auth/idempotency/rate controls; public allowlisted durable lifecycle status                                                     |
+| 012           | aggregate issuance; self position; admin issuance/transfer/reservation/release/correction/reconciliation | COMPLETE: aggregate public ownership only; no investor or private-ledger leakage                                                                                  |
+| 013           | self wallet transactions/balances, portfolio/holdings/lots and safe history; admin reversal/reconciliation | COMPLETE: journal/account internals, counterparties and raw metadata never public                                                                                   |
+| 014           | order preview/place/cancel/list, safe self executions, authoritative book/recent trades, market halt/resume | COMPLETE: exact integer price/units/fees; private orders; aggregated public book/trades; no account/reservation/counterparty leakage                              |
+| 015           | follows, discussions/reports/moderation, proposals/votes/close/sale/distribution                        | eligibility snapshot, privacy and exact distribution                                                                                                                |
+| 016           | compliance session/status, deposits/withdrawals/movements, signed provider webhooks, reconciliation     | LOCAL IMPLEMENTATION COMPLETE / PROVIDER CERTIFICATION PENDING; provider-neutral and production fail-closed                                                        |
+| 017           | authenticated notification/SSE stream, preferences, safe admin outbox/delivery dead-letter inspection and requeue | Complete: transactional append, leased worker reliability, durable routing, safe self notification API/SSE and audited admin operations; no Discord transport |
+| 018           | operational flags/kill-switch/launch evidence only if required                                          | no new product surface; human-controlled launch gate                                                                                                                |
+
+Every endpoint belongs to exactly one primary document. 007’s order-book/recent-trade placeholder is superseded—not duplicated—by 014. 008’s provisional portfolio projection is superseded by 013 authority. Controllers use DTO schemas and output mappers, never Prisma rows.
+
+## Document 015 completion update
+
+Document 015 is COMPLETE: the community controller provides authenticated follows, discussion/report/moderation authority, self-safe proposal reads, idempotent proposal/vote/close/sale/distribute mutations, and aggregate-only reconciliation. External-sale verification is two-person/non-proposer; no endpoint exposes voter, verifier, buyer, ownership-account or finance-account identity.

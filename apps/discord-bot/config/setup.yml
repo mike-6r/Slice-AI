@@ -1,0 +1,226 @@
+version: 8
+
+roles:
+  - { key: owner, name: Owner, color: "#F6C85F", hoist: true, staff: true }
+  - { key: administrator, name: Administrator, color: "#F56B6B", hoist: true, staff: true }
+  - { key: operations, name: Operations Lead, color: "#6CA8FF", staff: true }
+  - { key: compliance, name: Compliance, color: "#A98BFF", staff: true }
+  - { key: support, name: Support Team, color: "#27D7B1", staff: true }
+  - { key: moderator, name: Community Moderator, color: "#36E39A", staff: true }
+  - { key: developer, name: Developer, color: "#8E7CFF", staff: true }
+  - { key: verified, name: Verified Member, color: "#36E39A", hoist: true }
+  - { key: collector, name: Collector, color: "#F6C85F" }
+  - { key: seller, name: Seller, color: "#6CA8FF" }
+  - { key: beta, name: Beta Access, color: "#A98BFF" }
+  - { key: new-listings, name: New Listings, color: "#27D7B1", mentionable: true }
+  - { key: price-alerts, name: Price Alerts, color: "#F6C85F", mentionable: true }
+  - { key: rare-cards, name: Rare Finds, color: "#A98BFF", mentionable: true }
+  - { key: auctions, name: Auctions, color: "#F56B6B", mentionable: true }
+  - { key: giveaways, name: Giveaways, color: "#6CA8FF", mentionable: true }
+  - { key: news, name: Slice News, color: "#27D7B1", mentionable: true }
+  - { key: market-summary, name: Market Brief, color: "#9AA3B2", mentionable: true }
+  - { key: platform-updates, name: Platform Updates, color: "#6CA8FF", mentionable: true }
+  - { key: restricted, name: Restricted, color: "#737B8A" }
+  - { key: muted, name: Muted, color: "#5A606B" }
+  - { key: level-5, name: Level 5, color: "#27D7B1" }
+  - { key: level-10, name: Level 10, color: "#6CA8FF" }
+  - { key: level-20, name: Level 20, color: "#8E7CFF" }
+  - { key: level-30, name: Level 30, color: "#F6C85F" }
+  - { key: level-50, name: Level 50, color: "#F56B6B" }
+
+categories:
+  - { key: start, name: "01 - START" }
+  - { key: slice, name: "02 - SLICE PLATFORM" }
+  - { key: marketplace, name: "03 - MARKETPLACE" }
+  - { key: community, name: "04 - COMMUNITY" }
+  - { key: support, name: "05 - SUPPORT" }
+  - { key: staff, name: "06 - STAFF OPS", staff: true }
+
+channels:
+  - { key: welcome, name: welcome, category: start, order: 1, read_only: true, topic: "Start here: what Slice is, how to stay safe, and where to go next." }
+  - { key: start-here, name: start-here, category: start, order: 2, read_only: true, topic: "A simple 60-second path for new members." }
+  - { key: rules, name: rules, category: start, order: 3, read_only: true, topic: "Community standards and safety expectations." }
+  - { key: verify, name: verify, category: start, order: 4, read_only: true, topic: "Connect your Slice account and confirm access safely." }
+  - { key: roles, name: roles, category: start, order: 5, read_only: true, topic: "Choose only the notifications you actually want." }
+  - { key: faq, name: faq, category: start, order: 6, read_only: true, topic: "Fast answers before opening a ticket." }
+  - { key: roadmap, name: roadmap, category: start, order: 7, read_only: true, topic: "High-level product direction without speculative dates." }
+  - { key: announcements, name: announcements, category: slice, order: 1, read_only: true, topic: "Official Slice announcements only." }
+  - { key: platform-updates, name: platform-updates, category: slice, order: 2, read_only: true, topic: "Release notes, maintenance notes, and platform updates." }
+  - { key: market-feed, name: market-feed, category: slice, order: 3, read_only: true, topic: "Curated marketplace activity from Slice." }
+  - { key: recent-sales, name: recent-sales, category: slice, order: 4, read_only: true, topic: "Recent public sale signals when available." }
+  - { key: price-alerts, name: price-alerts, category: slice, order: 5, read_only: true, topic: "Price movement and alert information." }
+  - { key: market-discussion, name: market-discussion, category: slice, order: 6, topic: "Discuss market signals without making offers or financial claims." }
+  - { key: new-listings, name: new-listings, category: marketplace, order: 1, topic: "Discover new Slice listings and discuss public details." }
+  - { key: watchlists, name: watchlists, category: marketplace, order: 2, topic: "Track items, interests, and collecting themes." }
+  - { key: portfolio-showcase, name: portfolio-showcase, category: marketplace, order: 3, topic: "Optional community-safe showcases only. No private account details." }
+  - { key: market-analysis, name: market-analysis, category: marketplace, order: 4, topic: "Research, context, and public market discussion." }
+  - { key: general, name: general, category: community, order: 1, topic: "General collector conversation." }
+  - { key: collecting, name: collecting, category: community, order: 2, topic: "Cards, sets, grading, collecting stories, and hobby talk." }
+  - { key: investment-discussion, name: investment-discussion, category: community, order: 3, topic: "Educational market discussion only. No financial advice." }
+  - { key: pokemon-tcg, name: pokemon-tcg, category: community, order: 4, topic: "Pokemon TCG collecting, grading, sets, and nostalgia." }
+  - { key: suggestions, name: suggestions, category: community, order: 5, topic: "Suggest improvements for the community and Slice Discord experience." }
+  - { key: off-topic, name: off-topic, category: community, order: 6, topic: "Relaxed conversation that still follows community standards." }
+  - { key: create-a-ticket, name: create-a-ticket, category: support, order: 1, read_only: true, topic: "Open the right private support request." }
+  - { key: support-information, name: support-information, category: support, order: 2, read_only: true, topic: "What support can help with and what not to post publicly." }
+  - { key: known-issues, name: known-issues, category: support, order: 3, read_only: true, topic: "Known issues, maintenance notes, and safe workarounds." }
+  - { key: staff, name: staff-hub, category: staff, order: 1, staff: true, topic: "Staff navigation and private operating notes." }
+  - { key: operations, name: operations, category: staff, order: 2, staff: true, topic: "Operational queue, support pressure, and marketplace review context." }
+  - { key: compliance-alerts, name: compliance-alerts, category: staff, order: 3, staff: true, topic: "Compliance-sensitive reviews and escalations." }
+  - { key: support-log, name: support-log, category: staff, order: 4, staff: true, topic: "Ticket lifecycle and support activity." }
+  - { key: moderation-log, name: moderation-log, category: staff, order: 5, staff: true, topic: "Moderation cases and enforcement records." }
+  - { key: bot-log, name: bot-log, category: staff, order: 6, staff: true, topic: "Bot health, setup, and automation events." }
+  - { key: provider-status, name: provider-status, category: staff, order: 7, staff: true, topic: "External provider and integration status." }
+
+panels:
+  welcome:
+    title: "Welcome to Slice"
+    description: |
+      **Collectibles, market context, and private support in one organized workspace.**
+
+      Use this server to discover public Slice information, follow official updates, discuss the hobby, and get routed to the right private support path.
+
+      **Start**
+      Connect your account, review the standards, choose alerts, then explore the marketplace channels.
+    color: info
+    footer: "Slice AI | Start here"
+  start-here:
+    title: "Start in 60 Seconds"
+    description: |
+      **1. Connect**
+      Link your Slice account through the official handoff.
+
+      **2. Choose alerts**
+      Pick only the listing, market, auction, and update notifications you want.
+
+      **3. Explore**
+      Browse marketplace signals, community discussion, and support resources.
+    color: info
+    footer: "Slice AI | Simple onboarding"
+  rules:
+    title: "Community Standards"
+    description: |
+      **Professional by default**
+      Respect members, staff, privacy, intellectual property, and Discord rules.
+
+      **Keep private data private**
+      Never post credentials, banking details, identity documents, API keys, seed phrases, or private account information.
+
+      **No financial advice**
+      Marketplace discussion is educational and community-based. Nothing in Discord is investment, tax, legal, or account advice.
+    color: warning
+    footer: "Slice AI | Safety first"
+  verify:
+    title: "Connect Your Slice Account"
+    description: |
+      **Secure handoff only**
+      Account linking, identity checks, payments, deposits, withdrawals, ownership records, and transaction actions stay on the official Slice platform.
+
+      Discord helps route you. Slice remains the source of truth.
+    color: info
+    footer: "Slice AI | Account security"
+  roles:
+    title: "Choose Your Alerts"
+    description: |
+      **Keep the server clean**
+      Select only the notifications you want: listings, price alerts, rare finds, auctions, giveaways, news, market briefs, or platform updates.
+
+      You can update these preferences anytime.
+    color: info
+    footer: "Slice AI | Notification control"
+  faq:
+    title: "Slice Help Center"
+    description: |
+      **Fast answers before opening a ticket**
+      Read guidance for marketplace questions, security, account access, seller support, verification, deposits, withdrawals, and ownership records.
+
+      If the answer depends on your account, use private support.
+    color: info
+    footer: "Slice AI | Help center"
+  announcements:
+    title: "Official Announcements"
+    description: |
+      **High-signal updates only**
+      This channel is reserved for official Slice announcements, community notices, and important product communication.
+
+      Questions belong in community channels or private support.
+    color: info
+    footer: "Slice AI | Official updates"
+  platform-updates:
+    title: "Platform Updates"
+    description: |
+      **Release notes, maintenance, and improvements**
+      Follow product updates, maintenance notes, safe workarounds, and Discord experience changes.
+
+      This channel is read-only so updates stay easy to scan.
+    color: info
+    footer: "Slice AI | Product notes"
+  market-feed:
+    title: "Curated Market Feed"
+    description: |
+      **Public marketplace signals**
+      Watch curated listing, movement, and marketplace context when available.
+
+      Private account values, transactions, and ownership records remain outside Discord.
+    color: info
+    footer: "Slice AI | Market signal"
+  recent-sales:
+    title: "Recent Sales"
+    description: |
+      **Public sale context**
+      Review public sale signals when Slice provides them. Use this for context, not advice.
+
+      Availability, pricing, and eligibility may change.
+    color: info
+    footer: "Slice AI | Public data only"
+  price-alerts:
+    title: "Price Alerts"
+    description: |
+      **Track movement without the noise**
+      Price movement alerts are delivered when configured and available.
+
+      Alerts are informational and never a recommendation to buy, sell, or hold.
+    color: warning
+    footer: "Slice AI | Informational alerts"
+  new-listings:
+    title: "New Listings"
+    description: |
+      **Discover what is new**
+      Browse new public Slice listings and discuss collecting context with the community.
+
+      Use official Slice flows for availability, purchase, sale, or account actions.
+    color: success
+    footer: "Slice AI | Marketplace discovery"
+  market-analysis:
+    title: "Market Analysis"
+    description: |
+      **Research, context, and collector discussion**
+      Compare public signals, hobby trends, set history, grading context, and community observations.
+
+      Keep claims sourced and avoid financial advice.
+    color: info
+    footer: "Slice AI | Research space"
+  create-a-ticket:
+    title: "Open the Right Request"
+    description: |
+      **Private support starts here**
+      Choose the closest support path so your request reaches the right team with the right context.
+
+      Use tickets for account access, verification, deposits, withdrawals, seller support, marketplace issues, technical problems, partnerships, reports, or security concerns.
+    color: info
+    footer: "Slice Support | Private by default"
+  support-information:
+    title: "Support Guidance"
+    description: |
+      **Use private tickets for account-specific help**
+      Support can help with access, verification, marketplace issues, seller support, reports, technical problems, and security concerns.
+
+      Do not post private account details in public channels.
+    color: info
+    footer: "Slice Support | Keep sensitive details private"
+  known-issues:
+    title: "Known Issues"
+    description: |
+      **Current issues and safe workarounds**
+      Check here before opening a ticket. If your issue is account-specific or security-sensitive, open private support.
+    color: warning
+    footer: "Slice Support | Status and workarounds"

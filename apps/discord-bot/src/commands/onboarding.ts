@@ -1,0 +1,10 @@
+import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { BackendSeamAccountLinkClient, FAQ } from '../onboarding.js';
+import { SliceEmbed } from '../embeds/slice-embed.js';
+import { presentationConfig } from '../presentation-config.js';
+const copy = presentationConfig()['commands.yml'];
+export const accountCommand = new SlashCommandBuilder().setName('account').setDescription(copy.descriptions.account);
+export const rolesCommand = new SlashCommandBuilder().setName('roles').setDescription(copy.descriptions.roles);
+export const faqCommand = new SlashCommandBuilder().setName('faq').setDescription(copy.descriptions.faq).addStringOption((option) => option.setName('topic').setDescription(copy.options.topic).setAutocomplete(true));
+export const supportCommand = new SlashCommandBuilder().setName('support').setDescription(copy.descriptions.support);
+export async function handleOnboardingCommand(interaction: ChatInputCommandInteraction, links: BackendSeamAccountLinkClient): Promise<void> { if (interaction.commandName === 'account') { const state = await links.getLinkStatus(interaction.user.id); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.configured('onboarding.yml', 'account', { status: state.link.replace(/_/g, ' '), reason: state.verification.replace(/_/g, ' ') })] }); return; } if (interaction.commandName === 'roles') { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.configured('onboarding.yml', 'roles')] }); return; } if (interaction.commandName === 'faq') { const topic = interaction.options.getString('topic')?.toLowerCase(); const body = topic ? FAQ[topic] : Object.entries(FAQ).map(([key, value]) => `**${key}** — ${value}`).join('\n\n'); await interaction.reply({ ephemeral: true, embeds: [topic && !FAQ[topic] ? SliceEmbed.configured('onboarding.yml', 'faq_unavailable') : SliceEmbed.configured('onboarding.yml', 'faq', { reason: body ?? '' })] }); return; } await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.configured('onboarding.yml', 'support')] }); }

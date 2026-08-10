@@ -1,0 +1,28 @@
+log_channel_key: moderation-log
+defaults:
+  reason: "No reason provided."
+  timeout_display: "{duration}"
+automod:
+  spam_limit_per_minute: 6
+  duplicate_limit: 3
+  mention_limit: 8
+messages:
+  case:
+    title: "Moderation Case #{count}"
+    description: |
+      **Action:** {action}
+      **Status:** {status}
+      **Reason:** {reason}
+    color: staff
+  enforced:
+    title: "Case #{count} | {action} Enforced"
+    description: "Action applied to <@{user}>."
+    color: success
+  failed:
+    title: "Case #{count} | {action} Failed"
+    description: "Discord could not apply the action. The case was still recorded for staff review."
+    color: error
+  unavailable:
+    title: "Moderation Unavailable"
+    description: "You do not have permission to perform that action, or Discord could not enforce it."
+    color: error

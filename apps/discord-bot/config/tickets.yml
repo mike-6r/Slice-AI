@@ -1,0 +1,58 @@
+categories:
+  - { key: account-issues, label: "Account & Access", emoji: "👤", description: "Login, profile, linking, or access help." }
+  - { key: investment-issues, label: "Marketplace Guidance", emoji: "📈", description: "Questions about public Slice marketplace information." }
+  - { key: withdrawal, label: "Withdrawal Help", emoji: "💸", description: "Withdrawal status or account-specific withdrawal help." }
+  - { key: deposit, label: "Deposit Help", emoji: "💳", description: "Deposit status or account-specific deposit help." }
+  - { key: report-user, label: "Report a Member", emoji: "🛡️", description: "Report scams, spam, harassment, or unsafe conduct." }
+  - { key: partnership, label: "Partnerships", emoji: "🤝", description: "Business, creator, seller, or brand partnership inquiries." }
+  - { key: general-support, label: "General Support", emoji: "🎫", description: "General help when no other category fits." }
+  - { key: seller-support, label: "Seller Support", emoji: "🏷️", description: "Seller onboarding, listing, or order questions." }
+  - { key: marketplace-issue, label: "Marketplace Issue", emoji: "🛒", description: "Listing, sale, watchlist, or marketplace display issues." }
+  - { key: technical-issue, label: "Technical Issue", emoji: "🧰", description: "Bot, Discord, command, or platform technical problems." }
+  - { key: verification-help, label: "Verification Help", emoji: "✅", description: "Safe guidance for official verification steps." }
+  - { key: security-concern, label: "Security Concern", emoji: "🔒", description: "Urgent security, fraud, account, or impersonation concern." }
+timings:
+  inactivity_warning_hours: 48
+  inactivity_close_hours: 120
+controls:
+  claim: "Claim"
+  waiting-user: "Waiting on Member"
+  waiting-staff: "Waiting on Staff"
+  escalate: "Escalate"
+  priority: "Set Priority"
+  transfer: "Transfer"
+  resolve: "Resolve"
+  close: "Close"
+fields:
+  reference: "Reference"
+  category: "Category"
+  status: "Status"
+  priority: "Priority"
+  creator: "Requester"
+  assignee: "Assigned staff"
+  subject: "Subject"
+  created: "Created"
+  updated: "Last updated"
+  unassigned: "Unassigned"
+  no_subject: "No subject supplied"
+messages:
+  lifecycle:
+    title: "Ticket {ticket_id}"
+    description: |
+      **Private Slice support request.**
+
+      A staff member will review the category, context, and latest activity here. Keep all account-specific details inside this private channel.
+    color: info
+    footer: "Slice Support | Never share passwords, private keys, banking passwords, API keys, or identity documents in Discord"
+  opened:
+    title: "Ticket Created"
+    description: "Your private support channel is ready: <#{ticket_id}>"
+    color: success
+  inactivity_warning:
+    title: "Ticket Awaiting Response"
+    description: "This request may be closed if no further response is received. Reply with any missing context when you are ready."
+    color: warning
+  closed:
+    title: "Ticket Closed"
+    description: "This request is now closed. Open a new ticket if you need help with a separate issue."
+    color: info

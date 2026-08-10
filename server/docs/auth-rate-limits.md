@@ -1,0 +1,3 @@
+# Authentication rate-limit design
+
+When Redis is available, enforce IP and normalized-identifier controls: signup 5/hour, login 10/15 minutes, refresh 30/15 minutes, verification/reset 5/hour, and administrative mutations 20/hour. Normalize identifiers before keying, account for trusted proxies and IPv4/IPv6 representation, use progressive cooldowns without account lockout abuse, return standard rate-limit headers and user-safe failures, audit denials, expose monitoring, and require operational override approval. Redis outage must fail closed only for high-risk mutations after an approved runtime policy; no distributed limiter is active in Phase 2A.

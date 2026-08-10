@@ -1,0 +1,150 @@
+import type { AppRepositories } from "@/data/repositories";
+import { basisPoints, minorUnits, percentage } from "@/domain";
+
+/** Frontend preview helpers only. Authoritative market and settlement logic belongs on a backend. */
+export class AssetService {
+  constructor(private readonly repositories: AppRepositories) {}
+  list = (input?: {
+    category?: string;
+    query?: string;
+    set?: string;
+    sort?: "estimatedMarketValue" | "change24h" | "title";
+    cursor?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) => this.repositories.assets.listAssets(input);
+  get = (id: import("@/domain").AssetId) => this.repositories.assets.getAssetById(id);
+  featured = () => this.repositories.assets.getFeaturedAssets();
+  trending = () => this.repositories.assets.getTrendingAssets();
+}
+
+export class MarketService {
+  constructor(private readonly repositories: AppRepositories) {}
+  summary = () => this.repositories.market.getMarketSummary();
+  movers = () => this.repositories.market.getMarketMovers();
+  priceHistory = (assetId: import("@/domain").AssetId, range: import("@/domain").TimeRange) =>
+    this.repositories.market.getPriceHistory(assetId, range);
+  orderBook = (assetId: import("@/domain").AssetId) =>
+    this.repositories.market.getOrderBook(assetId);
+  recentTrades = (assetId: import("@/domain").AssetId) =>
+    this.repositories.market.getRecentTrades(assetId);
+}
+
+export class PortfolioService {
+  constructor(private readonly repositories: AppRepositories) {}
+  portfolio = () => this.repositories.portfolio.getPortfolio();
+  holdings = () => this.repositories.portfolio.getHoldings();
+  lots = () => this.repositories.portfolio.getLots();
+  transactions = (input?: { cursor?: string; limit?: number }) =>
+    this.repositories.portfolio.getTransactions(input);
+}
+
+export class TradingService {
+  constructor(private readonly repositories: AppRepositories) {}
+  previewOrder = (input: import("@/domain").TradingOrderInput) =>
+    this.repositories.trading.previewOrder(input);
+  placeOrder = (input: import("@/domain").TradingOrderInput) =>
+    this.repositories.trading.placeOrder(input);
+  cancelOrder = (orderId: string) => this.repositories.trading.cancelOrder(orderId);
+  orders = (input?: { cursor?: string; limit?: number }) =>
+    this.repositories.trading.listOwnOrders(input);
+  executions = (input?: { cursor?: string; limit?: number }) =>
+    this.repositories.trading.listOwnExecutions(input);
+  previewBuy = (assetId: import("@/domain").AssetId, units: number) =>
+    this.repositories.trading.previewBuyOrder(assetId, units);
+  previewSell = (assetId: import("@/domain").AssetId, units: number) =>
+    this.repositories.trading.previewSellOrder(assetId, units);
+  /** This creates a local simulation only; it never submits an order to a market. */
+  createDemoOrder = (input: Parameters<AppRepositories["trading"]["createDemoOrder"]>[0]) =>
+    this.repositories.trading.createDemoOrder(input);
+}
+
+export class OwnershipService {
+  constructor(private readonly repositories: AppRepositories) {}
+  watchlist = (userId: import("@/domain").UserId) =>
+    this.repositories.ownership.getWatchlist(userId);
+  toggleWatchlist = (userId: import("@/domain").UserId, assetId: import("@/domain").AssetId) =>
+    this.repositories.ownership.toggleWatchlistAsset(userId, assetId);
+  percentageForUnits(units: number, totalUnits: number) {
+    return percentage((units / totalUnits) * 100);
+  }
+  availableBasisPoints(value: number) {
+    return basisPoints(value);
+  }
+}
+
+export class WalletService {
+  constructor(private readonly repositories: AppRepositories) {}
+  balances = (userId: import("@/domain").UserId) => this.repositories.wallet.getBalances(userId);
+  transactions = (userId: import("@/domain").UserId) =>
+    this.repositories.wallet.getTransactions(userId);
+}
+
+export class AccountService {
+  constructor(private readonly repositories: AppRepositories) {}
+  capabilities = () => this.repositories.account.getCapabilities();
+}
+
+export class ProviderService {
+  constructor(private readonly repositories: AppRepositories) {}
+  compliance = () => this.repositories.providers.getCompliance();
+  startCompliance = () => this.repositories.providers.startCompliance();
+  createBankLinkToken = () => this.repositories.providers.createBankLinkToken();
+  exchangeBankLinkPublicToken = (publicToken: string) =>
+    this.repositories.providers.exchangeBankLinkPublicToken(publicToken);
+  bankConnections = () => this.repositories.providers.listBankConnections();
+  movements = (input?: { cursor?: string; limit?: number }) =>
+    this.repositories.providers.listMovements(input);
+  createDeposit = (amountMinor: string) => this.repositories.providers.createDeposit(amountMinor);
+  createWithdrawal = (input: {
+    amountMinor: string;
+    destinationReference?: string;
+    destinationChain?: string;
+  }) => this.repositories.providers.createWithdrawal(input);
+}
+
+export class CollectorService {
+  constructor(private readonly repositories: AppRepositories) {}
+  list = () => this.repositories.collectors.listCollectors();
+  get = (id: import("@/domain").UserId) => this.repositories.collectors.getCollector(id);
+  follow = (id: import("@/domain").UserId) => this.repositories.collectors.followCollector(id);
+  unfollow = (id: import("@/domain").UserId) => this.repositories.collectors.unfollowCollector(id);
+}
+
+export class CommunityService {
+  constructor(private readonly repositories: AppRepositories) {}
+  discussions = (assetId: import("@/domain").AssetId) =>
+    this.repositories.discussions.listDiscussions(assetId);
+  proposal = (id: string) => this.repositories.proposals.getSaleProposal(id);
+}
+
+export interface AppServices {
+  repositories: AppRepositories;
+  assets: AssetService;
+  market: MarketService;
+  portfolio: PortfolioService;
+  trading: TradingService;
+  ownership: OwnershipService;
+  wallet: WalletService;
+  account: AccountService;
+  providers: ProviderService;
+  collectors: CollectorService;
+  community: CommunityService;
+}
+
+export const createAppServices = (repositories: AppRepositories): AppServices => ({
+  repositories,
+  assets: new AssetService(repositories),
+  market: new MarketService(repositories),
+  portfolio: new PortfolioService(repositories),
+  trading: new TradingService(repositories),
+  ownership: new OwnershipService(repositories),
+  wallet: new WalletService(repositories),
+  account: new AccountService(repositories),
+  providers: new ProviderService(repositories),
+  collectors: new CollectorService(repositories),
+  community: new CommunityService(repositories),
+});
+
+export const deriveImpliedAssetValue = (unitPriceMinor: number, totalUnits: number) =>
+  minorUnits(unitPriceMinor * totalUnits);

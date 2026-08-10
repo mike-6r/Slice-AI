@@ -1,0 +1,3 @@
+# Password security
+
+`Argon2idPasswordHasher` uses Argon2id only. Production defaults are 64 MiB memory, time cost 3, parallelism 1; test settings use the documented lower Argon2 minimum for speed. Passwords are 12–128 Unicode code units, may contain whitespace without trimming, and reject empty/whitespace-only input. No composition rule is imposed. Hashes are salted by Argon2, malformed hashes verify as false, and `needsRehash` supports parameter upgrades. Passwords and hashes must never enter logs, errors, audit metadata, or responses. Runtime configuration and production deployment review remain required.

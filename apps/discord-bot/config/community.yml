@@ -1,0 +1,16 @@
+daily_prompts:
+  - "What collectible, card, set, or hobby moment first pulled you in?"
+  - "What is one collecting detail you think newer collectors overlook?"
+  - "What is a grail item you would love to see discussed or researched?"
+  - "What recent marketplace signal caught your eye, and why?"
+weekly_prompts:
+  - "Share one collecting win, lesson, market observation, or hobby story from this week."
+messages:
+  daily:
+    title: "Today in the Slice Community"
+    description: "{reason}"
+    color: info
+  weekly:
+    title: "Weekly Collector Thread"
+    description: "{reason}"
+    color: info

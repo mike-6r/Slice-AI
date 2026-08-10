@@ -1,0 +1,42 @@
+{
+  "name": "@slice/discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Slice AI Discord companion service",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "worker": "tsx src/worker.ts",
+    "build": "npm run prisma:generate && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:unit": "vitest run --config vitest.config.ts test/unit",
+    "test:integration": "vitest run --config vitest.config.ts test/integration",
+    "sync": "tsx src/deploy.ts",
+    "setup-check": "tsx src/setup-check.ts",
+    "prisma:generate": "prisma generate --schema ../../server/prisma/schema.prisma --generator discordBotClient",
+    "prisma:validate": "prisma validate --schema ../../server/prisma/schema.prisma",
+    "prisma:status": "prisma migrate status --schema ../../server/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "discord.js": "^14.25.1",
+    "sharp": "^0.34.5",
+    "yaml": "^2.9.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.32.0",
+    "@types/node": "22.16.5",
+    "eslint": "9.32.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.6.2",
+    "prisma": "6.19.0",
+    "tsx": "4.20.6",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.39.0",
+    "vitest": "4.1.10"
+  }
+}

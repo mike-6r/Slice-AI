@@ -1,0 +1,198 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { z } from 'zod';
+import {
+  AccessTokenGuard,
+  type AuthenticatedRequest,
+} from '../../identity/auth/access-token.guard';
+import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
+import { PermissionGuard } from '../../identity/access/permission.guard';
+import { RequirePermission } from '../../identity/access/permission.decorator';
+import { TradingService } from '../application/trading.service';
+
+const orderInput = z
+  .object({
+    assetId: z.string().min(1).max(128),
+    side: z.enum(['BUY', 'SELL']),
+    type: z.literal('LIMIT'),
+    timeInForce: z.enum(['GTC', 'IOC']),
+    units: z.string().min(1).max(32),
+    limitPriceMinor: z.string().min(1).max(32),
+  })
+  .strict();
+const page = z
+  .object({
+    cursor: z.string().min(1).max(128).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+const executionPage = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+const depth = z
+  .object({ depth: z.coerce.number().int().min(1).max(50).default(20) })
+  .strict();
+
+@Controller()
+export class TradingController {
+  constructor(
+    private readonly trading: TradingService,
+    private readonly limiter: ControlRateLimitService,
+  ) {}
+
+  @Post('trading/orders/preview')
+  @UseGuards(AccessTokenGuard)
+  preview(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    return this.trading.preview(req.actor!, this.parse(orderInput, body));
+  }
+
+  @Post('trading/orders')
+  @UseGuards(AccessTokenGuard)
+  async place(
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = this.parse(orderInput, body);
+    this.requireKey(key);
+    await this.limiter.enforce(
+      'tradingMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.trading.place(
+      req.actor!,
+      input,
+      req.requestId ?? 'unknown',
+      key!,
+    );
+  }
+
+  @Delete('trading/orders/:id')
+  @UseGuards(AccessTokenGuard)
+  async cancel(
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireKey(key);
+    await this.limiter.enforce(
+      'tradingMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.trading.cancel(
+      req.actor!,
+      id,
+      req.requestId ?? 'unknown',
+      key!,
+    );
+  }
+
+  @Get('trading/orders')
+  @UseGuards(AccessTokenGuard)
+  ownOrders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(page, query);
+    return this.trading.ownOrders(req.actor!.userId, input.cursor, input.limit);
+  }
+
+  @Get('trading/executions')
+  @UseGuards(AccessTokenGuard)
+  ownExecutions(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(executionPage, query);
+    return this.trading.ownExecutions(
+      req.actor!.userId,
+      input.cursor,
+      input.limit,
+    );
+  }
+
+  @Get('market/assets/:slug/order-book')
+  book(@Param('slug') slug: string, @Query() query: unknown) {
+    return this.trading.publicBook(slug, this.parse(depth, query).depth ?? 20);
+  }
+
+  @Get('market/assets/:slug/recent-trades')
+  trades(@Param('slug') slug: string, @Query() query: unknown) {
+    const input = this.parse(page, query);
+    return this.trading.recentTrades(slug, input.cursor, input.limit);
+  }
+
+  @Post('admin/trading/markets/:assetId/halt')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('trading.manage')
+  async halt(
+    @Param('assetId') assetId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireKey(key);
+    await this.limiter.enforce(
+      'adminMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.trading.setMarketStatus(
+      req.actor!,
+      assetId,
+      'HALTED',
+      req.requestId ?? 'unknown',
+      key!,
+    );
+  }
+
+  @Post('admin/trading/markets/:assetId/resume')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('trading.manage')
+  async resume(
+    @Param('assetId') assetId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireKey(key);
+    await this.limiter.enforce(
+      'adminMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.trading.setMarketStatus(
+      req.actor!,
+      assetId,
+      'OPEN',
+      req.requestId ?? 'unknown',
+      key!,
+    );
+  }
+
+  private parse<T>(schema: z.ZodType<T>, value: unknown): T {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      });
+    return parsed.data;
+  }
+  private requireKey(key: string | undefined) {
+    if (!key || !/^[\x21-\x7e]{1,128}$/.test(key))
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+  }
+}

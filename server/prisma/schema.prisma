@@ -1,0 +1,2389 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator discordBotClient {
+  provider = "prisma-client-js"
+  output   = "../../apps/discord-bot/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  DEACTIVATED
+  RESTRICTED
+  SUSPENDED
+  CLOSED
+  PENDING_REVIEW
+}
+
+/// Versions are server-authoritative policy references.  Consent acceptance is
+/// historical evidence, not a mutable user preference.
+enum ConsentType {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+}
+
+enum AccountDeletionRequestStatus {
+  REQUESTED
+  UNDER_REVIEW
+  BLOCKED
+  APPROVED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum Role {
+  USER
+  SUPPORT
+  COMPLIANCE_ANALYST
+  ASSET_REVIEWER
+  VAULT_OPERATOR
+  FINANCE_OPERATOR
+  ADMIN
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+}
+
+enum OwnershipSupplyStatus {
+  PENDING
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum OwnershipAccountType {
+  USER
+  TREASURY
+  ESCROW
+  EXTERNAL
+}
+
+enum OwnershipAccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum OwnershipLedgerEntryType {
+  ISSUANCE
+  TRANSFER
+  RESERVE
+  RELEASE
+  CONSUME_RESERVATION
+  CORRECTION
+  RETIRE
+}
+
+enum OwnershipReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
+enum OwnershipReconciliationStatus {
+  RECONCILED
+  MISMATCH
+}
+
+enum FinancialAccountOwnerType {
+  USER
+  PLATFORM
+  CLEARING
+  EXTERNAL
+}
+
+enum FinancialAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum DebitCredit {
+  DEBIT
+  CREDIT
+}
+
+enum FinancialAccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum JournalTransactionType {
+  DEMO_FUNDING
+  EXTERNAL_DEPOSIT
+  EXTERNAL_WITHDRAWAL
+  CASH_RESERVATION
+  CASH_RELEASE
+  TRADE_SETTLEMENT
+  FEE
+  REFUND
+  REVERSAL
+  ADMIN_CORRECTION
+  DISTRIBUTION
+}
+
+enum JournalTransactionStatus {
+  POSTED
+  REVERSED
+}
+
+enum CashReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
+enum PortfolioLotStatus {
+  OPEN
+  CLOSED
+}
+
+enum FinancialReconciliationStatus {
+  RECONCILED
+  MISMATCH
+}
+
+enum TradingMarketStatus {
+  OPEN
+  HALTED
+  CLOSED
+}
+
+enum TradingOrderSide {
+  BUY
+  SELL
+}
+
+enum TradingOrderType {
+  LIMIT
+}
+
+enum TradingTimeInForce {
+  GTC
+  IOC
+}
+
+enum TradingOrderStatus {
+  PENDING_RESERVATION
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  EXPIRED
+  REJECTED
+}
+
+enum TradingExecutionSettlementStatus {
+  SETTLED
+  FAILED
+}
+
+/// Delivery state only. Phase 1 producers append PENDING records inside their
+/// existing domain transaction; no dispatcher is introduced here.
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+enum NotificationDeliveryChannel {
+  IN_APP
+  DISCORD
+  EMAIL
+  PUSH
+  WEBHOOK
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  SUPPRESSED
+  DEAD_LETTER
+}
+
+enum DiscussionPostStatus {
+  VISIBLE
+  HIDDEN
+  REMOVED
+  LOCKED
+}
+
+enum ContentReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationActionType {
+  HIDE
+  REMOVE
+  LOCK
+  UNHIDE
+}
+
+enum SaleProposalStatus {
+  DRAFT
+  OPEN
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+  SALE_PENDING
+  SOLD
+  DISTRIBUTED
+  FAILED
+}
+
+enum ProposalVoteChoice {
+  APPROVE
+  REJECT
+}
+
+enum ExternalSaleVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum DistributionStatus {
+  PENDING
+  READY
+  PROCESSING
+  DISTRIBUTED
+  FAILED
+  MANUAL_REVIEW
+}
+
+enum DistributionReconciliationStatus {
+  RECONCILED
+  MISMATCH
+}
+
+/// Document 016 provider-neutral sandbox authority. Provider SDK vocabulary
+/// never escapes adapters into application services or public responses.
+enum ProviderCode {
+  BLOCKCHAIN_ANALYSIS
+  BRIDGE
+  PLAID
+  /// Historical compatibility only; no active runtime adapter selects these.
+  SUMSUB
+  TRM
+  BVNK
+  LOCAL_TEST
+}
+
+enum ComplianceCaseType {
+  KYC
+  KYT
+}
+
+enum ComplianceCaseStatus {
+  NOT_STARTED
+  PENDING
+  REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  MANUAL_REVIEW
+  SUSPENDED
+}
+
+enum MoneyMovementType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum MoneyMovementStatus {
+  CREATED
+  PENDING_PROVIDER
+  PROCESSING
+  SETTLED
+  FAILED
+  CANCELLED
+  REVERSED
+  MANUAL_REVIEW
+  HELD
+}
+
+enum WebhookInboxStatus {
+  ACCEPTED
+  PROCESSING
+  PROCESSED
+  FAILED
+  REJECTED
+}
+
+enum ProviderReconciliationStatus {
+  RECONCILED
+  MISMATCH
+}
+
+enum ComplianceHoldStatus {
+  ACTIVE
+  RELEASED
+}
+
+enum ProviderIncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProviderIncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+enum CatalogueStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AssetCatalogueStatus {
+  DRAFT
+  IN_REVIEW
+  VERIFIED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MarketDataStatus {
+  DEMO
+  DELAYED
+  LIVE
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum SubmissionMediaStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  SCANNING
+  SAFE
+  REJECTED
+  DELETED
+}
+
+enum VerificationReviewStatus {
+  CLAIMED
+  COMPLETED
+}
+
+enum ValuationDecisionStatus {
+  ACTIVE
+  SUPERSEDED
+}
+
+enum CustodyStatus {
+  EXPECTED
+  RECEIVED
+  INSPECTED
+  SECURED
+  RELEASE_PENDING
+  RELEASED
+  EXCEPTION
+}
+
+enum InsuranceCoverageStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  EXCEPTION
+}
+
+/// Bot-owned Discord operational state only. Never stores Slice account,
+/// financial, compliance, or identity authority.
+enum DiscordSetupStatus {
+  NOT_CONFIGURED
+  APPLIED
+  PARTIAL
+  ERROR
+}
+
+enum DiscordManagedResourceType {
+  ROLE
+  CATEGORY
+  CHANNEL
+  PANEL
+  MESSAGE
+}
+
+enum DiscordTicketStatus {
+  OPEN
+  CLAIMED
+  WAITING_USER
+  WAITING_STAFF
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum DiscordTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum DiscordTicketTranscriptStatus {
+  COMPLETE
+  PARTIAL
+  FAILED
+}
+
+enum DiscordModerationAction {
+  WARN
+  NOTE
+  TIMEOUT
+  UNTIMEOUT
+  KICK
+  BAN
+  UNBAN
+  MESSAGE_DELETE
+  AUTOMOD_BLOCK
+  SCAM_BLOCK
+}
+
+enum DiscordModerationSource {
+  MANUAL
+  AUTOMOD
+  ANTI_SCAM
+  SYSTEM
+}
+
+enum DiscordModerationStatus {
+  PENDING
+  ENFORCED
+  FAILED
+  REVERSED
+}
+
+enum AssetPublicationStatus {
+  BLOCKED
+  READY
+  PUBLISHED
+  UNPUBLISHED
+}
+
+model User {
+  id                          String                             @id @default(cuid())
+  email                       String                             @unique
+  normalizedEmail             String                             @unique
+  passwordHash                String
+  emailVerifiedAt             DateTime?
+  phoneE164                   String?                            @unique
+  phoneVerifiedAt             DateTime?
+  accountStatus               AccountStatus                      @default(PENDING_REVIEW)
+  createdAt                   DateTime                           @default(now())
+  updatedAt                   DateTime                           @updatedAt
+  lastLoginAt                 DateTime?
+  profile                     UserProfile?
+  sessions                    Session[]
+  roleAssignments             RoleAssignment[]
+  statusHistory               AccountStatusHistory[]
+  auditEvents                 AuditEvent[]                       @relation("ActorAuditEvents")
+  publicCollectorProfile      PublicCollectorProfile?
+  watchlistItems              WatchlistItem[]
+  notifications               Notification[]
+  notificationPreferences     NotificationPreference[]
+  submissions                 AssetSubmission[]                  @relation("SubmissionOwner")
+  assignedReviews             VerificationReview[]               @relation("ReviewReviewer")
+  valuationEvidence           ValuationEvidence[]                @relation("ValuationEvidenceCreator")
+  valuationDecisions          ValuationDecision[]                @relation("ValuationDecisionCreator")
+  publications                AssetPublication[]                 @relation("PublicationActor")
+  ownershipAccounts           OwnershipAccount[]                 @relation("OwnershipAccountUser")
+  financialAccounts           FinancialAccount[]                 @relation("FinancialAccountUser")
+  portfolioLots               PortfolioLot[]
+  tradingOrders               TradingOrder[]
+  followingCollectors         CollectorFollow[]                  @relation("CollectorFollower")
+  followedByCollectors        CollectorFollow[]                  @relation("CollectorFollowed")
+  discussionPosts             DiscussionPost[]                   @relation("DiscussionAuthor")
+  contentReports              ContentReport[]                    @relation("ContentReporter")
+  moderationActions           ModerationAction[]                 @relation("ModerationActor")
+  saleProposals               SaleProposal[]                     @relation("SaleProposer")
+  proposalEligibility         ProposalEligibility[]              @relation("EligibilityUser")
+  proposalVotes               ProposalVote[]                     @relation("VoteCaster")
+  externalSaleVerifications   ExternalSaleVerification[]         @relation("SaleVerifier")
+  saleVerificationApprovals   ExternalSaleVerificationApproval[] @relation("SaleVerificationApprover")
+  complianceCases             ComplianceCase[]
+  complianceDecisions         ComplianceDecision[]               @relation("ComplianceDecisionActor")
+  externalFinancialAccounts   ExternalFinancialAccount[]
+  moneyMovements              MoneyMovement[]
+  complianceHolds             ComplianceHold[]
+  providerIncidents           ProviderIncident[]                 @relation("ProviderIncidentOwner")
+  discordAccountLink          DiscordAccountLink?
+  discordOAuthStates          DiscordOAuthState[]
+  emailVerificationTokens     EmailVerificationToken[]
+  phoneVerificationChallenges PhoneVerificationChallenge[]
+  twoFactor                   UserTwoFactor?
+  twoFactorLoginChallenges    TwoFactorLoginChallenge[]
+  deletionRequests            AccountDeletionRequest[]
+  consentAcceptances          ConsentAcceptance[]
+
+  @@index([accountStatus])
+}
+
+/// Append-only evidence of a customer's explicit signup or later policy
+/// acceptance.  A new policy version creates a new row; old evidence is never
+/// rewritten to imply acceptance of a newer policy.
+model ConsentAcceptance {
+  id            String      @id @default(cuid())
+  userId        String
+  consentType   ConsentType
+  policyVersion String
+  acceptedAt    DateTime
+  source        String      @default("SIGNUP")
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, consentType, policyVersion])
+  @@index([userId, consentType, acceptedAt, id])
+}
+
+/// Customer-requested lifecycle only. Completion/anonymisation remains a
+/// future privileged retention-policy operation; this model never deletes
+/// accounting, trade, provider, compliance, or audit authority.
+model AccountDeletionRequest {
+  id            String                       @id @default(cuid())
+  userId        String
+  status        AccountDeletionRequestStatus @default(REQUESTED)
+  reason        String?
+  blockedReason String?
+  requestedAt   DateTime                     @default(now())
+  reviewedAt    DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  user          User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt, id])
+  @@index([status, createdAt, id])
+}
+
+/// One-time email proof. The raw token is deliberately never persisted.
+model EmailVerificationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, consumedAt, expiresAt])
+}
+
+/// One-time phone proof. OTP values are deliberately stored only as Argon2id
+/// hashes; a newly verified number replaces the current number atomically.
+model PhoneVerificationChallenge {
+  id           String    @id @default(cuid())
+  userId       String
+  phoneE164    String
+  codeHash     String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  supersededAt DateTime?
+  attemptCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, phoneE164, createdAt])
+  @@index([userId, consumedAt, supersededAt, expiresAt])
+}
+
+/// Slice-owned TOTP authority. The secret is AES-GCM encrypted and is only
+/// decryptable by the backend while validating a supplied one-time password.
+model UserTwoFactor {
+  userId              String                  @id
+  secretCiphertext    String
+  enabledAt           DateTime?
+  enrollmentStartedAt DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes       TwoFactorRecoveryCode[]
+
+  @@index([enabledAt])
+}
+
+/// One-way digests only. Plaintext recovery codes are returned once during
+/// enrollment/regeneration and are never available for later retrieval.
+model TwoFactorRecoveryCode {
+  id         String        @id @default(cuid())
+  userId     String
+  codeHash   String        @unique
+  consumedAt DateTime?
+  createdAt  DateTime      @default(now())
+  twoFactor  UserTwoFactor @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+}
+
+/// A password-success challenge is not a session. Its opaque proof is stored
+/// only as a digest and is consumed before a normal session is issued.
+model TwoFactorLoginChallenge {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt, expiresAt])
+}
+
+/// Minimal Slice-owned Discord identity link. OAuth tokens are intentionally not retained.
+model DiscordAccountLink {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  discordUserId String   @unique
+  username      String
+  displayName   String?
+  linkedAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([discordUserId])
+}
+
+/// Short-lived, single-use OAuth state. The raw state value never reaches persistence.
+model DiscordOAuthState {
+  id         String    @id @default(cuid())
+  userId     String
+  stateHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  displayName       String
+  publicUsername    String?  @unique
+  avatarReference   String?
+  countryCode       String   @default("GB")
+  preferredCurrency String   @default("GBP")
+  timezone          String   @default("Europe/London")
+  locale            String   @default("en-GB")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id                  String    @id @default(cuid())
+  publicId            String    @unique
+  userId              String
+  tokenHash           String
+  familyId            String
+  replacedBySessionId String?
+  issuedAt            DateTime  @default(now())
+  authenticatedAt     DateTime  @default(now())
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  revocationReason    String?
+  lastActivityAt      DateTime  @default(now())
+  userAgent           String?
+  ipHash              String?
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@index([userId, revokedAt])
+  @@index([userId, publicId])
+  @@index([familyId])
+}
+
+model AccountStatusHistory {
+  id          String         @id @default(cuid())
+  userId      String
+  fromStatus  AccountStatus?
+  toStatus    AccountStatus
+  reason      String
+  actorUserId String?
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model RoleAssignment {
+  id               String    @id @default(cuid())
+  userId           String
+  role             Role
+  scopeType        String    @default("GLOBAL")
+  scopeId          String    @default("*")
+  assignedByUserId String?
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, role, scopeType, scopeId, revokedAt])
+}
+
+model AuditEvent {
+  id           String         @id @default(cuid())
+  actorUserId  String?
+  actorType    AuditActorType
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String?
+  sessionId    String?
+  result       AuditResult
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  actor        User?          @relation("ActorAuditEvents", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([resourceType, resourceId])
+  @@index([actorUserId, createdAt])
+}
+
+model IdempotencyRecord {
+  id             String            @id @default(cuid())
+  key            String
+  scope          String            @default("default")
+  actorScope     String            @default("system")
+  requestHash    String
+  status         IdempotencyStatus @default(PROCESSING)
+  responseStatus Int?
+  responseBody   Json?
+  expiresAt      DateTime
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+
+  @@unique([actorScope, scope, key])
+  @@index([expiresAt])
+}
+
+model Category {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  iconKey     String?
+  description String?
+  status      CatalogueStatus   @default(ACTIVE)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  sets        CollectibleSet[]
+  assets      Asset[]
+  submissions AssetSubmission[]
+
+  @@index([status, sortOrder, id])
+}
+
+model CollectibleSet {
+  id           String            @id @default(cuid())
+  categoryId   String
+  slug         String            @unique
+  name         String
+  manufacturer String?
+  releaseYear  Int?
+  edition      String?
+  status       CatalogueStatus   @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  category     Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  assets       Asset[]
+  submissions  AssetSubmission[]
+
+  @@index([categoryId, status, id])
+}
+
+model GradingCompany {
+  id        String            @id @default(cuid())
+  code      String            @unique
+  name      String
+  status    CatalogueStatus   @default(ACTIVE)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  grades    GradeScaleEntry[]
+
+  @@index([status, code])
+}
+
+model GradeScaleEntry {
+  id             String            @id @default(cuid())
+  companyId      String
+  grade          Decimal           @db.Decimal(4, 2)
+  label          String
+  conditionLabel String?
+  sortOrder      Int               @default(0)
+  active         Boolean           @default(true)
+  company        GradingCompany    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  assets         Asset[]
+  submissions    AssetSubmission[]
+
+  @@unique([companyId, grade])
+  @@index([companyId, active, sortOrder, id])
+}
+
+model Asset {
+  id                  String                @id @default(cuid())
+  publicId            String                @unique
+  slug                String                @unique
+  categoryId          String
+  setId               String?
+  title               String
+  shortName           String?
+  year                Int?
+  manufacturer        String?
+  edition             String?
+  cardNumber          String?
+  description         String?
+  gradeScaleEntryId   String?
+  certificationNumber String?
+  status              AssetCatalogueStatus  @default(DRAFT)
+  heroMediaId         String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  publishedAt         DateTime?
+  category            Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet      CollectibleSet?       @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry     GradeScaleEntry?      @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  valuationPoints     AssetValuationPoint[]
+  marketSnapshots     AssetMarketSnapshot[]
+  watchlistItems      WatchlistItem[]
+  vaultPublicEvents   VaultPublicEvent[]
+  submissions         AssetSubmission[]
+  valuationEvidence   ValuationEvidence[]
+  valuationDecisions  ValuationDecision[]
+  custodyRecord       VaultCustodyRecord?
+  custodyEvents       CustodyEvent[]
+  insuranceCoverage   InsuranceCoverage[]
+  publication         AssetPublication?
+  ownershipSupply     OwnershipAssetSupply?
+  portfolioLots       PortfolioLot[]
+  tradingMarket       TradingMarket?
+  tradingOrders       TradingOrder[]
+  tradingExecutions   TradingExecution[]
+  discussionPosts     DiscussionPost[]
+  saleProposals       SaleProposal[]
+
+  @@unique([gradeScaleEntryId, certificationNumber])
+  @@index([status, categoryId, id])
+  @@index([setId, status, id])
+  @@index([title, id])
+}
+
+model PublicCollectorProfile {
+  userId      String    @id
+  slug        String    @unique
+  headline    String?
+  specialism  String?
+  isPublic    Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isPublic, slug])
+  @@index([isPublic, createdAt, userId])
+}
+
+model WatchlistItem {
+  userId    String
+  assetId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([userId, assetId])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id           String    @id @default(cuid())
+  deliveryId   String?   @unique
+  userId       String
+  type         String
+  title        String
+  body         String
+  resourceType String?
+  resourceId   String?
+  createdAt    DateTime  @default(now())
+  readAt       DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt, id])
+}
+
+/// Product notification policy. This is intentionally unrelated to Discord role UX.
+model NotificationPreference {
+  id        String                      @id @default(cuid())
+  userId    String
+  topic     String
+  channel   NotificationDeliveryChannel
+  enabled   Boolean                     @default(true)
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+  user      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topic, channel])
+  @@index([userId, topic])
+}
+
+model AssetSubmission {
+  id                String               @id @default(cuid())
+  ownerUserId       String
+  assetId           String?
+  status            SubmissionStatus     @default(DRAFT)
+  version           Int                  @default(1)
+  categoryId        String
+  setId             String?
+  gradeScaleEntryId String?
+  declaredMetadata  Json?
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  reviewerId        String?
+  decisionCode      String?
+  decisionNote      String?
+  cancelledAt       DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  owner             User                 @relation("SubmissionOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  asset             Asset?               @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  category          Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet    CollectibleSet?      @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry   GradeScaleEntry?     @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  media             SubmissionMedia[]
+  reviews           VerificationReview[]
+
+  @@index([ownerUserId, status, createdAt, id])
+  @@index([status, submittedAt, id])
+  @@index([reviewerId, status, updatedAt, id])
+}
+
+model SubmissionMedia {
+  id                String                @id @default(cuid())
+  submissionId      String
+  slot              String
+  objectKey         String                @unique
+  originalFilename  String
+  mimeType          String
+  sizeBytes         Int
+  sha256            String?
+  status            SubmissionMediaStatus @default(PENDING_UPLOAD)
+  scanResultCode    String?
+  deletedAt         DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  submission        AssetSubmission       @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  valuationEvidence ValuationEvidence[]   @relation("ValuationEvidenceDocument")
+  coverageEvidence  InsuranceCoverage[]   @relation("InsuranceCoverageDocument")
+
+  @@unique([submissionId, slot])
+  @@index([submissionId, status, slot])
+  @@index([sha256])
+}
+
+model ValuationEvidence {
+  id              String           @id @default(cuid())
+  assetId         String
+  sourceType      String
+  sourceRef       String?
+  observedAt      DateTime
+  valueMinor      BigInt
+  currency        String
+  conditionBasis  String
+  confidence      Int
+  documentMediaId String?
+  createdByUserId String
+  supersedesId    String?
+  createdAt       DateTime         @default(now())
+  asset           Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  documentMedia   SubmissionMedia? @relation("ValuationEvidenceDocument", fields: [documentMediaId], references: [id], onDelete: Restrict)
+  createdBy       User             @relation("ValuationEvidenceCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, observedAt, id])
+  @@index([assetId, sourceType, createdAt])
+}
+
+model ValuationDecision {
+  id              String                  @id @default(cuid())
+  assetId         String
+  valueMinor      BigInt
+  currency        String
+  confidence      Int
+  methodologyCode String
+  decidedByUserId String
+  decidedAt       DateTime
+  status          ValuationDecisionStatus @default(ACTIVE)
+  createdAt       DateTime                @default(now())
+  asset           Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  decidedBy       User                    @relation("ValuationDecisionCreator", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, status, decidedAt, id])
+}
+
+model VaultCustodyRecord {
+  id           String         @id @default(cuid())
+  assetId      String         @unique
+  providerCode String
+  facilityCode String?
+  status       CustodyStatus  @default(EXPECTED)
+  providerRef  String?
+  receivedAt   DateTime?
+  securedAt    DateTime?
+  updatedAt    DateTime       @updatedAt
+  asset        Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  events       CustodyEvent[]
+
+  @@index([status, updatedAt, id])
+}
+
+model CustodyEvent {
+  id              String             @id @default(cuid())
+  assetId         String
+  custodyRecordId String
+  fromStatus      CustodyStatus?
+  toStatus        CustodyStatus
+  actorUserId     String?
+  providerRef     String?
+  occurredAt      DateTime
+  createdAt       DateTime           @default(now())
+  asset           Asset              @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  custodyRecord   VaultCustodyRecord @relation(fields: [custodyRecordId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, occurredAt, id])
+  @@index([custodyRecordId, createdAt, id])
+}
+
+model InsuranceCoverage {
+  id                String                  @id @default(cuid())
+  assetId           String
+  providerCode      String
+  policyRef         String?
+  insuredValueMinor BigInt
+  currency          String
+  status            InsuranceCoverageStatus @default(PENDING)
+  effectiveAt       DateTime
+  expiresAt         DateTime
+  evidenceMediaId   String?
+  updatedAt         DateTime                @updatedAt
+  asset             Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  evidenceMedia     SubmissionMedia?        @relation("InsuranceCoverageDocument", fields: [evidenceMediaId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, status, expiresAt, id])
+}
+
+model AssetPublication {
+  id                String                 @id @default(cuid())
+  assetId           String                 @unique
+  status            AssetPublicationStatus @default(BLOCKED)
+  readiness         Json
+  publishedAt       DateTime?
+  publishedByUserId String?
+  unpublishedAt     DateTime?
+  version           Int                    @default(1)
+  updatedAt         DateTime               @updatedAt
+  asset             Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  publishedBy       User?                  @relation("PublicationActor", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt, id])
+}
+
+model VerificationReview {
+  id           String                   @id @default(cuid())
+  submissionId String
+  reviewerId   String
+  status       VerificationReviewStatus @default(CLAIMED)
+  decision     String?
+  reasonCode   String?
+  note         String?
+  createdAt    DateTime                 @default(now())
+  completedAt  DateTime?
+  submission   AssetSubmission          @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  reviewer     User                     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, createdAt, id])
+  @@index([reviewerId, status, createdAt, id])
+}
+
+model VaultPublicEvent {
+  id            String   @id @default(cuid())
+  assetId       String
+  type          String
+  occurredAt    DateTime
+  publicSummary String
+  status        String   @default("PUBLISHED")
+  sourceRef     String?
+  createdAt     DateTime @default(now())
+  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([status, occurredAt, id])
+  @@index([assetId, occurredAt])
+}
+
+model MarketSnapshot {
+  id                             String           @id @default(cuid())
+  asOf                           DateTime
+  currency                       String
+  totalEstimatedMarketValueMinor BigInt
+  volume24hMinor                 BigInt
+  activeAssetCount               Int
+  collectorCount                 Int
+  source                         String
+  status                         MarketDataStatus
+  createdAt                      DateTime         @default(now())
+
+  @@unique([source, asOf])
+  @@index([asOf, id])
+}
+
+model AssetValuationPoint {
+  id                        String           @id @default(cuid())
+  assetId                   String
+  observedAt                DateTime
+  estimatedMarketValueMinor BigInt
+  currency                  String
+  source                    String
+  status                    MarketDataStatus
+  createdAt                 DateTime         @default(now())
+  asset                     Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, source, observedAt])
+  @@index([assetId, observedAt, id])
+}
+
+model AssetMarketSnapshot {
+  id                        String           @id @default(cuid())
+  assetId                   String
+  asOf                      DateTime
+  estimatedMarketValueMinor BigInt
+  currency                  String
+  change24hBps              Int
+  availableBps              Int?
+  ownersCount               Int?
+  watchersCount             Int?
+  confidence                Int?
+  source                    String
+  status                    MarketDataStatus
+  createdAt                 DateTime         @default(now())
+  asset                     Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, source, asOf])
+  @@index([assetId, asOf, id])
+  @@index([asOf, change24hBps, id])
+}
+
+/// Per-asset cap-table authority. Document 012 issues fixed, indivisible units;
+/// this is intentionally separate from all future financial ledgers.
+model OwnershipAssetSupply {
+  assetId       String                 @id
+  totalUnits    BigInt
+  issuedUnits   BigInt                 @default(0)
+  nextSequence  BigInt                 @default(1)
+  status        OwnershipSupplyStatus  @default(PENDING)
+  issuedAt      DateTime?
+  version       Int                    @default(1)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  asset         Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  positions     OwnershipPosition[]
+  ledgerEntries OwnershipLedgerEntry[]
+
+  @@index([status, updatedAt, assetId])
+}
+
+/// A ledger principal. Initial issuance creates a private system treasury only;
+/// no user allocation or public investor identity is created by this surface.
+model OwnershipAccount {
+  id                    String                 @id @default(cuid())
+  type                  OwnershipAccountType
+  userId                String?                @unique
+  status                OwnershipAccountStatus @default(ACTIVE)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  user                  User?                  @relation("OwnershipAccountUser", fields: [userId], references: [id], onDelete: Restrict)
+  positions             OwnershipPosition[]
+  debits                OwnershipLedgerEntry[] @relation("OwnershipLedgerDebit")
+  credits               OwnershipLedgerEntry[] @relation("OwnershipLedgerCredit")
+  proposalEligibilities ProposalEligibility[]
+
+  @@index([type, status, id])
+}
+
+/// Materialized ownership position. Available units are settled minus reserved;
+/// constraints in the migration prevent a negative projection.
+model OwnershipPosition {
+  id            String                 @id @default(cuid())
+  assetId       String
+  accountId     String
+  settledUnits  BigInt                 @default(0)
+  reservedUnits BigInt                 @default(0)
+  version       Int                    @default(1)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  supply        OwnershipAssetSupply   @relation(fields: [assetId], references: [assetId], onDelete: Restrict)
+  account       OwnershipAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  reservations  OwnershipReservation[]
+
+  @@unique([assetId, accountId])
+  @@index([accountId, assetId])
+}
+
+model OwnershipReservation {
+  id             String                     @id @default(cuid())
+  assetId        String
+  accountId      String
+  purposeType    String
+  purposeId      String
+  units          BigInt
+  status         OwnershipReservationStatus @default(ACTIVE)
+  expiresAt      DateTime?
+  idempotencyRef String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  position       OwnershipPosition          @relation(fields: [assetId, accountId], references: [assetId, accountId], onDelete: Restrict)
+
+  @@unique([assetId, accountId, purposeType, purposeId])
+  @@index([assetId, accountId, status, expiresAt])
+}
+
+/// Append-only ownership quantities and sequences. It holds no cash, price,
+/// payment, or investor data.
+model OwnershipLedgerEntry {
+  id                  String                   @id @default(cuid())
+  assetId             String
+  sequence            BigInt
+  entryType           OwnershipLedgerEntryType
+  debitAccountId      String?
+  creditAccountId     String?
+  units               BigInt
+  correlationId       String
+  causationId         String?
+  idempotencyRecordId String?
+  reasonCode          String?
+  metadata            Json?
+  actorUserId         String?
+  createdAt           DateTime                 @default(now())
+  supply              OwnershipAssetSupply     @relation(fields: [assetId], references: [assetId], onDelete: Restrict)
+  debitAccount        OwnershipAccount?        @relation("OwnershipLedgerDebit", fields: [debitAccountId], references: [id], onDelete: Restrict)
+  creditAccount       OwnershipAccount?        @relation("OwnershipLedgerCredit", fields: [creditAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, sequence])
+  @@unique([assetId, correlationId, entryType])
+  @@index([assetId, createdAt, id])
+}
+
+/// Immutable reconciliation observation. Reconciliation never repairs state;
+/// any later repair must be a separately authorised compensating mutation.
+model OwnershipReconciliationRun {
+  id                  String                        @id @default(cuid())
+  assetId             String
+  status              OwnershipReconciliationStatus
+  expectedIssuedUnits BigInt
+  positionUnits       BigInt
+  reservedUnits       BigInt
+  ledgerUnits         BigInt
+  mismatchCodes       Json
+  actorUserId         String?
+  createdAt           DateTime                      @default(now())
+
+  @@index([assetId, createdAt, id])
+}
+
+/// Document 013's closed-loop GBP accounting principal. Accounts are private;
+/// `AccountBalance` is only a replayable projection of the immutable journal.
+model FinancialAccount {
+  id             String                     @id @default(cuid())
+  ownerType      FinancialAccountOwnerType
+  ownerUserId    String?
+  accountType    FinancialAccountType
+  code           String
+  currency       String
+  normalSide     DebitCredit
+  status         FinancialAccountStatus     @default(ACTIVE)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  owner          User?                      @relation("FinancialAccountUser", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  balance        AccountBalance?
+  entries        JournalEntry[]
+  reservations   CashReservation[]
+  saleProceeds   ExternalSaleVerification[] @relation("SaleProceedsAccount")
+  moneyMovements MoneyMovement[]            @relation("MovementCashAccount")
+
+  @@unique([ownerType, ownerUserId, code, currency])
+  @@index([ownerUserId, currency, status])
+}
+
+model JournalTransaction {
+  id              String                    @id @default(cuid())
+  type            JournalTransactionType
+  status          JournalTransactionStatus  @default(POSTED)
+  currency        String
+  correlationId   String                    @unique
+  descriptionCode String
+  reversalOfId    String?                   @unique
+  createdByUserId String?
+  effectiveAt     DateTime                  @default(now())
+  createdAt       DateTime                  @default(now())
+  reversalOf      JournalTransaction?       @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal        JournalTransaction?       @relation("JournalReversal")
+  entries         JournalEntry[]
+  saleProceeds    ExternalSaleVerification? @relation("SaleProceedsJournal")
+  moneyMovement   MoneyMovement?            @relation("MovementJournal")
+
+  @@index([currency, effectiveAt, id])
+}
+
+model JournalEntry {
+  id            String             @id @default(cuid())
+  transactionId String
+  sequence      Int
+  accountId     String
+  side          DebitCredit
+  amountMinor   BigInt
+  currency      String
+  createdAt     DateTime           @default(now())
+  transaction   JournalTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  account       FinancialAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([transactionId, sequence])
+  @@index([accountId, createdAt, id])
+}
+
+model AccountBalance {
+  accountId         String           @id
+  postedDebitMinor  BigInt           @default(0)
+  postedCreditMinor BigInt           @default(0)
+  reservedMinor     BigInt           @default(0)
+  version           Int              @default(1)
+  updatedAt         DateTime         @updatedAt
+  account           FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+}
+
+model CashReservation {
+  id          String                @id @default(cuid())
+  accountId   String
+  purposeType String
+  purposeId   String
+  amountMinor BigInt
+  status      CashReservationStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  account     FinancialAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, purposeType, purposeId])
+  @@index([accountId, status, expiresAt])
+}
+
+model PortfolioLot {
+  id              String             @id @default(cuid())
+  userId          String
+  assetId         String
+  acquiredUnits   BigInt
+  remainingUnits  BigInt
+  totalCostMinor  BigInt
+  currency        String
+  acquiredAt      DateTime           @default(now())
+  sourceReference String             @unique
+  status          PortfolioLotStatus @default(OPEN)
+  createdAt       DateTime           @default(now())
+  user            User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  asset           Asset              @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  disposals       LotDisposal[]
+
+  @@index([userId, assetId, acquiredAt, id])
+}
+
+model LotDisposal {
+  id                 String       @id @default(cuid())
+  lotId              String
+  sourceReference    String       @unique
+  units              BigInt
+  allocatedCostMinor BigInt
+  proceedsMinor      BigInt
+  feeMinor           BigInt
+  realizedPnlMinor   BigInt
+  createdAt          DateTime     @default(now())
+  lot                PortfolioLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+
+  @@index([lotId, createdAt, id])
+}
+
+model FinancialReconciliationRun {
+  id            String                        @id @default(cuid())
+  scope         String
+  status        FinancialReconciliationStatus
+  currency      String
+  debitMinor    BigInt
+  creditMinor   BigInt
+  mismatchCodes Json
+  actorUserId   String?
+  createdAt     DateTime                      @default(now())
+
+  @@index([scope, createdAt, id])
+}
+
+model ComplianceCase {
+  id                          String               @id @default(cuid())
+  userId                      String
+  provider                    ProviderCode
+  type                        ComplianceCaseType
+  status                      ComplianceCaseStatus @default(NOT_STARTED)
+  providerReferenceCiphertext String?
+  providerReferenceHash       String?
+  encryptionKeyVersion        String?
+  expiresAt                   DateTime?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  user                        User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  decisions                   ComplianceDecision[]
+
+  @@unique([userId, provider, type])
+  @@unique([provider, providerReferenceHash])
+  @@index([userId, status, updatedAt])
+  @@index([provider, status, updatedAt])
+}
+
+model ComplianceDecision {
+  id                  String               @id @default(cuid())
+  caseId              String
+  status              ComplianceCaseStatus
+  reasonCode          String
+  providerEventIdHash String?
+  actorUserId         String?
+  createdAt           DateTime             @default(now())
+  complianceCase      ComplianceCase       @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  actor               User?                @relation("ComplianceDecisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([caseId, providerEventIdHash])
+  @@index([caseId, createdAt, id])
+}
+
+model ExternalFinancialAccount {
+  id                          String          @id @default(cuid())
+  userId                      String
+  provider                    ProviderCode
+  providerReferenceCiphertext String
+  providerReferenceHash       String
+  encryptionKeyVersion        String
+  itemReferenceCiphertext     String?
+  itemReferenceHash           String?
+  accessTokenCiphertext       String?
+  accessTokenHash             String?
+  institutionName             String?
+  accountName                 String?
+  accountMask                 String?
+  currency                    String
+  accountType                 String
+  status                      String
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+  user                        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  movements                   MoneyMovement[]
+
+  @@unique([provider, providerReferenceHash])
+  @@index([userId, provider, itemReferenceHash])
+  @@index([userId, provider, status])
+}
+
+model MoneyMovement {
+  id                          String                    @id @default(cuid())
+  userId                      String
+  externalAccountId           String?
+  cashAccountId               String
+  type                        MoneyMovementType
+  amountMinor                 BigInt
+  currency                    String
+  status                      MoneyMovementStatus       @default(CREATED)
+  provider                    ProviderCode
+  providerReferenceCiphertext String?
+  providerReferenceHash       String?
+  encryptionKeyVersion        String?
+  idempotencyKeyHash          String
+  reservationId               String?                   @unique
+  ledgerTransactionId         String?                   @unique
+  failureCode                 String?
+  version                     Int                       @default(1)
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  settledAt                   DateTime?
+  user                        User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  externalAccount             ExternalFinancialAccount? @relation(fields: [externalAccountId], references: [id], onDelete: Restrict)
+  cashAccount                 FinancialAccount          @relation("MovementCashAccount", fields: [cashAccountId], references: [id], onDelete: Restrict)
+  ledgerTransaction           JournalTransaction?       @relation("MovementJournal", fields: [ledgerTransactionId], references: [id], onDelete: Restrict)
+  history                     MoneyMovementHistory[]
+  holds                       ComplianceHold[]
+
+  @@unique([userId, type, idempotencyKeyHash])
+  @@unique([provider, providerReferenceHash])
+  @@index([userId, createdAt, id])
+  @@index([provider, status, updatedAt])
+  @@index([status, createdAt, id])
+}
+
+model MoneyMovementHistory {
+  id         String               @id @default(cuid())
+  movementId String
+  fromStatus MoneyMovementStatus?
+  toStatus   MoneyMovementStatus
+  reasonCode String
+  createdAt  DateTime             @default(now())
+  movement   MoneyMovement        @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@index([movementId, createdAt, id])
+}
+
+model WebhookInbox {
+  id                   String             @id @default(cuid())
+  provider             ProviderCode
+  providerEventIdHash  String
+  eventType            String
+  payloadCiphertext    String?
+  payloadHash          String
+  encryptionKeyVersion String?
+  signatureVerified    Boolean
+  receivedAt           DateTime           @default(now())
+  processedAt          DateTime?
+  status               WebhookInboxStatus @default(ACCEPTED)
+  attempts             Int                @default(0)
+  errorCode            String?
+
+  @@unique([provider, providerEventIdHash])
+  @@index([provider, status, receivedAt, id])
+}
+
+model ProviderReconciliationRun {
+  id            String                       @id @default(cuid())
+  provider      ProviderCode
+  status        ProviderReconciliationStatus
+  actorUserId   String?
+  createdAt     DateTime                     @default(now())
+  discrepancies ProviderDiscrepancy[]
+
+  @@index([provider, createdAt, id])
+}
+
+model ProviderDiscrepancy {
+  id            String                    @id @default(cuid())
+  runId         String
+  code          String
+  movementId    String?
+  expectedMinor BigInt?
+  actualMinor   BigInt?
+  createdAt     DateTime                  @default(now())
+  run           ProviderReconciliationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([runId, code, id])
+}
+
+model ComplianceHold {
+  id         String               @id @default(cuid())
+  userId     String
+  movementId String?
+  scope      String
+  reasonCode String
+  source     String
+  status     ComplianceHoldStatus @default(ACTIVE)
+  createdAt  DateTime             @default(now())
+  releasedAt DateTime?
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  movement   MoneyMovement?       @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt])
+  @@index([movementId, status])
+}
+
+model ProviderIncident {
+  id          String                   @id @default(cuid())
+  provider    ProviderCode
+  severity    ProviderIncidentSeverity
+  status      ProviderIncidentStatus   @default(OPEN)
+  code        String
+  ownerUserId String?
+  createdAt   DateTime                 @default(now())
+  resolvedAt  DateTime?
+  owner       User?                    @relation("ProviderIncidentOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([provider, status, severity, createdAt])
+}
+
+/// Document 014 local/test market configuration. Production trading hours and
+/// fee schedules remain outside this model until separately approved.
+model TradingMarket {
+  assetId               String              @id
+  status                TradingMarketStatus @default(OPEN)
+  tickSizeMinor         BigInt              @default(1)
+  lotSizeUnits          BigInt              @default(1)
+  minimumNotionalMinor  BigInt              @default(100)
+  makerFeeBps           Int                 @default(0)
+  takerFeeBps           Int                 @default(100)
+  selfTradePrevention   String              @default("REJECT_TAKER")
+  tradingEnabled        Boolean             @default(true)
+  feeScheduleVersion    String              @default("INITIAL_POLICY_V1")
+  nextPrioritySequence  BigInt              @default(1)
+  nextExecutionSequence BigInt              @default(1)
+  version               Int                 @default(1)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  asset                 Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  orders                TradingOrder[]
+  executions            TradingExecution[]
+
+  @@index([status, updatedAt, assetId])
+}
+
+/// Durable order intent. Reservation references are opaque internal links; no
+/// public projection exposes them.
+model TradingOrder {
+  id                     String               @id @default(cuid())
+  userId                 String
+  assetId                String
+  side                   TradingOrderSide
+  type                   TradingOrderType     @default(LIMIT)
+  timeInForce            TradingTimeInForce
+  status                 TradingOrderStatus   @default(PENDING_RESERVATION)
+  limitPriceMinor        BigInt
+  originalUnits          BigInt
+  remainingUnits         BigInt
+  filledUnits            BigInt               @default(0)
+  averageFillPriceMinor  BigInt?
+  prioritySequence       BigInt?
+  cashReservationId      String?
+  ownershipReservationId String?
+  idempotencyRecordId    String?
+  expiresAt              DateTime?
+  closedAt               DateTime?
+  version                Int                  @default(1)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  user                   User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  asset                  Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingOrder_asset_fkey")
+  market                 TradingMarket        @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingOrder_market_fkey")
+  statusHistory          OrderStatusHistory[]
+  buyExecutions          TradingExecution[]   @relation("ExecutionBuyOrder")
+  sellExecutions         TradingExecution[]   @relation("ExecutionSellOrder")
+  makerExecutions        TradingExecution[]   @relation("ExecutionMakerOrder")
+  takerExecutions        TradingExecution[]   @relation("ExecutionTakerOrder")
+
+  @@index([assetId, side, status, limitPriceMinor, prioritySequence])
+  @@index([userId, createdAt, id])
+  @@index([assetId, status, createdAt, id])
+  @@index([assetId, status, expiresAt, id])
+}
+
+/// Append-only externally-safe execution record. Settlement is internal and
+/// atomic in Document 014; this record never carries financial account IDs.
+model TradingExecution {
+  id               String                           @id @default(cuid())
+  assetId          String
+  buyOrderId       String
+  sellOrderId      String
+  makerOrderId     String
+  takerOrderId     String
+  priceMinor       BigInt
+  units            BigInt
+  grossMinor       BigInt
+  buyerFeeMinor    BigInt                           @default(0)
+  sellerFeeMinor   BigInt                           @default(0)
+  marketSequence   BigInt
+  settlementStatus TradingExecutionSettlementStatus @default(SETTLED)
+  correlationId    String                           @unique
+  executedAt       DateTime                         @default(now())
+  settledAt        DateTime                         @default(now())
+  asset            Asset                            @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingExecution_asset_fkey")
+  market           TradingMarket                    @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingExecution_market_fkey")
+  buyOrder         TradingOrder                     @relation("ExecutionBuyOrder", fields: [buyOrderId], references: [id], onDelete: Restrict)
+  sellOrder        TradingOrder                     @relation("ExecutionSellOrder", fields: [sellOrderId], references: [id], onDelete: Restrict)
+  makerOrder       TradingOrder                     @relation("ExecutionMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
+  takerOrder       TradingOrder                     @relation("ExecutionTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, marketSequence])
+  @@index([assetId, executedAt, id])
+}
+
+/// Immutable state-transition audit distinct from generic access audit.
+/// Durable, provider-neutral event envelope. Payloads are validated plain JSON
+/// and never carry raw provider/compliance or financial-account authority.
+model OutboxEvent {
+  id             String                 @id @default(cuid())
+  eventId        String                 @unique
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  schemaVersion  Int
+  occurredAt     DateTime
+  payload        Json
+  metadata       Json?
+  correlationId  String?
+  causationId    String?
+  actorUserId    String?
+  status         OutboxEventStatus      @default(PENDING)
+  attempts       Int                    @default(0)
+  availableAt    DateTime               @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  claimToken     String?                @unique
+  leaseExpiresAt DateTime?
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  deadLetteredAt DateTime?
+  lastErrorSafe  String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  deliveries     NotificationDelivery[]
+
+  @@index([status, availableAt, createdAt, id])
+  @@index([status, leaseExpiresAt, id])
+  @@index([aggregateType, aggregateId, occurredAt, id])
+  @@index([correlationId])
+}
+
+/// Durable downstream delivery work. PENDING is not evidence of external delivery.
+model NotificationDelivery {
+  id             String                      @id @default(cuid())
+  deliveryId     String                      @unique
+  outboxEventId  String
+  channel        NotificationDeliveryChannel
+  destinationKey String
+  classification String
+  topic          String
+  mandatory      Boolean                     @default(false)
+  payloadVersion Int
+  payload        Json
+  idempotencyKey String                      @unique
+  status         NotificationDeliveryStatus  @default(PENDING)
+  attempts       Int                         @default(0)
+  availableAt    DateTime                    @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  claimToken     String?                     @unique
+  leaseExpiresAt DateTime?
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  deadLetteredAt DateTime?
+  lastErrorSafe  String?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  outboxEvent    OutboxEvent                 @relation(fields: [outboxEventId], references: [id], onDelete: Restrict)
+
+  @@unique([outboxEventId, channel, destinationKey])
+  @@index([status, availableAt, createdAt, id])
+  @@index([status, leaseExpiresAt, id])
+  @@index([outboxEventId, createdAt, id])
+}
+
+model OrderStatusHistory {
+  id         String              @id @default(cuid())
+  orderId    String
+  fromStatus TradingOrderStatus?
+  toStatus   TradingOrderStatus
+  reasonCode String?
+  createdAt  DateTime            @default(now())
+  order      TradingOrder        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt, id])
+}
+
+model CollectorFollow {
+  followerUserId String
+  followedUserId String
+  createdAt      DateTime @default(now())
+  follower       User     @relation("CollectorFollower", fields: [followerUserId], references: [id], onDelete: Cascade)
+  followed       User     @relation("CollectorFollowed", fields: [followedUserId], references: [id], onDelete: Cascade)
+
+  @@id([followerUserId, followedUserId])
+  @@index([followedUserId, createdAt, followerUserId])
+}
+
+model DiscussionPost {
+  id        String               @id @default(cuid())
+  assetId   String
+  userId    String
+  parentId  String?
+  body      String
+  status    DiscussionPostStatus @default(VISIBLE)
+  editedAt  DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  asset     Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  user      User                 @relation("DiscussionAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  parent    DiscussionPost?      @relation("DiscussionReply", fields: [parentId], references: [id], onDelete: Restrict)
+  replies   DiscussionPost[]     @relation("DiscussionReply")
+  reports   ContentReport[]
+  actions   ModerationAction[]
+
+  @@index([assetId, status, createdAt, id])
+  @@index([userId, createdAt, id])
+}
+
+model ContentReport {
+  id             String              @id @default(cuid())
+  postId         String
+  reporterUserId String
+  reasonCode     String
+  status         ContentReportStatus @default(OPEN)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  post           DiscussionPost      @relation(fields: [postId], references: [id], onDelete: Restrict)
+  reporter       User                @relation("ContentReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  actions        ModerationAction[]
+
+  @@unique([postId, reporterUserId])
+  @@index([status, createdAt, id])
+}
+
+model ModerationAction {
+  id            String               @id @default(cuid())
+  postId        String
+  reportId      String?
+  moderatorId   String
+  action        ModerationActionType
+  reasonCode    String
+  internalNotes String?
+  createdAt     DateTime             @default(now())
+  post          DiscussionPost       @relation(fields: [postId], references: [id], onDelete: Restrict)
+  report        ContentReport?       @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  moderator     User                 @relation("ModerationActor", fields: [moderatorId], references: [id], onDelete: Restrict)
+
+  @@index([postId, createdAt, id])
+  @@index([reportId, createdAt, id])
+}
+
+model SaleProposal {
+  id               String                    @id @default(cuid())
+  assetId          String
+  proposerId       String
+  status           SaleProposalStatus        @default(DRAFT)
+  offerMinor       BigInt
+  currency         String
+  policyVersion    String
+  opensAt          DateTime?
+  closesAt         DateTime?
+  snapshotSequence BigInt?
+  eligibleUnits    BigInt                    @default(0)
+  quorumBps        Int
+  approvalBps      Int
+  votingEnabled    Boolean                   @default(false)
+  version          Int                       @default(1)
+  closedAt         DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  asset            Asset                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  proposer         User                      @relation("SaleProposer", fields: [proposerId], references: [id], onDelete: Restrict)
+  eligibility      ProposalEligibility[]
+  votes            ProposalVote[]
+  externalSale     ExternalSaleVerification?
+  distribution     Distribution?
+
+  @@index([assetId, status, createdAt, id])
+  @@index([status, closesAt, id])
+}
+
+model ProposalEligibility {
+  id         String             @id @default(cuid())
+  proposalId String
+  accountId  String
+  userId     String?
+  units      BigInt
+  createdAt  DateTime           @default(now())
+  proposal   SaleProposal       @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  account    OwnershipAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  user       User?              @relation("EligibilityUser", fields: [userId], references: [id], onDelete: Restrict)
+  votes      ProposalVote[]
+  lines      DistributionLine[]
+
+  @@unique([proposalId, accountId])
+  @@index([proposalId, userId, id])
+}
+
+model ProposalVote {
+  id            String              @id @default(cuid())
+  proposalId    String
+  eligibilityId String
+  castByUserId  String
+  choice        ProposalVoteChoice
+  weightUnits   BigInt
+  sequence      Int
+  isCurrent     Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  proposal      SaleProposal        @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  eligibility   ProposalEligibility @relation(fields: [eligibilityId], references: [id], onDelete: Restrict)
+  castBy        User                @relation("VoteCaster", fields: [castByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([proposalId, eligibilityId, sequence])
+  @@index([proposalId, isCurrent, createdAt, id])
+}
+
+model ExternalSaleVerification {
+  id                String                             @id @default(cuid())
+  proposalId        String                             @unique
+  status            ExternalSaleVerificationStatus     @default(PENDING)
+  grossMinor        BigInt
+  currency          String
+  soldAt            DateTime
+  externalReference String
+  evidenceReference String
+  custodyConfirmed  Boolean                            @default(false)
+  proceedsAccountId String
+  proceedsJournalId String
+  verifierUserId    String?
+  verifiedAt        DateTime?
+  createdAt         DateTime                           @default(now())
+  updatedAt         DateTime                           @updatedAt
+  proposal          SaleProposal                       @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  verifier          User?                              @relation("SaleVerifier", fields: [verifierUserId], references: [id], onDelete: Restrict)
+  proceedsAccount   FinancialAccount                   @relation("SaleProceedsAccount", fields: [proceedsAccountId], references: [id], onDelete: Restrict)
+  proceedsJournal   JournalTransaction                 @relation("SaleProceedsJournal", fields: [proceedsJournalId], references: [id], onDelete: Restrict)
+  approvals         ExternalSaleVerificationApproval[]
+
+  @@unique([proceedsJournalId])
+}
+
+model ExternalSaleVerificationApproval {
+  id                 String                   @id @default(cuid())
+  saleVerificationId String
+  verifierUserId     String
+  createdAt          DateTime                 @default(now())
+  saleVerification   ExternalSaleVerification @relation(fields: [saleVerificationId], references: [id], onDelete: Restrict)
+  verifier           User                     @relation("SaleVerificationApprover", fields: [verifierUserId], references: [id], onDelete: Restrict)
+
+  @@unique([saleVerificationId, verifierUserId])
+  @@index([saleVerificationId, createdAt, id])
+}
+
+model Distribution {
+  id                   String                          @id @default(cuid())
+  proposalId           String                          @unique
+  status               DistributionStatus              @default(PENDING)
+  grossMinor           BigInt
+  feeMinor             BigInt                          @default(0)
+  netMinor             BigInt
+  currency             String
+  policyVersion        String
+  financeTransactionId String?                         @unique
+  attemptCount         Int                             @default(0)
+  failureCode          String?
+  completedAt          DateTime?
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  proposal             SaleProposal                    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  lines                DistributionLine[]
+  reconciliations      DistributionReconciliationRun[]
+
+  @@index([status, createdAt, id])
+}
+
+model DistributionLine {
+  id             String              @id @default(cuid())
+  distributionId String
+  eligibilityId  String
+  units          BigInt
+  amountMinor    BigInt
+  remainderRank  Int
+  createdAt      DateTime            @default(now())
+  distribution   Distribution        @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  eligibility    ProposalEligibility @relation(fields: [eligibilityId], references: [id], onDelete: Restrict)
+
+  @@unique([distributionId, eligibilityId])
+  @@index([distributionId, remainderRank, id])
+}
+
+model DistributionReconciliationRun {
+  id             String                           @id @default(cuid())
+  distributionId String
+  status         DistributionReconciliationStatus
+  grossMinor     BigInt
+  feeMinor       BigInt
+  netMinor       BigInt
+  lineMinor      BigInt
+  mismatchCodes  Json
+  actorUserId    String?
+  createdAt      DateTime                         @default(now())
+  distribution   Distribution                     @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([distributionId, createdAt, id])
+}
+
+/// Guild-scoped configuration for the bot's Discord-only setup system.
+/// Slice product data must never be placed in these tables.
+model DiscordGuildConfig {
+  guildId                 String                          @id
+  setupVersion            Int                             @default(0)
+  setupStatus             DiscordSetupStatus              @default(NOT_CONFIGURED)
+  settings                Json?
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  resources               DiscordManagedResource[]
+  panels                  DiscordPanel[]
+  notificationPreferences DiscordNotificationPreference[]
+  tickets                 DiscordTicket[]
+
+  @@index([setupStatus, updatedAt])
+}
+
+/// A reference to a resource Slice AI owns operationally. The logical key,
+/// rather than a display name, is the reconciliation authority.
+model DiscordManagedResource {
+  id               String                     @id @default(cuid())
+  guildId          String
+  resourceType     DiscordManagedResourceType
+  logicalKey       String
+  discordId        String
+  expectedName     String
+  parentLogicalKey String?
+  setupVersion     Int
+  metadata         Json?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  guild            DiscordGuildConfig         @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([guildId, resourceType, logicalKey])
+  @@index([guildId, discordId])
+  @@index([guildId, resourceType])
+}
+
+/// Canonical rendered Discord panel reference. It is separated from generic
+/// managed resources because panel message replacement is a normal repair.
+model DiscordPanel {
+  id          String             @id @default(cuid())
+  guildId     String
+  logicalKey  String
+  channelId   String
+  messageId   String
+  templateKey String
+  artworkKey  String?
+  version     Int
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  guild       DiscordGuildConfig @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([guildId, logicalKey])
+  @@index([guildId, channelId])
+}
+
+model DiscordNotificationPreference {
+  id            String             @id @default(cuid())
+  guildId       String
+  discordUserId String
+  logicalKey    String
+  enabled       Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  guild         DiscordGuildConfig @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([guildId, discordUserId, logicalKey])
+  @@index([guildId, discordUserId])
+}
+
+model DiscordTicket {
+  id                 String                   @id @default(cuid())
+  guildId            String
+  creatorDiscordId   String
+  category           String
+  channelId          String?                  @unique
+  subject            String
+  safeSummary        String
+  safeReferenceId    String?
+  status             DiscordTicketStatus      @default(OPEN)
+  priority           DiscordTicketPriority    @default(NORMAL)
+  assignedStaffId    String?
+  lastActivityAt     DateTime                 @default(now())
+  inactivityWarnedAt DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  guild              DiscordGuildConfig       @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  events             DiscordTicketEvent[]
+  transcript         DiscordTicketTranscript?
+
+  @@index([guildId, creatorDiscordId, status])
+  @@index([guildId, status, lastActivityAt])
+  @@index([guildId, assignedStaffId, status])
+}
+
+model DiscordTicketEvent {
+  id             String        @id @default(cuid())
+  ticketId       String
+  type           String
+  actorDiscordId String?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  ticket         DiscordTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model DiscordTicketTranscript {
+  id                String                        @id @default(cuid())
+  ticketId          String                        @unique
+  status            DiscordTicketTranscriptStatus @default(COMPLETE)
+  content           String
+  messageCount      Int                           @default(0)
+  failureReason     String?
+  deliveryChannelId String?
+  deliveredAt       DateTime?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  ticket            DiscordTicket                 @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model DiscordModerationCase {
+  id                     String                  @id @default(cuid())
+  guildId                String
+  caseNumber             Int
+  targetDiscordUserId    String
+  moderatorDiscordUserId String?
+  action                 DiscordModerationAction
+  source                 DiscordModerationSource
+  status                 DiscordModerationStatus @default(PENDING)
+  reason                 String
+  expiresAt              DateTime?
+  relatedMessageId       String?
+  relatedChannelId       String?
+  evidenceExcerpt        String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@unique([guildId, caseNumber])
+  @@index([guildId, targetDiscordUserId, createdAt])
+}
+
+model DiscordModerationCounter {
+  guildId        String @id
+  nextCaseNumber Int    @default(1)
+}
+
+/// Guild-scoped, non-financial community progression authority. XP, levels,
+/// reputation, and achievements never reference Slice accounts or balances.
+model DiscordMemberProgression {
+  id                    String                     @id @default(cuid())
+  guildId               String
+  discordUserId         String
+  xp                    Int                        @default(0)
+  level                 Int                        @default(1)
+  reputation            Int                        @default(0)
+  totalMessagesEligible Int                        @default(0)
+  lastXpAt              DateTime?
+  lastDailyClaimAt      DateTime?
+  currentStreak         Int                        @default(0)
+  longestStreak         Int                        @default(0)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  achievements          DiscordMemberAchievement[]
+
+  @@unique([guildId, discordUserId])
+  @@index([guildId, xp, discordUserId])
+  @@index([guildId, reputation, discordUserId])
+}
+
+/// An append-only, guild-scoped audit trail for positive community reputation.
+model DiscordReputationGrant {
+  id                    String   @id @default(cuid())
+  guildId               String
+  giverDiscordUserId    String
+  receiverDiscordUserId String
+  amount                Int      @default(1)
+  reason                String?
+  createdAt             DateTime @default(now())
+
+  @@index([guildId, giverDiscordUserId, createdAt])
+  @@index([guildId, receiverDiscordUserId, createdAt])
+}
+
+/// One row per giver makes reputation cooldown acquisition atomic across bot processes.
+model DiscordReputationCooldown {
+  guildId            String
+  giverDiscordUserId String
+  nextAvailableAt    DateTime
+  updatedAt          DateTime @updatedAt
+
+  @@id([guildId, giverDiscordUserId])
+}
+
+/// Guild-scoped community feedback. It never represents product governance.
+model DiscordSuggestion {
+  id                   String                  @id @default(cuid())
+  guildId              String
+  referenceNumber      Int
+  creatorDiscordUserId String
+  content              String
+  status               String                  @default("OPEN")
+  messageId            String?                 @unique
+  channelId            String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  votes                DiscordSuggestionVote[]
+
+  @@unique([guildId, referenceNumber])
+  @@index([guildId, status, createdAt])
+}
+
+model DiscordSuggestionVote {
+  id            String            @id @default(cuid())
+  suggestionId  String
+  discordUserId String
+  value         Int
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  suggestion    DiscordSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@unique([suggestionId, discordUserId])
+  @@index([suggestionId, value])
+}
+
+model DiscordPoll {
+  id                   String            @id @default(cuid())
+  guildId              String
+  creatorDiscordUserId String
+  question             String
+  options              Json
+  status               String            @default("OPEN")
+  closesAt             DateTime?
+  messageId            String?           @unique
+  channelId            String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  votes                DiscordPollVote[]
+
+  @@index([guildId, status, closesAt])
+}
+
+model DiscordPollVote {
+  id            String      @id @default(cuid())
+  pollId        String
+  discordUserId String
+  optionIndex   Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  poll          DiscordPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, discordUserId])
+  @@index([pollId, optionIndex])
+}
+
+/// Stores only month and day; Slice does not collect a member's age or birth year.
+model DiscordBirthday {
+  guildId         String
+  discordUserId   String
+  month           Int
+  day             Int
+  lastAnnouncedOn String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@id([guildId, discordUserId])
+  @@index([guildId, month, day])
+}
+
+/// Durable dedupe marker for community posts and announcements across restarts.
+model DiscordCommunityScheduleState {
+  guildId       String
+  scheduleKey   String
+  lastPeriodKey String
+  lastPostedAt  DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([guildId, scheduleKey])
+}
+
+/// Discord-only public-profile controls. Financial data is never stored here.
+model DiscordInvestorProfilePreference {
+  guildId       String
+  discordUserId String
+  visibility    String   @default("MEMBERS_ONLY")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([guildId, discordUserId])
+  @@index([guildId, visibility])
+}
+
+/// Bot-side idempotency record for backend-approved Discord deliveries only.
+model DiscordDeliveryReceipt {
+  id                 String   @id @default(cuid())
+  guildId            String
+  backendDeliveryId  String   @unique
+  backendEventId     String
+  logicalDestination String
+  discordChannelId   String?
+  discordMessageId   String?
+  status             String   @default("PENDING")
+  failureCode        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([guildId, logicalDestination, status])
+  @@index([backendEventId])
+}
+
+/// Discord-only alert preference. It cannot create orders or affect valuation.
+model DiscordPriceAlert {
+  id              String    @id @default(cuid())
+  guildId         String
+  discordUserId   String
+  assetId         String
+  condition       String
+  thresholdMinor  BigInt
+  enabled         Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([guildId, assetId, enabled])
+  @@index([guildId, discordUserId, enabled])
+}
+
+/// A first-unlock-only record for a public, non-financial community badge.
+model DiscordMemberAchievement {
+  id             String                   @id @default(cuid())
+  guildId        String
+  discordUserId  String
+  achievementKey String
+  unlockedAt     DateTime                 @default(now())
+  progression    DiscordMemberProgression @relation(fields: [guildId, discordUserId], references: [guildId, discordUserId], onDelete: Cascade)
+
+  @@unique([guildId, discordUserId, achievementKey])
+  @@index([guildId, discordUserId, unlockedAt])
+}

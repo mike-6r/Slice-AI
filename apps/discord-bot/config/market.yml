@@ -1,0 +1,70 @@
+date_format: "discord-relative"
+labels:
+  reference_value: "Reference value"
+  unavailable: "No authoritative market result is available yet."
+messages:
+  guild_only:
+    title: "Server Only"
+    description: "Slice Discord market commands are available only inside a Slice server."
+    color: error
+  data_unavailable:
+    title: "Market Data Unavailable"
+    description: "{reason}"
+    color: error
+  linked_required:
+    title: "Linked Slice Account Required"
+    description: "{reason}"
+    color: warning
+  private_available:
+    title: "Private Slice Data"
+    description: "Authoritative private account data is available through the official Slice platform."
+    color: info
+  private_unavailable:
+    title: "Private Data Unavailable"
+    description: "{reason}"
+    color: warning
+  profile_updated:
+    title: "Profile Privacy Updated"
+    description: "Your community profile is now **{status}**. Financial information always remains private."
+    color: success
+  profile_private:
+    title: "Profile Private"
+    description: "This member has limited their public community profile."
+    color: warning
+  profile:
+    title: "{username}'s Slice Profile"
+    description: |
+      **Level:** {level}
+      **XP:** {xp}
+      **Reputation:** {reputation}
+      **Achievements:** {count}
+      **Visibility:** {status}{reason}
+
+      Community information only. Financial holdings and account data remain private.
+    color: info
+  asset:
+    title: "{asset}"
+    description: "{reason}"
+    color: info
+  list:
+    title: "{reason}"
+    description: "{status}"
+    color: info
+  history:
+    title: "{asset} Market History"
+    description: "{status}"
+    color: info
+  recent_sale:
+    title: "Recent Slice Sale"
+    description: |
+      **Asset:** {asset}
+      **Price:** {price}
+    color: info
+  summary:
+    title: "Slice Market Brief"
+    description: "Public market information only. This is not financial, tax, legal, or investment advice."
+    color: info
+  unavailable:
+    title: "Market Unavailable"
+    description: "No authoritative market result is available yet."
+    color: warning

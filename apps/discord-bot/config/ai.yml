@@ -1,0 +1,42 @@
+disclaimer: "Informational only. AI output is not financial, legal, tax, account, or investment advice."
+messages:
+  help:
+    title: "Slice Command Center"
+    description: |
+      **Start:** `/account`, `/faq`, `/roles`, `/support`
+      **Market:** `/card`, `/search`, `/value`, `/price`, `/history`, `/top`, `/insights`
+      **Portfolio:** `/portfolio`, `/balance`, `/transactions`, `/watchlist`, `/profile`
+      **Community:** `/suggest`, `/poll`, `/summary`, `/trending`, `/birthday`
+      **Progression:** `/level`, `/leaderboard`, `/rep`, `/achievements`, `/daily`
+      **Support:** `/ticket`, `/support`
+      **Notifications:** `/notifications`, `/pricealert`
+    color: info
+  about:
+    title: "About Slice"
+    description: "Slice brings collectible discovery, public market context, community discussion, notifications, and private support into one Discord workspace. Account, marketplace, identity, payment, and ownership actions remain on the official Slice platform."
+    color: info
+  status:
+    title: "Slice Service Status"
+    description: |
+      **Discord bot:** Online
+      **Market data:** {status}
+      **Slice AI:** {reason}
+      **Discord delivery:** Backend seam required
+    color: info
+  answer:
+    title: "Slice AI | Informational Only"
+    description: "{reason}"
+    color: info
+    footer: "Informational only. Not financial, legal, tax, account, or investment advice."
+  unavailable:
+    title: "Slice AI Unavailable"
+    description: "The AI provider is currently unavailable. Try again later or open support if this blocks your work."
+    color: warning
+  rate_limited:
+    title: "Slice AI Cooldown"
+    description: "Please wait before making another AI request."
+    color: warning
+  summary:
+    title: "Public Discussion Summary"
+    description: "{reason}"
+    color: info
