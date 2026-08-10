@@ -14882,8 +14882,8 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 .dashboard-icon-box {
   display: grid;
   flex: 0 0 auto;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 3rem;
+  height: 3rem;
   place-items: center;
   border: 1px solid rgba(20, 233, 193, 0.26);
   border-radius: 0.68rem;
