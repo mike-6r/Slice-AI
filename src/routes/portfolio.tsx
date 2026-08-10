@@ -171,7 +171,7 @@ function PortfolioKpi({
   return (
     <article className="portfolio-kpi">
       <span className="portfolio-kpi__icon">{icon}</span>
-      <div className="min-w-0">
+      <div className="portfolio-kpi__content">
         <p>{label}</p>
         <strong>{value}</strong>
         <span>{detail}</span>
@@ -247,11 +247,11 @@ function AllocationPanel({ query }: { query: ReturnType<typeof useQuery<Portfoli
 
 function AllocationEmpty({ message }: { message: string }) {
   return (
-    <div className="portfolio-chart-empty">
+    <div className="portfolio-empty-state portfolio-empty-state--allocation">
       <div className="portfolio-chart-empty__ring" aria-hidden="true">
         <CircleGauge />
       </div>
-      <div>
+      <div className="portfolio-empty-state__copy">
         <strong>{message}</strong>
         <p>Slice shows allocation only when every holding has an authoritative mark.</p>
       </div>
@@ -284,11 +284,12 @@ function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<Portfol
       ) : query.isError ? (
         <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
       ) : (
-        <div className="portfolio-performance-empty">
-          <ChartNoAxesCombined aria-hidden="true" />
-          <strong>{PORTFOLIO_EMPTY_STATES.performance}</strong>
-          <span>Historical portfolio values are not currently exposed by Slice.</span>
-        </div>
+        <PortfolioEmptyState
+          className="portfolio-empty-state--performance"
+          icon={<ChartNoAxesCombined aria-hidden="true" />}
+          message={PORTFOLIO_EMPTY_STATES.performance}
+          detail="Historical portfolio values are not currently exposed by Slice."
+        />
       )}
       <div className="portfolio-range-summary" aria-label="Performance periods">
         {["Starting value", "Net contributions", "Total return", "Best day"].map((period) => (
@@ -340,13 +341,12 @@ function ActivityPanel({
           ))}
         </ul>
       ) : (
-        <div className="portfolio-compact-empty">
-          <Clock3 aria-hidden="true" />
-          <div>
-            <strong>No recent activity.</strong>
-            <p>Supported account activity will appear here when it is recorded.</p>
-          </div>
-        </div>
+        <PortfolioEmptyState
+          className="portfolio-empty-state--activity"
+          icon={<Clock3 aria-hidden="true" />}
+          message="No recent activity."
+          detail="Supported account activity will appear here when it is recorded."
+        />
       )}
     </PortfolioPanel>
   );
@@ -397,7 +397,14 @@ function HoldingsPanel({
                 ))
               ) : (
                 <tr className="portfolio-table__empty-row">
-                  <td colSpan={5}>{PORTFOLIO_EMPTY_STATES.holdings}</td>
+                  <td colSpan={5}>
+                    <PortfolioEmptyState
+                      className="portfolio-empty-state--table"
+                      icon={<Landmark aria-hidden="true" />}
+                      message={PORTFOLIO_EMPTY_STATES.holdings}
+                      detail="Your authoritative holdings will appear here once they are issued or acquired."
+                    />
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -518,11 +525,33 @@ function PortfolioPanel({
 
 function PanelEmpty({ message }: { message: string }) {
   return (
-    <div className="portfolio-compact-empty">
-      <Clock3 aria-hidden="true" />
-      <div>
+    <PortfolioEmptyState
+      className="portfolio-empty-state--transactions"
+      icon={<Clock3 aria-hidden="true" />}
+      message={message}
+      detail="Supported financial activity will appear here when it is recorded."
+    />
+  );
+}
+function PortfolioEmptyState({
+  className = "",
+  detail,
+  icon,
+  message,
+}: {
+  className?: string;
+  detail: string;
+  icon: ReactNode;
+  message: string;
+}) {
+  return (
+    <div className={`portfolio-empty-state ${className}`}>
+      <span className="portfolio-empty-state__icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="portfolio-empty-state__copy">
         <strong>{message}</strong>
-        <p>Supported account activity will appear here when it is recorded.</p>
+        <p>{detail}</p>
       </div>
     </div>
   );

@@ -17226,62 +17226,147 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   }
 }
 
-/* Portfolio final visual QA: shared alignment without changing the approved composition. */
+/* Portfolio final visual QA: fixed KPI tiles and one truthful empty-state system. */
+.portfolio-page .portfolio-shell {
+  width: min(calc(100% - clamp(2rem, 4vw, 5rem)), 94rem);
+}
+
 .portfolio-heading {
   padding-bottom: 1.12rem;
 }
 
 .portfolio-kpi {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.86rem;
+  position: relative;
+  display: block;
+  min-height: 7.5rem;
+  padding: 1.1rem 4.55rem 1.05rem 1.1rem;
 }
 
 .portfolio-kpi__icon {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
   box-sizing: border-box;
-  flex: 0 0 2.5rem;
   width: 2.5rem;
   height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(49, 213, 170, 0.2);
+  border-radius: 0.62rem;
+  background: linear-gradient(145deg, rgba(30, 92, 76, 0.38), rgba(12, 29, 30, 0.55));
+  color: #39d9ad;
 }
 
 .portfolio-kpi__icon svg {
-  width: 1rem;
-  height: 1rem;
+  width: 1.05rem;
+  height: 1.05rem;
   stroke-width: 1.75;
 }
 
-.portfolio-kpi > div {
+.portfolio-kpi__content {
   display: grid;
   min-width: 0;
-  padding-right: 2.6rem;
+  padding: 0 !important;
   align-content: start;
-  row-gap: 0;
 }
 
 .portfolio-kpi p {
+  color: #aeb8c4;
+  font-size: 0.62rem;
   line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .portfolio-kpi strong {
-  margin-top: 0.5rem;
+  margin-top: 0.52rem;
+  font-size: clamp(1.28rem, 1.62vw, 1.55rem);
   line-height: 1.05;
 }
 
-.portfolio-kpi > div > span {
-  margin-top: 0.38rem;
+.portfolio-kpi__content > span {
+  margin-top: 0.42rem;
+  font-size: 0.64rem;
   line-height: 1.35;
 }
 
-.portfolio-chart-empty {
+.portfolio-kpi--loading {
+  display: flex;
+  align-items: center;
+  gap: 0.86rem;
+  padding: 1rem 1.05rem;
+}
+
+.portfolio-kpi--loading > div {
+  padding: 0;
+}
+
+.portfolio-row--insight {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 0.9fr);
+}
+
+.portfolio-panel,
+.portfolio-panel--activity {
+  min-height: 20rem;
+}
+
+.portfolio-panel--holdings,
+.portfolio-panel--transactions {
+  min-height: 15.25rem;
+}
+
+.portfolio-empty-state {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 12.5rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.62rem;
+  padding: 1.25rem;
+  border: 1px dashed rgba(139, 168, 181, 0.15);
+  border-radius: 0.62rem;
+  background: linear-gradient(145deg, rgba(24, 49, 47, 0.26), rgba(9, 14, 18, 0.3));
+  color: #8c98a4;
+  text-align: center;
+}
+
+.portfolio-empty-state__icon {
+  display: flex;
+  width: 2.45rem;
+  height: 2.45rem;
   align-items: center;
   justify-content: center;
-  column-gap: 0.85rem;
-  padding: 1rem 1.2rem;
+  border: 1px solid rgba(50, 211, 164, 0.16);
+  border-radius: 0.65rem;
+  background: rgba(31, 102, 84, 0.16);
+  color: #39d9ad;
+}
+
+.portfolio-empty-state__icon svg {
+  width: 1.18rem;
+  height: 1.18rem;
+  stroke-width: 1.75;
+}
+
+.portfolio-empty-state__copy strong {
+  display: block;
+  color: #e4e9ed;
+  font-size: 0.78rem;
+}
+
+.portfolio-empty-state__copy p {
+  max-width: 19rem;
+  margin-top: 0.28rem;
+  color: #8c98a4;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.portfolio-empty-state--allocation {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: center;
+  column-gap: 1rem;
+  text-align: left;
 }
 
 .portfolio-chart-empty__ring {
@@ -17290,23 +17375,30 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   justify-content: center;
 }
 
-.portfolio-performance-empty {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 0.46rem;
+.portfolio-empty-state--performance {
+  flex: 1;
+  min-height: 11.9rem;
+  background:
+    linear-gradient(rgba(134, 161, 173, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(134, 161, 173, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(18, 42, 40, 0.2), rgba(8, 13, 17, 0.18));
   background-size:
     100% 2.4rem,
     4.2rem 100%,
     auto;
 }
 
-.portfolio-performance-empty > svg,
-.portfolio-compact-empty > svg {
-  flex: 0 0 auto;
-  width: 1.35rem;
-  height: 1.35rem;
-  stroke-width: 1.75;
+.portfolio-empty-state--activity {
+  min-height: 14.9rem;
+}
+
+.portfolio-empty-state--transactions {
+  min-height: 7.4rem;
+}
+
+.portfolio-empty-state--table {
+  min-height: 7rem;
+  margin: 0.65rem 0;
 }
 
 .portfolio-periods button {
@@ -17325,20 +17417,27 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   letter-spacing: 0.08em;
 }
 
-.portfolio-panel--transactions .portfolio-compact-empty {
-  min-height: 6.7rem;
+@media (max-width: 1239px) {
+  .portfolio-row--insight {
+    grid-template-columns: minmax(16rem, 1fr) minmax(20rem, 1.25fr);
+  }
 }
 
 @media (max-width: 599px) {
+  .portfolio-page .portfolio-shell {
+    width: calc(100% - 1.5rem);
+  }
+
   .portfolio-heading {
     padding-bottom: 0.95rem;
   }
 
-  .portfolio-kpi > div {
-    padding-right: 2.35rem;
+  .portfolio-kpi {
+    min-height: 7.3rem;
+    padding-right: 4.35rem;
   }
 
-  .portfolio-chart-empty {
+  .portfolio-empty-state--allocation {
     grid-template-columns: 1fr;
     justify-items: center;
     text-align: center;
