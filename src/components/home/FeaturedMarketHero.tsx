@@ -1,8 +1,8 @@
-import featuredDisplayImage from "@/assets/signup-collectible-display.png";
+import featuredMarketCardImage from "@/assets/charizard-slab.jpg";
 
 /**
- * Editorial homepage art direction. This deliberately does not read or imply
- * a live market quote; live public-market cards remain below the hero.
+ * Editorial homepage showcase. This is a clearly static visual module; it
+ * intentionally does not consume or imply a live public-market quote.
  */
 export function FeaturedMarketHero() {
   return (
@@ -15,8 +15,8 @@ export function FeaturedMarketHero() {
         <div className="featured-showcase__surface">
           <img
             className="featured-showcase__image"
-            src={featuredDisplayImage}
-            alt="1999 Charizard Base Set Holo displayed in a protective illuminated case"
+            src={featuredMarketCardImage}
+            alt="PSA-graded 1999 Charizard Base Set Holo card"
             decoding="async"
           />
         </div>
@@ -25,24 +25,24 @@ export function FeaturedMarketHero() {
       <article className="featured-static-panel" aria-labelledby="home-featured-heading">
         <p className="page-kicker">Featured asset</p>
         <h2 id="home-featured-heading">1999 Charizard</h2>
-        <p className="featured-static-panel__subtitle">Base Set · Holo</p>
+        <p className="featured-static-panel__subtitle">Base Set &middot; Holo</p>
 
         <div className="featured-static-panel__price">
-          <strong>£24,580</strong>
+          <strong>&pound;24,580</strong>
           <span>
-            ↗ +12.43% <small>(24H)</small>
+            +12.43% <small>(24H)</small>
           </span>
         </div>
 
         <div
           className="featured-static-panel__chart"
           role="img"
-          aria-label="Illustrative upward price chart"
+          aria-label="Illustrative upward 30-day price chart"
         >
           <svg viewBox="0 0 360 112" preserveAspectRatio="none" aria-hidden="true">
             <defs>
               <linearGradient id="featured-chart-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22d3a5" stopOpacity="0.28" />
+                <stop offset="0%" stopColor="#22d3a5" stopOpacity="0.25" />
                 <stop offset="100%" stopColor="#22d3a5" stopOpacity="0" />
               </linearGradient>
             </defs>
@@ -58,11 +58,25 @@ export function FeaturedMarketHero() {
               strokeLinejoin="round"
               strokeWidth="2.25"
             />
+            <circle cx="360" cy="10" r="3.2" fill="#22d3a5" />
           </svg>
-          <span className="featured-static-panel__axis featured-static-panel__axis--start">
-            24H
+          <span className="featured-static-panel__price-label featured-static-panel__price-label--high">
+            &pound;24K
           </span>
-          <span className="featured-static-panel__axis featured-static-panel__axis--end">£24K</span>
+          <span className="featured-static-panel__price-label featured-static-panel__price-label--middle">
+            &pound;22K
+          </span>
+          <span className="featured-static-panel__price-label featured-static-panel__price-label--low">
+            &pound;21K
+          </span>
+        </div>
+
+        <div className="featured-static-panel__ranges" aria-label="Static market history period">
+          {["24H", "7D", "30D", "90D", "1Y", "ALL"].map((range) => (
+            <span key={range} className={range === "30D" ? "is-active" : undefined}>
+              {range}
+            </span>
+          ))}
         </div>
 
         <dl className="featured-static-panel__stats">
