@@ -3408,6 +3408,12 @@
 .signup-hero {
   position: relative;
   max-width: 33rem;
+  min-height: clamp(35rem, 46vw, 44rem);
+  isolation: isolate;
+}
+.signup-hero > :not(.signup-collectible) {
+  position: relative;
+  z-index: 1;
 }
 .signup-hero__title {
   margin-top: 0.75rem;
@@ -3473,17 +3479,33 @@
   line-height: 1.4;
 }
 .signup-collectible {
-  width: min(100%, 29rem);
-  height: clamp(22rem, 34vw, 32rem);
-  margin: 1.25rem auto 0;
-  overflow: hidden;
-  filter: drop-shadow(0 1.35rem 2.6rem rgba(0, 0, 0, 0.5));
+  position: absolute;
+  right: clamp(-5rem, -3vw, -1rem);
+  bottom: -2rem;
+  z-index: 0;
+  width: clamp(22.5rem, 34vw, 35rem);
+  margin: 0;
+  pointer-events: none;
 }
 .signup-collectible img {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   object-fit: contain;
+  -webkit-mask-image: radial-gradient(
+    ellipse 82% 76% at 67% 58%,
+    #000 42%,
+    rgba(0, 0, 0, 0.94) 58%,
+    rgba(0, 0, 0, 0.52) 75%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 82% 76% at 67% 58%,
+    #000 42%,
+    rgba(0, 0, 0, 0.94) 58%,
+    rgba(0, 0, 0, 0.52) 75%,
+    transparent 100%
+  );
 }
 .signup-card {
   max-width: 24rem;
@@ -3878,13 +3900,15 @@
 
 @media (max-width: 900px) {
   .signup-page {
-    grid-template-columns: minmax(0, 0.85fr) minmax(22rem, 1fr);
-    gap: 2.2rem;
+    grid-template-columns: minmax(0, 34rem);
+    justify-content: center;
+    gap: 2.5rem;
+  }
+  .signup-hero {
+    min-height: 0;
   }
   .signup-collectible {
-    width: min(100%, 22rem);
-    height: 22rem;
-    margin-top: 0.75rem;
+    display: none;
   }
 }
 @media (max-width: 767px) {
