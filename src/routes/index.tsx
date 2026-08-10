@@ -11,13 +11,11 @@ import {
 } from "lucide-react";
 
 import { useSession } from "@/auth/use-session";
-import { editorial } from "@/config/editorial";
 import type { Asset } from "@/domain";
 import { formatCurrency } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
-import { selectFeaturedAsset } from "@/components/home/featured-asset-selection";
-import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
+import { useTrendingAssets } from "@/queries/hooks";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,7 +35,6 @@ export function HomePage() {
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const assets = useTrendingAssets();
-  const featuredAssets = useFeaturedAssets();
   const collectors = useQuery({
     queryKey: ["home", "collectors"],
     queryFn: () => services.repositories.collectors.listPublicCollectors({ limit: 3 }),
@@ -48,15 +45,6 @@ export function HomePage() {
     queryFn: () => services.repositories.vault.getPublicEvents({ limit: 3 }),
     staleTime: 30_000,
   });
-  const featuredAsset = useQuery({
-    queryKey: ["home", "editorial-featured-asset", editorial.featuredAssetId],
-    queryFn: () => services.repositories.assets.getAssetById(editorial.featuredAssetId as never),
-    enabled: Boolean(editorial.featuredAssetId),
-    staleTime: 30_000,
-  });
-  const featured = selectFeaturedAsset(featuredAsset.data, featuredAssets.data);
-  const featuredLoading =
-    (Boolean(editorial.featuredAssetId) && featuredAsset.isLoading) || featuredAssets.isLoading;
 
   return (
     <main className="home-hero">
@@ -94,7 +82,7 @@ export function HomePage() {
           </div>
         </div>
 
-        <FeaturedMarketHero asset={featured} loading={featuredLoading} />
+        <FeaturedMarketHero />
       </section>
 
       <section
