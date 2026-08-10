@@ -1,9 +1,48 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { HOMEPAGE_MARKET_TICKER } from "@/data/homepage-showcase";
 import { useTrendingAssets } from "@/queries/hooks";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
 /** Published market snapshots; it never substitutes the legacy sample tape in API mode. */
 export function MarketTicker() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  if (pathname === "/") {
+    return <HomepageShowcaseTicker />;
+  }
+
+  return <AuthoritativeMarketTicker />;
+}
+
+function HomepageShowcaseTicker() {
+  return (
+    <div className="hidden border-b border-border bg-surface/60 lg:block">
+      <div className="site-shell flex h-6 items-center gap-5 text-[8px] font-medium tabular">
+        <span className="shrink-0 uppercase tracking-[0.18em] text-muted">Market snapshot</span>
+        <ul
+          className="flex items-center gap-5 overflow-hidden"
+          aria-label="Illustrative market tape"
+        >
+          {HOMEPAGE_MARKET_TICKER.map((item) => (
+            <li key={item.symbol} className="flex shrink-0 items-center gap-2">
+              <span className="text-subtle">{item.symbol}</span>
+              <span className="text-foreground">{item.value}</span>
+              <span className={item.tone === "positive" ? "text-positive" : "text-negative"}>
+                {item.movement}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <span className="ml-auto flex shrink-0 items-center gap-3 text-subtle">
+          <span className="market-tape__dot" aria-hidden="true" />
+          Showcase data
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function AuthoritativeMarketTicker() {
   const market = useTrendingAssets();
   const assets = market.data ?? [];
   return (

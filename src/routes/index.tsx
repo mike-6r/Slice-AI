@@ -1,84 +1,84 @@
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
-  Box,
-  CheckCircle2,
-  Landmark,
+  BadgeCheck,
+  Bookmark,
+  Boxes,
+  ChartNoAxesCombined,
+  CircleDollarSign,
+  Eye,
+  LockKeyhole,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
+  UsersRound,
   Vault,
+  Zap,
 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
-import type { Asset } from "@/domain";
-import { formatCurrency } from "@/lib/format";
-import { useAppServices } from "@/providers/AppServicesProvider";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
-import { useTrendingAssets } from "@/queries/hooks";
+import {
+  HOMEPAGE_ALLOCATION,
+  HOMEPAGE_MARKET_METRICS,
+  HOMEPAGE_MARKET_MOVERS,
+  HOMEPAGE_TRENDING_ASSETS,
+  showcaseDestination,
+  type HomepageShowcaseAsset,
+} from "@/data/homepage-showcase";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Slice — Collectible ownership, backed by real records" },
+      { title: "Slice — Invest in authenticated collectibles" },
       {
         name: "description",
         content:
-          "Explore published collectible assets, public collector profiles and vault activity.",
+          "Explore authenticated collectible markets and follow the assets collectors care about.",
       },
     ],
   }),
   component: HomePage,
 });
 
-export function HomePage() {
-  const services = useAppServices();
+const metricIcons = [CircleDollarSign, ChartNoAxesCombined, Boxes, BadgeCheck, UsersRound] as const;
+
+function HomePage() {
   const { isAuthenticated } = useSession();
-  const assets = useTrendingAssets();
-  const collectors = useQuery({
-    queryKey: ["home", "collectors"],
-    queryFn: () => services.repositories.collectors.listPublicCollectors({ limit: 3 }),
-    staleTime: 30_000,
-  });
-  const vault = useQuery({
-    queryKey: ["home", "vault-events"],
-    queryFn: () => services.repositories.vault.getPublicEvents({ limit: 3 }),
-    staleTime: 30_000,
-  });
 
   return (
-    <main className="home-hero">
-      <section className="page-shell home-hero__inner py-10 sm:py-14">
-        <div className="hero-copy">
-          <p className="page-kicker">Collect with confidence</p>
-          <h1 className="hero-copy__headline max-w-xl font-display text-5xl font-bold tracking-[-0.065em] text-foreground sm:text-6xl xl:text-7xl">
-            <span>Invest.</span> <span>Collect.</span> <span className="text-accent">Grow.</span>
+    <div className="approved-home">
+      <section className="page-shell approved-home__hero" aria-labelledby="home-heading">
+        <div className="approved-home__copy">
+          <p className="page-kicker">Slice · The collectible investment platform</p>
+          <h1 id="home-heading">
+            <span>Invest.</span>
+            <span>Collect.</span>
+            <span>Grow.</span>
           </h1>
-          <p className="mt-6 max-w-lg text-base leading-7 text-subtle sm:text-lg">
-            Discover authenticated collectibles, public market context and custody records built for
-            serious collectors.
+          <p className="approved-home__lead">
+            Own a slice of authenticated collectibles. Track market context and follow the assets
+            collectors care about.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/marketplace"
-              className="primary-action rounded-lg px-5 py-3 text-sm font-semibold text-background"
-            >
-              Explore markets <ArrowRight className="size-4" aria-hidden="true" />
+          <div className="approved-home__actions">
+            <Link to="/marketplace" className="primary-action approved-home__primary-cta">
+              Explore Markets <ArrowRight aria-hidden="true" />
             </Link>
-            <Link
-              to={isAuthenticated ? "/dashboard" : "/signup"}
-              className="rounded-lg border border-border-strong px-5 py-3 text-sm font-semibold text-foreground transition hover:border-accent/60"
-            >
-              {isAuthenticated ? "View your dashboard" : "Create an account"}
-            </Link>
+            <ListAssetLink authenticated={isAuthenticated} className="approved-home__secondary-cta">
+              List an Asset
+            </ListAssetLink>
           </div>
-          <div className="mt-9 flex flex-wrap gap-x-5 gap-y-2 text-sm text-subtle">
-            <span className="inline-flex items-center gap-2">
-              <ShieldCheck className="size-4 text-accent" /> Public records
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <Vault className="size-4 text-accent" /> Vault-aware assets
-            </span>
+          <div className="approved-home__community" aria-label="Slice community">
+            <div className="approved-home__avatars" aria-hidden="true">
+              {["SC", "MM", "AR", "JT"].map((initials) => (
+                <span key={initials}>{initials}</span>
+              ))}
+            </div>
+            <div>
+              <strong>10K+ collectors investing on Slice</strong>
+              <small>Across cards, culture & rare assets</small>
+            </div>
           </div>
         </div>
 
@@ -86,180 +86,322 @@ export function HomePage() {
       </section>
 
       <section
-        className="market-overview-section page-shell pb-4"
-        aria-label="Public market overview"
+        className="page-shell approved-home__metrics"
+        aria-label="Illustrative market snapshot"
       >
-        <div className="market-strip grid overflow-hidden rounded-xl border border-border sm:grid-cols-2 xl:grid-cols-4">
-          <MarketMetric
-            label="Published assets"
-            value={assets.isLoading ? "…" : String(assets.data?.length ?? 0)}
+        {HOMEPAGE_MARKET_METRICS.map((metric, index) => {
+          const Icon = metricIcons[index];
+          return (
+            <article key={metric.label} className="approved-home__metric">
+              <div className="approved-home__metric-label">
+                {Icon ? <Icon aria-hidden="true" /> : null}
+                <span>{metric.label}</span>
+              </div>
+              <strong>{metric.value}</strong>
+              <small className={`is-${metric.tone}`}>{metric.detail}</small>
+              <MiniSparkline tone={metric.tone} />
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
+        <SectionHeading
+          eyebrow="Trending opportunities"
+          title="The market is moving."
+          action="View all markets"
+          to="/marketplace"
+          headingId="trending-heading"
+        />
+        <div className="approved-home__trending" data-testid="homepage-trending-assets">
+          {HOMEPAGE_TRENDING_ASSETS.map((asset) => (
+            <ShowcaseAssetLink
+              key={asset.showcaseKey}
+              asset={asset}
+              className="approved-home__asset-card"
+            >
+              <div className="approved-home__asset-media">
+                <img src={asset.image} alt="" loading="lazy" />
+                <span className="approved-home__asset-category">{asset.category}</span>
+                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
+                <Bookmark aria-hidden="true" />
+              </div>
+              <div className="approved-home__asset-body">
+                <strong>{asset.title}</strong>
+                <small>{asset.grade}</small>
+                <div className="approved-home__asset-price">
+                  <b>{asset.displayPrice}</b>
+                  <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
+                </div>
+                <div className="approved-home__availability">
+                  <span>
+                    <i style={{ width: asset.displayAvailability }} />
+                  </span>
+                  <small>Available {asset.displayAvailability}</small>
+                </div>
+              </div>
+            </ShowcaseAssetLink>
+          ))}
+        </div>
+      </section>
+
+      <section
+        className="page-shell approved-home__intelligence"
+        aria-label="Slice market intelligence"
+      >
+        <MarketMovers />
+
+        <article className="approved-home__panel approved-home__portfolio-preview">
+          <header>
+            <div>
+              <h2>Portfolio preview</h2>
+              <p>Illustrative account overview</p>
+            </div>
+            <PortfolioLink authenticated={isAuthenticated}>View portfolio</PortfolioLink>
+          </header>
+          <div className="approved-home__portfolio-value">
+            <strong>£8,942.18</strong>
+            <span>
+              +4.81% <small>(24H)</small>
+            </span>
+          </div>
+          <div className="approved-home__portfolio-chart" aria-hidden="true">
+            <svg viewBox="0 0 360 112" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="portfolio-preview-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22d3a5" stopOpacity=".24" />
+                  <stop offset="100%" stopColor="#22d3a5" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M0 99 C44 96 62 88 91 86 C122 84 138 72 167 69 C198 65 225 56 251 48 C286 37 314 31 360 20 L360 112 L0 112 Z"
+                fill="url(#portfolio-preview-fill)"
+              />
+              <path
+                d="M0 99 C44 96 62 88 91 86 C122 84 138 72 167 69 C198 65 225 56 251 48 C286 37 314 31 360 20"
+                fill="none"
+                stroke="#22d3a5"
+                strokeWidth="2"
+              />
+            </svg>
+          </div>
+          <dl className="approved-home__portfolio-facts">
+            <div>
+              <dt>Collectibles</dt>
+              <dd>14 assets</dd>
+            </div>
+            <div>
+              <dt>Cash available</dt>
+              <dd>£1,245.32</dd>
+            </div>
+            <div>
+              <dt>30D movement</dt>
+              <dd className="is-positive">+£412.08</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="approved-home__panel approved-home__allocation">
+          <header>
+            <div>
+              <h2>Asset allocation</h2>
+              <p>Sample portfolio distribution</p>
+            </div>
+          </header>
+          <div className="approved-home__allocation-body">
+            <div className="approved-home__donut" aria-hidden="true">
+              <span>
+                <strong>£8.9K</strong>
+                <small>Total value</small>
+              </span>
+            </div>
+            <ul>
+              {HOMEPAGE_ALLOCATION.map((item) => (
+                <li key={item.label}>
+                  <i className={`is-${item.tone}`} />
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Link to="/marketplace" className="approved-home__text-link">
+            Explore asset classes <ArrowRight aria-hidden="true" />
+          </Link>
+        </article>
+      </section>
+
+      <section className="page-shell approved-home__section" aria-labelledby="why-slice-heading">
+        <SectionHeading
+          eyebrow="Why Slice"
+          title="Built for serious collectors."
+          headingId="why-slice-heading"
+        />
+        <div className="approved-home__features">
+          <FeatureCard
+            icon={<Sparkles />}
+            title="Access"
+            detail="Discover collectible markets with transparent public records."
+            to="/marketplace"
           />
-          <MarketMetric
-            label="Public collectors"
-            value={collectors.isLoading ? "…" : String(collectors.data?.items.length ?? 0)}
+          <FeatureCard
+            icon={<Eye />}
+            title="Transparency"
+            detail="Follow published market, ownership and asset information."
+            to="/marketplace"
           />
-          <MarketMetric
-            label="Vault activity"
-            value={vault.isLoading ? "…" : String(vault.data?.items.length ?? 0)}
+          <FeatureCard
+            icon={<Zap />}
+            title="Liquidity"
+            detail="Move from discovery into the real Slice order experience."
+            to="/marketplace"
           />
-          <MarketMetric
-            label="Market performance"
-            value="Unavailable"
-            detail="Historical public metric not projected"
+          <FeatureCard
+            icon={<Vault />}
+            title="Custody"
+            detail="Explore the vault record and custody activity surface."
+            to="/vault-live"
+          />
+          <FeatureCard
+            icon={<UsersRound />}
+            title="Community"
+            detail="Meet collectors and follow their public specialist profiles."
+            to="/collectors"
           />
         </div>
       </section>
 
-      <section className="trending-section page-shell py-12" aria-labelledby="home-market-heading">
-        <SectionHeading
-          eyebrow="Explore the marketplace"
-          title="Trending opportunities"
-          action="Browse all assets"
-          to="/marketplace"
-        />
-        {assets.isLoading ? (
-          <div
-            className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-            aria-label="Loading published assets"
-          >
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="customer-skeleton h-64" />
-            ))}
-          </div>
-        ) : assets.data?.length ? (
-          <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {assets.data.slice(0, 6).map((asset) => (
-              <AssetCard key={asset.id} asset={asset} />
-            ))}
-          </ul>
-        ) : (
-          <EmptyMarketPanel
-            title="No trending assets available"
-            detail="Published opportunities will appear here when the public catalogue is ready."
-          />
-        )}
-      </section>
-
-      <section className="page-shell home-intelligence-grid grid gap-5 pb-12 xl:grid-cols-3">
-        <PublicListPanel
-          title="Public collectors"
-          action="Discover collectors"
-          to="/collectors"
-          icon={<Landmark />}
-        >
-          {collectors.data?.items.length ? (
-            collectors.data.items.map((collector) => (
-              <Link
-                key={collector.userId}
-                to="/collector/$id"
-                params={{ id: collector.handle }}
-                className="mover-row block rounded-lg border border-border p-3 transition hover:border-accent/50"
-              >
-                <strong>{collector.displayName}</strong>
-                <span className="mt-1 block text-sm text-subtle">{collector.focus}</span>
-              </Link>
-            ))
-          ) : (
-            <CompactEmpty label="No public collector profiles are available." />
-          )}
-        </PublicListPanel>
-        <PublicListPanel
-          title="Vault live"
-          action="See public events"
-          to="/vault-live"
-          icon={<Vault />}
-        >
-          {vault.data?.items.length ? (
-            vault.data.items.map((event) => (
-              <div key={event.id} className="mover-row rounded-lg border border-border p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">
-                  {event.type}
-                </span>
-                <p className="mt-1 text-sm text-subtle">{event.publicSummary}</p>
-              </div>
-            ))
-          ) : (
-            <CompactEmpty label="No public vault activity is available." />
-          )}
-        </PublicListPanel>
-        <section className="home-cta relative overflow-hidden rounded-2xl border border-border p-6">
-          <Sparkles className="size-7 text-accent" aria-hidden="true" />
-          <h2 className="mt-5 text-xl font-semibold">Start building your collection.</h2>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-subtle">
-            Create an account to access your private portfolio, wallet and order tools.
-          </p>
+      <section className="page-shell approved-home__final-cta">
+        <div>
+          <p className="page-kicker">Start your collection</p>
+          <h2>
+            Invest in what you love.
+            <br />
+            <span>Grow with confidence.</span>
+          </h2>
+          <p>Explore authenticated collectible markets and build your Slice account.</p>
+        </div>
+        <div className="approved-home__actions">
+          <Link to="/marketplace" className="primary-action approved-home__primary-cta">
+            Explore Markets <ArrowRight aria-hidden="true" />
+          </Link>
           <Link
             to={isAuthenticated ? "/dashboard" : "/signup"}
-            className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
+            className="approved-home__secondary-cta"
           >
-            {isAuthenticated ? "Open dashboard" : "Get started"}{" "}
-            <ArrowRight className="size-4" aria-hidden="true" />
+            {isAuthenticated ? "View dashboard" : "Create your account"}
           </Link>
-        </section>
+        </div>
       </section>
-    </main>
+    </div>
   );
 }
 
-function FeaturedAsset({ asset, loading }: { asset?: Asset; loading: boolean }) {
+function MarketMovers() {
+  type MoverTab = keyof typeof HOMEPAGE_MARKET_MOVERS;
+  const [tab, setTab] = useState<MoverTab>("Top Gainers");
   return (
-    <article className="showcase" aria-label="Featured collectible preview">
-      <div className="showcase__surface">
-        {loading ? (
-          <div className="customer-skeleton h-52 w-36" />
-        ) : asset?.media[0]?.url ? (
-          <img className="showcase__slab" src={asset.media[0].url} alt={asset.media[0].alt} />
-        ) : (
-          <div className="showcase__placeholder">
-            <Box className="size-9 text-muted" aria-hidden="true" />
-          </div>
-        )}
-        <div className="showcase__pedestal" aria-hidden="true" />
-        <div className="showcase__badge" aria-hidden="true">
-          <span className="showcase__badge-service">
-            <span className="showcase__badge-label">SLICE</span>
-            <span className="showcase__badge-certification">public</span>
-          </span>
-          <span className="showcase__badge-result">
-            <span className="showcase__badge-grade">{asset?.grade?.label ?? "—"}</span>
-            <span className="showcase__badge-description">status</span>
-          </span>
+    <article className="approved-home__panel approved-home__movers">
+      <header>
+        <div>
+          <h2>Market movers</h2>
+          <p>Illustrative market snapshot</p>
         </div>
+      </header>
+      <div className="approved-home__mover-tabs" role="tablist" aria-label="Market mover group">
+        {(Object.keys(HOMEPAGE_MARKET_MOVERS) as MoverTab[]).map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            className={tab === name ? "is-active" : undefined}
+            onClick={() => setTab(name)}
+          >
+            {name}
+          </button>
+        ))}
       </div>
+      <div className="approved-home__mover-list">
+        {HOMEPAGE_MARKET_MOVERS[tab].map((asset) => (
+          <ShowcaseAssetLink
+            key={`${tab}-${asset.showcaseKey}`}
+            asset={asset}
+            className="approved-home__mover-row"
+          >
+            <img src={asset.image} alt="" loading="lazy" />
+            <span>
+              <strong>{asset.title}</strong>
+              <small>{asset.displayPrice}</small>
+            </span>
+            <b className={`is-${asset.movementTone}`}>{asset.displayMovement}</b>
+          </ShowcaseAssetLink>
+        ))}
+      </div>
+      <Link to="/marketplace" className="approved-home__text-link">
+        View all movers <ArrowRight aria-hidden="true" />
+      </Link>
     </article>
   );
 }
 
-function AssetCard({ asset }: { asset: Asset }) {
-  const media = asset.media.find((item) => item.kind === "image");
-  return (
-    <li>
-      <Link
-        to="/asset/$id"
-        params={{ id: asset.slug ?? asset.id }}
-        className="asset-card asset-card--compact flex h-full flex-col"
-      >
-        <div className="asset-card__image aspect-[1.45/1]">
-          {media ? (
-            <img className="h-full w-full object-cover" src={media.url} alt={media.alt} />
-          ) : (
-            <div className="grid h-full place-items-center">
-              <Box className="size-8 text-muted" aria-hidden="true" />
-            </div>
-          )}
-        </div>
-        <div className="p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
-            {asset.symbol}
-          </p>
-          <h3 className="asset-card__title mt-1 text-base font-semibold">{asset.details.title}</h3>
-          <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-            <span className="text-subtle">{humaniseCategory(asset.details.category)}</span>
-            <strong>{assetValue(asset)}</strong>
-          </div>
-        </div>
-      </Link>
-    </li>
+function ShowcaseAssetLink({
+  asset,
+  className,
+  children,
+}: {
+  asset: HomepageShowcaseAsset;
+  className: string;
+  children: ReactNode;
+}) {
+  const destination = showcaseDestination(asset);
+  return destination.kind === "asset" ? (
+    <Link to="/asset/$id" params={{ id: destination.id }} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <Link to={destination.to} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+function ListAssetLink({
+  authenticated,
+  className,
+  children,
+}: {
+  authenticated: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  return authenticated ? (
+    <Link to="/list" className={className}>
+      {children}
+    </Link>
+  ) : (
+    <Link to="/login" search={{ returnTo: "/list" }} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+function PortfolioLink({
+  authenticated,
+  children,
+}: {
+  authenticated: boolean;
+  children: ReactNode;
+}) {
+  const className = "approved-home__text-link";
+  return authenticated ? (
+    <Link to="/portfolio" className={className}>
+      {children} <ArrowRight aria-hidden="true" />
+    </Link>
+  ) : (
+    <Link to="/login" search={{ returnTo: "/portfolio" }} className={className}>
+      {children} <ArrowRight aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -268,97 +410,67 @@ function SectionHeading({
   title,
   action,
   to,
+  headingId,
 }: {
   eyebrow: string;
   title: string;
-  action: string;
-  to: "/marketplace" | "/collectors" | "/vault-live";
+  action?: string;
+  to?: "/marketplace";
+  headingId: string;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
+    <header className="approved-home__section-heading">
       <div>
         <p className="page-kicker">{eyebrow}</p>
-        <h2
-          id="home-market-heading"
-          className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
-        >
-          {title}
-        </h2>
+        <h2 id={headingId}>{title}</h2>
       </div>
-      <Link
-        to={to}
-        className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
-      >
-        {action}
-        <ArrowRight className="size-4" aria-hidden="true" />
-      </Link>
-    </div>
+      {action && to ? (
+        <Link to={to} className="approved-home__text-link">
+          {action} <ArrowRight aria-hidden="true" />
+        </Link>
+      ) : null}
+    </header>
   );
 }
-function PublicListPanel({
-  title,
-  action,
-  to,
+
+function FeatureCard({
   icon,
-  children,
+  title,
+  detail,
+  to,
 }: {
+  icon: ReactNode;
   title: string;
-  action: string;
-  to: "/collectors" | "/vault-live";
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  detail: string;
+  to: "/marketplace" | "/vault-live" | "/collectors";
 }) {
   return (
-    <section className="panel rounded-2xl border border-border p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <span className="feature-card__icon grid size-8 place-items-center rounded-lg text-accent">
-            {icon}
-          </span>
-          {title}
-        </h2>
-        <Link to={to} className="text-sm font-semibold text-accent hover:underline">
-          {action}
-        </Link>
-      </div>
-      <div className="mt-5 space-y-3">{children}</div>
-    </section>
+    <Link to={to} className="approved-home__feature">
+      <span>{icon}</span>
+      <p className="page-kicker">{title}</p>
+      <strong>{detail}</strong>
+      <ArrowRight aria-hidden="true" />
+    </Link>
   );
 }
-function CompactEmpty({ label }: { label: string }) {
+
+function MiniSparkline({ tone }: { tone: "positive" | "negative" }) {
   return (
-    <p className="rounded-lg border border-dashed border-border p-4 text-sm text-subtle">{label}</p>
+    <svg
+      className={`approved-home__metric-spark is-${tone}`}
+      viewBox="0 0 72 28"
+      aria-hidden="true"
+    >
+      <path
+        d={
+          tone === "positive"
+            ? "M1 25 L10 22 L18 24 L27 17 L36 18 L45 11 L54 13 L62 6 L71 3"
+            : "M1 5 L10 8 L18 7 L27 13 L36 11 L45 18 L54 17 L62 23 L71 25"
+        }
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
   );
-}
-function EmptyMarketPanel({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="mt-6 grid min-h-64 place-items-center rounded-2xl border border-dashed border-border bg-elevated/60 p-8 text-center">
-      <div>
-        <Box className="mx-auto size-8 text-muted" aria-hidden="true" />
-        <h3 className="mt-4 font-semibold">{title}</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-subtle">{detail}</p>
-      </div>
-    </div>
-  );
-}
-function MarketMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <article className="market-strip__cell market-strip__cell--divided">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <strong className="mt-1 block text-xl">{value}</strong>
-      {detail ? (
-        <small className="mt-1 block text-xs text-subtle">{detail}</small>
-      ) : (
-        <small className="mt-1 block text-xs text-subtle">Live public projection</small>
-      )}
-    </article>
-  );
-}
-function assetValue(asset: Asset) {
-  return asset.market?.estimatedMarketValue
-    ? formatCurrency(asset.market.estimatedMarketValue.amount)
-    : "Unavailable";
-}
-function humaniseCategory(value: string) {
-  return value.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

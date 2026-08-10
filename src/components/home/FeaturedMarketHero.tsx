@@ -1,21 +1,29 @@
-import featuredMarketCardImage from "@/assets/charizard-slab.jpg";
+import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+
+import {
+  HOMEPAGE_FEATURED_ASSET,
+  showcaseDestination,
+  type HomepageShowcaseAsset,
+} from "@/data/homepage-showcase";
 
 /**
  * Editorial homepage showcase. This is a clearly static visual module; it
  * intentionally does not consume or imply a live public-market quote.
  */
 export function FeaturedMarketHero() {
+  const featured = HOMEPAGE_FEATURED_ASSET;
   return (
     <section
       className="featured-market-hero"
       aria-label="Featured asset showcase"
       data-static-showcase="true"
     >
-      <article className="featured-showcase">
+      <ShowcaseLink asset={featured} className="featured-showcase">
         <div className="featured-showcase__surface">
           <img
             className="featured-showcase__image"
-            src={featuredMarketCardImage}
+            src={featured.image}
             alt="PSA-graded 1999 Charizard Base Set Holo card"
             decoding="async"
           />
@@ -31,17 +39,17 @@ export function FeaturedMarketHero() {
             </span>
           </div>
         </div>
-      </article>
+      </ShowcaseLink>
 
-      <article className="featured-static-panel" aria-labelledby="home-featured-heading">
+      <ShowcaseLink asset={featured} className="featured-static-panel">
         <p className="page-kicker">Featured asset</p>
-        <h2 id="home-featured-heading">1999 Charizard</h2>
-        <p className="featured-static-panel__subtitle">Base Set &middot; Holo</p>
+        <h2 id="home-featured-heading">{featured.title}</h2>
+        <p className="featured-static-panel__subtitle">{featured.grade}</p>
 
         <div className="featured-static-panel__price">
-          <strong>&pound;24,580</strong>
+          <strong>{featured.displayPrice}</strong>
           <span>
-            +12.43% <small>(24H)</small>
+            {featured.displayMovement} <small>(24H)</small>
           </span>
         </div>
 
@@ -96,7 +104,7 @@ export function FeaturedMarketHero() {
         <dl className="featured-static-panel__stats">
           <div>
             <dt>Ownership</dt>
-            <dd>24.6% available</dd>
+            <dd>{featured.displayAvailability}</dd>
           </div>
           <div>
             <dt>Market confidence</dt>
@@ -107,7 +115,35 @@ export function FeaturedMarketHero() {
             <dd>1,250</dd>
           </div>
         </dl>
-      </article>
+      </ShowcaseLink>
     </section>
+  );
+}
+
+function ShowcaseLink({
+  asset,
+  className,
+  children,
+}: {
+  asset: HomepageShowcaseAsset;
+  className: string;
+  children: ReactNode;
+}) {
+  const destination = showcaseDestination(asset);
+  if (destination.kind === "asset") {
+    return (
+      <Link
+        to="/asset/$id"
+        params={{ id: destination.id }}
+        className={`${className} featured-showcase-link`}
+      >
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <Link to={destination.to} className={`${className} featured-showcase-link`}>
+      {children}
+    </Link>
   );
 }

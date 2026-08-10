@@ -108,7 +108,6 @@ export function SiteFooter() {
                 <LockKeyhole aria-hidden="true" /> Built with secure account and financial controls.
               </span>
             </div>
-            <p className="slice-footer__legal-note">Legal documents are pending publication.</p>
             <aside className="slice-footer__security-card" aria-label="Security information">
               <span aria-hidden="true">
                 <LockKeyhole />

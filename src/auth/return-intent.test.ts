@@ -6,6 +6,7 @@ describe("safe return intent", () => {
   it("allows only implemented internal destinations", () => {
     expect(safeReturnIntent("/portfolio")).toBe("/portfolio");
     expect(safeReturnIntent("/wallet?tab=history")).toBe("/wallet");
+    expect(safeReturnIntent("/list")).toBe("/list");
   });
 
   it("rejects external and script-like destinations", () => {

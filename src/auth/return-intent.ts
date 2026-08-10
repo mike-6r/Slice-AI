@@ -4,6 +4,7 @@ const allowedReturnPaths = new Set([
   "/portfolio",
   "/wallet",
   "/account",
+  "/list",
 ]);
 
 /** Accept only implemented internal destinations; never carry external/open redirect targets. */
