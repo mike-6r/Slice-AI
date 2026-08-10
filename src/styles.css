@@ -4756,15 +4756,18 @@
     grid-template-columns: 24rem minmax(58rem, 1fr);
     gap: 3rem;
   }
+  /* Keep the editorial asset module at its approved art-directed size on
+     ultrawide displays.  Expanding it here made the artwork and chart read
+     like a second hero instead of the compact paired showcase. */
   .hero-module {
-    max-width: 60rem;
-    grid-template-columns: 20rem 38rem;
-    gap: 2rem;
+    max-width: 48rem;
+    grid-template-columns: 17.5rem 28.75rem;
+    gap: 1.75rem;
   }
   .featured-market-hero {
-    max-width: 60rem;
-    grid-template-columns: 17.5rem minmax(0, 1fr);
-    gap: 2rem;
+    max-width: 48rem;
+    grid-template-columns: 14.5rem minmax(0, 28.75rem);
+    gap: 1.75rem;
   }
 }
 
