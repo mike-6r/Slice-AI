@@ -15,7 +15,9 @@ import { editorial } from "@/config/editorial";
 import type { Asset } from "@/domain";
 import { formatCurrency } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import { useTrendingAssets } from "@/queries/hooks";
+import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
+import { selectFeaturedAsset } from "@/components/home/featured-asset-selection";
+import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,6 +37,7 @@ export function HomePage() {
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const assets = useTrendingAssets();
+  const featuredAssets = useFeaturedAssets();
   const collectors = useQuery({
     queryKey: ["home", "collectors"],
     queryFn: () => services.repositories.collectors.listPublicCollectors({ limit: 3 }),
@@ -51,15 +54,17 @@ export function HomePage() {
     enabled: Boolean(editorial.featuredAssetId),
     staleTime: 30_000,
   });
-  const featured = featuredAsset.data ?? undefined;
+  const featured = selectFeaturedAsset(featuredAsset.data, featuredAssets.data);
+  const featuredLoading =
+    (Boolean(editorial.featuredAssetId) && featuredAsset.isLoading) || featuredAssets.isLoading;
 
   return (
     <main className="home-hero">
       <section className="page-shell home-hero__inner py-10 sm:py-14">
         <div className="hero-copy">
           <p className="page-kicker">Collect with confidence</p>
-          <h1 className="max-w-xl font-display text-5xl font-bold tracking-[-0.065em] text-foreground sm:text-6xl xl:text-7xl">
-            Invest in the collectibles you believe in.
+          <h1 className="hero-copy__headline max-w-xl font-display text-5xl font-bold tracking-[-0.065em] text-foreground sm:text-6xl xl:text-7xl">
+            <span>Invest.</span> <span>Collect.</span> <span className="text-accent">Grow.</span>
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-subtle sm:text-lg">
             Discover authenticated collectibles, public market context and custody records built for
@@ -89,41 +94,7 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="hero-module">
-          <FeaturedAsset asset={featured} loading={featuredAsset.isLoading} />
-          <section className="hero-panel p-5" aria-labelledby="home-featured-heading">
-            <p className="page-kicker">Featured market</p>
-            <h2 id="home-featured-heading" className="mt-2 text-xl font-semibold">
-              {featured?.details.title ?? "Featured asset unavailable"}
-            </h2>
-            {featured ? (
-              <>
-                <p className="mt-2 text-sm text-subtle">
-                  {featured.details.card?.set ?? humaniseCategory(featured.details.category)}
-                </p>
-                <div className="mt-auto grid grid-cols-2 gap-3 pt-7">
-                  <Metric label="Published value" value={assetValue(featured)} />
-                  <Metric
-                    label="Market status"
-                    value={featured.market?.dataStatus ?? "Unavailable"}
-                  />
-                </div>
-                <Link
-                  to="/asset/$id"
-                  params={{ id: featured.slug ?? featured.id }}
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
-                >
-                  View asset <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              </>
-            ) : (
-              <p className="mt-5 text-sm leading-6 text-subtle">
-                A featured collectible appears here when an editorially selected published asset is
-                available.
-              </p>
-            )}
-          </section>
-        </div>
+        <FeaturedMarketHero asset={featured} loading={featuredLoading} />
       </section>
 
       <section
@@ -379,14 +350,6 @@ function EmptyMarketPanel({ title, detail }: { title: string; detail: string }) 
         <h3 className="mt-4 font-semibold">{title}</h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-subtle">{detail}</p>
       </div>
-    </div>
-  );
-}
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-surface/70 p-3">
-      <span className="block text-xs text-muted">{label}</span>
-      <strong className="mt-1 block text-sm">{value}</strong>
     </div>
   );
 }
