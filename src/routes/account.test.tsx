@@ -64,6 +64,32 @@ function renderAccount() {
     enabled: true,
     enabledAt: "2026-08-09T00:00:00.000Z",
   });
+  client.setQueryData(queryKeys.account.capabilities, {
+    capabilities: [
+      {
+        capability: "PLACE_BUY_ORDER" as const,
+        allowed: false,
+        reason: "EMAIL_VERIFICATION_REQUIRED" as const,
+        requirements: [{ type: "EMAIL_VERIFICATION", satisfied: false }],
+      },
+      {
+        capability: "DEPOSIT_FUNDS" as const,
+        allowed: true,
+        reason: null,
+        requirements: [{ type: "EMAIL_VERIFICATION", satisfied: true }],
+      },
+      {
+        capability: "WITHDRAW_FUNDS" as const,
+        allowed: false,
+        reason: "TWO_FACTOR_REQUIRED" as const,
+        requirements: [
+          { type: "EMAIL_VERIFICATION", satisfied: true },
+          { type: "PHONE_VERIFICATION", satisfied: true },
+          { type: "TWO_FACTOR_AUTHENTICATION", satisfied: false },
+        ],
+      },
+    ],
+  });
   client.setQueryData(queryKeys.account.sessions, { sessions: [] });
   client.setQueryData(queryKeys.account.preferences, {
     timezone: "Europe/London",
@@ -147,6 +173,12 @@ describe("account UI", () => {
     expect(html).toContain("Safe Bank");
     expect(html).toContain("•••• 1234");
     expect(html).toContain("Two-factor auth");
+    expect(html).toContain("account-panel--access");
+    expect(html).toContain("Place Buy Order");
+    expect(html).toContain("Email verification required");
+    expect(html).toContain("Two-factor authentication required");
+    expect(html).toContain("Blocked");
+    expect(html).not.toContain("Complete account setup to unlock");
     expect(html).toContain("Order &amp; transaction updates");
     expect(html).toContain("Portfolio &amp; wallet activity");
     expect(html).toContain("Account data export");

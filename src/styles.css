@@ -562,6 +562,7 @@
   }
 }
 .account-shell {
+  width: min(calc(100% - 3rem), 96rem);
   padding-block: 2.15rem 3rem;
 }
 .account-heading {
@@ -583,8 +584,8 @@
 }
 .account-layout {
   display: grid;
-  grid-template-columns: 14.3rem minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(13.75rem, 15rem) minmax(0, 1fr);
+  gap: 1.5rem;
   align-items: start;
 }
 .account-sidebar,
@@ -689,6 +690,9 @@
   padding: 1rem;
   color: inherit;
 }
+.account-kpi > div {
+  min-width: 0;
+}
 .account-kpi[href]:hover {
   border-color: rgba(34, 211, 165, 0.38);
   transform: translateY(-1px);
@@ -724,6 +728,7 @@
   margin-top: 0.35rem;
   color: var(--color-subtle);
   font-size: 0.72rem;
+  overflow-wrap: break-word;
 }
 .account-main-grid {
   display: grid;
@@ -814,15 +819,15 @@
 }
 .account-profile-grid {
   display: grid;
-  grid-template-columns: 8.35rem minmax(0, 1fr);
-  gap: 1.2rem;
+  grid-template-columns: 6.3rem minmax(0, 1fr);
+  gap: 0.9rem;
   align-items: start;
   margin-top: 1rem;
 }
 .account-avatar {
   display: grid;
-  width: 6.9rem;
-  height: 6.9rem;
+  width: 6rem;
+  height: 6rem;
   place-items: center;
   border: 1px solid #697482;
   border-radius: 50%;
@@ -836,8 +841,8 @@
 }
 .account-profile-grid dl > div {
   display: grid;
-  grid-template-columns: 9.2rem minmax(0, 1fr);
-  gap: 0.7rem;
+  grid-template-columns: minmax(6.15rem, 0.82fr) minmax(0, 1.18fr);
+  gap: 0.55rem;
   padding: 0.51rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   font-size: 0.78rem;
@@ -849,7 +854,8 @@
   color: var(--color-subtle);
 }
 .account-profile-grid dd {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
   color: #f7f9fc;
 }
 .account-profile-grid dd.is-muted {
@@ -1020,6 +1026,9 @@
 .account-panel--security {
   grid-column: span 4;
 }
+.account-panel--access {
+  grid-column: span 4;
+}
 .account-panel--sessions {
   grid-column: span 4;
 }
@@ -1030,16 +1039,16 @@
   grid-column: span 4;
 }
 .account-panel--notifications {
-  grid-column: span 4;
+  grid-column: span 6;
 }
 .account-panel--activity {
-  grid-column: span 4;
+  grid-column: span 6;
 }
 .account-panel--data {
-  grid-column: span 5;
+  grid-column: span 6;
 }
 .account-panel--danger {
-  grid-column: span 7;
+  grid-column: span 6;
   border-color: rgba(248, 113, 113, 0.28);
 }
 .account-sidebar__section--danger {
@@ -1064,6 +1073,44 @@
   align-items: center;
   min-height: 3.1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+.account-access-list {
+  display: grid;
+  margin-top: 0.92rem;
+}
+.account-access-list li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  gap: 0.58rem;
+  align-items: center;
+  min-height: 3.2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+.account-access-list li:last-child {
+  border-bottom: 0;
+}
+.account-access-list li > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+.account-access-list strong {
+  color: #f5f7fa;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.account-access-list small {
+  color: var(--color-subtle);
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+.account-blocked {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #f4c85c;
+  font-size: 0.66rem;
+  font-weight: 700;
 }
 .account-security-row:last-child,
 .account-linked-row:last-child,
@@ -1408,7 +1455,7 @@
 .account-action-link:hover em {
   color: var(--color-accent);
 }
-@media (max-width: 1100px) {
+@media (max-width: 1160px) {
   .account-layout {
     grid-template-columns: 1fr;
   }
@@ -1422,12 +1469,14 @@
   .account-sidebar__help {
     display: none;
   }
-  .account-main-grid,
   .account-center-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .account-center-grid > .account-panel {
     grid-column: span 1;
+  }
+  .account-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 780px) {
@@ -1451,6 +1500,15 @@
     grid-template-columns: 1.25rem minmax(0, 1fr);
     padding: 0.5rem 0;
   }
+  .account-access-list li {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    padding: 0.5rem 0;
+  }
+  .account-access-list li > .account-good,
+  .account-access-list li > .account-blocked {
+    grid-column: 2;
+    justify-self: start;
+  }
   .account-security-list li > span:not(.account-security-icon),
   .account-good-icon {
     grid-column: 2;
@@ -1461,6 +1519,17 @@
   }
   .account-action-list em {
     grid-column: 2;
+  }
+}
+@media (max-width: 640px) {
+  .account-shell {
+    width: min(calc(100% - 2rem), 96rem);
+  }
+  .account-center-grid {
+    grid-template-columns: 1fr;
+  }
+  .account-center-grid > .account-panel {
+    grid-column: span 1;
   }
 }
 @media (max-width: 480px) {

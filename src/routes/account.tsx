@@ -203,26 +203,32 @@ function AccountAccessPanel({
       id="access"
       title="Security & access"
       detail="Your available features are based on your live account and verification state."
+      className="account-panel--access"
     >
       {query.isLoading ? <p className="text-sm text-subtle">Checking available features…</p> : null}
       {query.isError ? (
         <p className="text-sm text-subtle">Feature access could not be loaded right now.</p>
       ) : null}
       {query.data ? (
-        <ul className="account-security-list">
+        <ul className="account-access-list">
           {shown.map((capability) => {
             const item = query.data!.capabilities.find((entry) => entry.capability === capability);
             return (
               <li key={capability}>
-                <span>
+                <span className="account-security-icon" aria-hidden="true">
                   {item?.allowed ? (
                     <CheckCircle2 aria-hidden="true" />
                   ) : (
                     <CircleAlert aria-hidden="true" />
                   )}
                 </span>
-                <strong>{capability.replaceAll("_", " ").toLowerCase()}</strong>
-                <small>{item?.allowed ? "Available" : "Complete account setup to unlock"}</small>
+                <div>
+                  <strong>{capabilityLabel(capability)}</strong>
+                  <small>{capabilityRequirement(item)}</small>
+                </div>
+                <span className={item?.allowed ? "account-good" : "account-blocked"}>
+                  {item?.allowed ? "Available" : "Blocked"}
+                </span>
               </li>
             );
           })}
@@ -233,6 +239,52 @@ function AccountAccessPanel({
       </Link>
     </Panel>
   );
+}
+
+function capabilityLabel(capability: AccountCapability["capability"]) {
+  return capability
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function capabilityRequirement(item: AccountCapability | undefined) {
+  if (!item) return "Capability unavailable";
+  if (item.allowed) return "No additional verification required";
+
+  const missing = item.requirements.filter((requirement) => !requirement.satisfied);
+  if (missing.length) {
+    return `${missing.map((requirement) => capabilityRequirementLabel(requirement.type)).join(" + ")} required`;
+  }
+  return item.reason ? capabilityRequirementLabel(item.reason) : "Requirements not met";
+}
+
+function capabilityRequirementLabel(value: string) {
+  const labels: Record<string, string> = {
+    EMAIL_VERIFICATION: "Email verification",
+    PHONE_VERIFICATION: "Phone verification",
+    TWO_FACTOR_AUTHENTICATION: "Two-factor authentication",
+    IDENTITY_VERIFICATION: "Identity verification",
+    ACCOUNT_STATUS: "Active account",
+    FEATURE_AVAILABILITY: "Feature availability",
+    EMAIL_VERIFICATION_REQUIRED: "Email verification required",
+    PHONE_VERIFICATION_REQUIRED: "Phone verification required",
+    TWO_FACTOR_REQUIRED: "Two-factor authentication required",
+    IDENTITY_VERIFICATION_REQUIRED: "Identity verification required",
+    COMPLIANCE_REVIEW_REQUIRED: "Compliance review required",
+    ACCOUNT_RESTRICTED: "Account restricted",
+    ACCOUNT_DEACTIVATED: "Account deactivated",
+    ACCOUNT_DELETION_PENDING: "Account deletion pending",
+    ACCOUNT_REVIEW_REQUIRED: "Account review required",
+    FEATURE_DISABLED: "Feature unavailable",
+  };
+  if (labels[value]) return labels[value];
+  return value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace("two factor", "two-factor")
+    .replace("identity verification", "identity verification")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function AccountSidebar() {
