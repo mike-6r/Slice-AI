@@ -167,10 +167,7 @@ function SignupPage() {
           />
         </ul>
         <div className="signup-collectible" aria-hidden="true">
-          <div className="signup-collectible__glass">
-            <img src="/favicon.png" alt="" />
-          </div>
-          <span>Decorative collectible display</span>
+          <img src="/images/signup-collectible-display.png" alt="" decoding="async" />
         </div>
       </section>
 
