@@ -319,6 +319,87 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
     expectError(retry, 401, 'AUTHENTICATION_REQUIRED');
   });
 
+  it('preserves an opaque password across signup, logout, login, and a fresh application instance', async () => {
+    const email = `${runId}-signup-logout-login@example.test`;
+    const exactPassword = 'Slice Auth! Mixed Case 2026';
+    const created = await signup(
+      email,
+      `${runId}-signup-logout-login`,
+      'Credential Regression User',
+      '198.51.100.45',
+      exactPassword,
+    );
+    expect(created.status).toBe(201);
+
+    const storedBeforeLogout = await prisma.user.findUniqueOrThrow({
+      where: { normalizedEmail: email },
+      select: { passwordHash: true, updatedAt: true },
+    });
+    expect(storedBeforeLogout.passwordHash).toMatch(/^\$argon2id\$/);
+    expect(storedBeforeLogout.passwordHash.length).toBeGreaterThan(80);
+
+    const logout = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('authorization', `Bearer ${created.body.accessToken}`)
+      .set('cookie', readCookie(created)!);
+    expect(logout.status).toBe(204);
+    expectClearedCookie(logout);
+
+    const storedAfterLogout = await prisma.user.findUniqueOrThrow({
+      where: { normalizedEmail: email },
+      select: { passwordHash: true, updatedAt: true },
+    });
+    expect(storedAfterLogout.passwordHash).toBe(storedBeforeLogout.passwordHash);
+    expect(storedAfterLogout.updatedAt).toEqual(storedBeforeLogout.updatedAt);
+
+    const firstLogin = await login(email, exactPassword, '198.51.100.46');
+    expect(firstLogin.status).toBe(200);
+    expect(firstLogin.body.accessToken).toEqual(expect.any(String));
+    expectCookie(firstLogin, false);
+
+    const restartedApp = await createApp(AppModule);
+    await restartedApp.init();
+    try {
+      const afterReinitialization = await request(restartedApp.getHttpServer() as never)
+        .post('/api/v1/auth/login')
+        .set('x-forwarded-for', '198.51.100.47')
+        .send({ email, password: exactPassword });
+      expect(afterReinitialization.status).toBe(200);
+      expect(afterReinitialization.body.accessToken).toEqual(expect.any(String));
+      expectCookie(afterReinitialization, false);
+    } finally {
+      await restartedApp.close();
+    }
+
+    const wrongPassword = await login(email, `${exactPassword}!`, '198.51.100.48');
+    expectError(wrongPassword, 401, 'INVALID_CREDENTIALS');
+  });
+
+  it('uses the same opaque password semantics for ASCII, spaces, symbols, mixed case, and long values', async () => {
+    const cases = [
+      'PlainAsciiPassword12',
+      'Internal spaces 2026!',
+      'Symbols!@#$%^&*()_+-=12',
+      'MiXeD CaSe 2026! Slice',
+      `Long-${'password-segment-'.repeat(6)}2026!`,
+    ];
+
+    for (const [index, candidate] of cases.entries()) {
+      const email = `${runId}-opaque-${index}@example.test`;
+      const created = await signup(
+        email,
+        `${runId}-opaque-${index}`,
+        `Opaque Password ${index}`,
+        `198.51.101.${index + 1}`,
+        candidate,
+      );
+      expect(created.status).toBe(201);
+      const loggedIn = await login(email, candidate, `198.51.102.${index + 1}`);
+      expect(loggedIn.status).toBe(200);
+      expectCookie(loggedIn, false);
+    }
+  });
+
   it('logs out all sessions, clears cookies, revokes both refresh credentials, and rejects invalid idempotency use', async () => {
     const email = `${runId}-logout-all@example.test`;
     const created = await signup(
@@ -954,12 +1035,18 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
     process.env.COOKIE_SECURE = 'false';
   });
 
-  function signup(email: string, key: string, displayName: string, ip: string) {
+  function signup(
+    email: string,
+    key: string,
+    displayName: string,
+    ip: string,
+    candidatePassword: string = password,
+  ) {
     return request(app.getHttpServer())
       .post('/api/v1/auth/signup')
       .set('x-forwarded-for', ip)
       .set('idempotency-key', key)
-      .send({ email, password, displayName });
+      .send({ email, password: candidatePassword, displayName });
   }
 
   function login(email: string, candidatePassword: string, ip: string) {
