@@ -60,6 +60,7 @@ const config: AppConfig = {
     realtime: true,
     listing: true,
   },
+  localSubmissionStorageEnabled: true,
 };
 
 const actor = {

@@ -225,6 +225,9 @@ const configSchema = z.object({
   OPERATIONAL_WITHDRAWALS_ENABLED: z.enum(['true', 'false']).optional(),
   OPERATIONAL_REALTIME_ENABLED: z.enum(['true', 'false']).optional(),
   OPERATIONAL_LISTING_ENABLED: z.enum(['true', 'false']).optional(),
+  // Explicitly opt-in local diskless upload transport for staging only. Real
+  // production remains fail-closed until object storage is approved.
+  LOCAL_SUBMISSION_STORAGE_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export type AppConfig = {
@@ -321,6 +324,7 @@ export type AppConfig = {
     realtime: boolean;
     listing: boolean;
   };
+  localSubmissionStorageEnabled: boolean;
 };
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -515,6 +519,10 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   const providersProductionEnabled =
     parsed.PROVIDERS_PRODUCTION_ENABLED === 'true';
   const operationalFeatureDefault = parsed.NODE_ENV !== 'production';
+  const localSubmissionStorageEnabled =
+    parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === 'true' ||
+    (parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === undefined &&
+      parsed.NODE_ENV !== 'production');
   if (providersProductionEnabled && parsed.PROVIDER_MODE !== 'production') {
     throw new Error(
       'PROVIDERS_PRODUCTION_ENABLED requires PROVIDER_MODE=production.',
@@ -715,6 +723,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
         operationalFeatureDefault,
       ),
     },
+    localSubmissionStorageEnabled,
   };
 }
 

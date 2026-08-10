@@ -40,6 +40,18 @@ function SubmissionDetailPage() {
           ...(String(form.get("details") ?? "").trim()
             ? { details: String(form.get("details")).trim() }
             : {}),
+          ...(String(form.get("condition") ?? "").trim()
+            ? { condition: String(form.get("condition")).trim() }
+            : {}),
+          ...(String(form.get("certificationNumber") ?? "").trim()
+            ? { certificationNumber: String(form.get("certificationNumber")).trim() }
+            : {}),
+          ...(String(form.get("cardNumber") ?? "").trim()
+            ? { cardNumber: String(form.get("cardNumber")).trim() }
+            : {}),
+          ...(String(form.get("language") ?? "").trim()
+            ? { language: String(form.get("language")).trim() }
+            : {}),
         },
       }),
     onSuccess: () => {
@@ -66,9 +78,7 @@ function SubmissionDetailPage() {
     mutationFn: ({ slot, file }: { slot: string; file: File }) =>
       services.repositories.submissions.createMediaIntent(id, { slot, file }),
     onSuccess: () => {
-      setNotice(
-        "Upload intent created. This environment has no browser-accessible storage adapter, so evidence remains pending until the approved storage flow completes.",
-      );
+      setNotice("Evidence uploaded and checked by the approved submission storage workflow.");
       refresh();
     },
   });
@@ -156,6 +166,26 @@ function SubmissionDetailPage() {
               name="year"
               label="Year"
               defaultValue={String(item.declaredMetadata?.year ?? "")}
+            />
+            <Field
+              name="condition"
+              label="Condition / grade"
+              defaultValue={String(item.declaredMetadata?.condition ?? "")}
+            />
+            <Field
+              name="certificationNumber"
+              label="Certification number"
+              defaultValue={String(item.declaredMetadata?.certificationNumber ?? "")}
+            />
+            <Field
+              name="cardNumber"
+              label="Edition / reference number"
+              defaultValue={String(item.declaredMetadata?.cardNumber ?? "")}
+            />
+            <Field
+              name="language"
+              label="Language"
+              defaultValue={String(item.declaredMetadata?.language ?? "")}
             />
             <label className="grid gap-2 text-sm font-medium md:col-span-2">
               Description
@@ -291,6 +321,7 @@ function SafeMetadata({ metadata }: { metadata: Record<string, unknown> | null }
             "year",
             "details",
             "condition",
+            "certificationNumber",
             "cardNumber",
             "language",
           ].includes(key),

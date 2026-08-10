@@ -1,4 +1,5 @@
 import * as request from 'supertest';
+import { createHash } from 'node:crypto';
 import { LocalSubmissionStorage } from '../src/modules/submissions/infrastructure/local-submission-storage';
 import {
   bootSubmissionHarness,
@@ -55,6 +56,10 @@ describe('Document 010 submission media HTTP E2E', () => {
         originalFilename: 'oversize.jpg',
       });
     expect(oversize.status).toBe(413);
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAF/wJ+Xoej9QAAAABJRU5ErkJggg==',
+      'base64',
+    );
     const intent = await request(h.app.getHttpServer())
       .post(`/api/v1/submissions/${id}/media/upload-intents`)
       .set('authorization', owner.auth)
@@ -62,22 +67,21 @@ describe('Document 010 submission media HTTP E2E', () => {
       .set('idempotency-key', `${h.runId}-front`)
       .send({
         slot: 'front',
-        mimeType: 'image/jpeg',
-        sizeBytes: 42,
-        originalFilename: '../../front.jpg',
+        mimeType: 'image/png',
+        sizeBytes: png.length,
+        originalFilename: '../../front.png',
       });
     expect(intent.status).toBe(201);
     expect(intent.body.media.originalFilename).toBeUndefined();
-    const checksum = 'c'.repeat(64);
-    h.app.get(LocalSubmissionStorage).putForTest({
-      key: intent.body.upload.objectKey,
-      mimeType: 'image/jpeg',
-      sizeBytes: 42,
-      sha256: checksum,
-      magicMimeType: 'image/jpeg',
-      width: 2,
-      height: 2,
-    });
+    expect(intent.body.upload.url).toMatch(
+      /^\/api\/v1\/submissions\/local-uploads\//,
+    );
+    const upload = await request(h.app.getHttpServer())
+      .put(intent.body.upload.url)
+      .set('content-type', 'image/png')
+      .send(png);
+    expect(upload.status).toBe(204);
+    const checksum = createHash('sha256').update(png).digest('hex');
     const complete = await request(h.app.getHttpServer())
       .post(`/api/v1/submissions/${id}/media/${intent.body.media.id}/complete`)
       .set('authorization', owner.auth)

@@ -5,13 +5,16 @@ import {
   Delete,
   Get,
   Headers,
+  HttpCode,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { z } from 'zod';
 import {
   AccessTokenGuard,
@@ -21,6 +24,8 @@ import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { SubmissionService } from '../application/submission.service';
+import { LocalSubmissionStorage } from '../infrastructure/local-submission-storage';
+import { MAX_MEDIA_BYTES } from '../domain/submission.policy';
 
 const id = z.string().min(1).max(128);
 const metadata = z.record(z.unknown()).nullable().optional();
@@ -77,7 +82,24 @@ export class SubmissionController {
   constructor(
     private readonly submissions: SubmissionService,
     private readonly limiter: ControlRateLimitService,
+    private readonly localStorage: LocalSubmissionStorage,
   ) {}
+
+  /** Staging-only upload capability endpoint. The opaque one-use token is the
+   * authority; production keeps local storage disabled by configuration. */
+  @Put('submissions/local-uploads/:token')
+  @HttpCode(204)
+  async localUpload(
+    @Param('token') token: string,
+    @Headers('content-type') contentType: string | undefined,
+    @Req() req: Request,
+  ) {
+    await this.localStorage.receiveBrowserUpload(
+      token,
+      contentType ?? '',
+      await readRawUpload(req, MAX_MEDIA_BYTES),
+    );
+  }
 
   @Post('submissions')
   @UseGuards(AccessTokenGuard)
@@ -342,4 +364,27 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
       fieldErrors: result.error.flatten().fieldErrors,
     });
   return result.data;
+}
+
+function readRawUpload(req: Request, maxBytes: number) {
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.destroy();
+        reject(
+          new BadRequestException({
+            code: 'MEDIA_TOO_LARGE',
+            message: 'The media file is too large.',
+          }),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.once('end', () => resolve(Buffer.concat(chunks)));
+    req.once('error', reject);
+  });
 }
