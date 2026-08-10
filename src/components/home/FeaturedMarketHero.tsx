@@ -19,6 +19,17 @@ export function FeaturedMarketHero() {
             alt="PSA-graded 1999 Charizard Base Set Holo card"
             decoding="async"
           />
+          <div className="featured-showcase__pedestal" aria-hidden="true" />
+          <div className="featured-showcase__badge" aria-hidden="true">
+            <span>
+              <b>Slice</b>
+              <small>public</small>
+            </span>
+            <span>
+              <b>10</b>
+              <small>status</small>
+            </span>
+          </div>
         </div>
       </article>
 
