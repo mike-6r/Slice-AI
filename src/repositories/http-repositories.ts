@@ -39,6 +39,7 @@ type MarketAssetDto = {
   title: string;
   shortName: string | null;
   year: number | null;
+  certificationNumber?: string;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
   grading: { companyCode: string; grade: number; label: string } | null;
@@ -126,6 +127,13 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         numeric: value.grading.grade,
       }
     : undefined,
+  certification:
+    value.grading && value.certificationNumber
+      ? {
+          company: value.grading.companyCode.toUpperCase() as GradingCompany,
+          number: value.certificationNumber,
+        }
+      : undefined,
   market: {
     estimatedMarketValue: value.estimatedMarketValue
       ? {
@@ -934,6 +942,33 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             : [...current.items.map((item) => item.assetId as AssetId), assetId],
         };
       },
+      async getPublicIssuance(assetSlug) {
+        const body = await client.get<{
+          status: string;
+          totalUnits?: string;
+          issuedUnits?: string;
+          issuedAt?: string | null;
+        }>(`/market/assets/${assetSlug}/ownership/issuance`);
+        if (body.status !== "ACTIVE" || !body.totalUnits || !body.issuedUnits) return null;
+        return {
+          status: body.status,
+          totalUnits: body.totalUnits,
+          issuedUnits: body.issuedUnits,
+          issuedAt: body.issuedAt ?? null,
+        };
+      },
+      async getOwnMarketPosition(assetSlug) {
+        try {
+          return await client.get<{
+            settledUnits: string;
+            reservedUnits: string;
+            availableUnits: string;
+          }>(`/me/market/assets/${assetSlug}/ownership`);
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        }
+      },
     },
     trading: {
       async previewOrder(input) {
@@ -987,6 +1022,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async getPublicSummary() {
         return client.get<{ authority: string; eventCount: number }>("/vault/summary");
+      },
+      async getPublicLive() {
+        return client.get<import("@/data/repositories").VaultLiveProjection>("/vault/live");
       },
     },
     wallet: { getBalances: unsupported("Wallet"), getTransactions: unsupported("Wallet") },

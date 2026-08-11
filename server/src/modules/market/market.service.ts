@@ -270,6 +270,7 @@ type PublicAssetRow = {
   title: string;
   shortName: string | null;
   year: number | null;
+  certificationNumber: string | null;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
   gradeScaleEntry: {
@@ -300,6 +301,9 @@ function assetView(asset: PublicAssetRow) {
     title: asset.title,
     shortName: asset.shortName,
     year: asset.year,
+    ...(asset.certificationNumber
+      ? { certificationNumber: asset.certificationNumber }
+      : {}),
     category: { slug: asset.category.slug, name: asset.category.name },
     collectibleSet: asset.collectibleSet
       ? { slug: asset.collectibleSet.slug, name: asset.collectibleSet.name }

@@ -147,7 +147,7 @@ function KpiSkeletons() {
   return (
     <section className="portfolio-kpis" aria-label="Loading portfolio summary">
       {[0, 1, 2, 3].map((item) => (
-        <article key={item} className="portfolio-kpi portfolio-kpi--loading">
+        <article key={item} className="portfolio-summary-kpi portfolio-summary-kpi--loading">
           <div className="customer-skeleton size-11" />
           <div className="min-w-0 flex-1">
             <div className="customer-skeleton h-3 w-24" />
@@ -172,7 +172,7 @@ function PortfolioKpi({
   icon: LucideIcon;
 }) {
   return (
-    <article className="portfolio-kpi">
+    <article className="portfolio-summary-kpi">
       <KpiIconTile icon={icon} />
       <div className="portfolio-kpi__content">
         <p>{label}</p>

@@ -109,13 +109,28 @@ async function main() {
         blockingReason,
       };
     });
-    const demoCollectorAssets = collector
-      ? assets.filter((asset) =>
-          asset.submissions.some(
-            (submission) => submission.ownerUserId === collector.id,
-          ),
-        ).length
-      : 0;
+    const [collectorProfile, demoCollectorAssets, collectorPublishedListings] =
+      collector
+        ? await Promise.all([
+            db.publicCollectorProfile.findUnique({
+              where: { userId: collector.id },
+              select: { slug: true, isPublic: true },
+            }),
+            Promise.resolve(
+              assets.filter((asset) =>
+                asset.submissions.some(
+                  (submission) => submission.ownerUserId === collector.id,
+                ),
+              ).length,
+            ),
+            db.assetSubmission.count({
+              where: {
+                ownerUserId: collector.id,
+                asset: { is: { status: 'PUBLISHED' } },
+              },
+            }),
+          ])
+        : [null, 0, 0];
     const marketVisible = rows.filter((row) => row.marketVisible).length;
     const published = rows.filter((row) => row.status === 'PUBLISHED').length;
     const tradeable = rows.filter((row) => row.tradeable).length;
@@ -125,6 +140,8 @@ async function main() {
     const healthy =
       published === publishedStagingDemoAssetSlugs.length &&
       marketVisible === publishedStagingDemoAssetSlugs.length &&
+      collectorProfile?.isPublic === true &&
+      collectorPublishedListings >= 5 &&
       missingMedia === 0;
 
     process.stdout.write(
@@ -141,6 +158,13 @@ async function main() {
           email: demoAccounts.collector.email,
           exists: Boolean(collector),
           associatedAssets: demoCollectorAssets,
+          publicProfile: collectorProfile
+            ? {
+                slug: collectorProfile.slug,
+                isPublic: collectorProfile.isPublic,
+              }
+            : null,
+          publishedListingCount: collectorPublishedListings,
         },
         counts: {
           fixtureAssets: assets.length,

@@ -36,13 +36,14 @@ export type ShowcaseDestination =
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
   collectibleValue: "\u00a324,580",
-  totalUnits: "2,458 units",
+  totalShares: "2,458 shares",
+  availableShares: "604 shares",
   sharePrice: "\u00a310.00",
-  exampleUnits: "25 units",
+  exampleShares: "25 shares",
   exampleInvestment: "\u00a3250",
   exampleOwnership: "1.02%",
   availableOwnership: "24.6%",
-  minimumPosition: "1 share",
+  minimumPurchase: "1 share \u00b7 \u00a310",
 } as const;
 
 export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
@@ -163,13 +164,13 @@ export const HOMEPAGE_MARKET_METRICS = [
   {
     label: "Available",
     value: "24.6%",
-    detail: "Available ownership",
+    detail: "604 shares available",
     tone: "positive",
   },
   {
     label: "Minimum",
     value: "\u00a310",
-    detail: "Example entry point",
+    detail: "1 share minimum",
     tone: "positive",
   },
   {
@@ -225,9 +226,9 @@ export const HOMEPAGE_ALLOCATION = [
 ] as const;
 
 export const HOMEPAGE_PORTFOLIO_EXAMPLE = [
-  { label: "Charizard", value: "2.4%" },
-  { label: "Jordan Rookie", value: "1.8%" },
-  { label: "Dark Magician", value: "4.2%" },
+  { label: "Charizard", shares: "59 shares", ownership: "2.4%" },
+  { label: "Jordan Rookie", shares: "44 shares", ownership: "1.8%" },
+  { label: "Dark Magician", shares: "103 shares", ownership: "4.2%" },
 ] as const;
 
 export function showcaseDestination(asset: HomepageShowcaseAsset): ShowcaseDestination {

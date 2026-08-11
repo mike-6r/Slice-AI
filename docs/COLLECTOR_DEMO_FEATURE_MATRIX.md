@@ -5,7 +5,7 @@ This matrix records current code authority, not a product roadmap. It applies on
 | Feature | Route | Backend authority | Required state | Demo now | Fixture / external condition |
 | --- | --- | --- | --- | --- | --- |
 | Public collector directory | `/collectors` | `ReadsController` + `PublicCollectorProfile` | public profile | Yes | Demo profile and published submission-linked assets |
-| Public collector profile/catalogue | `/collector/:id` | `ReadsController` public projection | published asset linked to approved D10 submission | Yes | Five D10/D11-published listings |
+| Public collector profile/catalogue | `/collector/:id` | `ReadsController` public projection | published asset linked to approved D10 submission | Yes | Eight D10/D11-published listings (five primary, three specialist) |
 | Public asset discovery/detail | `/markets`, `/asset/:id` | catalogue + market reads | D11 publication and market snapshot | Yes | Real asset/lifecycle records; staging market history is labelled `DEMO` |
 | Asset submission | `/list` | `SubmissionService` (D10) | account capability `LIST_ASSET` | Yes, local-test email delivery only | Front/back evidence completed through D10 storage authority |
 | Review workspace | `/collector-workspace` | review queue, claim, decision endpoints | `ASSET_REVIEWER` role | Yes | Demo Collector receives only `ASSET_REVIEWER`, scoped staging fixture role; never finance/vault/compliance/admin |

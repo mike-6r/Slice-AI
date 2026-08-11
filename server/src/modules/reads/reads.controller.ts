@@ -113,6 +113,97 @@ export class ReadsController {
       }),
     };
   }
+  /**
+   * A compact, externally safe projection for Vault Live.  It deliberately
+   * reads only records already designated public; it is not a second
+   * lifecycle, custody, or trading authority.
+   */
+  @Get('vault/live') async vaultLive() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const publicAssetInclude = {
+      category: { select: { slug: true, name: true } },
+      collectibleSet: { select: { slug: true, name: true } },
+      gradeScaleEntry: { include: { company: true } },
+      marketSnapshots: { orderBy: { asOf: 'desc' as const }, take: 1 },
+    };
+    const [events, published, executions] = await Promise.all([
+      this.db.vaultPublicEvent.findMany({
+        where: { status: 'PUBLISHED' },
+        include: { asset: { include: publicAssetInclude } },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 24,
+      }),
+      this.db.asset.findMany({
+        where: { status: 'PUBLISHED' },
+        include: publicAssetInclude,
+        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+        take: 12,
+      }),
+      this.db.tradingExecution.findMany({
+        where: { executedAt: { gte: since }, asset: { status: 'PUBLISHED' } },
+        include: { asset: { include: publicAssetInclude } },
+        orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      }),
+    ]);
+
+    const eventView = events.map((event) => ({
+      id: event.id,
+      publicLabel: publicVaultEventLabel(event.type),
+      occurredAt: event.occurredAt.toISOString(),
+      publicSummary: event.publicSummary,
+      asset: publicVaultAssetView(event.asset),
+    }));
+    const viewedAssetIds = new Set(events.map((event) => event.assetId));
+    const reviewed = events
+      .filter((event) => isPublicReviewEvent(event.type))
+      .map((event) => publicVaultAssetView(event.asset))
+      .filter((asset): asset is NonNullable<typeof asset> => asset !== null);
+    const readiness = events
+      .filter((event) => isPublicReadinessEvent(event.type))
+      .map((event) => publicVaultAssetView(event.asset))
+      .filter((asset): asset is NonNullable<typeof asset> => asset !== null);
+    const distinct = <T extends { publicId: string }>(items: T[]) =>
+      [...new Map(items.map((item) => [item.publicId, item])).values()];
+    const activityByAsset = new Map<string, { asset: NonNullable<ReturnType<typeof publicVaultAssetView>>; units: bigint; latestPriceMinor: bigint; occurredAt: Date }>();
+    for (const execution of executions) {
+      const current = activityByAsset.get(execution.assetId);
+      if (current) {
+        current.units += execution.units;
+      } else {
+        activityByAsset.set(execution.assetId, {
+          asset: publicVaultAssetView(execution.asset)!,
+          units: execution.units,
+          latestPriceMinor: execution.priceMinor,
+          occurredAt: execution.executedAt,
+        });
+      }
+    }
+    const metrics = {
+      publicVaultEvents: events.filter((event) => event.occurredAt >= since).length,
+      newlyPublished: published.filter((asset) => asset.publishedAt && asset.publishedAt >= since).length,
+      valuationsUpdated: events.filter((event) => isPublicValuationEvent(event.type) && event.occurredAt >= since).length,
+      marketActivity: [...activityByAsset.values()].reduce((total, item) => total + item.units, 0n).toString(),
+    };
+    return {
+      dataStatus: 'LIVE_PUBLIC_PROJECTION',
+      windowStartedAt: since.toISOString(),
+      metrics,
+      featuredAsset: publicVaultAssetView(published.find((asset) => asset.slug === 'slice-demo-charizard') ?? published[0] ?? null),
+      recentEvents: eventView,
+      recentlyReviewed: distinct(reviewed),
+      readiness: distinct(readiness),
+      publishedAssets: published.map((asset) => publicVaultAssetView(asset)!),
+      marketActivity: [...activityByAsset.values()].slice(0, 6).map((item) => ({
+        asset: item.asset,
+        units: item.units.toString(),
+        latestPriceMinor: item.latestPriceMinor.toString(),
+        occurredAt: item.occurredAt.toISOString(),
+      })),
+      categories: [...new Map(published.map((asset) => [asset.category.slug, { slug: asset.category.slug, name: asset.category.name }])).values()],
+      eventAssetCount: viewedAssetIds.size,
+    };
+  }
   @Get('me/watchlist') @UseGuards(AccessTokenGuard) async list(
     @Req() req: AuthenticatedRequest,
     @Query('cursor') cursor?: string,
@@ -340,6 +431,84 @@ function publicCollectorView(x: {
     publishedListingCount: x.user._count.submissions,
     publishedListings: listings,
   };
+}
+
+type VaultLiveAsset = {
+  publicId: string;
+  slug: string;
+  title: string;
+  shortName: string | null;
+  year: number | null;
+  category: { slug: string; name: string };
+  collectibleSet: { slug: string; name: string } | null;
+  gradeScaleEntry: {
+    grade: { toFixed: (digits: number) => string };
+    label: string;
+    company: { code: string };
+  } | null;
+  marketSnapshots: Array<{
+    estimatedMarketValueMinor: bigint;
+    currency: string;
+    change24hBps: number;
+    availableBps: number | null;
+    ownersCount: number | null;
+    confidence: number | null;
+    asOf: Date;
+    status: string;
+  }>;
+};
+
+function publicVaultAssetView(asset: VaultLiveAsset | null) {
+  if (!asset) return null;
+  const market = asset.marketSnapshots[0] ?? null;
+  return {
+    publicId: asset.publicId,
+    slug: asset.slug,
+    title: asset.title,
+    shortName: asset.shortName,
+    year: asset.year,
+    category: asset.category,
+    collectibleSet: asset.collectibleSet,
+    grading: asset.gradeScaleEntry
+      ? {
+          companyCode: asset.gradeScaleEntry.company.code,
+          grade: asset.gradeScaleEntry.grade.toFixed(2),
+          label: asset.gradeScaleEntry.label,
+        }
+      : null,
+    market: market
+      ? {
+          estimatedValueMinor: market.estimatedMarketValueMinor.toString(),
+          currency: market.currency,
+          change24hBps: market.change24hBps,
+          availableBps: market.availableBps,
+          ownersCount: market.ownersCount,
+          confidence: market.confidence,
+          asOf: market.asOf.toISOString(),
+          dataStatus: market.status,
+        }
+      : null,
+  };
+}
+
+function publicVaultEventLabel(type: string) {
+  const normalized = type.trim().toUpperCase();
+  if (normalized.includes('VALU')) return 'Valuation updated';
+  if (normalized.includes('REVIEW') || normalized.includes('VERIF')) return 'Review complete';
+  if (normalized.includes('READY') || normalized.includes('STORED') || normalized.includes('RECEIVED')) return 'Vault readiness updated';
+  if (normalized.includes('MARKET') || normalized.includes('PUBLISH')) return 'Market live';
+  return 'Public vault update';
+}
+function isPublicReviewEvent(type: string) {
+  const normalized = type.toUpperCase();
+  return normalized.includes('REVIEW') || normalized.includes('VERIF');
+}
+function isPublicValuationEvent(type: string) {
+  return type.toUpperCase().includes('VALU');
+}
+function isPublicReadinessEvent(type: string) {
+  const normalized = type.toUpperCase();
+  return normalized.includes('READY') || normalized.includes('STORED') || normalized.includes('RECEIVED');
 }
 function makeCursor(scope: string, createdAt: Date, id: string) {
   return Buffer.from(

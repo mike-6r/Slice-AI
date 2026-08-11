@@ -53,22 +53,22 @@ const howSliceWorks = [
   {
     number: "02",
     icon: <CircleDollarSign />,
-    title: "Buy a slice",
-    detail: "Choose how much to own instead of purchasing the entire collectible.",
+    title: "Buy shares",
+    detail: "Choose the number of shares you want without buying the entire collectible.",
     to: "/marketplace" as const,
   },
   {
     number: "03",
     icon: <ChartNoAxesCombined />,
     title: "Track",
-    detail: "See percentage ownership, portfolio value and market activity in one place.",
+    detail: "Track your shares, percentage ownership, cost basis and portfolio activity.",
     to: "/portfolio" as const,
   },
   {
     number: "04",
     icon: <TrendingUp />,
     title: "Trade",
-    detail: "Buy or sell ownership positions through the marketplace when trading is available.",
+    detail: "Buy or sell supported share positions through the marketplace.",
     to: "/marketplace" as const,
   },
 ] as const;
@@ -87,9 +87,8 @@ function HomePage() {
             <span>Grow.</span>
           </h1>
           <p className="approved-home__lead">
-            Own a percentage of authenticated collectible cards without buying the entire asset.
-            Build a portfolio, track your ownership and trade your position through the Slice
-            marketplace.
+            Own shares in authenticated collectible cards without buying the entire asset. Build a
+            portfolio, track your percentage ownership and participate in the Slice marketplace.
           </p>
           <div className="approved-home__actions">
             <Link to="/marketplace" className="primary-action approved-home__primary-cta">
@@ -106,8 +105,8 @@ function HomePage() {
               ))}
             </div>
             <div>
-              <strong>Own a percentage, not the whole card</strong>
-              <small>Illustrative marketplace examples</small>
+              <strong>Own shares, not the whole card</strong>
+              <small>Start from a single share and build your position over time.</small>
             </div>
           </div>
           <HeroOwnershipLine />
@@ -175,7 +174,7 @@ function HomePage() {
                     <i style={{ width: asset.displayAvailability }} />
                   </span>
                   <small>
-                    {asset.displaySharePrice} - {asset.displayAvailability} available
+                    {asset.displaySharePrice} \u00b7 {asset.displayAvailability} available
                   </small>
                 </div>
               </div>
@@ -228,7 +227,9 @@ function HomePage() {
             {HOMEPAGE_PORTFOLIO_EXAMPLE.map((holding) => (
               <div key={holding.label}>
                 <dt>{holding.label}</dt>
-                <dd>{holding.value} owned</dd>
+                <dd>
+                  {holding.shares} · {holding.ownership}
+                </dd>
               </div>
             ))}
           </dl>
@@ -276,19 +277,19 @@ function HomePage() {
           <FeatureCard
             icon={<Boxes />}
             title="Fractional ownership"
-            detail="Own part of high-value collectible assets instead of purchasing the entire card."
+            detail="Buy shares in high-value collectible assets instead of purchasing the entire card."
             to="/marketplace"
           />
           <FeatureCard
             icon={<TrendingUp />}
             title="Marketplace"
-            detail="Discover available collectibles and manage buy or sell orders through one marketplace."
+            detail="Discover collectible share opportunities and manage supported buy or sell orders."
             to="/marketplace"
           />
           <FeatureCard
             icon={<ChartNoAxesCombined />}
             title="Portfolio"
-            detail="Track holdings, percentage ownership, cost basis and activity in one place."
+            detail="Track shares, percentage ownership, cost basis and activity in one place."
             to="/portfolio"
           />
           <FeatureCard
@@ -305,9 +306,8 @@ function HomePage() {
           <p className="page-kicker">The card is physical</p>
           <h2 id="physical-heading">Your ownership is tracked through Slice.</h2>
           <p>
-            Collectibles entering the Slice marketplace move through review, valuation and custody
-            workflows. Investors can then own fractional positions while the physical asset remains
-            associated with its marketplace record.
+            The physical collectible remains the underlying asset. Slice tracks your shares, cost
+            basis and ownership percentage in your portfolio while supporting marketplace positions.
           </p>
         </div>
         <div
@@ -315,15 +315,20 @@ function HomePage() {
           aria-label="Illustrative full card and fractional ownership comparison"
         >
           <div>
-            <span>Buy the full card</span>
+            <span>Buy the whole card</span>
             <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue}</strong>
             <small>1999 Charizard example</small>
           </div>
           <ArrowRight aria-hidden="true" />
           <div className="is-slice">
-            <span>Own a slice</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}</strong>
-            <small>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership - illustrative</small>
+            <span>Own shares</span>
+            <strong>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
+            </strong>
+            <small>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership \u00b7 illustrative
+            </small>
           </div>
         </div>
       </section>
@@ -336,7 +341,7 @@ function HomePage() {
             <br />
             <span>the entire collectible.</span>
           </h2>
-          <p>Start with a slice, build your portfolio and follow the market.</p>
+          <p>Buy shares, build your portfolio and follow the market through Slice.</p>
         </div>
         <div className="approved-home__actions">
           <Link to="/marketplace" className="primary-action approved-home__primary-cta">
@@ -358,13 +363,16 @@ function HeroOwnershipLine() {
   const items = [
     ["Card value", HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue],
     ["Share price", HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice],
-    ["Example investment", HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment],
+    [
+      "Example purchase",
+      `${HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} / ${HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}`,
+    ],
     ["Ownership", HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership],
   ] as const;
 
   return (
     <div className="approved-home__ownership-line" aria-label="Illustrative ownership example">
-      <p>Own a slice</p>
+      <p>Example ownership</p>
       <dl>
         {items.map(([label, value]) => (
           <div key={label}>
@@ -391,7 +399,7 @@ function OwnershipWorks() {
             <Vault aria-hidden="true" />
           </span>
           <div>
-            <small>Whole card</small>
+            <small>Whole collectible</small>
             <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue}</strong>
             <p>1999 Charizard</p>
           </div>
@@ -400,30 +408,39 @@ function OwnershipWorks() {
           <span>
             <ArrowRight />
           </span>
-          <small>Divided into ownership units</small>
+          <small>
+            Divided into {HOMEPAGE_OWNERSHIP_EXAMPLE.totalShares} at{" "}
+            {HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice} each
+          </small>
         </div>
         <div className="approved-home__ownership-stage is-slice">
           <span className="approved-home__ownership-icon">
             <BadgeCheck aria-hidden="true" />
           </span>
           <div>
-            <small>Your slice</small>
+            <small>Your ownership</small>
             <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership}</strong>
-            <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment} example investment</p>
+            <p>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment} example purchase
+            </p>
           </div>
         </div>
         <dl className="approved-home__ownership-facts">
           <div>
-            <dt>Total ownership units</dt>
-            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalUnits}</dd>
+            <dt>Total shares</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalShares}</dd>
           </div>
           <div>
-            <dt>Example unit price</dt>
+            <dt>Share price</dt>
             <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
           </div>
           <div>
-            <dt>Example investor buys</dt>
-            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleUnits}</dd>
+            <dt>Example purchase</dt>
+            <dd>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
+            </dd>
           </div>
           <div>
             <dt>Ownership</dt>
@@ -431,6 +448,13 @@ function OwnershipWorks() {
           </div>
         </dl>
       </div>
+      <aside className="approved-home__ownership-explainer">
+        <strong>What am I actually buying?</strong>
+        <p>
+          You’re purchasing shares that represent a percentage interest in the collectible listed on
+          Slice. Your position, cost basis and ownership percentage are tracked in your portfolio.
+        </p>
+      </aside>
     </section>
   );
 }

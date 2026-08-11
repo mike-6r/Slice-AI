@@ -69,6 +69,15 @@ export class OwnershipController {
     return this.operations.ownPosition(req.actor!, assetId);
   }
 
+  @Get('me/market/assets/:slug/ownership')
+  @UseGuards(AccessTokenGuard)
+  ownMarketPosition(
+    @Param('slug') slug: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.operations.ownMarketPosition(req.actor!, slug);
+  }
+
   @Post('admin/assets/:id/ownership/transfers')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('ownership.manage')

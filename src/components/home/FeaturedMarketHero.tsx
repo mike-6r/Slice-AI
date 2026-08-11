@@ -32,11 +32,7 @@ export function FeaturedMarketHero() {
           <div className="featured-showcase__badge" aria-hidden="true">
             <span>
               <b>Slice</b>
-              <small>public</small>
-            </span>
-            <span>
-              <b>10</b>
-              <small>status</small>
+              <small>showcase</small>
             </span>
           </div>
         </div>
@@ -104,16 +100,16 @@ export function FeaturedMarketHero() {
 
         <dl className="featured-static-panel__stats">
           <div>
-            <dt>Available ownership</dt>
-            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.availableOwnership}</dd>
+            <dt>Shares available</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.availableShares}</dd>
           </div>
           <div>
             <dt>Share price</dt>
             <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
           </div>
           <div>
-            <dt>Minimum position</dt>
-            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.minimumPosition}</dd>
+            <dt>Minimum purchase</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.minimumPurchase}</dd>
           </div>
         </dl>
       </ShowcaseLink>

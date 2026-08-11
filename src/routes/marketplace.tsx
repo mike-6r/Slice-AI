@@ -23,8 +23,12 @@ import {
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/marketplace")({
-  validateSearch: (search: Record<string, unknown>) =>
-    typeof search.q === "string" && search.q.length > 0 ? { q: search.q.slice(0, 120) } : {},
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.q === "string" && search.q.length > 0 ? { q: search.q.slice(0, 120) } : {}),
+    ...(typeof search.category === "string" && search.category.length > 0
+      ? { category: search.category.slice(0, 120) }
+      : {}),
+  }),
   head: () => ({
     meta: [
       { title: "Markets | Slice" },
@@ -38,7 +42,10 @@ function Marketplace() {
   const services = useAppServices();
   const routeSearch = Route.useSearch();
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>("trending");
-  const [filters, setFilters] = useState<MarketFilters>(EMPTY_MARKET_FILTERS);
+  const [filters, setFilters] = useState<MarketFilters>({
+    ...EMPTY_MARKET_FILTERS,
+    category: routeSearch.category ?? EMPTY_MARKET_FILTERS.category,
+  });
   const [sort, setSort] = useState<MarketSort>("trending");
   const [view, setView] = useState<MarketView>("grid");
   const [filtersOpen, setFiltersOpen] = useState(false);

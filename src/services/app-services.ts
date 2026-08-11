@@ -65,6 +65,9 @@ export class OwnershipService {
     this.repositories.ownership.getWatchlist(userId);
   toggleWatchlist = (userId: import("@/domain").UserId, assetId: import("@/domain").AssetId) =>
     this.repositories.ownership.toggleWatchlistAsset(userId, assetId);
+  publicIssuance = (assetSlug: string) => this.repositories.ownership.getPublicIssuance(assetSlug);
+  ownMarketPosition = (assetSlug: string) =>
+    this.repositories.ownership.getOwnMarketPosition(assetSlug);
   percentageForUnits(units: number, totalUnits: number) {
     return percentage((units / totalUnits) * 100);
   }

@@ -323,6 +323,12 @@ export const mockRepositories: AppRepositories = {
       else watched.add(assetId);
       return { userId, assetIds: [...watched] };
     },
+    async getPublicIssuance() {
+      return null;
+    },
+    async getOwnMarketPosition() {
+      return null;
+    },
   },
   trading: {
     async previewOrder(input) {
@@ -432,6 +438,26 @@ export const mockRepositories: AppRepositories = {
     },
     async getPublicSummary() {
       return { authority: "UNAVAILABLE_UNTIL_CUSTODY", eventCount: 0 };
+    },
+    async getPublicLive() {
+      return {
+        dataStatus: "LIVE_PUBLIC_PROJECTION" as const,
+        windowStartedAt: new Date().toISOString(),
+        metrics: {
+          publicVaultEvents: 0,
+          newlyPublished: 0,
+          valuationsUpdated: 0,
+          marketActivity: "0",
+        },
+        featuredAsset: null,
+        recentEvents: [],
+        recentlyReviewed: [],
+        readiness: [],
+        publishedAssets: [],
+        marketActivity: [],
+        categories: [],
+        eventAssetCount: 0,
+      };
     },
   },
   wallet: {

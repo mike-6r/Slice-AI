@@ -241,4 +241,31 @@ describe('Document 008 public read HTTP contracts', () => {
       (await request(app.getHttpServer()).get('/api/v1/me/portfolio')).status,
     ).toBe(401);
   });
+  it('projects Vault Live exclusively from safe public records', async () => {
+    const response = await request(app.getHttpServer()).get('/api/v1/vault/live');
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      dataStatus: 'LIVE_PUBLIC_PROJECTION',
+      metrics: expect.objectContaining({
+        publicVaultEvents: expect.any(Number),
+        newlyPublished: expect.any(Number),
+        valuationsUpdated: expect.any(Number),
+        marketActivity: expect.any(String),
+      }),
+      publishedAssets: expect.arrayContaining([
+        expect.objectContaining({ slug: `${id}-asset`, market: expect.anything() }),
+      ]),
+      recentEvents: expect.arrayContaining([
+        expect.objectContaining({
+          id: `${id}-event`,
+          publicLabel: 'Vault readiness updated',
+          asset: expect.objectContaining({ slug: `${id}-asset` }),
+        }),
+      ]),
+    });
+    const body = JSON.stringify(response.body).toLowerCase();
+    for (const forbidden of ['sourceref', 'private', 'email', 'owneruserid', 'providerref']) {
+      expect(body).not.toContain(forbidden);
+    }
+  });
 });

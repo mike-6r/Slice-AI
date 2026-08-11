@@ -7,6 +7,7 @@ export type MarketplaceAsset = {
   category: string;
   setName?: string;
   grade?: string;
+  certificationNumber?: string;
   estimatedMarketValueMinor?: number;
   source?: string;
   asOf?: string;
@@ -24,6 +25,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   category: asset.details.category,
   setName: asset.details.card?.set,
   grade: asset.grade ? `${asset.grade.company.toUpperCase()} ${asset.grade.label}` : undefined,
+  certificationNumber: asset.certification?.number,
   estimatedMarketValueMinor: asset.market?.estimatedMarketValue?.amount,
   source: asset.market?.source,
   asOf: asset.market?.asOf,

@@ -143,6 +143,17 @@ export interface CollectorRepository {
 export interface OwnershipRepository {
   getWatchlist(userId: UserId): Promise<Watchlist>;
   toggleWatchlistAsset(userId: UserId, assetId: AssetId): Promise<Watchlist>;
+  getPublicIssuance(assetSlug: string): Promise<{
+    status: string;
+    totalUnits: string;
+    issuedUnits: string;
+    issuedAt: string | null;
+  } | null>;
+  getOwnMarketPosition(assetSlug: string): Promise<{
+    settledUnits: string;
+    reservedUnits: string;
+    availableUnits: string;
+  } | null>;
 }
 export interface TradingRepository {
   /** Document 014 authority. API mode must use these operations, not local demos. */
@@ -171,7 +182,57 @@ export interface VaultRepository {
     nextCursor: string | null;
   }>;
   getPublicSummary(): Promise<{ authority: string; eventCount: number }>;
+  getPublicLive(): Promise<VaultLiveProjection>;
 }
+export type VaultLiveAsset = {
+  publicId: string;
+  slug: string;
+  title: string;
+  shortName: string | null;
+  year: number | null;
+  category: { slug: string; name: string };
+  collectibleSet: { slug: string; name: string } | null;
+  grading: { companyCode: string; grade: string; label: string } | null;
+  market: {
+    estimatedValueMinor: string;
+    currency: string;
+    change24hBps: number;
+    availableBps: number | null;
+    ownersCount: number | null;
+    confidence: number | null;
+    asOf: string;
+    dataStatus: string;
+  } | null;
+};
+export type VaultLiveProjection = {
+  dataStatus: "LIVE_PUBLIC_PROJECTION";
+  windowStartedAt: string;
+  metrics: {
+    publicVaultEvents: number;
+    newlyPublished: number;
+    valuationsUpdated: number;
+    marketActivity: string;
+  };
+  featuredAsset: VaultLiveAsset | null;
+  recentEvents: Array<{
+    id: string;
+    publicLabel: string;
+    occurredAt: string;
+    publicSummary: string;
+    asset: VaultLiveAsset;
+  }>;
+  recentlyReviewed: VaultLiveAsset[];
+  readiness: VaultLiveAsset[];
+  publishedAssets: VaultLiveAsset[];
+  marketActivity: Array<{
+    asset: VaultLiveAsset;
+    units: string;
+    latestPriceMinor: string;
+    occurredAt: string;
+  }>;
+  categories: Array<{ slug: string; name: string }>;
+  eventAssetCount: number;
+};
 export interface WalletRepository {
   getBalances(userId: UserId): Promise<WalletBalance[]>;
   getTransactions(userId: UserId): Promise<WalletTransaction[]>;

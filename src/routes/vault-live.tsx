@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -19,11 +19,9 @@ import {
 } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
-import {
-  toMarketplaceAsset,
-  type MarketplaceAsset,
-} from "@/components/marketplace/market-api-presentation";
-import { vaultLiveShowcase, VAULT_LIVE_SHOWCASE_LABEL } from "@/data/vault-live-showcase";
+import { type MarketplaceAsset } from "@/components/marketplace/market-api-presentation";
+import { vaultLiveShowcase } from "@/data/vault-live-showcase";
+import type { VaultLiveAsset } from "@/data/repositories";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
@@ -43,10 +41,10 @@ export const Route = createFileRoute("/vault-live")({
 
 type PublicEvent = {
   id: string;
-  type: string;
+  publicLabel: string;
   occurredAt: string;
   publicSummary: string;
-  assetSlug: string;
+  asset: VaultLiveAsset;
 };
 
 const statusIcon = {
@@ -94,33 +92,25 @@ function AssetRoute({
 
 function VaultLive() {
   const services = useAppServices();
-  const events = useInfiniteQuery({
-    queryKey: ["vault", "events"],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      services.repositories.vault.getPublicEvents({ cursor: pageParam, limit: 12, signal }),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  const live = useQuery({
+    queryKey: ["vault", "live-public-projection"],
+    queryFn: () => services.repositories.vault.getPublicLive(),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
-  const summary = useQuery({
-    queryKey: ["vault", "summary"],
-    queryFn: () => services.repositories.vault.getPublicSummary(),
-  });
-  const assetsQuery = useQuery({
-    queryKey: ["vault-live", "public-assets"],
-    queryFn: () => services.assets.list({ limit: 12, sort: "title" }),
-  });
-
   const assets = useMemo(
-    () => (assetsQuery.data?.items ?? []).map(toMarketplaceAsset),
-    [assetsQuery.data],
+    () => (live.data?.publishedAssets ?? []).map(toMarketplaceVaultAsset),
+    [live.data],
   );
-  const findAsset = (slug?: string) => assets.find((asset) => asset.slug === slug);
-  const eventItems = events.data?.pages.flatMap((page) => page.items) ?? [];
-  const featuredAsset = findAsset(vaultLiveShowcase.featured.realAssetSlug) ?? assets[0];
-  const reviewedAssets = assets.length ? assets.slice(0, 5) : [];
+  const eventItems = live.data?.recentEvents ?? [];
+  const featuredAsset = live.data?.featuredAsset
+    ? toMarketplaceVaultAsset(live.data.featuredAsset)
+    : undefined;
+  const reviewedAssets = (live.data?.recentlyReviewed ?? []).map(toMarketplaceVaultAsset);
+  const readinessAssets = (live.data?.readiness ?? []).map(toMarketplaceVaultAsset);
   const publishedAssets = assets.slice(0, 4);
   const hasRealEvents = eventItems.length > 0;
-  const eventCount = summary.data?.eventCount;
+  const metrics = live.data?.metrics;
 
   return (
     <main className="vault-live-page">
@@ -146,20 +136,12 @@ function VaultLive() {
           </div>
         </div>
 
-        <div className="vault-live-visual" aria-label="Illustrative public asset journey">
+        <div className="vault-live-visual" aria-label="Featured public asset journey">
           <div className="vault-live-visual__asset">
-            {assetShowcaseMedia(featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug) ? (
+            {featuredAsset && assetShowcaseMedia(featuredAsset.slug) ? (
               <img
-                src={
-                  assetShowcaseMedia(
-                    featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug,
-                  )!.src
-                }
-                alt={
-                  assetShowcaseMedia(
-                    featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug,
-                  )!.alt
-                }
+                src={assetShowcaseMedia(featuredAsset.slug)!.src}
+                alt={assetShowcaseMedia(featuredAsset.slug)!.alt}
               />
             ) : (
               <Box aria-hidden="true" />
@@ -186,12 +168,22 @@ function VaultLive() {
             })}
           </div>
           <div className="vault-live-visual__detail">
-            <span>Featured public path</span>
-            <strong>{featuredAsset?.title ?? vaultLiveShowcase.featured.title}</strong>
-            <p>{featuredAsset?.grade ?? vaultLiveShowcase.featured.grade} · Public journey view</p>
-            <AssetRoute asset={featuredAsset} className="text-link">
-              View asset <ArrowRight aria-hidden="true" />
-            </AssetRoute>
+            <span>{featuredAsset ? "Featured public path" : "Public asset journey"}</span>
+            <strong>{featuredAsset?.title ?? "No featured public asset"}</strong>
+            <p>
+              {featuredAsset
+                ? `${featuredAsset.grade ?? "Publicly listed"} / Public journey view`
+                : "A featured asset appears only after it is intentionally published to Slice."}
+            </p>
+            {featuredAsset ? (
+              <AssetRoute asset={featuredAsset} className="text-link">
+                View asset <ArrowRight aria-hidden="true" />
+              </AssetRoute>
+            ) : (
+              <Link className="text-link" to="/marketplace">
+                Explore markets <ArrowRight aria-hidden="true" />
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -200,28 +192,26 @@ function VaultLive() {
         className="page-shell vault-live-shell vault-live-metrics"
         aria-label="Vault Live metrics"
       >
-        {vaultLiveShowcase.metrics.map((metric, index) => {
+        {[
+          ["Public vault events", metrics?.publicVaultEvents ?? 0, "in the last 24 hours"],
+          ["Newly published", metrics?.newlyPublished ?? 0, "assets in the last 24 hours"],
+          ["Valuations updated", metrics?.valuationsUpdated ?? 0, "in the last 24 hours"],
+          ["Market activity", metrics?.marketActivity ?? "0", "shares traded in the last 24 hours"],
+        ].map(([label, value, detail], index) => {
           const Icon = [Eye, PackageCheck, ChartNoAxesCombined, Layers3][index]!;
-          const realValue =
-            index === 0 && typeof eventCount === "number" ? eventCount.toString() : metric.value;
           return (
-            <article className="vault-live-metric" key={metric.label}>
+            <article className="vault-live-metric" key={label as string}>
               <span className="vault-live-metric__icon">
                 <Icon aria-hidden="true" />
               </span>
               <div>
-                <p>{metric.label}</p>
-                <strong>{realValue}</strong>
-                <span>
-                  {index === 0 && typeof eventCount === "number"
-                    ? "published events"
-                    : metric.detail}
-                </span>
+                <p>{label as string}</p>
+                <strong>{String(value)}</strong>
+                <span>{detail as string}</span>
               </div>
             </article>
           );
         })}
-        <p className="vault-live-showcase-label">{VAULT_LIVE_SHOWCASE_LABEL}</p>
       </section>
 
       <section className="page-shell vault-live-shell vault-live-grid vault-live-grid--activity">
@@ -240,60 +230,54 @@ function VaultLive() {
           {hasRealEvents ? (
             <div className="vault-live-feed__rows">
               {eventItems.slice(0, 5).map((event) => (
-                <PublicEventRow event={event} asset={findAsset(event.assetSlug)} key={event.id} />
+                <PublicEventRow
+                  event={event}
+                  asset={toMarketplaceVaultAsset(event.asset)}
+                  key={event.id}
+                />
               ))}
             </div>
           ) : (
             <>
               <p className="vault-live-feed__notice">
-                Live public activity will appear here as eligible events are published. These
-                examples explain the intentionally public milestones shown on Vault Live.
+                No recent public Vault Live events. Events appear here only after an eligible
+                lifecycle milestone is intentionally published.
               </p>
-              <div className="vault-live-feed__rows">
-                {vaultLiveShowcase.activity.map((event) => (
-                  <ShowcaseEventRow
-                    event={event}
-                    asset={findAsset(event.realAssetSlug)}
-                    key={event.id}
-                  />
-                ))}
-              </div>
             </>
           )}
-          {events.hasNextPage ? (
-            <button
-              className="vault-live-more"
-              disabled={events.isFetchingNextPage}
-              onClick={() => void events.fetchNextPage()}
-              type="button"
-            >
-              {events.isFetchingNextPage ? "Loading public activity…" : "Load more public activity"}
-            </button>
-          ) : null}
         </div>
 
         <aside className="vault-live-panel vault-live-readiness">
           <div className="vault-live-panel__header">
             <div>
-              <p className="section-kicker">Entering the vault</p>
+              <p className="section-kicker">Readiness activity</p>
               <h2>Public readiness milestones.</h2>
             </div>
           </div>
           <div className="vault-live-readiness__cards">
-            {vaultLiveShowcase.readiness.map((item, index) => {
-              const Icon = [PackageCheck, Landmark, ShieldCheck][index]!;
-              return (
-                <article key={item.label}>
-                  <span>
-                    <Icon aria-hidden="true" />
-                  </span>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <p>{item.detail}</p>
-                  </div>
-                </article>
-              );
-            })}
+            {readinessAssets.length ? (
+              readinessAssets.slice(0, 3).map((asset, index) => {
+                const Icon = [PackageCheck, Landmark, ShieldCheck][index]!;
+                return (
+                  <article key={asset.slug}>
+                    <span>
+                      <Icon aria-hidden="true" />
+                    </span>
+                    <div>
+                      <strong>{asset.title}</strong>
+                      <p>
+                        {asset.category}
+                        {asset.grade ? ` / ${asset.grade}` : ""}
+                      </p>
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="vault-live-feed__notice">
+                No public readiness milestones have been published.
+              </p>
+            )}
           </div>
         </aside>
       </section>
@@ -308,19 +292,21 @@ function VaultLive() {
             Explore markets <ArrowRight aria-hidden="true" />
           </Link>
         </div>
-        <div className="vault-live-asset-rail">
-          {(reviewedAssets.length
-            ? reviewedAssets
-            : vaultLiveShowcase.reviewRail.map((slug) => findAsset(slug))
-          ).map((asset, index) => (
-            <VaultAssetCard
-              key={asset?.slug ?? vaultLiveShowcase.reviewRail[index]}
-              asset={asset}
-              fallbackSlug={vaultLiveShowcase.reviewRail[index]!}
-              label="Recently reviewed"
-            />
-          ))}
-        </div>
+        {reviewedAssets.length ? (
+          <div className="vault-live-asset-rail">
+            {reviewedAssets.map((asset) => (
+              <VaultAssetCard key={asset.slug} asset={asset} label="Recently reviewed" />
+            ))}
+          </div>
+        ) : (
+          <div className="vault-live-empty">
+            <PackageCheck aria-hidden="true" />
+            <div>
+              <strong>No publicly reviewed collectibles yet.</strong>
+              <p>Only review milestones intentionally published by Slice appear here.</p>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="page-shell vault-live-shell vault-live-grid vault-live-grid--market">
@@ -361,21 +347,26 @@ function VaultLive() {
               <h2>Public market signals.</h2>
             </div>
           </div>
-          <p className="vault-live-showcase-label">Illustrative market activity</p>
-          <div className="vault-live-market-activity__rows">
-            {vaultLiveShowcase.marketActivity.map((item) => (
-              <div key={item.title}>
-                <span>
-                  <TrendingUp aria-hidden="true" />
-                </span>
-                <p>
-                  <strong>{item.title}</strong>
-                  <small>{item.detail}</small>
-                </p>
-                <b>{item.value}</b>
-              </div>
-            ))}
-          </div>
+          {(live.data?.marketActivity.length ?? 0) > 0 ? (
+            <div className="vault-live-market-activity__rows">
+              {live.data!.marketActivity.map((item) => (
+                <div key={item.asset.publicId}>
+                  <span>
+                    <TrendingUp aria-hidden="true" />
+                  </span>
+                  <p>
+                    <strong>{item.asset.title}</strong>
+                    <small>Public executed share activity</small>
+                  </p>
+                  <b>{item.units} shares</b>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="vault-live-feed__notice">
+              No public share executions in the last 24 hours.
+            </p>
+          )}
         </aside>
       </section>
 
@@ -399,16 +390,10 @@ function VaultLive() {
 
       <section className="page-shell vault-live-shell vault-live-featured">
         <div className="vault-live-featured__image">
-          {assetShowcaseMedia(featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug) ? (
+          {featuredAsset && assetShowcaseMedia(featuredAsset.slug) ? (
             <img
-              src={
-                assetShowcaseMedia(featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug)!
-                  .src
-              }
-              alt={
-                assetShowcaseMedia(featuredAsset?.slug ?? vaultLiveShowcase.featured.realAssetSlug)!
-                  .alt
-              }
+              src={assetShowcaseMedia(featuredAsset.slug)!.src}
+              alt={assetShowcaseMedia(featuredAsset.slug)!.alt}
             />
           ) : (
             <Vault aria-hidden="true" />
@@ -417,12 +402,14 @@ function VaultLive() {
         <div className="vault-live-featured__copy">
           <p className="section-kicker">Featured Vault asset</p>
           <span className="vault-live-status">
-            <CircleDot aria-hidden="true" /> {vaultLiveShowcase.featured.publicStatus}
+            <CircleDot aria-hidden="true" />{" "}
+            {featuredAsset ? "Market live" : "Awaiting public asset"}
           </span>
-          <h2>{featuredAsset?.title ?? vaultLiveShowcase.featured.title}</h2>
+          <h2>{featuredAsset?.title ?? "No featured public asset"}</h2>
           <p>
-            {featuredAsset?.grade ?? vaultLiveShowcase.featured.grade} ·{" "}
-            {featuredAsset?.setName ?? vaultLiveShowcase.featured.subtitle}
+            {featuredAsset
+              ? `${featuredAsset.grade ?? "Publicly listed"} / ${featuredAsset.setName ?? featuredAsset.category}`
+              : "Featured details will appear once a public catalogue asset is available."}
           </p>
           <div className="vault-live-featured__numbers">
             <div>
@@ -430,7 +417,7 @@ function VaultLive() {
               <strong>
                 {featuredAsset?.estimatedMarketValueMinor
                   ? formatCurrency(featuredAsset.estimatedMarketValueMinor)
-                  : vaultLiveShowcase.featured.value}
+                  : "Unavailable"}
               </strong>
             </div>
             <div>
@@ -438,16 +425,22 @@ function VaultLive() {
               <strong>
                 {featuredAsset?.availabilityBps
                   ? `${featuredAsset.availabilityBps / 100}% available`
-                  : vaultLiveShowcase.featured.ownership}
+                  : "Unavailable"}
               </strong>
             </div>
           </div>
-          <AssetRoute
-            asset={featuredAsset}
-            className="vault-live-button vault-live-button--primary"
-          >
-            View asset <ArrowRight aria-hidden="true" />
-          </AssetRoute>
+          {featuredAsset ? (
+            <AssetRoute
+              asset={featuredAsset}
+              className="vault-live-button vault-live-button--primary"
+            >
+              View asset <ArrowRight aria-hidden="true" />
+            </AssetRoute>
+          ) : (
+            <Link className="vault-live-button vault-live-button--primary" to="/marketplace">
+              Explore markets <ArrowRight aria-hidden="true" />
+            </Link>
+          )}
         </div>
       </section>
 
@@ -459,10 +452,15 @@ function VaultLive() {
           </div>
         </div>
         <div>
-          {vaultLiveShowcase.categories.map((category) => (
-            <Link key={category} to="/marketplace" className="vault-live-category">
+          {(live.data?.categories ?? []).map((category) => (
+            <Link
+              key={category.slug}
+              to="/marketplace"
+              search={{ category: category.slug }}
+              className="vault-live-category"
+            >
               <Sparkles aria-hidden="true" />
-              <span>{category}</span>
+              <span>{category.name}</span>
               <ArrowRight aria-hidden="true" />
             </Link>
           ))}
@@ -492,15 +490,15 @@ function VaultLive() {
 }
 
 function PublicEventRow({ event, asset }: { event: PublicEvent; asset?: MarketplaceAsset }) {
-  const Icon = eventIcon(event.type);
+  const Icon = eventIcon(event.publicLabel);
   return (
     <article className="vault-live-event">
       <span className="vault-live-event__icon">
         <Icon aria-hidden="true" />
       </span>
       <div className="vault-live-event__copy">
-        <p>{event.type.replaceAll("_", " ")}</p>
-        <strong>{asset?.title ?? "Public collectible activity"}</strong>
+        <p>{event.publicLabel}</p>
+        <strong>{asset?.title}</strong>
         <span>{event.publicSummary}</span>
       </div>
       <time dateTime={event.occurredAt}>{formatDate(event.occurredAt)}</time>
@@ -511,45 +509,16 @@ function PublicEventRow({ event, asset }: { event: PublicEvent; asset?: Marketpl
   );
 }
 
-function ShowcaseEventRow({
-  event,
-  asset,
-}: {
-  event: (typeof vaultLiveShowcase.activity)[number];
-  asset?: MarketplaceAsset;
-}) {
-  const Icon = eventIcon(event.label);
-  return (
-    <article className="vault-live-event">
-      <span className="vault-live-event__icon">
-        <Icon aria-hidden="true" />
-      </span>
-      <div className="vault-live-event__copy">
-        <p>{event.label}</p>
-        <strong>{asset?.title ?? event.title}</strong>
-        <span>{event.detail}</span>
-      </div>
-      <time>{event.time}</time>
-      <AssetRoute asset={asset} className="text-link">
-        View asset <ArrowRight aria-hidden="true" />
-      </AssetRoute>
-    </article>
-  );
-}
-
 function VaultAssetCard({
   asset,
-  fallbackSlug,
   label,
   compact = false,
 }: {
-  asset?: MarketplaceAsset;
-  fallbackSlug?: string;
+  asset: MarketplaceAsset;
   label: string;
   compact?: boolean;
 }) {
-  const media = assetShowcaseMedia(asset?.slug ?? fallbackSlug ?? "");
-  const title = asset?.title ?? "Public collectible";
+  const media = assetShowcaseMedia(asset.slug);
   return (
     <article className={`vault-live-asset-card${compact ? " vault-live-asset-card--compact" : ""}`}>
       <div className="vault-live-asset-card__media">
@@ -557,11 +526,11 @@ function VaultAssetCard({
         <span>{label}</span>
       </div>
       <div className="vault-live-asset-card__copy">
-        <strong>{title}</strong>
+        <strong>{asset.title}</strong>
         <p>
           {asset?.grade ?? "Public catalogue"} · {asset?.category ?? "Collectible"}
         </p>
-        {asset?.estimatedMarketValueMinor ? (
+        {asset.estimatedMarketValueMinor ? (
           <b>{formatCurrency(asset.estimatedMarketValueMinor)}</b>
         ) : (
           <small>Explore public listing</small>
@@ -572,4 +541,23 @@ function VaultAssetCard({
       </div>
     </article>
   );
+}
+
+function toMarketplaceVaultAsset(asset: VaultLiveAsset): MarketplaceAsset {
+  return {
+    id: asset.publicId,
+    slug: asset.slug,
+    title: asset.title,
+    category: asset.category.name,
+    setName: asset.collectibleSet?.name,
+    grade: asset.grading ? `${asset.grading.companyCode} ${asset.grading.label}` : undefined,
+    estimatedMarketValueMinor: asset.market ? Number(asset.market.estimatedValueMinor) : undefined,
+    source: asset.market?.dataStatus,
+    asOf: asset.market?.asOf,
+    confidence: asset.market?.confidence ?? undefined,
+    availabilityBps: asset.market?.availableBps ?? undefined,
+    ownersCount: asset.market?.ownersCount ?? undefined,
+    dataStatus: asset.market?.dataStatus === "LIVE" ? "LIVE" : "DEMO",
+    change24hBps: asset.market?.change24hBps ?? undefined,
+  };
 }

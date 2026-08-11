@@ -40,6 +40,16 @@ function AssetPage() {
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.market.priceHistory(id as never, period),
   });
+  const issuanceQuery = useQuery({
+    queryKey: ["asset", id, "issuance"],
+    enabled: Boolean(assetQuery.data),
+    queryFn: () => services.ownership.publicIssuance(id),
+  });
+  const ownPositionQuery = useQuery({
+    queryKey: ["asset", id, "own-position"],
+    enabled: isAuthenticated && Boolean(assetQuery.data),
+    queryFn: () => services.ownership.ownMarketPosition(id),
+  });
   const similarQuery = useQuery({
     queryKey: ["asset", id, "similar"],
     enabled: Boolean(assetQuery.data),
@@ -89,6 +99,12 @@ function AssetPage() {
   const media = assetShowcaseMedia(asset.slug);
   const history = historyQuery.data ?? [];
   const currentValue = asset.estimatedMarketValueMinor;
+  const shares = sharePresentation({
+    issuedUnits: issuanceQuery.data?.issuedUnits,
+    valueMinor: currentValue,
+    availabilityBps: asset.availabilityBps,
+    ownUnits: ownPositionQuery.data?.settledUnits,
+  });
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
 
   return (
@@ -107,6 +123,7 @@ function AssetPage() {
               title={asset.title}
               category={asset.category}
               grade={asset.grade}
+              certificationNumber={asset.certificationNumber}
               media={media}
               watched={watched}
               canWatch={isAuthenticated}
@@ -133,9 +150,11 @@ function AssetPage() {
                   </p>
                 </section>
                 <section className="asset-trade-summary" aria-label="Asset trade summary">
-                  <span>Estimated market value</span>
+                  <span>Share price</span>
                   <strong>
-                    {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+                    {shares.sharePriceMinor === undefined
+                      ? "Unavailable"
+                      : formatCurrency(shares.sharePriceMinor)}
                   </strong>
                   <em>
                     {asset.change24hBps === undefined
@@ -143,13 +162,13 @@ function AssetPage() {
                       : `${formatPercent(asset.change24hBps / 100)} (24h)`}
                   </em>
                   <Link to="/buy/$id" params={{ id }} className="asset-buy-action">
-                    Buy units
+                    Buy shares
                   </Link>
                   <Link to="/sell/$id" params={{ id }} className="asset-sell-action">
-                    Sell units
+                    Sell shares
                   </Link>
                   <div className="asset-owned-summary">
-                    <span>Market availability</span>
+                    <span>Available ownership</span>
                     <strong>
                       {asset.availabilityBps === undefined
                         ? "Unavailable"
@@ -162,8 +181,27 @@ function AssetPage() {
                         }}
                       />
                     </div>
-                    <small>Aggregate published market availability</small>
+                    <small>
+                      {shares.availableShares === undefined || shares.issuedShares === undefined
+                        ? "Aggregate published market availability"
+                        : `${shares.availableShares.toLocaleString()} of ${shares.issuedShares.toLocaleString()} shares available`}
+                    </small>
                   </div>
+                  {isAuthenticated && (
+                    <div className="asset-owned-summary asset-my-ownership-summary">
+                      <span>Your ownership</span>
+                      <strong>
+                        {shares.ownShares === undefined
+                          ? "No shares held"
+                          : `${shares.ownShares.toLocaleString()} shares`}
+                      </strong>
+                      <small>
+                        {shares.ownShares === undefined || shares.issuedShares === undefined
+                          ? "Your settled share position"
+                          : formatOwnershipPercent(shares.ownShares, shares.issuedShares)}
+                      </small>
+                    </div>
+                  )}
                 </section>
               </div>
               <AssetRanking asset={asset} historyCount={history.length} />
@@ -174,8 +212,16 @@ function AssetPage() {
             <h2>Market snapshot</h2>
             <div>
               <Stat
-                label="Market value"
+                label="Asset value"
                 value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+              />
+              <Stat
+                label="Share price"
+                value={
+                  shares.sharePriceMinor === undefined
+                    ? "Unavailable"
+                    : formatCurrency(shares.sharePriceMinor)
+                }
               />
               <Stat
                 label="24 hour move"
@@ -192,6 +238,14 @@ function AssetPage() {
                   asset.availabilityBps === undefined
                     ? "Unavailable"
                     : `${(asset.availabilityBps / 100).toFixed(1)}%`
+                }
+              />
+              <Stat
+                label="Shares issued"
+                value={
+                  shares.issuedShares === undefined
+                    ? "Unavailable"
+                    : shares.issuedShares.toLocaleString()
                 }
               />
               <Stat
@@ -289,11 +343,11 @@ function AssetPage() {
                 <ul>
                   <li>
                     <i className="is-emerald" />
-                    <span>Published availability</span>
+                    <span>Shares available</span>
                     <strong>
-                      {asset.availabilityBps === undefined
+                      {shares.availableShares === undefined
                         ? "Unavailable"
-                        : `${(asset.availabilityBps / 100).toFixed(1)}%`}
+                        : `${shares.availableShares.toLocaleString()} shares`}
                     </strong>
                   </li>
                   <li>
@@ -305,11 +359,11 @@ function AssetPage() {
                   </li>
                   <li>
                     <i className="is-amber" />
-                    <span>Reserved / unavailable</span>
+                    <span>Shares issued</span>
                     <strong>
-                      {asset.availabilityBps === undefined
+                      {shares.issuedShares === undefined
                         ? "Unavailable"
-                        : `${((10000 - asset.availabilityBps) / 100).toFixed(1)}%`}
+                        : shares.issuedShares.toLocaleString()}
                     </strong>
                   </li>
                 </ul>
@@ -326,16 +380,16 @@ function AssetPage() {
                 <strong>{asset.setName ?? "Unavailable"}</strong>
               </div>
               <div>
-                <span>Grade</span>
+                <span>Grader / grade</span>
                 <strong>{asset.grade ?? "Unavailable"}</strong>
+              </div>
+              <div>
+                <span>Certification</span>
+                <strong>{asset.certificationNumber ?? "Unavailable"}</strong>
               </div>
               <div>
                 <span>Catalogue state</span>
                 <strong>Published</strong>
-              </div>
-              <div>
-                <span>Public reference</span>
-                <strong>{asset.slug}</strong>
               </div>
             </section>
             <section className="asset-details-panel">
@@ -409,6 +463,7 @@ function AssetShowcase({
   title,
   category,
   grade,
+  certificationNumber,
   media,
   watched,
   canWatch,
@@ -418,6 +473,7 @@ function AssetShowcase({
   title: string;
   category: string;
   grade?: string;
+  certificationNumber?: string;
   media?: { src: string; alt: string };
   watched: boolean;
   canWatch: boolean;
@@ -436,9 +492,9 @@ function AssetShowcase({
       <span className="asset-live-badge">Published</span>
       {grade && (
         <span className="asset-grade-badge">
-          <small>Grade</small>
+          <small>{grade.split(" ")[0] ?? "Grader"}</small>
           <strong>{grade.replace(/^[A-Z]+\s+/, "")}</strong>
-          <em>verified</em>
+          <em>{certificationNumber ? `Cert. ${certificationNumber}` : "Public record"}</em>
         </span>
       )}
       <button
@@ -556,7 +612,7 @@ function OrderBook({
         <>
           <div className="asset-order-head">
             <span>Side</span>
-            <span>Units</span>
+            <span>Shares</span>
             <span>Price</span>
             <span>Orders</span>
           </div>
@@ -576,10 +632,10 @@ function OrderBook({
       )}
       <div className="asset-order-actions">
         <Link to="/buy/$id" params={{ id }}>
-          Buy
+          Buy shares
         </Link>
         <Link to="/sell/$id" params={{ id }}>
-          Sell
+          Sell shares
         </Link>
       </div>
     </section>
@@ -643,7 +699,7 @@ function RecentTrades({
             trades.slice(0, 7).map((trade) => (
               <li key={trade.id}>
                 <span>{formatDate(trade.executedAt)}</span>
-                <strong>{trade.units} units</strong>
+                <strong>{trade.units} shares</strong>
                 <em className="is-up">{formatCurrency(trade.pricePerUnit.amount)}</em>
               </li>
             ))
@@ -727,6 +783,68 @@ function SimilarAssets({
       )}
     </section>
   );
+}
+
+/**
+ * Public market data arrives as integer strings.  Keep this calculation in
+ * whole shares/minor units so the detail page never manufactures fractional
+ * ownership or a floating-point price.  The UI only converts the final,
+ * bounded display amount after the integer division is complete.
+ */
+function sharePresentation(input: {
+  issuedUnits?: string;
+  valueMinor?: number;
+  availabilityBps?: number;
+  ownUnits?: string;
+}) {
+  const issued = positiveSafeInteger(input.issuedUnits);
+  const value =
+    input.valueMinor !== undefined &&
+    Number.isSafeInteger(input.valueMinor) &&
+    input.valueMinor >= 0
+      ? BigInt(input.valueMinor)
+      : undefined;
+  const issuedBigInt = issued === undefined ? undefined : BigInt(issued);
+  const availability =
+    input.availabilityBps !== undefined &&
+    Number.isInteger(input.availabilityBps) &&
+    input.availabilityBps >= 0 &&
+    input.availabilityBps <= 10_000
+      ? BigInt(input.availabilityBps)
+      : undefined;
+  const available =
+    issuedBigInt !== undefined && availability !== undefined
+      ? (issuedBigInt * availability) / 10_000n
+      : undefined;
+  const own = positiveSafeInteger(input.ownUnits, true);
+  const sharePrice = issuedBigInt && value !== undefined ? value / issuedBigInt : undefined;
+  return {
+    issuedShares: issued,
+    availableShares: safeDisplayInteger(available),
+    ownShares: own,
+    sharePriceMinor: safeDisplayInteger(sharePrice),
+  };
+}
+
+function positiveSafeInteger(value: string | undefined, allowZero = false) {
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || (!allowZero && parsed <= 0) || (allowZero && parsed < 0))
+    return undefined;
+  return parsed;
+}
+
+function safeDisplayInteger(value: bigint | undefined) {
+  if (value === undefined || value > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  return Number(value);
+}
+
+function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
+  if (issuedShares <= 0) return "Your settled share position";
+  const percentageBasisPoints = (BigInt(ownedShares) * 10_000n) / BigInt(issuedShares);
+  const wholePercent = percentageBasisPoints / 100n;
+  const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
+  return `${wholePercent}.${fractionalPercent}% of issued shares`;
 }
 
 function PageState({

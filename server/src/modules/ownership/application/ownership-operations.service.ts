@@ -423,6 +423,20 @@ export class OwnershipOperationsService {
     };
   }
 
+  /** Own-only projection addressed by the public market slug. */
+  async ownMarketPosition(actor: Actor, slug: string) {
+    const asset = await this.db.asset.findFirst({
+      where: { slug, status: 'PUBLISHED' },
+      select: { id: true },
+    });
+    if (!asset)
+      throw new NotFoundException({
+        code: 'ASSET_NOT_FOUND',
+        message: 'Resource not found.',
+      });
+    return this.ownPosition(actor, asset.id);
+  }
+
   private async mutate<T extends Record<string, unknown>>(
     actor: Actor,
     assetId: string,

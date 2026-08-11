@@ -8,6 +8,7 @@ const dto = {
   title: "Charizard",
   shortName: null,
   year: 1999,
+  certificationNumber: "58291042",
   category: { slug: "pokemon", name: "Pokémon" },
   collectibleSet: null,
   grading: { companyCode: "PSA", grade: 10, label: "10" },
@@ -60,6 +61,7 @@ describe("HTTP catalogue mapping", () => {
     expect(asset.marketValue).toBeUndefined();
     expect(asset.ownershipAvailableBps).toBeUndefined();
     expect(asset.market?.source).toBe("AUCTION_COMPS");
+    expect(asset.certification).toEqual({ company: "PSA", number: "58291042" });
   });
 
   it("uses the API adapter and never falls back to mocks", async () => {
