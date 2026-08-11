@@ -949,11 +949,14 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
         recoveryCode: newRecoveryCode,
       });
     expect(newRecovery.status).toBe(200);
+    const disableCode = await generateTotpForTest(
+      enrollment.body.manualEntryKey,
+    );
     const disabled = await request(app.getHttpServer())
       .post('/api/v1/me/2fa/disable')
       .set('authorization', `Bearer ${newRecovery.body.accessToken}`)
       .set('x-forwarded-for', '198.51.100.116')
-      .send({ code });
+      .send({ code: disableCode });
     expect(disabled.status).toBe(201);
     await request(app.getHttpServer())
       .post('/api/v1/auth/logout')

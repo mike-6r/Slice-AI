@@ -11,7 +11,7 @@ const dto = {
   certificationNumber: "58291042",
   category: { slug: "pokemon", name: "Pokémon" },
   collectibleSet: null,
-  grading: { companyCode: "PSA", grade: 10, label: "10" },
+  grading: { companyCode: "PSA", grade: "10.00", label: "10" },
   estimatedMarketValue: { minor: "2458000", currency: "GBP" as const },
   change24hBps: 1243,
   availabilityBps: null,

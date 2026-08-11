@@ -42,7 +42,9 @@ type MarketAssetDto = {
   certificationNumber?: string;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
-  grading: { companyCode: string; grade: number; label: string } | null;
+  // The public API serializes decimal grades as strings to preserve their
+  // canonical precision (for example, "10.00").
+  grading: { companyCode: string; grade: string; label: string } | null;
   estimatedMarketValue: { minor: string; currency: "GBP" } | null;
   change24hBps: number | null;
   availabilityBps: number | null;
@@ -124,7 +126,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     ? {
         company: value.grading.companyCode.toLowerCase() as GradingCompany,
         label: value.grading.label,
-        numeric: value.grading.grade,
+        numeric: Number(value.grading.grade),
       }
     : undefined,
   certification:

@@ -51,6 +51,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   SUBMISSION_REVIEW_CLAIMED: ['reviewId'],
   SUBMISSION_CHANGES_REQUESTED: ['reviewId', 'reasonCode', 'version'],
   SUBMISSION_APPROVED: ['reviewId', 'reasonCode', 'version'],
+  SUBMISSION_APPROVED_ASSET_LINKED: ['assetId', 'ownerUserId'],
   SUBMISSION_REJECTED: ['reviewId', 'reasonCode', 'version'],
   VALUATION_EVIDENCE_RECORDED: ['assetId', 'sourceType', 'currency'],
   VALUATION_DECIDED: ['assetId', 'currency', 'confidence', 'methodologyCode'],

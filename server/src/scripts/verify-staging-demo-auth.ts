@@ -17,7 +17,11 @@ async function main() {
   try {
     const auth = app.get(AuthService);
     const db = app.get(PrismaService);
-    for (const demo of Object.values(demoAccounts)) {
+    // The first demo-setup phase creates only these two principal identities.
+    // Supporting collector/liquidity identities are created by the subsequent
+    // collector fixture, after this restart-proof has completed.
+    const restartProofAccounts = [demoAccounts.investor, demoAccounts.collector];
+    for (const demo of restartProofAccounts) {
       const before = await db.user.findUnique({
         where: { normalizedEmail: demo.email },
         select: { passwordHash: true },
@@ -69,7 +73,7 @@ async function main() {
         result: process.env.STAGING_DEMO_AUTH_RESTART_PROOF === 'true'
           ? 'STAGING_DEMO_AUTH_RESTART_VERIFIED'
           : 'STAGING_DEMO_AUTH_VERIFIED',
-        accounts: Object.values(demoAccounts).map((item) => item.email),
+        accounts: restartProofAccounts.map((item) => item.email),
       }) + '\n',
     );
   } finally {

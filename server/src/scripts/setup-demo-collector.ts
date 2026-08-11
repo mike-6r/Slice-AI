@@ -41,6 +41,11 @@ type DemoAsset = Readonly<{
   valueMinor: bigint;
   historyProfile: 'UPWARD' | 'DOWNWARD' | 'VOLATILE' | 'STABLE';
   state: 'DRAFT' | 'SUBMITTED' | 'CHANGES_REQUESTED' | 'CUSTODY' | 'PUBLISHED';
+  grading: Readonly<{
+    companyCode: 'PSA' | 'BGS';
+    grade: '8.00' | '9.00' | '10.00';
+    label: 'Near Mint-Mint' | 'Mint' | 'Gem Mint';
+  }>;
 }>;
 
 const assets: readonly DemoAsset[] = [
@@ -53,6 +58,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 2458000n,
     historyProfile: 'UPWARD',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
   },
   {
     key: 'pikachu',
@@ -63,6 +69,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 615000n,
     historyProfile: 'VOLATILE',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'blastoise',
@@ -73,6 +80,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 465000n,
     historyProfile: 'STABLE',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'jordan',
@@ -83,6 +91,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 682000n,
     historyProfile: 'UPWARD',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '8.00', label: 'Near Mint-Mint' },
   },
   {
     key: 'mantle',
@@ -93,6 +102,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 1285000n,
     historyProfile: 'DOWNWARD',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '8.00', label: 'Near Mint-Mint' },
   },
   {
     key: 'dark-magician',
@@ -103,6 +113,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 68000n,
     historyProfile: 'VOLATILE',
     state: 'CUSTODY',
+    grading: { companyCode: 'BGS', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'black-lotus',
@@ -113,6 +124,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 9200000n,
     historyProfile: 'VOLATILE',
     state: 'CHANGES_REQUESTED',
+    grading: { companyCode: 'BGS', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'one-piece',
@@ -123,6 +135,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 365000n,
     historyProfile: 'UPWARD',
     state: 'SUBMITTED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
   },
   {
     key: 'luka',
@@ -133,6 +146,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 285000n,
     historyProfile: 'STABLE',
     state: 'DRAFT',
+    grading: { companyCode: 'PSA', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'rayquaza',
@@ -143,6 +157,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 875000n,
     historyProfile: 'UPWARD',
     state: 'DRAFT',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
   },
   {
     key: 'specialist-dark-magician',
@@ -154,6 +169,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 68000n,
     historyProfile: 'VOLATILE',
     state: 'PUBLISHED',
+    grading: { companyCode: 'BGS', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'specialist-black-lotus',
@@ -165,6 +181,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 9200000n,
     historyProfile: 'VOLATILE',
     state: 'PUBLISHED',
+    grading: { companyCode: 'BGS', grade: '9.00', label: 'Mint' },
   },
   {
     key: 'specialist-one-piece',
@@ -176,6 +193,7 @@ const assets: readonly DemoAsset[] = [
     valueMinor: 365000n,
     historyProfile: 'UPWARD',
     state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
   },
 ];
 
@@ -196,7 +214,24 @@ const fixturePng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
-const fixtureHash = createHash('sha256').update(fixturePng).digest('hex');
+
+/**
+ * Every evidence slot must have its own digest. The submissions authority
+ * deliberately rejects duplicate evidence hashes within a submission, so a
+ * single shared 1px fixture cannot be used for both its front and back media.
+ * Keeping the payload length stable also lets an interrupted local fixture run
+ * finish a pending upload created by an earlier invocation.
+ */
+function fixtureMedia(identity: string) {
+  const bytes = Buffer.from(fixturePng);
+  let marker = 0;
+  for (const character of identity) marker = (marker + character.charCodeAt(0)) % 251;
+  bytes[bytes.length - 1] = (bytes[bytes.length - 1] + marker + 1) % 256;
+  return {
+    bytes,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+}
 
 /**
  * Staging-only fixture that deliberately uses D10/D11/D12 authority. It never
@@ -294,6 +329,7 @@ export async function runCollectorDemoSetup() {
         await ensureCategory(db, catalogue, admin, category),
       );
     }
+    const gradeIds = await ensureDemoGrades(db, catalogue, admin);
     for (const spec of assets) {
       const owner = spec.owner === 'SECONDARY' ? collectorB : collector;
       const asset = await ensureAsset(
@@ -302,6 +338,7 @@ export async function runCollectorDemoSetup() {
         admin,
         spec,
         categoryIds.get(spec.category)!,
+        gradeIds.get(`${spec.grading.companyCode}:${spec.grading.grade}`)!,
       );
       const submission = await ensureSubmission(
         db,
@@ -564,10 +601,21 @@ async function ensureAsset(
   admin: Actor,
   spec: DemoAsset,
   categoryId: string,
+  gradeScaleEntryId: string,
 ) {
   const publicId = `stg_collector_${spec.key}`;
   const existing = await db.asset.findUnique({ where: { publicId } });
-  if (existing) return existing;
+  if (existing) {
+    if (existing.gradeScaleEntryId !== gradeScaleEntryId)
+      await catalogue.updateAsset(
+        admin,
+        existing.id,
+        { gradeScaleEntryId },
+        `collector-asset-grade-${randomUUID()}`,
+        `collector-asset-grade:${spec.key}:${gradeScaleEntryId}`,
+      );
+    return db.asset.findUniqueOrThrow({ where: { id: existing.id } });
+  }
   const set =
     (await db.collectibleSet.findFirst({
       where: { categoryId, name: spec.set, status: 'ACTIVE' },
@@ -598,12 +646,81 @@ async function ensureAsset(
       manufacturer: spec.category,
       edition: spec.set,
       description: `Staging showcase collectible: ${spec.title}.`,
+      gradeScaleEntryId,
       certificationNumber: `STG-${spec.key.toUpperCase()}`,
     },
     `collector-asset-${randomUUID()}`,
     `collector-asset:${spec.key}`,
   );
   return db.asset.findUniqueOrThrow({ where: { id: created.id } });
+}
+
+/**
+ * The demo catalogue uses the same audited catalogue authority as operator
+ * setup. It is deliberately idempotent so refresh repairs incomplete local
+ * fixture runs without overwriting unrelated reference data.
+ */
+async function ensureDemoGrades(
+  db: PrismaService,
+  catalogue: CatalogueService,
+  admin: Actor,
+) {
+  const ids = new Map<string, string>();
+  const required = new Map(
+    assets.map((asset) => [
+      `${asset.grading.companyCode}:${asset.grading.grade}`,
+      asset.grading,
+    ]),
+  );
+  for (const grading of required.values()) {
+    let company = await db.gradingCompany.findUnique({
+      where: { code: grading.companyCode },
+    });
+    if (!company) {
+      await catalogue.createCompany(
+        admin,
+        {
+          code: grading.companyCode,
+          name:
+            grading.companyCode === 'PSA'
+              ? 'Professional Sports Authenticator'
+              : 'Beckett Grading Services',
+          status: 'ACTIVE',
+        },
+        `collector-grade-company-${randomUUID()}`,
+        `collector-grade-company:${grading.companyCode}`,
+      );
+      company = await db.gradingCompany.findUniqueOrThrow({
+        where: { code: grading.companyCode },
+      });
+    }
+    let grade = await db.gradeScaleEntry.findUnique({
+      where: {
+        companyId_grade: { companyId: company.id, grade: grading.grade },
+      },
+    });
+    if (!grade) {
+      await catalogue.createGrade(
+        admin,
+        {
+          companyId: company.id,
+          grade: grading.grade,
+          label: grading.label,
+          sortOrder: Math.round(Number(grading.grade) * 10),
+          active: true,
+        },
+        `collector-grade-${randomUUID()}`,
+        `collector-grade:${grading.companyCode}:${grading.grade}`,
+      );
+      grade = await db.gradeScaleEntry.findUniqueOrThrow({
+        where: {
+          companyId_grade: { companyId: company.id, grade: grading.grade },
+        },
+      });
+    }
+    ids.set(`${grading.companyCode}:${grading.grade}`, grade.id);
+  }
+  return ids;
 }
 
 async function ensureSubmission(
@@ -654,25 +771,55 @@ async function ensureSubmission(
     submission = await db.assetSubmission.findUniqueOrThrow({
       where: { id: draft.id },
     });
-    if (spec.state !== 'DRAFT') {
-      for (const slot of ['front', 'back']) {
+  }
+  if (spec.state !== 'DRAFT' && submission.status === 'DRAFT') {
+    const mediaBySlot = new Map(
+      (
+        await db.submissionMedia.findMany({
+          where: { submissionId: submission.id, deletedAt: null },
+        })
+      ).map((media) => [media.slot, media]),
+    );
+    for (const slot of ['front', 'back']) {
+      const fixture = fixtureMedia(`${spec.key}:${slot}`);
+      let media = mediaBySlot.get(slot);
+      if (media?.status === 'REJECTED') {
+        const latest = await db.assetSubmission.findUniqueOrThrow({
+          where: { id: submission.id },
+        });
+        await service.deleteMedia(
+          owner,
+          submission.id,
+          media.id,
+          latest.version,
+          `collector-media-delete-${randomUUID()}`,
+          `collector-media-delete:${spec.key}:${slot}`,
+        );
+        media = undefined;
+      }
+      if (!media) {
         const intent = await service.uploadIntent(
           owner,
           submission.id,
           {
             slot,
             mimeType: 'image/png',
-            sizeBytes: fixturePng.length,
+            sizeBytes: fixture.bytes.length,
             originalFilename: `${spec.key}-${slot}.png`,
           },
           `collector-media-${randomUUID()}`,
           `collector-media:${spec.key}:${slot}`,
         );
+        media = await db.submissionMedia.findUniqueOrThrow({
+          where: { id: intent.media.id },
+        });
+      }
+      if (media.status !== 'SAFE') {
         storage.putForTest({
-          key: intent.upload.objectKey,
+          key: media.objectKey,
           mimeType: 'image/png',
-          sizeBytes: fixturePng.length,
-          sha256: fixtureHash,
+          sizeBytes: media.sizeBytes,
+          sha256: fixture.sha256,
           magicMimeType: 'image/png',
           width: 1,
           height: 1,
@@ -683,23 +830,23 @@ async function ensureSubmission(
         await service.completeMedia(
           owner,
           submission.id,
-          intent.media.id,
-          { sha256: fixtureHash, version: latest.version },
+          media.id,
+          { sha256: fixture.sha256, version: latest.version },
           `collector-media-complete-${randomUUID()}`,
           `collector-media-complete:${spec.key}:${slot}`,
         );
       }
-      const latest = await db.assetSubmission.findUniqueOrThrow({
-        where: { id: submission.id },
-      });
-      await service.submit(
-        owner,
-        submission.id,
-        latest.version,
-        `collector-submit-${randomUUID()}`,
-        `collector-submit:${spec.key}`,
-      );
     }
+    const latest = await db.assetSubmission.findUniqueOrThrow({
+      where: { id: submission.id },
+    });
+    await service.submit(
+      owner,
+      submission.id,
+      latest.version,
+      `collector-submit-${randomUUID()}`,
+      `collector-submit:${spec.key}`,
+    );
   }
   submission = await db.assetSubmission.findUniqueOrThrow({
     where: { id: submission.id },
@@ -744,6 +891,19 @@ async function ensureSubmission(
       `collector-approve-${randomUUID()}`,
       `collector-approve:${spec.key}`,
     );
+  }
+  submission = await db.assetSubmission.findUniqueOrThrow({
+    where: { id: submission.id },
+  });
+  // A prior invocation can succeed through review and then be interrupted
+  // before the separate asset-link authority commits. Resume that exact
+  // authority on refresh rather than leaving an approved submission unusable
+  // for custody intake.
+  if (
+    (spec.state === 'CUSTODY' || spec.state === 'PUBLISHED') &&
+    submission.status === 'APPROVED' &&
+    submission.assetId !== assetId
+  ) {
     await service.linkApprovedAsset(
       admin,
       submission.id,
@@ -752,7 +912,7 @@ async function ensureSubmission(
       `collector-link:${spec.key}`,
     );
   }
-  return submission;
+  return db.assetSubmission.findUniqueOrThrow({ where: { id: submission.id } });
 }
 
 async function ensureAssetLifecycle(
@@ -1400,13 +1560,14 @@ async function ensureWorkspaceQueue(
         where: { id: draft.id },
       });
       for (const slot of ['front', 'back']) {
+        const fixture = fixtureMedia(`collector-b:${index}:${slot}`);
         const intent = await submissions.uploadIntent(
           owner,
           submission.id,
           {
             slot,
             mimeType: 'image/png',
-            sizeBytes: fixturePng.length,
+            sizeBytes: fixture.bytes.length,
             originalFilename: `collector-b-${index}-${slot}.png`,
           },
           `collector-b-media-${randomUUID()}`,
@@ -1415,8 +1576,8 @@ async function ensureWorkspaceQueue(
         storage.putForTest({
           key: intent.upload.objectKey,
           mimeType: 'image/png',
-          sizeBytes: fixturePng.length,
-          sha256: fixtureHash,
+          sizeBytes: fixture.bytes.length,
+          sha256: fixture.sha256,
           magicMimeType: 'image/png',
           width: 1,
           height: 1,
@@ -1428,7 +1589,7 @@ async function ensureWorkspaceQueue(
           owner,
           submission!.id,
           intent.media.id,
-          { sha256: fixtureHash, version: latest.version },
+          { sha256: fixture.sha256, version: latest.version },
           `collector-b-media-complete-${randomUUID()}`,
           `collector-b-media-complete:${index}:${slot}`,
         );
