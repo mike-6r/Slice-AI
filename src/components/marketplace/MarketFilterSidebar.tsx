@@ -1,26 +1,31 @@
-import { ChevronDown, CircleEllipsis, Search, X } from "lucide-react";
+import { ChevronDown, Gem, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MarketFilters } from "./marketplace-helpers";
+import { marketCategoryPresentation } from "./marketplace-presentation";
 
 type FilterKey = keyof MarketFilters;
 
 function AccordionFilter({
+  label,
   value,
+  options,
   onChange,
 }: {
+  label: string;
   value: string;
+  options: string[];
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <section className="markets-filter-accordion">
       <button type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span>Grade</span>
+        <span>{label}</span>
         <ChevronDown className={open ? "is-open" : ""} aria-hidden="true" />
       </button>
       {open && (
         <div className="markets-filter-options">
-          {["Any grade", "PSA", "BGS", "CGC"].map((option) => (
+          {options.map((option) => (
             <button
               key={option}
               type="button"
@@ -40,12 +45,18 @@ function AccordionFilter({
 export function MarketFilterPanel({
   filters,
   categories,
+  gradeOptions,
+  setEditionOptions,
+  totalCount,
   onChange,
   onClear,
   onClose,
 }: {
   filters: MarketFilters;
-  categories: Array<{ slug: string; name: string }>;
+  categories: Array<{ slug: string; name: string; count: number }>;
+  gradeOptions: string[];
+  setEditionOptions: string[];
+  totalCount: number;
   onChange: (key: FilterKey, value: string) => void;
   onClear: () => void;
   onClose?: () => void;
@@ -91,24 +102,50 @@ export function MarketFilterPanel({
             className={filters.category === "All Assets" ? "is-selected" : ""}
             onClick={() => onChange("category", "All Assets")}
           >
-            <CircleEllipsis aria-hidden="true" />
+            <Gem aria-hidden="true" />
             <span>All Assets</span>
+            <span className="market-category-count">{totalCount}</span>
           </button>
-          {visible.map((category) => (
-            <button
-              key={category.slug}
-              type="button"
-              aria-pressed={filters.category === category.slug}
-              className={filters.category === category.slug ? "is-selected" : ""}
-              onClick={() => onChange("category", category.slug)}
-            >
-              <CircleEllipsis aria-hidden="true" />
-              <span>{category.name}</span>
-            </button>
-          ))}
+          {visible.map((category) => {
+            const Icon = marketCategoryPresentation(category.slug).icon;
+            return (
+              <button
+                key={category.slug}
+                type="button"
+                aria-pressed={filters.category === category.slug}
+                className={filters.category === category.slug ? "is-selected" : ""}
+                onClick={() => onChange("category", category.slug)}
+              >
+                <Icon aria-hidden="true" />
+                <span>{category.name}</span>
+                <span className="market-category-count">{category.count}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
-      <AccordionFilter value={filters.grade} onChange={(value) => onChange("grade", value)} />
+      <AccordionFilter
+        label="Price Range"
+        value={filters.priceRange}
+        options={["Any price", "Under £5,000", "£5,000 – £15,000", "£15,000+"]}
+        onChange={(value) => onChange("priceRange", value)}
+      />
+      {gradeOptions.length > 1 && (
+        <AccordionFilter
+          label="Grade"
+          value={filters.grade}
+          options={gradeOptions}
+          onChange={(value) => onChange("grade", value)}
+        />
+      )}
+      {setEditionOptions.length > 1 && (
+        <AccordionFilter
+          label="Set / Edition"
+          value={filters.setEdition}
+          options={setEditionOptions}
+          onChange={(value) => onChange("setEdition", value)}
+        />
+      )}
     </div>
   );
 }

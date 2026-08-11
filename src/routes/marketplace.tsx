@@ -14,12 +14,14 @@ import { MarketsHeader } from "@/components/marketplace/MarketsHeader";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import {
   EMPTY_MARKET_FILTERS,
+  filterMarketAssets,
   sortMarketAssets,
   type MarketFilters,
   type MarketSort,
   type MarketView,
   type QuickFilterId,
 } from "@/components/marketplace/marketplace-helpers";
+import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/marketplace")({
@@ -44,48 +46,57 @@ function Marketplace() {
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>("trending");
   const [filters, setFilters] = useState<MarketFilters>({
     ...EMPTY_MARKET_FILTERS,
-    category: routeSearch.category ?? EMPTY_MARKET_FILTERS.category,
+    category: routeSearch.category
+      ? marketCategoryPresentation(routeSearch.category).slug
+      : EMPTY_MARKET_FILTERS.category,
   });
   const [sort, setSort] = useState<MarketSort>("trending");
   const [view, setView] = useState<MarketView>("grid");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState(routeSearch.q ?? "");
-  const category = filters.category === "All Assets" ? undefined : filters.category;
-  const backendSort =
-    sort === "price-high" || sort === "price-low"
-      ? "estimatedMarketValue"
-      : sort === "biggest-movers"
-        ? "change24h"
-        : "title";
   const result = useInfiniteQuery({
-    queryKey: ["marketplace", { query, category, sort: backendSort, grade: filters.grade }],
+    queryKey: ["marketplace", "public-catalogue"],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       services.assets.list({
-        query: query.trim() || undefined,
-        category,
-        sort: backendSort,
+        sort: "title",
         cursor: pageParam,
-        limit: 24,
+        limit: 48,
         signal,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const assets = useMemo(
-    () =>
-      sortMarketAssets(
-        result.data?.pages.flatMap((page) => page.items.map(toMarketplaceAsset)) ?? [],
-        sort,
-      ),
-    [result.data, sort],
+    () => result.data?.pages.flatMap((page) => page.items.map(toMarketplaceAsset)) ?? [],
+    [result.data],
   );
-  const categories = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          assets.map((asset) => [asset.category, { slug: asset.category, name: asset.category }]),
-        ).values(),
-      ),
+  const categories = useMemo(() => {
+    const counts = new Map<string, { slug: string; name: string; count: number }>();
+    for (const asset of assets) {
+      const category = marketCategoryPresentation(asset.category);
+      const current = counts.get(category.slug);
+      counts.set(category.slug, {
+        slug: category.slug,
+        name: category.label,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+    return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [assets]);
+  const gradeOptions = useMemo(
+    () => [
+      "Any grade",
+      ...Array.from(new Set(assets.flatMap((asset) => (asset.grade ? [asset.grade] : [])))).sort(),
+    ],
+    [assets],
+  );
+  const setEditionOptions = useMemo(
+    () => [
+      "Any set / edition",
+      ...Array.from(
+        new Set(assets.flatMap((asset) => (asset.setName ? [asset.setName] : []))),
+      ).sort(),
+    ],
     [assets],
   );
 
@@ -107,10 +118,11 @@ function Marketplace() {
           : "trending",
     );
   };
-  const hasUnsupportedGrade = filters.grade !== "Any grade";
-  const visible = hasUnsupportedGrade
-    ? assets.filter((asset) => asset.grade?.startsWith(filters.grade))
-    : assets;
+  const visible = useMemo(
+    () => sortMarketAssets(filterMarketAssets(assets, filters, query, quickFilter), sort),
+    [assets, filters, query, quickFilter, sort],
+  );
+  const clearFilters = () => setFilters(EMPTY_MARKET_FILTERS);
 
   return (
     <div className="markets-page">
@@ -121,8 +133,11 @@ function Marketplace() {
           <MarketFilterPanel
             filters={filters}
             categories={categories}
+            gradeOptions={gradeOptions}
+            setEditionOptions={setEditionOptions}
+            totalCount={assets.length}
             onChange={updateFilter}
-            onClear={() => setFilters(EMPTY_MARKET_FILTERS)}
+            onClear={clearFilters}
           />
         </aside>
         <div className="markets-results">
@@ -138,7 +153,7 @@ function Marketplace() {
           />
           {result.isLoading ? (
             <div className="markets-empty-state">
-              <h2>Loading the catalogue…</h2>
+              <h2>Loading the catalogue&hellip;</h2>
               <p>Fetching published assets from Slice.</p>
             </div>
           ) : result.isError ? (
@@ -165,7 +180,15 @@ function Marketplace() {
               <SearchX aria-hidden="true" />
               <h2>No assets match these filters</h2>
               <p>Try another search or clear the filters to see the catalogue.</p>
-              <button type="button" onClick={() => setFilters(EMPTY_MARKET_FILTERS)}>
+              <button
+                type="button"
+                onClick={() => {
+                  clearFilters();
+                  setQuery("");
+                  setQuickFilter("trending");
+                  setSort("trending");
+                }}
+              >
                 Clear filters
               </button>
             </div>
@@ -176,8 +199,11 @@ function Marketplace() {
         <MarketFilterPanel
           filters={filters}
           categories={categories}
+          gradeOptions={gradeOptions}
+          setEditionOptions={setEditionOptions}
+          totalCount={assets.length}
           onChange={updateFilter}
-          onClear={() => setFilters(EMPTY_MARKET_FILTERS)}
+          onClear={clearFilters}
           onClose={() => setFiltersOpen(false)}
         />
       </MobileFilterDrawer>

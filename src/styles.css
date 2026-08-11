@@ -6022,6 +6022,11 @@ body:has(.markets-page) .site-shell {
 .markets-category-section button.is-selected > span:last-child {
   color: var(--color-accent);
 }
+.market-category-count {
+  margin-left: auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .markets-filter-accordion {
   margin-inline: 1rem;
   border-top: 1px solid var(--color-border);
@@ -6414,6 +6419,11 @@ body:has(.markets-page) .site-shell {
   margin-top: 6px;
   color: var(--color-muted);
   font-size: 8.5px;
+}
+.market-card-value-helper {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 7.5px;
 }
 .market-card-value {
   display: flex;

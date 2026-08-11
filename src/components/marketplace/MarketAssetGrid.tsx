@@ -19,8 +19,8 @@ export function MarketAssetGrid({
     );
   return (
     <div className={`market-asset-grid ${view === "compact" ? "is-compact" : ""}`}>
-      {assets.map((asset, index) => (
-        <MarketAssetCard key={asset.id} asset={asset} index={index} compact={view === "compact"} />
+      {assets.map((asset) => (
+        <MarketAssetCard key={asset.id} asset={asset} compact={view === "compact"} />
       ))}
     </div>
   );
