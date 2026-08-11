@@ -19926,6 +19926,22 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   line-height: 1.55;
   color: var(--text-muted);
 }
+.vault-live-data-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.85rem 0 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 740;
+}
+.vault-live-data-status i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0.6rem color-mix(in srgb, currentColor 50%, transparent);
+}
 .vault-live-hero__actions,
 .vault-live-cta > div:last-child {
   display: flex;
@@ -20232,6 +20248,14 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0.6rem var(--accent);
+}
+.vault-live-live--illustrative {
+  color: var(--text-muted);
+}
+.vault-live-event__illustrative {
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  white-space: nowrap;
 }
 .vault-live-feed__notice {
   margin: -0.2rem 0 0.75rem;
@@ -20553,12 +20577,12 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 }
 .vault-live-featured {
   display: grid;
-  grid-template-columns: minmax(14rem, 0.7fr) minmax(17rem, 1fr);
+  grid-template-columns: minmax(20rem, 0.9fr) minmax(22rem, 1.1fr);
   margin-top: 1.15rem;
   overflow: hidden;
 }
 .vault-live-featured__image {
-  min-height: 21rem;
+  min-height: clamp(28rem, 33vw, 34rem);
   background: #061311;
 }
 .vault-live-featured__image img {
@@ -20604,7 +20628,7 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 }
 .vault-live-featured__numbers {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   width: 100%;
   gap: 1rem;
   margin: 1.4rem 0;
@@ -20678,6 +20702,26 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   color: var(--text-subtle);
   font-size: 0.85rem;
 }
+.vault-live-loading,
+.vault-live-unavailable {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--elevated);
+}
+.vault-live-loading { min-height: 14rem; align-content: center; }
+.vault-live-loading__eyebrow { color: var(--accent); font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.vault-live-loading strong { font-size: clamp(1.3rem, 2vw, 1.8rem); }
+.vault-live-loading__bars { display: grid; gap: .65rem; max-width: 43rem; }
+.vault-live-loading__bars i { display: block; height: .8rem; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface), color-mix(in srgb, var(--accent) 12%, var(--surface))); }
+.vault-live-loading__bars i:nth-child(2) { width: 78%; }
+.vault-live-loading__bars i:nth-child(3) { width: 56%; }
+.vault-live-unavailable { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.vault-live-unavailable h1 { margin: .25rem 0; font-size: clamp(1.5rem, 3vw, 2.35rem); letter-spacing: -.05em; }
+.vault-live-unavailable p:last-child { max-width: 48rem; margin: 0; color: var(--text-subtle); }
 
 @media (max-width: 1080px) {
   .vault-live-hero {
@@ -20817,6 +20861,7 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
+  .vault-live-unavailable { grid-template-columns: 1fr; }
   .vault-live-metric {
     min-height: 6.5rem;
     padding: 0.85rem;
