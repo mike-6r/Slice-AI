@@ -130,6 +130,15 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           </div>
         </div>
       )}
+      {listings.length === 0 && (
+        <div className="featured-collector-empty-preview">
+          <Box aria-hidden="true" />
+          <div>
+            <strong>Public catalogue in progress</strong>
+            <p>This collector has not published a catalogue listing yet.</p>
+          </div>
+        </div>
+      )}
       <Link to="/collector/$id" params={{ id: collector.handle }} className="featured-assets-link">
         View public profile <ArrowRight aria-hidden="true" />
       </Link>
@@ -162,6 +171,25 @@ export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorP
           {listings.map((listing) => (
             <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
           ))}
+        </div>
+      )}
+      <dl className="collector-discovery-summary">
+        <div>
+          <dt>Public profiles</dt>
+          <dd>{collectors.length}</dd>
+        </div>
+        <div>
+          <dt>Published catalogues</dt>
+          <dd>{listings.length}</dd>
+        </div>
+      </dl>
+      {specialties.length === 0 && listings.length === 0 && (
+        <div className="collector-discovery-empty">
+          <Sparkles aria-hidden="true" />
+          <div>
+            <strong>Profiles are growing</strong>
+            <p>Collector catalogues appear here when owners choose to publish them.</p>
+          </div>
         </div>
       )}
       <Link to="/marketplace" className="featured-assets-link">

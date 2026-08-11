@@ -8,6 +8,7 @@ import {
   FeaturedCollector,
 } from "@/components/collectors/public-collector-ui";
 import { collectorSpecialties } from "@/components/collectors/collector-specialties";
+import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/collectors")({
@@ -103,19 +104,25 @@ function CollectorsPage() {
         </div>
         <div className="collectors-hero-metrics">
           <article className="collectors-metric-card is-emerald">
-            <span className="collectors-metric-label">Visible public profiles</span>
-            <strong>{allCollectors.length}</strong>
-            <UserRoundCheck aria-hidden="true" />
+            <KpiIconTile icon={UserRoundCheck} />
+            <div className="collectors-metric-content">
+              <span className="collectors-metric-label">Visible public profiles</span>
+              <strong>{allCollectors.length}</strong>
+            </div>
           </article>
           <article className="collectors-metric-card is-violet">
-            <span className="collectors-metric-label">Published collectibles</span>
-            <strong>{publishedCount}</strong>
-            <Archive aria-hidden="true" />
+            <KpiIconTile icon={Archive} />
+            <div className="collectors-metric-content">
+              <span className="collectors-metric-label">Published collectibles</span>
+              <strong>{publishedCount}</strong>
+            </div>
           </article>
           <article className="collectors-metric-card is-amber">
-            <span className="collectors-metric-label">Categories represented</span>
-            <strong>{categoryCount}</strong>
-            <Tags aria-hidden="true" />
+            <KpiIconTile icon={Tags} />
+            <div className="collectors-metric-content">
+              <span className="collectors-metric-label">Categories represented</span>
+              <strong>{categoryCount}</strong>
+            </div>
           </article>
         </div>
       </section>
