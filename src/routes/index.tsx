@@ -154,9 +154,7 @@ function HomePage() {
               <div className="approved-home__asset-media">
                 <img src={asset.image} alt="" loading="lazy" />
                 <span className="approved-home__asset-category">{asset.category}</span>
-                <span className="approved-home__asset-grade">
-                  {asset.grade.split(" \u00b7 ")[0]}
-                </span>
+                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
                 <Bookmark aria-hidden="true" />
               </div>
               <div className="approved-home__asset-body">
@@ -174,7 +172,7 @@ function HomePage() {
                     <i style={{ width: asset.displayAvailability }} />
                   </span>
                   <small>
-                    {asset.displaySharePrice} \u00b7 {asset.displayAvailability} available
+                    {asset.displaySharePrice} · {asset.displayAvailability} available
                   </small>
                 </div>
               </div>
@@ -323,12 +321,10 @@ function HomePage() {
           <div className="is-slice">
             <span>Own shares</span>
             <strong>
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} ·{" "}
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
             </strong>
-            <small>
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership \u00b7 illustrative
-            </small>
+            <small>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership · illustrative</small>
           </div>
         </div>
       </section>
@@ -421,7 +417,7 @@ function OwnershipWorks() {
             <small>Your ownership</small>
             <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership}</strong>
             <p>
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} ·{" "}
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment} example purchase
             </p>
           </div>
@@ -438,7 +434,7 @@ function OwnershipWorks() {
           <div>
             <dt>Example purchase</dt>
             <dd>
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} \u00b7{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} ·{" "}
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
             </dd>
           </div>
