@@ -42,7 +42,7 @@ import type {
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
-import { WalletKpiIcon } from "@/components/ui/WalletKpiIcon";
+import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import {
   filterWalletMovements,
   formatWalletMoney,
@@ -247,7 +247,7 @@ function WalletKpi({
 }) {
   return (
     <article className="wallet-kpi">
-      <WalletKpiIcon icon={icon} />
+      <KpiIconTile icon={icon} />
       <div>
         <p>{label}</p>
         <strong>{value}</strong>

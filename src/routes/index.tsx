@@ -6,14 +6,10 @@ import {
   Boxes,
   ChartNoAxesCombined,
   CircleDollarSign,
-  Eye,
-  LockKeyhole,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
   UsersRound,
   Vault,
-  Zap,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -23,6 +19,8 @@ import {
   HOMEPAGE_ALLOCATION,
   HOMEPAGE_MARKET_METRICS,
   HOMEPAGE_MARKET_MOVERS,
+  HOMEPAGE_OWNERSHIP_EXAMPLE,
+  HOMEPAGE_PORTFOLIO_EXAMPLE,
   HOMEPAGE_TRENDING_ASSETS,
   showcaseDestination,
   type HomepageShowcaseAsset,
@@ -31,11 +29,11 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Slice — Invest in authenticated collectibles" },
+      { title: "Slice - Fractional collectible ownership" },
       {
         name: "description",
         content:
-          "Explore authenticated collectible markets and follow the assets collectors care about.",
+          "Discover authenticated collectibles and explore illustrative fractional ownership examples.",
       },
     ],
   }),
@@ -44,6 +42,37 @@ export const Route = createFileRoute("/")({
 
 const metricIcons = [CircleDollarSign, ChartNoAxesCombined, Boxes, BadgeCheck, UsersRound] as const;
 
+const howSliceWorks = [
+  {
+    number: "01",
+    icon: <Sparkles />,
+    title: "Discover",
+    detail: "Browse authenticated collectible assets available through Slice.",
+    to: "/marketplace" as const,
+  },
+  {
+    number: "02",
+    icon: <CircleDollarSign />,
+    title: "Buy a slice",
+    detail: "Choose how much to own instead of purchasing the entire collectible.",
+    to: "/marketplace" as const,
+  },
+  {
+    number: "03",
+    icon: <ChartNoAxesCombined />,
+    title: "Track",
+    detail: "See percentage ownership, portfolio value and market activity in one place.",
+    to: "/portfolio" as const,
+  },
+  {
+    number: "04",
+    icon: <TrendingUp />,
+    title: "Trade",
+    detail: "Buy or sell ownership positions through the marketplace when trading is available.",
+    to: "/marketplace" as const,
+  },
+] as const;
+
 function HomePage() {
   const { isAuthenticated } = useSession();
 
@@ -51,15 +80,16 @@ function HomePage() {
     <div className="approved-home">
       <section className="page-shell approved-home__hero" aria-labelledby="home-heading">
         <div className="approved-home__copy">
-          <p className="page-kicker">Slice · The collectible investment platform</p>
+          <p className="page-kicker">Slice - The collectible investment platform</p>
           <h1 id="home-heading">
             <span>Invest.</span>
             <span>Collect.</span>
             <span>Grow.</span>
           </h1>
           <p className="approved-home__lead">
-            Own a slice of authenticated collectibles. Track market context and follow the assets
-            collectors care about.
+            Own a percentage of authenticated collectible cards without buying the entire asset.
+            Build a portfolio, track your ownership and trade your position through the Slice
+            marketplace.
           </p>
           <div className="approved-home__actions">
             <Link to="/marketplace" className="primary-action approved-home__primary-cta">
@@ -69,17 +99,18 @@ function HomePage() {
               List an Asset
             </ListAssetLink>
           </div>
-          <div className="approved-home__community" aria-label="Slice community">
+          <div className="approved-home__community" aria-label="Slice product principle">
             <div className="approved-home__avatars" aria-hidden="true">
-              {["SC", "MM", "AR", "JT"].map((initials) => (
+              {["SL", "IC", "E"].map((initials) => (
                 <span key={initials}>{initials}</span>
               ))}
             </div>
             <div>
-              <strong>10K+ collectors investing on Slice</strong>
-              <small>Across cards, culture & rare assets</small>
+              <strong>Own a percentage, not the whole card</strong>
+              <small>Illustrative marketplace examples</small>
             </div>
           </div>
+          <HeroOwnershipLine />
         </div>
 
         <FeaturedMarketHero />
@@ -87,7 +118,7 @@ function HomePage() {
 
       <section
         className="page-shell approved-home__metrics"
-        aria-label="Illustrative market snapshot"
+        aria-label="Illustrative product example"
       >
         {HOMEPAGE_MARKET_METRICS.map((metric, index) => {
           const Icon = metricIcons[index];
@@ -99,16 +130,17 @@ function HomePage() {
               </div>
               <strong>{metric.value}</strong>
               <small className={`is-${metric.tone}`}>{metric.detail}</small>
-              <MiniSparkline tone={metric.tone} />
             </article>
           );
         })}
       </section>
 
+      <OwnershipWorks />
+
       <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
         <SectionHeading
-          eyebrow="Trending opportunities"
-          title="The market is moving."
+          eyebrow="Illustrative market examples"
+          title="Trending opportunities."
           action="View all markets"
           to="/marketplace"
           headingId="trending-heading"
@@ -123,21 +155,28 @@ function HomePage() {
               <div className="approved-home__asset-media">
                 <img src={asset.image} alt="" loading="lazy" />
                 <span className="approved-home__asset-category">{asset.category}</span>
-                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
+                <span className="approved-home__asset-grade">
+                  {asset.grade.split(" \u00b7 ")[0]}
+                </span>
                 <Bookmark aria-hidden="true" />
               </div>
               <div className="approved-home__asset-body">
                 <strong>{asset.title}</strong>
                 <small>{asset.grade}</small>
                 <div className="approved-home__asset-price">
-                  <b>{asset.displayPrice}</b>
+                  <div>
+                    <small>Asset value</small>
+                    <b>{asset.displayPrice}</b>
+                  </div>
                   <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
                 </div>
                 <div className="approved-home__availability">
                   <span>
                     <i style={{ width: asset.displayAvailability }} />
                   </span>
-                  <small>Available {asset.displayAvailability}</small>
+                  <small>
+                    {asset.displaySharePrice} - {asset.displayAvailability} available
+                  </small>
                 </div>
               </div>
             </ShowcaseAssetLink>
@@ -147,7 +186,7 @@ function HomePage() {
 
       <section
         className="page-shell approved-home__intelligence"
-        aria-label="Slice market intelligence"
+        aria-label="Slice market examples"
       >
         <MarketMovers />
 
@@ -155,14 +194,14 @@ function HomePage() {
           <header>
             <div>
               <h2>Portfolio preview</h2>
-              <p>Illustrative account overview</p>
+              <p>Illustrative ownership example</p>
             </div>
             <PortfolioLink authenticated={isAuthenticated}>View portfolio</PortfolioLink>
           </header>
           <div className="approved-home__portfolio-value">
-            <strong>£8,942.18</strong>
+            <strong>{"\u00a3"}8,942.18</strong>
             <span>
-              +4.81% <small>(24H)</small>
+              Example <small>portfolio</small>
             </span>
           </div>
           <div className="approved-home__portfolio-chart" aria-hidden="true">
@@ -186,18 +225,12 @@ function HomePage() {
             </svg>
           </div>
           <dl className="approved-home__portfolio-facts">
-            <div>
-              <dt>Collectibles</dt>
-              <dd>14 assets</dd>
-            </div>
-            <div>
-              <dt>Cash available</dt>
-              <dd>£1,245.32</dd>
-            </div>
-            <div>
-              <dt>30D movement</dt>
-              <dd className="is-positive">+£412.08</dd>
-            </div>
+            {HOMEPAGE_PORTFOLIO_EXAMPLE.map((holding) => (
+              <div key={holding.label}>
+                <dt>{holding.label}</dt>
+                <dd>{holding.value} owned</dd>
+              </div>
+            ))}
           </dl>
         </article>
 
@@ -205,14 +238,14 @@ function HomePage() {
           <header>
             <div>
               <h2>Asset allocation</h2>
-              <p>Sample portfolio distribution</p>
+              <p>Sample portfolio allocation by value</p>
             </div>
           </header>
           <div className="approved-home__allocation-body">
             <div className="approved-home__donut" aria-hidden="true">
               <span>
-                <strong>£8.9K</strong>
-                <small>Total value</small>
+                <strong>{"\u00a3"}8.9K</strong>
+                <small>Sample value</small>
               </span>
             </div>
             <ul>
@@ -231,69 +264,202 @@ function HomePage() {
         </article>
       </section>
 
-      <section className="page-shell approved-home__section" aria-labelledby="why-slice-heading">
+      <HowSliceWorks />
+
+      <section className="page-shell approved-home__section" aria-labelledby="what-slice-heading">
         <SectionHeading
-          eyebrow="Why Slice"
-          title="Built for serious collectors."
-          headingId="why-slice-heading"
+          eyebrow="Built for collectible ownership"
+          title="What you can do with Slice."
+          headingId="what-slice-heading"
         />
-        <div className="approved-home__features">
+        <div className="approved-home__features approved-home__features--four">
           <FeatureCard
-            icon={<Sparkles />}
-            title="Access"
-            detail="Discover collectible markets with transparent public records."
+            icon={<Boxes />}
+            title="Fractional ownership"
+            detail="Own part of high-value collectible assets instead of purchasing the entire card."
             to="/marketplace"
           />
           <FeatureCard
-            icon={<Eye />}
-            title="Transparency"
-            detail="Follow published market, ownership and asset information."
+            icon={<TrendingUp />}
+            title="Marketplace"
+            detail="Discover available collectibles and manage buy or sell orders through one marketplace."
             to="/marketplace"
           />
           <FeatureCard
-            icon={<Zap />}
-            title="Liquidity"
-            detail="Move from discovery into the real Slice order experience."
-            to="/marketplace"
-          />
-          <FeatureCard
-            icon={<Vault />}
-            title="Custody"
-            detail="Explore the vault record and custody activity surface."
-            to="/vault-live"
+            icon={<ChartNoAxesCombined />}
+            title="Portfolio"
+            detail="Track holdings, percentage ownership, cost basis and activity in one place."
+            to="/portfolio"
           />
           <FeatureCard
             icon={<UsersRound />}
-            title="Community"
-            detail="Meet collectors and follow their public specialist profiles."
+            title="Collector network"
+            detail="Discover collectors and view public collectible catalogues across the platform."
             to="/collectors"
           />
         </div>
       </section>
 
+      <section className="page-shell approved-home__physical" aria-labelledby="physical-heading">
+        <div className="approved-home__physical-copy">
+          <p className="page-kicker">The card is physical</p>
+          <h2 id="physical-heading">Your ownership is tracked through Slice.</h2>
+          <p>
+            Collectibles entering the Slice marketplace move through review, valuation and custody
+            workflows. Investors can then own fractional positions while the physical asset remains
+            associated with its marketplace record.
+          </p>
+        </div>
+        <div
+          className="approved-home__comparison"
+          aria-label="Illustrative full card and fractional ownership comparison"
+        >
+          <div>
+            <span>Buy the full card</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue}</strong>
+            <small>1999 Charizard example</small>
+          </div>
+          <ArrowRight aria-hidden="true" />
+          <div className="is-slice">
+            <span>Own a slice</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}</strong>
+            <small>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership - illustrative</small>
+          </div>
+        </div>
+      </section>
+
       <section className="page-shell approved-home__final-cta">
         <div>
-          <p className="page-kicker">Start your collection</p>
+          <p className="page-kicker">Own the cards you believe in</p>
           <h2>
-            Invest in what you love.
+            You do not need to buy
             <br />
-            <span>Grow with confidence.</span>
+            <span>the entire collectible.</span>
           </h2>
-          <p>Explore authenticated collectible markets and build your Slice account.</p>
+          <p>Start with a slice, build your portfolio and follow the market.</p>
         </div>
         <div className="approved-home__actions">
           <Link to="/marketplace" className="primary-action approved-home__primary-cta">
             Explore Markets <ArrowRight aria-hidden="true" />
           </Link>
           <Link
-            to={isAuthenticated ? "/dashboard" : "/signup"}
+            to={isAuthenticated ? "/portfolio" : "/signup"}
             className="approved-home__secondary-cta"
           >
-            {isAuthenticated ? "View dashboard" : "Create your account"}
+            {isAuthenticated ? "View portfolio" : "Create Account"}
           </Link>
         </div>
       </section>
     </div>
+  );
+}
+
+function HeroOwnershipLine() {
+  const items = [
+    ["Card value", HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue],
+    ["Share price", HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice],
+    ["Example investment", HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment],
+    ["Ownership", HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership],
+  ] as const;
+
+  return (
+    <div className="approved-home__ownership-line" aria-label="Illustrative ownership example">
+      <p>Own a slice</p>
+      <dl>
+        {items.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function OwnershipWorks() {
+  return (
+    <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
+      <SectionHeading
+        eyebrow="Illustrative ownership example"
+        title="How ownership works."
+        headingId="ownership-heading"
+      />
+      <div className="approved-home__ownership-card">
+        <div className="approved-home__ownership-stage">
+          <span className="approved-home__ownership-icon">
+            <Vault aria-hidden="true" />
+          </span>
+          <div>
+            <small>Whole card</small>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue}</strong>
+            <p>1999 Charizard</p>
+          </div>
+        </div>
+        <div className="approved-home__ownership-divider" aria-hidden="true">
+          <span>
+            <ArrowRight />
+          </span>
+          <small>Divided into ownership units</small>
+        </div>
+        <div className="approved-home__ownership-stage is-slice">
+          <span className="approved-home__ownership-icon">
+            <BadgeCheck aria-hidden="true" />
+          </span>
+          <div>
+            <small>Your slice</small>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership}</strong>
+            <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment} example investment</p>
+          </div>
+        </div>
+        <dl className="approved-home__ownership-facts">
+          <div>
+            <dt>Total ownership units</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalUnits}</dd>
+          </div>
+          <div>
+            <dt>Example unit price</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
+          </div>
+          <div>
+            <dt>Example investor buys</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleUnits}</dd>
+          </div>
+          <div>
+            <dt>Ownership</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function HowSliceWorks() {
+  return (
+    <section
+      className="page-shell approved-home__section approved-home__how"
+      aria-labelledby="how-slice-heading"
+    >
+      <SectionHeading
+        eyebrow="How Slice works"
+        title="Own collectibles differently."
+        headingId="how-slice-heading"
+      />
+      <ol className="approved-home__how-grid">
+        {howSliceWorks.map((step) => (
+          <li key={step.number}>
+            <span className="approved-home__how-number">{step.number}</span>
+            <span className="approved-home__how-icon">{step.icon}</span>
+            <h3>{step.title}</h3>
+            <p>{step.detail}</p>
+            <Link to={step.to} className="approved-home__text-link">
+              Explore <ArrowRight aria-hidden="true" />
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -332,7 +498,7 @@ function MarketMovers() {
             <img src={asset.image} alt="" loading="lazy" />
             <span>
               <strong>{asset.title}</strong>
-              <small>{asset.displayPrice}</small>
+              <small>Asset value {asset.displayPrice}</small>
             </span>
             <b className={`is-${asset.movementTone}`}>{asset.displayMovement}</b>
           </ShowcaseAssetLink>
@@ -442,7 +608,7 @@ function FeatureCard({
   icon: ReactNode;
   title: string;
   detail: string;
-  to: "/marketplace" | "/vault-live" | "/collectors";
+  to: "/marketplace" | "/vault-live" | "/collectors" | "/portfolio";
 }) {
   return (
     <Link to={to} className="approved-home__feature">
@@ -451,26 +617,5 @@ function FeatureCard({
       <strong>{detail}</strong>
       <ArrowRight aria-hidden="true" />
     </Link>
-  );
-}
-
-function MiniSparkline({ tone }: { tone: "positive" | "negative" }) {
-  return (
-    <svg
-      className={`approved-home__metric-spark is-${tone}`}
-      viewBox="0 0 72 28"
-      aria-hidden="true"
-    >
-      <path
-        d={
-          tone === "positive"
-            ? "M1 25 L10 22 L18 24 L27 17 L36 18 L45 11 L54 13 L62 6 L71 3"
-            : "M1 5 L10 8 L18 7 L27 13 L36 11 L45 18 L54 17 L62 23 L71 25"
-        }
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </svg>
   );
 }

@@ -84,15 +84,15 @@ describe('Document 008 public read HTTP contracts', () => {
       data: {
         assetId: asset,
         source: 'READS_E2E_TEST',
-      asOf: new Date(),
-      estimatedMarketValueMinor: 123450n,
-      currency: 'GBP',
-      change24hBps: 125,
-      availableBps: 4500,
-      ownersCount: 12,
-      watchersCount: 4,
-      confidence: 92,
-      status: 'DEMO',
+        asOf: new Date(),
+        estimatedMarketValueMinor: 123450n,
+        currency: 'GBP',
+        change24hBps: 125,
+        availableBps: 4500,
+        ownersCount: 12,
+        watchersCount: 4,
+        confidence: 92,
+        status: 'DEMO',
       },
     });
     await db.vaultPublicEvent.createMany({
@@ -199,7 +199,9 @@ describe('Document 008 public read HTTP contracts', () => {
         }),
       ],
     });
-    expect(JSON.stringify(publicProfile)).not.toContain(`${id}-pub@example.test`);
+    expect(JSON.stringify(publicProfile)).not.toContain(
+      `${id}-pub@example.test`,
+    );
     expect(JSON.stringify(publicProfile)).not.toContain('ownerUserId');
     const detail = await request(app.getHttpServer()).get(
       `/api/v1/collectors/${id}-private`,
@@ -213,10 +215,28 @@ describe('Document 008 public read HTTP contracts', () => {
         expect.objectContaining({
           id: `${id}-event`,
           publicSummary: 'Stored safely',
+          type: 'STORED',
+          assetSlug: `${id}-asset`,
         }),
       ]),
     );
-    expect(JSON.stringify(vault.body)).not.toContain('private');
+    const publicVaultPayload = JSON.stringify(vault.body).toLowerCase();
+    for (const forbidden of [
+      'private',
+      'sourceRef',
+      'email',
+      'phone',
+      'wallet',
+      'bank',
+      'provider',
+      'custody location',
+      'internal note',
+      'evidence',
+      'compliance',
+      'assignment',
+    ]) {
+      expect(publicVaultPayload).not.toContain(forbidden.toLowerCase());
+    }
     expect(
       (await request(app.getHttpServer()).get('/api/v1/me/portfolio')).status,
     ).toBe(401);

@@ -25,6 +25,7 @@
     "staging:demo:preflight": "ts-node src/scripts/preflight-staging-demo.ts",
     "staging:demo:refresh": "ts-node src/scripts/refresh-staging-demo.ts",
     "staging:demo:collector:refresh": "ts-node src/scripts/setup-demo-collector.ts",
+    "staging:demo:market:check": "ts-node src/scripts/check-staging-demo-market.ts",
     "staging:demo:market:verify": "ts-node src/scripts/verify-staging-demo-market.ts",
     "staging:demo:create-disposable-user": "ts-node src/scripts/create-staging-demo-disposable-user.ts",
     "staging:demo:verify-auth": "ts-node src/scripts/verify-staging-demo-auth.ts",

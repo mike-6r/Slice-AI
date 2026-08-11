@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import {
   HOMEPAGE_FEATURED_ASSET,
+  HOMEPAGE_OWNERSHIP_EXAMPLE,
   showcaseDestination,
   type HomepageShowcaseAsset,
 } from "@/data/homepage-showcase";
@@ -56,7 +57,7 @@ export function FeaturedMarketHero() {
         <div
           className="featured-static-panel__chart"
           role="img"
-          aria-label="Illustrative upward 30-day price chart"
+          aria-label="Illustrative upward 30-day featured asset value chart"
         >
           <svg viewBox="0 0 360 112" preserveAspectRatio="none" aria-hidden="true">
             <defs>
@@ -103,16 +104,16 @@ export function FeaturedMarketHero() {
 
         <dl className="featured-static-panel__stats">
           <div>
-            <dt>Ownership</dt>
-            <dd>{featured.displayAvailability}</dd>
+            <dt>Available ownership</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.availableOwnership}</dd>
           </div>
           <div>
-            <dt>Market confidence</dt>
-            <dd>92/100</dd>
+            <dt>Share price</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
           </div>
           <div>
-            <dt>Owners</dt>
-            <dd>1,250</dd>
+            <dt>Minimum position</dt>
+            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.minimumPosition}</dd>
           </div>
         </dl>
       </ShowcaseLink>

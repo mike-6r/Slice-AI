@@ -120,6 +120,7 @@ describe("Document 016 wallet UI", () => {
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
     const html = renderWallet();
     expect(html).toContain("Cash and money movements");
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
     expect(html).toContain("£125.00");
     expect(html).toContain("Safe Bank");
     expect(html).toContain("•••• 1234");

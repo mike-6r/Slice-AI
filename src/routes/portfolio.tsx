@@ -18,7 +18,7 @@ import type { ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import { WalletKpiIcon } from "@/components/ui/WalletKpiIcon";
+import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type { PortfolioHolding, PortfolioSummary, PortfolioTransaction } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -173,7 +173,7 @@ function PortfolioKpi({
 }) {
   return (
     <article className="portfolio-kpi">
-      <WalletKpiIcon icon={icon} />
+      <KpiIconTile icon={icon} />
       <div className="portfolio-kpi__content">
         <p>{label}</p>
         <strong>{value}</strong>

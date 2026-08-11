@@ -108,6 +108,7 @@ describe("Document 013 portfolio UI", () => {
     expect(html).toContain("Demo Funding");
     expect(html).toContain("No portfolio performance history available.");
     expect(html).toContain("portfolio-kpi__content");
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
     expect(html).toContain("portfolio-empty-state--performance");
     expect(html).toContain("Unavailable");
     expect(html).not.toContain("account-safe-id");

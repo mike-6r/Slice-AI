@@ -179,6 +179,19 @@ const assets: readonly DemoAsset[] = [
   },
 ];
 
+/**
+ * Stable identifiers for the explicitly named staging catalogue.  The market
+ * health check imports these rather than duplicating the fixture definition,
+ * which keeps its assertions aligned with the lifecycle fixture.
+ */
+export const stagingDemoAssetSlugs = assets.map(
+  (asset) => `slice-demo-${asset.key}`,
+);
+
+export const publishedStagingDemoAssetSlugs = assets
+  .filter((asset) => asset.state === 'PUBLISHED')
+  .map((asset) => `slice-demo-${asset.key}`);
+
 const fixturePng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
