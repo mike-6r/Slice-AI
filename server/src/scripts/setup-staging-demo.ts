@@ -17,8 +17,10 @@ type DemoDefinition = (typeof demoAccounts)[keyof typeof demoAccounts];
 /**
  * Creates only the two durable demo identities and their public presentation
  * records. It deliberately does not alter passwords of an existing account,
- * grant staff roles, directly credit balances, or create external-provider
- * records. Rich cross-domain fixtures are added only through their authorities.
+ * grant privileged financial, vault, or compliance roles, directly credit
+ * balances, or create external-provider records. The collector showcase may
+ * additionally receive ASSET_REVIEWER through its own bounded setup script so
+ * it can exercise the existing staff-only submission workspace.
  */
 export async function runStagingDemoSetup() {
   assertStagingDemoSafety();
@@ -89,9 +91,14 @@ export async function runStagingDemoSetup() {
         result: 'STAGING_DEMO_IDENTITIES_READY',
         accounts: [demoAccounts.investor.email, demoAccounts.collector.email],
         collectorPublicProfile: 'slice-demo-collector',
-        roles: ['USER'],
-        note:
-          'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. No passwords, staff roles, or external-provider records were written.',
+        roles: {
+          investor: ['USER'],
+          collector: [
+            'USER',
+            'ASSET_REVIEWER (only when collector fixture is enabled)',
+          ],
+        },
+        note: 'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. No passwords, privileged financial/vault/compliance roles, or external-provider records were written.',
       }) + '\n',
     );
   } finally {
@@ -114,12 +121,14 @@ async function authenticatedAdmin(auth: AuthService): Promise<Actor> {
   );
   const actor = await auth.actor(session.accessToken);
   if (!actor.roles.includes('ADMIN')) {
-    throw new Error('DEMO_SETUP_ADMIN_EMAIL must authenticate as an active ADMIN.');
+    throw new Error(
+      'DEMO_SETUP_ADMIN_EMAIL must authenticate as an active ADMIN.',
+    );
   }
   return actor;
 }
 
-async function ensureDemoAccount(
+export async function ensureDemoAccount(
   auth: AuthService,
   access: AccessControlService,
   db: PrismaService,
@@ -196,7 +205,7 @@ async function ensureDemoAccount(
   return { userId: actor.userId, actor };
 }
 
-async function ensureDemoFunding(
+export async function ensureDemoFunding(
   db: PrismaService,
   ledger: FinancialLedgerService,
   actor: Actor,
@@ -229,8 +238,16 @@ async function ensureDemoFunding(
         correlationId,
         descriptionCode: 'STAGING_DEMO_FUNDING',
         lines: [
-          { accountId: clearing.id, side: 'DEBIT', amountMinor: input.amountMinor },
-          { accountId: cash.id, side: 'CREDIT', amountMinor: input.amountMinor },
+          {
+            accountId: clearing.id,
+            side: 'DEBIT',
+            amountMinor: input.amountMinor,
+          },
+          {
+            accountId: cash.id,
+            side: 'CREDIT',
+            amountMinor: input.amountMinor,
+          },
         ],
       },
       `staging-demo-funding-request:${input.label}`,
@@ -259,6 +276,47 @@ async function ensureDemoFunding(
   if (!valid) {
     throw new Error(
       `Refusing setup: ${input.label} demo funding journal is not the expected balanced D13 fixture.`,
+    );
+  }
+
+  // A repeat demo must retain enough spendable cash after its own D14 trades.
+  // Replenishment is still an explicit, balanced D13 journal; it never writes
+  // projections directly or touches a non-demo account. Existing history is
+  // intentionally retained for the owner walkthrough.
+  const wallet = await ledger.walletForUser(actor.userId);
+  const availableMinor = BigInt(
+    wallet.accounts.find((account) => account.code === 'CASH_AVAILABLE')
+      ?.availableMinor ?? '0',
+  );
+  const targetAvailableMinor = BigInt(input.amountMinor);
+  if (availableMinor < targetAvailableMinor) {
+    const topUpMinor = targetAvailableMinor - availableMinor;
+    const prefix = `staging-demo-funding-replenish:${input.label}:`;
+    const priorTopUps = await db.journalTransaction.count({
+      where: { correlationId: { startsWith: prefix } },
+    });
+    const correlationId = `${prefix}${priorTopUps + 1}:${topUpMinor}`;
+    await ledger.post(
+      actor,
+      {
+        type: 'DEMO_FUNDING',
+        correlationId,
+        descriptionCode: 'STAGING_DEMO_FUNDING_REPLENISHMENT',
+        lines: [
+          {
+            accountId: clearing.id,
+            side: 'DEBIT',
+            amountMinor: topUpMinor.toString(),
+          },
+          {
+            accountId: cash.id,
+            side: 'CREDIT',
+            amountMinor: topUpMinor.toString(),
+          },
+        ],
+      },
+      `staging-demo-funding-replenish-request:${input.label}:${priorTopUps + 1}`,
+      `staging-demo-funding-replenish:${input.label}:${priorTopUps + 1}`,
     );
   }
 }
@@ -300,10 +358,17 @@ async function assertDemoRoleBoundary(
   collectorUserId: string,
 ) {
   const roles = await db.roleAssignment.findMany({
-    where: { userId: { in: [investorUserId, collectorUserId] }, revokedAt: null },
+    where: {
+      userId: { in: [investorUserId, collectorUserId] },
+      revokedAt: null,
+    },
     select: { userId: true, role: true },
   });
-  const invalid = roles.find((entry) => entry.role !== 'USER');
+  const invalid = roles.find(
+    (entry) =>
+      entry.role !== 'USER' &&
+      !(entry.userId === collectorUserId && entry.role === 'ASSET_REVIEWER'),
+  );
   if (invalid) {
     throw new Error(
       `Refusing setup: demo account has prohibited role ${invalid.role}. Revoke it explicitly before rerunning.`,

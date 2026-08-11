@@ -5,17 +5,23 @@ import { useState } from "react";
 import { useSession } from "@/auth/use-session";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { assetShowcaseMedia } from "./demo-asset-media";
 import { marketStatus } from "./marketplace-helpers";
 import type { MarketplaceAsset } from "./market-api-presentation";
 
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
+  const media = assetShowcaseMedia(asset.slug);
   return (
     <div
       className="market-card-media profile-raw-card lighting-graphite"
-      aria-label={`${asset.title} media unavailable`}
+      aria-label={media ? `${asset.title} media` : `${asset.title} media unavailable`}
     >
       <span className="market-card-glow" aria-hidden="true" />
-      <span className="market-card-media-placeholder">Media unavailable</span>
+      {media ? (
+        <img className="market-card-media-image" src={media.src} alt={media.alt} />
+      ) : (
+        <span className="market-card-media-placeholder">Media unavailable</span>
+      )}
       <div className={`market-status-badge is-${marketStatus(asset).tone}`}>
         {marketStatus(asset).label}
       </div>

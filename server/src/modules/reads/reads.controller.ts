@@ -10,6 +10,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service';
 import {
@@ -41,17 +42,12 @@ export class ReadsController {
             }
           : {}),
       },
-      include: { user: { include: { profile: true } } },
+      include: publicCollectorInclude,
       orderBy: [{ createdAt: 'desc' }, { userId: 'desc' }],
       take: pageSize + 1,
     });
     return {
-      items: rows.slice(0, pageSize).map((x) => ({
-        slug: x.slug,
-        headline: x.headline,
-        specialism: x.specialism,
-        displayName: x.user.profile?.displayName ?? null,
-      })),
+      items: rows.slice(0, pageSize).map(publicCollectorView),
       nextCursor:
         rows.length > pageSize
           ? makeCursor(
@@ -65,16 +61,9 @@ export class ReadsController {
   @Get('collectors/:slug') async collector(@Param('slug') slug: string) {
     const x = await this.db.publicCollectorProfile.findFirst({
       where: { slug, isPublic: true },
-      include: { user: { include: { profile: true } } },
+      include: publicCollectorInclude,
     });
-    return x
-      ? {
-          slug: x.slug,
-          headline: x.headline,
-          specialism: x.specialism,
-          displayName: x.user.profile?.displayName ?? null,
-        }
-      : { error: 'COLLECTOR_NOT_FOUND' };
+    return x ? publicCollectorView(x) : { error: 'COLLECTOR_NOT_FOUND' };
   }
   @Get('vault/events') async vault(
     @Query('cursor') cursor?: string,
@@ -262,6 +251,95 @@ export class ReadsController {
     );
     return result.value;
   }
+}
+
+const publicCollectorInclude = {
+  user: {
+    include: {
+      profile: true,
+      _count: {
+        select: {
+          submissions: { where: { asset: { is: { status: 'PUBLISHED' } } } },
+        },
+      },
+      submissions: {
+        where: { asset: { is: { status: 'PUBLISHED' } } },
+        include: {
+          asset: {
+            include: {
+              category: { select: { name: true } },
+              marketSnapshots: {
+                orderBy: { asOf: 'desc' },
+                take: 1,
+                select: {
+                  estimatedMarketValueMinor: true,
+                  currency: true,
+                  asOf: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+      },
+    },
+  },
+} satisfies Prisma.PublicCollectorProfileInclude;
+
+function publicCollectorView(x: {
+  slug: string;
+  headline: string | null;
+  specialism: string | null;
+  user: {
+    profile: { displayName: string } | null;
+    _count: { submissions: number };
+    submissions: Array<{
+      asset: {
+        publicId: string;
+        slug: string;
+        title: string;
+        category: { name: string };
+        marketSnapshots: Array<{
+          estimatedMarketValueMinor: bigint;
+          currency: string;
+          asOf: Date;
+          status: string;
+        }>;
+      } | null;
+    }>;
+  };
+}) {
+  const listings = x.user.submissions.flatMap((submission) => {
+    const asset = submission.asset;
+    if (!asset) return [];
+    const market = asset.marketSnapshots[0] ?? null;
+    return [
+      {
+        publicId: asset.publicId,
+        slug: asset.slug,
+        title: asset.title,
+        category: asset.category.name,
+        market: market
+          ? {
+              estimatedValueMinor: market.estimatedMarketValueMinor.toString(),
+              currency: 'GBP',
+              asOf: market.asOf.toISOString(),
+              dataStatus: market.status,
+            }
+          : null,
+      },
+    ];
+  });
+  return {
+    slug: x.slug,
+    headline: x.headline,
+    specialism: x.specialism,
+    displayName: x.user.profile?.displayName ?? null,
+    publishedListingCount: x.user._count.submissions,
+    publishedListings: listings,
+  };
 }
 function makeCursor(scope: string, createdAt: Date, id: string) {
   return Buffer.from(

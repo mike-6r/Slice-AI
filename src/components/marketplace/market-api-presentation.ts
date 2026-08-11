@@ -11,6 +11,8 @@ export type MarketplaceAsset = {
   source?: string;
   asOf?: string;
   confidence?: number;
+  availabilityBps?: number;
+  ownersCount?: number;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE";
   change24hBps?: number;
 };
@@ -26,6 +28,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   source: asset.market?.source,
   asOf: asset.market?.asOf,
   confidence: asset.market?.confidence ?? asset.confidence,
+  availabilityBps: asset.market?.availabilityBps,
+  ownersCount: asset.market?.ownersCount,
   dataStatus: asset.market?.dataStatus,
   change24hBps: asset.market?.change24hBps,
 });

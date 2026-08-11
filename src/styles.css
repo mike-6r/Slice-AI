@@ -10096,6 +10096,73 @@ body:has(.collectors-page) .site-shell {
   color: #f1fbf8;
 }
 
+.collector-discovery-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 430px;
+  flex-direction: column;
+  padding: 23px 22px 16px;
+  border: 1px solid rgba(145, 176, 186, 0.13);
+  border-radius: 11px;
+  background:
+    radial-gradient(ellipse 70% 40% at 100% 0%, rgba(34, 211, 165, 0.075), transparent 72%),
+    linear-gradient(150deg, rgba(15, 25, 30, 0.94), rgba(5, 11, 15, 0.985));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 34px rgba(0, 0, 0, 0.19);
+}
+
+.collector-discovery-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.collector-discovery-panel > header h2 {
+  margin-top: 9px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -0.035em;
+}
+
+.collector-discovery-panel > header > svg {
+  width: 20px;
+  height: 20px;
+  color: #25dca5;
+}
+
+.collector-discovery-specialties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.collector-discovery-specialties span {
+  padding: 6px 8px;
+  border: 1px solid rgba(34, 211, 165, 0.15);
+  border-radius: 999px;
+  background: rgba(34, 211, 165, 0.055);
+  color: rgba(207, 239, 229, 0.96);
+  font-size: 9px;
+  font-weight: 630;
+}
+
+.collector-discovery-assets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.collector-discovery-assets .collector-mini-holding {
+  height: 94px;
+}
+
+.collector-discovery-panel .featured-assets-link {
+  margin-top: auto;
+}
+
 .collectors-leaderboard {
   display: flex;
   min-width: 0;
@@ -10591,7 +10658,9 @@ body:has(.collectors-page) .site-shell {
 .public-collector-hero .collectors-shell { padding-block: 28px 30px; }
 .public-collector-back { display: inline-flex; align-items: center; gap: 6px; color: rgba(174, 192, 199, 0.82); font-size: 10px; }
 .public-collector-back svg { width: 13px; height: 13px; }
+.public-collector-hero-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: clamp(22px, 4vw, 56px); align-items: end; margin-top: 22px; }
 .public-collector-identity { display: flex; align-items: center; gap: 17px; margin-top: 22px; }
+.public-collector-hero-grid .public-collector-identity { margin-top: 0; }
 .public-collector-identity > div > span { display: inline-flex; align-items: center; gap: 5px; color: #28dca6; font-size: 9px; font-weight: 650; }
 .public-collector-identity > div > span svg { width: 13px; height: 13px; }
 .public-collector-identity h1 { margin-top: 6px; font-family: var(--font-display); font-size: clamp(30px, 3vw, 45px); font-weight: 700; letter-spacing: -0.05em; }
@@ -10603,6 +10672,12 @@ body:has(.collectors-page) .site-shell {
 .public-collector-stats dt { color: rgba(144, 160, 168, 0.83); font-size: 8px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; }
 .public-collector-stats dd { margin-top: 5px; font-size: 14px; font-weight: 680; }
 .public-collector-stats dd.is-positive { color: #29dba5; }
+.public-collector-hero-catalogue { min-width: 0; padding: 17px; border: 1px solid rgba(145, 176, 186, 0.14); border-radius: 12px; background: radial-gradient(ellipse 80% 50% at 75% 0%, rgba(34, 211, 165, 0.07), transparent 72%), linear-gradient(150deg, rgba(15, 25, 30, 0.94), rgba(5, 11, 15, 0.985)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 34px rgba(0, 0, 0, 0.19); }
+.public-collector-hero-catalogue h2 { margin-top: 7px; font-family: var(--font-display); font-size: 18px; font-weight: 680; letter-spacing: -0.035em; }
+.public-collector-hero-rail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 15px; }
+.public-collector-hero-rail .collector-mini-holding { height: 112px; }
+.public-collector-hero-catalogue > a { display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; color: #29dba5; font-size: 10px; font-weight: 650; }
+.public-collector-hero-catalogue > a svg { width: 13px; height: 13px; }
 .public-collector-hero.is-listings h1 { margin-top: 9px; font-family: var(--font-display); font-size: clamp(31px, 3vw, 45px); font-weight: 700; letter-spacing: -0.05em; }
 .public-collector-hero.is-listings p:last-child { max-width: 600px; margin-top: 9px; color: rgba(178, 194, 201, 0.82); font-size: 12px; }
 .public-collector-listings { padding-top: 29px; }
@@ -10627,8 +10702,8 @@ body:has(.collectors-page) .site-shell {
 .public-collector-activity-empty > svg { flex: 0 0 auto; width: 23px; height: 23px; color: rgba(43, 220, 167, 0.8); }
 .public-collector-activity-empty h3 { font-size: 11px; font-weight: 670; }
 .public-collector-activity-empty p { margin-top: 5px; color: rgba(157, 177, 184, 0.85); font-size: 10px; line-height: 1.5; }
-@media (max-width: 819px) { .public-collector-assets-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 599px) { .featured-collector-stats.has-3-stats { gap: 0; } .featured-collector-stats.has-3-stats > div { padding-inline: 8px; } .featured-collector-stats.has-3-stats > div:first-child { padding-left: 0; } .public-collector-hero .collectors-shell { padding-block: 22px 24px; } .public-collector-identity { align-items: flex-start; gap: 12px; } .public-collector-identity .collector-avatar.is-featured { width: 55px; height: 55px; font-size: 21px; } .public-collector-stats { max-width: none; } .public-collector-stats > div { padding-inline: 8px; } .public-collector-section-heading { align-items: flex-start; flex-direction: column; } .public-collector-assets-grid { grid-template-columns: 1fr; } .public-collector-asset-media { height: 215px; } }
+@media (max-width: 819px) { .collector-discovery-panel { min-height: 0; } .public-collector-hero-grid { grid-template-columns: 1fr; } .public-collector-assets-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 599px) { .featured-collector-stats.has-3-stats { gap: 0; } .featured-collector-stats.has-3-stats > div { padding-inline: 8px; } .featured-collector-stats.has-3-stats > div:first-child { padding-left: 0; } .public-collector-hero .collectors-shell { padding-block: 22px 24px; } .public-collector-identity { align-items: flex-start; gap: 12px; } .public-collector-identity .collector-avatar.is-featured { width: 55px; height: 55px; font-size: 21px; } .public-collector-stats { max-width: none; } .public-collector-stats > div { padding-inline: 8px; } .public-collector-section-heading { align-items: flex-start; flex-direction: column; } .public-collector-assets-grid { grid-template-columns: 1fr; } .public-collector-asset-media { height: 215px; } .public-collector-hero-catalogue { padding: 14px; } }
 
 /* =================================================
    Wallet — customer cash and movement dashboard

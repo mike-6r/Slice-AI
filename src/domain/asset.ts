@@ -88,5 +88,9 @@ export interface Asset {
     confidence?: Percentage;
     dataStatus?: "DEMO" | "DELAYED" | "LIVE";
     change24hBps?: number;
+    /** Public aggregate availability from the market snapshot, never account ownership. */
+    availabilityBps?: BasisPoints;
+    /** Public aggregate owner count from the market snapshot. */
+    ownersCount?: number;
   };
 }

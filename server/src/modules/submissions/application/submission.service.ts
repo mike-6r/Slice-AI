@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Optional,
@@ -101,6 +102,93 @@ export class SubmissionService {
     });
     if (!submission) this.notFound();
     return ownerProjection(submission!);
+  }
+
+  /**
+   * Binds an approved submission to the catalogue asset that was created for
+   * it.  This is the narrow hand-off between D10 review and D11 lifecycle;
+   * publication never infers ownership from an arbitrary catalogue row.
+   *
+   * It is intentionally service-only for now: the staging fixture and future
+   * staff workflow use the same durable, audited transition rather than
+   * writing AssetSubmission.assetId directly.
+   */
+  linkApprovedAsset(
+    actor: Actor,
+    submissionId: string,
+    assetId: string,
+    requestId: string,
+    key: string,
+  ) {
+    if (
+      !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
+    ) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to link an approved submission.',
+      });
+    }
+    return this.mutate(
+      actor,
+      `submission.asset-link:${submissionId}`,
+      'POST',
+      `/v1/admin/submissions/${submissionId}/asset-link`,
+      { assetId },
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw`SELECT id FROM "AssetSubmission" WHERE id = ${submissionId} FOR UPDATE`;
+        await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${assetId} FOR UPDATE`;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id: submissionId },
+          select: { id: true, status: true, assetId: true, ownerUserId: true },
+        });
+        if (!submission) this.notFound();
+        if (submission!.status !== 'APPROVED') {
+          throw new ConflictException({
+            code: 'SUBMISSION_STATE_CONFLICT',
+            message: 'Only an approved submission can start asset lifecycle.',
+          });
+        }
+        const asset = await db.asset.findUnique({
+          where: { id: assetId },
+          select: { id: true },
+        });
+        if (!asset) this.notFound();
+        if (submission!.assetId && submission!.assetId !== assetId) {
+          throw new ConflictException({
+            code: 'SUBMISSION_STATE_CONFLICT',
+            message:
+              'The approved submission is already linked to another asset.',
+          });
+        }
+        const existing = await db.assetSubmission.findFirst({
+          where: { assetId, id: { not: submissionId } },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new ConflictException({
+            code: 'ASSET_SUBMISSION_CONFLICT',
+            message: 'The asset is already linked to another submission.',
+          });
+        }
+        const updated = await db.assetSubmission.update({
+          where: { id: submissionId },
+          data: { assetId },
+          select: { id: true, assetId: true, ownerUserId: true },
+        });
+        await audit(
+          'SUBMISSION_APPROVED_ASSET_LINKED',
+          'submission',
+          submissionId,
+          {
+            assetId,
+            ownerUserId: updated.ownerUserId,
+          },
+        );
+        return { submissionId: updated.id, assetId: updated.assetId! };
+      },
+    );
   }
 
   async listOwned(actor: Actor, cursor: string | undefined, limit: number) {

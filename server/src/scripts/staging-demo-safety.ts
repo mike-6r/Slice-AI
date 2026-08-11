@@ -4,7 +4,9 @@
  */
 export function assertStagingDemoSafety() {
   if (process.env.SLICE_ENV !== 'staging') {
-    throw new Error('Refusing demo setup: SLICE_ENV must be exactly "staging".');
+    throw new Error(
+      'Refusing demo setup: SLICE_ENV must be exactly "staging".',
+    );
   }
   if (process.env.ALLOW_DEMO_DATA_SETUP !== 'true') {
     throw new Error(
@@ -12,7 +14,9 @@ export function assertStagingDemoSafety() {
     );
   }
   if (!process.env.DATABASE_URL || !process.env.REDIS_URL) {
-    throw new Error('Refusing demo setup: DATABASE_URL and REDIS_URL are required.');
+    throw new Error(
+      'Refusing demo setup: DATABASE_URL and REDIS_URL are required.',
+    );
   }
 }
 
@@ -34,5 +38,15 @@ export const demoAccounts = {
     email: 'demo-collector@slicecollectable.com',
     displayName: 'Slice Demo Collector',
     passwordEnv: 'DEMO_COLLECTOR_PASSWORD',
+  },
+  collectorB: {
+    email: 'demo-collector-b@slicecollectable.com',
+    displayName: 'Slice Demo Collector B',
+    passwordEnv: 'DEMO_COLLECTOR_B_PASSWORD',
+  },
+  marketMaker: {
+    email: 'demo-market-maker@slicecollectable.com',
+    displayName: 'Slice Demo Market Maker',
+    passwordEnv: 'DEMO_MARKET_MAKER_PASSWORD',
   },
 } as const;

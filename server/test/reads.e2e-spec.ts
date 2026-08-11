@@ -71,6 +71,30 @@ describe('Document 008 public read HTTP contracts', () => {
         { userId: priv.id, slug: `${id}-private`, isPublic: false },
       ],
     });
+    await db.assetSubmission.create({
+      data: {
+        ownerUserId: pub.id,
+        assetId: asset,
+        categoryId: `${id}-cat`,
+        status: 'APPROVED',
+        reviewedAt: new Date(),
+      },
+    });
+    await db.assetMarketSnapshot.create({
+      data: {
+        assetId: asset,
+        source: 'READS_E2E_TEST',
+      asOf: new Date(),
+      estimatedMarketValueMinor: 123450n,
+      currency: 'GBP',
+      change24hBps: 125,
+      availableBps: 4500,
+      ownersCount: 12,
+      watchersCount: 4,
+      confidence: 92,
+      status: 'DEMO',
+      },
+    });
     await db.vaultPublicEvent.createMany({
       data: [
         {
@@ -94,6 +118,8 @@ describe('Document 008 public read HTTP contracts', () => {
   });
   afterAll(async () => {
     await db.vaultPublicEvent.deleteMany({ where: { id: { startsWith: id } } });
+    await db.assetMarketSnapshot.deleteMany({ where: { assetId: asset } });
+    await db.assetSubmission.deleteMany({ where: { assetId: asset } });
     await db.publicCollectorProfile.deleteMany({
       where: { slug: { startsWith: id } },
     });
@@ -156,6 +182,25 @@ describe('Document 008 public read HTTP contracts', () => {
       ]),
     );
     expect(JSON.stringify(list.body)).not.toContain(`${id}-private`);
+    const publicProfile = list.body.items.find(
+      (item: { slug: string }) => item.slug === `${id}-public`,
+    );
+    expect(publicProfile).toMatchObject({
+      publishedListingCount: 1,
+      publishedListings: [
+        expect.objectContaining({
+          slug: `${id}-asset`,
+          title: 'A',
+          category: 'C',
+          market: expect.objectContaining({
+            estimatedValueMinor: '123450',
+            currency: 'GBP',
+          }),
+        }),
+      ],
+    });
+    expect(JSON.stringify(publicProfile)).not.toContain(`${id}-pub@example.test`);
+    expect(JSON.stringify(publicProfile)).not.toContain('ownerUserId');
     const detail = await request(app.getHttpServer()).get(
       `/api/v1/collectors/${id}-private`,
     );

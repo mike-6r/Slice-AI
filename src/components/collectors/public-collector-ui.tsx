@@ -113,7 +113,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         </div>
         <div>
           <dt>Categories represented</dt>
-          <dd>{categoryCount || "—"}</dd>
+          <dd>{categoryCount || "\u2014"}</dd>
         </div>
         <div>
           <dt>Public profile</dt>
@@ -134,6 +134,40 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         View public profile <ArrowRight aria-hidden="true" />
       </Link>
     </article>
+  );
+}
+
+export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorProfile[] }) {
+  const specialties = [...new Set(collectors.flatMap(collectorSpecialties))].slice(0, 6);
+  const listings = collectors.flatMap((collector) => collector.publishedListings ?? []).slice(0, 4);
+
+  return (
+    <aside className="collector-discovery-panel">
+      <header>
+        <div>
+          <p className="collectors-kicker">Discovery</p>
+          <h2>Collectible expertise.</h2>
+        </div>
+        <Sparkles aria-hidden="true" />
+      </header>
+      {specialties.length > 0 && (
+        <div className="collector-discovery-specialties" aria-label="Public collector specialties">
+          {specialties.map((specialty) => (
+            <span key={specialty}>{specialty}</span>
+          ))}
+        </div>
+      )}
+      {listings.length > 0 && (
+        <div className="collector-discovery-assets" aria-label="Published collectible previews">
+          {listings.map((listing) => (
+            <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
+          ))}
+        </div>
+      )}
+      <Link to="/marketplace" className="featured-assets-link">
+        Browse published collectibles <ArrowRight aria-hidden="true" />
+      </Link>
+    </aside>
   );
 }
 
@@ -163,7 +197,9 @@ export function CollectorCard({
         </span>
       </header>
       <div className="collector-profile-copy">
-        <strong>{specialties.length ? specialties.join(" · ") : "Public collector profile"}</strong>
+        <strong>
+          {specialties.length ? specialties.join(" \u00b7 ") : "Public collector profile"}
+        </strong>
         <p>{collector.focus}</p>
       </div>
       <dl className="collector-profile-stats">
@@ -173,7 +209,7 @@ export function CollectorCard({
         </div>
         <div>
           <dt>Categories</dt>
-          <dd>{categoryCount || "—"}</dd>
+          <dd>{categoryCount || "\u2014"}</dd>
         </div>
         <div>
           <dt>Status</dt>

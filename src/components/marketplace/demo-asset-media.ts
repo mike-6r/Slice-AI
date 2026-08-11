@@ -54,6 +54,18 @@ const stagedMedia: Record<string, { src: string; alt: string }> = {
     src: charizardImage,
     alt: "Pokemon collectible presentation",
   },
+  "slice-demo-specialist-dark-magician": {
+    src: magicImage,
+    alt: "Yu-Gi-Oh Dark Magician trading card collectible presentation",
+  },
+  "slice-demo-specialist-black-lotus": {
+    src: magicImage,
+    alt: "Magic the Gathering Black Lotus collectible presentation",
+  },
+  "slice-demo-specialist-one-piece": {
+    src: onePieceImage,
+    alt: "One Piece manga rare trading card collectible presentation",
+  },
 };
 
 export const assetShowcaseMedia = (slug: string) => stagedMedia[slug];

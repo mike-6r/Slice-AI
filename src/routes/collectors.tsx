@@ -1,8 +1,12 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Archive, Search, Sparkles, Tags, UserRoundCheck } from "lucide-react";
 import { useMemo, useState } from "react";
-import { CollectorCard, FeaturedCollector } from "@/components/collectors/public-collector-ui";
+import {
+  CollectorCard,
+  CollectorDiscoveryPanel,
+  FeaturedCollector,
+} from "@/components/collectors/public-collector-ui";
 import { collectorSpecialties } from "@/components/collectors/collector-specialties";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
@@ -148,34 +152,7 @@ function CollectorsPage() {
       ) : featured ? (
         <section className="collectors-shell collectors-spotlight">
           <FeaturedCollector collector={featured} />
-          <aside className="collectors-leaderboard">
-            <header>
-              <div>
-                <p className="collectors-kicker">Discovery</p>
-                <h2>Public collector catalogue</h2>
-              </div>
-              <Sparkles aria-hidden="true" />
-            </header>
-            <ol>
-              {collectors.slice(0, 5).map((collector, index) => (
-                <li key={collector.userId}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <Link to="/collector/$id" params={{ id: collector.handle }}>
-                    {collector.displayName}
-                    <small>{collector.publishedListingCount ?? 0} published collectibles</small>
-                  </Link>
-                  <strong>Public</strong>
-                </li>
-              ))}
-            </ol>
-            <Link
-              to="/collector/$id"
-              params={{ id: featured.handle }}
-              className="collectors-leaderboard-link"
-            >
-              Explore featured profile <Sparkles aria-hidden="true" />
-            </Link>
-          </aside>
+          <CollectorDiscoveryPanel collectors={collectors} />
         </section>
       ) : null}
       <section className="collectors-shell collectors-directory">

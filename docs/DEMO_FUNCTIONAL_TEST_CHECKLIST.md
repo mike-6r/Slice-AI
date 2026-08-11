@@ -67,8 +67,9 @@ deleting customer-facing history. It is intentionally not a database reset.
 SLICE_ENV=staging
 ALLOW_DEMO_DATA_SETUP=true
 DEMO_SETUP_ADMIN_EMAIL=existing-admin@example.invalid
-# DEMO_SETUP_ADMIN_PASSWORD, DEMO_INVESTOR_PASSWORD and
-# DEMO_COLLECTOR_PASSWORD are runtime secrets. Do not place them in Git.
+# DEMO_SETUP_ADMIN_PASSWORD, DEMO_INVESTOR_PASSWORD,
+# DEMO_COLLECTOR_PASSWORD and DEMO_COLLECTOR_B_PASSWORD are runtime secrets.
+# Do not place them in Git.
 ```
 
 The setup command authenticates the existing administrator and uses

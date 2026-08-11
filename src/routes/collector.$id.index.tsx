@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Archive, ArrowLeft, BadgeCheck, Sparkles } from "lucide-react";
 import {
   CollectorAvatar,
+  CollectorAssetPreview,
   PublicCollectorAssetCard,
 } from "@/components/collectors/public-collector-ui";
 import { collectorSpecialties } from "@/components/collectors/collector-specialties";
@@ -21,7 +22,7 @@ function CollectorPage() {
     queryFn: () => services.collectors.get(id as never),
   });
   if (result.isLoading)
-    return <section className="page-shell py-12">Loading public profile…</section>;
+    return <section className="page-shell py-12">Loading public profile\u2026</section>;
   if (result.isError)
     return (
       <section className="page-shell py-12">
@@ -50,45 +51,67 @@ function CollectorPage() {
           <Link to="/collectors" className="public-collector-back">
             <ArrowLeft aria-hidden="true" /> Browse collectors
           </Link>
-          <div className="public-collector-identity">
-            <CollectorAvatar collector={collector} featured />
+          <div className="public-collector-hero-grid">
             <div>
-              <span>
-                <BadgeCheck aria-hidden="true" /> Public collector
-              </span>
-              <h1>{collector.displayName}</h1>
-              <p>@{collector.handle}</p>
+              <div className="public-collector-identity">
+                <CollectorAvatar collector={collector} featured />
+                <div>
+                  <span>
+                    <BadgeCheck aria-hidden="true" /> Public collector
+                  </span>
+                  <h1>{collector.displayName}</h1>
+                  <p>@{collector.handle}</p>
+                </div>
+              </div>
+              <p className="public-collector-bio">{collector.focus}</p>
+              {specialties.length > 0 && (
+                <div className="collector-specialty-chips">
+                  {specialties.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+              )}
+              <dl className="public-collector-stats">
+                <div>
+                  <dt>Published collectibles</dt>
+                  <dd>{collector.publishedListingCount ?? listings.length}</dd>
+                </div>
+                <div>
+                  <dt>Categories represented</dt>
+                  <dd>{categoryCount || "\u2014"}</dd>
+                </div>
+                <div>
+                  <dt>Profile visibility</dt>
+                  <dd className="is-positive">Public</dd>
+                </div>
+              </dl>
             </div>
+            {listings.length > 0 && (
+              <aside className="public-collector-hero-catalogue">
+                <div>
+                  <p className="collectors-kicker">Catalogue preview</p>
+                  <h2>Collectibles to inspect.</h2>
+                </div>
+                <div className="public-collector-hero-rail">
+                  {listings.slice(0, 3).map((listing) => (
+                    <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
+                  ))}
+                </div>
+                <Link to="/collector/$id/assets" params={{ id }}>
+                  Browse the public catalogue <Sparkles aria-hidden="true" />
+                </Link>
+              </aside>
+            )}
           </div>
-          <p className="public-collector-bio">{collector.focus}</p>
-          {specialties.length > 0 && (
-            <div className="collector-specialty-chips">
-              {specialties.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-          )}
-          <dl className="public-collector-stats">
-            <div>
-              <dt>Published collectibles</dt>
-              <dd>{collector.publishedListingCount ?? listings.length}</dd>
-            </div>
-            <div>
-              <dt>Categories represented</dt>
-              <dd>{categoryCount || "—"}</dd>
-            </div>
-            <div>
-              <dt>Profile visibility</dt>
-              <dd className="is-positive">Public</dd>
-            </div>
-          </dl>
         </div>
       </section>
       <section className="collectors-shell public-collector-listings">
         <div className="public-collector-section-heading">
           <div>
             <p className="collectors-kicker">Published collectibles</p>
-            <h2>Catalogue available to inspect.</h2>
+            <h2>
+              {listings.length ? "Catalogue available to inspect." : "No public collectibles yet."}
+            </h2>
           </div>
           <Link to="/collector/$id/assets" params={{ id }}>
             <Sparkles aria-hidden="true" /> View all listings
@@ -109,23 +132,16 @@ function CollectorPage() {
             </p>
           </div>
         )}
-        <p className="public-collector-privacy-note">
-          This profile publishes catalogue listings only. Holdings, portfolio value, private
-          submissions, operational review state, and performance are never public.
-        </p>
         <section className="public-collector-activity" aria-labelledby="public-activity-heading">
           <div>
             <p className="collectors-kicker">Public activity</p>
-            <h2 id="public-activity-heading">Activity stays opt-in.</h2>
+            <h2 id="public-activity-heading">Recent activity</h2>
           </div>
           <div className="public-collector-activity-empty">
             <Archive aria-hidden="true" />
             <div>
-              <h3>No public collector activity is available.</h3>
-              <p>
-                Slice only shows activity when it is intentionally published through a safe public
-                projection.
-              </p>
+              <h3>No public activity yet.</h3>
+              <p>New catalogue publications will appear here when they are shared publicly.</p>
             </div>
           </div>
         </section>
