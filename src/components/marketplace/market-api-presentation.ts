@@ -6,6 +6,10 @@ export type MarketplaceAsset = {
   title: string;
   category: string;
   setName?: string;
+  year?: number;
+  grader?: string;
+  gradeScore?: number;
+  gradeLabel?: string;
   grade?: string;
   certificationNumber?: string;
   estimatedMarketValueMinor?: number;
@@ -24,7 +28,21 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   title: asset.details.title,
   category: asset.details.category,
   setName: asset.details.card?.set,
-  grade: asset.grade ? `${asset.grade.company.toUpperCase()} ${asset.grade.label}` : undefined,
+  year: asset.details.card?.year,
+  grader: asset.grade?.company.toUpperCase(),
+  gradeScore: asset.grade?.numeric,
+  gradeLabel: asset.grade?.label,
+  grade: asset.grade
+    ? [
+        asset.grade.company.toUpperCase(),
+        asset.grade.numeric === undefined
+          ? undefined
+          : Number(asset.grade.numeric.toFixed(2)).toString(),
+        asset.grade.label,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined,
   certificationNumber: asset.certification?.number,
   estimatedMarketValueMinor: asset.market?.estimatedMarketValue?.amount,
   source: asset.market?.source,

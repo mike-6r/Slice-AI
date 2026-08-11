@@ -1,6 +1,4 @@
-import boosterImage from "@/assets/booster.jpg";
 import charizardSlabImage from "@/assets/charizard-slab.jpg";
-import charizardImage from "@/assets/charizard.jpg";
 import jordanImage from "@/assets/jordan.jpg";
 import magicImage from "@/assets/mtg.jpg";
 import onePieceImage from "@/assets/onepiece.jpg";
@@ -13,56 +11,44 @@ import pikachuImage from "@/assets/pikachu.jpg";
  * read from the API. Unknown live catalogue records deliberately have no
  * fallback photograph rather than being shown with misleading media.
  */
-const stagedMedia: Record<string, { src: string; alt: string }> = {
+export type DemoAssetMediaKey =
+  "charizard-slab" | "jordan-rookie" | "black-lotus" | "one-piece" | "pikachu-illustrator";
+
+type DemoAssetMedia = { key: DemoAssetMediaKey; src: string; alt: string };
+
+const stagedMedia: Partial<Record<string, DemoAssetMedia>> = {
   "slice-demo-charizard": {
+    key: "charizard-slab",
     src: charizardSlabImage,
     alt: "1999 Pokemon Base Set Charizard Holo in a graded slab",
   },
   "slice-demo-pikachu": {
+    key: "pikachu-illustrator",
     src: pikachuImage,
     alt: "Pokemon Pikachu Illustrator collectible card",
   },
-  "slice-demo-blastoise": {
-    src: boosterImage,
-    alt: "Pokemon Base Set collectible presentation",
-  },
   "slice-demo-jordan": {
+    key: "jordan-rookie",
     src: jordanImage,
     alt: "Michael Jordan rookie sports card",
   },
-  "slice-demo-mantle": {
-    src: jordanImage,
-    alt: "Vintage sports card collectible presentation",
-  },
-  "slice-demo-dark-magician": {
-    src: magicImage,
-    alt: "Trading card collectible presentation",
-  },
   "slice-demo-black-lotus": {
+    key: "black-lotus",
     src: magicImage,
     alt: "Magic the Gathering collectible presentation",
   },
   "slice-demo-one-piece": {
+    key: "one-piece",
     src: onePieceImage,
     alt: "One Piece trading card collectible presentation",
   },
-  "slice-demo-luka": {
-    src: jordanImage,
-    alt: "Basketball card collectible presentation",
-  },
-  "slice-demo-rayquaza": {
-    src: charizardImage,
-    alt: "Pokemon collectible presentation",
-  },
-  "slice-demo-specialist-dark-magician": {
-    src: magicImage,
-    alt: "Yu-Gi-Oh Dark Magician trading card collectible presentation",
-  },
   "slice-demo-specialist-black-lotus": {
+    key: "black-lotus",
     src: magicImage,
     alt: "Magic the Gathering Black Lotus collectible presentation",
   },
   "slice-demo-specialist-one-piece": {
+    key: "one-piece",
     src: onePieceImage,
     alt: "One Piece manga rare trading card collectible presentation",
   },

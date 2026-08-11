@@ -1,19 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  ShieldCheck,
-  Star,
-} from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
+import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
@@ -106,6 +99,7 @@ function AssetPage() {
     ownUnits: ownPositionQuery.data?.settledUnits,
   });
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
+  const category = marketCategoryPresentation(asset.category);
 
   return (
     <div className="asset-detail-page">
@@ -121,8 +115,10 @@ function AssetPage() {
           <section className="asset-hero" aria-labelledby="asset-title">
             <AssetShowcase
               title={asset.title}
-              category={asset.category}
-              grade={asset.grade}
+              category={category.label}
+              grader={asset.grader}
+              gradeScore={asset.gradeScore}
+              gradeLabel={asset.gradeLabel}
               certificationNumber={asset.certificationNumber}
               media={media}
               watched={watched}
@@ -131,81 +127,69 @@ function AssetPage() {
               onToggleWatch={() => toggleWatchlist.mutate(asset.id)}
             />
             <div className="asset-summary">
-              <div className="asset-summary-top">
-                <section className="asset-description">
-                  <div className="asset-identity-row">
-                    <span>Published asset</span>
-                    <i aria-hidden="true" />
-                    <strong>{asset.category}</strong>
-                    <em>{asset.dataStatus ?? "UNAVAILABLE"}</em>
-                  </div>
-                  <h1 id="asset-title">{asset.title}</h1>
-                  <p className="asset-grade-line">
-                    {asset.grade ?? "Grade unavailable"}
-                    {asset.setName ? ` · ${asset.setName}` : ""}
-                  </p>
-                  <p className="asset-description-copy">
-                    Authenticated catalogue identity, valuation history and public market activity.
-                    Trading status is always confirmed by the Slice API.
-                  </p>
-                </section>
-                <section className="asset-trade-summary" aria-label="Asset trade summary">
-                  <span>Share price</span>
-                  <strong>
-                    {shares.sharePriceMinor === undefined
+              <section className="asset-description">
+                <div className="asset-identity-row">
+                  <span>Published collectible</span>
+                  <i aria-hidden="true" />
+                  <strong>{category.label}</strong>
+                </div>
+                <h1 id="asset-title">{asset.title}</h1>
+                <p className="asset-grade-line">
+                  {asset.grade ?? "Grade not published"}
+                  {asset.setName ? ` · ${asset.setName}` : ""}
+                </p>
+                <p className="asset-description-copy">
+                  Explore the public collectible record, valuation history, ownership availability,
+                  and live Slice market activity for this asset.
+                </p>
+              </section>
+              <div className="asset-ranking-strip">
+                <Stat
+                  label="Asset value"
+                  value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+                />
+                <Stat
+                  label="Share price"
+                  value={
+                    shares.sharePriceMinor === undefined
                       ? "Unavailable"
-                      : formatCurrency(shares.sharePriceMinor)}
-                  </strong>
-                  <em>
-                    {asset.change24hBps === undefined
-                      ? "Change unavailable"
-                      : `${formatPercent(asset.change24hBps / 100)} (24h)`}
-                  </em>
-                  <Link to="/buy/$id" params={{ id }} className="asset-buy-action">
-                    Buy shares
-                  </Link>
-                  <Link to="/sell/$id" params={{ id }} className="asset-sell-action">
-                    Sell shares
-                  </Link>
-                  <div className="asset-owned-summary">
-                    <span>Available ownership</span>
-                    <strong>
-                      {asset.availabilityBps === undefined
-                        ? "Unavailable"
-                        : `${(asset.availabilityBps / 100).toFixed(1)}% available`}
-                    </strong>
-                    <div aria-hidden="true">
-                      <i
-                        style={{
-                          width: `${Math.min(Math.max(asset.availabilityBps ?? 0, 0), 10000) / 100}%`,
-                        }}
-                      />
-                    </div>
-                    <small>
-                      {shares.availableShares === undefined || shares.issuedShares === undefined
-                        ? "Aggregate published market availability"
-                        : `${shares.availableShares.toLocaleString()} of ${shares.issuedShares.toLocaleString()} shares available`}
-                    </small>
-                  </div>
-                  {isAuthenticated && (
-                    <div className="asset-owned-summary asset-my-ownership-summary">
-                      <span>Your ownership</span>
-                      <strong>
-                        {shares.ownShares === undefined
-                          ? "No shares held"
-                          : `${shares.ownShares.toLocaleString()} shares`}
-                      </strong>
-                      <small>
-                        {shares.ownShares === undefined || shares.issuedShares === undefined
-                          ? "Your settled share position"
-                          : formatOwnershipPercent(shares.ownShares, shares.issuedShares)}
-                      </small>
-                    </div>
-                  )}
-                </section>
+                      : formatCurrency(shares.sharePriceMinor)
+                  }
+                />
+                <Stat
+                  label="Available"
+                  value={
+                    asset.availabilityBps === undefined
+                      ? "Unavailable"
+                      : `${(asset.availabilityBps / 100).toFixed(1)}%`
+                  }
+                />
+                <Stat
+                  label="Last valuation"
+                  value={asset.asOf ? formatDate(asset.asOf) : "Unavailable"}
+                />
               </div>
-              <AssetRanking asset={asset} historyCount={history.length} />
             </div>
+            <aside className="asset-hero-trading">
+              <TradingPanel
+                book={orderBookQuery.data}
+                isLoading={orderBookQuery.isLoading}
+                isError={orderBookQuery.isError}
+                retry={() => void orderBookQuery.refetch()}
+                id={id}
+                sharePriceMinor={shares.sharePriceMinor}
+                issuedShares={shares.issuedShares}
+                availableShares={shares.availableShares}
+                ownShares={shares.ownShares}
+                isAuthenticated={isAuthenticated}
+              />
+              <RecentTrades
+                trades={tradesQuery.data ?? []}
+                isLoading={tradesQuery.isLoading}
+                isError={tradesQuery.isError}
+                retry={() => void tradesQuery.refetch()}
+              />
+            </aside>
           </section>
 
           <section className="asset-market-stats" aria-label="Market statistics">
@@ -249,15 +233,9 @@ function AssetPage() {
                 }
               />
               <Stat
-                label="Confidence"
-                value={asset.confidence === undefined ? "Unavailable" : `${asset.confidence}/100`}
-              />
-              <Stat label="Market source" value={asset.source ?? "Unavailable"} />
-              <Stat
                 label="Last valuation"
                 value={asset.asOf ? formatDate(asset.asOf) : "Unavailable"}
               />
-              <Stat label="Data status" value={asset.dataStatus ?? "Unavailable"} accent />
             </div>
           </section>
 
@@ -288,7 +266,7 @@ function AssetPage() {
                 <PriceChart
                   className="asset-price-chart"
                   data={history.map((point) => point.value.amount / 100)}
-                  height={74}
+                  height={150}
                   showAxis
                   label={`Estimated value history for ${asset.title}`}
                 />
@@ -373,15 +351,23 @@ function AssetPage() {
               <h2>Collectible record</h2>
               <div>
                 <span>Category</span>
-                <strong>{asset.category}</strong>
+                <strong>{category.label}</strong>
               </div>
               <div>
                 <span>Set</span>
                 <strong>{asset.setName ?? "Unavailable"}</strong>
               </div>
               <div>
-                <span>Grader / grade</span>
-                <strong>{asset.grade ?? "Unavailable"}</strong>
+                <span>Year</span>
+                <strong>{asset.year ?? "Unavailable"}</strong>
+              </div>
+              <div>
+                <span>Grader</span>
+                <strong>{asset.grader ?? "Unavailable"}</strong>
+              </div>
+              <div>
+                <span>Grade</span>
+                <strong>{formatPublicGrade(asset.gradeScore, asset.gradeLabel)}</strong>
               </div>
               <div>
                 <span>Certification</span>
@@ -393,24 +379,28 @@ function AssetPage() {
               </div>
             </section>
             <section className="asset-details-panel">
-              <h2>Market integrity</h2>
+              <h2>Market information</h2>
               <div>
                 <span>Publication</span>
                 <strong>Published</strong>
               </div>
               <div>
-                <span>Source</span>
-                <strong>{asset.source ?? "Unavailable"}</strong>
-              </div>
-              <div>
-                <span>Confidence</span>
+                <span>Valuation</span>
                 <strong>
-                  {asset.confidence === undefined ? "Unavailable" : `${asset.confidence}/100`}
+                  {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
                 </strong>
               </div>
               <div>
-                <span>Data status</span>
-                <strong>{asset.dataStatus ?? "Unavailable"}</strong>
+                <span>Ownership available</span>
+                <strong>
+                  {asset.availabilityBps === undefined
+                    ? "Unavailable"
+                    : `${(asset.availabilityBps / 100).toFixed(1)}%`}
+                </strong>
+              </div>
+              <div>
+                <span>Owners</span>
+                <strong>{asset.ownersCount ?? "Unavailable"}</strong>
               </div>
               <div>
                 <span>Recorded</span>
@@ -427,33 +417,6 @@ function AssetPage() {
             retry={() => void similarQuery.refetch()}
           />
         </main>
-
-        <aside className="asset-sidebar">
-          <div className="asset-trading-sidebar">
-            <OrderBook
-              book={orderBookQuery.data}
-              isLoading={orderBookQuery.isLoading}
-              isError={orderBookQuery.isError}
-              retry={() => void orderBookQuery.refetch()}
-              id={id}
-            />
-            <RecentTrades
-              trades={tradesQuery.data ?? []}
-              isLoading={tradesQuery.isLoading}
-              isError={tradesQuery.isError}
-              retry={() => void tradesQuery.refetch()}
-            />
-            <section className="asset-sidebar-card">
-              <ShieldCheck aria-hidden="true" />
-              <h2>Public asset record</h2>
-              <p>Only published catalogue and aggregate market data are shown here.</p>
-              <Link to="/marketplace" className="asset-sidebar-link">
-                <ChevronLeft aria-hidden="true" />
-                Back to markets
-              </Link>
-            </section>
-          </div>
-        </aside>
       </div>
     </div>
   );
@@ -462,7 +425,9 @@ function AssetPage() {
 function AssetShowcase({
   title,
   category,
-  grade,
+  grader,
+  gradeScore,
+  gradeLabel,
   certificationNumber,
   media,
   watched,
@@ -472,7 +437,9 @@ function AssetShowcase({
 }: {
   title: string;
   category: string;
-  grade?: string;
+  grader?: string;
+  gradeScore?: number;
+  gradeLabel?: string;
   certificationNumber?: string;
   media?: { src: string; alt: string };
   watched: boolean;
@@ -490,10 +457,11 @@ function AssetShowcase({
         ))}
       </span>
       <span className="asset-live-badge">Published</span>
-      {grade && (
+      {grader && (
         <span className="asset-grade-badge">
-          <small>{grade.split(" ")[0] ?? "Grader"}</small>
-          <strong>{grade.replace(/^[A-Z]+\s+/, "")}</strong>
+          <small>{grader}</small>
+          <strong>{gradeScore === undefined ? "—" : Number(gradeScore.toFixed(2))}</strong>
+          <span>{gradeLabel ?? "Grade published"}</span>
           <em>{certificationNumber ? `Cert. ${certificationNumber}` : "Public record"}</em>
         </span>
       )}
@@ -522,48 +490,6 @@ function AssetShowcase({
   );
 }
 
-function AssetRanking({
-  asset,
-  historyCount,
-}: {
-  asset: ReturnType<typeof toMarketplaceAsset>;
-  historyCount: number;
-}) {
-  return (
-    <div className="asset-ranking-strip">
-      <div>
-        <span>Market data</span>
-        <strong>
-          <Star aria-hidden="true" />
-          {asset.dataStatus ?? "Unavailable"}
-        </strong>
-        <small>{asset.source ?? "No market source"}</small>
-      </div>
-      <div>
-        <span>Availability</span>
-        <strong>
-          {asset.availabilityBps === undefined
-            ? "Unavailable"
-            : `${(asset.availabilityBps / 100).toFixed(1)}%`}
-        </strong>
-        <small>aggregate public supply</small>
-      </div>
-      <div>
-        <span>Market confidence</span>
-        <strong>
-          {asset.confidence === undefined ? "Unavailable" : `${asset.confidence}/100`}
-        </strong>
-        <small>latest valuation snapshot</small>
-      </div>
-      <div>
-        <span>Historical points</span>
-        <strong>{historyCount || "Unavailable"}</strong>
-        <small>authoritative valuation history</small>
-      </div>
-    </div>
-  );
-}
-
 function Stat({
   label,
   value,
@@ -581,27 +507,64 @@ function Stat({
   );
 }
 
-function OrderBook({
+function TradingPanel({
   book,
   isLoading,
   isError,
   retry,
   id,
+  sharePriceMinor,
+  issuedShares,
+  availableShares,
+  ownShares,
+  isAuthenticated,
 }: {
   book: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["orderBook"]>> | undefined;
   isLoading: boolean;
   isError: boolean;
   retry: () => void;
   id: string;
+  sharePriceMinor?: number;
+  issuedShares?: number;
+  availableShares?: number;
+  ownShares?: number;
+  isAuthenticated: boolean;
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
   return (
     <section className="asset-order-book">
       <header>
-        <h2>Order book</h2>
-        <strong>Live API</strong>
+        <h2>Trade ownership</h2>
+        <strong>Live order book</strong>
       </header>
+      <div className="asset-trading-summary">
+        <Stat
+          label="Share price"
+          value={sharePriceMinor === undefined ? "Unavailable" : formatCurrency(sharePriceMinor)}
+        />
+        <Stat
+          label="Available"
+          value={
+            availableShares === undefined
+              ? "Unavailable"
+              : `${availableShares.toLocaleString()} shares`
+          }
+        />
+        <Stat
+          label="Your position"
+          value={
+            !isAuthenticated
+              ? "Sign in to view"
+              : ownShares === undefined
+                ? "No shares held"
+                : `${ownShares.toLocaleString()} shares`
+          }
+        />
+      </div>
+      {isAuthenticated && ownShares !== undefined && issuedShares !== undefined && (
+        <p className="asset-position-copy">{formatOwnershipPercent(ownShares, issuedShares)}</p>
+      )}
       {isLoading ? (
         <p>Loading order book…</p>
       ) : isError ? (
@@ -657,6 +620,7 @@ function OrderRows({
             <span>{kind === "ask" ? "Ask" : "Bid"}</span>
             <strong>{row.units}</strong>
             <em>{formatCurrency(row.pricePerUnit.amount)}</em>
+            <small>{row.orderCount}</small>
           </li>
         ))
       ) : (
@@ -664,6 +628,7 @@ function OrderRows({
           <span>No open {kind === "ask" ? "asks" : "bids"}</span>
           <strong>—</strong>
           <em>—</em>
+          <small>—</small>
         </li>
       )}
     </ul>
@@ -751,7 +716,7 @@ function SimilarAssets({
           Retry similar assets
         </button>
       ) : similar.length ? (
-        <div className="asset-similar-grid">
+        <div className={`asset-similar-grid${similar.length === 1 ? " is-single" : ""}`}>
           {similar.map((item) => {
             const media = assetShowcaseMedia(item.slug);
             return (
@@ -764,7 +729,7 @@ function SimilarAssets({
                 <div>{media ? <img src={media.src} alt="" /> : <span>Media unavailable</span>}</div>
                 <section>
                   <h3>{item.title}</h3>
-                  <p>{item.grade ?? item.category}</p>
+                  <p>{item.grade ?? marketCategoryPresentation(item.category).label}</p>
                   <strong>
                     {item.estimatedMarketValueMinor === undefined
                       ? "Unavailable"
@@ -845,6 +810,11 @@ function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
   const wholePercent = percentageBasisPoints / 100n;
   const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
   return `${wholePercent}.${fractionalPercent}% of issued shares`;
+}
+
+function formatPublicGrade(score?: number, label?: string) {
+  const formattedScore = score === undefined ? undefined : Number(score.toFixed(2)).toString();
+  return [formattedScore, label].filter(Boolean).join(" · ") || "Unavailable";
 }
 
 function PageState({

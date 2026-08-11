@@ -13057,7 +13057,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 }
 
 .asset-detail-shell {
-  width: min(calc(100% - clamp(2rem, 4.6vw, 4.5rem)), 91.5rem);
+  width: min(calc(100% - clamp(2rem, 4.6vw, 4.5rem)), 96rem);
   margin-inline: auto;
 }
 
@@ -13086,10 +13086,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 }
 
 .asset-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 352px;
-  gap: 40px;
-  align-items: start;
+  display: block;
 }
 
 .asset-primary-column {
@@ -13098,11 +13095,13 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-hero {
   display: grid;
-  grid-template-columns: minmax(360px, 423px) minmax(0, 1fr);
-  gap: 27px;
+  grid-template-columns: minmax(270px, 0.9fr) minmax(360px, 1.36fr) minmax(280px, 0.92fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .asset-showcase,
+.asset-summary,
 .asset-market-stats,
 .asset-price-panel,
 .asset-ai-panel,
@@ -13124,7 +13123,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-showcase {
   position: relative;
-  height: 346px;
+  min-height: 410px;
   overflow: hidden;
   border-radius: 10px;
   background:
@@ -13146,11 +13145,11 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-showcase > img {
   position: absolute;
   z-index: 3;
-  top: 15px;
-  bottom: 10px;
+  top: 18px;
+  bottom: 14px;
   left: 50%;
-  width: 245px;
-  height: 315px;
+  width: min(78%, 292px);
+  height: 374px;
   object-fit: contain;
   filter: saturate(1.05) contrast(1.04) drop-shadow(0 24px 26px rgba(0, 0, 0, 0.66));
   transform: translateX(-50%);
@@ -13292,11 +13291,12 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-grade-badge {
   position: absolute;
   z-index: 6;
-  top: 16px;
-  right: 32px;
+  top: 14px;
+  right: 14px;
   display: grid;
-  width: 60px;
-  min-height: 80px;
+  width: 78px;
+  min-height: 104px;
+  padding: 8px 6px;
   place-content: center;
   border: 1px solid rgba(199, 212, 219, 0.28);
   border-radius: 7px;
@@ -13317,15 +13317,37 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-grade-badge strong {
   margin-top: 1px;
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1;
+}
+
+.asset-showcase-image {
+  position: absolute;
+  z-index: 3;
+  inset: 72px 34px 42px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(143, 172, 183, 0.22);
+  border-radius: 9px;
+  background: rgba(3, 12, 15, 0.46);
+  color: rgba(172, 188, 196, 0.76);
+  font-size: 11px;
+  text-align: center;
+}
+
+.asset-grade-badge > span {
+  margin-top: 4px;
+  color: rgba(205, 215, 220, 0.88);
+  font-size: 8px;
+  line-height: 1.2;
 }
 
 .asset-grade-badge em {
   margin-top: 6px;
   color: rgba(230, 236, 239, 0.9);
   font-family: var(--font-mono);
-  font-size: 8px;
+  overflow: hidden;
+  font-size: 6px;
   font-style: normal;
   text-transform: uppercase;
 }
@@ -13333,10 +13355,10 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-watch-button {
   position: absolute;
   z-index: 6;
-  top: 106px;
-  right: 32px;
+  top: 128px;
+  right: 14px;
   display: grid;
-  width: 60px;
+  width: 78px;
   height: 54px;
   place-items: center;
   align-content: center;
@@ -13392,7 +13414,12 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-summary {
   min-width: 0;
-  padding-top: 2px;
+  display: flex;
+  min-height: 410px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+  border-radius: 10px;
 }
 
 .asset-summary-top {
@@ -13438,7 +13465,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-description h1 {
   margin-top: 9px;
   font-family: var(--font-display);
-  font-size: clamp(23px, 1.85vw, 29px);
+  font-size: clamp(26px, 2vw, 34px);
   font-weight: 690;
   line-height: 1.03;
   letter-spacing: -0.042em;
@@ -13454,8 +13481,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   max-width: 450px;
   margin-top: 14px;
   color: rgba(189, 200, 206, 0.88);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.58;
 }
 
 .asset-trade-summary > span,
@@ -13559,8 +13586,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-ranking-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 64px;
-  margin-top: 18px;
+  min-height: 76px;
+  margin-top: 24px;
   overflow: hidden;
   border: 1px solid rgba(143, 172, 183, 0.14);
   border-radius: 7px;
@@ -13568,7 +13595,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
-.asset-ranking-strip > div {
+.asset-ranking-strip > dl {
   position: relative;
   display: flex;
   min-width: 0;
@@ -13579,33 +13606,24 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   border-left: 1px solid rgba(150, 178, 188, 0.1);
 }
 
-.asset-ranking-strip > div:first-child {
+.asset-ranking-strip > dl:first-child {
   border-left: 0;
 }
-.asset-ranking-strip strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-}
-.asset-ranking-strip strong svg {
-  width: 14px;
-  height: 14px;
-  color: #f0b71e;
-}
-.asset-ranking-strip span {
-  align-self: center;
+.asset-ranking-strip dt {
   color: rgba(163, 178, 187, 0.74);
   font-family: var(--font-mono);
-  font-size: 6px;
+  font-size: 7px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.asset-ranking-strip small {
-  display: block;
+.asset-ranking-strip dd {
   width: 100%;
-  color: rgba(159, 174, 182, 0.8);
-  font-size: 8px;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.25;
+  text-overflow: ellipsis;
 }
 
 .asset-market-stats {
@@ -13626,7 +13644,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-market-stats > div {
   display: grid;
-  grid-template-columns: 0.9fr 0.94fr 0.86fr 0.86fr 1.22fr 1.12fr 0.94fr;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 .asset-market-stats dl {
   min-width: 0;
@@ -13715,8 +13733,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-chart-stage {
   position: relative;
-  height: 92px;
-  padding: 8px 50px 18px 8px;
+  height: 190px;
+  padding: 16px 58px 24px 12px;
 }
 .asset-chart-stage .price-chart__line {
   filter: drop-shadow(0 0 5px rgba(43, 220, 167, 0.45));
@@ -13770,7 +13788,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 
 .asset-insight-grid {
   display: grid;
-  grid-template-columns: 1.12fr 0.98fr 0.7fr;
+  grid-template-columns: 1.08fr 1fr 1fr;
   gap: 12px;
   margin-top: 12px;
 }
@@ -14014,6 +14032,49 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   gap: 12px;
   margin-top: -13px;
 }
+
+.asset-hero-trading {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+}
+
+.asset-trading-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding-block: 10px;
+  border-block: 1px solid rgba(144, 173, 183, 0.1);
+}
+
+.asset-trading-summary dl {
+  min-width: 0;
+}
+
+.asset-trading-summary dt {
+  color: rgba(143, 159, 168, 0.78);
+  font-family: var(--font-mono);
+  font-size: 6px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.asset-trading-summary dd {
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 680;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.asset-position-copy {
+  margin-top: 7px;
+  color: #2bdca7;
+  font-size: 8px;
+}
 .asset-order-book,
 .asset-recent-trades,
 .asset-details-panel {
@@ -14046,7 +14107,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 .asset-order-rows li {
   display: grid;
   min-height: 21px;
-  grid-template-columns: 1fr 48px 76px;
+  grid-template-columns: 1fr 42px 78px 50px;
   align-items: center;
   font-size: 9px;
 }
@@ -14054,6 +14115,11 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   color: rgba(185, 196, 202, 0.88);
 }
 .asset-order-rows strong {
+  text-align: right;
+}
+.asset-order-rows small {
+  color: rgba(154, 170, 178, 0.78);
+  font-size: 8px;
   text-align: right;
 }
 .asset-order-rows em {
@@ -14203,16 +14269,19 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 }
 .asset-similar-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 9px;
   margin-top: 9px;
+}
+.asset-similar-grid.is-single {
+  grid-template-columns: minmax(280px, 420px);
 }
 .asset-similar-card {
   position: relative;
   display: grid;
   min-width: 0;
-  height: 88px;
-  grid-template-columns: 70px minmax(0, 1fr);
+  height: 108px;
+  grid-template-columns: 86px minmax(0, 1fr);
   gap: 9px;
   overflow: hidden;
   border-radius: 7px;
@@ -14236,8 +14305,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   background: radial-gradient(circle at 50% 84%, rgba(35, 220, 165, 0.13), transparent 68%);
 }
 .asset-similar-card img {
-  width: 62px;
-  height: 82px;
+  width: 78px;
+  height: 100px;
   object-fit: contain;
   filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.5));
   transition: transform 220ms ease;
@@ -14412,16 +14481,12 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
 }
 
 @media (max-width: 1260px) {
-  .asset-workspace {
-    grid-template-columns: 1fr;
-    gap: 14px;
+  .asset-hero {
+    grid-template-columns: minmax(300px, 0.86fr) minmax(420px, 1.14fr);
   }
-  .asset-trading-sidebar {
-    grid-template-columns: 1.2fr 0.85fr 0.95fr;
-    margin-top: 0;
-  }
-  .asset-order-book {
-    grid-row: span 2;
+  .asset-hero-trading {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
   }
   .asset-similar-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -14435,6 +14500,9 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   .asset-hero {
     grid-template-columns: minmax(300px, 0.86fr) 1.14fr;
     gap: 16px;
+  }
+  .asset-hero-trading {
+    grid-column: 1 / -1;
   }
   .asset-summary-top {
     grid-template-columns: 1fr;
@@ -14478,13 +14546,6 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   .asset-ai-panel {
     grid-column: 1 / -1;
   }
-  .asset-trading-sidebar {
-    grid-template-columns: 1fr 1fr;
-  }
-  .asset-order-book {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
 }
 
 @media (max-width: 640px) {
@@ -14500,6 +14561,7 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   }
   .asset-showcase {
     height: 360px;
+    min-height: 360px;
   }
   .asset-showcase > img {
     width: 250px;
@@ -14510,7 +14572,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
     right: 14px;
   }
   .asset-summary {
-    padding-top: 8px;
+    min-height: auto;
+    padding: 20px;
   }
   .asset-description h1 {
     font-size: 28px;
@@ -14527,11 +14590,11 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
   .asset-ranking-strip {
     grid-template-columns: repeat(2, 1fr);
   }
-  .asset-ranking-strip > div:nth-child(3) {
+  .asset-ranking-strip > dl:nth-child(3) {
     border-left: 0;
     border-top: 1px solid rgba(150, 178, 188, 0.1);
   }
-  .asset-ranking-strip > div:nth-child(4) {
+  .asset-ranking-strip > dl:nth-child(4) {
     border-top: 1px solid rgba(150, 178, 188, 0.1);
   }
   .asset-market-stats {
@@ -14603,11 +14666,8 @@ body:has(.asset-detail-page) header.sticky > .site-shell {
     width: 86px;
     height: 86px;
   }
-  .asset-trading-sidebar {
+  .asset-hero-trading {
     grid-template-columns: 1fr;
-  }
-  .asset-order-book {
-    grid-column: auto;
   }
   .asset-order-rows li,
   .asset-recent-trades li {
