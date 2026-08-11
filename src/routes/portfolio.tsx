@@ -12,11 +12,13 @@ import {
   LockKeyhole,
   RefreshCw,
   WalletCards,
+  type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import { WalletKpiIcon } from "@/components/ui/WalletKpiIcon";
 import type { PortfolioHolding, PortfolioSummary, PortfolioTransaction } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -112,7 +114,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       <PortfolioKpi
         label="Portfolio value"
         value={portfolioValueLabel(summary)}
-        icon={<Layers3 aria-hidden="true" />}
+        icon={Layers3}
         detail={
           summary.valuationStatus === "FULL"
             ? "No trend data"
@@ -122,19 +124,19 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       <PortfolioKpi
         label="Available cash"
         value={formatPortfolioMoney(summary.cash.availableMinor)}
-        icon={<WalletCards aria-hidden="true" />}
+        icon={WalletCards}
         detail="Authoritative available cash"
       />
       <PortfolioKpi
         label="Reserved cash"
         value={formatPortfolioMoney(summary.cash.reservedMinor)}
-        icon={<LockKeyhole aria-hidden="true" />}
+        icon={LockKeyhole}
         detail="Reserved for supported account activity"
       />
       <PortfolioKpi
         label="Total return"
         value="Unavailable"
-        icon={<BanknoteArrowDown aria-hidden="true" />}
+        icon={BanknoteArrowDown}
         detail="No return history available"
       />
     </section>
@@ -167,13 +169,11 @@ function PortfolioKpi({
   label: string;
   value: string;
   detail: string;
-  icon: ReactNode;
+  icon: LucideIcon;
 }) {
   return (
     <article className="portfolio-kpi">
-      <span className="wallet-kpi__icon" aria-hidden="true">
-        {icon}
-      </span>
+      <WalletKpiIcon icon={icon} />
       <div className="portfolio-kpi__content">
         <p>{label}</p>
         <strong>{value}</strong>

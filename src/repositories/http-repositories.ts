@@ -30,7 +30,7 @@ import type {
   PublicationReadiness,
   AccountCapability,
 } from "@/domain";
-import { minorUnits, percentage } from "@/domain";
+import { basisPoints, minorUnits, percentage } from "@/domain";
 import { createFinanceApiRepository } from "./finance-api-repository";
 
 type MarketAssetDto = {
@@ -45,6 +45,7 @@ type MarketAssetDto = {
   estimatedMarketValue: { minor: string; currency: "GBP" } | null;
   change24hBps: number | null;
   availabilityBps: number | null;
+  ownersCount?: number | null;
   confidence: number | null;
   source: string | null;
   dataStatus: "DEMO" | "DELAYED" | "LIVE" | null;
@@ -57,6 +58,19 @@ type CollectorDto = {
   headline: string | null;
   specialism: string | null;
   displayName: string | null;
+  publishedListingCount?: number;
+  publishedListings?: Array<{
+    publicId: string;
+    slug: string;
+    title: string;
+    category: string;
+    market: {
+      estimatedValueMinor: string;
+      currency: "GBP";
+      asOf: string;
+      dataStatus: "DEMO" | "DELAYED" | "LIVE";
+    } | null;
+  }>;
 };
 const mapCollector = (value: CollectorDto): CollectorProfile => ({
   userId: value.slug as UserId,
@@ -64,6 +78,18 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
   displayName: value.displayName ?? value.slug,
   focus: value.specialism ?? value.headline ?? "Collector profile",
   category: "mixed",
+  publishedListingCount: value.publishedListingCount ?? 0,
+  publishedListings: (value.publishedListings ?? []).map((listing) => ({
+    assetId: listing.publicId as AssetId,
+    slug: listing.slug,
+    title: listing.title,
+    category: listing.category,
+    estimatedMarketValue: listing.market
+      ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
+      : undefined,
+    asOf: listing.market?.asOf,
+    dataStatus: listing.market?.dataStatus,
+  })),
 });
 
 const safeMinor = (value: string): Money["amount"] => {
@@ -112,6 +138,11 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     confidence: value.confidence === null ? undefined : percentage(value.confidence),
     dataStatus: value.dataStatus ?? undefined,
     change24hBps: value.change24hBps ?? undefined,
+    availabilityBps:
+      value.availabilityBps === null || value.availabilityBps === undefined
+        ? undefined
+        : basisPoints(value.availabilityBps),
+    ownersCount: value.ownersCount ?? undefined,
   },
 });
 

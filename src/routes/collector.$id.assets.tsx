@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Archive, ChevronLeft } from "lucide-react";
+import { PublicCollectorAssetCard } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/collector/$id/assets")({
-  head: () => ({ meta: [{ title: "Collector assets | Slice" }] }),
+  head: () => ({ meta: [{ title: "Collector listings | Slice" }] }),
   component: CollectorAssets,
 });
 
@@ -32,36 +33,37 @@ function CollectorAssets() {
         description="This collector is private or unavailable."
       />
     );
+  const listings = profile.data.publishedListings ?? [];
   return (
-    <div className="pb-16">
-      <section className="border-b border-border bg-surface/25">
-        <div className="page-shell py-10 lg:py-14">
-          <Link
-            to="/collector/$id"
-            params={{ id }}
-            className="inline-flex items-center gap-2 text-sm text-subtle"
-          >
-            <ChevronLeft className="size-4" />
-            Back to profile
+    <div className="public-collector-page">
+      <section className="public-collector-hero is-listings">
+        <div className="collectors-shell">
+          <Link to="/collector/$id" params={{ id }} className="public-collector-back">
+            <ChevronLeft aria-hidden="true" /> Back to profile
           </Link>
-          <p className="page-kicker mt-8">Public profile</p>
-          <h1 className="page-title mt-3">{profile.data.displayName}</h1>
-          <p className="mt-3 text-subtle">{profile.data.focus}</p>
+          <p className="collectors-kicker">Public collector listings</p>
+          <h1>{profile.data.displayName}</h1>
+          <p>Published catalogue listings only—never private holdings or workflow records.</p>
         </div>
       </section>
-      <section className="page-shell py-10">
-        <div className="rounded-2xl border border-border bg-elevated p-8 text-center">
-          <Archive className="mx-auto size-8 text-accent" aria-hidden="true" />
-          <h2 className="mt-4 text-xl font-semibold">Public holding details are unavailable</h2>
-          <p className="mx-auto mt-3 max-w-xl text-subtle">
-            Authoritative holdings, ownership, allocation, value, and performance will be published
-            only when the ownership and financial-ledger services are available.
-          </p>
-        </div>
+      <section className="collectors-shell public-collector-listings">
+        {listings.length ? (
+          <div className="public-collector-assets-grid">
+            {listings.map((listing) => (
+              <PublicCollectorAssetCard key={listing.assetId} listing={listing} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border bg-elevated p-8 text-center">
+            <Archive className="mx-auto size-8 text-accent" />
+            <h2 className="mt-4 text-xl font-semibold">No public listings yet</h2>
+          </div>
+        )}
       </section>
     </div>
   );
 }
+
 function PageState({
   title,
   description,

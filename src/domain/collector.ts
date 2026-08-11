@@ -12,6 +12,17 @@ export interface CollectorHolding {
   value: Money;
   allocation: Percentage;
 }
+
+/** A public catalogue listing, not a public ownership holding. */
+export interface CollectorPublishedListing {
+  assetId: AssetId;
+  slug: string;
+  title: string;
+  category: string;
+  estimatedMarketValue?: Money;
+  asOf?: string;
+  dataStatus?: "DEMO" | "DELAYED" | "LIVE";
+}
 export interface CollectorProfile {
   userId: UserId;
   handle: string;
@@ -20,6 +31,8 @@ export interface CollectorProfile {
   category: CollectorCategory;
   followers?: number;
   performance?: CollectorPerformance;
+  publishedListingCount?: number;
+  publishedListings?: CollectorPublishedListing[];
   /** Public holdings are unavailable until authoritative ownership exists. */
   holdings?: CollectorHolding[];
 }

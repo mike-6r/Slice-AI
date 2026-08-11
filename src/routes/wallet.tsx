@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ShieldCheck,
   WalletCards,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { usePlaidLink } from "react-plaid-link";
@@ -41,6 +42,7 @@ import type {
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
+import { WalletKpiIcon } from "@/components/ui/WalletKpiIcon";
 import {
   filterWalletMovements,
   formatWalletMoney,
@@ -205,25 +207,25 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
   return (
     <section className="wallet-kpis" aria-label="Cash summary">
       <WalletKpi
-        icon={<WalletCards />}
+        icon={WalletCards}
         label="Available cash"
         value={formatWalletMoney(cash.availableMinor)}
         detail="Available to invest"
       />
       <WalletKpi
-        icon={<LockKeyhole />}
+        icon={LockKeyhole}
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
         detail="Reserved for supported activity"
       />
       <WalletKpi
-        icon={<Layers3 />}
+        icon={Layers3}
         label="Total cash"
         value={formatWalletMoney(cash.totalMinor)}
         detail="Available + reserved"
       />
       <WalletKpi
-        icon={<BanknoteArrowDown />}
+        icon={BanknoteArrowDown}
         label="Cash change (30D)"
         value="Unavailable"
         detail="Cash history unavailable"
@@ -238,16 +240,14 @@ function WalletKpi({
   value,
   detail,
 }: {
-  icon: ReactNode;
+  icon: LucideIcon;
   label: string;
   value: string;
   detail: string;
 }) {
   return (
     <article className="wallet-kpi">
-      <span className="wallet-kpi__icon" aria-hidden="true">
-        {icon}
-      </span>
+      <WalletKpiIcon icon={icon} />
       <div>
         <p>{label}</p>
         <strong>{value}</strong>
