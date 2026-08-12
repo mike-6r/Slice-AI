@@ -26,6 +26,9 @@ import type {
   SubmissionMedia,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
+import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 import { formatDate } from "@/lib/format";
 import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 
@@ -80,6 +83,7 @@ const blank: ListingForm = {
 };
 
 export function SubmissionPage() {
+  useCurrency();
   const services = useAppServices();
   const session = useSession();
   const client = useQueryClient();
@@ -1234,11 +1238,16 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 function money(amount: string, currency = "GBP") {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(Number(amount) / 100);
+  const presentation = getCurrencyPresentation();
+  return formatDisplayMoney(
+    amount,
+    asSupportedCurrency(currency) ?? "GBP",
+    presentation.currency,
+    presentation.rates,
+    {
+      maximumFractionDigits: 0,
+    },
+  );
 }
 function range(value: { lowMinor?: string; highMinor?: string; currency?: string }) {
   return `${value.lowMinor ? money(value.lowMinor, value.currency) : "—"} – ${value.highMinor ? money(value.highMinor, value.currency) : "—"}`;

@@ -25,8 +25,9 @@ import {
   type VaultLivePresentedAsset,
   type VaultLivePresentedEvent,
 } from "@/data/vault-live-showcase";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 
 export const Route = createFileRoute("/vault-live")({
   head: () => ({
@@ -125,6 +126,7 @@ function VaultLiveUnavailable() {
 
 function VaultLive() {
   const services = useAppServices();
+  const { formatMoney } = useCurrency();
   const live = useQuery({
     queryKey: ["vault", "live-public-projection"],
     queryFn: () => services.repositories.vault.getPublicLive(),
@@ -315,6 +317,7 @@ function VaultLive() {
               key={asset.asset.slug}
               asset={asset}
               label={asset.source === "real" ? "Recently reviewed" : "Illustrative review"}
+              formatMoney={formatMoney}
             />
           ))}
         </div>
@@ -338,6 +341,7 @@ function VaultLive() {
                 asset={asset}
                 label={asset.source === "real" ? "Published" : "Illustrative market"}
                 compact
+                formatMoney={formatMoney}
               />
             ))}
           </div>
@@ -418,7 +422,7 @@ function VaultLive() {
               </small>
               <strong>
                 {featuredAsset.asset.estimatedMarketValueMinor
-                  ? formatCurrency(featuredAsset.asset.estimatedMarketValueMinor)
+                  ? formatMoney(featuredAsset.asset.estimatedMarketValueMinor)
                   : "Unavailable"}
               </strong>
             </div>
@@ -529,10 +533,12 @@ function VaultAssetCard({
   asset,
   label,
   compact = false,
+  formatMoney,
 }: {
   asset: VaultLivePresentedAsset;
   label: string;
   compact?: boolean;
+  formatMoney: (value: number | string | bigint) => string;
 }) {
   const media = assetShowcaseMedia(asset.asset.slug);
   return (
@@ -547,7 +553,7 @@ function VaultAssetCard({
           {asset.asset.grade ?? "Public catalogue"} · {asset.asset.category ?? "Collectible"}
         </p>
         {asset.asset.estimatedMarketValueMinor ? (
-          <b>{formatCurrency(asset.asset.estimatedMarketValueMinor)}</b>
+          <b>{formatMoney(asset.asset.estimatedMarketValueMinor)}</b>
         ) : (
           <small>Explore public listing</small>
         )}

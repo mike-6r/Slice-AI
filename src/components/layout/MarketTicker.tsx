@@ -1,7 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { HOMEPAGE_MARKET_TICKER } from "@/data/homepage-showcase";
 import { useTrendingAssets } from "@/queries/hooks";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatPercent } from "@/lib/format";
+import { useCurrency } from "@/currency/CurrencyProvider";
 
 /** Published market snapshots; it never substitutes the legacy sample tape in API mode. */
 export function MarketTicker() {
@@ -44,6 +45,7 @@ function HomepageShowcaseTicker() {
 
 function AuthoritativeMarketTicker() {
   const market = useTrendingAssets();
+  const { formatMoney } = useCurrency();
   const assets = market.data ?? [];
   return (
     <div className="hidden border-b border-border bg-surface/60 lg:block">
@@ -65,7 +67,7 @@ function AuthoritativeMarketTicker() {
                   <span className="text-subtle">{asset.symbol}</span>
                   <span className="text-foreground">
                     {asset.market?.estimatedMarketValue
-                      ? formatCurrency(asset.market.estimatedMarketValue.amount)
+                      ? formatMoney(asset.market.estimatedMarketValue.amount)
                       : "Unavailable"}
                   </span>
                   {asset.market?.change24hBps !== undefined && (

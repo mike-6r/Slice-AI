@@ -9,6 +9,7 @@ import { toMarketplaceAsset } from "@/components/marketplace/market-api-presenta
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 
 export const Route = createFileRoute("/asset/$id")({
@@ -20,6 +21,7 @@ const PERIODS = ["24H", "7D", "30D", "90D", "1Y", "ALL"] as const;
 const currentUser = "current" as never;
 
 function AssetPage() {
+  useCurrency();
   const { id } = Route.useParams();
   const services = useAppServices();
   const queryClient = useQueryClient();

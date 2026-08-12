@@ -45,6 +45,16 @@ import type {
   Watchlist,
 } from "@/domain";
 
+export type SupportedCurrency = "GBP" | "USD" | "CAD" | "EUR";
+export type CurrencyRates = {
+  baseCurrency: "GBP";
+  rates: Record<SupportedCurrency, number>;
+  asOf: string;
+  fetchedAt: string;
+  source: string;
+  cached: boolean;
+};
+
 export interface AssetRepository {
   listAssets(input?: {
     category?: string;
@@ -316,7 +326,7 @@ export interface UserRepository {
       usernameChangedAt: string | null;
       avatarReference: string | null;
       countryCode: string;
-      preferredCurrency: "GBP";
+      preferredCurrency: SupportedCurrency;
       timezone: string;
     };
   }>;
@@ -412,10 +422,18 @@ export interface AccountRepository {
   }>;
   revokeSession(reference: string): Promise<{ currentSessionRevoked: boolean }>;
   revokeOtherSessions(): Promise<{ revokedSessionCount: number }>;
-  getPreferences(): Promise<{ timezone: string; locale: "en-GB" | "en-US" }>;
+  getPreferences(): Promise<{
+    timezone: string;
+    locale: "en-GB" | "en-US";
+    preferredCurrency: SupportedCurrency;
+  }>;
   updatePreferences(
-    input: Partial<{ timezone: string; locale: "en-GB" | "en-US" }>,
-  ): Promise<{ timezone: string; locale: "en-GB" | "en-US" }>;
+    input: Partial<{
+      timezone: string;
+      locale: "en-GB" | "en-US";
+      preferredCurrency: SupportedCurrency;
+    }>,
+  ): Promise<{ timezone: string; locale: "en-GB" | "en-US"; preferredCurrency: SupportedCurrency }>;
   getNotificationPreferences(): Promise<{
     preferences: Array<{
       topic: "ORDER_UPDATES" | "PORTFOLIO_UPDATES";
@@ -498,4 +516,5 @@ export interface AppRepositories {
   users: UserRepository;
   auth: AuthRepository;
   account: AccountRepository;
+  currency?: { getRates(): Promise<CurrencyRates | null> };
 }

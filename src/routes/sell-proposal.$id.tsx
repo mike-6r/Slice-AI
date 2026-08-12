@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 
 export const Route = createFileRoute("/sell-proposal/$id")({
   head: () => ({ meta: [{ title: "Sale proposal | Slice" }] }),
@@ -15,6 +16,7 @@ function formatGbpMinor(value: string) {
 }
 
 function SaleProposalPage() {
+  useCurrency();
   const { id } = Route.useParams();
   const services = useAppServices();
   const session = useSession();

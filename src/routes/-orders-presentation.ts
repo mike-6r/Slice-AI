@@ -1,4 +1,6 @@
 import type { OrderBook, TradingOrderView } from "@/domain";
+import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export const ORDER_EMPTY_STATES = {
   open: "No open orders.",
@@ -37,13 +39,8 @@ export function ordersForSide(items: TradingOrderView[], side: OrderSideFilter) 
 
 /** Presentation-only GBP formatting. All money inputs remain integer minor-unit strings. */
 export function formatOrderMoney(value: string) {
-  const amount = BigInt(value);
-  const absolute = amount < 0n ? -amount : amount;
-  return `${amount < 0n ? "-" : ""}\u00a3${(absolute / 100n).toLocaleString("en-GB")}.${(
-    absolute % 100n
-  )
-    .toString()
-    .padStart(2, "0")}`;
+  const { currency, rates } = getCurrencyPresentation();
+  return formatAuthoritativeMoney(value, "GBP", currency, rates);
 }
 
 export function orderNotionalMinor(order: TradingOrderView, units = order.originalUnits) {

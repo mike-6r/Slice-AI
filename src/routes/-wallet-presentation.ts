@@ -1,15 +1,12 @@
 import type { WalletMovementView } from "@/domain";
+import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export type WalletMovementFilter = "ALL" | "DEPOSIT" | "WITHDRAWAL";
 
 export function formatWalletMoney(value: string) {
-  const amount = BigInt(value);
-  const absolute = amount < 0n ? -amount : amount;
-  return `${amount < 0n ? "-" : ""}\u00a3${(absolute / 100n).toLocaleString("en-GB")}.${(
-    absolute % 100n
-  )
-    .toString()
-    .padStart(2, "0")}`;
+  const { currency, rates } = getCurrencyPresentation();
+  return formatAuthoritativeMoney(value, "GBP", currency, rates);
 }
 
 export function parseWalletGbp(value: string) {

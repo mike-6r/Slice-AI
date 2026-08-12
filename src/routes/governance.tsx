@@ -20,6 +20,7 @@ import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import type { ProposalStatus, SaleProposalSummary } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import {
   calculateGovernance,
@@ -36,6 +37,7 @@ export const Route = createFileRoute("/governance")({
 });
 
 export function Governance() {
+  useCurrency();
   const services = useAppServices();
   const session = useSession();
   const queryClient = useQueryClient();

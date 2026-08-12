@@ -1450,6 +1450,7 @@
   font-size: 0.72rem;
 }
 .account-preferences-form input,
+.account-preferences-form select,
 .account-dialog-form input,
 .account-dialog-form textarea {
   width: 100%;
@@ -1471,6 +1472,50 @@
 .account-preferences-form p strong {
   color: #f5f7fa;
   font-weight: 600;
+}
+.currency-selector {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+}
+.currency-selector > span {
+  color: #f5f7fa;
+  font-weight: 600;
+}
+.currency-selector select {
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.4rem;
+  background: rgba(4, 7, 11, 0.65);
+  padding: 0.47rem 0.52rem;
+  color: #f5f7fa;
+}
+.currency-selector small {
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+.currency-selector {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+}
+.currency-selector > span {
+  color: #f5f7fa;
+  font-weight: 600;
+}
+.currency-selector select {
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.4rem;
+  background: rgba(4, 7, 11, 0.65);
+  padding: 0.47rem 0.52rem;
+  color: #f5f7fa;
+}
+.currency-selector small {
+  color: var(--color-muted);
+  line-height: 1.4;
 }
 .account-notification-list {
   display: grid;
@@ -17719,6 +17764,24 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   color: #82909c;
   font-size: 0.78rem;
   line-height: 1.75;
+}
+.slice-footer__currency {
+  max-width: 18rem;
+  margin-top: 1.25rem;
+}
+.slice-footer__currency select {
+  width: 100%;
+  border-color: rgba(130, 160, 170, 0.32);
+  background: rgba(5, 11, 14, 0.72);
+}
+.slice-footer__currency {
+  max-width: 18rem;
+  margin-top: 1.25rem;
+}
+.slice-footer__currency select {
+  width: 100%;
+  border-color: rgba(130, 160, 170, 0.32);
+  background: rgba(5, 11, 14, 0.72);
 }
 
 .slice-footer__links {

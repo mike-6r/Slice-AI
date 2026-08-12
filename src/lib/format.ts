@@ -1,24 +1,23 @@
 export type MinorUnits = number;
+import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export function formatCurrency(
   valueInMinorUnits: MinorUnits,
   options: Intl.NumberFormatOptions = {},
 ) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    maximumFractionDigits: 0,
-    ...options,
-  }).format(valueInMinorUnits / 100);
+  const sourceCurrency = asSupportedCurrency(options.currency) ?? "GBP";
+  const { currency, rates } = getCurrencyPresentation();
+  const { currency: _currency, ...formatOptions } = options;
+  return formatDisplayMoney(valueInMinorUnits, sourceCurrency, currency, rates, formatOptions);
 }
 
 export function formatCurrencyPrecise(valueInMinorUnits: MinorUnits) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
+  const { currency, rates } = getCurrencyPresentation();
+  return formatDisplayMoney(valueInMinorUnits, "GBP", currency, rates, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(valueInMinorUnits / 100);
+  });
 }
 
 export function formatPercent(value: number, options: Intl.NumberFormatOptions = {}) {

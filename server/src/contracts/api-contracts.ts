@@ -33,7 +33,7 @@ export const publicProfileSchema = z
     usernameChangedAt: isoTimestampSchema.nullable(),
     avatarReference: z.string().nullable(),
     countryCode: z.string(),
-    preferredCurrency: z.literal('GBP'),
+    preferredCurrency: z.enum(['GBP', 'USD', 'CAD', 'EUR']),
     timezone: z.string(),
   })
   .strict();
@@ -112,7 +112,12 @@ export function toPublicUser(record: {
         record.profile.usernameChangedAt?.toISOString() ?? null,
       avatarReference: record.profile.avatarReference,
       countryCode: record.profile.countryCode,
-      preferredCurrency: 'GBP',
+      preferredCurrency:
+        record.profile.preferredCurrency === 'USD' ||
+        record.profile.preferredCurrency === 'CAD' ||
+        record.profile.preferredCurrency === 'EUR'
+          ? record.profile.preferredCurrency
+          : 'GBP',
       timezone: record.profile.timezone,
     },
     roles: record.roles,

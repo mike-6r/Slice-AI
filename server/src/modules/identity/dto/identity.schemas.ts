@@ -117,7 +117,7 @@ export const profileUpdateSchema = z
         }
       })
       .optional(),
-    preferredCurrency: z.enum(['GBP', 'USD', 'EUR']).optional(),
+    preferredCurrency: z.enum(['GBP', 'USD', 'CAD', 'EUR']).optional(),
   })
   .strict()
   .refine(
@@ -141,6 +141,7 @@ export const preferencesUpdateSchema = z
   .object({
     timezone: z.string().min(1).max(64).refine(isIanaTimezone).optional(),
     locale: z.enum(['en-GB', 'en-US']).optional(),
+    preferredCurrency: z.enum(['GBP', 'USD', 'CAD', 'EUR']).optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

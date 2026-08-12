@@ -16,6 +16,7 @@ const DEFAULT_LOCALE = 'en-GB' as const;
 export type CustomerPreferencesDto = {
   timezone: string;
   locale: 'en-GB' | 'en-US';
+  preferredCurrency: 'GBP' | 'USD' | 'CAD' | 'EUR';
 };
 
 @Injectable()
@@ -40,8 +41,13 @@ export class AccountPreferencesService {
   ): Promise<CustomerPreferencesDto> {
     await this.abuse.enforce('preferences', ip, actor.userId);
     const patch = {
-      ...(input.timezone ? { timezone: normalizeTimezone(input.timezone) } : {}),
+      ...(input.timezone
+        ? { timezone: normalizeTimezone(input.timezone) }
+        : {}),
       ...(input.locale ? { locale: input.locale } : {}),
+      ...(input.preferredCurrency
+        ? { preferredCurrency: input.preferredCurrency }
+        : {}),
     };
     const outcome = await this.idempotency.run(
       {
@@ -74,10 +80,13 @@ export class AccountPreferencesService {
     return outcome.value;
   }
 
-  private toDto(profile: Awaited<ReturnType<UserRepository['getProfile']>>): CustomerPreferencesDto {
+  private toDto(
+    profile: Awaited<ReturnType<UserRepository['getProfile']>>,
+  ): CustomerPreferencesDto {
     return {
       timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
       locale: profile?.locale ?? DEFAULT_LOCALE,
+      preferredCurrency: profile?.preferredCurrency ?? 'GBP',
     };
   }
 }

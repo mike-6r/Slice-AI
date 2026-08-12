@@ -3,8 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bookmark, TrendingDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "@/auth/use-session";
-import { formatCurrency, formatOwnership, formatPercent } from "@/lib/format";
+import { formatOwnership, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { assetShowcaseMedia } from "./demo-asset-media";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { marketCategoryPresentation, marketplaceEditorialTag } from "./marketplace-presentation";
@@ -52,6 +53,7 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
 }
 
 function MarketValue({ asset }: { asset: MarketplaceAsset }) {
+  const { formatMoney } = useCurrency();
   const change = asset.change24hBps === undefined ? undefined : asset.change24hBps / 100;
   const TrendIcon = (change ?? 0) >= 0 ? TrendingUp : TrendingDown;
   return (
@@ -59,7 +61,7 @@ function MarketValue({ asset }: { asset: MarketplaceAsset }) {
       <strong>
         {asset.estimatedMarketValueMinor === undefined
           ? "Unavailable"
-          : formatCurrency(asset.estimatedMarketValueMinor)}
+          : formatMoney(asset.estimatedMarketValueMinor)}
       </strong>
       {change !== undefined && (
         <span className={change >= 0 ? "is-positive" : "is-negative"}>
@@ -78,6 +80,7 @@ export function MarketAssetCard({
   asset: MarketplaceAsset;
   compact?: boolean;
 }) {
+  const { formatMoney } = useCurrency();
   const services = useAppServices();
   const client = useQueryClient();
   const { isAuthenticated } = useSession();
@@ -170,6 +173,7 @@ export function MarketAssetCard({
 }
 
 export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
+  const { formatMoney } = useCurrency();
   const editorial = marketplaceEditorialTag(asset);
   return (
     <article className="market-detailed-row">
@@ -191,7 +195,7 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
           <dd>
             {asset.estimatedMarketValueMinor === undefined
               ? "Unavailable"
-              : formatCurrency(asset.estimatedMarketValueMinor)}
+              : formatMoney(asset.estimatedMarketValueMinor)}
           </dd>
         </div>
         <div>

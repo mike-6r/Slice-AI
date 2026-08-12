@@ -155,6 +155,7 @@ function mapIdentityProfile(record: PersistedIdentityProfile): IdentityProfile {
   if (
     preferredCurrency !== 'GBP' &&
     preferredCurrency !== 'USD' &&
+    preferredCurrency !== 'CAD' &&
     preferredCurrency !== 'EUR'
   ) {
     throw new Error(

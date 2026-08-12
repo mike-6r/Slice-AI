@@ -23,6 +23,7 @@ import { EmailVerificationModule } from './modules/identity/email-verification/e
 import { PhoneVerificationModule } from './modules/identity/phone-verification/phone-verification.module';
 import { MarketResearchModule } from './modules/market-research/market-research.module';
 import { CollectorWorkspaceModule } from './modules/collector-workspace/collector-workspace.module';
+import { CurrencyModule } from './modules/currency/currency.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CollectorWorkspaceModule } from './modules/collector-workspace/collecto
     AccessControlModule,
     CatalogueModule,
     MarketModule,
+    CurrencyModule,
     MarketResearchModule,
     CollectorWorkspaceModule,
     ReadsModule,

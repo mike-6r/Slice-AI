@@ -738,10 +738,24 @@ export const mockRepositories: AppRepositories = {
       return { revokedSessionCount: 0 };
     },
     async getPreferences() {
-      return { timezone: "Europe/London", locale: "en-GB" as const };
+      return {
+        timezone: "Europe/London",
+        locale: "en-GB" as const,
+        preferredCurrency: "GBP" as const,
+      };
     },
-    async updatePreferences(input: Partial<{ timezone: string; locale: "en-GB" | "en-US" }>) {
-      return { timezone: input.timezone ?? "Europe/London", locale: input.locale ?? "en-GB" };
+    async updatePreferences(
+      input: Partial<{
+        timezone: string;
+        locale: "en-GB" | "en-US";
+        preferredCurrency: import("@/data/repositories").SupportedCurrency;
+      }>,
+    ) {
+      return {
+        timezone: input.timezone ?? "Europe/London",
+        locale: input.locale ?? "en-GB",
+        preferredCurrency: input.preferredCurrency ?? "GBP",
+      };
     },
     async getNotificationPreferences() {
       return {
@@ -788,6 +802,11 @@ export const mockRepositories: AppRepositories = {
     },
     async changePassword() {
       throw new ApiError("FEATURE_UNAVAILABLE", "Password changes require the authoritative API.");
+    },
+  },
+  currency: {
+    async getRates() {
+      return null;
     },
   },
 };

@@ -22,6 +22,7 @@ import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type { Asset, PortfolioSummary, TradingExecution, TradingOrderView } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import {
   formatOrderMoney,
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/orders")({
 });
 
 export function Orders() {
+  useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const [tab, setTab] = useState<OrderTab>("OPEN");

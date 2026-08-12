@@ -1,11 +1,18 @@
 import type { OrderBookLevel } from "@/domain";
+import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 
-export const formatGbpMinor = (value: string | bigint) => {
+const _legacyFormatGbpMinor = (value: string | bigint) => {
   const amount = typeof value === "bigint" ? value : BigInt(value);
   const absolute = amount < 0n ? -amount : amount;
   return `${amount < 0n ? "-" : ""}£${(absolute / 100n).toLocaleString("en-GB")}.${(absolute % 100n)
     .toString()
     .padStart(2, "0")}`;
+};
+
+export const formatGbpMinor = (value: string | bigint) => {
+  const { currency, rates } = getCurrencyPresentation();
+  return formatAuthoritativeMoney(value, "GBP", currency, rates);
 };
 
 /** Converts a customer-entered GBP decimal into D14's minor-unit wire value. */

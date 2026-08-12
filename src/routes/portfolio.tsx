@@ -29,6 +29,7 @@ import type {
   TradingOrderPage,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import {
   PORTFOLIO_EMPTY_STATES,
@@ -53,6 +54,7 @@ export const Route = createFileRoute("/portfolio")({
 type HoldingFilter = "ALL" | string;
 
 export function Portfolio() {
+  useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>("ALL");

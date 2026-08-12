@@ -41,6 +41,9 @@ import type {
   CollectorWorkspaceStage,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
+import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
 
 export const Route = createFileRoute("/collector-workspace")({
@@ -79,6 +82,7 @@ const navigation: Array<{ id: WorkspaceSection; label: string; icon: typeof Home
 ];
 
 function CollectorWorkspacePage() {
+  useCurrency();
   return (
     <RoleWorkspaceGuard allows={canAccessCollectorWorkspace} title="Collector workspace">
       <CollectorWorkspace />
@@ -1154,11 +1158,16 @@ function filterAssets(assets: CollectorWorkspaceAsset[], query: string) {
 }
 function money(value: { amountMinor: string; currency: string } | null) {
   if (!value) return "Unavailable";
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: value.currency,
-    maximumFractionDigits: 0,
-  }).format(Number(value.amountMinor) / 100);
+  const { currency, rates } = getCurrencyPresentation();
+  return formatDisplayMoney(
+    value.amountMinor,
+    asSupportedCurrency(value.currency) ?? "GBP",
+    currency,
+    rates,
+    {
+      maximumFractionDigits: 0,
+    },
+  );
 }
 function date(value: string) {
   return new Intl.DateTimeFormat("en-GB", {

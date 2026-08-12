@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BadgeCheck, Box, Sparkles } from "lucide-react";
 import type { CollectorProfile, CollectorPublishedListing } from "@/domain";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { collectorCategoryLabel, collectorSpecialties } from "./collector-specialties";
 
@@ -40,6 +40,7 @@ export function CollectorAssetPreview({
   listing: CollectorPublishedListing;
   compact?: boolean;
 }) {
+  const { formatMoney } = useCurrency();
   return (
     <Link
       to="/asset/$id"
@@ -64,7 +65,7 @@ export function CollectorAssetPreview({
             <div>
               <strong>
                 {listing.estimatedMarketValue
-                  ? formatCurrency(listing.estimatedMarketValue.amount)
+                  ? formatMoney(listing.estimatedMarketValue.amount)
                   : "Value unavailable"}
               </strong>
               <span>{listing.dataStatus ?? "Public"}</span>
@@ -276,6 +277,7 @@ export function CollectorCard({
 }
 
 export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublishedListing }) {
+  const { formatMoney } = useCurrency();
   const media = assetShowcaseMedia(listing.slug);
   return (
     <Link to="/asset/$id" params={{ id: listing.slug }} className="public-collector-asset-card">
@@ -291,7 +293,7 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
         <h3>{listing.title}</h3>
         <strong>
           {listing.estimatedMarketValue
-            ? formatCurrency(listing.estimatedMarketValue.amount)
+            ? formatMoney(listing.estimatedMarketValue.amount)
             : "Value unavailable"}
         </strong>
       </div>

@@ -1416,7 +1416,13 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           roles: stringArrayField(value.roles, "user.roles"),
           profile: (() => {
             const profile = objectField(value.profile, "user.profile");
-            if (profile.preferredCurrency !== "GBP")
+            const preferredCurrency = profile.preferredCurrency;
+            if (
+              preferredCurrency !== "GBP" &&
+              preferredCurrency !== "USD" &&
+              preferredCurrency !== "CAD" &&
+              preferredCurrency !== "EUR"
+            )
               throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid profile currency from service.");
             return {
               displayName: stringField(profile.displayName, "profile.displayName"),
@@ -1427,7 +1433,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
               ),
               avatarReference: nullableString(profile.avatarReference, "profile.avatarReference"),
               countryCode: stringField(profile.countryCode, "profile.countryCode"),
-              preferredCurrency: "GBP" as const,
+              preferredCurrency,
               timezone: stringField(profile.timezone, "profile.timezone"),
             };
           })(),
@@ -1646,7 +1652,19 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const locale = value.locale;
         if (locale !== "en-GB" && locale !== "en-US")
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid locale from service.");
-        return { timezone: stringField(value.timezone, "preferences.timezone"), locale };
+        const preferredCurrency = value.preferredCurrency;
+        if (
+          preferredCurrency !== "GBP" &&
+          preferredCurrency !== "USD" &&
+          preferredCurrency !== "CAD" &&
+          preferredCurrency !== "EUR"
+        )
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid preferred currency from service.");
+        return {
+          timezone: stringField(value.timezone, "preferences.timezone"),
+          locale,
+          preferredCurrency,
+        };
       },
       async updatePreferences(input) {
         const value = objectField(
@@ -1660,7 +1678,19 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const locale = value.locale;
         if (locale !== "en-GB" && locale !== "en-US")
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid locale from service.");
-        return { timezone: stringField(value.timezone, "preferences.timezone"), locale };
+        const preferredCurrency = value.preferredCurrency;
+        if (
+          preferredCurrency !== "GBP" &&
+          preferredCurrency !== "USD" &&
+          preferredCurrency !== "CAD" &&
+          preferredCurrency !== "EUR"
+        )
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid preferred currency from service.");
+        return {
+          timezone: stringField(value.timezone, "preferences.timezone"),
+          locale,
+          preferredCurrency,
+        };
       },
       async getNotificationPreferences() {
         return mapNotificationPreferences(
@@ -1757,6 +1787,33 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           body: input,
           headers: { "Idempotency-Key": idempotencyKey() },
         });
+      },
+    },
+    currency: {
+      async getRates() {
+        const value = objectField(await client.get<unknown>("/currency/rates"), "currency rates");
+        const rates = objectField(value.rates, "currency rates.rates");
+        const readRate = (currency: "GBP" | "USD" | "CAD" | "EUR") => {
+          const rate = rates[currency];
+          if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0)
+            throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid currency rate from service.");
+          return rate;
+        };
+        if (value.baseCurrency !== "GBP")
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid FX base currency from service.");
+        return {
+          baseCurrency: "GBP" as const,
+          rates: {
+            GBP: readRate("GBP"),
+            USD: readRate("USD"),
+            CAD: readRate("CAD"),
+            EUR: readRate("EUR"),
+          },
+          asOf: stringField(value.asOf, "currencyRates.asOf"),
+          fetchedAt: stringField(value.fetchedAt, "currencyRates.fetchedAt"),
+          source: stringField(value.source, "currencyRates.source"),
+          cached: booleanField(value.cached, "currencyRates.cached"),
+        };
       },
     },
   };

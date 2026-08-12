@@ -14,6 +14,7 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_ALLOCATION,
@@ -75,6 +76,7 @@ const howSliceWorks = [
 ] as const;
 
 function HomePage() {
+  useCurrency();
   const { isAuthenticated } = useSession();
 
   return (

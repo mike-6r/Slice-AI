@@ -1,13 +1,13 @@
 import type { PortfolioHolding, PortfolioSummary, PortfolioValuationStatus } from "@/domain";
+import { formatDisplayMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export function formatPortfolioMoney(value: string) {
-  const amount = BigInt(value);
-  const absolute = amount < 0n ? -amount : amount;
-  return `${amount < 0n ? "-" : ""}\u00a3${(absolute / 100n).toLocaleString("en-GB")}.${(
-    absolute % 100n
-  )
-    .toString()
-    .padStart(2, "0")}`;
+  const { currency, rates } = getCurrencyPresentation();
+  return formatDisplayMoney(value, "GBP", currency, rates, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function portfolioValueLabel(summary: PortfolioSummary) {

@@ -25,6 +25,8 @@ import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import type { AccountCapability, BankConnection } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { CurrencySelector } from "@/currency/CurrencySelector";
+import type { SupportedCurrency } from "@/data/repositories";
 import { queryKeys } from "@/queries/keys";
 import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-presentation";
 
@@ -1130,7 +1132,13 @@ function PreferencesPanel({
   query,
   refresh,
 }: {
-  query: ReturnType<typeof useQuery<{ timezone: string; locale: "en-GB" | "en-US" }>>;
+  query: ReturnType<
+    typeof useQuery<{
+      timezone: string;
+      locale: "en-GB" | "en-US";
+      preferredCurrency: SupportedCurrency;
+    }>
+  >;
   refresh: () => void;
 }) {
   const { repositories } = useAppServices();
@@ -1144,7 +1152,7 @@ function PreferencesPanel({
     <Panel
       id="preferences"
       title="Preferences"
-      detail="Regional display preferences. Financial balances remain in GBP."
+      detail="Choose your display currency. Ledger balances and order submissions remain authoritative in GBP."
       className="account-panel--preferences"
     >
       {query.isLoading ? (
@@ -1168,10 +1176,7 @@ function PreferencesPanel({
             <strong>Regional format</strong>
             <span>{current.locale}</span>
           </p>
-          <p>
-            <strong>Currency</strong>
-            <span>GBP — fixed by the financial ledger</span>
-          </p>
+          <CurrencySelector className="account-currency-selector" />
           <button className="account-primary" disabled={update.isPending}>
             Save preferences
           </button>

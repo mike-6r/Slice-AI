@@ -40,6 +40,7 @@ import type {
   WalletMovementView,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
@@ -58,6 +59,7 @@ export const Route = createFileRoute("/wallet")({
 });
 
 export function Wallet() {
+  useCurrency();
   const services = useAppServices();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useSession();

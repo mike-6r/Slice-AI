@@ -78,7 +78,7 @@ export interface IdentityProfile {
   usernameChangedAt: Date | null;
   avatarReference: string | null;
   countryCode: string;
-  preferredCurrency: 'GBP' | 'USD' | 'EUR';
+  preferredCurrency: 'GBP' | 'USD' | 'CAD' | 'EUR';
   timezone: string;
   /** Customer display locale. The product currently supports English variants only. */
   locale?: 'en-GB' | 'en-US';

@@ -15,6 +15,7 @@ import { SessionBoundary } from "@/auth/SessionBoundary";
 import { AppShell } from "@/components/layout/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { AppServicesProvider } from "@/providers/AppServicesProvider";
+import { CurrencyProvider } from "@/currency/CurrencyProvider";
 
 function NotFoundComponent() {
   return (
@@ -132,10 +133,12 @@ function RootComponent() {
       <QaHarnessBoundary />
       <SessionBoundary>
         <AppServicesProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-          <Toaster />
+          <CurrencyProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+            <Toaster />
+          </CurrencyProvider>
         </AppServicesProvider>
       </SessionBoundary>
     </QueryClientProvider>

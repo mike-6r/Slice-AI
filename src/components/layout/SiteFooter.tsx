@@ -3,6 +3,7 @@ import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 
 import { useSession } from "@/auth/use-session";
 import { Wordmark } from "@/components/layout/MainNavigation";
+import { CurrencySelector } from "@/currency/CurrencySelector";
 
 type FooterRoute =
   | "/marketplace"
@@ -74,6 +75,7 @@ export function SiteFooter() {
                 Discover published assets, explore the collector community, and manage your Slice
                 account in one place.
               </p>
+              <CurrencySelector className="slice-footer__currency" />
             </section>
 
             <div className="slice-footer__links" aria-label="Footer navigation">
