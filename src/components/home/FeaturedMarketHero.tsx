@@ -25,7 +25,7 @@ export function FeaturedMarketHero() {
           <img
             className="featured-showcase__image"
             src={featured.image}
-            alt="PSA-graded 1999 Charizard Base Set Holo card"
+            alt={featured.title}
             decoding="async"
           />
           <div className="featured-showcase__pedestal" aria-hidden="true" />
@@ -77,16 +77,16 @@ export function FeaturedMarketHero() {
             <circle cx="360" cy="10" r="3.2" fill="#22d3a5" />
           </svg>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--high">
-            &pound;25K
+            &pound;1.95K
           </span>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--upper-middle">
-            &pound;24K
+            &pound;1.90K
           </span>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--middle">
-            &pound;22K
+            &pound;1.85K
           </span>
           <span className="featured-static-panel__price-label featured-static-panel__price-label--low">
-            &pound;21K
+            &pound;1.80K
           </span>
         </div>
 

@@ -17,6 +17,7 @@ import { useSession } from "@/auth/use-session";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_ALLOCATION,
+  HOMEPAGE_FEATURED_ASSET,
   HOMEPAGE_MARKET_METRICS,
   HOMEPAGE_MARKET_MOVERS,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
@@ -115,6 +116,8 @@ function HomePage() {
         <FeaturedMarketHero />
       </section>
 
+      <OwnershipWorks />
+
       <section
         className="page-shell approved-home__metrics"
         aria-label="Illustrative product example"
@@ -133,8 +136,6 @@ function HomePage() {
           );
         })}
       </section>
-
-      <OwnershipWorks />
 
       <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
         <SectionHeading
@@ -301,11 +302,11 @@ function HomePage() {
 
       <section className="page-shell approved-home__physical" aria-labelledby="physical-heading">
         <div className="approved-home__physical-copy">
-          <p className="page-kicker">The card is physical</p>
-          <h2 id="physical-heading">Your ownership is tracked through Slice.</h2>
+          <p className="page-kicker">The collectible is real</p>
+          <h2 id="physical-heading">Own part of a physical collectible.</h2>
           <p>
-            The physical collectible remains the underlying asset. Slice tracks your shares, cost
-            basis and ownership percentage in your portfolio while supporting marketplace positions.
+            Slice divides eligible authenticated collectibles into ownership shares. Track your
+            shares, ownership percentage, cost basis and market position in your portfolio.
           </p>
         </div>
         <div
@@ -313,9 +314,9 @@ function HomePage() {
           aria-label="Illustrative full card and fractional ownership comparison"
         >
           <div>
-            <span>Buy the whole card</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue}</strong>
-            <small>1999 Charizard example</small>
+            <span>Whole collectible reference</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue}</strong>
+            <small>{HOMEPAGE_FEATURED_ASSET.title}</small>
           </div>
           <ArrowRight aria-hidden="true" />
           <div className="is-slice">
@@ -357,7 +358,7 @@ function HomePage() {
 
 function HeroOwnershipLine() {
   const items = [
-    ["Card value", HOMEPAGE_OWNERSHIP_EXAMPLE.collectibleValue],
+    ["Whole collectible reference", HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue],
     ["Share price", HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice],
     [
       "Example purchase",
@@ -381,7 +382,7 @@ function HeroOwnershipLine() {
   );
 }
 
-function OwnershipWorks() {
+function LegacyOwnershipWorks() {
   return (
     <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
       <SectionHeading
@@ -451,6 +452,207 @@ function OwnershipWorks() {
           Slice. Your position, cost basis and ownership percentage are tracked in your portfolio.
         </p>
       </aside>
+    </section>
+  );
+}
+
+function OwnershipWorks() {
+  const featured = HOMEPAGE_FEATURED_ASSET;
+
+  return (
+    <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
+      <SectionHeading
+        eyebrow="The collectible is real"
+        title="Own part of a physical collectible."
+        headingId="ownership-heading"
+      />
+      <p className="approved-home__ownership-lead">
+        Slice divides eligible authenticated collectibles into ownership shares. Buy shares instead
+        of the entire card, track your position in your portfolio, and trade supported shares
+        through the Slice marketplace.
+      </p>
+      <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
+        <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
+          <div className="approved-home__ownership-image">
+            <img src={featured.image} alt={featured.title} loading="lazy" />
+          </div>
+          <div>
+            <small>Physical collectible</small>
+            <strong>{featured.title}</strong>
+            <p>{featured.grade}</p>
+          </div>
+        </article>
+        <OwnershipFlowArrow label="Whole-card reference" />
+        <article className="approved-home__ownership-node">
+          <span className="approved-home__ownership-icon">
+            <Vault aria-hidden="true" />
+          </span>
+          <div>
+            <small>External / whole collectible reference</small>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue}</strong>
+            <p>Recent reference for this collectible</p>
+          </div>
+        </article>
+        <OwnershipFlowArrow label="Slice ownership" />
+        <article className="approved-home__ownership-node is-slice">
+          <span className="approved-home__ownership-icon">
+            <BadgeCheck aria-hidden="true" />
+          </span>
+          <div>
+            <small>Illustrative Slice share price</small>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</strong>
+            <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalShares} in this educational example</p>
+          </div>
+        </article>
+        <OwnershipFlowArrow label="Your portfolio" />
+        <article className="approved-home__ownership-node approved-home__ownership-node--portfolio">
+          <span className="approved-home__ownership-icon">
+            <ChartNoAxesCombined aria-hidden="true" />
+          </span>
+          <div>
+            <small>Investor position</small>
+            <strong>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} ·{" "}
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
+            </strong>
+            <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership · illustrative</p>
+          </div>
+        </article>
+      </div>
+      <aside className="approved-home__ownership-explainer">
+        <strong>What appears in your portfolio?</strong>
+        <p>
+          Shares owned, ownership percentage, cost basis and current market position. The whole-card
+          reference and illustrative Slice share price are always shown separately.
+        </p>
+      </aside>
+      <TradingEducation />
+    </section>
+  );
+}
+
+function OwnershipFlowArrow({ label }: { label: string }) {
+  return (
+    <div className="approved-home__ownership-arrow" aria-hidden="true">
+      <ArrowRight />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function TradingEducation() {
+  const [buyShares, setBuyShares] = useState(25);
+  const [buyReviewed, setBuyReviewed] = useState(false);
+  const [sellReviewed, setSellReviewed] = useState(false);
+  const ownership = ((buyShares / HOMEPAGE_OWNERSHIP_EXAMPLE.totalSharesCount) * 100).toFixed(2);
+  const investment = `£${(buyShares * 10).toFixed(2)}`;
+
+  return (
+    <section className="approved-home__trading-demo" aria-labelledby="trading-demo-heading">
+      <header>
+        <div>
+          <p className="page-kicker">How trading works</p>
+          <h3 id="trading-demo-heading">Buy and sell ownership shares.</h3>
+          <p>Educational examples only — these controls never place an order.</p>
+        </div>
+        <div className="approved-home__trading-asset">
+          <img src={HOMEPAGE_FEATURED_ASSET.image} alt="" />
+          <span>
+            <strong>{HOMEPAGE_FEATURED_ASSET.title}</strong>
+            <small>{HOMEPAGE_FEATURED_ASSET.grade}</small>
+          </span>
+        </div>
+      </header>
+      <div className="approved-home__trading-demo-grid">
+        <article className="approved-home__trade-example">
+          <div className="approved-home__trade-example-heading">
+            <span>Buy shares</span>
+            <small>Demo only</small>
+          </div>
+          <dl className="approved-home__trade-price">
+            <div>
+              <dt>Illustrative Slice share price</dt>
+              <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
+            </div>
+            <div>
+              <dt>Select shares</dt>
+              <dd>{buyShares}</dd>
+            </div>
+          </dl>
+          <div className="approved-home__share-options" aria-label="Select example shares">
+            {[1, 5, 10, 25].map((shares) => (
+              <button
+                key={shares}
+                type="button"
+                aria-pressed={buyShares === shares}
+                className={buyShares === shares ? "is-selected" : undefined}
+                onClick={() => {
+                  setBuyShares(shares);
+                  setBuyReviewed(false);
+                }}
+              >
+                {shares}
+              </button>
+            ))}
+          </div>
+          <div className="approved-home__trade-result">
+            <strong>
+              {buyShares} shares · {investment}
+            </strong>
+            <span>Ownership after purchase: {ownership}%</span>
+          </div>
+          <ol className="approved-home__trade-flow">
+            <li className="is-current">Choose shares</li>
+            <li className={buyReviewed ? "is-current" : undefined}>Review</li>
+            <li>Own shares</li>
+          </ol>
+          <button
+            type="button"
+            className="approved-home__demo-action"
+            onClick={() => setBuyReviewed(true)}
+          >
+            {buyReviewed ? "Demo order reviewed" : "Buy shares — demo only"}
+            <ArrowRight aria-hidden="true" />
+          </button>
+        </article>
+        <article className="approved-home__trade-example approved-home__trade-example--sell">
+          <div className="approved-home__trade-example-heading">
+            <span>Sell shares</span>
+            <small>Demo only</small>
+          </div>
+          <dl className="approved-home__trade-price">
+            <div>
+              <dt>Example current position</dt>
+              <dd>25 shares</dd>
+            </div>
+            <div>
+              <dt>Sell</dt>
+              <dd>5 shares</dd>
+            </div>
+          </dl>
+          <div className="approved-home__trade-result">
+            <strong>Estimated proceeds: £50</strong>
+            <span>Remaining position: 20 shares</span>
+          </div>
+          <ol className="approved-home__trade-flow">
+            <li className="is-current">Choose shares</li>
+            <li className={sellReviewed ? "is-current" : undefined}>Review</li>
+            <li>Sell on marketplace</li>
+          </ol>
+          <button
+            type="button"
+            className="approved-home__demo-action approved-home__demo-action--secondary"
+            onClick={() => setSellReviewed(true)}
+          >
+            {sellReviewed ? "Demo sale reviewed" : "Sell shares — demo only"}
+            <ArrowRight aria-hidden="true" />
+          </button>
+        </article>
+      </div>
+      <p className="approved-home__trading-demo-note">
+        Real authenticated Buy and Sell pages remain the authority: select a collectible, choose
+        shares, review an order, and see matched trades update Portfolio and Orders.
+      </p>
     </section>
   );
 }

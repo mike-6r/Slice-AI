@@ -8,10 +8,10 @@ import {
 } from "./homepage-showcase";
 
 describe("homepage showcase routing", () => {
-  it("keeps every unmapped showcase card on the real marketplace fallback", () => {
+  it("uses the canonical published record when a showcase card is explicitly mapped", () => {
     expect(
       [HOMEPAGE_FEATURED_ASSET, ...HOMEPAGE_TRENDING_ASSETS].every(
-        (asset) => showcaseDestination(asset).kind === "marketplace",
+        (asset) => showcaseDestination(asset).kind === "asset",
       ),
     ).toBe(true);
   });
@@ -30,13 +30,14 @@ describe("homepage showcase routing", () => {
 
   it("keeps the illustrative share maths internally consistent", () => {
     expect(HOMEPAGE_OWNERSHIP_EXAMPLE).toMatchObject({
-      collectibleValue: "£24,580",
-      totalShares: "2,458 shares",
-      availableShares: "604 shares",
+      referenceValue: "\u00a31,950",
+      totalShares: "195 shares",
+      totalSharesCount: 195,
+      availableShares: "62 shares",
       sharePrice: "£10.00",
       exampleShares: "25 shares",
       exampleInvestment: "£250",
-      exampleOwnership: "1.02%",
+      exampleOwnership: "12.82%",
     });
   });
 });

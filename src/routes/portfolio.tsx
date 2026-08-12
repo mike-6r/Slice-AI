@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type { PortfolioHolding, PortfolioSummary, PortfolioTransaction } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -531,10 +532,12 @@ function TransactionsPanel({
 }
 
 function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
+  const media = holding.slug ? assetShowcaseMedia(holding.slug) : undefined;
+
   return (
     <>
       <span className="portfolio-asset__icon" aria-hidden="true">
-        <Landmark />
+        {media ? <img src={media.src} alt="" /> : <Landmark />}
       </span>
       <span className="portfolio-asset__copy">
         <strong>{holdingDisplayLabel(holding)}</strong>

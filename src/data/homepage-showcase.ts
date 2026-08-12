@@ -29,14 +29,16 @@ export type ShowcaseDestination =
  * on each linked asset page remain separate from these terms.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
+  referenceValue: "\u00a31,950",
   collectibleValue: "£4,277",
-  totalShares: "428 shares",
-  availableShares: "137 shares",
+  totalShares: "195 shares",
+  totalSharesCount: 195,
+  availableShares: "62 shares",
   sharePrice: "£10.00",
   exampleShares: "25 shares",
   exampleInvestment: "£250",
-  exampleOwnership: "5.84%",
-  availableOwnership: "32.0%",
+  exampleOwnership: "12.82%",
+  availableOwnership: "31.8%",
   minimumPurchase: "Illustrative · 1 share · £10",
 } as const;
 
