@@ -17,18 +17,20 @@ describe("private workspace role mapping", () => {
     expect(canAccessCollectorWorkspace(["USER", "SUPPORT"])).toBe(false);
   });
 
-  it("maps the existing asset-reviewer role to the collector workspace only", () => {
+  it("keeps staff reviewer authority separate from collector workspace access", () => {
     expect(canAccessStaffWorkspace(["USER", "ASSET_REVIEWER"])).toBe(false);
-    expect(canAccessCollectorWorkspace(["USER", "ASSET_REVIEWER"])).toBe(true);
+    expect(canAccessCollectorWorkspace(["USER", "ASSET_REVIEWER"])).toBe(false);
     expect(staffWorkspaceLinks(["USER", "ASSET_REVIEWER"])).toEqual({
       canReviewSubmissions: true,
       canManageAssetLifecycle: false,
     });
+    expect(canAccessCollectorWorkspace(["USER", "COLLECTOR"])).toBe(true);
   });
 
   it("keeps support and collector roles additive and honours admin authority", () => {
     expect(canAccessStaffWorkspace(["SUPPORT", "ASSET_REVIEWER"])).toBe(true);
-    expect(canAccessCollectorWorkspace(["SUPPORT", "ASSET_REVIEWER"])).toBe(true);
+    expect(canAccessCollectorWorkspace(["SUPPORT", "ASSET_REVIEWER"])).toBe(false);
+    expect(canAccessCollectorWorkspace(["SUPPORT", "COLLECTOR"])).toBe(true);
     expect(canAccessStaffWorkspace(["ADMIN"])).toBe(true);
     expect(canAccessCollectorWorkspace(["ADMIN"])).toBe(true);
   });

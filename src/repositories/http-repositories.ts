@@ -1047,6 +1047,21 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         await client.request(`/collectors/${id}/follow`, { method: "DELETE" });
       },
     },
+    collectorWorkspace: {
+      async getOverview() {
+        return client.get<import("@/domain").CollectorWorkspaceOverview>(
+          "/collector-workspace/overview",
+        );
+      },
+      async updatePublicProfile(input) {
+        return client.request<{
+          slug: string;
+          headline: string | null;
+          specialism: string | null;
+          isPublic: boolean;
+        }>("/collector-workspace/profile", { method: "PATCH", body: input });
+      },
+    },
     ownership: {
       async getWatchlist(userId) {
         const body = await client.get<{ items: Array<{ assetId: string }> }>("/me/watchlist");

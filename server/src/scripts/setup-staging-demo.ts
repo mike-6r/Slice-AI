@@ -19,8 +19,8 @@ type DemoDefinition = (typeof demoAccounts)[keyof typeof demoAccounts];
  * records. It deliberately does not alter passwords of an existing account,
  * grant privileged financial, vault, or compliance roles, directly credit
  * balances, or create external-provider records. The collector showcase may
- * additionally receive ASSET_REVIEWER through its own bounded setup script so
- * it can exercise the existing staff-only submission workspace.
+ * additionally receive COLLECTOR and ASSET_REVIEWER through its own bounded
+ * setup script for the collector workspace and review fixture.
  */
 export async function runStagingDemoSetup() {
   assertStagingDemoSafety();
@@ -95,6 +95,7 @@ export async function runStagingDemoSetup() {
           investor: ['USER'],
           collector: [
             'USER',
+            'COLLECTOR (only when collector fixture is enabled)',
             'ASSET_REVIEWER (only when collector fixture is enabled)',
           ],
         },
@@ -367,7 +368,10 @@ async function assertDemoRoleBoundary(
   const invalid = roles.find(
     (entry) =>
       entry.role !== 'USER' &&
-      !(entry.userId === collectorUserId && entry.role === 'ASSET_REVIEWER'),
+      !(
+        entry.userId === collectorUserId &&
+        ['COLLECTOR', 'ASSET_REVIEWER'].includes(entry.role)
+      ),
   );
   if (invalid) {
     throw new Error(

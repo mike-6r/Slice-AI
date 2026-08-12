@@ -22,6 +22,7 @@ import { DiscordLinkModule } from './modules/identity/discord/discord-link.modul
 import { EmailVerificationModule } from './modules/identity/email-verification/email-verification.module';
 import { PhoneVerificationModule } from './modules/identity/phone-verification/phone-verification.module';
 import { MarketResearchModule } from './modules/market-research/market-research.module';
+import { CollectorWorkspaceModule } from './modules/collector-workspace/collector-workspace.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { MarketResearchModule } from './modules/market-research/market-research.
     CatalogueModule,
     MarketModule,
     MarketResearchModule,
+    CollectorWorkspaceModule,
     ReadsModule,
     SubmissionsModule,
     LifecycleModule,

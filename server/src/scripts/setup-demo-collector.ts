@@ -583,7 +583,7 @@ export async function runCollectorDemoSetup() {
       emailDelivery,
       collectorB,
     );
-    await ensureReviewerRole(access, db, admin, collector.userId);
+    await ensureCollectorRoles(access, db, admin, collector.userId);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
     await archiveRetiredDemoAssets(db);
     await db.publicCollectorProfile.upsert({
@@ -857,27 +857,29 @@ async function ensureLocalEmailVerification(
   );
 }
 
-async function ensureReviewerRole(
+async function ensureCollectorRoles(
   access: AccessControlService,
   db: PrismaService,
   admin: Actor,
   userId: string,
 ) {
-  const current = await db.roleAssignment.findFirst({
-    where: { userId, role: 'ASSET_REVIEWER', revokedAt: null },
-  });
-  if (!current)
+  for (const role of ['COLLECTOR', 'ASSET_REVIEWER'] as const) {
+    const current = await db.roleAssignment.findFirst({
+      where: { userId, role, revokedAt: null },
+    });
+    if (current) continue;
     await access.grantRole(
       admin,
       userId as never,
       {
-        role: 'ASSET_REVIEWER',
+        role,
         scopeType: 'STAGING_DEMO',
         scopeId: 'collector-workspace',
       },
-      `collector-role-${randomUUID()}`,
-      'staging-demo-collector-reviewer',
+      `collector-role-${role.toLowerCase()}-${randomUUID()}`,
+      `staging-demo-collector-${role.toLowerCase()}`,
     );
+  }
 }
 
 async function ensureCategory(

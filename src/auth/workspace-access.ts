@@ -6,9 +6,9 @@ export type WorkspaceRole = string;
 
 const STAFF_ROLES = new Set<WorkspaceRole>(["SUPPORT", "ADMIN"]);
 
-/** Asset reviewers are the existing collector-operations authority. */
+/** Collector ownership access is separate from any staff review authority. */
 export function canAccessCollectorWorkspace(roles: readonly WorkspaceRole[]) {
-  return roles.includes("ASSET_REVIEWER") || roles.includes("ADMIN");
+  return roles.includes("COLLECTOR") || roles.includes("ADMIN");
 }
 
 /** Any server-recognised operations role can enter the staff workspace shell. */
@@ -18,7 +18,7 @@ export function canAccessStaffWorkspace(roles: readonly WorkspaceRole[]) {
 
 export function staffWorkspaceLinks(roles: readonly WorkspaceRole[]) {
   return {
-    canReviewSubmissions: canAccessCollectorWorkspace(roles),
+    canReviewSubmissions: roles.includes("ASSET_REVIEWER") || roles.includes("ADMIN"),
     canManageAssetLifecycle:
       roles.includes("COMPLIANCE_ANALYST") ||
       roles.includes("VAULT_OPERATOR") ||

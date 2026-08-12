@@ -1,5 +1,6 @@
 export * from "./asset";
 export * from "./collector";
+export * from "./collector-workspace";
 export * from "./common";
 export * from "./community";
 export * from "./market";

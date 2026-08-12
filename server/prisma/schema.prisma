@@ -40,6 +40,7 @@ enum AccountDeletionRequestStatus {
 
 enum Role {
   USER
+  COLLECTOR
   SUPPORT
   COMPLIANCE_ANALYST
   ASSET_REVIEWER

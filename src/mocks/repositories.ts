@@ -317,6 +317,53 @@ export const mockRepositories: AppRepositories = {
       followed.delete(id);
     },
   },
+  collectorWorkspace: {
+    async getOverview() {
+      return {
+        collector: {
+          displayName: "Demo collector",
+          username: null,
+          countryCode: "GB",
+          collectorSince: now(),
+          publicProfile: null,
+        },
+        kpis: {
+          totalCollectibles: 0,
+          referenceValue: null,
+          marketLive: 0,
+          inReview: 0,
+          needsAttention: 0,
+        },
+        pipeline: [
+          "DRAFT",
+          "SUBMITTED",
+          "REVIEW",
+          "VALUATION",
+          "CUSTODY",
+          "VAULT_READY",
+          "MARKET_LIVE",
+        ].map((stage) => ({
+          stage,
+          count: 0,
+        })) as import("@/domain").CollectorWorkspaceOverview["pipeline"],
+        assets: [],
+        attention: [],
+        activity: [],
+        analytics: {
+          catalogueReferenceValue: null,
+          marketLiveReferenceValue: null,
+          marketLiveAssets: 0,
+          trades: null,
+          volume: null,
+          executedUnits: "0",
+          owners: null,
+        },
+      };
+    },
+    async updatePublicProfile() {
+      return { slug: "demo-collector", headline: null, specialism: null, isPublic: false };
+    },
+  },
   ownership: {
     async getWatchlist(userId) {
       return { userId, assetIds: [...watched] };

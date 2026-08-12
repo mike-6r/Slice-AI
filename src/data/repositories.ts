@@ -144,6 +144,19 @@ export interface CollectorRepository {
   followCollector(id: UserId): Promise<void>;
   unfollowCollector(id: UserId): Promise<void>;
 }
+export interface CollectorWorkspaceRepository {
+  getOverview(): Promise<import("@/domain").CollectorWorkspaceOverview>;
+  updatePublicProfile(input: {
+    headline?: string | null;
+    specialism?: string | null;
+    isPublic?: boolean;
+  }): Promise<{
+    slug: string;
+    headline: string | null;
+    specialism: string | null;
+    isPublic: boolean;
+  }>;
+}
 
 export interface OwnershipRepository {
   getWatchlist(userId: UserId): Promise<Watchlist>;
@@ -473,6 +486,7 @@ export interface AppRepositories {
   market: MarketRepository;
   portfolio: PortfolioRepository;
   collectors: CollectorRepository;
+  collectorWorkspace: CollectorWorkspaceRepository;
   ownership: OwnershipRepository;
   trading: TradingRepository;
   vault: VaultRepository;

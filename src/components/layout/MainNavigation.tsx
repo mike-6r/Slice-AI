@@ -262,7 +262,7 @@ export function MainNavigation() {
                     onClick={() => setMobileOpen(false)}
                     className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
                   >
-                    Collector Dashboard
+                    Collector Workspace
                   </Link>
                 )}
                 <Link
@@ -496,7 +496,7 @@ function ProfileMenu({
           <ProfileMenuLink
             to="/collector-workspace"
             icon={<ClipboardCheck />}
-            label="Collector Dashboard"
+            label="Collector Workspace"
             close={close}
           />
         )}

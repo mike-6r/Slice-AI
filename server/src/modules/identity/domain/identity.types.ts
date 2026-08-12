@@ -16,6 +16,7 @@ export type EmailVerificationStatus = 'UNVERIFIED' | 'VERIFIED';
 export type ActorType = 'USER' | 'SYSTEM';
 export type Role =
   | 'USER'
+  | 'COLLECTOR'
   | 'SUPPORT'
   | 'COMPLIANCE_ANALYST'
   | 'ASSET_REVIEWER'
