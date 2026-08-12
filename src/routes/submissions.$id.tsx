@@ -30,6 +30,7 @@ function SubmissionDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const previewUrls = useRef<Record<string, string>>({});
   const detail = useQuery({
@@ -66,6 +67,7 @@ function SubmissionDetailPage() {
       setNotice("Draft saved. You can continue editing it whenever it is eligible for changes.");
       setLocalError(null);
       refresh();
+      setStep(2);
     },
   });
   const submit = useMutation({
@@ -107,17 +109,17 @@ function SubmissionDetailPage() {
         `${slotLabel(variables.slot)} image uploaded. Its review readiness is shown below.`,
       );
       setLocalError(null);
-      clearPreview(variables.slot, previewUrls, setPreviews);
       refresh();
     },
   });
   const remove = useMutation({
-    mutationFn: async (mediaId: string) => {
+    mutationFn: async ({ mediaId }: { mediaId: string; slot: string }) => {
       const current = await services.repositories.submissions.getOwn(id);
       return services.repositories.submissions.removeMedia(id, mediaId, current.version);
     },
-    onSuccess: () => {
+    onSuccess: (_detail, variables) => {
       setNotice("Evidence removed from this draft.");
+      clearPreview(variables.slot, previewUrls, setPreviews);
       refresh();
     },
   });
@@ -151,6 +153,7 @@ function SubmissionDetailPage() {
     categories.data?.find((category) => category.id === item.categoryId)?.name ?? "Saved category";
   const activeMedia = REQUIRED_EVIDENCE_SLOTS.map((slot) => findActiveMedia(item.media, slot));
   const evidenceReady = activeMedia.every((entry) => entry?.status === "SAFE");
+  const detailsReady = Boolean(metadataValue(item.declaredMetadata, "name") && item.categoryId);
 
   const beginUpload = (slot: string, file: File, existing?: SubmissionMedia) => {
     const error = fileValidationError(file);
@@ -182,215 +185,337 @@ function SubmissionDetailPage() {
       {localError ? <ErrorNotice>{localError}</ErrorNotice> : null}
       {actionError ? <ErrorNotice>{friendlyError(actionError)}</ErrorNotice> : null}
 
-      <section className="rounded-2xl border border-border bg-elevated p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">Asset details</h2>
-            <p className="mt-1 text-sm text-subtle">Save the draft before moving on to review.</p>
-          </div>
-          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-subtle">
-            {categoryName}
-          </span>
-        </div>
-        {editable ? (
-          <form
-            className="mt-5 grid gap-4 md:grid-cols-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              update.mutate(new FormData(event.currentTarget));
-            }}
-          >
-            <label className="grid gap-2 text-sm font-medium">
-              Asset category
-              <select name="categoryId" defaultValue={item.categoryId}>
-                {!categories.data?.some((category) => category.id === item.categoryId) ? (
-                  <option value={item.categoryId}>{categoryName}</option>
-                ) : null}
-                {categories.data?.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Field
-              name="name"
-              label="Asset title"
-              defaultValue={metadataValue(item.declaredMetadata, "name")}
-              required
-            />
-            <Field
-              name="manufacturer"
-              label="Brand, manufacturer or creator"
-              defaultValue={metadataValue(item.declaredMetadata, "manufacturer")}
-            />
-            <Field
-              name="year"
-              label="Year"
-              defaultValue={metadataValue(item.declaredMetadata, "year")}
-            />
-            <Field
-              name="condition"
-              label="Condition"
-              defaultValue={metadataValue(item.declaredMetadata, "condition")}
-            />
-            <Field
-              name="grader"
-              label="Grading company"
-              defaultValue={metadataValue(item.declaredMetadata, "grader")}
-            />
-            <Field
-              name="grade"
-              label="Grade"
-              defaultValue={metadataValue(item.declaredMetadata, "grade")}
-            />
-            <Field
-              name="certificationNumber"
-              label="Certification number"
-              defaultValue={metadataValue(item.declaredMetadata, "certificationNumber")}
-            />
-            <Field
-              name="cardNumber"
-              label="Set, edition or reference number"
-              defaultValue={metadataValue(item.declaredMetadata, "cardNumber")}
-            />
-            <Field
-              name="language"
-              label="Language"
-              defaultValue={metadataValue(item.declaredMetadata, "language")}
-            />
-            <label className="grid gap-2 text-sm font-medium md:col-span-2">
-              Description
-              <textarea
-                name="details"
-                rows={4}
-                defaultValue={metadataValue(item.declaredMetadata, "details")}
-                maxLength={2000}
-              />
-            </label>
-            <button className="button-primary w-fit" disabled={update.isPending}>
-              {update.isPending ? "Saving…" : "Save draft"}
-            </button>
-          </form>
-        ) : (
-          <SafeMetadata metadata={item.declaredMetadata} categoryName={categoryName} />
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-elevated p-6">
-        <div>
-          <h2 className="text-lg font-semibold">Front and back images</h2>
-          <p className="mt-1 text-sm text-subtle">
-            Upload a clear image of each side. File validation and review readiness remain
-            controlled by the submission service.
+      {item.status === "SUBMITTED" ? (
+        <section className="rounded-2xl border border-positive/30 bg-positive/10 p-6">
+          <p className="page-kicker">Submission received</p>
+          <h2 className="mt-2 text-xl font-semibold">{submissionName(item.declaredMetadata)}</h2>
+          <p className="mt-2 text-sm text-subtle">
+            Reference {item.id}. Your asset is in review; it is not published or market live.
           </p>
-        </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
-            const existing = findActiveMedia(item.media, slot);
-            const preview = previews[slot];
-            return (
-              <EvidenceCard
-                key={slot}
-                slot={slot}
-                existing={existing}
-                preview={preview}
-                editable={editable}
-                uploadPending={media.isPending}
-                removePending={remove.isPending}
-                onSelect={(file) => beginUpload(slot, file, existing)}
-                onRemove={() => existing && remove.mutate(existing.id)}
-              />
-            );
-          })}
-        </div>
-      </section>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link to="/submissions/$id" params={{ id }} className="button-primary">
+              View submission
+            </Link>
+            <Link to="/list" className="button-secondary">
+              Submit another asset
+            </Link>
+            <Link to="/dashboard" className="button-secondary">
+              Back to dashboard
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
-      <section className="rounded-2xl border border-border bg-elevated p-6">
-        <h2 className="text-lg font-semibold">Review and submit</h2>
-        <p className="mt-1 text-sm text-subtle">
-          Submitting sends this saved submission into review. It does not publish the asset.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
-            const entry = findActiveMedia(item.media, slot);
-            return (
-              <div
-                key={slot}
-                className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
-              >
-                {entry?.status === "SAFE" ? (
-                  <Check className="size-4 text-positive" aria-hidden />
-                ) : (
-                  <CircleAlert className="size-4 text-warning" aria-hidden />
-                )}
-                <span>
-                  <strong>{slotLabel(slot)} image:</strong>{" "}
-                  {entry ? mediaStatusLabel(entry.status) : "Required"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        {editable ? (
-          <div className="mt-5 flex flex-wrap gap-3">
+      <SubmissionSteps
+        step={step}
+        detailsReady={detailsReady}
+        evidenceReady={evidenceReady}
+        onSelect={setStep}
+      />
+
+      {step === 1 ? (
+        <section className="rounded-2xl border border-border bg-elevated p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Asset details</h2>
+              <p className="mt-1 text-sm text-subtle">Save the draft before moving on to review.</p>
+            </div>
+            <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-subtle">
+              {categoryName}
+            </span>
+          </div>
+          {editable ? (
+            <form
+              className="mt-5 grid gap-4 md:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                update.mutate(new FormData(event.currentTarget));
+              }}
+            >
+              <label className="grid gap-2 text-sm font-medium">
+                Asset category
+                <select name="categoryId" defaultValue={item.categoryId}>
+                  {!categories.data?.some((category) => category.id === item.categoryId) ? (
+                    <option value={item.categoryId}>{categoryName}</option>
+                  ) : null}
+                  {categories.data?.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                name="name"
+                label="Asset title"
+                defaultValue={metadataValue(item.declaredMetadata, "name")}
+                required
+              />
+              <Field
+                name="manufacturer"
+                label="Brand, manufacturer or creator"
+                defaultValue={metadataValue(item.declaredMetadata, "manufacturer")}
+              />
+              <Field
+                name="year"
+                label="Year"
+                defaultValue={metadataValue(item.declaredMetadata, "year")}
+              />
+              <Field
+                name="condition"
+                label="Condition"
+                defaultValue={metadataValue(item.declaredMetadata, "condition")}
+              />
+              <Field
+                name="grader"
+                label="Grading company"
+                defaultValue={metadataValue(item.declaredMetadata, "grader")}
+              />
+              <Field
+                name="grade"
+                label="Grade"
+                defaultValue={metadataValue(item.declaredMetadata, "grade")}
+              />
+              <Field
+                name="certificationNumber"
+                label="Certification number"
+                defaultValue={metadataValue(item.declaredMetadata, "certificationNumber")}
+              />
+              <Field
+                name="cardNumber"
+                label="Set, edition or reference number"
+                defaultValue={metadataValue(item.declaredMetadata, "cardNumber")}
+              />
+              <Field
+                name="language"
+                label="Language"
+                defaultValue={metadataValue(item.declaredMetadata, "language")}
+              />
+              <label className="grid gap-2 text-sm font-medium md:col-span-2">
+                Description
+                <textarea
+                  name="details"
+                  rows={4}
+                  defaultValue={metadataValue(item.declaredMetadata, "details")}
+                  maxLength={2000}
+                />
+              </label>
+              <button className="button-primary w-fit" disabled={update.isPending}>
+                {update.isPending ? "Saving…" : "Save draft"}
+              </button>
+            </form>
+          ) : (
+            <SafeMetadata metadata={item.declaredMetadata} categoryName={categoryName} />
+          )}
+        </section>
+      ) : null}
+
+      {step === 2 ? <TermsStep onBack={() => setStep(1)} onContinue={() => setStep(3)} /> : null}
+
+      {step === 3 ? (
+        <section className="rounded-2xl border border-border bg-elevated p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Front and back images</h2>
+            <p className="mt-1 text-sm text-subtle">
+              Upload a clear image of each side. File validation and review readiness remain
+              controlled by the submission service.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
+              const existing = findActiveMedia(item.media, slot);
+              const preview = previews[slot];
+              return (
+                <EvidenceCard
+                  key={slot}
+                  slot={slot}
+                  existing={existing}
+                  preview={preview}
+                  editable={editable}
+                  uploadPending={media.isPending}
+                  removePending={remove.isPending}
+                  onSelect={(file) => beginUpload(slot, file, existing)}
+                onRemove={() => existing && remove.mutate({ mediaId: existing.id, slot })}
+                />
+              );
+            })}
+          </div>
+          <div className="mt-6 flex gap-3">
+            <button type="button" className="button-secondary" onClick={() => setStep(2)}>
+              Back
+            </button>
             <button
               type="button"
               className="button-primary"
-              disabled={submit.isPending || media.isPending}
-              onClick={() => {
-                if (!evidenceReady) {
-                  setLocalError(
-                    "Front and back images must both be marked ready before you submit this asset for review.",
-                  );
-                  return;
-                }
-                submit.mutate();
-              }}
+              disabled={!evidenceReady || media.isPending}
+              onClick={() => setStep(4)}
             >
-              {item.status === "CHANGES_REQUESTED" ? "Resubmit for review" : "Submit for review"}
+              Continue to review
             </button>
-            {cancellable && !confirmCancel ? (
+          </div>
+        </section>
+      ) : null}
+
+      {step === 4 ? (
+        <section className="rounded-2xl border border-border bg-elevated p-6">
+          <h2 className="text-lg font-semibold">Review and submit</h2>
+          <p className="mt-1 text-sm text-subtle">
+            Submitting sends this saved submission into review. It does not publish the asset.
+          </p>
+          <SafeMetadata metadata={item.declaredMetadata} categoryName={categoryName} />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
+              const entry = findActiveMedia(item.media, slot);
+              return (
+                <div
+                  key={slot}
+                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
+                >
+                  {entry?.status === "SAFE" ? (
+                    <Check className="size-4 text-positive" aria-hidden />
+                  ) : (
+                    <CircleAlert className="size-4 text-warning" aria-hidden />
+                  )}
+                  <span>
+                    <strong>{slotLabel(slot)} image:</strong>{" "}
+                    {entry ? mediaStatusLabel(entry.status) : "Required"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {editable ? (
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="button" className="button-secondary" onClick={() => setStep(3)}>
+                Edit media
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                disabled={submit.isPending || media.isPending}
+                onClick={() => {
+                  if (!evidenceReady) {
+                    setLocalError(
+                      "Front and back images must both be marked ready before you submit this asset for review.",
+                    );
+                    return;
+                  }
+                  submit.mutate();
+                }}
+              >
+                {item.status === "CHANGES_REQUESTED" ? "Resubmit for review" : "Submit for review"}
+              </button>
+              {cancellable && !confirmCancel ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  Cancel submission
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {cancellable && confirmCancel ? (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <span className="text-sm text-subtle">
+                Cancel this submission? This cannot be undone from this screen.
+              </span>
               <button
                 type="button"
                 className="button-secondary"
-                onClick={() => setConfirmCancel(true)}
+                disabled={cancel.isPending}
+                onClick={() => cancel.mutate()}
               >
-                Cancel submission
+                Confirm cancel
               </button>
-            ) : null}
-          </div>
-        ) : null}
-        {cancellable && confirmCancel ? (
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span className="text-sm text-subtle">
-              Cancel this submission? This cannot be undone from this screen.
-            </span>
-            <button
-              type="button"
-              className="button-secondary"
-              disabled={cancel.isPending}
-              onClick={() => cancel.mutate()}
-            >
-              Confirm cancel
-            </button>
-            <button
-              type="button"
-              className="text-sm font-semibold"
-              onClick={() => setConfirmCancel(false)}
-            >
-              Keep submission
-            </button>
-          </div>
-        ) : null}
-        {!editable && item.status !== "CANCELLED" ? (
-          <p className="mt-5 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
-            This submission is currently {submissionStatusLabel(item.status).toLowerCase()}. Editing
-            is available only when the review workflow permits changes.
-          </p>
-        ) : null}
-      </section>
+              <button
+                type="button"
+                className="text-sm font-semibold"
+                onClick={() => setConfirmCancel(false)}
+              >
+                Keep submission
+              </button>
+            </div>
+          ) : null}
+          {!editable && item.status !== "CANCELLED" ? (
+            <p className="mt-5 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
+              This submission is currently {submissionStatusLabel(item.status).toLowerCase()}.
+              Editing is available only when the review workflow permits changes.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
     </main>
+  );
+}
+
+function SubmissionSteps({
+  step,
+  detailsReady,
+  evidenceReady,
+  onSelect,
+}: {
+  step: 1 | 2 | 3 | 4;
+  detailsReady: boolean;
+  evidenceReady: boolean;
+  onSelect: (step: 1 | 2 | 3 | 4) => void;
+}) {
+  const steps = [
+    [1, "Asset details", true],
+    [2, "Details & terms", detailsReady],
+    [3, "Media & documents", detailsReady],
+    [4, "Review & submit", evidenceReady],
+  ] as const;
+  return (
+    <nav aria-label="Submission steps" className="rounded-2xl border border-border bg-elevated p-3">
+      <ol className="grid gap-2 sm:grid-cols-4">
+        {steps.map(([number, label, available]) => (
+          <li key={number}>
+            <button
+              type="button"
+              disabled={!available}
+              onClick={() => onSelect(number)}
+              className={`w-full rounded-lg px-3 py-2 text-left text-sm ${step === number ? "bg-accent text-accent-foreground" : available ? "hover:bg-surface" : "cursor-not-allowed text-muted"}`}
+            >
+              <span className="mr-2 font-mono text-xs">{number}</span>
+              {label}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+function TermsStep({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+  return (
+    <section className="rounded-2xl border border-border bg-elevated p-6">
+      <p className="page-kicker">Details &amp; terms</p>
+      <h2 className="mt-2 text-lg font-semibold">Submission terms</h2>
+      <p className="mt-2 text-sm text-subtle">
+        Your saved asset details are private. Slice reviews collectibles separately before any
+        valuation, custody, publication, or market availability decision.
+      </p>
+      <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-xs text-subtle">Valuation</dt>
+          <dd className="mt-1 font-medium">Set through staff review</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-subtle">Custody</dt>
+          <dd className="mt-1 font-medium">Arranged only after review</dd>
+        </div>
+      </dl>
+      <div className="mt-6 flex gap-3">
+        <button type="button" className="button-secondary" onClick={onBack}>
+          Back
+        </button>
+        <button type="button" className="button-primary" onClick={onContinue}>
+          Save and continue
+        </button>
+      </div>
+    </section>
   );
 }
 

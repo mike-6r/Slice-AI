@@ -434,7 +434,7 @@ export function SubmissionPage() {
           {create.error ? (
             <p className="list-save-error">
               <CircleAlert aria-hidden="true" />
-              Unable to save draft. No listing, valuation, custody, or financial action was created.
+              Unable to save draft: {draftErrorMessage(create.error)}
             </p>
           ) : null}
           <footer className="list-action-bar">
@@ -454,6 +454,11 @@ export function SubmissionPage() {
       </div>
     </main>
   );
+}
+
+function draftErrorMessage(error: unknown) {
+  if (error instanceof ApiError) return error.message;
+  return "No listing, valuation, custody, or financial action was created.";
 }
 
 function MarketCheck({ research }: { research: MarketResearchSnapshot }) {
