@@ -14,7 +14,11 @@ const policies = {
   adminMutation: { limit: 30, ttlSeconds: 3600 },
   auditRead: { limit: 120, ttlSeconds: 3600 },
   catalogueMutation: { limit: 60, ttlSeconds: 3600 },
-  submissionMutation: { limit: 60, ttlSeconds: 3600 },
+  // A guided listing saves a private draft as its fields change. Sixty writes
+  // per hour is reachable during a normal card submission, before any abusive
+  // pattern is involved. Keep the per-user/IP guard, with headroom for normal
+  // autosave and evidence steps.
+  submissionMutation: { limit: 240, ttlSeconds: 3600 },
   marketResearch: { limit: 12, ttlSeconds: 3600 },
   referenceImport: { limit: 30, ttlSeconds: 3600 },
   assetLifecycleMutation: { limit: 60, ttlSeconds: 3600 },

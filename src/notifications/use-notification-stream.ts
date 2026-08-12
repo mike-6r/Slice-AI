@@ -21,7 +21,11 @@ export function useNotificationStream(userId = "current") {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread });
     };
-    const scheduleReconnect = (status?: number) => {
+    const scheduleReconnect = (status?: number, code?: string) => {
+      // Realtime is an optional deployment feature. When it is intentionally
+      // disabled, durable notification queries remain the source of truth and
+      // retrying only creates noisy 503s in the browser and API logs.
+      if (code === "FEATURE_DISABLED") return;
       if (abort.signal.aborted || attempts >= 5) return;
       const exponentialDelay = Math.min(60_000, 1_000 * 2 ** attempts);
       const delay = status === 503 ? Math.max(15_000, exponentialDelay) : exponentialDelay;
@@ -45,7 +49,10 @@ export function useNotificationStream(userId = "current") {
               fallbackRefreshed = true;
               refresh();
             }
-            scheduleReconnect(error instanceof ApiError ? error.status : undefined);
+            scheduleReconnect(
+              error instanceof ApiError ? error.status : undefined,
+              error instanceof ApiError ? error.code : undefined,
+            );
           }
         });
     };

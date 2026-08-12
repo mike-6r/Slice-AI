@@ -65,7 +65,8 @@ export function Orders() {
   });
   const assets = useQuery({
     queryKey: [...queryKeys.assets.all, "orders"],
-    queryFn: () => services.assets.list({ limit: 100 }),
+    // The public market endpoint intentionally caps a single page at 48.
+    queryFn: () => services.assets.list({ limit: 48 }),
     enabled: isAuthenticated,
     staleTime: 30_000,
   });
