@@ -1787,7 +1787,12 @@ async function ensureDemoOrderBook(
   const price = spec.illustrativeValueMinor / 1000n;
   const levels = [
     { actor: seller, side: 'SELL' as const, price: price + 50n, key: 'ask' },
-    { actor: buyer, side: 'BUY' as const, price: price - 50n, key: 'bid' },
+    {
+      actor: buyer,
+      side: 'BUY' as const,
+      price: price > 50n ? price - 50n : 1n,
+      key: 'bid',
+    },
   ];
   for (const level of levels) {
     const existing = await input.db.tradingOrder.findFirst({
