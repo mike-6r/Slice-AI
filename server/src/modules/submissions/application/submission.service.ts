@@ -108,7 +108,7 @@ export class SubmissionService {
               ownerUserId: actor.userId,
               submissionId: null,
             },
-            select: { identityHash: true },
+            select: { id: true, identityHash: true, submissionId: true },
           });
           if (
             !research ||
@@ -316,7 +316,7 @@ export class SubmissionService {
               ownerUserId: actor.userId,
               OR: [{ submissionId: null }, { submissionId: id }],
             },
-            select: { identityHash: true },
+            select: { id: true, identityHash: true, submissionId: true },
           });
           if (
             !research ||
@@ -331,14 +331,16 @@ export class SubmissionService {
               message:
                 'Refresh market research after changing the collectible identity.',
             });
-          await db.submissionMarketResearch.updateMany({
-            where: {
-              id: input.marketResearchId,
-              ownerUserId: actor.userId,
-              submissionId: null,
-            },
-            data: { submissionId: id },
-          });
+          // The record was just verified for this owner and draft above. Use a
+          // single-record update here: it preserves an already-attached
+          // matching snapshot and avoids a bulk relation write in the draft
+          // transaction.
+          if (research.submissionId === null) {
+            await db.submissionMarketResearch.update({
+              where: { id: research.id },
+              data: { submissionId: id },
+            });
+          }
         }
         const updated = await db.assetSubmission.update({
           where: { id },
@@ -349,7 +351,13 @@ export class SubmissionService {
             declaredMetadata: jsonMetadata(input.declaredMetadata),
             version: { increment: 1 },
           },
-          include: { media: { orderBy: { slot: 'asc' } } },
+          include: {
+            media: { orderBy: { slot: 'asc' } },
+            marketResearch: {
+              orderBy: { collectedAt: 'desc' },
+              include: { observations: { orderBy: { observedAt: 'desc' } } },
+            },
+          },
         });
         await audit('SUBMISSION_DRAFT_UPDATED', 'submission', id, {
           version: updated.version,
