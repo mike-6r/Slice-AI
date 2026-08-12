@@ -865,7 +865,13 @@ async function ensureCollectorRoles(
 ) {
   for (const role of ['COLLECTOR', 'ASSET_REVIEWER'] as const) {
     const current = await db.roleAssignment.findFirst({
-      where: { userId, role, revokedAt: null },
+      where: {
+        userId,
+        role,
+        scopeType: 'GLOBAL',
+        scopeId: '*',
+        revokedAt: null,
+      },
     });
     if (current) continue;
     await access.grantRole(
@@ -873,8 +879,8 @@ async function ensureCollectorRoles(
       userId as never,
       {
         role,
-        scopeType: 'STAGING_DEMO',
-        scopeId: 'collector-workspace',
+        scopeType: 'GLOBAL',
+        scopeId: '*',
       },
       `collector-role-${role.toLowerCase()}-${randomUUID()}`,
       `staging-demo-collector-${role.toLowerCase()}`,

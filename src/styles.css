@@ -21947,10 +21947,10 @@ body:has(.collectors-page) .site-shell {
 }
 .portfolio-asset > .portfolio-asset__copy {
   display: block;
-  width: 0;
+  width: auto;
   height: auto;
   min-width: 0;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   padding: 0;
   border: 0;
   background: transparent;

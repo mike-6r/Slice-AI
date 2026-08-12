@@ -25,8 +25,24 @@ describe('account preferences and customer activity', () => {
       { run: async (_identity: unknown, _method: string, _route: string, _body: unknown, work: (tx: unknown) => Promise<unknown>) => ({ value: await work({ users: { updateProfile }, audit: { append: jest.fn() } }) }) } as never,
       { enforce: jest.fn() } as never,
     );
-    await expect(service.get(actor)).resolves.toEqual({ timezone: 'Europe/London', locale: 'en-GB' });
-    await expect(service.update(actor, { timezone: 'America/New_York', locale: 'en-US' }, '127.0.0.1', 'request-a', 'key-a')).resolves.toEqual({ timezone: 'America/New_York', locale: 'en-US' });
+    await expect(service.get(actor)).resolves.toEqual({
+      timezone: 'Europe/London',
+      locale: 'en-GB',
+      preferredCurrency: 'GBP',
+    });
+    await expect(
+      service.update(
+        actor,
+        { timezone: 'America/New_York', locale: 'en-US' },
+        '127.0.0.1',
+        'request-a',
+        'key-a',
+      ),
+    ).resolves.toEqual({
+      timezone: 'America/New_York',
+      locale: 'en-US',
+      preferredCurrency: 'GBP',
+    });
     expect(updateProfile).toHaveBeenCalledWith('user-a', { timezone: 'America/New_York', locale: 'en-US' });
   });
 

@@ -58,7 +58,14 @@ export class AuthAbuseService {
     ip: string,
     accountHint?: string,
   ) {
-    const limit = operation === 'login' ? 10 : operation === 'refresh' ? 30 : 5;
+    const limit =
+      operation === 'login'
+        ? 10
+        : operation === 'refresh'
+          ? 30
+          : operation === 'preferences'
+            ? 60
+            : 5;
     const ttlSeconds = operation === 'login' ? 900 : 3600;
     const keys = [this.cache.key(`auth-${operation}-ip`, hash(ip))];
     if (accountHint)

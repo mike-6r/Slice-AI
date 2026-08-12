@@ -4,7 +4,7 @@ import { supportedCurrencies } from "./currency-presentation";
 
 export function CurrencySelector({ className = "" }: { className?: string }) {
   const id = useId();
-  const { currency, setCurrency, ratesAvailable } = useCurrency();
+  const { currency, setCurrency, ratesAvailable, preferenceError } = useCurrency();
   return (
     <label className={`currency-selector ${className}`.trim()} htmlFor={id}>
       <span>Display currency</span>
@@ -22,6 +22,7 @@ export function CurrencySelector({ className = "" }: { className?: string }) {
       {!ratesAvailable && currency !== "GBP" ? (
         <small>Showing GBP until live FX is available.</small>
       ) : null}
+      {preferenceError ? <small role="status">{preferenceError}</small> : null}
     </label>
   );
 }
