@@ -111,7 +111,7 @@ export function MainNavigation() {
   const roles = currentUser.data?.roles ?? [];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 shadow-[0_10px_36px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+    <header className="main-navigation sticky top-0 z-50 border-b border-border shadow-[0_10px_36px_rgba(0,0,0,0.18)]">
       <MarketTicker />
       <div className="site-shell flex h-[66px] items-center gap-3 xl:gap-5">
         <button

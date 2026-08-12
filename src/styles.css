@@ -17947,17 +17947,42 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   .slice-footer {
     padding-top: 1.5rem;
   }
+  .slice-footer .site-shell {
+    width: min(calc(100% - 2rem), 90rem);
+  }
   .slice-footer__upper {
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.35rem;
     padding: 1.25rem;
   }
   .slice-footer__links {
+    min-width: 0;
     gap: 1rem;
   }
+  .slice-footer__updates {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .slice-footer__updates p,
+  .slice-footer__updates-cta {
+    grid-column: 1 / -1;
+  }
+  .slice-footer__updates-cta {
+    grid-row: auto;
+  }
   .slice-footer__lower {
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
     padding: 0.9rem 1.25rem;
   }
+  .slice-footer__security-card {
+    justify-self: stretch;
+  }
+}
+
+/* The sticky navigation must remain a solid surface over scrolling content. */
+.main-navigation {
+  isolation: isolate;
+  background: #08090c;
 }
 
 /* =================================================
