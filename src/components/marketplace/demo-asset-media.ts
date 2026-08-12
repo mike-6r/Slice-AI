@@ -1,56 +1,57 @@
-import charizardSlabImage from "@/assets/charizard-slab.jpg";
-import jordanImage from "@/assets/jordan.jpg";
-import magicImage from "@/assets/mtg.jpg";
-import onePieceImage from "@/assets/onepiece.jpg";
-import pikachuImage from "@/assets/pikachu.jpg";
+import bedardImage from "@/assets/connor-bedard-young-guns-psa10.png";
+import charizardImage from "@/assets/charizard-ex-obsidian-flames-psa10.jpg";
+import stroudImage from "@/assets/cj-stroud-purple-pulsar-psa10.jpg";
+import pikachuImage from "@/assets/pikachu-grey-felt-hat-psa10.jpg";
+import umbreonImage from "@/assets/umbreon-vmax-psa10.jpg";
+import wembanyamaImage from "@/assets/victor-wembanyama-prizm-bgs95.jpg";
 
 /**
  * The public catalogue currently has no public-media URL field. These are the
- * approved, bundled staging showcase photographs for the fixed demo catalogue;
- * catalogue identity, pricing, history, availability and trading are still
- * read from the API. Unknown live catalogue records deliberately have no
- * fallback photograph rather than being shown with misleading media.
+ * source-attributed marketplace listing images for the fixed staging catalogue.
+ * They match the record's listed card, grade and variant, but remain external
+ * reference media — Slice does not claim ownership of the pictured card.
+ * Unknown live catalogue records deliberately have no fallback photograph.
  */
 export type DemoAssetMediaKey =
-  "charizard-slab" | "jordan-rookie" | "black-lotus" | "one-piece" | "pikachu-illustrator";
+  | "umbreon-psa10"
+  | "pikachu-psa10"
+  | "charizard-psa10"
+  | "wembanyama-bgs95"
+  | "bedard-psa10"
+  | "stroud-psa10";
 
 type DemoAssetMedia = { key: DemoAssetMediaKey; src: string; alt: string };
 
 const stagedMedia: Partial<Record<string, DemoAssetMedia>> = {
-  "slice-demo-charizard": {
-    key: "charizard-slab",
-    src: charizardSlabImage,
-    alt: "1999 Pokemon Base Set Charizard Holo in a graded slab",
+  "slice-demo-umbreon-vmax-moonbreon": {
+    key: "umbreon-psa10",
+    src: umbreonImage,
+    alt: "External listing image: 2021 Umbreon VMAX 215/203 Alternate Art, PSA 10",
   },
-  "slice-demo-pikachu": {
-    key: "pikachu-illustrator",
+  "slice-demo-charizard-ex-obsidian-flames": {
+    key: "charizard-psa10",
+    src: charizardImage,
+    alt: "External listing image: 2023 Charizard ex 223/197 Special Illustration Rare, PSA 10",
+  },
+  "slice-demo-pikachu-grey-felt-hat": {
+    key: "pikachu-psa10",
     src: pikachuImage,
-    alt: "Pokemon Pikachu Illustrator collectible card",
+    alt: "External listing image: 2023 Pikachu with Grey Felt Hat SVP 085, PSA 10",
   },
-  "slice-demo-jordan": {
-    key: "jordan-rookie",
-    src: jordanImage,
-    alt: "Michael Jordan rookie sports card",
+  "slice-demo-victor-wembanyama-prizm-rookie": {
+    key: "wembanyama-bgs95",
+    src: wembanyamaImage,
+    alt: "External listing image: 2023-24 Panini Prizm Victor Wembanyama 136 rookie, BGS 9.5",
   },
-  "slice-demo-black-lotus": {
-    key: "black-lotus",
-    src: magicImage,
-    alt: "Magic the Gathering collectible presentation",
+  "slice-demo-connor-bedard-young-guns": {
+    key: "bedard-psa10",
+    src: bedardImage,
+    alt: "External listing image: 2023-24 Upper Deck Connor Bedard Young Guns 451 rookie, PSA 10",
   },
-  "slice-demo-one-piece": {
-    key: "one-piece",
-    src: onePieceImage,
-    alt: "One Piece trading card collectible presentation",
-  },
-  "slice-demo-specialist-black-lotus": {
-    key: "black-lotus",
-    src: magicImage,
-    alt: "Magic the Gathering Black Lotus collectible presentation",
-  },
-  "slice-demo-specialist-one-piece": {
-    key: "one-piece",
-    src: onePieceImage,
-    alt: "One Piece manga rare trading card collectible presentation",
+  "slice-demo-cj-stroud-purple-pulsar-rookie": {
+    key: "stroud-psa10",
+    src: stroudImage,
+    alt: "External listing image: 2023 Panini Prizm C.J. Stroud Purple Pulsar 339 rookie, PSA 10",
   },
 };
 

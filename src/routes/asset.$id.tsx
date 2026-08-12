@@ -139,8 +139,8 @@ function AssetPage() {
                   {asset.setName ? ` · ${asset.setName}` : ""}
                 </p>
                 <p className="asset-description-copy">
-                  Explore the public collectible record, valuation history, ownership availability,
-                  and live Slice market activity for this asset.
+                  {assetQuery.data.details.description ??
+                    "Explore the public collectible record and illustrative Slice ownership structure for this asset."}
                 </p>
               </section>
               <div className="asset-ranking-strip">
@@ -362,6 +362,14 @@ function AssetPage() {
                 <strong>{asset.year ?? "Unavailable"}</strong>
               </div>
               <div>
+                <span>Manufacturer</span>
+                <strong>{assetQuery.data.details.card?.manufacturer ?? "Unavailable"}</strong>
+              </div>
+              <div>
+                <span>Card number</span>
+                <strong>{assetQuery.data.details.card?.cardNumber ?? "Unavailable"}</strong>
+              </div>
+              <div>
                 <span>Grader</span>
                 <strong>{asset.grader ?? "Unavailable"}</strong>
               </div>
@@ -385,11 +393,21 @@ function AssetPage() {
                 <strong>Published</strong>
               </div>
               <div>
-                <span>Valuation</span>
+                <span>
+                  {asset.dataStatus === "DEMO" ? "Illustrative Slice basis" : "Valuation"}
+                </span>
                 <strong>
                   {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
                 </strong>
               </div>
+              <ExternalReference
+                label="Current listing"
+                observation={assetQuery.data.market?.reference?.currentListing}
+              />
+              <ExternalReference
+                label="Recent observed sale"
+                observation={assetQuery.data.market?.reference?.recentCompletedSale}
+              />
               <div>
                 <span>Ownership available</span>
                 <strong>
@@ -418,6 +436,29 @@ function AssetPage() {
           />
         </main>
       </div>
+    </div>
+  );
+}
+
+function ExternalReference({
+  label,
+  observation,
+}: {
+  label: string;
+  observation?: import("@/domain").ExternalMarketObservation;
+}) {
+  if (!observation) return null;
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>
+        <a href={observation.listingUrl} target="_blank" rel="noreferrer">
+          {formatCurrency(observation.amount.amount, { currency: observation.amount.currency })}
+        </a>
+      </strong>
+      <small>
+        {observation.source} · {formatDate(observation.observedAt)}
+      </small>
     </div>
   );
 }

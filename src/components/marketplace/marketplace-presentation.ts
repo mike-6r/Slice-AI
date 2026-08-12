@@ -85,6 +85,9 @@ export function marketCategoryPresentation(category: string): MarketCategoryPres
 export type MarketplaceEditorialTag = {
   label:
     | "Trending"
+    | "High Interest"
+    | "Modern Chase"
+    | "Iconic"
     | "Editor's Pick"
     | "Rising Fast"
     | "Most Watched"
@@ -97,7 +100,12 @@ export type MarketplaceEditorialTag = {
 
 // PRESENTATION-ONLY MARKETPLACE SHOWCASE LABELS. NOT AUTHORITATIVE TRADING SIGNALS.
 const EDITORIAL_TAGS: Array<{ match: RegExp; tag: MarketplaceEditorialTag }> = [
+  { match: /umbreon.*vmax|moonbreon/i, tag: { label: "Modern Chase", tone: "purple", icon: Gem } },
+  { match: /grey felt hat|van gogh/i, tag: { label: "Most Watched", tone: "blue", icon: Eye } },
   { match: /charizard/i, tag: { label: "Trending", tone: "green", icon: Flame } },
+  { match: /wembanyama/i, tag: { label: "High Interest", tone: "green", icon: TrendingUp } },
+  { match: /bedard/i, tag: { label: "New Listing", tone: "orange", icon: Clock3 } },
+  { match: /stroud/i, tag: { label: "Editor's Pick", tone: "purple", icon: Sparkles } },
   {
     match: /black-lotus|dark-magician/i,
     tag: { label: "Editor's Pick", tone: "purple", icon: Sparkles },

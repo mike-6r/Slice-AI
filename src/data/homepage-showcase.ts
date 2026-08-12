@@ -1,10 +1,9 @@
-import boosterImage from "@/assets/booster.jpg";
-import charizardImage from "@/assets/charizard.jpg";
-import charizardSlabImage from "@/assets/charizard-slab.jpg";
-import jordanImage from "@/assets/jordan.jpg";
-import mtgImage from "@/assets/mtg.jpg";
-import onePieceImage from "@/assets/onepiece.jpg";
-import pikachuImage from "@/assets/pikachu.jpg";
+import bedardImage from "@/assets/connor-bedard-young-guns-psa10.png";
+import charizardImage from "@/assets/charizard-ex-obsidian-flames-psa10.jpg";
+import stroudImage from "@/assets/cj-stroud-purple-pulsar-psa10.jpg";
+import pikachuImage from "@/assets/pikachu-grey-felt-hat-psa10.jpg";
+import umbreonImage from "@/assets/umbreon-vmax-psa10.jpg";
+import wembanyamaImage from "@/assets/victor-wembanyama-prizm-bgs95.jpg";
 
 export type HomepageShowcaseAsset = Readonly<{
   showcaseKey: string;
@@ -18,7 +17,7 @@ export type HomepageShowcaseAsset = Readonly<{
   displayMovement: string;
   displayAvailability: string;
   movementTone: "positive" | "negative";
-  realAssetId?: string;
+  realAssetId: string;
   fallbackRoute: "/marketplace";
 }>;
 
@@ -26,209 +25,167 @@ export type ShowcaseDestination =
   Readonly<{ kind: "asset"; id: string }> | Readonly<{ kind: "marketplace"; to: "/marketplace" }>;
 
 /**
- * ILLUSTRATIVE PUBLIC MARKETING DATA. NOT LIVE MARKET DATA. NOT CUSTOMER
- * FINANCIAL DATA.
- *
- * Product pages remain API-authoritative. A realAssetId may only be added
- * after a published asset is confirmed in the target environment; absent
- * mappings always fail safely to the real marketplace rather than
- * manufacturing an asset route.
+ * ILLUSTRATIVE SLICE OWNERSHIP EXAMPLE. The external listing/sale references
+ * on each linked asset page remain separate from these terms.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
-  collectibleValue: "\u00a324,580",
-  totalShares: "2,458 shares",
-  availableShares: "604 shares",
-  sharePrice: "\u00a310.00",
+  collectibleValue: "£4,277",
+  totalShares: "428 shares",
+  availableShares: "137 shares",
+  sharePrice: "£10.00",
   exampleShares: "25 shares",
-  exampleInvestment: "\u00a3250",
-  exampleOwnership: "1.02%",
-  availableOwnership: "24.6%",
-  minimumPurchase: "1 share · £10",
+  exampleInvestment: "£250",
+  exampleOwnership: "5.84%",
+  availableOwnership: "32.0%",
+  minimumPurchase: "Illustrative · 1 share · £10",
 } as const;
 
-export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
-  showcaseKey: "featured-charizard",
-  symbol: "CHZ.IO",
-  title: "1999 Charizard",
-  category: "Pokemon TCG",
-  grade: "Base Set · Holo",
-  image: charizardSlabImage,
-  displayPrice: "\u00a324,580",
-  displaySharePrice: "\u00a310.00 / share",
-  displayMovement: "+12.43%",
-  displayAvailability: "24.6%",
-  movementTone: "positive",
-  fallbackRoute: "/marketplace",
-};
-
-export const HOMEPAGE_TRENDING_ASSETS: readonly HomepageShowcaseAsset[] = [
+const catalogue: readonly HomepageShowcaseAsset[] = [
   {
-    showcaseKey: "charizard-base-set",
-    symbol: "CHZ.IO",
-    title: "1999 Pok\u00e9mon Base Set Charizard",
-    category: "Pok\u00e9mon TCG",
+    showcaseKey: "umbreon-vmax-moonbreon",
+    symbol: "UMB.215",
+    title: "2021 Umbreon VMAX Alternate Art",
+    category: "Pokémon TCG",
+    grade: "PSA 10 · Gem Mint",
+    image: umbreonImage,
+    displayPrice: "£1,950",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "32.0%",
+    movementTone: "positive",
+    realAssetId: "slice-demo-umbreon-vmax-moonbreon",
+    fallbackRoute: "/marketplace",
+  },
+  {
+    showcaseKey: "pikachu-grey-felt-hat",
+    symbol: "PIK.085",
+    title: "2023 Pikachu with Grey Felt Hat",
+    category: "Pokémon TCG",
+    grade: "PSA 10 · Gem Mint",
+    image: pikachuImage,
+    displayPrice: "US$470",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "41.0%",
+    movementTone: "positive",
+    realAssetId: "slice-demo-pikachu-grey-felt-hat",
+    fallbackRoute: "/marketplace",
+  },
+  {
+    showcaseKey: "charizard-ex-obsidian-flames",
+    symbol: "CHZ.223",
+    title: "2023 Charizard ex Special Illustration Rare",
+    category: "Pokémon TCG",
     grade: "PSA 10 · Gem Mint",
     image: charizardImage,
-    displayPrice: "\u00a324,580",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+12.43%",
-    displayAvailability: "24.6%",
+    displayPrice: "US$399.99",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "52.0%",
     movementTone: "positive",
+    realAssetId: "slice-demo-charizard-ex-obsidian-flames",
     fallbackRoute: "/marketplace",
   },
   {
-    showcaseKey: "lorcana-ariel",
-    symbol: "LOR.ARL",
-    title: "Lorcana Ariel Enchanted",
-    category: "Disney Lorcana",
+    showcaseKey: "victor-wembanyama-prizm-rookie",
+    symbol: "WEM.136",
+    title: "2023-24 Prizm Victor Wembanyama Rookie",
+    category: "Sports Cards",
+    grade: "BGS 9.5 · Mint",
+    image: wembanyamaImage,
+    displayPrice: "US$215",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "60.0%",
+    movementTone: "positive",
+    realAssetId: "slice-demo-victor-wembanyama-prizm-rookie",
+    fallbackRoute: "/marketplace",
+  },
+  {
+    showcaseKey: "connor-bedard-young-guns",
+    symbol: "BED.451",
+    title: "2023-24 Connor Bedard Young Guns Rookie",
+    category: "Sports Cards",
     grade: "PSA 10 · Gem Mint",
-    image: onePieceImage,
-    displayPrice: "\u00a36,850",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+9.8%",
-    displayAvailability: "50%",
+    image: bedardImage,
+    displayPrice: "CA$750",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "47.0%",
     movementTone: "positive",
+    realAssetId: "slice-demo-connor-bedard-young-guns",
     fallbackRoute: "/marketplace",
   },
   {
-    showcaseKey: "blastoise-base-set",
-    symbol: "BST.PK",
-    title: "1999 Pok\u00e9mon Base Set Blastoise",
-    category: "Pok\u00e9mon TCG",
-    grade: "PSA 9 · Mint",
-    image: boosterImage,
-    displayPrice: "\u00a34,650",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+7.64%",
-    displayAvailability: "28.1%",
+    showcaseKey: "cj-stroud-purple-pulsar-rookie",
+    symbol: "STR.339",
+    title: "2023 Prizm C.J. Stroud Purple Pulsar Rookie",
+    category: "Sports Cards",
+    grade: "PSA 10 · Gem Mint",
+    image: stroudImage,
+    displayPrice: "US$550",
+    displaySharePrice: "Illustrative from £10 / share",
+    displayMovement: "Reference only",
+    displayAvailability: "38.0%",
     movementTone: "positive",
-    fallbackRoute: "/marketplace",
-  },
-  {
-    showcaseKey: "dark-magician",
-    symbol: "YG.DRK",
-    title: "Yu-Gi-Oh! Dark Magician 1st Edition",
-    category: "Yu-Gi-Oh!",
-    grade: "PSA 8 · NM-MT",
-    image: mtgImage,
-    displayPrice: "\u00a33,200",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+5.22%",
-    displayAvailability: "45%",
-    movementTone: "positive",
-    fallbackRoute: "/marketplace",
-  },
-  {
-    showcaseKey: "pikachu-illustrator",
-    symbol: "PIK.IL",
-    title: "Pikachu Illustrator Reprint",
-    category: "Pok\u00e9mon TCG",
-    grade: "PSA 9 · Mint",
-    image: pikachuImage,
-    displayPrice: "\u00a312,400",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+6.31%",
-    displayAvailability: "18.7%",
-    movementTone: "positive",
-    fallbackRoute: "/marketplace",
-  },
-  {
-    showcaseKey: "jordan-rookie",
-    symbol: "JRD.RC",
-    title: "1986 Fleer Michael Jordan Rookie",
-    category: "Sports · Basketball",
-    grade: "PSA 8 · NM-MT",
-    image: jordanImage,
-    displayPrice: "\u00a318,900",
-    displaySharePrice: "From \u00a310 / share",
-    displayMovement: "+4.2%",
-    displayAvailability: "31.2%",
-    movementTone: "positive",
+    realAssetId: "slice-demo-cj-stroud-purple-pulsar-rookie",
     fallbackRoute: "/marketplace",
   },
 ] as const;
 
+export const HOMEPAGE_FEATURED_ASSET = catalogue[0];
+export const HOMEPAGE_TRENDING_ASSETS = catalogue;
+
 export const HOMEPAGE_MARKET_METRICS = [
   {
-    label: "Card value",
-    value: "\u00a324,580",
-    detail: "Featured illustrative example",
+    label: "Reference sale",
+    value: "£1,950",
+    detail: "External listing observation",
     tone: "positive",
   },
   {
     label: "Share price",
-    value: "\u00a310.00",
+    value: "£10.00",
     detail: "Illustrative ownership unit",
     tone: "positive",
   },
   {
     label: "Available",
-    value: "24.6%",
-    detail: "604 shares available",
+    value: "32.0%",
+    detail: "Illustrative share availability",
     tone: "positive",
   },
+  { label: "Minimum", value: "£10", detail: "Illustrative 1-share minimum", tone: "positive" },
   {
-    label: "Minimum",
-    value: "\u00a310",
-    detail: "1 share minimum",
-    tone: "positive",
-  },
-  {
-    label: "Ownership",
-    value: "From 1 share",
-    detail: "Build your position",
+    label: "Reference media",
+    value: "6 cards",
+    detail: "External listing images",
     tone: "positive",
   },
 ] as const;
 
-export const HOMEPAGE_MARKET_TICKER = [
-  { symbol: "CHK 10", value: "\u00a324,580", movement: "+12.4%", tone: "positive" },
-  { symbol: "JRD.RC", value: "\u00a318,900", movement: "+4.2%", tone: "positive" },
-  { symbol: "LOT.MTG", value: "\u00a34,650", movement: "+2.8%", tone: "positive" },
-  { symbol: "LUF.OP", value: "\u00a33,200", movement: "-1.2%", tone: "negative" },
-] as const;
+export const HOMEPAGE_MARKET_TICKER = catalogue.map((asset) => ({
+  symbol: asset.symbol,
+  value: asset.displayPrice,
+  movement: "Reference",
+  tone: "positive" as const,
+}));
 
 export const HOMEPAGE_MARKET_MOVERS = {
-  "Top Gainers": [
-    HOMEPAGE_TRENDING_ASSETS[0],
-    HOMEPAGE_TRENDING_ASSETS[1],
-    HOMEPAGE_TRENDING_ASSETS[2],
-  ],
-  "Top Losers": [
-    {
-      ...HOMEPAGE_TRENDING_ASSETS[3],
-      displayMovement: "-1.82%",
-      movementTone: "negative" as const,
-    },
-    {
-      ...HOMEPAGE_TRENDING_ASSETS[5],
-      displayMovement: "-0.74%",
-      movementTone: "negative" as const,
-    },
-    {
-      ...HOMEPAGE_TRENDING_ASSETS[4],
-      displayMovement: "-0.31%",
-      movementTone: "negative" as const,
-    },
-  ],
-  "Most Active": [
-    HOMEPAGE_TRENDING_ASSETS[4],
-    HOMEPAGE_TRENDING_ASSETS[0],
-    HOMEPAGE_TRENDING_ASSETS[5],
-  ],
+  "Modern Chase": [catalogue[0], catalogue[2], catalogue[5]],
+  "Most Watched": [catalogue[1], catalogue[3], catalogue[4]],
+  "New Listings": [catalogue[4], catalogue[5], catalogue[2]],
 } as const;
 
 export const HOMEPAGE_ALLOCATION = [
-  { label: "Pok\u00e9mon", value: "42.7%", tone: "mint" },
-  { label: "Sports", value: "28.3%", tone: "blue" },
-  { label: "Yu-Gi-Oh!", value: "14.9%", tone: "amber" },
-  { label: "Other", value: "14.1%", tone: "violet" },
+  { label: "Pokémon", value: "50%", tone: "mint" },
+  { label: "Sports", value: "50%", tone: "blue" },
 ] as const;
 
 export const HOMEPAGE_PORTFOLIO_EXAMPLE = [
-  { label: "Charizard", shares: "59 shares", ownership: "2.4%" },
-  { label: "Jordan Rookie", shares: "44 shares", ownership: "1.8%" },
-  { label: "Dark Magician", shares: "103 shares", ownership: "4.2%" },
+  { label: "Umbreon VMAX", shares: "25 shares", ownership: "5.8%" },
+  { label: "Wembanyama Rookie", shares: "10 shares", ownership: "1.0%" },
+  { label: "Bedard Young Guns", shares: "15 shares", ownership: "1.5%" },
 ] as const;
 
 export function showcaseDestination(asset: HomepageShowcaseAsset): ShowcaseDestination {

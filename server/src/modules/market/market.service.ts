@@ -83,6 +83,11 @@ export class MarketService {
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+        valuationEvidence: {
+          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+          orderBy: { observedAt: 'desc' },
+          take: 2,
+        },
         publication: true,
         custodyRecord: true,
         insuranceCoverage: {
@@ -175,6 +180,11 @@ export class MarketService {
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+        valuationEvidence: {
+          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+          orderBy: { observedAt: 'desc' },
+          take: 2,
+        },
         publication: true,
         custodyRecord: true,
         insuranceCoverage: {
@@ -223,6 +233,11 @@ export class MarketService {
             collectibleSet: true,
             gradeScaleEntry: { include: { company: true } },
             marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+            valuationEvidence: {
+              where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+              orderBy: { observedAt: 'desc' },
+              take: 2,
+            },
           },
         },
       },
@@ -253,6 +268,11 @@ export class MarketService {
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+        valuationEvidence: {
+          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+          orderBy: { observedAt: 'desc' },
+          take: 2,
+        },
       },
     });
     if (!asset)
@@ -270,6 +290,9 @@ type PublicAssetRow = {
   title: string;
   shortName: string | null;
   year: number | null;
+  manufacturer: string | null;
+  cardNumber: string | null;
+  description: string | null;
   certificationNumber: string | null;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
@@ -292,6 +315,13 @@ type PublicAssetRow = {
   publication?: { status: string; publishedAt: Date | null } | null;
   custodyRecord?: { status: string; updatedAt: Date } | null;
   insuranceCoverage?: Array<{ status: string; expiresAt: Date }>;
+  valuationEvidence?: Array<{
+    sourceType: string;
+    sourceRef: string | null;
+    observedAt: Date;
+    valueMinor: bigint;
+    currency: string;
+  }>;
 };
 function assetView(asset: PublicAssetRow) {
   const market = asset.marketSnapshots[0];
@@ -301,6 +331,9 @@ function assetView(asset: PublicAssetRow) {
     title: asset.title,
     shortName: asset.shortName,
     year: asset.year,
+    manufacturer: asset.manufacturer,
+    cardNumber: asset.cardNumber,
+    description: asset.description,
     ...(asset.certificationNumber
       ? { certificationNumber: asset.certificationNumber }
       : {}),
@@ -323,6 +356,7 @@ function assetView(asset: PublicAssetRow) {
     ownersCount: market?.ownersCount ?? null,
     confidence: market?.confidence ?? null,
     source: market?.source ?? 'NO_MARKET_DATA',
+    marketReference: externalMarketReference(asset.valuationEvidence ?? []),
     dataStatus: market ? status(market.status) : 'DEMO',
     asOf: market ? asOf(market.asOf) : null,
     publication:
@@ -346,6 +380,44 @@ function assetView(asset: PublicAssetRow) {
         }
       : null,
   };
+}
+
+function externalMarketReference(
+  records: NonNullable<PublicAssetRow['valuationEvidence']>,
+) {
+  const read = (sourceType: string) => {
+    const record = records.find((item) => item.sourceType === sourceType);
+    if (!record?.sourceRef) return null;
+    try {
+      const detail = JSON.parse(record.sourceRef) as {
+        source?: unknown;
+        externalReference?: unknown;
+        listingUrl?: unknown;
+        imageUrl?: unknown;
+      };
+      if (
+        typeof detail.source !== 'string' ||
+        typeof detail.externalReference !== 'string' ||
+        typeof detail.listingUrl !== 'string'
+      )
+        return null;
+      return {
+        amount: { minor: record.valueMinor.toString(), currency: record.currency },
+        source: detail.source,
+        externalReference: detail.externalReference,
+        listingUrl: detail.listingUrl,
+        ...(typeof detail.imageUrl === 'string' ? { imageUrl: detail.imageUrl } : {}),
+        observedAt: record.observedAt.toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  };
+  const currentListing = read('STAGING_CURRENT_LISTING');
+  const recentCompletedSale = read('STAGING_RECENT_COMPLETED_SALE');
+  return currentListing || recentCompletedSale
+    ? { ...(currentListing ? { currentListing } : {}), ...(recentCompletedSale ? { recentCompletedSale } : {}) }
+    : null;
 }
 function encodeCursor(id: string) {
   return Buffer.from(JSON.stringify({ id })).toString('base64url');

@@ -39,6 +39,9 @@ type MarketAssetDto = {
   title: string;
   shortName: string | null;
   year: number | null;
+  manufacturer: string | null;
+  cardNumber: string | null;
+  description: string | null;
   certificationNumber?: string;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
@@ -53,6 +56,18 @@ type MarketAssetDto = {
   source: string | null;
   dataStatus: "DEMO" | "DELAYED" | "LIVE" | null;
   asOf: string | null;
+  marketReference: {
+    currentListing?: ExternalMarketObservationDto;
+    recentCompletedSale?: ExternalMarketObservationDto;
+  } | null;
+};
+type ExternalMarketObservationDto = {
+  amount: { minor: string; currency: "GBP" | "USD" | "EUR" | "CAD" };
+  source: string;
+  externalReference: string;
+  listingUrl: string;
+  imageUrl?: string;
+  observedAt: string;
 };
 
 type MarketAssetPageDto = { items: MarketAssetDto[]; hasMore: boolean; nextCursor: string | null };
@@ -118,7 +133,13 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
   details: {
     title: value.title,
     category: value.category.slug as Asset["details"]["category"],
-    card: { set: value.collectibleSet?.name, year: value.year ?? undefined },
+    description: value.description ?? undefined,
+    card: {
+      manufacturer: value.manufacturer ?? undefined,
+      set: value.collectibleSet?.name,
+      cardNumber: value.cardNumber ?? undefined,
+      year: value.year ?? undefined,
+    },
   },
   status: "listed",
   media: [],
@@ -153,7 +174,30 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         ? undefined
         : basisPoints(value.availabilityBps),
     ownersCount: value.ownersCount ?? undefined,
+    reference: value.marketReference
+      ? {
+          ...(value.marketReference.currentListing
+            ? { currentListing: mapExternalMarketObservation(value.marketReference.currentListing) }
+            : {}),
+          ...(value.marketReference.recentCompletedSale
+            ? {
+                recentCompletedSale: mapExternalMarketObservation(
+                  value.marketReference.recentCompletedSale,
+                ),
+              }
+            : {}),
+        }
+      : undefined,
   },
+});
+
+const mapExternalMarketObservation = (value: ExternalMarketObservationDto) => ({
+  amount: { amount: safeMinor(value.amount.minor), currency: value.amount.currency },
+  source: value.source,
+  externalReference: value.externalReference,
+  listingUrl: value.listingUrl,
+  imageUrl: value.imageUrl,
+  observedAt: value.observedAt as ISODateTime,
 });
 
 const unsupported = (name: string) => () =>

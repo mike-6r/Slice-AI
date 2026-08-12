@@ -129,7 +129,9 @@ export function MarketAssetCard({
         {!compact && (
           <>
             <p className="market-card-value-helper">
-              {asset.dataStatus === "LIVE" ? "Current public valuation" : "Estimated valuation"}
+              {asset.dataStatus === "DEMO"
+                ? "Illustrative Slice basis"
+                : "Current public valuation"}
             </p>
             <dl className="market-card-metrics">
               <div>
@@ -185,7 +187,7 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
       </div>
       <dl>
         <div>
-          <dt>Asset value</dt>
+          <dt>{asset.dataStatus === "DEMO" ? "Illustrative basis" : "Asset value"}</dt>
           <dd>
             {asset.estimatedMarketValueMinor === undefined
               ? "Unavailable"

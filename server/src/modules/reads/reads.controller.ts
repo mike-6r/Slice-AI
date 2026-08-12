@@ -189,7 +189,7 @@ export class ReadsController {
       dataStatus: 'LIVE_PUBLIC_PROJECTION',
       windowStartedAt: since.toISOString(),
       metrics,
-      featuredAsset: publicVaultAssetView(published.find((asset) => asset.slug === 'slice-demo-charizard') ?? published[0] ?? null),
+      featuredAsset: publicVaultAssetView(published.find((asset) => asset.slug === 'slice-demo-umbreon-vmax-moonbreon') ?? published[0] ?? null),
       recentEvents: eventView,
       recentlyReviewed: distinct(reviewed),
       readiness: distinct(readiness),

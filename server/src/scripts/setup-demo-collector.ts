@@ -33,22 +33,298 @@ import {
 
 type DemoAsset = Readonly<{
   key: string;
-  owner?: 'PRIMARY' | 'SECONDARY';
   title: string;
   category: string;
+  manufacturer: string;
   set: string;
   year: number;
-  valueMinor: bigint;
-  historyProfile: 'UPWARD' | 'DOWNWARD' | 'VOLATILE' | 'STABLE';
-  state: 'DRAFT' | 'SUBMITTED' | 'CHANGES_REQUESTED' | 'CUSTODY' | 'PUBLISHED';
+  cardNumber: string;
+  subject: string;
+  variant?: string;
+  /** Slice-only illustrative ownership basis; never an external market quote. */
+  illustrativeValueMinor: bigint;
+  illustrativeAvailableBps: number;
+  state: 'PUBLISHED';
   grading: Readonly<{
     companyCode: 'PSA' | 'BGS';
-    grade: '8.00' | '9.00' | '10.00';
-    label: 'Near Mint-Mint' | 'Mint' | 'Gem Mint';
+    grade: '9.50' | '10.00';
+    label: 'Mint' | 'Gem Mint';
+  }>;
+  reference: Readonly<{
+    source: string;
+    observedAt: string;
+    currentListing?: Readonly<{
+      amountMinor: bigint;
+      currency: 'GBP' | 'USD' | 'CAD';
+      observedAt: string;
+      source: string;
+      externalReference: string;
+      listingUrl: string;
+      imageUrl: string;
+    }>;
+    recentCompletedSale?: Readonly<{
+      amountMinor: bigint;
+      currency: 'GBP' | 'USD' | 'CAD';
+      observedAt: string;
+      source: string;
+      externalReference: string;
+      listingUrl: string;
+    }>;
   }>;
 }>;
 
+const retiredDemoAssetKeys = [
+  'charizard',
+  'pikachu',
+  'blastoise',
+  'jordan',
+  'mantle',
+  'dark-magician',
+  'black-lotus',
+  'one-piece',
+  'luka',
+  'rayquaza',
+  'specialist-dark-magician',
+  'specialist-black-lotus',
+  'specialist-one-piece',
+] as const;
+
 const assets: readonly DemoAsset[] = [
+  {
+    key: 'umbreon-vmax-moonbreon',
+    title: '2021 Pokemon Evolving Skies Umbreon VMAX Alternate Art',
+    category: 'Pokemon TCG',
+    manufacturer: 'The Pokémon Company',
+    set: 'Evolving Skies',
+    year: 2021,
+    cardNumber: '215/203',
+    subject: 'Umbreon VMAX',
+    variant: 'Alternate Art Secret',
+    illustrativeValueMinor: 427700n,
+    illustrativeAvailableBps: 3200,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
+    reference: {
+      source: 'PriceCharting public eBay sale records; Cosmic Collectables UK listing',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 195000n,
+        currency: 'GBP',
+        observedAt: '2026-07-24',
+        source: 'Cosmic Collectables UK',
+        externalReference: 'PSA 102738334',
+        listingUrl: 'https://cosmiccollectables.co.uk/products/psa-pokemon-swsh-evolving-skies-215-203-umbreon-vmax-alt-art-psa-10',
+        imageUrl: 'https://cosmiccollectables.co.uk/cdn/shop/files/Z2FBIT06uE6J50sXtPNemA_1024x1024%402x.jpg?v=1740580550',
+      },
+      recentCompletedSale: {
+        amountMinor: 427700n,
+        currency: 'USD',
+        observedAt: '2026-07-27',
+        source: 'PriceCharting public eBay record',
+        externalReference: 'PSA 10 comparable',
+        listingUrl: 'https://www.pricecharting.com/game/pokemon-evolving-skies/umbreon-vmax-215',
+      },
+    },
+  },
+  {
+    key: 'pikachu-grey-felt-hat',
+    title: '2023 Pokemon Pikachu with Grey Felt Hat',
+    category: 'Pokemon TCG',
+    manufacturer: 'The Pokémon Company',
+    set: 'Pokemon x Van Gogh Museum Promo',
+    year: 2023,
+    cardNumber: 'SVP 085',
+    subject: 'Pikachu',
+    variant: 'Van Gogh Museum Promo',
+    illustrativeValueMinor: 235337n,
+    illustrativeAvailableBps: 4100,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
+    reference: {
+      source: 'eBay listing; PriceCharting public completed-sale record',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 47000n,
+        currency: 'USD',
+        observedAt: '2026-08-12',
+        source: 'eBay',
+        externalReference: 'eBay item 306504969037',
+        listingUrl: 'https://www.ebay.com/itm/306504969037',
+        imageUrl: 'https://i.ebayimg.com/images/g/PDYAAeSwQypozB9o/s-l1600.jpg',
+      },
+      recentCompletedSale: {
+        amountMinor: 144050n,
+        currency: 'USD',
+        observedAt: '2026-07-24',
+        source: 'PriceCharting Marketplace',
+        externalReference: 'PriceCharting offer h6f67z',
+        listingUrl: 'https://www.pricecharting.com/offer/37wwhlfu2tncjlqinmoisb2ff4',
+      },
+    },
+  },
+  {
+    key: 'charizard-ex-obsidian-flames',
+    title: '2023 Pokemon Charizard ex Special Illustration Rare',
+    category: 'Pokemon TCG',
+    manufacturer: 'The Pokémon Company',
+    set: 'Obsidian Flames',
+    year: 2023,
+    cardNumber: '223/197',
+    subject: 'Charizard ex',
+    variant: 'Special Illustration Rare',
+    illustrativeValueMinor: 79900n,
+    illustrativeAvailableBps: 5200,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
+    reference: {
+      source: 'eBay listing; PriceCharting public completed-sale records',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 39999n,
+        currency: 'USD',
+        observedAt: '2026-08-12',
+        source: 'eBay',
+        externalReference: 'eBay item 116612500558',
+        listingUrl: 'https://www.ebay.ca/itm/116612500558',
+        imageUrl: 'https://i.ebayimg.com/images/g/iH0AAeSwDSJoLhDr/s-l1200.jpg',
+      },
+      recentCompletedSale: {
+        amountMinor: 79000n,
+        currency: 'USD',
+        observedAt: '2026-07-24',
+        source: 'PriceCharting public eBay record',
+        externalReference: 'PSA 10 comparable',
+        listingUrl: 'https://www.pricecharting.com/game/pokemon-obsidian-flames/charizard-ex-223',
+      },
+    },
+  },
+  {
+    key: 'victor-wembanyama-prizm-rookie',
+    title: '2023-24 Panini Prizm Victor Wembanyama Rookie',
+    category: 'Sports Cards',
+    manufacturer: 'Panini',
+    set: 'Panini Prizm Basketball',
+    year: 2023,
+    cardNumber: '136',
+    subject: 'Victor Wembanyama',
+    variant: 'Base Rookie',
+    illustrativeValueMinor: 15250n,
+    illustrativeAvailableBps: 6000,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'BGS', grade: '9.50', label: 'Mint' },
+    reference: {
+      source: 'Fanatics Collect listing image; SportsCardsPro public eBay reference',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 21500n,
+        currency: 'USD',
+        observedAt: '2026-07-27',
+        source: 'eBay listing indexed by SportsCardsPro',
+        externalReference: '2023-24 Panini Prizm #136 BGS 9.5',
+        listingUrl: 'https://www.sportscardspro.com/game/basketball-cards-2023-panini-prizm/victor-wembanyama-136',
+        imageUrl: 'https://cdn-vault.fanaticscollect.com/2024/6/13/bs1/large/v864147_2024061303010659R_3.jpg',
+      },
+      recentCompletedSale: {
+        amountMinor: 27500n,
+        currency: 'USD',
+        observedAt: '2026-06-02',
+        source: 'Collectibles.com recorded eBay result',
+        externalReference: 'BGS 9.5 comparable',
+        listingUrl: 'https://collectibles.com/basketball-cards/ci-2023-panini-prizm-136-rc-victor-wembanyama?catalog_item_variation_id=20929933',
+      },
+    },
+  },
+  {
+    key: 'connor-bedard-young-guns',
+    title: '2023-24 Upper Deck Connor Bedard Young Guns Rookie',
+    category: 'Sports Cards',
+    manufacturer: 'Upper Deck',
+    set: 'Upper Deck Series 2 Hockey',
+    year: 2023,
+    cardNumber: '451',
+    subject: 'Connor Bedard',
+    variant: 'Young Guns Rookie',
+    illustrativeValueMinor: 49689n,
+    illustrativeAvailableBps: 4700,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
+    reference: {
+      source: 'Mintink product listing; eBay completed sale',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 75000n,
+        currency: 'CAD',
+        observedAt: '2026-08-12',
+        source: 'Mintink',
+        externalReference: 'PSA 97040794',
+        listingUrl: 'https://www.mintink.ca/products/2023-24-upper-deck-series-2-hockey-connor-bedard-young-guns-psa-13',
+        imageUrl: 'https://www.mintink.ca/cdn/shop/files/2023-24-Upper-Deck-Series-2-Hockey-Connor-Bedard-Young-Guns-PSA-10_-225250748.png',
+      },
+      recentCompletedSale: {
+        amountMinor: 49689n,
+        currency: 'USD',
+        observedAt: '2025-06-09',
+        source: 'eBay',
+        externalReference: 'eBay item 365638362836',
+        listingUrl: 'https://www.ebay.ca/itm/365638362836',
+      },
+    },
+  },
+  {
+    key: 'cj-stroud-purple-pulsar-rookie',
+    title: '2023 Panini Prizm C.J. Stroud Purple Pulsar Rookie',
+    category: 'Sports Cards',
+    manufacturer: 'Panini',
+    set: 'Panini Prizm Football',
+    year: 2023,
+    cardNumber: '339',
+    subject: 'C.J. Stroud',
+    variant: 'Purple Pulsar',
+    illustrativeValueMinor: 55000n,
+    illustrativeAvailableBps: 3800,
+    state: 'PUBLISHED',
+    grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
+    reference: {
+      source: 'eBay listing; Sports Card Investor completed-sale record',
+      observedAt: '2026-08-12',
+      currentListing: {
+        amountMinor: 55000n,
+        currency: 'USD',
+        observedAt: '2026-08-12',
+        source: 'eBay',
+        externalReference: 'eBay item 266918752662',
+        listingUrl: 'https://www.ebay.com/itm/266918752662',
+        imageUrl: 'https://i.ebayimg.com/images/g/C5UAAOSwQXNmn-5p/s-l1200.jpg',
+      },
+      recentCompletedSale: {
+        amountMinor: 3667n,
+        currency: 'USD',
+        observedAt: '2026-07-24',
+        source: 'Sports Card Investor',
+        externalReference: 'Purple Pulsar PSA 10 comparable',
+        listingUrl: 'https://www.sportscardinvestor.com/cards/cj-stroud-football/2023-prizm-purple-pulsar-339',
+      },
+    },
+  },
+];
+
+/*
+ * Retired, tagged staging records are archived rather than deleted. This keeps
+ * any audit references intact while ensuring the public catalogue contains
+ * only the current modern reference set.
+ */
+async function archiveRetiredDemoAssets(db: PrismaService) {
+  await db.asset.updateMany({
+    where: { slug: { in: retiredDemoAssetKeys.map((key) => `slice-demo-${key}`) } },
+    data: { status: 'ARCHIVED' },
+  });
+}
+
+/*
+ * Historical fixture retained only as a source migration map. It is never
+ * created or published by this setup.
+ */
+const retiredAssets: readonly unknown[] = [
   {
     key: 'charizard',
     title: '1999 Pokémon Base Set Charizard Holo',
@@ -280,24 +556,20 @@ export async function runCollectorDemoSetup() {
     );
     await ensureReviewerRole(access, db, admin, collector.userId);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
-
+    await archiveRetiredDemoAssets(db);
     await db.publicCollectorProfile.upsert({
       where: { userId: collector.userId },
       create: {
         userId: collector.userId,
         slug: 'slice-demo-collector',
-        headline:
-          'Specialist collector of authenticated Pokémon, sports cards, Yu-Gi-Oh!, Magic: The Gathering and One Piece cards.',
-        specialism:
-          'Pokémon · Sports Cards · Yu-Gi-Oh! · Magic: The Gathering · One Piece',
+        headline: 'Public showcase collector for modern Pokémon and sports-card reference listings.',
+        specialism: 'Pokémon TCG · Sports Cards',
         isPublic: true,
         publishedAt: new Date(),
       },
       update: {
-        headline:
-          'Specialist collector of authenticated Pokémon, sports cards, Yu-Gi-Oh!, Magic: The Gathering and One Piece cards.',
-        specialism:
-          'Pokémon · Sports Cards · Yu-Gi-Oh! · Magic: The Gathering · One Piece',
+        headline: 'Public showcase collector for modern Pokémon and sports-card reference listings.',
+        specialism: 'Pokémon TCG · Sports Cards',
         isPublic: true,
         publishedAt: new Date(),
       },
@@ -331,7 +603,7 @@ export async function runCollectorDemoSetup() {
     }
     const gradeIds = await ensureDemoGrades(db, catalogue, admin);
     for (const spec of assets) {
-      const owner = spec.owner === 'SECONDARY' ? collectorB : collector;
+      const owner = collector;
       const asset = await ensureAsset(
         db,
         catalogue,
@@ -362,7 +634,8 @@ export async function runCollectorDemoSetup() {
           spec,
           spec.state === 'PUBLISHED',
         );
-        await ensureMarketHistory(db, asset.id, spec);
+        await ensureMarketReference(db, asset.id, spec);
+        await ensureExternalReferenceEvidence(db, asset.id, admin.userId, spec);
       }
       void submission;
     }
@@ -606,14 +879,22 @@ async function ensureAsset(
   const publicId = `stg_collector_${spec.key}`;
   const existing = await db.asset.findUnique({ where: { publicId } });
   if (existing) {
-    if (existing.gradeScaleEntryId !== gradeScaleEntryId)
-      await catalogue.updateAsset(
-        admin,
-        existing.id,
-        { gradeScaleEntryId },
-        `collector-asset-grade-${randomUUID()}`,
-        `collector-asset-grade:${spec.key}:${gradeScaleEntryId}`,
-      );
+    await catalogue.updateAsset(
+      admin,
+      existing.id,
+      {
+        title: spec.title,
+        shortName: spec.title,
+        year: spec.year,
+        manufacturer: spec.manufacturer,
+        edition: spec.set,
+        cardNumber: spec.cardNumber,
+        description: showcaseDescription(spec),
+        gradeScaleEntryId,
+      },
+      `collector-asset-refresh-${randomUUID()}`,
+      `collector-asset-refresh:${spec.key}`,
+    );
     return db.asset.findUniqueOrThrow({ where: { id: existing.id } });
   }
   const set =
@@ -626,7 +907,7 @@ async function ensureAsset(
         categoryId,
         name: spec.set,
         slug: `${slug(spec.category)}-${slug(spec.set)}`,
-        manufacturer: spec.category,
+        manufacturer: spec.manufacturer,
         releaseYear: spec.year,
         status: 'ACTIVE',
       },
@@ -643,9 +924,10 @@ async function ensureAsset(
       title: spec.title,
       shortName: spec.title,
       year: spec.year,
-      manufacturer: spec.category,
+      manufacturer: spec.manufacturer,
       edition: spec.set,
-      description: `Staging showcase collectible: ${spec.title}.`,
+      cardNumber: spec.cardNumber,
+      description: showcaseDescription(spec),
       gradeScaleEntryId,
       certificationNumber: `STG-${spec.key.toUpperCase()}`,
     },
@@ -653,6 +935,17 @@ async function ensureAsset(
     `collector-asset:${spec.key}`,
   );
   return db.asset.findUniqueOrThrow({ where: { id: created.id } });
+}
+
+function showcaseDescription(spec: DemoAsset) {
+  return [
+    'Staging showcase reference only.',
+    `${spec.subject} · ${spec.set} · #${spec.cardNumber}.`,
+    spec.variant ? `Variant: ${spec.variant}.` : undefined,
+    'The displayed market observations and listing image are external references; Slice does not represent ownership of the pictured card.',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /**
@@ -759,10 +1052,10 @@ async function ensureSubmission(
         categoryId,
         declaredMetadata: {
           name: spec.title,
-          manufacturer: spec.category,
+          manufacturer: spec.manufacturer,
           year: String(spec.year),
           certificationNumber,
-          details: 'Staging collector showcase submission.',
+          details: `${spec.reference.source}; reference observed ${spec.reference.observedAt}. This is a reference-only staging showcase, and the illustrative Slice ownership terms are not an external sale offer.`,
         },
       },
       `collector-submission-${randomUUID()}`,
@@ -976,10 +1269,10 @@ async function ensureAssetLifecycle(
       admin,
       assetId,
       {
-        valueMinor: spec.valueMinor,
+        valueMinor: spec.illustrativeValueMinor,
         currency: 'GBP',
         confidence: 92,
-        methodologyCode: 'STAGING_DEMO_MARKET_REFERENCE',
+        methodologyCode: 'ILLUSTRATIVE_STAGING_SHARE_BASIS',
         sourceType: 'STAGING_DEMO',
       },
       `collector-valuation-${randomUUID()}`,
@@ -993,7 +1286,7 @@ async function ensureAssetLifecycle(
       admin,
       assetId,
       {
-        insuredValueMinor: spec.valueMinor,
+        insuredValueMinor: spec.illustrativeValueMinor,
         currency: 'GBP',
         effectiveAt: new Date(Date.now() - 3600000),
         expiresAt: new Date(Date.now() + 365 * 86400000),
@@ -1040,48 +1333,16 @@ async function ensureAssetLifecycle(
     );
 }
 
-async function ensureMarketHistory(
+async function ensureMarketReference(
   db: PrismaService,
   assetId: string,
   spec: DemoAsset,
 ) {
-  const now = new Date();
-  for (let day = 0; day < 90; day += 1) {
-    const observedAt = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate() - (89 - day),
-        12,
-      ),
-    );
-    const amount =
-      spec.valueMinor +
-      (spec.valueMinor *
-        demoMarketHistoryAdjustmentBps(spec.historyProfile, day)) /
-        10_000n;
-    await db.assetValuationPoint.upsert({
-      where: {
-        assetId_source_observedAt: {
-          assetId,
-          source: 'STAGING_DEMO_MARKET',
-          observedAt,
-        },
-      },
-      create: {
-        assetId,
-        observedAt,
-        source: 'STAGING_DEMO_MARKET',
-        estimatedMarketValueMinor: amount,
-        currency: 'GBP',
-        status: 'DEMO',
-      },
-      update: { estimatedMarketValueMinor: amount, status: 'DEMO' },
-    });
-  }
-  const asOf = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12),
-  );
+  const asOf = new Date(`${spec.reference.observedAt}T12:00:00.000Z`);
+  // The finance snapshot is deliberately an illustrative Slice ownership
+  // basis. Public reference listings and completed sales remain in the asset
+  // record's source-labelled copy; an external asking price is never treated
+  // as Slice's market value.
   await db.assetMarketSnapshot.upsert({
     where: {
       assetId_source_asOf: { assetId, source: 'STAGING_DEMO_MARKET', asOf },
@@ -1090,46 +1351,73 @@ async function ensureMarketHistory(
       assetId,
       asOf,
       source: 'STAGING_DEMO_MARKET',
-      estimatedMarketValueMinor: spec.valueMinor,
+      estimatedMarketValueMinor: spec.illustrativeValueMinor,
       currency: 'GBP',
-      change24hBps: spec.key.length % 2 ? 1243 : -321,
-      availableBps: 7000,
-      ownersCount: 24,
-      watchersCount: 86,
-      confidence: 92,
+      change24hBps: 0,
+      availableBps: spec.illustrativeAvailableBps,
+      ownersCount: null,
+      watchersCount: null,
+      confidence: null,
       status: 'DEMO',
     },
     update: {
-      estimatedMarketValueMinor: spec.valueMinor,
-      change24hBps: spec.key.length % 2 ? 1243 : -321,
-      availableBps: 7000,
-      ownersCount: 24,
-      watchersCount: 86,
-      confidence: 92,
+      estimatedMarketValueMinor: spec.illustrativeValueMinor,
+      change24hBps: 0,
+      availableBps: spec.illustrativeAvailableBps,
+      ownersCount: null,
+      watchersCount: null,
+      confidence: null,
       status: 'DEMO',
     },
   });
 }
 
 /**
- * A deterministic, persisted valuation profile for the specifically named
- * staging catalogue. These values populate real market-history rows only;
- * no chart data is assembled in the frontend.
+ * Persist external listing and completed-sale observations independently from
+ * the illustrative Slice share basis. These records are source-labelled and
+ * are never used to synthesize a movement, confidence, or market valuation.
  */
-export function demoMarketHistoryAdjustmentBps(
-  profile: DemoAsset['historyProfile'],
-  day: number,
+async function ensureExternalReferenceEvidence(
+  db: PrismaService,
+  assetId: string,
+  createdByUserId: string,
+  spec: DemoAsset,
 ) {
-  switch (profile) {
-    case 'UPWARD':
-      return BigInt(-500 + day * 19);
-    case 'DOWNWARD':
-      return BigInt(650 - day * 14);
-    case 'VOLATILE':
-      return BigInt(-320 + day * 8 + (((day * 37) % 11) - 5) * 115);
-    case 'STABLE':
-      return BigInt((((day * 17) % 7) - 3) * 24);
-  }
+  const persist = async (
+    kind: 'CURRENT_LISTING' | 'RECENT_COMPLETED_SALE',
+    observation: NonNullable<
+      DemoAsset['reference']['currentListing'] | DemoAsset['reference']['recentCompletedSale']
+    >,
+  ) => {
+    const sourceRef = JSON.stringify({
+      source: observation.source,
+      externalReference: observation.externalReference,
+      listingUrl: observation.listingUrl,
+      ...('imageUrl' in observation ? { imageUrl: observation.imageUrl } : {}),
+    });
+    const existing = await db.valuationEvidence.findFirst({
+      where: { assetId, sourceType: `STAGING_${kind}`, sourceRef },
+      select: { id: true },
+    });
+    const data = {
+      observedAt: new Date(`${observation.observedAt}T12:00:00.000Z`),
+      valueMinor: observation.amountMinor,
+      currency: observation.currency,
+      conditionBasis: kind,
+      confidence: 0,
+    };
+    if (existing) {
+      await db.valuationEvidence.update({ where: { id: existing.id }, data });
+      return;
+    }
+    await db.valuationEvidence.create({
+      data: { id: randomUUID(), assetId, sourceType: `STAGING_${kind}`, sourceRef, createdByUserId, ...data },
+    });
+  };
+  if (spec.reference.currentListing)
+    await persist('CURRENT_LISTING', spec.reference.currentListing);
+  if (spec.reference.recentCompletedSale)
+    await persist('RECENT_COMPLETED_SALE', spec.reference.recentCompletedSale);
 }
 
 /**
@@ -1154,14 +1442,14 @@ async function ensureDemoWatchlists(
   });
   const bySlug = new Map(published.map((item) => [item.slug, item.id]));
   const investorSlugs = [
-    'slice-demo-charizard',
-    'slice-demo-pikachu',
-    'slice-demo-jordan',
+    'slice-demo-umbreon-vmax-moonbreon',
+    'slice-demo-pikachu-grey-felt-hat',
+    'slice-demo-charizard-ex-obsidian-flames',
   ];
   const collectorSlugs = [
-    'slice-demo-charizard',
-    'slice-demo-blastoise',
-    'slice-demo-mantle',
+    'slice-demo-victor-wembanyama-prizm-rookie',
+    'slice-demo-connor-bedard-young-guns',
+    'slice-demo-umbreon-vmax-moonbreon',
   ];
   for (const [userId, slugs] of [
     [investorUserId, investorSlugs],
@@ -1383,7 +1671,7 @@ async function ensureMarketMakerInventory(
     where: { sourceReference },
   });
   if (!lot) {
-    const unitPrice = spec.valueMinor / 1000n;
+    const unitPrice = spec.illustrativeValueMinor / 1000n;
     await input.lots.recordAcquisition(
       marketMaker,
       {
@@ -1417,7 +1705,7 @@ async function ensureDemoExecution(
     select: { id: true },
   });
   if (prior) return;
-  const price = spec.valueMinor / 1000n;
+  const price = spec.illustrativeValueMinor / 1000n;
   await input.trading.place(
     seller,
     {
@@ -1453,7 +1741,7 @@ async function ensureDemoOrderBook(
   asset: { id: string; publicId: string; slug: string },
   spec: DemoAsset,
 ) {
-  const price = spec.valueMinor / 1000n;
+  const price = spec.illustrativeValueMinor / 1000n;
   const levels = [
     { actor: seller, side: 'SELL' as const, price: price + 50n, key: 'ask' },
     { actor: buyer, side: 'BUY' as const, price: price - 50n, key: 'bid' },
@@ -1507,7 +1795,7 @@ async function ensureCancelledDemoOrder(
       type: 'LIMIT',
       timeInForce: 'GTC',
       units: '5',
-      limitPriceMinor: (spec.valueMinor / 2000n).toString(),
+      limitPriceMinor: (spec.illustrativeValueMinor / 2000n).toString(),
     },
     `staging-demo-cancel-open:${spec.key}`,
     `staging-demo-cancel-open:${spec.key}`,

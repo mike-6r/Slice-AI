@@ -8,6 +8,9 @@ const dto = {
   title: "Charizard",
   shortName: null,
   year: 1999,
+  manufacturer: "The Pokémon Company",
+  cardNumber: "4/102",
+  description: "Reference-only staging record.",
   certificationNumber: "58291042",
   category: { slug: "pokemon", name: "Pokémon" },
   collectibleSet: null,
@@ -19,6 +22,7 @@ const dto = {
   source: "AUCTION_COMPS",
   dataStatus: "DELAYED" as const,
   asOf: "2026-08-06T00:00:00.000Z",
+  marketReference: null,
 };
 
 describe("HTTP catalogue mapping", () => {

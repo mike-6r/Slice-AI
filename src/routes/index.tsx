@@ -485,7 +485,7 @@ function HowSliceWorks() {
 
 function MarketMovers() {
   type MoverTab = keyof typeof HOMEPAGE_MARKET_MOVERS;
-  const [tab, setTab] = useState<MoverTab>("Top Gainers");
+  const [tab, setTab] = useState<MoverTab>("Modern Chase");
   return (
     <article className="approved-home__panel approved-home__movers">
       <header>

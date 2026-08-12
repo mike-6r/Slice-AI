@@ -34,6 +34,7 @@ export interface AssetMedia {
   order: number;
 }
 export interface CardDetails {
+  manufacturer?: string;
   set?: string;
   cardNumber?: string;
   year?: number;
@@ -92,5 +93,19 @@ export interface Asset {
     availabilityBps?: BasisPoints;
     /** Public aggregate owner count from the market snapshot. */
     ownersCount?: number;
+    /** Source-labelled external observations. Never a Slice ownership offer. */
+    reference?: {
+      currentListing?: ExternalMarketObservation;
+      recentCompletedSale?: ExternalMarketObservation;
+    };
   };
+}
+
+export interface ExternalMarketObservation {
+  amount: Money;
+  source: string;
+  externalReference: string;
+  listingUrl: string;
+  imageUrl?: string;
+  observedAt: ISODateTime;
 }

@@ -1,7 +1,7 @@
 /** Financial primitives used at frontend data boundaries. */
 export type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
-export type CurrencyCode = "GBP" | "USD" | "EUR";
+export type CurrencyCode = "GBP" | "USD" | "EUR" | "CAD";
 export type MinorUnits = Brand<number, "MinorUnits">;
 export type CryptoAmount = Brand<string, "CryptoAmount">;
 export type Percentage = Brand<number, "Percentage">;
