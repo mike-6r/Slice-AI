@@ -111,11 +111,17 @@ function AdminConsole() {
   const { section } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [userRole, setUserRole] = useState("");
   const [userStatus, setUserStatus] = useState("");
+  const [complianceFilter, setComplianceFilter] = useState("All");
   const [usersCursor, setUsersCursor] = useState<string | undefined>();
   useEffect(() => setUsersCursor(undefined), [search]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
   const user = useQuery({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
@@ -124,16 +130,19 @@ function AdminConsole() {
   const reviews = useQuery({
     queryKey: ["admin", "reviews"],
     queryFn: () => services.repositories.reviews.listQueue({ limit: 100 }),
+    enabled: section === "control",
     staleTime: 30_000,
   });
   const operations = useQuery({
     queryKey: ["admin", "operations"],
     queryFn: () => services.repositories.lifecycle.listOperations(),
+    enabled: section === "control" || section === "moderation",
     staleTime: 30_000,
   });
   const overview = useQuery({
     queryKey: ["admin", "overview"],
     queryFn: () => services.repositories.admin.getOverview(),
+    enabled: section === "control" || section === "compliance",
     staleTime: 30_000,
   });
   const users = useQuery({
@@ -258,8 +267,8 @@ function AdminConsole() {
           <label className="admin-console-search">
             <Search aria-hidden="true" />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search this workspace"
               aria-label="Search this workspace"
             />
@@ -279,7 +288,10 @@ function AdminConsole() {
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
                     search={{ section: "users", user: result.id }}
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                    }}
                   >
                     {content}
                   </Link>
@@ -287,7 +299,10 @@ function AdminConsole() {
                   <a
                     key={`${result.entityType}-${result.id}`}
                     href={result.target}
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                    }}
                   >
                     {content}
                   </a>
@@ -301,11 +316,12 @@ function AdminConsole() {
             reviews={reviewItems}
             operations={operationItems}
             attentionOperations={attentionOperations}
-            loading={reviews.isLoading || operations.isLoading}
-            failed={reviews.isError || operations.isError}
+            loading={reviews.isLoading || operations.isLoading || overview.isLoading}
+            failed={reviews.isError || operations.isError || overview.isError}
             retry={() => {
               void reviews.refetch();
               void operations.refetch();
+              void overview.refetch();
             }}
             select={select}
             overview={overview.data}
@@ -338,10 +354,15 @@ function AdminConsole() {
         ) : section === "compliance" ? (
           <ComplianceWorkspace
             cases={compliance.data?.items ?? []}
-            loading={compliance.isLoading}
-            failed={compliance.isError}
-            retry={() => void compliance.refetch()}
+            loading={compliance.isLoading || overview.isLoading}
+            failed={compliance.isError || overview.isError}
+            retry={() => {
+              void compliance.refetch();
+              void overview.refetch();
+            }}
             overview={overview.data}
+            filter={complianceFilter}
+            setFilter={setComplianceFilter}
           />
         ) : section === "payments" ? (
           <PaymentsWorkspace
@@ -432,6 +453,7 @@ function ControlCenter({
       operations.filter((item) => item.custodyStatus !== "SECURED").length,
     market: operations.filter((item) => item.publicationStatus === "PUBLISHED").length,
   };
+  const pendingReviews = overview?.reviews.pending ?? reviews.length;
   return (
     <div className="admin-console-content">
       <section className="admin-console-heading">
@@ -463,7 +485,7 @@ function ControlCenter({
             action="Review assets"
             onClick={() => select("moderation")}
           />
-          {reviews.length || attentionOperations.length ? (
+          {pendingReviews || attentionOperations.length ? (
             <div className="admin-attention-list">
               {reviews.slice(0, 4).map((item) => (
                 <AdminAttention
@@ -474,6 +496,14 @@ function ControlCenter({
                   tone="warning"
                 />
               ))}
+              {!reviews.length && pendingReviews ? (
+                <AdminAttention
+                  type="Asset review"
+                  subject={`${pendingReviews} review${pendingReviews === 1 ? "" : "s"} pending`}
+                  detail="Open Asset Moderation to inspect the authoritative queue."
+                  tone="warning"
+                />
+              ) : null}
               {attentionOperations.slice(0, 4).map((item) => (
                 <AdminAttention
                   key={item.id}
@@ -493,8 +523,8 @@ function ControlCenter({
           <div className="admin-status-list">
             <StatusRow label="API reads" status="Operational" icon={Gauge} />
             <StatusRow label="Database / queues" status="Unknown" icon={Database} />
-            <StatusRow label="Notifications" status="Not exposed" icon={Activity} />
-            <StatusRow label="Provider health" status="Not exposed" icon={Globe2} />
+            <StatusRow label="Notifications" status="Unknown" icon={Activity} />
+            <StatusRow label="Provider health" status="Unknown" icon={Globe2} />
           </div>
         </section>
       </div>
@@ -588,7 +618,6 @@ function AssetModeration({
                 </small>
               </div>
               <span className="admin-record-status">{moderationStage(item)}</span>
-              <ArrowRight aria-hidden="true" />
             </article>
           ))}
         </div>
@@ -909,13 +938,25 @@ function ComplianceWorkspace({
   failed,
   retry,
   overview,
+  filter,
+  setFilter,
 }: {
   cases: AdminComplianceCase[];
   loading: boolean;
   failed: boolean;
   retry: () => void;
   overview?: AdminOverview;
+  filter: string;
+  setFilter: (value: string) => void;
 }) {
+  const visibleCases = cases.filter((item) => {
+    const value = `${item.type} ${item.provider} ${item.status}`.toLowerCase();
+    if (filter === "All") return true;
+    if (filter === "Resolved") return ["APPROVED", "REJECTED", "EXPIRED"].includes(item.status);
+    if (filter === "Provider Issue") return value.includes("provider");
+    if (filter === "Manual Review") return value.includes("manual");
+    return value.includes(filter.toLowerCase().replace(" / ", " "));
+  });
   return (
     <AdminPageSection
       title="Compliance"
@@ -938,9 +979,13 @@ function ComplianceWorkspace({
       <div className="admin-filter-row">
         {["All", "Identity / KYC", "KYT", "Manual Review", "Provider Issue", "Resolved"].map(
           (label) => (
-            <span className="admin-filter-chip" key={label}>
+            <button
+              className={`admin-filter-chip ${filter === label ? "is-active" : ""}`}
+              key={label}
+              onClick={() => setFilter(label)}
+            >
               {label}
-            </span>
+            </button>
           ),
         )}
       </div>
@@ -952,9 +997,9 @@ function ComplianceWorkspace({
           detail="Cases could not be loaded safely."
           retry={retry}
         />
-      ) : cases.length ? (
+      ) : visibleCases.length ? (
         <div className="admin-record-list">
-          {cases.map((item) => (
+          {visibleCases.map((item) => (
             <article className="admin-record admin-record--case" key={item.id}>
               <span className="admin-record-icon">
                 <ShieldCheck aria-hidden="true" />
@@ -969,14 +1014,15 @@ function ComplianceWorkspace({
                 </small>
               </div>
               <span className="admin-status-pill">{sentence(item.status)}</span>
-              <button className="admin-inline-action">
-                Open <ArrowRight aria-hidden="true" />
-              </button>
+              <span className="admin-muted">Detail unavailable</span>
             </article>
           ))}
         </div>
       ) : (
-        <AdminEmpty detail="No open compliance cases." icon={ShieldCheck} />
+        <AdminEmpty
+          detail={filter === "All" ? "No open compliance cases." : "No cases match these filters."}
+          icon={ShieldCheck}
+        />
       )}
     </AdminPageSection>
   );
@@ -1080,7 +1126,7 @@ function Integrations({
   return (
     <AdminPageSection
       title="Integrations"
-      detail="Configuration summaries will appear when an admin-safe provider projection is connected."
+      detail={`Provider status is only shown where the backend can determine it. ${query.data?.providerIncidents ?? 0} open incidents · ${query.data?.failedWebhooks ?? 0} failed webhooks.`}
     >
       <div className="admin-integration-grid">
         {["Plaid", "Bridge", "BlockchainAnalysis.io", "Market Data", "Email", "Notifications"].map(
@@ -1093,9 +1139,7 @@ function Integrations({
                   ? `${query.data?.failedWebhooks ?? 0} failed webhooks`
                   : "No secrets displayed"}
               </small>
-              <span>
-                {query.data?.providerIncidents ? "Degraded" : "Operational"} · safe summary
-              </span>
+              <span>Unknown · safe summary</span>
             </article>
           ),
         )}
@@ -1228,7 +1272,6 @@ function AdminAttention({
         <strong>{subject}</strong>
         <span>{detail}</span>
       </div>
-      <ArrowRight aria-hidden="true" />
     </article>
   );
 }
