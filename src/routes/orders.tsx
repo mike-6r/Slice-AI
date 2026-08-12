@@ -19,6 +19,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type { Asset, PortfolioSummary, TradingExecution, TradingOrderView } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -385,6 +386,7 @@ function OrdersTable({
                       key={order.id}
                       order={order}
                       asset={resolveAsset(order)}
+                      assetSlug={order.assetSlug}
                       confirming={confirmingOrderId === order.id}
                       setConfirming={() => setConfirmingOrderId(order.id)}
                       clearConfirming={() => setConfirmingOrderId(null)}
@@ -411,6 +413,7 @@ function OrdersTable({
 function OrderRow({
   order,
   asset,
+  assetSlug,
   confirming,
   setConfirming,
   clearConfirming,
@@ -418,6 +421,7 @@ function OrderRow({
 }: {
   order: TradingOrderView;
   asset?: Asset;
+  assetSlug: string | null;
   confirming: boolean;
   setConfirming: () => void;
   clearConfirming: () => void;
@@ -427,7 +431,7 @@ function OrderRow({
   return (
     <tr>
       <td>
-        <AssetLabel asset={asset} />
+        <AssetLabel asset={asset} assetSlug={assetSlug} />
       </td>
       <td>
         <SidePill side={order.side} />
@@ -445,28 +449,35 @@ function OrderRow({
       </td>
       <td>{formatOrderDate(order.createdAt)}</td>
       <td>
-        {cancellable ? (
-          confirming ? (
-            <span className="orders-confirm">
-              <button
-                type="button"
-                disabled={cancellation.isPending}
-                onClick={() => cancellation.mutate(order.id)}
-              >
-                Confirm
+        <div className="orders-actions">
+          {assetSlug ? (
+            <Link to="/asset/$id" params={{ id: assetSlug }} className="orders-view-action">
+              {order.status === "FILLED" ? "View asset" : "View"}
+            </Link>
+          ) : null}
+          {cancellable ? (
+            confirming ? (
+              <span className="orders-confirm">
+                <button
+                  type="button"
+                  disabled={cancellation.isPending}
+                  onClick={() => cancellation.mutate(order.id)}
+                >
+                  Confirm
+                </button>
+                <button type="button" disabled={cancellation.isPending} onClick={clearConfirming}>
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="orders-cancel" onClick={setConfirming}>
+                {order.status === "PARTIALLY_FILLED" ? "Cancel remainder" : "Cancel"}
               </button>
-              <button type="button" disabled={cancellation.isPending} onClick={clearConfirming}>
-                Keep
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="orders-cancel" onClick={setConfirming}>
-              Cancel
-            </button>
-          )
-        ) : (
-          <span className="orders-no-action">—</span>
-        )}
+            )
+          ) : !assetSlug ? (
+            <span className="orders-no-action">—</span>
+          ) : null}
+        </div>
         {cancellation.isError && confirming ? (
           <p className="orders-cancel-error">
             Cancellation was not completed. Refresh to see the current order state.
@@ -542,6 +553,7 @@ function RecentExecutionsPanel({
                           asset={[...assets.values()].find(
                             (asset) => asset.slug === execution.assetSlug,
                           )}
+                          assetSlug={execution.assetSlug}
                         />
                       </td>
                       <td>
@@ -628,8 +640,10 @@ function ReservationContextPanel({ query }: { query: UseQueryResult<PortfolioSum
               <p className="orders-reservation-empty">No ownership shares are reserved.</p>
             )}
             <p className="orders-reservation-note">
-              Reserved resources remain excluded from available balances until an order fills or is
-              cancelled.
+              Reserved resources remain unavailable until the related order fills or is cancelled.
+              <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                View affected orders <ArrowRight aria-hidden="true" />
+              </button>
             </p>
           </>
         )}
@@ -727,20 +741,21 @@ function OrdersPanel({
     </section>
   );
 }
-function AssetLabel({ asset }: { asset?: Asset }) {
+function AssetLabel({ asset, assetSlug }: { asset?: Asset; assetSlug?: string | null }) {
+  const showcaseMedia = assetShowcaseMedia(asset?.slug ?? assetSlug ?? "");
   const media = asset?.media.find((item) => item.kind === "image");
   const grade = asset?.grade ? `${asset.grade.company} ${asset.grade.label}` : null;
   const content = (
     <>
-      {media ? (
-        <img src={media.url} alt="" />
+      {showcaseMedia || media ? (
+        <img src={showcaseMedia?.src ?? media!.url} alt="" />
       ) : (
         <span aria-hidden="true">
           <Landmark />
         </span>
       )}
       <div>
-        <strong>{asset?.details.title ?? "Collectible asset"}</strong>
+        <strong>{asset?.details.title ?? "Asset reference unavailable"}</strong>
         <small>
           {grade ?? asset?.details.card?.set ?? asset?.details.category ?? "Public asset"}
         </small>
@@ -847,8 +862,8 @@ function activityLabel(order: TradingOrderView) {
   return `Order ${formatOrderStatus(order.status).toLowerCase()}`;
 }
 function activityDetail(order: TradingOrderView, asset?: Asset) {
-  const title = asset?.details.title ?? "Collectible asset";
-  return `${order.side === "BUY" ? "Buy" : "Sell"} ${order.originalUnits} shares of ${title} at ${formatOrderMoney(order.limitPriceMinor)} per share`;
+  const title = asset?.details.title ?? "Asset reference unavailable";
+  return `${order.originalUnits} shares · ${title} · ${formatOrderMoney(order.limitPriceMinor)}/share`;
 }
 function formatOrderDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(

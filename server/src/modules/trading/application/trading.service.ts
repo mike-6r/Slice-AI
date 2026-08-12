@@ -474,7 +474,13 @@ export class TradingService {
 
   async ownOrders(userId: string, cursor?: string, limit = 20) {
     const rows = await this.db.tradingOrder.findMany({
-      where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
+      // Archived assets remain in the audit ledger, but are no longer part of
+      // a customer's active catalogue or current Orders workspace.
+      where: {
+        userId,
+        asset: { status: 'PUBLISHED' },
+        ...(cursor ? { id: { lt: cursor } } : {}),
+      },
       include: { asset: { select: { slug: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -494,6 +500,7 @@ export class TradingService {
           {
             OR: [{ buyOrder: { userId } }, { sellOrder: { userId } }],
           },
+          { asset: { status: 'PUBLISHED' } },
           ...(before
             ? [
                 {

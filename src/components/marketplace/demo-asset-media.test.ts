@@ -3,11 +3,18 @@ import { assetShowcaseMedia } from "./demo-asset-media";
 
 describe("staging marketplace media", () => {
   it("maps only exact catalogue identities to their approved media", () => {
-    expect(assetShowcaseMedia("slice-demo-charizard")?.key).toBe("charizard-slab");
-    expect(assetShowcaseMedia("slice-demo-pikachu")?.key).toBe("pikachu-illustrator");
-    expect(assetShowcaseMedia("slice-demo-jordan")?.key).toBe("jordan-rookie");
-    expect(assetShowcaseMedia("slice-demo-black-lotus")?.key).toBe("black-lotus");
-    expect(assetShowcaseMedia("slice-demo-one-piece")?.key).toBe("one-piece");
+    expect(assetShowcaseMedia("slice-demo-charizard-ex-obsidian-flames")?.key).toBe(
+      "charizard-psa10",
+    );
+    expect(assetShowcaseMedia("slice-demo-pikachu-grey-felt-hat")?.key).toBe("pikachu-psa10");
+    expect(assetShowcaseMedia("slice-demo-umbreon-vmax-moonbreon")?.key).toBe("umbreon-psa10");
+    expect(assetShowcaseMedia("slice-demo-victor-wembanyama-prizm-rookie")?.key).toBe(
+      "wembanyama-bgs95",
+    );
+    expect(assetShowcaseMedia("slice-demo-connor-bedard-young-guns")?.key).toBe("bedard-psa10");
+    expect(assetShowcaseMedia("slice-demo-cj-stroud-purple-pulsar-rookie")?.key).toBe(
+      "stroud-psa10",
+    );
   });
 
   it.each([

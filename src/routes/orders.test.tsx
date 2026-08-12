@@ -149,7 +149,7 @@ describe("Document 014 orders UI", () => {
     expect(html).toContain("Reserved cash");
     expect(html).toContain("Cancel");
     expect(html).toContain("Recent executions");
-    expect(html).toContain("Buy 2 shares of Safe asset");
+    expect(html).toContain("2 shares · Safe asset · £1,850.00/share");
     expect(html).not.toContain("order-safe");
     expect(html).not.toContain("execution-safe");
     expect(html).not.toContain("Asset reference unavailable");

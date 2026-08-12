@@ -16932,11 +16932,12 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   font-size: 0.68rem;
 }
 .orders-table-wrap {
-  overflow-x: auto;
+  min-width: 0;
 }
 .orders-table {
   width: 100%;
-  min-width: 72rem;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: collapse;
   color: #dbe0e7;
   font-size: 0.7rem;
@@ -16958,12 +16959,23 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 }
 .orders-table th:first-child,
 .orders-table td:first-child {
-  min-width: 13rem;
+  width: 24%;
+  min-width: 0;
   padding-left: 0;
 }
+.orders-table th:nth-child(2), .orders-table td:nth-child(2) { width: 6%; }
+.orders-table th:nth-child(3), .orders-table td:nth-child(3) { width: 5%; }
+.orders-table th:nth-child(4), .orders-table td:nth-child(4) { width: 11%; }
+.orders-table th:nth-child(5), .orders-table td:nth-child(5) { width: 6%; }
+.orders-table th:nth-child(6), .orders-table td:nth-child(6) { width: 9%; }
+.orders-table th:nth-child(7), .orders-table td:nth-child(7) { width: 9%; }
+.orders-table th:nth-child(8), .orders-table td:nth-child(8) { width: 5%; }
+.orders-table th:nth-child(9), .orders-table td:nth-child(9) { width: 9%; }
+.orders-table th:nth-child(10), .orders-table td:nth-child(10) { width: 8%; }
+.orders-table th:nth-child(11), .orders-table td:nth-child(11) { width: 8%; }
 .orders-asset {
   display: flex;
-  min-width: 11rem;
+  min-width: 0;
   align-items: center;
   gap: 0.55rem;
   text-decoration: none;
@@ -16989,10 +17001,11 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 .orders-asset small {
   display: block;
   overflow: hidden;
-  max-width: 11rem;
+  max-width: none;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.orders-asset > div { min-width: 0; }
 .orders-asset strong {
   color: #e7eaf0;
   font-size: 0.7rem;
@@ -17034,7 +17047,11 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   color: #aeb7c4;
 }
 .orders-cancel,
-.orders-confirm button {
+.orders-confirm button,
+.orders-view-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 1.75rem;
   border: 1px solid rgba(255, 119, 129, 0.26);
   border-radius: 0.35rem;
@@ -17043,6 +17060,8 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   font-size: 0.62rem;
   font-weight: 700;
 }
+.orders-view-action { border-color: rgba(20, 233, 193, 0.22); color: #27dfbc; text-decoration: none; }
+.orders-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 0.32rem; }
 .orders-confirm {
   display: inline-flex;
   gap: 0.3rem;
@@ -17150,6 +17169,8 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   font-size: 0.65rem;
   line-height: 1.45;
 }
+.orders-reservation-note button { display: inline-flex; align-items: center; gap: 0.2rem; margin-top: 0.45rem; color: var(--color-accent); font-weight: 700; }
+.orders-reservation-note button svg { width: 0.76rem; height: 0.76rem; }
 .orders-reservation-empty {
   margin-top: 0.75rem;
 }
@@ -17387,6 +17408,14 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   .orders-layout__side {
     grid-template-columns: minmax(0, 1fr);
   }
+  .orders-table th:nth-child(5), .orders-table td:nth-child(5), .orders-table th:nth-child(7), .orders-table td:nth-child(7), .orders-table th:nth-child(8), .orders-table td:nth-child(8), .orders-table th:nth-child(10), .orders-table td:nth-child(10) { display: none; }
+  .orders-table th:first-child, .orders-table td:first-child { width: 29%; }
+  .orders-table th:nth-child(2), .orders-table td:nth-child(2) { width: 9%; }
+  .orders-table th:nth-child(3), .orders-table td:nth-child(3) { width: 8%; }
+  .orders-table th:nth-child(4), .orders-table td:nth-child(4) { width: 16%; }
+  .orders-table th:nth-child(6), .orders-table td:nth-child(6) { width: 12%; }
+  .orders-table th:nth-child(9), .orders-table td:nth-child(9) { width: 12%; }
+  .orders-table th:nth-child(11), .orders-table td:nth-child(11) { width: 14%; }
 }
 @media (max-width: 520px) {
   .orders-kpis {
