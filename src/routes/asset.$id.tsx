@@ -9,6 +9,7 @@ import { toMarketplaceAsset } from "@/components/marketplace/market-api-presenta
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { queryKeys } from "@/queries/keys";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -25,21 +26,21 @@ function AssetPage() {
   const { isAuthenticated } = useSession();
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>("30D");
   const assetQuery = useQuery({
-    queryKey: ["asset", id],
+    queryKey: queryKeys.assets.detail(id),
     queryFn: () => services.assets.get(id as never),
   });
   const historyQuery = useQuery({
-    queryKey: ["asset", id, "history", period],
+    queryKey: queryKeys.market.history(id, period),
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.market.priceHistory(id as never, period),
   });
   const issuanceQuery = useQuery({
-    queryKey: ["asset", id, "issuance"],
+    queryKey: ["ownership", "issuance", id],
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.ownership.publicIssuance(id),
   });
   const ownPositionQuery = useQuery({
-    queryKey: ["asset", id, "own-position"],
+    queryKey: ["ownership", "position", id],
     enabled: isAuthenticated && Boolean(assetQuery.data),
     queryFn: () => services.ownership.ownMarketPosition(id),
   });
@@ -53,12 +54,12 @@ function AssetPage() {
       }),
   });
   const orderBookQuery = useQuery({
-    queryKey: ["asset", id, "order-book"],
+    queryKey: queryKeys.market.orderBook(id),
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.market.orderBook(id as never),
   });
   const tradesQuery = useQuery({
-    queryKey: ["asset", id, "recent-trades"],
+    queryKey: queryKeys.market.recentTrades(id),
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.market.recentTrades(id as never),
   });

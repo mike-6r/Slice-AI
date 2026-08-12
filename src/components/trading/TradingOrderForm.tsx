@@ -174,20 +174,29 @@ export function TradingOrderForm({
     staleTime: 0,
   });
 
+  const refreshTradingViews = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.market.summary }),
+      queryClient.invalidateQueries({ queryKey: ["marketplace", "public-catalogue"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.market.orderBook(assetSlug) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.market.recentTrades(assetSlug) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.trading.orders }),
+      queryClient.invalidateQueries({ queryKey: ["trading", "executions"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.summary }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.holdings }),
+      queryClient.invalidateQueries({ queryKey: ["portfolio", "transactions"] }),
+      queryClient.invalidateQueries({ queryKey: ["ownership", "issuance", assetSlug] }),
+      queryClient.invalidateQueries({ queryKey: ["ownership", "position", assetSlug] }),
+    ]);
+  };
+
   const place = useMutation({
     mutationFn: services.trading.placeOrder,
-    onSuccess: (value) => {
+    onSuccess: async (value) => {
+      await refreshTradingViews();
       setResult(value);
       setStage("result");
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.summary }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.holdings }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.transactions() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.trading.orders }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.market.orderBook(assetSlug) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.market.recentTrades(assetSlug) }),
-        queryClient.invalidateQueries({ queryKey: ["ownership", "position", assetSlug] }),
-      ]);
     },
   });
 
@@ -285,7 +294,7 @@ export function TradingOrderForm({
             />
             <Cell label="Status" value={formatStatus(result.status)} />
           </dl>
-          <div className="trading-actions">
+          <div className="trading-actions trading-result-actions">
             <Link to="/orders" className="primary-action">
               View orders
             </Link>
@@ -528,7 +537,7 @@ export function TradingOrderForm({
                   {messageFor(place.error)}
                 </p>
               )}
-              <div className="trading-actions">
+              <div className="trading-actions trading-review-actions">
                 <button
                   type="button"
                   disabled={!orderInput || place.isPending}

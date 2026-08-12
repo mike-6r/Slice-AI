@@ -77,9 +77,17 @@ export function Orders() {
     onSuccess: async () => {
       setConfirmingOrderId(null);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.market.summary }),
+        queryClient.invalidateQueries({ queryKey: ["marketplace", "public-catalogue"] }),
+        queryClient.invalidateQueries({ queryKey: ["market", "order-book"] }),
+        queryClient.invalidateQueries({ queryKey: ["market", "recent-trades"] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trading.orders }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.trading.executions() }),
+        queryClient.invalidateQueries({ queryKey: ["trading", "executions"] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.summary }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.holdings }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio", "transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["ownership", "position"] }),
       ]);
     },
   });

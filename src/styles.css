@@ -21375,6 +21375,75 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
   color: var(--color-subtle);
 }
 
+/* The featured Vault Live path is a real grid: the lifecycle track and its
+ * public-asset detail occupy separate rows, so the final timeline item never
+ * competes with the divider below it. */
+.vault-live-visual {
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: auto;
+  min-height: 19rem;
+}
+.vault-live-visual__asset {
+  height: auto;
+  min-height: 17.5rem;
+  grid-row: 1 / span 2;
+}
+.vault-live-visual__track {
+  align-self: center;
+  min-width: 0;
+  padding-bottom: 0.9rem;
+}
+.vault-live-visual__detail {
+  position: static;
+  min-width: 0;
+  grid-column: 2;
+  align-self: end;
+  padding-top: 0.85rem;
+}
+.vault-live-visual__detail strong,
+.vault-live-visual__detail p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.trading-review-actions,
+.trading-result-actions {
+  gap: 0.75rem;
+}
+.trading-review-actions > button,
+.trading-result-actions > a {
+  display: inline-flex;
+  min-height: 3.125rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.78rem 1.1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .vault-live-visual {
+    grid-template-rows: 13rem auto auto;
+    min-height: 0;
+  }
+  .vault-live-visual__asset {
+    min-height: 0;
+    height: 13rem;
+    grid-row: auto;
+  }
+  .vault-live-visual__track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-self: start;
+    padding-bottom: 0;
+  }
+  .vault-live-visual__detail {
+    grid-column: auto;
+  }
+}
+
 /* Asset-specific D14 order entry. Financial and ownership values remain API authoritative. */
 .trading-order-page {
   width: min(calc(100% - clamp(2rem, 6vw, 6.5rem)), 92rem);
