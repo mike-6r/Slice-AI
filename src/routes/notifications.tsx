@@ -116,24 +116,28 @@ function Notifications() {
           </button>
         </section>
       ) : list.data?.length ? (
-        <div className="mt-7 overflow-hidden rounded-xl border border-border bg-elevated">
+        <div className="notification-list mt-7 overflow-hidden rounded-xl border border-border bg-elevated">
           {list.data.map((item) => (
             <button
               key={item.id}
               type="button"
               disabled={Boolean(item.readAt) || read.isPending}
               onClick={() => read.mutate(item.id)}
-              className="flex w-full gap-3 border-b border-border p-4 text-left last:border-0 hover:bg-surface"
+              className="notification-list__row flex w-full gap-3 border-b border-border p-4 text-left last:border-0 hover:bg-surface"
             >
-              <span className={item.readAt ? "mt-1 text-muted" : "mt-1 text-accent"}>
+              <span
+                className={`notification-list__icon ${item.readAt ? "text-muted" : "text-accent"}`}
+              >
                 {item.readAt ? <Bell className="size-4" /> : <CircleDot className="size-4" />}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex justify-between gap-3">
-                  <span className="font-semibold">{item.title}</span>
+              <span className="notification-list__copy min-w-0 flex-1">
+                <span className="notification-list__heading flex justify-between gap-3">
+                  <span className="notification-list__title font-semibold">{item.title}</span>
                   <span className="shrink-0 text-xs text-muted">{formatDate(item.createdAt)}</span>
                 </span>
-                <span className="mt-1 block text-sm leading-6 text-subtle">{item.body}</span>
+                <span className="notification-list__body mt-1 block text-sm leading-6 text-subtle">
+                  {item.body}
+                </span>
               </span>
             </button>
           ))}

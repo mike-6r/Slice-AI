@@ -90,7 +90,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
       </header>
       <div className="featured-collector-identity">
         <CollectorAvatar collector={collector} featured />
-        <div>
+        <div className="featured-collector-identity__copy">
           <h2>
             {collector.displayName}
             <BadgeCheck aria-label="Public collector" />

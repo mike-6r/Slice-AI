@@ -21223,7 +21223,9 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
  * allowed to shrink; the published-card grid then consumes only the available
  * featured-panel width instead of reserving a fourth empty fixed track. */
 .collectors-spotlight {
-  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.85fr);
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 13fr) minmax(0, 7fr);
 }
 .collectors-spotlight > .featured-collector-card,
 .collectors-spotlight > .collector-discovery-panel,
@@ -21231,9 +21233,138 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
 .featured-holdings-grid,
 .featured-holding-card {
   min-width: 0;
+  max-width: 100%;
 }
 .featured-holdings-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.75rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+}
+.featured-collector-identity__copy,
+.featured-collector-identity h2,
+.featured-holding-copy,
+.featured-holding-copy > div {
+  min-width: 0;
+}
+.featured-collector-identity h2,
+.featured-collector-identity strong,
+.featured-collector-identity p,
+.featured-holding-copy h4,
+.featured-holding-copy > p,
+.featured-holding-copy > div strong,
+.featured-holding-copy > div span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.featured-collector-identity h2 svg {
+  flex: 0 0 auto;
+}
+.featured-holding-media img {
+  max-width: 100%;
+}
+
+.portfolio-asset {
+  min-width: 0;
+}
+.portfolio-asset__icon {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 2.15rem;
+  place-items: center;
+  border: 1px solid rgba(158, 174, 194, 0.14);
+  border-radius: 0.4rem;
+  background: linear-gradient(145deg, rgba(31, 51, 55, 0.92), rgba(16, 23, 28, 0.9));
+  color: #a2acb8;
+}
+.portfolio-asset__icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.portfolio-asset__copy {
+  display: block;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  place-items: initial;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.portfolio-asset__copy strong,
+.portfolio-asset__copy small {
+  display: block;
+  overflow: hidden;
+  max-width: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-notification-button {
+  line-height: 1;
+}
+.header-notification-button > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+.header-icon__badge {
+  top: 0.23rem;
+  right: 0.18rem;
+  display: grid;
+  min-width: 0.85rem;
+  height: 0.85rem;
+  place-items: center;
+  padding-inline: 0.14rem;
+  border-width: 1px;
+  color: var(--color-background);
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.notification-list__row {
+  min-height: 4.5rem;
+  align-items: flex-start;
+}
+.notification-list__icon {
+  display: grid;
+  width: 1rem;
+  flex: 0 0 1rem;
+  place-items: center;
+  margin-top: 0.16rem;
+}
+.notification-list__copy,
+.notification-list__heading,
+.notification-list__title,
+.notification-list__body {
+  min-width: 0;
+}
+.notification-list__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notification-list__body {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .collectors-spotlight {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .featured-holdings-grid {
+    display: grid;
+    margin-right: 0;
+    overflow: visible;
+    padding: 0;
+    scroll-snap-type: none;
+  }
+  .featured-holding-card {
+    flex: initial;
+  }
+  .notification-list__heading {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
 }
 .featured-holding-media > svg {
   position: relative;

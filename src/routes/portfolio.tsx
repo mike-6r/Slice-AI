@@ -533,7 +533,7 @@ function TransactionsPanel({
 function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
   return (
     <>
-      <span aria-hidden="true">
+      <span className="portfolio-asset__icon" aria-hidden="true">
         <Landmark />
       </span>
       <span className="portfolio-asset__copy">

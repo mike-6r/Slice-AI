@@ -403,7 +403,7 @@ function NotificationButton({ unread }: { unread: number }) {
     <Link
       to="/notifications"
       aria-label="Notifications"
-      className="header-icon relative grid size-9 place-items-center rounded-lg text-subtle"
+      className="header-icon header-notification-button relative grid size-9 shrink-0 place-items-center rounded-lg text-subtle"
     >
       <Bell className="size-[18px]" aria-hidden="true" />
       {unread > 0 && (
