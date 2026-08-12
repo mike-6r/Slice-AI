@@ -61,6 +61,7 @@ const metadataAllowedKeys = new Set([
   'provenanceNotes',
   'knownDefects',
   'termsAcknowledged',
+  'customerReference',
 ]);
 
 @Injectable()
@@ -883,52 +884,66 @@ export class SubmissionService {
     const requestHash = createHash('sha256')
       .update(`${method}\n${path}\n${JSON.stringify(body)}`)
       .digest('hex');
-    return this.prisma.$transaction(async (db) => {
-      const identityTx = createIdentityTransaction(db);
-      const acquired = await identityTx.idempotency.acquire(
-        identity,
-        requestHash,
-        new Date(Date.now() + 86_400_000),
-      );
-      if (acquired.state === 'FINGERPRINT_CONFLICT')
+    try {
+      return await this.prisma.$transaction(async (db) => {
+        const identityTx = createIdentityTransaction(db);
+        const acquired = await identityTx.idempotency.acquire(
+          identity,
+          requestHash,
+          new Date(Date.now() + 86_400_000),
+        );
+        if (acquired.state === 'FINGERPRINT_CONFLICT')
+          throw new ConflictException({
+            code: 'IDEMPOTENCY_KEY_CONFLICT',
+            message: 'The request key cannot be reused for this operation.',
+          });
+        if (acquired.state === 'EXISTING_IN_PROGRESS')
+          throw new ConflictException({
+            code: 'PERSISTENCE_CONFLICT',
+            message: 'The request is already in progress. Please retry.',
+          });
+        if (acquired.state === 'EXISTING_COMPLETED')
+          return acquired.record.response!.body as T;
+        const audit = (
+          action: string,
+          resourceType: string,
+          resourceId: string,
+          metadata: Record<string, unknown>,
+        ) =>
+          identityTx.audit.append({
+            id: randomUUID(),
+            actorUserId: actor.userId,
+            actorType: 'USER',
+            action,
+            resourceType,
+            resourceId,
+            requestId,
+            sessionId: actor.sessionId as never,
+            result: 'SUCCESS',
+            metadata,
+            createdAt: new Date(),
+          });
+        const result = await work(db, audit);
+        await identityTx.idempotency.complete(
+          identity,
+          { status: 200, body: result },
+          new Date(),
+        );
+        return result;
+      });
+    } catch (error) {
+      // Overlapping PATCH writes can make PostgreSQL abort one transaction.
+      // This is an expected optimistic-concurrency outcome, not a 500.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      )
         throw new ConflictException({
-          code: 'IDEMPOTENCY_KEY_CONFLICT',
-          message: 'The request key cannot be reused for this operation.',
+          code: 'SUBMISSION_VERSION_CONFLICT',
+          message: 'This submission has been updated. Refresh and try again.',
         });
-      if (acquired.state === 'EXISTING_IN_PROGRESS')
-        throw new ConflictException({
-          code: 'PERSISTENCE_CONFLICT',
-          message: 'The request is already in progress. Please retry.',
-        });
-      if (acquired.state === 'EXISTING_COMPLETED')
-        return acquired.record.response!.body as T;
-      const audit = (
-        action: string,
-        resourceType: string,
-        resourceId: string,
-        metadata: Record<string, unknown>,
-      ) =>
-        identityTx.audit.append({
-          id: randomUUID(),
-          actorUserId: actor.userId,
-          actorType: 'USER',
-          action,
-          resourceType,
-          resourceId,
-          requestId,
-          sessionId: actor.sessionId as never,
-          result: 'SUCCESS',
-          metadata,
-          createdAt: new Date(),
-        });
-      const result = await work(db, audit);
-      await identityTx.idempotency.complete(
-        identity,
-        { status: 200, body: result },
-        new Date(),
-      );
-      return result;
-    });
+      throw error;
+    }
   }
 
   private async ownerForUpdate(
@@ -1003,13 +1018,49 @@ function jsonMetadata(
   if (value === undefined) return undefined;
   if (value === null) return Prisma.JsonNull;
   for (const [key, item] of Object.entries(value)) {
-    if (!metadataAllowedKeys.has(key) || !isSafeMetadata(item))
+    if (
+      !metadataAllowedKeys.has(key) ||
+      (key === 'customerReference'
+        ? !isSafeCustomerReference(item)
+        : !isSafeMetadata(item))
+    )
       throw new UnprocessableEntityException({
         code: 'VALIDATION_FAILED',
         message: 'Submission metadata is invalid.',
       });
   }
   return value as Prisma.InputJsonValue;
+}
+function isSafeCustomerReference(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const reference = value as Record<string, unknown>;
+  const allowed = new Set([
+    'provider',
+    'externalReferenceId',
+    'normalizedUrl',
+    'originalTitle',
+    'observedAskingPrice',
+    'importedAt',
+    'matchQuality',
+    'extractedIdentity',
+  ]);
+  if (Object.keys(reference).some((key) => !allowed.has(key))) return false;
+  return (
+    typeof reference.provider === 'string' &&
+    reference.provider.length <= 80 &&
+    (typeof reference.externalReferenceId === 'string' ||
+      reference.externalReferenceId === null) &&
+    typeof reference.normalizedUrl === 'string' &&
+    reference.normalizedUrl.length <= 2048 &&
+    (typeof reference.originalTitle === 'string' ||
+      reference.originalTitle === null) &&
+    typeof reference.importedAt === 'string' &&
+    (reference.matchQuality === 'MATCH_FOUND' ||
+      reference.matchQuality === 'PARTIAL_MATCH') &&
+    isSafeMetadata(reference.extractedIdentity) &&
+    (reference.observedAskingPrice === undefined ||
+      isSafeMetadata(reference.observedAskingPrice))
+  );
 }
 function isSafeMetadata(value: unknown): boolean {
   if (typeof value === 'string') return value.length <= 500;

@@ -28,6 +28,7 @@ import type {
   AssetSubmission,
   AssetOperationSummary,
   CreateSubmissionDraft,
+  CollectibleReferenceImport,
   SubmissionCategory,
   SubmissionDetail,
   SubmissionReviewDetail,
@@ -74,6 +75,7 @@ export interface CatalogueRepository {
   listSubmissionCategories(): Promise<SubmissionCategory[]>;
 }
 export interface SubmissionRepository {
+  importReference(input: { url: string }): Promise<CollectibleReferenceImport>;
   createDraft(input: CreateSubmissionDraft): Promise<AssetSubmission>;
   checkMarket(input: {
     categoryId: string;

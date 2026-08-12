@@ -161,6 +161,7 @@ function ReviewDetail({
             </div>
           ))}
       </dl>
+      <StaffCustomerReference reference={detail.declaredMetadata?.customerReference} />
       <StaffMarketResearch research={detail.marketResearch} />
       {detail.status === "SUBMITTED" ? (
         <button className="button-primary" onClick={onClaim} disabled={claiming}>
@@ -217,6 +218,57 @@ function ReviewDetail({
         </p>
       )}
     </div>
+  );
+}
+function StaffCustomerReference({ reference }: { reference: unknown }) {
+  if (!reference || typeof reference !== "object" || Array.isArray(reference)) return null;
+  const value = reference as Record<string, unknown>;
+  if (typeof value.provider !== "string" || typeof value.normalizedUrl !== "string") return null;
+  const price =
+    value.observedAskingPrice && typeof value.observedAskingPrice === "object"
+      ? (value.observedAskingPrice as Record<string, unknown>)
+      : null;
+  return (
+    <section className="border-t border-border pt-5">
+      <p className="page-kicker">Customer-supplied reference</p>
+      <h3 className="mt-1 font-semibold">Imported marketplace / pricing link</h3>
+      <p className="mt-2 text-sm text-subtle">
+        Supporting context only. This does not determine Slice valuation or market authority.
+      </p>
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <StaffMetric label="Source" value={value.provider} />
+        <StaffMetric
+          label="Observed"
+          value={
+            typeof value.importedAt === "string"
+              ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(
+                  new Date(value.importedAt),
+                )
+              : "Not available"
+          }
+        />
+        <StaffMetric
+          label="Current listing / asking price"
+          value={
+            price && typeof price.amountMinor === "string" && typeof price.currency === "string"
+              ? marketAmount(price.amountMinor, price.currency)
+              : "Not provided"
+          }
+        />
+        <StaffMetric
+          label="Imported identity"
+          value={typeof value.originalTitle === "string" ? value.originalTitle : "Not available"}
+        />
+      </dl>
+      <a
+        className="mt-4 inline-block text-sm font-semibold text-accent"
+        href={value.normalizedUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open supplied reference
+      </a>
+    </section>
   );
 }
 function StaffMarketResearch({

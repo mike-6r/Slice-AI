@@ -28,6 +28,7 @@ import type {
   SubmissionReviewDetail,
   SubmissionReviewSummary,
   MarketResearchSnapshot,
+  CollectibleReferenceImport,
   PublicationReadiness,
   AccountCapability,
 } from "@/domain";
@@ -744,6 +745,87 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
     submissions: {
+      async importReference(input) {
+        const value = objectField(
+          await client.request<unknown>("/collectibles/import-reference", {
+            method: "POST",
+            body: input,
+          }),
+          "collectible reference import",
+        );
+        const status = stringField(value.status, "referenceImport.status");
+        if (
+          ![
+            "MATCH_FOUND",
+            "PARTIAL_MATCH",
+            "COULD_NOT_IDENTIFY",
+            "UNSUPPORTED",
+            "PROVIDER_UNAVAILABLE",
+          ].includes(status)
+        )
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid reference import response.");
+        const identity = objectField(value.identity, "referenceImport.identity");
+        const rawReference = value.customerReference;
+        const customerReference =
+          rawReference === null
+            ? null
+            : (() => {
+                const reference = objectField(rawReference, "referenceImport.customerReference");
+                const price = reference.observedAskingPrice;
+                return {
+                  provider: stringField(reference.provider, "referenceImport.provider"),
+                  externalReferenceId: nullableString(
+                    reference.externalReferenceId,
+                    "referenceImport.externalReferenceId",
+                  ),
+                  normalizedUrl: stringField(
+                    reference.normalizedUrl,
+                    "referenceImport.normalizedUrl",
+                  ),
+                  originalTitle: nullableString(
+                    reference.originalTitle,
+                    "referenceImport.originalTitle",
+                  ),
+                  ...(price
+                    ? {
+                        observedAskingPrice: (() => {
+                          const value = objectField(price, "referenceImport.observedAskingPrice");
+                          return {
+                            amountMinor: stringField(
+                              value.amountMinor,
+                              "referenceImport.askingPrice.amountMinor",
+                            ),
+                            currency: stringField(
+                              value.currency,
+                              "referenceImport.askingPrice.currency",
+                            ),
+                          };
+                        })(),
+                      }
+                    : {}),
+                  importedAt: stringField(
+                    reference.importedAt,
+                    "referenceImport.importedAt",
+                  ) as ISODateTime,
+                  matchQuality: stringField(
+                    reference.matchQuality,
+                    "referenceImport.matchQuality",
+                  ) as "MATCH_FOUND" | "PARTIAL_MATCH",
+                  extractedIdentity: Object.fromEntries(
+                    Object.entries(identity).filter(([, entry]) => typeof entry === "string"),
+                  ) as Record<string, string>,
+                };
+              })();
+        return {
+          status: status as CollectibleReferenceImport["status"],
+          message: stringField(value.message, "referenceImport.message"),
+          provider: nullableString(value.provider, "referenceImport.provider"),
+          identity: Object.fromEntries(
+            Object.entries(identity).filter(([, entry]) => typeof entry === "string"),
+          ) as Record<string, string>,
+          customerReference,
+        };
+      },
       async checkMarket(input) {
         return mapMarketResearch(
           await client.request<unknown>("/submissions/market-research", {

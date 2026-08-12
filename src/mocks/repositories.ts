@@ -113,6 +113,15 @@ export const mockRepositories: AppRepositories = {
     },
   },
   submissions: {
+    async importReference() {
+      return {
+        status: "PROVIDER_UNAVAILABLE" as const,
+        message: "Reference import requires the Slice API.",
+        provider: null,
+        identity: {},
+        customerReference: null,
+      };
+    },
     async checkMarket() {
       throw new Error("External market research is unavailable in mock mode.");
     },

@@ -146,8 +146,30 @@ export interface CreateSubmissionDraft {
     provenanceNotes?: string;
     knownDefects?: string;
     termsAcknowledged?: boolean;
+    customerReference?: CustomerReference;
   };
   marketResearchId?: string;
+}
+
+/** A customer-supplied source is supporting context only. It is never a Slice valuation. */
+export interface CustomerReference {
+  provider: string;
+  externalReferenceId: string | null;
+  normalizedUrl: string;
+  originalTitle: string | null;
+  observedAskingPrice?: { amountMinor: string; currency: string };
+  importedAt: ISODateTime;
+  matchQuality: "MATCH_FOUND" | "PARTIAL_MATCH";
+  extractedIdentity: Record<string, string>;
+}
+
+export interface CollectibleReferenceImport {
+  status:
+    "MATCH_FOUND" | "PARTIAL_MATCH" | "COULD_NOT_IDENTIFY" | "UNSUPPORTED" | "PROVIDER_UNAVAILABLE";
+  message: string;
+  provider: string | null;
+  identity: Record<string, string>;
+  customerReference: CustomerReference | null;
 }
 
 export interface UpdateSubmissionDraft extends CreateSubmissionDraft {

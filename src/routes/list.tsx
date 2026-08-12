@@ -8,6 +8,7 @@ import {
   CircleAlert,
   FileImage,
   ImagePlus,
+  Link2,
   LoaderCircle,
   ScanSearch,
   ShieldCheck,
@@ -20,6 +21,7 @@ import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import type {
   AssetSubmission,
+  CollectibleReferenceImport,
   CreateSubmissionDraft,
   MarketResearchSnapshot,
   SubmissionDetail,
@@ -62,6 +64,7 @@ type ListingForm = {
   condition: string;
   details: string;
   termsAcknowledged: boolean;
+  customerReference: CreateSubmissionDraft["declaredMetadata"]["customerReference"];
 };
 
 const blank: ListingForm = {
@@ -80,6 +83,7 @@ const blank: ListingForm = {
   condition: "",
   details: "",
   termsAcknowledged: false,
+  customerReference: undefined,
 };
 
 export function SubmissionPage() {
@@ -94,7 +98,11 @@ export function SubmissionPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const [referenceResult, setReferenceResult] = useState<CollectibleReferenceImport | null>(null);
   const lastSaved = useRef<string | null>(null);
+  const version = useRef<number | null>(null);
+  const saveStopped = useRef(false);
   const previewUrls = useRef<Record<string, string>>({});
 
   const categories = useQuery({
@@ -121,19 +129,23 @@ export function SubmissionPage() {
   const payloadFingerprint = JSON.stringify({
     categoryId: form.categoryId,
     metadata,
-    marketResearchId: marketResearch?.id ?? null,
   });
 
   const create = useMutation({
-    mutationFn: ({ nextStep }: { nextStep?: number }) =>
-      services.repositories.submissions.createDraft({
+    mutationFn: async ({ nextStep }: { nextStep?: number }) => {
+      const fingerprint = payloadFingerprint;
+      const created = await services.repositories.submissions.createDraft({
         categoryId: form.categoryId,
         declaredMetadata: metadata,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
-      }),
-    onSuccess: async (created, variables) => {
+      });
+      return { created, fingerprint };
+    },
+    onSuccess: async ({ created, fingerprint }, variables) => {
       setDraft(created);
-      lastSaved.current = payloadFingerprint;
+      version.current = created.version;
+      lastSaved.current = fingerprint;
+      saveStopped.current = false;
       setNotice("Draft saved privately.");
       if (variables.nextStep) setStep(variables.nextStep);
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
@@ -141,24 +153,38 @@ export function SubmissionPage() {
   });
   const update = useMutation({
     mutationFn: async ({ nextStep }: { nextStep?: number } = {}) => {
-      if (!detail.data) throw new Error("Your draft is still loading.");
-      return services.repositories.submissions.updateDraft(detail.data.id, {
-        version: detail.data.version,
+      if (!draft || version.current === null) throw new Error("Your draft is still loading.");
+      const fingerprint = payloadFingerprint;
+      const updated = await services.repositories.submissions.updateDraft(draft.id, {
+        version: version.current,
         categoryId: form.categoryId,
         declaredMetadata: metadata,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
       });
+      return { updated, fingerprint };
     },
-    onSuccess: async (_updated, variables) => {
-      lastSaved.current = payloadFingerprint;
+    onSuccess: async ({ updated, fingerprint }, variables) => {
+      version.current = updated.version;
+      lastSaved.current = fingerprint;
+      saveStopped.current = false;
       setNotice("Saved");
-      await Promise.all([
-        detail.refetch(),
-        client.invalidateQueries({ queryKey: ["submissions", "mine"] }),
-      ]);
+      client.setQueryData(["submissions", draft?.id], updated);
+      await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
       if (variables.nextStep) setStep(variables.nextStep);
     },
+    onError: () => {
+      saveStopped.current = true;
+      setLocalError("We couldn't save your draft. Please try again.");
+    },
   });
+  const importReference = useMutation({
+    mutationFn: () => services.repositories.submissions.importReference({ url: referenceUrl }),
+    onSuccess: (result) => {
+      setReferenceResult(result);
+      setLocalError(null);
+    },
+  });
+  const saveDraft = update.mutate;
   const checkMarket = useMutation({
     mutationFn: () =>
       services.repositories.submissions.checkMarket({
@@ -170,6 +196,7 @@ export function SubmissionPage() {
       setMarketResearch(research);
       setNotice("Market check updated. Save this step to attach it to your draft.");
     },
+    onError: () => setLocalError("Market data couldn't be loaded right now. Try again."),
   });
   const media = useMutation({
     mutationFn: async ({
@@ -230,15 +257,42 @@ export function SubmissionPage() {
     return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
   }, []);
   useEffect(() => {
-    if (!draft || !detail.data || !validIdentity || lastSaved.current === payloadFingerprint)
+    if (
+      !draft ||
+      !validIdentity ||
+      update.isPending ||
+      saveStopped.current ||
+      lastSaved.current === payloadFingerprint
+    )
       return;
-    const timer = window.setTimeout(() => update.mutate({}), 900);
+    const timer = window.setTimeout(() => saveDraft({}), 900);
     return () => window.clearTimeout(timer);
-  }, [draft, detail.data, payloadFingerprint, update, validIdentity]);
+  }, [draft, payloadFingerprint, saveDraft, update.isPending, validIdentity]);
 
   const change = <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    saveStopped.current = false;
     if (key !== "termsAcknowledged") setMarketResearch(null);
+  };
+  const useImportedDetails = () => {
+    if (!referenceResult?.customerReference) return;
+    const identity = referenceResult.identity;
+    const category = categories.data?.find((item) => item.slug === identity.categorySlug);
+    setForm((current) => ({
+      ...current,
+      categoryId: category?.id ?? current.categoryId,
+      name: identity.name ?? current.name,
+      manufacturer: identity.manufacturer ?? current.manufacturer,
+      year: identity.year ?? current.year,
+      set: identity.set ?? current.set,
+      cardNumber: identity.cardNumber ?? current.cardNumber,
+      playerOrCharacter: identity.playerOrCharacter ?? current.playerOrCharacter,
+      variant: identity.variant ?? current.variant,
+      customerReference: referenceResult.customerReference ?? undefined,
+    }));
+    saveStopped.current = false;
+    setMarketResearch(null);
+    setNotice("Card details added. Please check them, then continue.");
   };
   const saveAndContinue = () => {
     setLocalError(null);
@@ -348,7 +402,17 @@ export function SubmissionPage() {
 
         <section className="list-guided-card">
           {step === 1 ? (
-            <IdentityStep categories={categories.data ?? []} form={form} onChange={change} />
+            <IdentityStep
+              categories={categories.data ?? []}
+              form={form}
+              onChange={change}
+              referenceUrl={referenceUrl}
+              onReferenceUrl={setReferenceUrl}
+              onIdentify={() => importReference.mutate()}
+              identifying={importReference.isPending}
+              referenceResult={referenceResult}
+              onUseImportedDetails={useImportedDetails}
+            />
           ) : null}
           {step === 2 ? <DetailsStep form={form} onChange={change} /> : null}
           {step === 3 ? (
@@ -485,16 +549,93 @@ function IdentityStep({
   categories,
   form,
   onChange,
+  referenceUrl,
+  onReferenceUrl,
+  onIdentify,
+  identifying,
+  referenceResult,
+  onUseImportedDetails,
 }: {
   categories: Array<{ id: string; name: string }>;
   form: ListingForm;
   onChange: <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => void;
+  referenceUrl: string;
+  onReferenceUrl: (value: string) => void;
+  onIdentify: () => void;
+  identifying: boolean;
+  referenceResult: CollectibleReferenceImport | null;
+  onUseImportedDetails: () => void;
 }) {
   return (
     <div className="list-step">
       <p className="page-kicker">Step 1</p>
       <h2>What are you listing?</h2>
       <p>Start with the category and the name printed on the card or slab.</p>
+      <section
+        className="rounded-xl border border-emerald-400/20 bg-emerald-950/20 p-4"
+        aria-label="Paste a marketplace or pricing link"
+      >
+        <div>
+          <p className="page-kicker">Start faster</p>
+          <h3 className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Link2 className="h-4 w-4 text-accent" aria-hidden="true" /> Paste marketplace / pricing
+            link
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-subtle">
+            PriceCharting links can prefill supported card details. eBay import is available when
+            Slice’s approved provider integration is configured.
+          </p>
+        </div>
+        <div className="mt-3 flex min-w-0 gap-2 max-sm:grid">
+          <input
+            type="url"
+            className="min-w-0 flex-1"
+            value={referenceUrl}
+            onChange={(event) => onReferenceUrl(event.target.value)}
+            placeholder="Paste a trusted card link"
+            maxLength={2048}
+          />
+          <button
+            type="button"
+            className="button-secondary shrink-0 max-sm:w-full"
+            disabled={!referenceUrl.trim() || identifying}
+            onClick={onIdentify}
+          >
+            {identifying ? "Identifying…" : "Identify card"}
+          </button>
+        </div>
+        {referenceResult ? (
+          <div className="mt-3 grid gap-2 rounded-lg border border-border bg-background/50 p-3 text-xs">
+            <strong className="text-accent">{referenceResult.status.replaceAll("_", " ")}</strong>
+            <p className="text-subtle">{referenceResult.message}</p>
+            {referenceResult.customerReference ? (
+              <>
+                <dl className="grid gap-1 text-subtle">
+                  <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
+                    <dt>Source</dt>
+                    <dd className="truncate text-foreground">
+                      {referenceResult.customerReference.provider}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
+                    <dt>Imported identity</dt>
+                    <dd className="truncate text-foreground">
+                      {referenceResult.customerReference.originalTitle}
+                    </dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  className="button-primary inline-flex w-fit items-center gap-1"
+                  onClick={onUseImportedDetails}
+                >
+                  Use these details <ChevronRight aria-hidden="true" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
       <div className="list-simple-fields">
         <label>
           Category
@@ -1203,9 +1344,9 @@ function ListState({
   );
 }
 function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMetadata"] {
-  const value = (key: Exclude<keyof ListingForm, "termsAcknowledged">) => form[key].trim();
-  const optional = (key: Exclude<keyof ListingForm, "termsAcknowledged">) =>
-    value(key) ? { [key]: value(key) } : {};
+  type TextField = Exclude<keyof ListingForm, "termsAcknowledged" | "customerReference">;
+  const value = (key: TextField) => form[key].trim();
+  const optional = (key: TextField) => (value(key) ? { [key]: value(key) } : {});
   return {
     name: value("name"),
     ...optional("manufacturer"),
@@ -1220,6 +1361,7 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
     ...optional("details"),
     ...optional("playerOrCharacter"),
     ...optional("variant"),
+    ...(form.customerReference ? { customerReference: form.customerReference } : {}),
     termsAcknowledged: form.termsAcknowledged,
   };
 }

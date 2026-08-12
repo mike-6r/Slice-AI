@@ -16,6 +16,7 @@ const policies = {
   catalogueMutation: { limit: 60, ttlSeconds: 3600 },
   submissionMutation: { limit: 60, ttlSeconds: 3600 },
   marketResearch: { limit: 12, ttlSeconds: 3600 },
+  referenceImport: { limit: 30, ttlSeconds: 3600 },
   assetLifecycleMutation: { limit: 60, ttlSeconds: 3600 },
   tradingMutation: { limit: 120, ttlSeconds: 3600 },
   providerMutation: { limit: 30, ttlSeconds: 3600 },

@@ -1,0 +1,54 @@
+import { TrustedReferenceImportService } from './trusted-reference-import.service';
+
+describe('TrustedReferenceImportService', () => {
+  const service = new TrustedReferenceImportService();
+
+  it('imports a supported PriceCharting card without fetching the URL', () => {
+    expect(
+      service.identify(
+        'https://www.pricecharting.com/game/pokemon-evolving-skies/umbreon-vmax-215',
+      ),
+    ).toMatchObject({
+      status: 'MATCH_FOUND',
+      provider: 'PriceCharting',
+      identity: {
+        name: 'Umbreon VMAX',
+        cardNumber: '215/203',
+      },
+      customerReference: {
+        externalReferenceId: 'pokemon-evolving-skies/umbreon-vmax-215',
+      },
+    });
+  });
+
+  it('rejects arbitrary and private-network URLs', () => {
+    expect(service.identify('http://127.0.0.1:3000/admin').status).toBe(
+      'UNSUPPORTED',
+    );
+    expect(service.identify('https://example.test/listing').status).toBe(
+      'UNSUPPORTED',
+    );
+  });
+
+  it('keeps eBay unavailable until its approved API adapter is configured', () => {
+    expect(
+      service.identify('https://www.ebay.com/itm/123456789012'),
+    ).toMatchObject({
+      status: 'PROVIDER_UNAVAILABLE',
+      provider: 'eBay',
+      customerReference: null,
+    });
+  });
+
+  it('returns only a partial match for an unknown approved PriceCharting path', () => {
+    expect(
+      service.identify(
+        'https://www.pricecharting.com/game/pokemon-test/example-card-99',
+      ),
+    ).toMatchObject({
+      status: 'PARTIAL_MATCH',
+      identity: { name: 'Example Card', set: 'Pokemon Test' },
+      customerReference: { matchQuality: 'PARTIAL_MATCH' },
+    });
+  });
+});
