@@ -6,12 +6,15 @@ import { queryKeys } from "@/queries/keys";
 
 /** Best-effort realtime companion to durable notification queries. */
 const activeStreams = new Set<string>();
+// Realtime is opt-in. Durable notification queries remain authoritative, and
+// staging keeps the stream feature disabled until the deployment enables it.
+const realtimeEnabled = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
 export function useNotificationStream(userId = "current") {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useSession();
   useEffect(() => {
-    if (!isAuthenticated || activeStreams.has(userId)) return;
+    if (!realtimeEnabled || !isAuthenticated || activeStreams.has(userId)) return;
     activeStreams.add(userId);
     const abort = new AbortController();
     let reconnect: ReturnType<typeof setTimeout> | undefined;

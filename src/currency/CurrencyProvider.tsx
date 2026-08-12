@@ -56,9 +56,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useSession();
   const { repositories } = useAppServices();
   const queryClient = useQueryClient();
-  const [currency, setCurrencyState] = useState<SupportedCurrency>(browserCurrency);
+  // SSR and the first browser render must agree. Local storage is applied in
+  // the effect below after hydration, rather than while React is hydrating the
+  // footer's currency selector.
+  const [currency, setCurrencyState] = useState<SupportedCurrency>("GBP");
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
-  const persistedCurrency = useRef<SupportedCurrency>(browserCurrency());
+  const persistedCurrency = useRef<SupportedCurrency>("GBP");
   const pendingCurrency = useRef<SupportedCurrency | null>(null);
   const preferences = useQuery({
     queryKey: queryKeys.account.preferences,
