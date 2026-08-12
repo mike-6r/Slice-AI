@@ -28,7 +28,7 @@ import {
   Vault,
   X,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { logout } from "@/auth/actions";
 import { canAccessCollectorWorkspace } from "@/auth/workspace-access";
@@ -41,6 +41,7 @@ import type {
   CollectorWorkspaceStage,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import type { CollectorWorkspaceRequest } from "@/data/repositories";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
@@ -65,6 +66,22 @@ type WorkspaceSection =
   | "activity"
   | "settings"
   | "asset";
+
+type AssetDetailSection =
+  | "overview"
+  | "submission"
+  | "market-data"
+  | "media"
+  | "valuation"
+  | "custody"
+  | "market"
+  | "activity";
+
+type CollectorAssetDetail = {
+  asset: CollectorWorkspaceAsset;
+  requests: CollectorWorkspaceRequest[];
+  activity: CollectorWorkspaceOverview["activity"];
+};
 
 const navigation: Array<{ id: WorkspaceSection; label: string; icon: typeof Home }> = [
   { id: "overview", label: "Overview", icon: Home },
@@ -95,6 +112,7 @@ function CollectorWorkspace() {
   const client = useQueryClient();
   const [active, setActive] = useState<WorkspaceSection>("overview");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailSection, setDetailSection] = useState<AssetDetailSection>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const overview = useQuery({
@@ -128,9 +146,10 @@ function CollectorWorkspace() {
   const selected = selectedId
     ? (collectibleDetail.data?.asset ?? data.assets.find((item) => item.id === selectedId) ?? null)
     : null;
-  const open = (section: WorkspaceSection, assetId?: string) => {
+  const open = (section: WorkspaceSection, assetId?: string, tab?: AssetDetailSection) => {
     setActive(section);
     if (assetId) setSelectedId(assetId);
+    if (section === "asset") setDetailSection(tab ?? "overview");
     setMobileOpen(false);
   };
   const matchingAssets = filterAssets(data.assets, query);
@@ -200,7 +219,7 @@ function CollectorWorkspace() {
         ) : active === "market" ? (
           <MarketListings assets={matchingAssets} open={open} />
         ) : active === "performance" ? (
-          <Performance data={data} />
+          <Performance data={data} open={open} />
         ) : active === "requests" ? (
           <Requests data={data} open={open} />
         ) : active === "documents" ? (
@@ -212,7 +231,11 @@ function CollectorWorkspace() {
         ) : active === "settings" ? (
           <SettingsView />
         ) : selected ? (
-          <AssetManagement asset={selected} />
+          <AssetManagement
+            asset={selected}
+            detail={collectibleDetail.data}
+            initialSection={detailSection}
+          />
         ) : (
           <WorkspaceState title="Select a collectible" />
         )}
@@ -615,17 +638,51 @@ function ValuationRecords({ assets, open }: { assets: CollectorWorkspaceAsset[];
       title="Valuations"
       detail="External market references remain separate from staff-supported Slice valuations."
     >
-      <section className="collector-panel collector-record-list">
-        {assets.map((asset) => (
-          <WorkspaceRecordRow
-            key={asset.id}
-            asset={asset}
-            label="Valuation"
-            detail={`${asset.referenceValue?.source === "SLICE_SUPPORTED_VALUATION" ? "Staff-supported valuation" : "External market reference"} · Updated ${asset.referenceValue ? date(asset.referenceValue.asOf) : "unavailable"}`}
-            value={money(asset.referenceValue)}
-            onClick={() => open("asset", asset.id)}
-          />
-        ))}
+      <section className="collector-advanced-list collector-valuation-list">
+        {assets.map((asset) => {
+          const market = marketResearchSummary(asset);
+          return (
+            <article key={asset.id} className="collector-advanced-card collector-valuation-card">
+              <AssetThumbnail asset={asset} className="collector-advanced-card__image" />
+              <div className="collector-advanced-card__identity">
+                <span className="collector-advanced-card__eyebrow">
+                  {asset.category ?? "Collectible"}
+                </span>
+                <h3>{asset.title}</h3>
+                <p>{assetMetadata(asset)}</p>
+                <StatusBadge stage={asset.stage} />
+              </div>
+              <dl className="collector-valuation-card__values">
+                <div>
+                  <dt>Slice-supported valuation</dt>
+                  <dd>{money(asset.valuation.supportedValue)}</dd>
+                  <small>
+                    {asset.valuation.supportedValue
+                      ? `Updated ${date(asset.valuation.supportedValue.asOf)}`
+                      : "Slice valuation pending"}
+                  </small>
+                </div>
+                <div>
+                  <dt>External market reference</dt>
+                  <dd>{market.saleRange ?? money(asset.valuation.externalReference)}</dd>
+                  <small>
+                    {market.updatedAt
+                      ? `Research checked ${date(market.updatedAt)}`
+                      : asset.valuation.externalReference
+                        ? `Updated ${date(asset.valuation.externalReference.asOf)}`
+                        : "No market reference available"}
+                  </small>
+                </div>
+              </dl>
+              <button
+                className="collector-button"
+                onClick={() => open("asset", asset.id, "valuation")}
+              >
+                View valuation <ArrowRight aria-hidden="true" />
+              </button>
+            </article>
+          );
+        })}
       </section>
     </WorkspacePage>
   );
@@ -637,22 +694,41 @@ function CustodyRecords({ assets, open }: { assets: CollectorWorkspaceAsset[]; o
       title="Custody & Vault"
       detail="Custody, inspection and vault readiness remain staff- and provider-controlled stages."
     >
-      <section className="collector-panel collector-record-list">
+      <section className="collector-advanced-list collector-custody-list">
         {assets.map((asset) => (
-          <WorkspaceRecordRow
-            key={asset.id}
-            asset={asset}
-            label="Custody"
-            detail={
-              asset.custody ? custodyLabel(asset.custody.status) : "Custody status unavailable"
-            }
-            meta={
-              asset.custody
-                ? `Last updated ${date(asset.custody.updatedAt)}`
-                : "Staff-controlled workflow"
-            }
-            onClick={() => open("asset", asset.id)}
-          />
+          <article key={asset.id} className="collector-advanced-card collector-custody-card">
+            <AssetThumbnail asset={asset} className="collector-advanced-card__image" />
+            <div className="collector-advanced-card__identity">
+              <span className="collector-advanced-card__eyebrow">Physical asset journey</span>
+              <h3>{asset.title}</h3>
+              <p>{assetMetadata(asset)}</p>
+              <p className="collector-custody-card__status">
+                {asset.custody ? custodyLabel(asset.custody.status) : "Custody workflow pending"}
+                <small>
+                  {asset.custody
+                    ? `Updated ${date(asset.custody.updatedAt)}`
+                    : "Staff-controlled stage"}
+                </small>
+              </p>
+            </div>
+            <CustodyTimeline asset={asset} />
+            <div className="collector-advanced-card__actions">
+              {asset.submissionStatus === "CHANGES_REQUESTED" ? (
+                <strong className="collector-action-required">
+                  Action required: review requested changes
+                </strong>
+              ) : null}
+              <span>
+                {asset.market.isLive ? "Published on the Slice market" : "Not market live"}
+              </span>
+              <button
+                className="collector-button"
+                onClick={() => open("asset", asset.id, "custody")}
+              >
+                View details <ArrowRight aria-hidden="true" />
+              </button>
+            </div>
+          </article>
         ))}
       </section>
     </WorkspacePage>
@@ -660,23 +736,81 @@ function CustodyRecords({ assets, open }: { assets: CollectorWorkspaceAsset[]; o
 }
 
 function MarketListingRecords({ assets, open }: { assets: CollectorWorkspaceAsset[]; open: Open }) {
+  const [sort, setSort] = useState<"value" | "owners" | "activity">("value");
+  const sorted = [...assets].sort((a, b) => {
+    if (sort === "owners") return (b.market.ownersCount ?? -1) - (a.market.ownersCount ?? -1);
+    if (sort === "activity") return b.market.executionCount - a.market.executionCount;
+    return Number(b.referenceValue?.amountMinor ?? 0) - Number(a.referenceValue?.amountMinor ?? 0);
+  });
   return (
     <WorkspacePage
       title="Market Listings"
       detail="Only published collectibles appear here. Market data is derived from the existing public market authority."
     >
-      <section className="collector-panel collector-record-list">
-        {assets.map((asset) => (
-          <WorkspaceRecordRow
-            key={asset.id}
-            asset={asset}
-            label="Market live"
-            detail={`${asset.market.ownersCount === null ? "Owner count unavailable" : `${asset.market.ownersCount} owners`} · ${asset.market.executionCount ? `${asset.market.executionCount} executions` : "No recorded executions"}`}
-            value={money(asset.referenceValue)}
-            onClick={() => open("asset", asset.id)}
-          />
-        ))}
-      </section>
+      <>
+        <div className="collector-advanced-filterbar" aria-label="Sort market listings">
+          <span>Sort by</span>
+          {[
+            ["value", "Highest value"],
+            ["owners", "Most owners"],
+            ["activity", "Most active"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              className={sort === value ? "is-active" : ""}
+              onClick={() => setSort(value as typeof sort)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <section className="collector-market-cards">
+          {sorted.map((asset) => (
+            <article key={asset.id} className="collector-market-card">
+              <AssetThumbnail asset={asset} className="collector-market-card__image" />
+              <div className="collector-market-card__identity">
+                <span>Market live</span>
+                <h3>{asset.title}</h3>
+                <p>{assetMetadata(asset)}</p>
+              </div>
+              <dl className="collector-market-card__metrics">
+                <div>
+                  <dt>Reference value</dt>
+                  <dd>{money(asset.referenceValue)}</dd>
+                </div>
+                <div>
+                  <dt>Available</dt>
+                  <dd>{availability(asset)}</dd>
+                </div>
+                <div>
+                  <dt>Owners</dt>
+                  <dd>{asset.market.ownersCount ?? "Unavailable"}</dd>
+                </div>
+                <div>
+                  <dt>Executions</dt>
+                  <dd>{asset.market.executionCount || "None"}</dd>
+                </div>
+                <div>
+                  <dt>Latest trade</dt>
+                  <dd>{sharePrice(asset)}</dd>
+                </div>
+              </dl>
+              {asset.slug ? (
+                <Link className="collector-button" to="/asset/$id" params={{ id: asset.slug }}>
+                  View market <ArrowRight aria-hidden="true" />
+                </Link>
+              ) : (
+                <button
+                  className="collector-button"
+                  onClick={() => open("asset", asset.id, "market")}
+                >
+                  View market <ArrowRight aria-hidden="true" />
+                </button>
+              )}
+            </article>
+          ))}
+        </section>
+      </>
     </WorkspacePage>
   );
 }
@@ -718,10 +852,20 @@ function WorkspaceRecordRow({
 function Performance({
   data,
   compact = false,
+  open,
 }: {
   data: CollectorWorkspaceOverview;
   compact?: boolean;
+  open?: Open;
 }) {
+  const highestValue = [...data.assets]
+    .filter((asset) => asset.referenceValue)
+    .sort((a, b) => Number(b.referenceValue!.amountMinor) - Number(a.referenceValue!.amountMinor))
+    .slice(0, 3);
+  const mostActive = [...data.assets]
+    .filter((asset) => asset.market.executionCount > 0)
+    .sort((a, b) => b.market.executionCount - a.market.executionCount)
+    .slice(0, 3);
   return (
     <section className={`collector-panel collector-performance ${compact ? "is-compact" : ""}`}>
       <PanelHeader title="Performance Overview" />
@@ -748,9 +892,25 @@ function Performance({
         />
       </div>
       {!compact ? (
-        <p className="collector-panel__note">
-          Historical returns are not shown because no authoritative performance series is available.
-        </p>
+        <div className="collector-performance-dashboard">
+          <section className="collector-performance-history">
+            <span>Performance history</span>
+            <strong>Historical performance data isn't available yet.</strong>
+            <p>Current catalogue and market activity are shown below.</p>
+          </section>
+          <Ranking
+            title="Highest-value collectibles"
+            assets={highestValue}
+            metric={(asset) => money(asset.referenceValue)}
+            open={open}
+          />
+          <Ranking
+            title="Most active collectibles"
+            assets={mostActive}
+            metric={(asset) => `${asset.market.executionCount} executions`}
+            open={open}
+          />
+        </div>
       ) : null}
     </section>
   );
@@ -1191,15 +1351,17 @@ function SettingsView() {
   );
 }
 
-function AssetManagement({ asset: source }: { asset: CollectorWorkspaceAsset }) {
-  const asset = {
-    ...source,
-    marketResearch: source.marketResearch!,
-    custody: source.custody!,
-    slug: source.slug!,
-  };
-  return <AssetManagementView asset={asset} />;
-  /* legacy detail layout retained below temporarily for the existing detail content. */
+function AssetManagement({
+  asset,
+  detail,
+  initialSection,
+}: {
+  asset: CollectorWorkspaceAsset;
+  detail?: CollectorAssetDetail;
+  initialSection: AssetDetailSection;
+}) {
+  return <AssetManagementView asset={asset} detail={detail} initialSection={initialSection} />;
+  /* legacy detail layout retained below temporarily for the existing detail content.
   return (
     <WorkspacePage
       title={asset.title}
@@ -1303,6 +1465,7 @@ function AssetManagement({ asset: source }: { asset: CollectorWorkspaceAsset }) 
       </section>
     </WorkspacePage>
   );
+  */
 }
 
 function SettingsCards() {
@@ -1344,139 +1507,457 @@ function SettingsCards() {
   );
 }
 
-function AssetManagementView({ asset }: { asset: CollectorWorkspaceAsset }) {
-  const sections = ["overview", "submission", "market", "media", "valuation", "custody"] as const;
-  const [section, setSection] = useState<(typeof sections)[number]>("overview");
-  const content: Record<(typeof sections)[number], ReactNode> = {
-    overview: (
-      <>
-        <Detail label="Lifecycle status" value={stageCopy(asset.stage).label} />
-        <Detail label="Supported value / reference" value={money(asset.referenceValue)} />
-        <Detail label="Next action" value={submissionNextStep(asset)} />
-      </>
+function AssetManagementView({
+  asset,
+  detail,
+  initialSection,
+}: {
+  asset: CollectorWorkspaceAsset;
+  detail?: CollectorAssetDetail;
+  initialSection: AssetDetailSection;
+}) {
+  const sections: Array<{ id: AssetDetailSection; label: string }> = [
+    { id: "overview", label: "Overview" },
+    { id: "submission", label: "Submission" },
+    { id: "market-data", label: "Market Data" },
+    { id: "media", label: "Media" },
+    { id: "valuation", label: "Valuation" },
+    { id: "custody", label: "Custody" },
+    { id: "market", label: "Market" },
+    { id: "activity", label: "Activity" },
+  ];
+  const [section, setSection] = useState<AssetDetailSection>(initialSection);
+  useEffect(() => setSection(initialSection), [asset.id, initialSection]);
+  const market = marketResearchSummary(asset);
+  const content: Record<AssetDetailSection, ReactNode> = {
+    overview: <DetailOverview asset={asset} />,
+    submission: <SubmissionDetail asset={asset} />,
+    "market-data": <MarketResearchDetail asset={asset} market={market} />,
+    media: <MediaDetail asset={asset} />,
+    valuation: <ValuationDetail asset={asset} market={market} />,
+    custody: <CustodyDetail asset={asset} />,
+    market: <MarketDetail asset={asset} />,
+    activity: (
+      <ActivityDetail
+        asset={asset}
+        activity={detail?.activity ?? []}
+        requests={detail?.requests ?? []}
+      />
     ),
-    submission: (
-      <>
-        <Detail label="Submission status" value={asset.submissionStatus.replaceAll("_", " ")} />
+  };
+  return (
+    <WorkspacePage
+      title={asset.title}
+      detail="A customer-safe view of your submission, physical custody and public market progress."
+    >
+      <section className="collector-asset-detail collector-asset-detail--advanced">
+        <header className="collector-detail-hero">
+          <AssetThumbnail asset={asset} className="collector-detail-hero__image" />
+          <div className="collector-detail-hero__identity">
+            <span className="collector-advanced-card__eyebrow">
+              {asset.category ?? "Collectible"}
+            </span>
+            <h3>{asset.title}</h3>
+            <p>{assetMetadata(asset)}</p>
+            <div className="collector-detail-hero__status">
+              <StatusBadge stage={asset.stage} />
+              <span>Updated {date(asset.updatedAt)}</span>
+            </div>
+          </div>
+          <dl className="collector-detail-hero__summary">
+            <div>
+              <dt>Supported value</dt>
+              <dd>{money(asset.valuation.supportedValue)}</dd>
+            </div>
+            <div>
+              <dt>External reference</dt>
+              <dd>{money(asset.valuation.externalReference)}</dd>
+            </div>
+          </dl>
+          {detailAction(asset)}
+        </header>
+        <div className="collector-asset-detail__content">
+          <div className="collector-detail-tabs" role="tablist" aria-label="Collectible details">
+            {sections.map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={section === id}
+                className={section === id ? "is-active" : ""}
+                onClick={() => setSection(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <DetailPanel title={sections.find((item) => item.id === section)?.label ?? "Details"}>
+            {content[section]}
+          </DetailPanel>
+        </div>
+      </section>
+    </WorkspacePage>
+  );
+}
+
+function DetailOverview({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return (
+    <div className="collector-detail-summary-grid">
+      <Detail label="Lifecycle status" value={stageCopy(asset.stage).label} />
+      <Detail label="Next action" value={submissionNextStep(asset)} />
+      <Detail label="Submission status" value={sentence(asset.submissionStatus)} />
+      <Detail
+        label="Valuation status"
+        value={
+          asset.valuation.supportedValue
+            ? "Slice-supported valuation available"
+            : "Slice valuation pending"
+        }
+      />
+      <Detail
+        label="Custody status"
+        value={asset.custody ? custodyLabel(asset.custody.status) : "Not currently in custody"}
+      />
+      <Detail
+        label="Market status"
+        value={asset.market.isLive ? "Market live" : "Not market live"}
+      />
+      <Detail
+        label="Media completeness"
+        value={
+          asset.media.length
+            ? `${asset.media.length} uploaded item${asset.media.length === 1 ? "" : "s"}`
+            : "No uploaded evidence"
+        }
+      />
+    </div>
+  );
+}
+
+function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return (
+    <div className="collector-detail-summary-grid">
+      <Detail label="Submission status" value={sentence(asset.submissionStatus)} />
+      <Detail label="Last updated" value={date(asset.updatedAt)} />
+      <Detail label="Collectible details" value={assetMetadata(asset)} />
+      <Detail
+        label="Evidence"
+        value={
+          asset.media.length
+            ? `${asset.media.length} uploaded item${asset.media.length === 1 ? "" : "s"}`
+            : "No evidence uploaded"
+        }
+      />
+      <Detail label="Allowed action" value={submissionNextStep(asset)} />
+      <Link to="/list" className="collector-button">
+        {asset.submissionStatus === "CHANGES_REQUESTED"
+          ? "Review requested changes"
+          : asset.stage === "DRAFT"
+            ? "Continue submission"
+            : "View submission"}{" "}
+        <ArrowRight aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+function MarketResearchDetail({
+  asset,
+  market,
+}: {
+  asset: CollectorWorkspaceAsset;
+  market: ReturnType<typeof marketResearchSummary>;
+}) {
+  return (
+    <div className="collector-detail-market-research">
+      <section className="collector-detail-market-summary">
+        <span>Market summary</span>
+        <div>
+          <Detail label="Recent sale range" value={market.saleRange ?? "Unavailable"} />
+          <Detail label="Median recent sale" value={market.median ?? "Unavailable"} />
+          <Detail label="Current listings" value={market.listingRange ?? "Unavailable"} />
+          <Detail
+            label="Last checked"
+            value={market.updatedAt ? date(market.updatedAt) : "Unavailable"}
+          />
+        </div>
+      </section>
+      <p className="collector-detail-note">
+        External research is informational only and does not replace a Slice-supported valuation.
+      </p>
+      <div className="collector-detail-summary-grid">
         <Detail
-          label="Evidence"
-          value={`${asset.media.length} uploaded item${asset.media.length === 1 ? "" : "s"}`}
-        />
-        <Link to="/list" className="collector-button">
-          Open submission flow <ArrowRight aria-hidden="true" />
-        </Link>
-      </>
-    ),
-    market: (
-      <>
-        <Detail
-          label="External market research"
+          label="Research status"
           value={
             asset.marketResearch
-              ? `${asset.marketResearch.state} · ${date(asset.marketResearch.collectedAt)}`
-              : "Unavailable"
+              ? sentence(asset.marketResearch.state)
+              : "No market research available"
+          }
+        />
+        <Detail label="Exact comparable sales" value={market.exactComps ?? "Unavailable"} />
+        <Detail label="Recent sales" value={market.saleCount ?? "Unavailable"} />
+        <Detail label="Listings observed" value={market.listingCount ?? "Unavailable"} />
+      </div>
+      <p className="collector-detail-note">
+        Individual comparable-sale and listing observations are not available in this collector
+        projection.
+      </p>
+    </div>
+  );
+}
+
+function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return asset.media.length ? (
+    <div className="collector-media-gallery">
+      {asset.media.map((item) => (
+        <article key={item.id} className="collector-media-tile">
+          {asset.slug ? (
+            <AssetThumbnail asset={asset} className="collector-media-tile__preview" />
+          ) : (
+            <span>
+              <Image aria-hidden="true" />
+            </span>
+          )}
+          <strong>{friendlyMediaLabel(item.slot)}</strong>
+          <small>
+            {sentence(item.status)} · Uploaded {date(item.updatedAt)}
+          </small>
+          <em>Secure evidence preview</em>
+        </article>
+      ))}
+    </div>
+  ) : (
+    <Empty detail="No evidence has been uploaded for this collectible yet." />
+  );
+}
+
+function ValuationDetail({
+  asset,
+  market,
+}: {
+  asset: CollectorWorkspaceAsset;
+  market: ReturnType<typeof marketResearchSummary>;
+}) {
+  return (
+    <div className="collector-detail-valuation">
+      <section className="collector-detail-valuation__primary">
+        <span>Slice-supported valuation</span>
+        <strong>{money(asset.valuation.supportedValue)}</strong>
+        <p>
+          {asset.valuation.supportedValue
+            ? `Updated ${date(asset.valuation.supportedValue.asOf)}`
+            : "Slice valuation pending. Market references remain informational until staff review is complete."}
+        </p>
+      </section>
+      <div className="collector-detail-summary-grid">
+        <Detail
+          label="External market reference"
+          value={market.saleRange ?? money(asset.valuation.externalReference)}
+        />
+        <Detail
+          label="External reference date"
+          value={
+            market.updatedAt
+              ? date(market.updatedAt)
+              : asset.valuation.externalReference
+                ? date(asset.valuation.externalReference.asOf)
+                : "Unavailable"
+          }
+        />
+        <Detail label="Current listings" value={market.listingRange ?? "Unavailable"} />
+        <Detail
+          label="Valuation status"
+          value={asset.valuation.supportedValue ? "Supported" : "Pending"}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CustodyDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return (
+    <div className="collector-detail-custody">
+      <CustodyTimeline asset={asset} full />
+      <div className="collector-detail-summary-grid">
+        <Detail
+          label="Current custody status"
+          value={asset.custody ? custodyLabel(asset.custody.status) : "Not currently in custody"}
+        />
+        <Detail
+          label="Last updated"
+          value={asset.custody ? date(asset.custody.updatedAt) : "Unavailable"}
+        />
+        <Detail
+          label="Vault readiness"
+          value={
+            ["VAULT_READY", "MARKET_LIVE"].includes(asset.stage)
+              ? "Vault ready"
+              : "Not yet confirmed"
           }
         />
         <Detail
-          label="Market state"
-          value={asset.market.isLive ? "Market Live" : "Not market live"}
+          label="Market publication"
+          value={asset.market.isLive ? "Published" : "Not published"}
         />
+      </div>
+      <p className="collector-detail-note">
+        Custody and vault stages are controlled by Slice and its providers. Exact facility details
+        remain private for security.
+      </p>
+    </div>
+  );
+}
+
+function MarketDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  if (!asset.market.isLive) {
+    return (
+      <Empty
+        detail={`${stageCopy(asset.stage).label} — this collectible is not available on the public market yet.`}
+      />
+    );
+  }
+  return (
+    <div className="collector-detail-market">
+      <div className="collector-detail-summary-grid">
+        <Detail label="Reference value" value={money(asset.referenceValue)} />
+        <Detail label="Shares available" value={availability(asset)} />
         <Detail
           label="Owners"
           value={
             asset.market.ownersCount === null ? "Unavailable" : String(asset.market.ownersCount)
           }
         />
-        {asset.slug && asset.market.isLive ? (
-          <Link className="collector-button" to="/asset/$id" params={{ id: asset.slug }}>
-            View public asset <ArrowRight aria-hidden="true" />
-          </Link>
-        ) : null}
-      </>
-    ),
-    media: (
-      <>
         <Detail
-          label="Evidence status"
-          value={
-            asset.media.length
-              ? `${asset.media.length} uploaded item${asset.media.length === 1 ? "" : "s"}`
-              : "No evidence"
-          }
+          label="Executions"
+          value={asset.market.executionCount ? String(asset.market.executionCount) : "None"}
         />
-        {asset.media.length ? (
-          <ul className="collector-detail-evidence">
-            {asset.media.map((item) => (
-              <li key={item.id}>
-                <Image aria-hidden="true" />
-                <span>
-                  <strong>{friendlyMediaLabel(item.slot)}</strong>
-                  <small>
-                    {item.status.replaceAll("_", " ")} · Updated {date(item.updatedAt)}
-                  </small>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </>
-    ),
-    valuation: (
-      <>
-        <Detail label="Slice-supported valuation" value={money(asset.valuation.supportedValue)} />
-        <Detail
-          label="External market reference"
-          value={money(asset.valuation.externalReference)}
-        />
-        <Detail
-          label="Authority"
-          value={
-            asset.valuation.supportedValue
-              ? "Staff-supported Slice valuation"
-              : asset.valuation.externalReference
-                ? "External market reference only"
-                : "No supported valuation available"
-          }
-        />
-      </>
-    ),
-    custody: (
-      <>
-        <Detail
-          label="Custody state"
-          value={asset.custody ? custodyLabel(asset.custody.status) : "Not currently in custody"}
-        />
-        <p>Custody completion and vault readiness remain staff-controlled.</p>
-      </>
-    ),
-  };
+        <Detail label="Latest trade" value={sharePrice(asset)} />
+        <Detail label="Market status" value="Market live" />
+      </div>
+      {asset.slug ? (
+        <Link className="collector-button" to="/asset/$id" params={{ id: asset.slug }}>
+          Open public market <ArrowRight aria-hidden="true" />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function ActivityDetail({
+  asset,
+  activity,
+  requests,
+}: {
+  asset: CollectorWorkspaceAsset;
+  activity: CollectorWorkspaceOverview["activity"];
+  requests: CollectorWorkspaceRequest[];
+}) {
+  const related = activity.filter(Boolean);
   return (
-    <WorkspacePage
-      title={asset.title}
-      detail="Collector-side asset management uses current customer-safe submission and lifecycle data."
+    <div className="collector-detail-activity">
+      {requests.length ? (
+        <p className="collector-detail-note">
+          {requests.length} open customer request{requests.length === 1 ? "" : "s"} related to this
+          collectible.
+        </p>
+      ) : null}
+      {related.length ? (
+        <ul>
+          {related.map((item) => (
+            <ActivityRow key={item.id} item={item} />
+          ))}
+        </ul>
+      ) : (
+        <Empty detail={`No customer-safe activity is available for ${asset.title} yet.`} />
+      )}
+    </div>
+  );
+}
+
+function CustodyTimeline({
+  asset,
+  full = false,
+}: {
+  asset: CollectorWorkspaceAsset;
+  full?: boolean;
+}) {
+  const current = custodyProgress(asset);
+  const steps = ["Received", "Verified", "Custody confirmed", "Vault ready", "Market live"];
+  return (
+    <ol
+      className={`collector-custody-timeline ${full ? "is-full" : ""}`}
+      aria-label="Custody lifecycle"
     >
-      <section className="collector-asset-detail">
-        <AssetCard asset={asset} open={() => undefined} />
-        <div className="collector-asset-detail__content">
-          <div className="collector-detail-tabs" role="tablist" aria-label="Collectible details">
-            {sections.map((item) => (
-              <button
-                key={item}
-                role="tab"
-                aria-selected={section === item}
-                className={section === item ? "is-active" : ""}
-                onClick={() => setSection(item)}
-              >
-                {item === "market" ? "Market data" : item}
-              </button>
-            ))}
-          </div>
-          <DetailPanel title={section === "market" ? "Market data" : section}>
-            {content[section]}
-          </DetailPanel>
-        </div>
-      </section>
-    </WorkspacePage>
+      {steps.map((step, index) => (
+        <li
+          key={step}
+          className={index < current ? "is-complete" : index === current ? "is-current" : ""}
+        >
+          <span>{index < current ? "✓" : index + 1}</span>
+          <strong>{step}</strong>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Ranking({
+  title,
+  assets,
+  metric,
+  open,
+}: {
+  title: string;
+  assets: CollectorWorkspaceAsset[];
+  metric: (asset: CollectorWorkspaceAsset) => string;
+  open?: Open;
+}) {
+  return (
+    <section className="collector-ranking">
+      <h3>{title}</h3>
+      {assets.length ? (
+        <ol>
+          {assets.map((asset, index) => (
+            <li key={asset.id}>
+              <span>{index + 1}</span>
+              <AssetThumbnail asset={asset} />
+              <div>
+                <strong>{asset.title}</strong>
+                <small>{assetMetadata(asset)}</small>
+              </div>
+              <b>{metric(asset)}</b>
+              {open ? (
+                <button onClick={() => open("asset", asset.id, "overview")}>View</button>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <Empty detail="No recorded current market activity is available yet." />
+      )}
+    </section>
+  );
+}
+
+function detailAction(asset: CollectorWorkspaceAsset) {
+  if (asset.slug && asset.market.isLive)
+    return (
+      <Link
+        className="collector-button collector-button--primary"
+        to="/asset/$id"
+        params={{ id: asset.slug }}
+      >
+        View market <ArrowRight aria-hidden="true" />
+      </Link>
+    );
+  return (
+    <Link to="/list" className="collector-button collector-button--primary">
+      {asset.submissionStatus === "CHANGES_REQUESTED"
+        ? "Review request"
+        : asset.stage === "DRAFT"
+          ? "Continue submission"
+          : "View submission"}{" "}
+      <ArrowRight aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -1694,7 +2175,7 @@ function WorkspaceState({
   );
 }
 
-type Open = (section: WorkspaceSection, assetId?: string) => void;
+type Open = (section: WorkspaceSection, assetId?: string, tab?: AssetDetailSection) => void;
 const stageCopy = (stage: CollectorWorkspaceStage) =>
   ({
     DRAFT: { label: "Draft", icon: FileText },
@@ -1786,4 +2267,69 @@ function custodyLabel(status: string) {
       EXCEPTION: "Action required",
     }[status] ?? status.replaceAll("_", " ")
   );
+}
+function sentence(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+function assetMetadata(asset: CollectorWorkspaceAsset) {
+  return (
+    [asset.year, asset.set, [asset.grader, asset.grade].filter(Boolean).join(" ")]
+      .filter(Boolean)
+      .join(" · ") || "Collectible details unavailable"
+  );
+}
+function availability(asset: CollectorWorkspaceAsset) {
+  return asset.market.availabilityBps === null
+    ? "Unavailable"
+    : `${(asset.market.availabilityBps / 100).toFixed(asset.market.availabilityBps % 100 ? 2 : 0)}%`;
+}
+function sharePrice(asset: CollectorWorkspaceAsset) {
+  if (!asset.market.latestSharePriceMinor) return "Unavailable";
+  return `${money({ amountMinor: asset.market.latestSharePriceMinor, currency: asset.referenceValue?.currency ?? "GBP" })}/share`;
+}
+function custodyProgress(asset: CollectorWorkspaceAsset) {
+  if (asset.market.isLive || asset.stage === "MARKET_LIVE") return 5;
+  if (asset.stage === "VAULT_READY") return 4;
+  if (asset.custody?.status === "SECURED") return 3;
+  if (asset.custody?.status === "INSPECTED") return 2;
+  if (asset.custody?.status === "RECEIVED") return 1;
+  return 0;
+}
+function marketResearchSummary(asset: CollectorWorkspaceAsset) {
+  const snapshot = asset.marketResearch?.snapshot ?? {};
+  const record = (value: unknown) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  const string = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const number = (value: unknown) => (typeof value === "number" ? value : undefined);
+  const sales = record(snapshot.sales);
+  const listings = record(snapshot.listings);
+  const formatRange = (summary?: Record<string, unknown>) => {
+    const currency = string(summary?.currency);
+    const low = string(summary?.lowMinor);
+    const high = string(summary?.highMinor);
+    if (!currency || !low || !high) return undefined;
+    const lowValue = money({ amountMinor: low, currency });
+    const highValue = money({ amountMinor: high, currency });
+    return low === high ? lowValue : `${lowValue} – ${highValue}`;
+  };
+  const formatMedian = (summary?: Record<string, unknown>) => {
+    const currency = string(summary?.currency);
+    const median = string(summary?.medianMinor);
+    return currency && median ? money({ amountMinor: median, currency }) : undefined;
+  };
+  const updatedAt = string(snapshot.updatedAt) ?? asset.marketResearch?.collectedAt;
+  return {
+    saleRange: formatRange(sales),
+    listingRange: formatRange(listings),
+    median: formatMedian(sales),
+    updatedAt,
+    exactComps: number(snapshot.exactCompCount)?.toString(),
+    saleCount: number(sales?.count)?.toString(),
+    listingCount: number(listings?.count)?.toString(),
+  };
 }
