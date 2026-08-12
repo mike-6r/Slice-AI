@@ -22695,3 +22695,51 @@ body:has(.collectors-page) .site-shell {
     background: #08090c;
   }
 }
+
+/* Keep the educational trading example directly with the featured asset,
+ * while preserving a compact footprint in the hero column. */
+.approved-home__featured-stack {
+  width: min(100%, 53rem);
+  min-width: 0;
+  justify-self: end;
+}
+.approved-home__trading-demo--compact {
+  margin-top: 0.8rem;
+  padding: 0.85rem;
+}
+.approved-home__trading-demo--compact > header {
+  align-items: flex-start;
+}
+.approved-home__trading-demo--compact h3 {
+  font-size: 1.2rem;
+}
+.approved-home__trading-demo--compact > header > div:first-child > p:last-child,
+.approved-home__trading-demo--compact .approved-home__trading-asset,
+.approved-home__trading-demo--compact .approved-home__trading-demo-note {
+  display: none;
+}
+.approved-home__trading-demo--compact .approved-home__trading-demo-grid {
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.approved-home__trading-demo--compact .approved-home__trade-example {
+  padding: 0.72rem;
+}
+.approved-home__trading-demo--compact .approved-home__trade-price,
+.approved-home__trading-demo--compact .approved-home__share-options,
+.approved-home__trading-demo--compact .approved-home__trade-result {
+  margin-top: 0.55rem;
+}
+.approved-home__trading-demo--compact .approved-home__trade-flow {
+  margin: 0.6rem 0;
+}
+.approved-home__trading-demo--compact .approved-home__demo-action {
+  min-height: 2.25rem;
+}
+@media (max-width: 899px) {
+  .approved-home__featured-stack {
+    width: 100%;
+    max-width: 42.1875rem;
+    justify-self: center;
+  }
+}

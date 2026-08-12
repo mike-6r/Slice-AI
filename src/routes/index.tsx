@@ -113,7 +113,10 @@ function HomePage() {
           <HeroOwnershipLine />
         </div>
 
-        <FeaturedMarketHero />
+        <div className="approved-home__featured-stack">
+          <FeaturedMarketHero />
+          <TradingEducation compact />
+        </div>
       </section>
 
       <OwnershipWorks />
@@ -526,7 +529,6 @@ function OwnershipWorks() {
           reference and illustrative Slice share price are always shown separately.
         </p>
       </aside>
-      <TradingEducation />
     </section>
   );
 }
@@ -540,7 +542,7 @@ function OwnershipFlowArrow({ label }: { label: string }) {
   );
 }
 
-function TradingEducation() {
+function TradingEducation({ compact = false }: { compact?: boolean }) {
   const [buyShares, setBuyShares] = useState(25);
   const [buyReviewed, setBuyReviewed] = useState(false);
   const [sellReviewed, setSellReviewed] = useState(false);
@@ -548,7 +550,10 @@ function TradingEducation() {
   const investment = `£${(buyShares * 10).toFixed(2)}`;
 
   return (
-    <section className="approved-home__trading-demo" aria-labelledby="trading-demo-heading">
+    <section
+      className={`approved-home__trading-demo${compact ? " approved-home__trading-demo--compact" : ""}`}
+      aria-labelledby="trading-demo-heading"
+    >
       <header>
         <div>
           <p className="page-kicker">How trading works</p>
