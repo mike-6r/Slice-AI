@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type {
   Asset,
   PortfolioHolding,
@@ -304,10 +305,12 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
         <PanelError message={DASHBOARD_ERROR_STATES.market} retry={() => void query.refetch()} />
       ) : query.data?.length ? (
         <ul className="dashboard-market-list">
-          {query.data.slice(0, 3).map((asset) => (
+          {query.data.slice(0, 3).map((asset) => {
+            const media = asset.slug ? assetShowcaseMedia(asset.slug) : undefined;
+            return (
             <li key={asset.id}>
               <span className="dashboard-asset-placeholder" aria-hidden="true">
-                <Landmark />
+                {media ? <img src={media.src} alt="" /> : <Landmark />}
               </span>
               <div className="min-w-0 flex-1">
                 <strong>{asset.details.title}</strong>
@@ -326,7 +329,8 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
                 </span>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : (
         <PanelEmpty message={DASHBOARD_EMPTY_STATES.market} />
@@ -405,6 +409,7 @@ function HoldingsPanel({ portfolio }: { portfolio: UseQueryResult<PortfolioSumma
 }
 
 function HoldingRow({ holding }: { holding: PortfolioHolding }) {
+  const media = holding.slug ? assetShowcaseMedia(holding.slug) : undefined;
   return (
     <tr>
       <td>
@@ -413,7 +418,7 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
             className="dashboard-asset-placeholder dashboard-asset-placeholder--small"
             aria-hidden="true"
           >
-            <Landmark />
+            {media ? <img src={media.src} alt="" /> : <Landmark />}
           </span>
           <span>{holding.title ?? holding.slug ?? "Asset"}</span>
         </div>

@@ -16224,6 +16224,12 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   width: 1.7rem;
   height: 1.7rem;
 }
+.dashboard-asset-placeholder img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
 .dashboard-panel--allocation .dashboard-panel__body {
   display: flex;
@@ -23399,7 +23405,7 @@ body:has(.collectors-page) .site-shell {
 .portfolio-page--approved .portfolio-donut span { font-size: 0.53rem; }
 .portfolio-page--approved .portfolio-allocation-table__row { grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.38rem; padding: 0.5rem 0; font-size: 0.62rem; }
 .portfolio-page--approved .portfolio-allocation-table__row strong { font-size: 0.61rem; }
-.portfolio-panel--holdings { min-height: 23rem; }
+.portfolio-panel--holdings { min-height: 0; }
 .portfolio-page--approved .portfolio-panel--holdings .portfolio-panel__head { align-items: flex-start; }
 .portfolio-holding-filters { display: flex; min-width: 0; gap: 0.2rem; overflow-x: auto; padding-bottom: 0.08rem; }
 .portfolio-holding-filters button {
@@ -23432,6 +23438,20 @@ body:has(.collectors-page) .site-shell {
 .portfolio-page--approved .portfolio-asset__copy { width: auto; flex: 1 1 auto; min-width: 0; }
 .portfolio-page--approved .portfolio-asset__copy strong { font-size: 0.62rem; }
 .portfolio-page--approved .portfolio-asset__copy small { font-size: 0.53rem; }
+.portfolio-page--approved .portfolio-table--holdings .portfolio-asset {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+}
+.portfolio-page--approved .portfolio-table--holdings .portfolio-asset__icon {
+  position: static;
+  flex: 0 0 2.35rem;
+}
+.portfolio-page--approved .portfolio-table--holdings .portfolio-asset__copy {
+  min-width: 0;
+  overflow: hidden;
+}
 .portfolio-page--approved .portfolio-table__quantity strong { font-size: 0.66rem; }
 .portfolio-page--approved .portfolio-table__quantity small,
 .portfolio-table__pnl small { color: #8493a0; font-size: 0.5rem; }

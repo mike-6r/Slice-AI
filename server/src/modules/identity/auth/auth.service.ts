@@ -494,7 +494,15 @@ export class AuthService {
   async me(actor: Actor) {
     const user = await this.users.findById(actor.userId);
     if (!user) throw new ForbiddenException();
-    return this.publicUser(user, actor.roles);
+    // Role assignments can change after a session was issued (for example the
+    // staged collector workspace enablement). Resolve them at projection time
+    // so the navigation and workspace guard reflect current authority.
+    return this.publicUser(
+      user,
+      (await this.roles.listForUser(user.id))
+        .filter((role) => role.scopeType === 'GLOBAL' && role.scopeId === '*')
+        .map((role) => role.role),
+    );
   }
   async usernameTaken(username: string) {
     return Boolean(await this.users.findByUsername(username));

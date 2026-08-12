@@ -584,6 +584,7 @@ export async function runCollectorDemoSetup() {
       collectorB,
     );
     await ensureCollectorRoles(access, db, admin, collector.userId);
+    await ensureCollectorRoles(access, db, admin, collectorB.userId);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
     await archiveRetiredDemoAssets(db);
     await db.publicCollectorProfile.upsert({
