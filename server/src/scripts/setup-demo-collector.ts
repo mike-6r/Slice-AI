@@ -1705,8 +1705,8 @@ async function ensureMarketMakerInventory(
       input.admin,
       assetId,
       { toUserId: marketMaker.userId, units: (350n - owned).toString() },
-      `staging-demo-market-maker-allocation:${spec.key}`,
-      `staging-demo-market-maker-allocation:${spec.key}`,
+      `staging-demo-market-maker-allocation:${spec.key}:${owned}`,
+      `staging-demo-market-maker-allocation:${spec.key}:${owned}`,
     );
   }
   const sourceReference = `staging-demo-market-maker-lot:${spec.key}`;
