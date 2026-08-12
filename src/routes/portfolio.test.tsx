@@ -77,6 +77,7 @@ function renderPortfolio() {
     ],
     nextCursor: "next-safe-cursor",
   };
+  client.setQueryData(queryKeys.portfolio.holdings, summary.holdings);
   client.setQueryData(queryKeys.portfolio.lots, lots);
   client.setQueryData(queryKeys.portfolio.transactions(), transactions);
   const repositories: AppRepositories = {
@@ -97,14 +98,14 @@ function renderPortfolio() {
   );
 }
 
-describe("Document 013 portfolio UI", () => {
-  it("renders authoritative cash, holdings and safe activity without fabricated performance", () => {
+describe("approved portfolio workspace", () => {
+  it("renders authoritative account data without fabricated historical performance", () => {
     const html = renderPortfolio();
     expect(html).toContain("Portfolio value");
     expect(html).toContain("Available cash");
     expect(html).toContain("Holdings value");
     expect(html).toContain("Invested cost");
-    expect(html).toContain("Collectible allocation");
+    expect(html).toContain("Allocation by asset class");
     expect(html).toContain("Safe asset");
     expect(html).toContain("20");
     expect(html).toContain("Recent transactions");
@@ -112,16 +113,19 @@ describe("Document 013 portfolio UI", () => {
     expect(html).toContain("Funds added");
     expect(html).toContain("Current marked value");
     expect(html).toContain("Open position cost");
-    expect(html).toContain("Unrealised change");
-    expect(html).toContain("Current marked value compared with open cost basis.");
-    expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(4);
+    expect(html).toContain("Unrealised P/L");
+    expect(html).toContain("Historical performance data is not yet available.");
+    expect(html).toContain("Portfolio breakdown");
+    expect(html).toContain("Open orders / reserved cash");
+    expect(html).toContain("Top holding");
+    expect(html).toContain("Portfolio insights");
+    expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(5);
     expect(html).not.toContain('class="portfolio-kpi"');
     expect(html).toContain("portfolio-kpi__content");
-    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(5);
     expect(html).toContain("portfolio-performance-snapshot");
     expect(html).not.toContain("Demo Funding");
     expect(html).not.toContain("account-safe-id");
-    expect(html).not.toContain("P/L");
     expect(html).not.toContain("24h change");
     expect(html).not.toContain("View all holdings");
     expect(html).not.toContain("account-safe-id");

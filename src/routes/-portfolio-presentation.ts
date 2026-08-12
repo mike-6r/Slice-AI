@@ -37,6 +37,10 @@ export type PortfolioValuationSnapshot = {
   unrealisedValueMinor: string;
 };
 
+export type PortfolioHoldingValuation = {
+  unrealisedValueMinor: string;
+};
+
 /**
  * A current marked-value / open-cost snapshot is shown only when every
  * holding has both authoritative values. It is not a time-series return.
@@ -60,6 +64,29 @@ export function derivePortfolioValuationSnapshot(
   };
 }
 
+/** A holding-level marked-value / open-cost comparison. This is deliberately
+ * not presented as a historical return. */
+export function deriveHoldingValuation(
+  holding: PortfolioHolding,
+): PortfolioHoldingValuation | null {
+  if (holding.estimatedValueMinor === null || holding.costBasisMinor === null) return null;
+  return {
+    unrealisedValueMinor: (
+      BigInt(holding.estimatedValueMinor) - BigInt(holding.costBasisMinor)
+    ).toString(),
+  };
+}
+
+/** The freshest authoritative holding mark is the only refresh time the
+ * portfolio read model currently exposes. */
+export function latestPortfolioMarkAt(summary: PortfolioSummary) {
+  const marks = summary.holdings
+    .map((holding) => holding.valuationAsOf)
+    .filter((value): value is NonNullable<typeof value> => Boolean(value));
+  if (!marks.length) return null;
+  return marks.reduce((latest, value) => (value > latest ? value : latest));
+}
+
 export function formatSignedPortfolioMoney(value: string) {
   const amount = BigInt(value);
   const formatted = formatPortfolioMoney(value);
@@ -73,6 +100,8 @@ export type PortfolioAllocationItem = {
   valueMinor: string;
   percentageBps: number;
 };
+
+export type PortfolioCategoryAllocationItem = Omit<PortfolioAllocationItem, "assetId">;
 
 /** A display-only allocation, derived only when the backend says all holdings are valued. */
 export function deriveHoldingAllocation(
@@ -90,6 +119,28 @@ export function deriveHoldingAllocation(
     valueMinor: row.value.toString(),
     percentageBps: Number((row.value * 10_000n) / total),
   }));
+}
+
+/** Asset-class allocation uses the same complete marked-value guard as the
+ * per-holding allocation. It never blends cash into collectible allocation. */
+export function deriveCategoryAllocation(
+  summary: PortfolioSummary,
+): PortfolioCategoryAllocationItem[] | null {
+  const holdings = deriveHoldingAllocation(summary);
+  if (!holdings) return null;
+  const categories = new Map<string, bigint>();
+  for (const holding of summary.holdings) {
+    if (holding.estimatedValueMinor === null) return null;
+    const label = holding.category?.trim() || "Other";
+    categories.set(label, (categories.get(label) ?? 0n) + BigInt(holding.estimatedValueMinor));
+  }
+  const total = Array.from(categories.values()).reduce((sum, value) => sum + value, 0n);
+  if (total <= 0n) return null;
+  return Array.from(categories, ([label, value]) => ({
+    label,
+    valueMinor: value.toString(),
+    percentageBps: Number((value * 10_000n) / total),
+  })).sort((left, right) => Number(BigInt(right.valueMinor) - BigInt(left.valueMinor)));
 }
 
 function holdingToAllocation(holding: PortfolioHolding) {
