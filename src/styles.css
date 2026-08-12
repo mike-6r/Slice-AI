@@ -21219,6 +21219,31 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
   .collectors-directory-grid.is-compact-directory { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Keep the collector spotlight inside its content column. Both panels must be
+ * allowed to shrink; the published-card grid then consumes only the available
+ * featured-panel width instead of reserving a fourth empty fixed track. */
+.collectors-spotlight {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.85fr);
+}
+.collectors-spotlight > .featured-collector-card,
+.collectors-spotlight > .collector-discovery-panel,
+.featured-holdings,
+.featured-holdings-grid,
+.featured-holding-card {
+  min-width: 0;
+}
+.featured-holdings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.75rem), 1fr));
+}
+.featured-holding-media > svg {
+  position: relative;
+  z-index: 1;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: auto;
+  color: var(--color-subtle);
+}
+
 /* Asset-specific D14 order entry. Financial and ownership values remain API authoritative. */
 .trading-order-page {
   width: min(calc(100% - clamp(2rem, 6vw, 6.5rem)), 92rem);
