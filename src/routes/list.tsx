@@ -155,7 +155,10 @@ export function SubmissionPage() {
     ["Review before submitting", false],
   ] as const;
   const update = <K extends keyof ListingForm>(key: K, value: ListingForm[K]) =>
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (current[key] !== value) setMarketResearch(null);
+      return { ...current, [key]: value };
+    });
   return (
     <main className="list-page">
       <div className="list-shell">

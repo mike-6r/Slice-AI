@@ -11,6 +11,12 @@ export type MarketResearchInput = {
   declaredMetadata: Record<string, unknown>;
   refresh?: boolean;
 };
+export function marketResearchIdentityHash(input: {
+  categoryId: string;
+  declaredMetadata: Record<string, unknown>;
+}) {
+  return hashIdentity(canonicalIdentity({ ...input }));
+}
 
 type Identity = {
   categoryId: string;

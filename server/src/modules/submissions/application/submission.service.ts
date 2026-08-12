@@ -21,6 +21,7 @@ import {
   type ObjectStoragePort,
 } from '../ports/submission-storage.ports';
 import { Inject } from '@nestjs/common';
+import { marketResearchIdentityHash } from '../../market-research/market-research.service';
 import {
   assertEditableStatus,
   assertExpectedVersion,
@@ -91,6 +92,27 @@ export class SubmissionService {
           include: { media: true },
         });
         if (input.marketResearchId) {
+          const research = await db.submissionMarketResearch.findFirst({
+            where: {
+              id: input.marketResearchId,
+              ownerUserId: actor.userId,
+              submissionId: null,
+            },
+            select: { identityHash: true },
+          });
+          if (
+            !research ||
+            research.identityHash !==
+              marketResearchIdentityHash({
+                categoryId: input.categoryId,
+                declaredMetadata: input.declaredMetadata ?? {},
+              })
+          )
+            throw new UnprocessableEntityException({
+              code: 'MARKET_RESEARCH_UNAVAILABLE',
+              message:
+                'Refresh market research after changing the collectible identity.',
+            });
           const attached = await db.submissionMarketResearch.updateMany({
             where: {
               id: input.marketResearchId,
