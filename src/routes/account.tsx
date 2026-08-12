@@ -30,6 +30,7 @@ import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-pr
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "Account Center | Slice" }] }),
+  validateSearch: (search) => ({ sessions: search.sessions === "all" ? "all" : undefined }),
   component: AccountPageForTest,
 });
 
@@ -50,6 +51,7 @@ const date = (value: string | null | undefined) =>
     : "Not available";
 
 export function AccountPageForTest() {
+  const { sessions: sessionsView } = Route.useSearch();
   const { isAuthenticated } = useSession();
   const services = useAppServices();
   const client = useQueryClient();
@@ -115,6 +117,7 @@ export function AccountPageForTest() {
     enabled,
   });
   const refresh = () => void client.invalidateQueries({ queryKey: ["account"] });
+  const showAllSessions = sessionsView === "all";
 
   if (!isAuthenticated || (user.error instanceof ApiError && user.error.status === 401))
     return <AccessRequired />;
@@ -177,7 +180,7 @@ export function AccountPageForTest() {
               />
               <SecurityPanel email={email} phone={phone} twoFactor={twoFactor} refresh={refresh} />
               <AccountAccessPanel query={capabilities} />
-              <SessionsPanel sessions={sessions} refresh={refresh} />
+              <SessionsPanel sessions={sessions} refresh={refresh} showAll={showAllSessions} />
               <LinkedPanel banks={banks} discord={discord} refresh={refresh} />
               <PreferencesPanel query={preferences} refresh={refresh} />
               <NotificationPreferencesPanel query={notificationPreferences} refresh={refresh} />
@@ -889,6 +892,7 @@ function RecoveryDialog({ close }: { close: () => void }) {
 function SessionsPanel({
   sessions,
   refresh,
+  showAll,
 }: {
   sessions: ReturnType<
     typeof useQuery<{
@@ -903,6 +907,7 @@ function SessionsPanel({
     }>
   >;
   refresh: () => void;
+  showAll: boolean;
 }) {
   const { repositories } = useAppServices();
   const revoke = useMutation({
@@ -913,11 +918,17 @@ function SessionsPanel({
     mutationFn: repositories.account.revokeOtherSessions,
     onSuccess: refresh,
   });
+  const ordered = sessions.data?.sessions ? orderSessions(sessions.data.sessions) : [];
+  const visible = showAll ? ordered : ordered.slice(0, 3);
   return (
     <Panel
       id="sessions"
       title="Sessions & devices"
-      detail="Signed-in sessions on your account."
+      detail={
+        showAll
+          ? "All signed-in sessions on your account."
+          : "A summary of signed-in sessions on your account."
+      }
       className="account-panel--sessions"
     >
       <div className="account-session-actions">
@@ -934,9 +945,9 @@ function SessionsPanel({
         <Rows />
       ) : sessions.error ? (
         <Retry detail="Unable to load sessions." retry={() => void sessions.refetch()} />
-      ) : sessions.data?.sessions.length ? (
+      ) : ordered.length ? (
         <ul className="account-session-list">
-          {sessions.data.sessions.map((item) => (
+          {visible.map((item) => (
             <li key={item.reference}>
               <Smartphone aria-hidden="true" />
               <div>
@@ -962,11 +973,28 @@ function SessionsPanel({
       ) : (
         <p className="account-empty">No active sessions found.</p>
       )}
+      {!showAll && ordered.length > 3 ? (
+        <a href="/account?sessions=all#sessions" className="account-text-button">
+          View all sessions →
+        </a>
+      ) : null}
+      {showAll ? (
+        <a href="/account#overview" className="account-text-button">
+          Back to account overview
+        </a>
+      ) : null}
       {revoke.error || revokeOthers.error ? (
         <p className="account-form-error">{errorCopy(revoke.error ?? revokeOthers.error)}</p>
       ) : null}
     </Panel>
   );
+}
+function orderSessions<T extends { currentSession: boolean; lastUsedAt: string }>(sessions: T[]) {
+  const current = sessions.filter((item) => item.currentSession);
+  const other = sessions
+    .filter((item) => !item.currentSession)
+    .sort((left, right) => Date.parse(right.lastUsedAt) - Date.parse(left.lastUsedAt));
+  return [...current, ...other];
 }
 type DiscordLink = {
   connected: boolean;

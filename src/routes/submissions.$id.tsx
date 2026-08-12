@@ -335,7 +335,7 @@ function SubmissionDetailPage() {
                   uploadPending={media.isPending}
                   removePending={remove.isPending}
                   onSelect={(file) => beginUpload(slot, file, existing)}
-                onRemove={() => existing && remove.mutate({ mediaId: existing.id, slot })}
+                  onRemove={() => existing && remove.mutate({ mediaId: existing.id, slot })}
                 />
               );
             })}
