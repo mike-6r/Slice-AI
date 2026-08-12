@@ -21223,7 +21223,6 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
  * allowed to shrink; the published-card grid then consumes only the available
  * featured-panel width instead of reserving a fourth empty fixed track. */
 .collectors-spotlight {
-  width: 100%;
   max-width: 100%;
   grid-template-columns: minmax(0, 13fr) minmax(0, 7fr);
 }
