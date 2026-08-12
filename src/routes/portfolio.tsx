@@ -26,7 +26,10 @@ import {
   PORTFOLIO_EMPTY_STATES,
   PORTFOLIO_ERROR_STATES,
   deriveHoldingAllocation,
+  derivePortfolioValuationSnapshot,
   formatPortfolioMoney,
+  formatSignedPortfolioMoney,
+  holdingDisplayLabel,
   portfolioValueLabel,
   valuationDescription,
 } from "./-portfolio-presentation";
@@ -109,6 +112,8 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
       </section>
     );
   const summary = query.data;
+  const valuationSnapshot = derivePortfolioValuationSnapshot(summary);
+  const holdingsValue = summary.estimatedHoldingsValueMinor;
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
@@ -128,16 +133,30 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
         detail="Authoritative available cash"
       />
       <PortfolioKpi
-        label="Reserved cash"
-        value={formatPortfolioMoney(summary.cash.reservedMinor)}
-        icon={LockKeyhole}
-        detail="Reserved for supported account activity"
+        label={holdingsValue === null ? "Reserved cash" : "Holdings value"}
+        value={
+          holdingsValue === null
+            ? formatPortfolioMoney(summary.cash.reservedMinor)
+            : formatPortfolioMoney(holdingsValue)
+        }
+        icon={holdingsValue === null ? LockKeyhole : Landmark}
+        detail={
+          holdingsValue === null
+            ? "Reserved for supported account activity"
+            : "Authoritative marked collectibles"
+        }
       />
       <PortfolioKpi
-        label="Total return"
-        value="Unavailable"
+        label={valuationSnapshot ? "Invested cost" : "Reserved cash"}
+        value={
+          valuationSnapshot
+            ? formatPortfolioMoney(valuationSnapshot.investedCostMinor)
+            : formatPortfolioMoney(summary.cash.reservedMinor)
+        }
         icon={BanknoteArrowDown}
-        detail="No return history available"
+        detail={
+          valuationSnapshot ? "Open holding cost basis" : "Reserved for supported account activity"
+        }
       />
     </section>
   );
@@ -186,20 +205,20 @@ function PortfolioKpi({
 function AllocationPanel({ query }: { query: ReturnType<typeof useQuery<PortfolioSummary>> }) {
   if (query.isLoading)
     return (
-      <PortfolioPanel title="Portfolio allocation" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Collectible allocation" className="portfolio-panel--allocation">
         <ChartSkeleton />
       </PortfolioPanel>
     );
   if (query.isError || !query.data)
     return (
-      <PortfolioPanel title="Portfolio allocation" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Collectible allocation" className="portfolio-panel--allocation">
         <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
       </PortfolioPanel>
     );
   const rows = deriveHoldingAllocation(query.data);
   if (!rows)
     return (
-      <PortfolioPanel title="Portfolio allocation" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Collectible allocation" className="portfolio-panel--allocation">
         <AllocationEmpty
           message={
             query.data.holdings.length
@@ -211,7 +230,7 @@ function AllocationPanel({ query }: { query: ReturnType<typeof useQuery<Portfoli
     );
   const gradient = allocationGradient(rows.map((row) => row.percentageBps));
   return (
-    <PortfolioPanel title="Portfolio allocation" className="portfolio-panel--allocation">
+    <PortfolioPanel title="Collectible allocation" className="portfolio-panel--allocation">
       <div className="portfolio-allocation">
         <div
           className="portfolio-donut"
@@ -220,8 +239,8 @@ function AllocationPanel({ query }: { query: ReturnType<typeof useQuery<Portfoli
           aria-label="Allocation by holding using authoritative marked values"
         >
           <div>
-            <strong>{portfolioValueLabel(query.data)}</strong>
-            <span>Total value</span>
+            <strong>{formatPortfolioMoney(query.data.estimatedHoldingsValueMinor ?? "0")}</strong>
+            <span>Collectibles value</span>
           </div>
         </div>
         <div className="portfolio-allocation-table">
@@ -263,29 +282,37 @@ function AllocationEmpty({ message }: { message: string }) {
 }
 
 function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<PortfolioSummary>> }) {
+  const valuationSnapshot = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
   return (
-    <PortfolioPanel
-      title="Performance"
-      className="portfolio-panel--performance"
-      header={
-        <div className="portfolio-periods" aria-label="Portfolio performance periods unavailable">
-          {["1D", "7D", "30D", "3M", "1Y", "All"].map((period) => (
-            <button
-              key={period}
-              type="button"
-              disabled
-              aria-label={`${period} history unavailable`}
-            >
-              {period}
-            </button>
-          ))}
-        </div>
-      }
-    >
+    <PortfolioPanel title="Performance" className="portfolio-panel--performance">
       {query.isLoading ? (
         <ChartSkeleton />
       ) : query.isError ? (
         <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
+      ) : valuationSnapshot ? (
+        <div
+          className="portfolio-performance-snapshot"
+          aria-label="Current holding valuation snapshot"
+        >
+          <div>
+            <span>Marked holdings value</span>
+            <strong>{formatPortfolioMoney(valuationSnapshot.holdingsValueMinor)}</strong>
+          </div>
+          <div>
+            <span>Open holding cost</span>
+            <strong>{formatPortfolioMoney(valuationSnapshot.investedCostMinor)}</strong>
+          </div>
+          <div>
+            <span>Unrealised value change</span>
+            <strong
+              className={
+                BigInt(valuationSnapshot.unrealisedValueMinor) >= 0n ? "is-credit" : "is-debit"
+              }
+            >
+              {formatSignedPortfolioMoney(valuationSnapshot.unrealisedValueMinor)}
+            </strong>
+          </div>
+        </div>
       ) : (
         <PortfolioEmptyState
           className="portfolio-empty-state--performance"
@@ -294,14 +321,11 @@ function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<Portfol
           detail="Historical portfolio values are not currently exposed by Slice."
         />
       )}
-      <div className="portfolio-range-summary" aria-label="Performance periods">
-        {["Starting value", "Net contributions", "Total return", "Best day"].map((period) => (
-          <div key={period}>
-            <span>{period}</span>
-            <strong>Unavailable</strong>
-          </div>
-        ))}
-      </div>
+      {valuationSnapshot ? (
+        <p className="portfolio-performance-note">
+          Current marked-value comparison only. Historical performance is not yet available.
+        </p>
+      ) : null}
     </PortfolioPanel>
   );
 }
@@ -331,13 +355,11 @@ function ActivityPanel({
                 {item.side === "CREDIT" ? <ArrowUpRight /> : <ArrowDownRight />}
               </span>
               <div>
-                <strong>{humanise(item.type)}</strong>
-                <p>
-                  {item.reference ?? (item.status ? humanise(item.status) : "Recorded activity")}
-                </p>
+                <strong>{transactionLabel(item)}</strong>
+                <p>{transactionDetail(item)}</p>
               </div>
               <aside>
-                <strong>{formatPortfolioMoney(item.amountMinor)}</strong>
+                <strong>{formatTransactionMoney(item)}</strong>
                 <span>{formatDate(item.effectiveAt)}</span>
               </aside>
             </li>
@@ -428,12 +450,19 @@ function HoldingRow({
   return (
     <tr>
       <td>
-        <div className="portfolio-asset">
-          <span aria-hidden="true">
-            <Landmark />
-          </span>
-          <strong>{holding.title ?? holding.slug ?? "Asset"}</strong>
-        </div>
+        {holding.slug ? (
+          <Link
+            to="/asset/$id"
+            params={{ id: holding.slug }}
+            className="portfolio-asset portfolio-asset--link"
+          >
+            <HoldingIdentity holding={holding} />
+          </Link>
+        ) : (
+          <div className="portfolio-asset">
+            <HoldingIdentity holding={holding} />
+          </div>
+        )}
       </td>
       <td>{holding.ownedUnits}</td>
       <td>
@@ -481,15 +510,12 @@ function TransactionsPanel({
                 <tr key={`${item.reference ?? item.type}-${item.effectiveAt}-${index}`}>
                   <td>
                     <span className={`portfolio-transaction-pill is-${item.side.toLowerCase()}`}>
-                      {humanise(item.type)}
+                      {transactionLabel(item)}
                     </span>
                   </td>
-                  <td>
-                    {item.reference ??
-                      (item.status ? humanise(item.status) : "Recorded financial activity")}
-                  </td>
+                  <td>{transactionDetail(item)}</td>
                   <td className={item.side === "CREDIT" ? "is-credit" : "is-debit"}>
-                    {formatPortfolioMoney(item.amountMinor)}
+                    {formatTransactionMoney(item)}
                   </td>
                   <td>{formatDate(item.effectiveAt)}</td>
                 </tr>
@@ -501,6 +527,22 @@ function TransactionsPanel({
         <PanelEmpty message={PORTFOLIO_EMPTY_STATES.transactions} />
       )}
     </PortfolioPanel>
+  );
+}
+
+function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
+  return (
+    <>
+      <span aria-hidden="true">
+        <Landmark />
+      </span>
+      <span className="portfolio-asset__copy">
+        <strong>{holdingDisplayLabel(holding)}</strong>
+        <small>
+          {holding.availableUnits} available · {holding.reservedUnits} reserved
+        </small>
+      </span>
+    </>
   );
 }
 
@@ -628,11 +670,32 @@ function allocationForHolding(summary: PortfolioSummary, assetId: string) {
 function formatBps(value: number) {
   return `${(value / 100).toFixed(2)}%`;
 }
-function humanise(value: string) {
-  return value
-    .toLowerCase()
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+function transactionLabel(item: PortfolioTransaction) {
+  const type = item.type.toLowerCase();
+  if (type.includes("fund") || type.includes("deposit")) return "Funds added";
+  if (type.includes("withdraw")) return "Funds withdrawn";
+  if (type.includes("fee")) return "Marketplace fee";
+  if (type.includes("settle") || type.includes("trade") || type.includes("execution")) {
+    return "Marketplace trade";
+  }
+  return item.side === "CREDIT" ? "Account credit" : "Account debit";
+}
+
+function transactionDetail(item: PortfolioTransaction) {
+  const type = item.type.toLowerCase();
+  if (type.includes("fund") || type.includes("deposit")) return "Cash added to your Slice wallet";
+  if (type.includes("withdraw")) return "Cash withdrawn from your Slice wallet";
+  if (type.includes("fee")) return "Fee recorded for marketplace activity";
+  if (type.includes("settle") || type.includes("trade") || type.includes("execution")) {
+    return "Marketplace order and settlement activity";
+  }
+  return item.side === "CREDIT" ? "Recorded account credit" : "Recorded account debit";
+}
+
+function formatTransactionMoney(item: PortfolioTransaction) {
+  const amount = formatPortfolioMoney(item.amountMinor);
+  const absolute = amount.startsWith("-") ? amount.slice(1) : amount;
+  return `${item.side === "CREDIT" ? "+" : "-"}${absolute}`;
 }
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(

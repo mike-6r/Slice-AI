@@ -22,6 +22,51 @@ export function valuationDescription(status: PortfolioValuationStatus) {
   return "No authoritative valuation available.";
 }
 
+/**
+ * The portfolio API deliberately exposes only safe public holding metadata. Do
+ * not fall back to a slug here: a missing display title should not leak an
+ * internal fixture or identifier into the investor experience.
+ */
+export function holdingDisplayLabel(holding: PortfolioHolding) {
+  return holding.title?.trim() || "Collectible";
+}
+
+export type PortfolioValuationSnapshot = {
+  holdingsValueMinor: string;
+  investedCostMinor: string;
+  unrealisedValueMinor: string;
+};
+
+/**
+ * A current marked-value / open-cost snapshot is shown only when every
+ * holding has both authoritative values. It is not a time-series return.
+ */
+export function derivePortfolioValuationSnapshot(
+  summary: PortfolioSummary,
+): PortfolioValuationSnapshot | null {
+  if (summary.holdings.length === 0 || summary.estimatedHoldingsValueMinor === null) return null;
+  if (summary.holdings.some((holding) => holding.costBasisMinor === null)) return null;
+
+  const holdingsValue = BigInt(summary.estimatedHoldingsValueMinor);
+  const investedCost = summary.holdings.reduce(
+    (total, holding) => total + BigInt(holding.costBasisMinor as string),
+    0n,
+  );
+
+  return {
+    holdingsValueMinor: holdingsValue.toString(),
+    investedCostMinor: investedCost.toString(),
+    unrealisedValueMinor: (holdingsValue - investedCost).toString(),
+  };
+}
+
+export function formatSignedPortfolioMoney(value: string) {
+  const amount = BigInt(value);
+  const formatted = formatPortfolioMoney(value);
+  if (amount === 0n) return formatted;
+  return amount > 0n ? `+${formatted}` : formatted;
+}
+
 export type PortfolioAllocationItem = {
   assetId: string;
   label: string;
@@ -53,7 +98,7 @@ function holdingToAllocation(holding: PortfolioHolding) {
   if (value < 0n) return null;
   return {
     assetId: holding.assetId,
-    label: holding.title ?? holding.slug ?? "Asset",
+    label: holdingDisplayLabel(holding),
     value,
   };
 }
