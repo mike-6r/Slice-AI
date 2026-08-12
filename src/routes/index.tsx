@@ -470,9 +470,9 @@ function OwnershipWorks() {
         headingId="ownership-heading"
       />
       <p className="approved-home__ownership-lead">
-        Slice divides eligible authenticated collectibles into ownership shares. Buy shares instead
-        of the entire card, track your position in your portfolio, and trade supported shares
-        through the Slice marketplace.
+        Slice lets investors buy ownership shares in authenticated collectibles. The card remains
+        the underlying asset, while your shares, cost basis, and ownership percentage are tracked in
+        your portfolio.
       </p>
       <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
         <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
@@ -480,40 +480,39 @@ function OwnershipWorks() {
             <img src={featured.image} alt={featured.title} loading="lazy" />
           </div>
           <div>
-            <small>Physical collectible</small>
+            <small>1. Underlying collectible</small>
             <strong>{featured.title}</strong>
-            <p>{featured.grade}</p>
+            <p>A real authenticated collectible sits underneath the Slice market.</p>
           </div>
         </article>
-        <OwnershipFlowArrow label="Whole-card reference" />
-        <article className="approved-home__ownership-node">
+        <OwnershipFlowArrow label="Slice creates shares" />
+        <article className="approved-home__ownership-node approved-home__ownership-node--structure is-slice">
           <span className="approved-home__ownership-icon">
             <Vault aria-hidden="true" />
           </span>
           <div>
-            <small>External / whole collectible reference</small>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue}</strong>
-            <p>Recent reference for this collectible</p>
+            <small>2. Illustrative share structure</small>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalShares}</strong>
+            <dl className="approved-home__ownership-structure">
+              <div>
+                <dt>Whole collectible reference</dt>
+                <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue}</dd>
+              </div>
+              <div>
+                <dt>Example share price</dt>
+                <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
+              </div>
+            </dl>
+            <p>Slice creates this illustrative ownership structure, not the external marketplace.</p>
           </div>
         </article>
-        <OwnershipFlowArrow label="Slice ownership" />
-        <article className="approved-home__ownership-node is-slice">
-          <span className="approved-home__ownership-icon">
-            <BadgeCheck aria-hidden="true" />
-          </span>
-          <div>
-            <small>Illustrative Slice share price</small>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</strong>
-            <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalShares} in this educational example</p>
-          </div>
-        </article>
-        <OwnershipFlowArrow label="Your portfolio" />
+        <OwnershipFlowArrow label="Investor owns shares" />
         <article className="approved-home__ownership-node approved-home__ownership-node--portfolio">
           <span className="approved-home__ownership-icon">
             <ChartNoAxesCombined aria-hidden="true" />
           </span>
           <div>
-            <small>Investor position</small>
+            <small>3. Example ownership</small>
             <strong>
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} ·{" "}
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
@@ -523,7 +522,7 @@ function OwnershipWorks() {
         </article>
       </div>
       <aside className="approved-home__ownership-explainer">
-        <strong>What appears in your portfolio?</strong>
+        <strong>Your portfolio tracks the position.</strong>
         <p>
           Shares owned, ownership percentage, cost basis and current market position. The whole-card
           reference and illustrative Slice share price are always shown separately.

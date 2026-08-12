@@ -22743,3 +22743,57 @@ body:has(.collectors-page) .site-shell {
     justify-self: center;
   }
 }
+
+/* Three clear ownership steps: the physical collectible, Slice's illustrative
+ * share structure, then the example investor position. */
+.approved-home__ownership-flow {
+  grid-template-columns: minmax(0, 1.32fr) minmax(4.75rem, 0.42fr) minmax(0, 1.15fr) minmax(4.75rem, 0.42fr) minmax(0, 1fr);
+}
+.approved-home__ownership-node--structure {
+  align-items: flex-start;
+}
+.approved-home__ownership-node--collectible p,
+.approved-home__ownership-node--structure p {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+.approved-home__ownership-structure {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.48rem;
+}
+.approved-home__ownership-structure div {
+  min-width: 0;
+  padding-top: 0.38rem;
+  border-top: 1px solid rgba(146, 174, 185, 0.14);
+}
+.approved-home__ownership-structure dt {
+  color: #94a2ae;
+  font-size: 0.52rem;
+  line-height: 1.3;
+}
+.approved-home__ownership-structure dd {
+  margin-top: 0.18rem;
+  color: #e9f4f0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .approved-home__ownership-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .approved-home__ownership-arrow {
+    display: none;
+  }
+}
+@media (max-width: 680px) {
+  .approved-home__ownership-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .approved-home__ownership-structure {
+    grid-template-columns: 1fr;
+  }
+}
