@@ -93,7 +93,7 @@ const assets: readonly DemoAsset[] = [
   {
     key: 'umbreon-vmax-moonbreon',
     title: '2021 Pokemon Evolving Skies Umbreon VMAX Alternate Art',
-    category: 'Pokemon TCG',
+    category: 'Pokémon TCG',
     manufacturer: 'The Pokémon Company',
     set: 'Evolving Skies',
     year: 2021,
@@ -133,7 +133,7 @@ const assets: readonly DemoAsset[] = [
   {
     key: 'pikachu-grey-felt-hat',
     title: '2023 Pokemon Pikachu with Grey Felt Hat',
-    category: 'Pokemon TCG',
+    category: 'Pokémon TCG',
     manufacturer: 'The Pokémon Company',
     set: 'Pokemon x Van Gogh Museum Promo',
     year: 2023,
@@ -170,7 +170,7 @@ const assets: readonly DemoAsset[] = [
   {
     key: 'charizard-ex-obsidian-flames',
     title: '2023 Pokemon Charizard ex Special Illustration Rare',
-    category: 'Pokemon TCG',
+    category: 'Pokémon TCG',
     manufacturer: 'The Pokémon Company',
     set: 'Obsidian Flames',
     year: 2023,
@@ -676,7 +676,7 @@ export async function runCollectorDemoSetup() {
       storage,
       collectorB,
       collectorReviewer,
-      categoryIds.get('Pokémon')!,
+      categoryIds.get('Pokémon TCG')!,
     );
     await ensureDemoWatchlists(db, investor.userId, collector.userId);
     const tradingFixture = await ensureTradingDemonstration({
