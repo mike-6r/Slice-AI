@@ -503,7 +503,9 @@ function OwnershipWorks() {
                 <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</dd>
               </div>
             </dl>
-            <p>Slice creates this illustrative ownership structure, not the external marketplace.</p>
+            <p>
+              Slice creates this illustrative ownership structure, not the external marketplace.
+            </p>
           </div>
         </article>
         <OwnershipFlowArrow label="Investor owns shares" />

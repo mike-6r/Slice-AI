@@ -22797,3 +22797,83 @@ body:has(.collectors-page) .site-shell {
     grid-template-columns: 1fr;
   }
 }
+
+/* Portfolio: the account snapshot remains explicitly current rather than
+   implying a historical performance series that Slice does not expose. */
+.portfolio-panel__status {
+  flex: 0 0 auto;
+  color: #2adba5;
+  font-size: 0.54rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.portfolio-panel--performance .portfolio-panel__body {
+  justify-content: center;
+}
+.portfolio-performance-snapshot > div {
+  background: linear-gradient(145deg, rgba(19, 43, 40, 0.5), rgba(9, 17, 22, 0.68));
+}
+.portfolio-performance-note {
+  max-width: 34rem;
+  margin-inline: auto;
+  line-height: 1.45;
+}
+.portfolio-asset {
+  min-width: 0;
+  gap: 0.7rem;
+}
+.portfolio-asset__icon {
+  overflow: hidden;
+}
+.portfolio-asset__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.portfolio-asset__copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+.portfolio-asset__copy strong,
+.portfolio-asset__copy small {
+  overflow: hidden;
+  max-width: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portfolio-asset__copy small {
+  color: #8d9aa6;
+  font-size: 0.58rem;
+}
+.portfolio-table--holdings td:nth-child(n + 2),
+.portfolio-table--holdings th:nth-child(n + 2) {
+  text-align: right;
+}
+.portfolio-table__quantity {
+  display: grid;
+  gap: 0.16rem;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-table__quantity strong {
+  color: #e4ecea;
+  font-size: 0.72rem;
+}
+.portfolio-table__quantity small {
+  color: #7e8d98;
+  font-size: 0.55rem;
+}
+.portfolio-allocation-table__row > span {
+  font-weight: 600;
+}
+.portfolio-allocation-table__row strong:last-child {
+  color: #37d9ac;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 599px) {
+  .portfolio-panel__status {
+    display: none;
+  }
+}

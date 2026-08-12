@@ -76,6 +76,8 @@ const portfolio: PortfolioSummary = {
       assetId: "asset-safe",
       slug: "safe-asset",
       title: "Safe asset",
+      category: "Sports Cards",
+      grade: "PSA 10 · Gem Mint",
       ownedUnits: "8",
       reservedUnits: "2",
       availableUnits: "6",

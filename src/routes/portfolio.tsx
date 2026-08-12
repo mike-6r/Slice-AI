@@ -123,7 +123,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
         icon={Layers3}
         detail={
           summary.valuationStatus === "FULL"
-            ? "No trend data"
+            ? "Current account value; no trend history yet"
             : valuationDescription(summary.valuationStatus)
         }
       />
@@ -144,7 +144,7 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
         detail={
           holdingsValue === null
             ? "Reserved for supported account activity"
-            : "Authoritative marked collectibles"
+            : `${summary.holdings.length} current marked position${summary.holdings.length === 1 ? "" : "s"}`
         }
       />
       <PortfolioKpi
@@ -156,7 +156,9 @@ function PortfolioKpis({ query }: { query: ReturnType<typeof useQuery<PortfolioS
         }
         icon={BanknoteArrowDown}
         detail={
-          valuationSnapshot ? "Open holding cost basis" : "Reserved for supported account activity"
+          valuationSnapshot
+            ? `Cost basis across ${summary.holdings.length} open position${summary.holdings.length === 1 ? "" : "s"}`
+            : "Reserved for supported account activity"
         }
       />
     </section>
@@ -285,7 +287,11 @@ function AllocationEmpty({ message }: { message: string }) {
 function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<PortfolioSummary>> }) {
   const valuationSnapshot = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
   return (
-    <PortfolioPanel title="Performance" className="portfolio-panel--performance">
+    <PortfolioPanel
+      title="Current performance"
+      className="portfolio-panel--performance"
+      header={<span className="portfolio-panel__status">Marked snapshot</span>}
+    >
       {query.isLoading ? (
         <ChartSkeleton />
       ) : query.isError ? (
@@ -296,15 +302,15 @@ function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<Portfol
           aria-label="Current holding valuation snapshot"
         >
           <div>
-            <span>Marked holdings value</span>
+            <span>Current marked value</span>
             <strong>{formatPortfolioMoney(valuationSnapshot.holdingsValueMinor)}</strong>
           </div>
           <div>
-            <span>Open holding cost</span>
+            <span>Open position cost</span>
             <strong>{formatPortfolioMoney(valuationSnapshot.investedCostMinor)}</strong>
           </div>
           <div>
-            <span>Unrealised value change</span>
+            <span>Unrealised change</span>
             <strong
               className={
                 BigInt(valuationSnapshot.unrealisedValueMinor) >= 0n ? "is-credit" : "is-debit"
@@ -324,7 +330,8 @@ function PerformancePanel({ query }: { query: ReturnType<typeof useQuery<Portfol
       )}
       {valuationSnapshot ? (
         <p className="portfolio-performance-note">
-          Current marked-value comparison only. Historical performance is not yet available.
+          Current marked value compared with open cost basis. Historical performance is not yet
+          available.
         </p>
       ) : null}
     </PortfolioPanel>
@@ -337,7 +344,11 @@ function ActivityPanel({
   query: ReturnType<typeof useQuery<{ items: PortfolioTransaction[] }>>;
 }) {
   return (
-    <PortfolioPanel title="Recent activity" className="portfolio-panel--activity">
+    <PortfolioPanel
+      title="Recent activity"
+      className="portfolio-panel--activity"
+      header={<span className="portfolio-panel__status">Account events</span>}
+    >
       {query.isLoading ? (
         <RowsSkeleton rows={4} />
       ) : query.isError ? (
@@ -400,7 +411,7 @@ function HoldingsPanel({
           tabIndex={0}
           aria-label="Holdings table; scroll horizontally on smaller screens"
         >
-          <table className="portfolio-table">
+          <table className="portfolio-table portfolio-table--holdings">
             <thead>
               <tr>
                 <th>Asset</th>
@@ -465,7 +476,14 @@ function HoldingRow({
           </div>
         )}
       </td>
-      <td>{holding.ownedUnits}</td>
+      <td>
+        <span className="portfolio-table__quantity">
+          <strong>{holding.ownedUnits}</strong>
+          <small>
+            {holding.availableUnits} available · {holding.reservedUnits} reserved
+          </small>
+        </span>
+      </td>
       <td>
         {holding.costBasisMinor === null
           ? "Unavailable"
@@ -487,7 +505,11 @@ function TransactionsPanel({
   query: ReturnType<typeof useQuery<{ items: PortfolioTransaction[] }>>;
 }) {
   return (
-    <PortfolioPanel title="Recent transactions" className="portfolio-panel--transactions">
+    <PortfolioPanel
+      title="Recent transactions"
+      className="portfolio-panel--transactions"
+      header={<span className="portfolio-panel__status">Authoritative ledger</span>}
+    >
       {query.isLoading ? (
         <RowsSkeleton rows={5} />
       ) : query.isError ? (
@@ -542,7 +564,7 @@ function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
       <span className="portfolio-asset__copy">
         <strong>{holdingDisplayLabel(holding)}</strong>
         <small>
-          {holding.availableUnits} available · {holding.reservedUnits} reserved
+          {[holding.category, holding.grade].filter(Boolean).join(" · ") || "Collectible"}
         </small>
       </span>
     </>
@@ -677,9 +699,13 @@ function transactionLabel(item: PortfolioTransaction) {
   const type = item.type.toLowerCase();
   if (type.includes("fund") || type.includes("deposit")) return "Funds added";
   if (type.includes("withdraw")) return "Funds withdrawn";
+  if (type.includes("reservation")) return "Buy order placed";
+  if (type.includes("release")) return "Order reservation released";
+  if (type.includes("reversal")) return "Transaction reversed";
+  if (type.includes("refund")) return "Marketplace refund";
   if (type.includes("fee")) return "Marketplace fee";
   if (type.includes("settle") || type.includes("trade") || type.includes("execution")) {
-    return "Marketplace trade";
+    return item.side === "CREDIT" ? "Sell trade settled" : "Buy trade settled";
   }
   return item.side === "CREDIT" ? "Account credit" : "Account debit";
 }
@@ -688,9 +714,15 @@ function transactionDetail(item: PortfolioTransaction) {
   const type = item.type.toLowerCase();
   if (type.includes("fund") || type.includes("deposit")) return "Cash added to your Slice wallet";
   if (type.includes("withdraw")) return "Cash withdrawn from your Slice wallet";
+  if (type.includes("reservation")) return "Cash reserved while a buy order is open";
+  if (type.includes("release")) return "Cash returned after an order reservation was released";
+  if (type.includes("reversal")) return "A previously recorded transaction was reversed";
+  if (type.includes("refund")) return "A marketplace amount was returned to your wallet";
   if (type.includes("fee")) return "Fee recorded for marketplace activity";
   if (type.includes("settle") || type.includes("trade") || type.includes("execution")) {
-    return "Marketplace order and settlement activity";
+    return item.side === "CREDIT"
+      ? "Proceeds recorded from a completed marketplace sale"
+      : "Cash recorded for a completed marketplace purchase";
   }
   return item.side === "CREDIT" ? "Recorded account credit" : "Recorded account debit";
 }

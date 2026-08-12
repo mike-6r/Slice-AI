@@ -64,6 +64,8 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     assetId: requiredString(value.assetId, "holding.assetId"),
     slug: nullableString(value.slug),
     title: nullableString(value.title),
+    category: nullableString(value.category),
+    grade: nullableString(value.grade),
     ownedUnits: units(value.ownedUnits, "holding.ownedUnits"),
     reservedUnits: units(value.reservedUnits, "holding.reservedUnits"),
     availableUnits: units(value.availableUnits, "holding.availableUnits"),

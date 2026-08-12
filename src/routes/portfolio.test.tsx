@@ -34,6 +34,8 @@ const summary: PortfolioSummary = {
       assetId: "asset-safe-id",
       slug: "safe-asset",
       title: "Safe asset",
+      category: "Pokémon TCG",
+      grade: "PSA 10 · Gem Mint",
       ownedUnits: "20",
       reservedUnits: "5",
       availableUnits: "15",
@@ -108,10 +110,10 @@ describe("Document 013 portfolio UI", () => {
     expect(html).toContain("Recent transactions");
     expect(html).toContain("Recent activity");
     expect(html).toContain("Funds added");
-    expect(html).toContain("Marked holdings value");
-    expect(html).toContain("Open holding cost");
-    expect(html).toContain("Unrealised value change");
-    expect(html).toContain("Current marked-value comparison only.");
+    expect(html).toContain("Current marked value");
+    expect(html).toContain("Open position cost");
+    expect(html).toContain("Unrealised change");
+    expect(html).toContain("Current marked value compared with open cost basis.");
     expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(4);
     expect(html).not.toContain('class="portfolio-kpi"');
     expect(html).toContain("portfolio-kpi__content");

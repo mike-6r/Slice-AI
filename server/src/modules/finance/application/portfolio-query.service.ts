@@ -51,16 +51,27 @@ export class PortfolioQueryService {
         orderBy: { assetId: 'asc' },
       }),
       this.db.portfolioLot.findMany({
-        where: { userId },
+        where: { userId, asset: { status: 'PUBLISHED' } },
         include: { disposals: { select: { allocatedCostMinor: true } } },
       }),
     ]);
     const assets = await this.db.asset.findMany({
-      where: { id: { in: positions.map((position) => position.assetId) } },
+      where: {
+        id: { in: positions.map((position) => position.assetId) },
+        status: 'PUBLISHED',
+      },
       select: {
         id: true,
         slug: true,
         title: true,
+        category: { select: { name: true } },
+        gradeScaleEntry: {
+          select: {
+            grade: true,
+            label: true,
+            company: { select: { code: true } },
+          },
+        },
         ownershipSupply: { select: { totalUnits: true } },
         marketSnapshots: {
           where: { currency: 'GBP' },
@@ -71,10 +82,14 @@ export class PortfolioQueryService {
       },
     });
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
-    return positions.map((position) => {
+    return positions.flatMap((position) => {
       const asset = assetsById.get(position.assetId);
-      const supply = asset?.ownershipSupply?.totalUnits;
-      const mark = asset?.marketSnapshots[0];
+      // Retired staging assets remain archived for audit purposes, but are not
+      // investable portfolio positions. Exclude them from every portfolio
+      // projection so the demo stays aligned with the published catalogue.
+      if (!asset) return [];
+      const supply = asset.ownershipSupply?.totalUnits;
+      const mark = asset.marketSnapshots[0];
       const estimated =
         supply && mark
           ? (mark.estimatedMarketValueMinor * position.settledUnits) / supply
@@ -94,8 +109,12 @@ export class PortfolioQueryService {
       );
       return {
         assetId: position.assetId,
-        slug: asset?.slug ?? null,
-        title: asset?.title ?? null,
+        slug: asset.slug,
+        title: asset.title,
+        category: asset.category.name,
+        grade: asset.gradeScaleEntry
+          ? `${asset.gradeScaleEntry.company.code} ${asset.gradeScaleEntry.grade.toString()} · ${asset.gradeScaleEntry.label}`
+          : null,
         ownedUnits: position.settledUnits.toString(),
         reservedUnits: position.reservedUnits.toString(),
         availableUnits: (
@@ -111,7 +130,7 @@ export class PortfolioQueryService {
 
   async lotsForUser(userId: string) {
     const lots = await this.db.portfolioLot.findMany({
-      where: { userId },
+      where: { userId, asset: { status: 'PUBLISHED' } },
       include: { asset: { select: { slug: true, title: true } } },
       orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
     });

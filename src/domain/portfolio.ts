@@ -15,6 +15,8 @@ export interface PortfolioHolding {
   assetId: string;
   slug: string | null;
   title: string | null;
+  category: string | null;
+  grade: string | null;
   ownedUnits: string;
   reservedUnits: string;
   availableUnits: string;

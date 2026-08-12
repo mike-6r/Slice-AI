@@ -29,6 +29,8 @@ describe("Document 013 finance API adapter", () => {
       assetId: "asset",
       slug: null,
       title: null,
+      category: null,
+      grade: null,
       ownedUnits: "10",
       reservedUnits: "2",
       availableUnits: "8",
