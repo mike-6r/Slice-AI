@@ -10,6 +10,7 @@ describe("frontend validation", () => {
     expect(
       signupSchema.safeParse({
         displayName: "Viewer",
+        username: "viewer_cards",
         email: "viewer@example.com",
         password: "a-secure-password",
         confirmPassword: "different-password",
@@ -19,11 +20,32 @@ describe("frontend validation", () => {
     expect(
       signupSchema.safeParse({
         displayName: "Viewer",
+        username: "viewer_cards",
         email: "viewer@example.com",
         password: "a-secure-password",
         confirmPassword: "a-secure-password",
       }).success,
     ).toBe(true));
+  it("normalizes usernames and rejects invalid handles", () => {
+    expect(
+      signupSchema.safeParse({
+        displayName: "Viewer",
+        username: "Viewer_Cards",
+        email: "viewer@example.com",
+        password: "a-secure-password",
+        confirmPassword: "a-secure-password",
+      }).data?.username,
+    ).toBe("viewer_cards");
+    expect(
+      signupSchema.safeParse({
+        displayName: "Viewer",
+        username: "no-dashes",
+        email: "viewer@example.com",
+        password: "a-secure-password",
+        confirmPassword: "a-secure-password",
+      }).success,
+    ).toBe(false);
+  });
   it("requires decimal strings for demo USDC deposits", () =>
     expect(
       walletDepositSchema.safeParse({ asset: "USDC", network: "base", amount: "1250.500000" })

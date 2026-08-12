@@ -7,12 +7,37 @@ const password = z
     (value) => validatePasswordPolicy(value).valid,
     'Password does not meet policy.',
   );
-const username = z.string().regex(/^[a-z0-9_]{3,24}$/i);
+export const usernamePattern = /^[a-z0-9_]{3,30}$/;
+export const reservedUsernames = new Set([
+  'admin',
+  'administrator',
+  'support',
+  'help',
+  'slice',
+  'slicecollectable',
+  'staff',
+  'system',
+  'api',
+  'root',
+]);
+export const normalizeUsername = (value: string) => value.trim().toLowerCase();
+export const usernameSchema = z
+  .string()
+  .transform(normalizeUsername)
+  .refine(
+    (value) => usernamePattern.test(value),
+    'Use 3–30 letters, numbers, or underscores.',
+  )
+  .refine(
+    (value) => !reservedUsernames.has(value),
+    'That username is reserved.',
+  );
 export const signupSchema = z
   .object({
     email: z.string().email().transform(normalizeEmail),
     password,
     displayName: z.string().trim().min(2).max(80),
+    username: usernameSchema,
     // The server determines whether CAPTCHA and consent are required.  These
     // fields remain optional at DTO parse time so a production-safe canonical
     // error can be returned rather than silently substituting client defaults.
@@ -75,7 +100,7 @@ export const logoutSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const profileUpdateSchema = z
   .object({
     displayName: z.string().trim().min(2).max(80).optional(),
-    username: username.optional(),
+    username: usernameSchema.optional(),
     avatarReference: z.string().url().optional(),
     countryCode: z
       .string()
@@ -99,6 +124,9 @@ export const profileUpdateSchema = z
     (v) => Object.keys(v).length > 0,
     'At least one profile field is required.',
   );
+export const usernameAvailabilitySchema = z
+  .object({ username: usernameSchema })
+  .strict();
 
 const isIanaTimezone = (value: string) => {
   try {

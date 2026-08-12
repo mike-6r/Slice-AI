@@ -30,6 +30,7 @@ export const publicProfileSchema = z
   .object({
     displayName: z.string(),
     username: z.string().nullable(),
+    usernameChangedAt: isoTimestampSchema.nullable(),
     avatarReference: z.string().nullable(),
     countryCode: z.string(),
     preferredCurrency: z.literal('GBP'),
@@ -68,6 +69,7 @@ export const identityErrorHttpStatus: Record<string, number> = {
   ACCOUNT_UNAVAILABLE: 403,
   EMAIL_ALREADY_REGISTERED: 409,
   USERNAME_UNAVAILABLE: 409,
+  USERNAME_CHANGE_COOLDOWN: 409,
   SESSION_EXPIRED: 401,
   SESSION_REVOKED: 401,
   REFRESH_REUSE_DETECTED: 401,
@@ -89,6 +91,7 @@ export function toPublicUser(record: {
   profile: {
     displayName: string;
     publicUsername: string | null;
+    usernameChangedAt: Date | null;
     avatarReference: string | null;
     countryCode: string;
     preferredCurrency: string;
@@ -105,6 +108,8 @@ export function toPublicUser(record: {
     profile: {
       displayName: record.profile.displayName,
       username: record.profile.publicUsername,
+      usernameChangedAt:
+        record.profile.usernameChangedAt?.toISOString() ?? null,
       avatarReference: record.profile.avatarReference,
       countryCode: record.profile.countryCode,
       preferredCurrency: 'GBP',

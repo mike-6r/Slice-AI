@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 const email = z.string().email("Enter a valid email address.");
+export const usernameSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9_]{3,30}$/i, "Use 3–30 letters, numbers, or underscores.")
+  .transform((value) => value.toLowerCase());
 const positiveDecimal = z.string().regex(/^\d+(?:\.\d+)?$/, "Enter a positive decimal value.");
 const ownershipPercentage = z.coerce
   .number()
@@ -14,6 +19,7 @@ export const loginSchema = z.object({
 export const signupSchema = z
   .object({
     displayName: z.string().trim().min(2, "Enter a display name.").max(80),
+    username: usernameSchema,
     email,
     password: z.string().min(12, "Use at least 12 characters."),
     confirmPassword: z.string(),

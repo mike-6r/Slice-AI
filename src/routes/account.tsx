@@ -388,6 +388,8 @@ function ProfilePanel({
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(user.profile.displayName);
   const [username, setUsername] = useState(user.profile.username ?? "");
+  const nextUsernameChange = usernameChangeEligibleAt(user.profile.usernameChangedAt);
+  const usernameLocked = Boolean(user.profile.username && nextUsernameChange);
   const update = useMutation({
     mutationFn: repositories.users.updateCurrentProfile,
     onSuccess: () => {
@@ -409,7 +411,7 @@ function ProfilePanel({
           className="account-inline-button"
           onClick={() => setEditing(!editing)}
         >
-          {editing ? "Cancel" : "Edit profile"}
+          {editing ? "Cancel" : user.profile.username ? "Edit profile" : "Choose username"}
         </button>
       </div>
       <div className="account-profile-grid">
@@ -434,11 +436,21 @@ function ProfilePanel({
             </label>
             <label>
               Username
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="Optional"
-              />
+              <span className="account-username-input">
+                <b aria-hidden="true">@</b>
+                <input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Choose username"
+                  disabled={usernameLocked}
+                  required={!user.profile.username}
+                />
+              </span>
+              <small>
+                {usernameLocked
+                  ? `You can change your username again on ${usernameDateLabel(nextUsernameChange!)}.`
+                  : "3–30 characters. Letters, numbers and underscores."}
+              </small>
             </label>
             <button className="account-primary" disabled={update.isPending}>
               {update.isPending ? "Saving…" : "Save profile"}
@@ -448,6 +460,11 @@ function ProfilePanel({
         ) : (
           <dl>
             <Definition label="Display name" value={user.profile.displayName} />
+            <Definition
+              label="Username"
+              value={user.profile.username ? `@${user.profile.username}` : "Not set"}
+              muted={!user.profile.username}
+            />
             <Definition label="Email" value={user.email} />
             <Definition label="Phone" value="Manage in Security" muted />
             <Definition label="Member since" value={memberSinceLabel(user.createdAt)} />
@@ -458,6 +475,22 @@ function ProfilePanel({
       </div>
     </Panel>
   );
+}
+
+function usernameChangeEligibleAt(changedAt: string | null) {
+  if (!changedAt) return null;
+  const eligible = new Date(changedAt);
+  eligible.setUTCDate(eligible.getUTCDate() + 30);
+  return eligible > new Date() ? eligible : null;
+}
+
+function usernameDateLabel(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(value);
 }
 
 function SecurityPanel({

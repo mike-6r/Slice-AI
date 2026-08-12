@@ -1375,6 +1375,16 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         );
         return { accessToken: stringField(value.accessToken, "signup.accessToken") };
       },
+      async usernameAvailability(username) {
+        const value = objectField(
+          await client.get<unknown>("/auth/usernames/availability", { username }),
+          "username availability",
+        );
+        return {
+          username: stringField(value.username, "usernameAvailability.username"),
+          available: booleanField(value.available, "usernameAvailability.available"),
+        };
+      },
     },
     users: {
       async getCurrentUser() {
@@ -1396,6 +1406,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             return {
               displayName: stringField(profile.displayName, "profile.displayName"),
               username: nullableString(profile.username, "profile.username"),
+              usernameChangedAt: nullableString(
+                profile.usernameChangedAt,
+                "profile.usernameChangedAt",
+              ),
               avatarReference: nullableString(profile.avatarReference, "profile.avatarReference"),
               countryCode: stringField(profile.countryCode, "profile.countryCode"),
               preferredCurrency: "GBP" as const,

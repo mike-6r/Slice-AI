@@ -24,6 +24,7 @@ const userInput = (id: string) => ({
   profile: {
     displayName: 'Integration User',
     publicUsername: null,
+    usernameChangedAt: null,
     avatarReference: null,
     countryCode: 'GB',
     preferredCurrency: 'GBP' as const,

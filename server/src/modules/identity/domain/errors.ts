@@ -57,6 +57,7 @@ export class RepositoryConflict extends IdentityDomainError {
     code: Extract<
       IdentityErrorCode,
       | 'IDENTITY_EMAIL_CONFLICT'
+      | 'DUPLICATE_USERNAME'
       | 'SESSION_TOKEN_CONFLICT'
       | 'ROLE_ASSIGNMENT_CONFLICT'
       | 'IDEMPOTENCY_KEY_CONFLICT'

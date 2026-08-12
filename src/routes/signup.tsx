@@ -19,7 +19,7 @@ import { session } from "@/auth/session";
 import { useSession } from "@/auth/use-session";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
-import { signupSchema } from "@/validation/schemas";
+import { signupSchema, usernameSchema } from "@/validation/schemas";
 
 export const Route = createFileRoute("/signup")({
   validateSearch: (search: Record<string, unknown>) =>
@@ -45,6 +45,10 @@ function SignupPage() {
   });
   const idempotencyKey = useRef<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameAvailability, setUsernameAvailability] = useState<
+    "idle" | "checking" | "available" | "unavailable"
+  >("idle");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,7 +68,13 @@ function SignupPage() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    const parsed = signupSchema.safeParse({ displayName, email, password, confirmPassword });
+    const parsed = signupSchema.safeParse({
+      displayName,
+      username,
+      email,
+      password,
+      confirmPassword,
+    });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the account details and try again.");
       return;
@@ -97,6 +107,7 @@ function SignupPage() {
       const result = await repositories.auth.signup(
         {
           displayName: parsed.data.displayName,
+          username: parsed.data.username,
           email: parsed.data.email,
           password: parsed.data.password,
           ...(currentPolicy.captcha.required ? { captchaToken: captchaToken.trim() } : {}),
@@ -183,6 +194,28 @@ function SignupPage() {
             value={displayName}
             onChange={setDisplayName}
             placeholder="Your display name"
+          />
+          <UsernameField
+            value={username}
+            onChange={(value) => {
+              setUsername(value);
+              setUsernameAvailability("idle");
+            }}
+            onCheck={async () => {
+              const parsed = usernameSchema.safeParse(username);
+              if (!parsed.success) {
+                setUsernameAvailability("unavailable");
+                return;
+              }
+              setUsernameAvailability("checking");
+              try {
+                const result = await repositories.auth.usernameAvailability(parsed.data);
+                setUsernameAvailability(result.available ? "available" : "unavailable");
+              } catch {
+                setUsernameAvailability("idle");
+              }
+            }}
+            availability={usernameAvailability}
           />
           <TextField
             id="signup-email"
@@ -371,6 +404,46 @@ function PasswordField({
   );
 }
 
+function UsernameField({
+  value,
+  onChange,
+  onCheck,
+  availability,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onCheck: () => void;
+  availability: "idle" | "checking" | "available" | "unavailable";
+}) {
+  return (
+    <label className="form-field" htmlFor="signup-username">
+      <span>Username</span>
+      <span className="username-input">
+        <b aria-hidden="true">@</b>
+        <input
+          id="signup-username"
+          autoComplete="username"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onCheck}
+          placeholder="card_collector"
+          className="form-control"
+          required
+        />
+      </span>
+      <small className={availability === "available" ? "text-accent" : undefined}>
+        {availability === "checking"
+          ? "Checking username…"
+          : availability === "available"
+            ? "Username available"
+            : availability === "unavailable" && value
+              ? "Username unavailable, too short, or invalid."
+              : "3–30 characters. Letters, numbers and underscores."}
+      </small>
+    </label>
+  );
+}
+
 function PasswordRules({ password }: { password: string }) {
   const satisfied = password.length >= 12;
   return (
@@ -406,6 +479,7 @@ function signupError(reason: unknown) {
   if (!(reason instanceof ApiError)) return "Unable to create your account. Please try again.";
   if (reason.code === "EMAIL_ALREADY_REGISTERED")
     return "An account already exists for this email address.";
+  if (reason.code === "USERNAME_UNAVAILABLE") return "That username is already taken.";
   if (reason.code === "CAPTCHA_UNAVAILABLE") return "Account creation is temporarily unavailable.";
   if (reason.code === "CAPTCHA_VERIFICATION_FAILED")
     return "Signup verification could not be completed.";

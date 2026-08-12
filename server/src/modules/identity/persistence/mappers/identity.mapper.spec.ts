@@ -18,6 +18,7 @@ describe('identity persistence mappers', () => {
     profile: {
       displayName: 'User',
       publicUsername: null,
+      usernameChangedAt: null,
       avatarReference: null,
       countryCode: 'GB',
       preferredCurrency: 'GBP',

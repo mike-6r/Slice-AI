@@ -66,6 +66,8 @@ class UserAdapter implements UserRepository {
         }),
       );
     } catch (error) {
+      if (isUsernameConflict(error))
+        throw new RepositoryConflict('DUPLICATE_USERNAME');
       throw translate(error, 'IDENTITY_EMAIL_CONFLICT');
     }
   }
@@ -85,7 +87,11 @@ class UserAdapter implements UserRepository {
   }
   async findByUsername(publicUsername: string) {
     const row = await this.db.user.findFirst({
-      where: { profile: { publicUsername } },
+      where: {
+        profile: {
+          publicUsername: { equals: publicUsername, mode: 'insensitive' },
+        },
+      },
       include: userInclude,
     });
     return row ? mapIdentityUser(row) : null;
@@ -100,7 +106,7 @@ class UserAdapter implements UserRepository {
         }),
       );
     } catch (error) {
-      throw translate(error, 'IDENTITY_NOT_FOUND');
+      throw translate(error, 'DUPLICATE_USERNAME');
     }
   }
   async updateEmailVerificationState(id: UserId, emailVerifiedAt: Date | null) {
@@ -449,7 +455,9 @@ class IdempotencyAdapter implements IdempotencyRepository {
 
 class ConsentAcceptanceAdapter implements ConsentAcceptanceRepository {
   constructor(private readonly db: Db) {}
-  async appendMany(input: readonly import('../ports/repositories').ConsentAcceptanceWrite[]) {
+  async appendMany(
+    input: readonly import('../ports/repositories').ConsentAcceptanceWrite[],
+  ) {
     if (!input.length) return;
     await this.db.consentAcceptance.createMany({ data: [...input] });
   }
@@ -481,6 +489,7 @@ function translate(
   error: unknown,
   conflict:
     | 'IDENTITY_EMAIL_CONFLICT'
+    | 'DUPLICATE_USERNAME'
     | 'IDENTITY_NOT_FOUND'
     | 'SESSION_TOKEN_CONFLICT'
     | 'SESSION_NOT_FOUND'
@@ -508,6 +517,13 @@ function translate(
     if (error.code === 'P2034') return new RepositorySerializationFailure();
   }
   throw error;
+}
+function isUsernameConflict(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002' &&
+    JSON.stringify(error.meta?.target ?? '').includes('publicUsername')
+  );
 }
 function asRole(row: {
   id: string;

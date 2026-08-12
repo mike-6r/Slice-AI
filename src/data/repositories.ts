@@ -300,6 +300,7 @@ export interface UserRepository {
     profile: {
       displayName: string;
       username: string | null;
+      usernameChangedAt: string | null;
       avatarReference: string | null;
       countryCode: string;
       preferredCurrency: "GBP";
@@ -341,6 +342,7 @@ export interface AuthRepository {
   signup(
     input: {
       displayName: string;
+      username: string;
       email: string;
       password: string;
       captchaToken?: string;
@@ -353,6 +355,7 @@ export interface AuthRepository {
     },
     idempotencyKey?: string,
   ): Promise<{ accessToken: string }>;
+  usernameAvailability(username: string): Promise<{ username: string; available: boolean }>;
 }
 
 /** Safe self-service account contracts.  These deliberately contain no tokens,

@@ -579,6 +579,7 @@ export const mockRepositories: AppRepositories = {
         profile: {
           displayName: "Demo collector",
           username: null,
+          usernameChangedAt: null,
           avatarReference: null,
           countryCode: "GB",
           preferredCurrency: "GBP" as const,
@@ -612,6 +613,9 @@ export const mockRepositories: AppRepositories = {
     },
     async signup() {
       throw new ApiError("FEATURE_UNAVAILABLE", "Account creation requires the authoritative API.");
+    },
+    async usernameAvailability(username) {
+      return { username, available: true };
     },
   },
   account: {

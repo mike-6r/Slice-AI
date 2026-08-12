@@ -10,7 +10,7 @@ import { AppServicesProvider } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 
 vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => () => ({}),
+  createFileRoute: () => () => ({ useSearch: () => ({}) }),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }));
 vi.mock("@/auth/use-session", () => ({ useSession: () => ({ isAuthenticated: true }) }));
@@ -47,6 +47,7 @@ function renderAccount() {
     profile: {
       displayName: "Slice Collector",
       username: "slice_collector",
+      usernameChangedAt: null,
       avatarReference: null,
       countryCode: "GB",
       preferredCurrency: "GBP" as const,
@@ -148,6 +149,7 @@ function renderAccountWithOptionalPanelsUnavailable() {
     profile: {
       displayName: "Slice Collector",
       username: "slice_collector",
+      usernameChangedAt: null,
       avatarReference: null,
       countryCode: "GB",
       preferredCurrency: "GBP" as const,

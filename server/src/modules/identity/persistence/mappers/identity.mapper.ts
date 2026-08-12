@@ -28,6 +28,7 @@ export type PersistedIdentityUser = {
 export type PersistedIdentityProfile = {
   displayName: string;
   publicUsername: string | null;
+  usernameChangedAt: Date | null;
   avatarReference: string | null;
   countryCode: string;
   preferredCurrency: string;
@@ -163,6 +164,7 @@ function mapIdentityProfile(record: PersistedIdentityProfile): IdentityProfile {
   return {
     displayName: requireText(record.displayName, 'displayName'),
     publicUsername: record.publicUsername,
+    usernameChangedAt: record.usernameChangedAt,
     avatarReference: record.avatarReference,
     countryCode: requireText(record.countryCode, 'countryCode'),
     preferredCurrency,

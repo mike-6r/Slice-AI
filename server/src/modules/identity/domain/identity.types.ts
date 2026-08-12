@@ -74,6 +74,7 @@ export interface ActorContext {
 export interface IdentityProfile {
   displayName: string;
   publicUsername: string | null;
+  usernameChangedAt: Date | null;
   avatarReference: string | null;
   countryCode: string;
   preferredCurrency: 'GBP' | 'USD' | 'EUR';

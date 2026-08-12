@@ -815,6 +815,12 @@ async function ensureCollectorB(
     );
     actor = await loginActor(auth, demo);
   }
+  await auth.updateProfile(
+    actor,
+    { displayName: demo.displayName, publicUsername: 'slice-demo-collector-b' },
+    `collector-b-profile-${randomUUID()}`,
+    `collector-b-profile:${demo.email}`,
+  );
   return actor;
 }
 

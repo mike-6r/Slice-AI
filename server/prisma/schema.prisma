@@ -705,6 +705,7 @@ model UserProfile {
   userId            String   @unique
   displayName       String
   publicUsername    String?  @unique
+  usernameChangedAt DateTime?
   avatarReference   String?
   countryCode       String   @default("GB")
   preferredCurrency String   @default("GBP")

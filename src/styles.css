@@ -795,6 +795,32 @@
   color: #fff;
   font-size: 0.76rem;
 }
+.account-username-input,
+.username-input {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.38rem;
+  background: rgba(4, 7, 11, 0.55);
+}
+.account-username-input b,
+.username-input b {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2rem;
+  place-items: center;
+  border-right: 1px solid var(--color-border-strong);
+  color: var(--color-accent);
+  font-size: 0.82rem;
+}
+.account-username-input input,
+.username-input .form-control {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+}
 .account-profile-form p {
   color: var(--color-subtle);
   font-size: 0.7rem;
@@ -3801,6 +3827,12 @@ body:has(.collectors-page) .site-shell {
 .password-input {
   position: relative;
   display: block;
+}
+.username-input {
+  min-height: 2.55rem;
+}
+.username-input .form-control {
+  padding-left: 0.75rem;
 }
 .password-input .form-control {
   padding-right: 3rem;

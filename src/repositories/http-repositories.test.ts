@@ -344,6 +344,7 @@ describe("HTTP catalogue mapping", () => {
         profile: {
           displayName: "Safe user",
           username: null,
+          usernameChangedAt: null,
           avatarReference: null,
           countryCode: "GB",
           preferredCurrency: "GBP",

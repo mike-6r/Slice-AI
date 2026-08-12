@@ -28,6 +28,7 @@ import {
   deletionRequestSchema,
   emptyObjectSchema,
   signupSchema,
+  usernameAvailabilitySchema,
   twoFactorChallengeSchema,
 } from '../dto/identity.schemas';
 import {
@@ -100,6 +101,14 @@ export class AuthController {
           ? (this.config.signupConsent.privacyVersion ?? null)
           : null,
       },
+    };
+  }
+  @Get('auth/usernames/availability')
+  async usernameAvailability(@Query() query: unknown) {
+    const input = parse(usernameAvailabilitySchema, query);
+    return {
+      username: input.username,
+      available: !(await this.auth.usernameTaken(input.username)),
     };
   }
   @Post('auth/signup') async signup(

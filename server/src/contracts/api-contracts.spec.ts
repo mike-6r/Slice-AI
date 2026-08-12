@@ -35,6 +35,7 @@ describe('wire contracts', () => {
       profile: {
         displayName: 'User',
         publicUsername: null,
+        usernameChangedAt: null,
         avatarReference: null,
         countryCode: 'GB',
         preferredCurrency: 'USD',

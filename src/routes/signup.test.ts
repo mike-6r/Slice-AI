@@ -9,6 +9,7 @@ describe("signup and onboarding rules", () => {
     expect(
       signupSchema.safeParse({
         displayName: "Collector",
+        username: "card_collector",
         email: "collector@example.test",
         password: "twelvechars!",
         confirmPassword: "twelvechars!",
@@ -17,6 +18,7 @@ describe("signup and onboarding rules", () => {
     expect(
       signupSchema.safeParse({
         displayName: "Collector",
+        username: "card_collector",
         email: "collector@example.test",
         password: "too-short",
         confirmPassword: "too-short",

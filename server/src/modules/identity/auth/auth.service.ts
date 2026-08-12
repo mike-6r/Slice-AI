@@ -33,8 +33,14 @@ import {
   TwoFactorService,
   type TwoFactorLoginChallenge,
 } from '../two-factor/two-factor.service';
-import { CAPTCHA_VERIFIER, type CaptchaVerifier } from '../captcha/captcha-verifier';
-import { SignupConsentService, type SignupConsentInput } from './signup-consent.service';
+import {
+  CAPTCHA_VERIFIER,
+  type CaptchaVerifier,
+} from '../captcha/captcha-verifier';
+import {
+  SignupConsentService,
+  type SignupConsentInput,
+} from './signup-consent.service';
 
 export type AuthResult = {
   user: ReturnType<AuthService['publicUser']>;
@@ -89,7 +95,9 @@ export class AuthService {
     private readonly tokens: AuthTokenService,
     private readonly idempotency: IdempotencyCoordinator,
     @Optional() private readonly twoFactor?: TwoFactorService,
-    @Optional() @Inject(CAPTCHA_VERIFIER) private readonly captcha?: CaptchaVerifier,
+    @Optional()
+    @Inject(CAPTCHA_VERIFIER)
+    private readonly captcha?: CaptchaVerifier,
     @Optional() private readonly signupConsent?: SignupConsentService,
   ) {}
 
@@ -98,7 +106,14 @@ export class AuthService {
   }
 
   async signup(
-    input: { email: string; password: string; displayName: string; captchaToken?: string; consent?: SignupConsentInput },
+    input: {
+      email: string;
+      password: string;
+      displayName: string;
+      username?: string;
+      captchaToken?: string;
+      consent?: SignupConsentInput;
+    },
     requestId: string,
     idempotencyKey: string = randomUUID(),
     sessionContext: SessionContext = {},
@@ -110,11 +125,30 @@ export class AuthService {
     };
     // An exact completed replay must mint fresh credentials without asking a
     // customer to solve a deliberately one-time CAPTCHA again.
-    if (await this.idempotency.hasCompletedReplay(identity, 'POST', '/v1/auth/signup', input)) {
-      const replay = await this.idempotency.run(identity, 'POST', '/v1/auth/signup', input, async () => {
-        throw new Error('Completed idempotency replay unexpectedly executed.');
-      });
-      return this.issueSignupReplayCredentials(replay.value, requestId, sessionContext);
+    if (
+      await this.idempotency.hasCompletedReplay(
+        identity,
+        'POST',
+        '/v1/auth/signup',
+        input,
+      )
+    ) {
+      const replay = await this.idempotency.run(
+        identity,
+        'POST',
+        '/v1/auth/signup',
+        input,
+        async () => {
+          throw new Error(
+            'Completed idempotency replay unexpectedly executed.',
+          );
+        },
+      );
+      return this.issueSignupReplayCredentials(
+        replay.value,
+        requestId,
+        sessionContext,
+      );
     }
     if (this.config.captcha.enabled) {
       if (!input.captchaToken) {
@@ -129,12 +163,21 @@ export class AuthService {
           message: 'Signup verification is temporarily unavailable.',
         });
       }
-      await this.captcha.verify({ token: input.captchaToken, action: 'signup' });
+      await this.captcha.verify({
+        token: input.captchaToken,
+        action: 'signup',
+      });
     }
     this.signupConsent?.assertValid(input.consent);
     const now = new Date();
     const userId = randomUUID() as UserId;
-    const session = this.newSession(userId, now, undefined, undefined, sessionContext.userAgent);
+    const session = this.newSession(
+      userId,
+      now,
+      undefined,
+      undefined,
+      sessionContext.userAgent,
+    );
     const passwordHash = await this.passwords.hash(input.password);
     try {
       const outcome = await this.idempotency.run(
@@ -154,7 +197,11 @@ export class AuthService {
           ),
       );
       if (outcome.replay)
-        return this.issueSignupReplayCredentials(outcome.value, requestId, sessionContext);
+        return this.issueSignupReplayCredentials(
+          outcome.value,
+          requestId,
+          sessionContext,
+        );
       return {
         user: outcome.value.user,
         ...(await this.transientCredentials(
@@ -164,6 +211,14 @@ export class AuthService {
         )),
       };
     } catch (error) {
+      if (
+        error instanceof RepositoryConflict &&
+        error.code === 'DUPLICATE_USERNAME'
+      )
+        throw new ConflictException({
+          code: 'USERNAME_UNAVAILABLE',
+          message: 'That username is unavailable.',
+        });
       if (error instanceof RepositoryConflict)
         throw new ConflictException({
           code: 'EMAIL_ALREADY_REGISTERED',
@@ -441,6 +496,9 @@ export class AuthService {
     if (!user) throw new ForbiddenException();
     return this.publicUser(user, actor.roles);
   }
+  async usernameTaken(username: string) {
+    return Boolean(await this.users.findByUsername(username));
+  }
   async session(actor: Actor) {
     return {
       authenticated: true,
@@ -525,13 +583,22 @@ export class AuthService {
   }
   private async signupDurable(
     tx: IdentityTransaction,
-    input: { email: string; password: string; displayName: string; captchaToken?: string; consent?: SignupConsentInput },
+    input: {
+      email: string;
+      password: string;
+      displayName: string;
+      username?: string;
+      captchaToken?: string;
+      consent?: SignupConsentInput;
+    },
     requestId: string,
     now: Date,
     userId: UserId,
     passwordHash: string,
     session: IdentitySession,
   ): Promise<DurableSignupResult> {
+    if (input.username && (await tx.users.findByUsername(input.username)))
+      throw new RepositoryConflict('DUPLICATE_USERNAME');
     const user = await tx.users.create({
       id: userId,
       email: input.email,
@@ -541,7 +608,8 @@ export class AuthService {
       accountStatus: 'PENDING_REVIEW',
       profile: {
         displayName: input.displayName,
-        publicUsername: null,
+        publicUsername: input.username ?? null,
+        usernameChangedAt: input.username ? now : null,
         avatarReference: null,
         countryCode: 'GB',
         preferredCurrency: 'GBP',
@@ -562,17 +630,36 @@ export class AuthService {
       // assertValid ran before password work. This narrow guard makes a future
       // direct application call fail closed rather than persisting a user alone.
       if (!input.consent) {
-        throw new BadRequestException({ code: 'REQUIRED_CONSENT_MISSING', message: 'Current Terms and Privacy Policy acceptance is required.' });
+        throw new BadRequestException({
+          code: 'REQUIRED_CONSENT_MISSING',
+          message: 'Current Terms and Privacy Policy acceptance is required.',
+        });
       }
       await tx.consents.appendMany([
-        { id: randomUUID(), userId, consentType: 'TERMS_OF_SERVICE', policyVersion: input.consent.termsVersion, acceptedAt: now, source: 'SIGNUP' },
-        { id: randomUUID(), userId, consentType: 'PRIVACY_POLICY', policyVersion: input.consent.privacyVersion, acceptedAt: now, source: 'SIGNUP' },
+        {
+          id: randomUUID(),
+          userId,
+          consentType: 'TERMS_OF_SERVICE',
+          policyVersion: input.consent.termsVersion,
+          acceptedAt: now,
+          source: 'SIGNUP',
+        },
+        {
+          id: randomUUID(),
+          userId,
+          consentType: 'PRIVACY_POLICY',
+          policyVersion: input.consent.privacyVersion,
+          acceptedAt: now,
+          source: 'SIGNUP',
+        },
       ]);
-      await tx.audit.append(this.audit('CONSENT_ACCEPTED', userId, session.id, requestId, now, {
-        consentTypes: ['TERMS_OF_SERVICE', 'PRIVACY_POLICY'],
-        termsVersion: input.consent.termsVersion,
-        privacyVersion: input.consent.privacyVersion,
-      }));
+      await tx.audit.append(
+        this.audit('CONSENT_ACCEPTED', userId, session.id, requestId, now, {
+          consentTypes: ['TERMS_OF_SERVICE', 'PRIVACY_POLICY'],
+          termsVersion: input.consent.termsVersion,
+          privacyVersion: input.consent.privacyVersion,
+        }),
+      );
     }
     await tx.sessions.create(session);
     await tx.audit.append(
@@ -618,7 +705,47 @@ export class AuthService {
     requestId: string,
     now: Date,
   ): Promise<DurableProfileUpdateResult> {
-    const user = await tx.users.updateProfile(actor.userId, patch);
+    const current = await tx.users.findById(actor.userId);
+    if (!current?.profile) throw new ForbiddenException();
+    const requestedUsername = patch.publicUsername;
+    const usernameChanged =
+      requestedUsername !== undefined &&
+      requestedUsername !== current.profile.publicUsername;
+    if (usernameChanged && current.profile.usernameChangedAt) {
+      const nextEligibleAt = new Date(current.profile.usernameChangedAt);
+      nextEligibleAt.setUTCDate(nextEligibleAt.getUTCDate() + 30);
+      if (nextEligibleAt > now)
+        throw new ConflictException({
+          code: 'USERNAME_CHANGE_COOLDOWN',
+          message: `You can change your username again on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(nextEligibleAt)}.`,
+        });
+    }
+    if (
+      usernameChanged &&
+      requestedUsername &&
+      (await tx.users.findByUsername(requestedUsername))
+    )
+      throw new ConflictException({
+        code: 'USERNAME_UNAVAILABLE',
+        message: 'That username is unavailable.',
+      });
+    let user: IdentityUser;
+    try {
+      user = await tx.users.updateProfile(actor.userId, {
+        ...patch,
+        ...(usernameChanged ? { usernameChangedAt: now } : {}),
+      });
+    } catch (error) {
+      if (
+        error instanceof RepositoryConflict &&
+        error.code === 'DUPLICATE_USERNAME'
+      )
+        throw new ConflictException({
+          code: 'USERNAME_UNAVAILABLE',
+          message: 'That username is unavailable.',
+        });
+      throw error;
+    }
     await tx.audit.append(
       this.audit(
         'AUTH_PROFILE_UPDATED',
@@ -753,6 +880,8 @@ export class AuthService {
         ? {
             displayName: user.profile.displayName,
             username: user.profile.publicUsername,
+            usernameChangedAt:
+              user.profile.usernameChangedAt?.toISOString() ?? null,
             avatarReference: user.profile.avatarReference,
             countryCode: user.profile.countryCode,
             preferredCurrency: user.profile.preferredCurrency,

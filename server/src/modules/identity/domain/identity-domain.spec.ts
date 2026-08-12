@@ -122,12 +122,19 @@ describe('offline identity rules', () => {
     expect(
       profileUpdateSchema.safeParse({ accountStatus: 'ACTIVE' }).success,
     ).toBe(false);
+    const signup = signupSchema.safeParse({
+      email: 'USER@EXAMPLE.TEST',
+      password: 'ValidPassword12',
+      displayName: 'Sam',
+      username: 'Sam_Collector',
+    });
+    expect(signup.data?.email).toBe('user@example.test');
+    expect(signup.data?.username).toBe('sam_collector');
     expect(
-      signupSchema.safeParse({
-        email: 'USER@EXAMPLE.TEST',
-        password: 'ValidPassword12',
-        displayName: 'Sam',
-      }).data?.email,
-    ).toBe('user@example.test');
+      signupSchema.safeParse({ ...signup.data, username: 'admin' }).success,
+    ).toBe(false);
+    expect(profileUpdateSchema.safeParse({ username: 'xy' }).success).toBe(
+      false,
+    );
   });
 });
