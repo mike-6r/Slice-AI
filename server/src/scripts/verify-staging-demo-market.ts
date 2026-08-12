@@ -3,17 +3,7 @@ import { AppModule } from '../app.module';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { assertStagingDemoSafety, demoAccounts } from './staging-demo-safety';
-
-const publishedSlugs = [
-  'slice-demo-charizard',
-  'slice-demo-pikachu',
-  'slice-demo-blastoise',
-  'slice-demo-jordan',
-  'slice-demo-mantle',
-  'slice-demo-specialist-dark-magician',
-  'slice-demo-specialist-black-lotus',
-  'slice-demo-specialist-one-piece',
-] as const;
+import { publishedStagingDemoAssetSlugs } from './setup-demo-collector';
 
 async function main() {
   assertStagingDemoSafety();
@@ -23,52 +13,56 @@ async function main() {
   try {
     const db = app.get(PrismaService);
     const config = app.get<AppConfig>(APP_CONFIG);
-    const [investor, collector, collectorB, marketMaker, profiles, assets] = await Promise.all([
-      db.user.findUnique({
-        where: { normalizedEmail: demoAccounts.investor.email },
-        select: { id: true, accountStatus: true },
-      }),
-      db.user.findUnique({
-        where: { normalizedEmail: demoAccounts.collector.email },
-        select: { id: true, accountStatus: true },
-      }),
-      db.user.findUnique({
-        where: { normalizedEmail: demoAccounts.collectorB.email },
-        select: { id: true, accountStatus: true },
-      }),
-      db.user.findUnique({
-        where: { normalizedEmail: demoAccounts.marketMaker.email },
-        select: { id: true, accountStatus: true },
-      }),
-      db.publicCollectorProfile.findMany({
-        where: {
-          isPublic: true,
-          slug: { in: ['slice-demo-collector', 'slice-demo-specialist'] },
-        },
-        select: { userId: true, slug: true },
-      }),
-      db.asset.findMany({
-        where: { slug: { in: [...publishedSlugs] }, status: 'PUBLISHED' },
-        select: { id: true, slug: true },
-      }),
-    ]);
+    const [investor, collector, collectorB, marketMaker, profiles, assets] =
+      await Promise.all([
+        db.user.findUnique({
+          where: { normalizedEmail: demoAccounts.investor.email },
+          select: { id: true, accountStatus: true },
+        }),
+        db.user.findUnique({
+          where: { normalizedEmail: demoAccounts.collector.email },
+          select: { id: true, accountStatus: true },
+        }),
+        db.user.findUnique({
+          where: { normalizedEmail: demoAccounts.collectorB.email },
+          select: { id: true, accountStatus: true },
+        }),
+        db.user.findUnique({
+          where: { normalizedEmail: demoAccounts.marketMaker.email },
+          select: { id: true, accountStatus: true },
+        }),
+        db.publicCollectorProfile.findMany({
+          where: {
+            isPublic: true,
+            slug: { in: ['slice-demo-collector', 'slice-demo-specialist'] },
+          },
+          select: { userId: true, slug: true },
+        }),
+        db.asset.findMany({
+          where: {
+            slug: { in: [...publishedStagingDemoAssetSlugs] },
+            status: 'PUBLISHED',
+          },
+          select: { id: true, slug: true },
+        }),
+      ]);
     if (!investor || !collector || !collectorB)
       throw new Error('Demo investor and collector identities are missing.');
-    if (assets.length !== publishedSlugs.length)
+    if (assets.length !== publishedStagingDemoAssetSlugs.length)
       throw new Error(
-        `Expected ${publishedSlugs.length} published demo assets; found ${assets.length}.`,
+        `Expected ${publishedStagingDemoAssetSlugs.length} published demo assets; found ${assets.length}.`,
       );
 
     const assetIds = assets.map((asset) => asset.id);
     const [
-      historyRows,
+      marketSnapshotRows,
       investorWatchlist,
       collectorWatchlist,
       markets,
       orders,
       executions,
     ] = await Promise.all([
-      db.assetValuationPoint.count({
+      db.assetMarketSnapshot.count({
         where: { assetId: { in: assetIds }, source: 'STAGING_DEMO_MARKET' },
       }),
       db.watchlistItem.count({
@@ -91,7 +85,7 @@ async function main() {
       },
       publishedAssets: assets.length,
       publicCollectorProfiles: profiles.length,
-      valuationHistoryRows: historyRows,
+      marketSnapshotRows,
       watchlists: {
         investor: investorWatchlist,
         collector: collectorWatchlist,
@@ -104,9 +98,9 @@ async function main() {
         executions,
       },
     };
-    if (historyRows < publishedSlugs.length * 90)
+    if (marketSnapshotRows < publishedStagingDemoAssetSlugs.length)
       throw new Error(
-        'Each published demo asset must have 90 staged valuation points.',
+        'Each published demo asset must have a staging market snapshot.',
       );
     if (profiles.length < 2)
       throw new Error('Expected two public staging collector profiles.');
@@ -115,7 +109,7 @@ async function main() {
     if (
       config.operationalFeatures.trading &&
       config.providerMode === 'local' &&
-      (markets !== publishedSlugs.length || executions < 2)
+      (markets !== publishedStagingDemoAssetSlugs.length || executions < 2)
     )
       throw new Error('Configured staging trading fixture is incomplete.');
     process.stdout.write(`${JSON.stringify(result)}\n`);

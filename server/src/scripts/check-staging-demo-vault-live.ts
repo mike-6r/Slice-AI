@@ -57,7 +57,7 @@ async function main() {
       };
     });
     const featured = publishedRows.find(
-      (asset) => asset.slug === 'slice-demo-charizard',
+      (asset) => asset.slug === 'slice-demo-charizard-ex-obsidian-flames',
     );
     const eventAssetSlugs = new Set(events.map((event) => event.asset.slug));
     const eventsReferenceOnlyFixtureAssets = events.every((event) =>
@@ -89,8 +89,7 @@ async function main() {
         },
         eventSource: {
           safePublicEventsOnly: eventsReferenceOnlyFixtureAssets,
-          note:
-            'Zero events is a truthful empty Vault Live feed; this check never invents public lifecycle activity.',
+          note: 'Zero events is a truthful empty Vault Live feed; this check never invents public lifecycle activity.',
         },
         assets: publishedRows,
       })}\n`,
