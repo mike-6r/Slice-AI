@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CollectorWorkspaceRouteImport } from './routes/collector-workspace'
 import { Route as CollectorsRouteImport } from './routes/collectors'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -57,6 +58,11 @@ const AboutRoute = AboutRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CollectorWorkspaceRoute = CollectorWorkspaceRouteImport.update({
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
@@ -292,6 +300,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/collector-workspace': typeof CollectorWorkspaceRoute
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
@@ -330,6 +339,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account'
+    | '/admin'
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
@@ -366,6 +376,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account'
+    | '/admin'
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
@@ -402,6 +413,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account'
+    | '/admin'
     | '/collector-workspace'
     | '/collectors'
     | '/dashboard'
@@ -439,6 +451,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
+  AdminRoute: typeof AdminRoute
   CollectorWorkspaceRoute: typeof CollectorWorkspaceRoute
   CollectorsRoute: typeof CollectorsRoute
   DashboardRoute: typeof DashboardRoute
@@ -493,6 +506,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/collector-workspace': {
@@ -719,6 +739,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
+  AdminRoute: AdminRoute,
   CollectorWorkspaceRoute: CollectorWorkspaceRoute,
   CollectorsRoute: CollectorsRoute,
   DashboardRoute: DashboardRoute,

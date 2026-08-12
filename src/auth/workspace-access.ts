@@ -6,6 +6,10 @@ export type WorkspaceRole = string;
 
 const STAFF_ROLES = new Set<WorkspaceRole>(["SUPPORT", "ADMIN"]);
 
+export function canAccessAdmin(roles: readonly WorkspaceRole[]) {
+  return roles.includes("ADMIN");
+}
+
 /** Collector ownership access is separate from any staff review authority. */
 export function canAccessCollectorWorkspace(roles: readonly WorkspaceRole[]) {
   return roles.includes("COLLECTOR") || roles.includes("ADMIN");

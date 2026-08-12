@@ -7,7 +7,10 @@ import { useRouterState } from "@tanstack/react-router";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const collectorWorkspace = useRouterState({
-    select: (state) => state.location.pathname === "/collector-workspace",
+    select: (state) =>
+      state.location.pathname === "/collector-workspace" ||
+      state.location.pathname === "/admin" ||
+      state.location.pathname.startsWith("/admin/"),
   });
   useNotificationStream("current", !collectorWorkspace);
   if (collectorWorkspace)

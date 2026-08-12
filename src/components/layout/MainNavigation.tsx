@@ -22,7 +22,11 @@ import { useSession } from "@/auth/use-session";
 import { MarketTicker } from "@/components/layout/MarketTicker";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
-import { canAccessCollectorWorkspace, canAccessStaffWorkspace } from "@/auth/workspace-access";
+import {
+  canAccessAdmin,
+  canAccessCollectorWorkspace,
+  canAccessStaffWorkspace,
+} from "@/auth/workspace-access";
 import { primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
 
 export function Wordmark({ className }: { className?: string }) {
@@ -247,6 +251,16 @@ export function MainNavigation() {
                 >
                   Dashboard
                 </Link>
+                {canAccessAdmin(currentUser.data?.roles ?? []) && (
+                  <Link
+                    to="/admin"
+                    search={{ section: "control" }}
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
+                  >
+                    Admin Console
+                  </Link>
+                )}
                 {canAccessStaffWorkspace(roles) && (
                   <Link
                     to="/staff"
@@ -484,6 +498,14 @@ function ProfileMenu({
           label="Dashboard"
           close={close}
         />
+        {canAccessAdmin(roles) && (
+          <ProfileMenuLink
+            to="/admin"
+            icon={<BriefcaseBusiness />}
+            label="Admin Console"
+            close={close}
+          />
+        )}
         {canAccessStaffWorkspace(roles) && (
           <ProfileMenuLink
             to="/staff"
