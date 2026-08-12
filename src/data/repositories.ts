@@ -65,6 +65,11 @@ export interface CatalogueRepository {
 }
 export interface SubmissionRepository {
   createDraft(input: CreateSubmissionDraft): Promise<AssetSubmission>;
+  checkMarket(input: {
+    categoryId: string;
+    declaredMetadata: CreateSubmissionDraft["declaredMetadata"];
+    refresh?: boolean;
+  }): Promise<import("@/domain").MarketResearchSnapshot>;
   listOwn(input?: { cursor?: string; limit?: number }): Promise<{
     items: AssetSubmission[];
     nextCursor: string | null;

@@ -993,10 +993,62 @@ model AssetSubmission {
   gradeScaleEntry   GradeScaleEntry?     @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
   media             SubmissionMedia[]
   reviews           VerificationReview[]
+  marketResearch    SubmissionMarketResearch[]
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
+}
+
+/// External collectible-market reference data captured for a D10 submission.
+/// It is supporting research only: D11 valuation and publication remain separate
+/// staff-controlled lifecycle decisions.
+model SubmissionMarketResearch {
+  id                String   @id @default(cuid())
+  submissionId      String?
+  ownerUserId       String
+  identityHash      String
+  identity          Json
+  state             String
+  dataQuality       String?
+  sourceCoverage    Json
+  providerFailures  Json
+  snapshot          Json
+  collectedAt       DateTime
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  submission        AssetSubmission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  observations      SubmissionMarketObservation[]
+
+  @@index([ownerUserId, identityHash, expiresAt])
+  @@index([submissionId, collectedAt, id])
+}
+
+/// Normalized whole-card market observation. Original currency and source
+/// provenance are retained; this model never represents Slice share trading.
+model SubmissionMarketObservation {
+  id                  String   @id @default(cuid())
+  researchId          String
+  providerCode        String
+  externalReferenceId String
+  externalUrl         String?
+  observationType     String
+  originalTitle       String
+  amountMinor         BigInt
+  currency            String
+  observedAt          DateTime
+  soldAt              DateTime?
+  grader              String?
+  grade               String?
+  variant             String?
+  matchQuality        String
+  exclusionReason     String?
+  includedInSnapshot  Boolean  @default(false)
+  ingestedAt          DateTime @default(now())
+  research            SubmissionMarketResearch @relation(fields: [researchId], references: [id], onDelete: Restrict)
+
+  @@unique([researchId, providerCode, externalReferenceId])
+  @@index([researchId, observationType, matchQuality, observedAt])
 }
 
 model SubmissionMedia {

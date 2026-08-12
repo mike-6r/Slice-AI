@@ -105,7 +105,8 @@ const assets: readonly DemoAsset[] = [
     state: 'PUBLISHED',
     grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
     reference: {
-      source: 'PriceCharting public eBay sale records; Cosmic Collectables UK listing',
+      source:
+        'PriceCharting public eBay sale records; Cosmic Collectables UK listing',
       observedAt: '2026-08-12',
       currentListing: {
         amountMinor: 195000n,
@@ -113,8 +114,10 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-24',
         source: 'Cosmic Collectables UK',
         externalReference: 'PSA 102738334',
-        listingUrl: 'https://cosmiccollectables.co.uk/products/psa-pokemon-swsh-evolving-skies-215-203-umbreon-vmax-alt-art-psa-10',
-        imageUrl: 'https://cosmiccollectables.co.uk/cdn/shop/files/Z2FBIT06uE6J50sXtPNemA_1024x1024%402x.jpg?v=1740580550',
+        listingUrl:
+          'https://cosmiccollectables.co.uk/products/psa-pokemon-swsh-evolving-skies-215-203-umbreon-vmax-alt-art-psa-10',
+        imageUrl:
+          'https://cosmiccollectables.co.uk/cdn/shop/files/Z2FBIT06uE6J50sXtPNemA_1024x1024%402x.jpg?v=1740580550',
       },
       recentCompletedSale: {
         amountMinor: 427700n,
@@ -122,7 +125,8 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-27',
         source: 'PriceCharting public eBay record',
         externalReference: 'PSA 10 comparable',
-        listingUrl: 'https://www.pricecharting.com/game/pokemon-evolving-skies/umbreon-vmax-215',
+        listingUrl:
+          'https://www.pricecharting.com/game/pokemon-evolving-skies/umbreon-vmax-215',
       },
     },
   },
@@ -158,7 +162,8 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-24',
         source: 'PriceCharting Marketplace',
         externalReference: 'PriceCharting offer h6f67z',
-        listingUrl: 'https://www.pricecharting.com/offer/37wwhlfu2tncjlqinmoisb2ff4',
+        listingUrl:
+          'https://www.pricecharting.com/offer/37wwhlfu2tncjlqinmoisb2ff4',
       },
     },
   },
@@ -194,7 +199,8 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-24',
         source: 'PriceCharting public eBay record',
         externalReference: 'PSA 10 comparable',
-        listingUrl: 'https://www.pricecharting.com/game/pokemon-obsidian-flames/charizard-ex-223',
+        listingUrl:
+          'https://www.pricecharting.com/game/pokemon-obsidian-flames/charizard-ex-223',
       },
     },
   },
@@ -213,7 +219,8 @@ const assets: readonly DemoAsset[] = [
     state: 'PUBLISHED',
     grading: { companyCode: 'BGS', grade: '9.50', label: 'Mint' },
     reference: {
-      source: 'Fanatics Collect listing image; SportsCardsPro public eBay reference',
+      source:
+        'Fanatics Collect listing image; SportsCardsPro public eBay reference',
       observedAt: '2026-08-12',
       currentListing: {
         amountMinor: 21500n,
@@ -221,8 +228,10 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-27',
         source: 'eBay listing indexed by SportsCardsPro',
         externalReference: '2023-24 Panini Prizm #136 BGS 9.5',
-        listingUrl: 'https://www.sportscardspro.com/game/basketball-cards-2023-panini-prizm/victor-wembanyama-136',
-        imageUrl: 'https://cdn-vault.fanaticscollect.com/2024/6/13/bs1/large/v864147_2024061303010659R_3.jpg',
+        listingUrl:
+          'https://www.sportscardspro.com/game/basketball-cards-2023-panini-prizm/victor-wembanyama-136',
+        imageUrl:
+          'https://cdn-vault.fanaticscollect.com/2024/6/13/bs1/large/v864147_2024061303010659R_3.jpg',
       },
       recentCompletedSale: {
         amountMinor: 27500n,
@@ -230,7 +239,8 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-06-02',
         source: 'Collectibles.com recorded eBay result',
         externalReference: 'BGS 9.5 comparable',
-        listingUrl: 'https://collectibles.com/basketball-cards/ci-2023-panini-prizm-136-rc-victor-wembanyama?catalog_item_variation_id=20929933',
+        listingUrl:
+          'https://collectibles.com/basketball-cards/ci-2023-panini-prizm-136-rc-victor-wembanyama?catalog_item_variation_id=20929933',
       },
     },
   },
@@ -257,8 +267,10 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-08-12',
         source: 'Mintink',
         externalReference: 'PSA 97040794',
-        listingUrl: 'https://www.mintink.ca/products/2023-24-upper-deck-series-2-hockey-connor-bedard-young-guns-psa-13',
-        imageUrl: 'https://www.mintink.ca/cdn/shop/files/2023-24-Upper-Deck-Series-2-Hockey-Connor-Bedard-Young-Guns-PSA-10_-225250748.png',
+        listingUrl:
+          'https://www.mintink.ca/products/2023-24-upper-deck-series-2-hockey-connor-bedard-young-guns-psa-13',
+        imageUrl:
+          'https://www.mintink.ca/cdn/shop/files/2023-24-Upper-Deck-Series-2-Hockey-Connor-Bedard-Young-Guns-PSA-10_-225250748.png',
       },
       recentCompletedSale: {
         amountMinor: 49689n,
@@ -302,7 +314,8 @@ const assets: readonly DemoAsset[] = [
         observedAt: '2026-07-24',
         source: 'Sports Card Investor',
         externalReference: 'Purple Pulsar PSA 10 comparable',
-        listingUrl: 'https://www.sportscardinvestor.com/cards/cj-stroud-football/2023-prizm-purple-pulsar-339',
+        listingUrl:
+          'https://www.sportscardinvestor.com/cards/cj-stroud-football/2023-prizm-purple-pulsar-339',
       },
     },
   },
@@ -315,7 +328,9 @@ const assets: readonly DemoAsset[] = [
  */
 async function archiveRetiredDemoAssets(db: PrismaService) {
   await db.asset.updateMany({
-    where: { slug: { in: retiredDemoAssetKeys.map((key) => `slice-demo-${key}`) } },
+    where: {
+      slug: { in: retiredDemoAssetKeys.map((key) => `slice-demo-${key}`) },
+    },
     data: { status: 'ARCHIVED' },
   });
 }
@@ -472,6 +487,7 @@ const retiredAssets: readonly unknown[] = [
     grading: { companyCode: 'PSA', grade: '10.00', label: 'Gem Mint' },
   },
 ];
+void retiredAssets;
 
 /**
  * Stable identifiers for the explicitly named staging catalogue.  The market
@@ -501,12 +517,25 @@ const fixturePng = Buffer.from(
 function fixtureMedia(identity: string) {
   const bytes = Buffer.from(fixturePng);
   let marker = 0;
-  for (const character of identity) marker = (marker + character.charCodeAt(0)) % 251;
+  for (const character of identity)
+    marker = (marker + character.charCodeAt(0)) % 251;
   bytes[bytes.length - 1] = (bytes[bytes.length - 1] + marker + 1) % 256;
   return {
     bytes,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   };
+}
+
+/** Deterministic staging history profile used only by the fixture test. It is
+ * not presented as external market movement or valuation evidence. */
+export function demoMarketHistoryAdjustmentBps(
+  profile: 'UPWARD' | 'DOWNWARD' | 'STABLE' | 'VOLATILE',
+  day: number,
+) {
+  if (profile === 'UPWARD') return -900 + day * 20;
+  if (profile === 'DOWNWARD') return 900 - day * 20;
+  if (profile === 'STABLE') return 0;
+  return [0, 260, -180, 330, -300, 140, -220][day % 7];
 }
 
 /**
@@ -562,13 +591,15 @@ export async function runCollectorDemoSetup() {
       create: {
         userId: collector.userId,
         slug: 'slice-demo-collector',
-        headline: 'Public showcase collector for modern Pokémon and sports-card reference listings.',
+        headline:
+          'Public showcase collector for modern Pokémon and sports-card reference listings.',
         specialism: 'Pokémon TCG · Sports Cards',
         isPublic: true,
         publishedAt: new Date(),
       },
       update: {
-        headline: 'Public showcase collector for modern Pokémon and sports-card reference listings.',
+        headline:
+          'Public showcase collector for modern Pokémon and sports-card reference listings.',
         specialism: 'Pokémon TCG · Sports Cards',
         isPublic: true,
         publishedAt: new Date(),
@@ -1026,6 +1057,7 @@ async function ensureSubmission(
   assetId: string,
   categoryId: string,
 ) {
+  const requestedState: string = spec.state;
   const certificationNumber = `STG-${spec.key.toUpperCase()}`;
   let submission = await db.assetSubmission.findFirst({
     where: { assetId, ownerUserId: owner.userId },
@@ -1065,7 +1097,7 @@ async function ensureSubmission(
       where: { id: draft.id },
     });
   }
-  if (spec.state !== 'DRAFT' && submission.status === 'DRAFT') {
+  if (requestedState !== 'DRAFT' && submission.status === 'DRAFT') {
     const mediaBySlot = new Map(
       (
         await db.submissionMedia.findMany({
@@ -1144,7 +1176,10 @@ async function ensureSubmission(
   submission = await db.assetSubmission.findUniqueOrThrow({
     where: { id: submission.id },
   });
-  if (spec.state === 'CHANGES_REQUESTED' && submission.status === 'SUBMITTED') {
+  if (
+    requestedState === 'CHANGES_REQUESTED' &&
+    submission.status === 'SUBMITTED'
+  ) {
     await service.claim(
       admin,
       submission.id,
@@ -1164,7 +1199,7 @@ async function ensureSubmission(
     );
   }
   if (
-    (spec.state === 'CUSTODY' || spec.state === 'PUBLISHED') &&
+    (requestedState === 'CUSTODY' || requestedState === 'PUBLISHED') &&
     submission.status === 'SUBMITTED'
   ) {
     await service.claim(
@@ -1193,7 +1228,7 @@ async function ensureSubmission(
   // authority on refresh rather than leaving an approved submission unusable
   // for custody intake.
   if (
-    (spec.state === 'CUSTODY' || spec.state === 'PUBLISHED') &&
+    (requestedState === 'CUSTODY' || requestedState === 'PUBLISHED') &&
     submission.status === 'APPROVED' &&
     submission.assetId !== assetId
   ) {
@@ -1386,7 +1421,8 @@ async function ensureExternalReferenceEvidence(
   const persist = async (
     kind: 'CURRENT_LISTING' | 'RECENT_COMPLETED_SALE',
     observation: NonNullable<
-      DemoAsset['reference']['currentListing'] | DemoAsset['reference']['recentCompletedSale']
+      | DemoAsset['reference']['currentListing']
+      | DemoAsset['reference']['recentCompletedSale']
     >,
   ) => {
     const sourceRef = JSON.stringify({
@@ -1411,7 +1447,14 @@ async function ensureExternalReferenceEvidence(
       return;
     }
     await db.valuationEvidence.create({
-      data: { id: randomUUID(), assetId, sourceType: `STAGING_${kind}`, sourceRef, createdByUserId, ...data },
+      data: {
+        id: randomUUID(),
+        assetId,
+        sourceType: `STAGING_${kind}`,
+        sourceRef,
+        createdByUserId,
+        ...data,
+      },
     });
   };
   if (spec.reference.currentListing)

@@ -21,6 +21,7 @@ import { NotificationModule } from './modules/notifications/notification.module'
 import { DiscordLinkModule } from './modules/identity/discord/discord-link.module';
 import { EmailVerificationModule } from './modules/identity/email-verification/email-verification.module';
 import { PhoneVerificationModule } from './modules/identity/phone-verification/phone-verification.module';
+import { MarketResearchModule } from './modules/market-research/market-research.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PhoneVerificationModule } from './modules/identity/phone-verification/p
     AccessControlModule,
     CatalogueModule,
     MarketModule,
+    MarketResearchModule,
     ReadsModule,
     SubmissionsModule,
     LifecycleModule,

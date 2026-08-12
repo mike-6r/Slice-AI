@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
+import { MarketResearchModule } from '../market-research/market-research.module';
 import { SubmissionService } from './application/submission.service';
 import {
   LocalMalwareScanner,
@@ -13,7 +14,7 @@ import {
 } from './ports/submission-storage.ports';
 
 @Module({
-  imports: [AuthModule, AccessControlModule],
+  imports: [AuthModule, AccessControlModule, MarketResearchModule],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,

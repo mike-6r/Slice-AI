@@ -161,6 +161,7 @@ function ReviewDetail({
             </div>
           ))}
       </dl>
+      <StaffMarketResearch research={detail.marketResearch} />
       {detail.status === "SUBMITTED" ? (
         <button className="button-primary" onClick={onClaim} disabled={claiming}>
           {claiming ? "Claiming…" : "Claim review"}
@@ -217,6 +218,136 @@ function ReviewDetail({
       )}
     </div>
   );
+}
+function StaffMarketResearch({
+  research,
+}: {
+  research: import("@/domain").MarketResearchSnapshot | null;
+}) {
+  if (!research)
+    return (
+      <section className="border-t border-border pt-5">
+        <h3 className="font-semibold">Market research</h3>
+        <p className="mt-2 text-sm text-subtle">
+          No external market research was attached to this submission.
+        </p>
+      </section>
+    );
+  const sales = research.snapshot.sales;
+  const listings = research.snapshot.listings;
+  return (
+    <section className="border-t border-border pt-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="page-kicker">Supporting evidence</p>
+          <h3 className="mt-1 font-semibold">External market research</h3>
+        </div>
+        <span className="text-xs text-subtle">
+          Captured{" "}
+          {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(
+            new Date(research.collectedAt),
+          )}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-subtle">
+        Reference data only. D11 staff valuation remains the authoritative decision.
+      </p>
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <StaffMetric
+          label="External reference range"
+          value={sales ? marketRange(sales) : "No reliable sale range"}
+        />
+        <StaffMetric
+          label="Median recent sale"
+          value={sales ? marketAmount(sales.medianMinor, sales.currency) : "Not available"}
+        />
+        <StaffMetric
+          label="Current listings"
+          value={listings ? marketRange(listings) : "None tracked"}
+        />
+        <StaffMetric
+          label="Comparable evidence"
+          value={`${research.snapshot.exactCompCount} exact · ${research.snapshot.strongCompCount} strong · ${research.snapshot.rejectedCompCount} rejected`}
+        />
+        <StaffMetric
+          label="Source coverage"
+          value={`${research.sourceCoverage.available} available · ${research.sourceCoverage.unavailable} unavailable`}
+        />
+        <StaffMetric
+          label="Data quality"
+          value={research.dataQuality?.toLowerCase() ?? "Unavailable"}
+        />
+      </dl>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-semibold text-accent">
+          Inspect comparable observations
+        </summary>
+        <ul className="mt-3 space-y-2 text-xs text-subtle">
+          {research.observations.map((item) => (
+            <li
+              key={`${item.providerCode}-${item.externalReferenceId}`}
+              className="rounded-lg border border-border p-3"
+            >
+              <div className="flex flex-wrap justify-between gap-2">
+                <span className="font-medium text-foreground">
+                  {item.observationType === "SALE"
+                    ? "Completed sale"
+                    : item.observationType === "LISTING"
+                      ? "Current listing"
+                      : "Price guide"}{" "}
+                  · {marketAmount(item.amountMinor, item.currency)}
+                </span>
+                <span>
+                  {item.providerCode.replaceAll("_", " ")} · {item.matchQuality}
+                </span>
+              </div>
+              <p className="mt-1">
+                {item.grader && item.grade ? `${item.grader} ${item.grade}` : "Raw"}
+                {item.exclusionReason ? ` — ${item.exclusionReason}` : ""}
+              </p>
+              {item.externalUrl ? (
+                <a
+                  className="mt-1 inline-block text-accent"
+                  href={item.externalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View source
+                </a>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
+  );
+}
+function StaffMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-subtle">{label}</dt>
+      <dd className="mt-1 font-semibold capitalize">{value}</dd>
+    </div>
+  );
+}
+function marketAmount(amount: string | undefined, currency: string | undefined) {
+  return amount && currency
+    ? new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 0,
+      }).format(Number(amount) / 100)
+    : "Not available";
+}
+function marketRange(range: {
+  lowMinor?: string;
+  highMinor?: string;
+  medianMinor?: string;
+  currency?: string;
+}) {
+  return range.lowMinor && range.highMinor
+    ? `${marketAmount(range.lowMinor, range.currency)} – ${marketAmount(range.highMinor, range.currency)}`
+    : marketAmount(range.medianMinor, range.currency);
 }
 function State({ title, detail, retry }: { title: string; detail: string; retry?: () => void }) {
   return (

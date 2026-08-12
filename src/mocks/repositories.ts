@@ -113,6 +113,9 @@ export const mockRepositories: AppRepositories = {
     },
   },
   submissions: {
+    async checkMarket() {
+      throw new Error("External market research is unavailable in mock mode.");
+    },
     async createDraft(input) {
       const submission: import("@/domain").AssetSubmission = {
         id: `mock-submission-${submissionDrafts.length + 1}`,
@@ -137,7 +140,7 @@ export const mockRepositories: AppRepositories = {
     async getOwn(id) {
       const draft = submissionDrafts.find((item) => item.id === id);
       if (!draft) throw new Error("Submission not found");
-      return { ...draft, media: [] };
+      return { ...draft, media: [], marketResearch: null };
     },
     async updateDraft(id, input) {
       const index = submissionDrafts.findIndex((item) => item.id === id);
@@ -149,7 +152,7 @@ export const mockRepositories: AppRepositories = {
         updatedAt: now(),
       };
       submissionDrafts[index] = updated;
-      return { ...updated, media: [] };
+      return { ...updated, media: [], marketResearch: null };
     },
     async createMediaIntent() {
       throw new Error("Media uploads require the API storage provider.");

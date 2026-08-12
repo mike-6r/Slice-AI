@@ -11,6 +11,8 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { useState } from "react";
+import { formatDate } from "@/lib/format";
+import type { MarketResearchSnapshot } from "@/domain";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -60,6 +62,7 @@ export function SubmissionPage() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const [form, setForm] = useState<ListingForm>(blank);
+  const [marketResearch, setMarketResearch] = useState<MarketResearchSnapshot | null>(null);
   const categories = useQuery({
     queryKey: ["catalogue", "submission-categories"],
     queryFn: () => services.repositories.catalogue.listSubmissionCategories(),
@@ -88,11 +91,30 @@ export function SubmissionPage() {
           ...(form.language.trim() ? { language: form.language.trim() } : {}),
           ...(form.details.trim() ? { details: form.details.trim() } : {}),
         },
+        ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
       }),
     onSuccess: async (draft) => {
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
       await navigate({ to: "/submissions/$id", params: { id: draft.id } });
     },
+  });
+  const checkMarket = useMutation({
+    mutationFn: (refresh: boolean) =>
+      services.repositories.submissions.checkMarket({
+        categoryId: form.categoryId,
+        refresh,
+        declaredMetadata: {
+          name: form.name.trim(),
+          ...(form.manufacturer.trim() ? { manufacturer: form.manufacturer.trim() } : {}),
+          ...(form.year.trim() ? { year: form.year.trim() } : {}),
+          ...(form.cardNumber.trim() ? { cardNumber: form.cardNumber.trim() } : {}),
+          ...(form.language.trim() ? { language: form.language.trim() } : {}),
+          ...(form.grader.trim() ? { grader: form.grader.trim() } : {}),
+          ...(form.grade.trim() ? { grade: form.grade.trim() } : {}),
+          ...(form.details.trim() ? { details: form.details.trim() } : {}),
+        },
+      }),
+    onSuccess: setMarketResearch,
   });
   const authRequired =
     !session.isAuthenticated || (drafts.error instanceof ApiError && drafts.error.status === 401);
@@ -118,6 +140,13 @@ export function SubmissionPage() {
     );
   const selectedCategory = categories.data?.find((category) => category.id === form.categoryId);
   const valid = Boolean(form.categoryId && form.name.trim());
+  const marketReady = Boolean(
+    form.categoryId &&
+    form.name.trim() &&
+    form.cardNumber.trim() &&
+    form.grader.trim() &&
+    form.grade.trim(),
+  );
   const checklist = [
     ["Add a clear title", Boolean(form.name.trim())],
     ["Choose an asset category", Boolean(form.categoryId)],
@@ -207,6 +236,36 @@ export function SubmissionPage() {
                     <small>{form.details.length}/500 characters</small>
                   </Field>
                 </div>
+              </Panel>
+              <Panel
+                title="Market check"
+                detail="Check comparable whole-card sales and current listings once the card identity is complete."
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-subtle">
+                    {marketReady
+                      ? "Ready to check market. Exact graded cards are compared separately from raw cards and other grades."
+                      : "Add category, card name, card number, grader and grade to check the market."}
+                  </p>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    disabled={!marketReady || checkMarket.isPending}
+                    onClick={() => checkMarket.mutate(Boolean(marketResearch))}
+                  >
+                    {checkMarket.isPending
+                      ? "Searching market…"
+                      : marketResearch
+                        ? "Refresh market data"
+                        : "Check market"}
+                  </button>
+                </div>
+                {checkMarket.isError ? (
+                  <p role="alert" className="mt-4 text-sm text-negative">
+                    Market data is temporarily unavailable. You can continue your submission.
+                  </p>
+                ) : null}
+                {marketResearch ? <MarketCheck research={marketResearch} /> : null}
               </Panel>
               <Panel
                 title="Asset specifics"
@@ -392,6 +451,138 @@ export function SubmissionPage() {
       </div>
     </main>
   );
+}
+
+function MarketCheck({ research }: { research: MarketResearchSnapshot }) {
+  const sales = research.snapshot.sales;
+  const listings = research.snapshot.listings;
+  const stateCopy =
+    research.state === "UNAVAILABLE"
+      ? "Market data temporarily unavailable"
+      : research.state === "NO_MATCHES"
+        ? "No reliable matches found"
+        : research.state === "LIMITED"
+          ? "Limited market data"
+          : "Market data found";
+  return (
+    <section className="mt-5 rounded-xl border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold">{stateCopy}</p>
+          <p className="mt-1 text-xs text-subtle">
+            External market reference only — Slice reviews the collectible and establishes any
+            supported valuation separately.
+          </p>
+        </div>
+        <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold">
+          {research.dataQuality
+            ? `${research.dataQuality.toLowerCase()} data quality`
+            : "reference unavailable"}
+        </span>
+      </div>
+      {sales ? (
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <MarketMetric
+            label="Recent sales"
+            value={
+              sales.count > 1 ? marketRange(sales) : marketAmount(sales.latestMinor, sales.currency)
+            }
+          />
+          <MarketMetric
+            label="Median recent sale"
+            value={marketAmount(sales.medianMinor, sales.currency)}
+          />
+          <MarketMetric
+            label="Exact comparable sales"
+            value={String(research.snapshot.exactCompCount)}
+          />
+          <MarketMetric
+            label="Current listings"
+            value={
+              listings
+                ? listings.count > 1
+                  ? marketRange(listings)
+                  : marketAmount(listings.latestMinor, listings.currency)
+                : "None tracked"
+            }
+          />
+          <MarketMetric label="Sources" value={String(research.sourceCoverage.available)} />
+          <MarketMetric label="Updated" value={formatDate(research.collectedAt)} />
+        </dl>
+      ) : (
+        <p className="mt-4 text-sm text-subtle">
+          No reliable comparable market data was found. This does not prevent your submission.
+        </p>
+      )}
+      <details className="mt-4 border-t border-border pt-3">
+        <summary className="cursor-pointer text-sm font-semibold text-accent">
+          View market details
+        </summary>
+        <MarketObservationList
+          title="Recent completed sales"
+          items={research.observations.filter((item) => item.observationType === "SALE")}
+          sale
+        />
+        <MarketObservationList
+          title="Current listings"
+          items={research.observations.filter((item) => item.observationType === "LISTING")}
+        />
+      </details>
+    </section>
+  );
+}
+function MarketMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-subtle">{label}</dt>
+      <dd className="mt-1 font-semibold">{value}</dd>
+    </div>
+  );
+}
+function MarketObservationList({
+  title,
+  items,
+  sale = false,
+}: {
+  title: string;
+  items: MarketResearchSnapshot["observations"];
+  sale?: boolean;
+}) {
+  if (!items.length) return null;
+  return (
+    <section className="mt-4">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <ul className="mt-2 space-y-2 text-xs text-subtle">
+        {items.map((item) => (
+          <li
+            key={`${item.providerCode}-${item.externalReferenceId}`}
+            className="flex flex-wrap justify-between gap-2"
+          >
+            <span>
+              {item.providerCode.replaceAll("_", " ")} ·{" "}
+              {item.grader && item.grade ? `${item.grader} ${item.grade}` : "Raw"} ·{" "}
+              {item.matchQuality.toLowerCase()} match
+            </span>
+            <span>
+              {marketAmount(item.amountMinor, item.currency)} ·{" "}
+              {formatDate(sale ? (item.soldAt ?? item.observedAt) : item.observedAt)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+function marketAmount(amount: string | undefined, currency: string | undefined) {
+  if (!amount || !currency) return "Not available";
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(amount) / 100);
+}
+function marketRange(range: { lowMinor?: string; highMinor?: string; currency?: string }) {
+  return `${marketAmount(range.lowMinor, range.currency)} – ${marketAmount(range.highMinor, range.currency)}`;
 }
 
 function ListSidebar({

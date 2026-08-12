@@ -27,6 +27,7 @@ import type {
   SubmissionMedia,
   SubmissionReviewDetail,
   SubmissionReviewSummary,
+  MarketResearchSnapshot,
   PublicationReadiness,
   AccountCapability,
 } from "@/domain";
@@ -458,7 +459,75 @@ const mapSubmissionDetail = (raw: unknown): SubmissionDetail => {
   const value = objectField(raw, "submission detail");
   if (!Array.isArray(value.media))
     throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid submission media from service.");
-  return { ...mapSubmission(value), media: value.media.map(mapSubmissionMedia) };
+  return {
+    ...mapSubmission(value),
+    media: value.media.map(mapSubmissionMedia),
+    marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
+  };
+};
+const mapMarketResearch = (raw: unknown): MarketResearchSnapshot => {
+  const value = objectField(raw, "market research");
+  if (!Array.isArray(value.observations))
+    throw new ApiError(
+      "CLIENT_CONTRACT_ERROR",
+      "Invalid market research observations from service.",
+    );
+  const snapshot = objectField(value.snapshot, "market research snapshot");
+  const range = (item: unknown) =>
+    item === null ? null : objectField(item, "market research range");
+  const sales = range(snapshot.sales);
+  const listings = range(snapshot.listings);
+  return {
+    id: stringField(value.id, "marketResearch.id"),
+    state: stringField(value.state, "marketResearch.state") as MarketResearchSnapshot["state"],
+    dataQuality: nullableString(
+      value.dataQuality,
+      "marketResearch.dataQuality",
+    ) as MarketResearchSnapshot["dataQuality"],
+    identity: objectField(value.identity, "marketResearch.identity"),
+    sourceCoverage: objectField(
+      value.sourceCoverage,
+      "marketResearch.sourceCoverage",
+    ) as MarketResearchSnapshot["sourceCoverage"],
+    providerFailures: (Array.isArray(value.providerFailures)
+      ? value.providerFailures
+      : []) as MarketResearchSnapshot["providerFailures"],
+    snapshot: {
+      sales: sales as MarketResearchSnapshot["snapshot"]["sales"],
+      listings: listings as MarketResearchSnapshot["snapshot"]["listings"],
+      exactCompCount: Number(snapshot.exactCompCount),
+      strongCompCount: Number(snapshot.strongCompCount),
+      rejectedCompCount: Number(snapshot.rejectedCompCount),
+      updatedAt: typeof snapshot.updatedAt === "string" ? snapshot.updatedAt : undefined,
+    },
+    collectedAt: stringField(value.collectedAt, "marketResearch.collectedAt") as ISODateTime,
+    observations: value.observations.map((rawObservation) => {
+      const item = objectField(rawObservation, "market observation");
+      return {
+        providerCode: stringField(item.providerCode, "marketObservation.provider"),
+        externalReferenceId: stringField(item.externalReferenceId, "marketObservation.reference"),
+        externalUrl: nullableString(item.externalUrl, "marketObservation.url"),
+        observationType: stringField(
+          item.observationType,
+          "marketObservation.type",
+        ) as MarketResearchSnapshot["observations"][number]["observationType"],
+        originalTitle: stringField(item.originalTitle, "marketObservation.title"),
+        amountMinor: stringField(item.amountMinor, "marketObservation.amount"),
+        currency: stringField(item.currency, "marketObservation.currency"),
+        observedAt: stringField(item.observedAt, "marketObservation.observedAt") as ISODateTime,
+        soldAt: nullableString(item.soldAt, "marketObservation.soldAt") as ISODateTime | null,
+        grader: nullableString(item.grader, "marketObservation.grader"),
+        grade: nullableString(item.grade, "marketObservation.grade"),
+        variant: nullableString(item.variant, "marketObservation.variant"),
+        matchQuality: stringField(
+          item.matchQuality,
+          "marketObservation.matchQuality",
+        ) as MarketResearchSnapshot["observations"][number]["matchQuality"],
+        exclusionReason: nullableString(item.exclusionReason, "marketObservation.exclusionReason"),
+        includedInSnapshot: Boolean(item.includedInSnapshot),
+      };
+    }),
+  };
 };
 const mapReviewSummary = (raw: unknown): SubmissionReviewSummary => {
   const value = objectField(raw, "submission review");
@@ -493,6 +562,7 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
         ) as ISODateTime | null,
       };
     }),
+    marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
   };
 };
 const mapOperation = (raw: unknown): AssetOperationSummary => {
@@ -674,6 +744,14 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
     submissions: {
+      async checkMarket(input) {
+        return mapMarketResearch(
+          await client.request<unknown>("/submissions/market-research", {
+            method: "POST",
+            body: input,
+          }),
+        );
+      },
       async createDraft(input) {
         return mapSubmission(
           await client.request<unknown>("/submissions", {

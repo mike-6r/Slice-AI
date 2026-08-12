@@ -36,6 +36,7 @@ type DraftInput = {
   setId?: string | null;
   gradeScaleEntryId?: string | null;
   declaredMetadata?: Record<string, unknown> | null;
+  marketResearchId?: string;
 };
 type UpdateInput = DraftInput & { version: number };
 
@@ -46,6 +47,8 @@ const metadataAllowedKeys = new Set([
   'cardNumber',
   'language',
   'condition',
+  'grader',
+  'grade',
   'certificationNumber',
   'details',
 ]);
@@ -87,6 +90,29 @@ export class SubmissionService {
           },
           include: { media: true },
         });
+        if (input.marketResearchId) {
+          const attached = await db.submissionMarketResearch.updateMany({
+            where: {
+              id: input.marketResearchId,
+              ownerUserId: actor.userId,
+              submissionId: null,
+            },
+            data: { submissionId: submission.id },
+          });
+          if (attached.count !== 1)
+            throw new UnprocessableEntityException({
+              code: 'MARKET_RESEARCH_UNAVAILABLE',
+              message: 'The selected market research is no longer available.',
+            });
+          await audit(
+            'MARKET_RESEARCH_ATTACHED_TO_SUBMISSION',
+            'submission',
+            submission.id,
+            {
+              marketResearchId: input.marketResearchId,
+            },
+          );
+        }
         await audit('SUBMISSION_DRAFT_CREATED', 'submission', submission.id, {
           version: submission.version,
         });
@@ -98,7 +124,13 @@ export class SubmissionService {
   async getOwned(actor: Actor, id: string) {
     const submission = await this.prisma.assetSubmission.findFirst({
       where: { id, ownerUserId: actor.userId },
-      include: { media: { orderBy: { slot: 'asc' } } },
+      include: {
+        media: { orderBy: { slot: 'asc' } },
+        marketResearch: {
+          orderBy: { collectedAt: 'desc' },
+          include: { observations: { orderBy: { observedAt: 'desc' } } },
+        },
+      },
     });
     if (!submission) this.notFound();
     return ownerProjection(submission!);
@@ -205,7 +237,13 @@ export class SubmissionService {
             }
           : {}),
       },
-      include: { media: { orderBy: { slot: 'asc' } } },
+      include: {
+        media: { orderBy: { slot: 'asc' } },
+        marketResearch: {
+          orderBy: { collectedAt: 'desc' },
+          include: { observations: { orderBy: { observedAt: 'desc' } } },
+        },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -607,6 +645,10 @@ export class SubmissionService {
       include: {
         media: { orderBy: { slot: 'asc' } },
         reviews: { orderBy: { createdAt: 'asc' } },
+        marketResearch: {
+          orderBy: { collectedAt: 'desc' },
+          include: { observations: { orderBy: { observedAt: 'desc' } } },
+        },
       },
     });
     if (!submission) this.notFound();
@@ -962,6 +1004,7 @@ function ownerProjection(submission: {
     createdAt: Date;
     updatedAt: Date;
   }>;
+  marketResearch?: ResearchRow[];
 }) {
   return {
     id: submission.id,
@@ -977,6 +1020,9 @@ function ownerProjection(submission: {
     createdAt: submission.createdAt.toISOString(),
     updatedAt: submission.updatedAt.toISOString(),
     media: submission.media.map(mediaProjection),
+    marketResearch: submission.marketResearch?.[0]
+      ? marketResearchProjection(submission.marketResearch[0])
+      : null,
   };
 }
 function reviewProjection(submission: {
@@ -1025,6 +1071,7 @@ type ReviewDetailRow = {
     createdAt: Date;
     completedAt: Date | null;
   }>;
+  marketResearch: ResearchRow[];
 };
 function reviewDetailProjection(submission: ReviewDetailRow) {
   return {
@@ -1032,6 +1079,9 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
     version: submission.version,
     declaredMetadata: submission.declaredMetadata,
     media: submission.media.map(mediaProjection),
+    marketResearch: submission.marketResearch[0]
+      ? marketResearchProjection(submission.marketResearch[0])
+      : null,
     reviews: submission.reviews.map((review) => ({
       id: review.id,
       status: review.status,
@@ -1039,6 +1089,51 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       reasonCode: review.reasonCode,
       createdAt: review.createdAt.toISOString(),
       completedAt: review.completedAt?.toISOString() ?? null,
+    })),
+  };
+}
+type ResearchRow = {
+  id: string;
+  state: string;
+  dataQuality: string | null;
+  identity: Prisma.JsonValue;
+  sourceCoverage: Prisma.JsonValue;
+  providerFailures: Prisma.JsonValue;
+  snapshot: Prisma.JsonValue;
+  collectedAt: Date;
+  observations: Array<{
+    providerCode: string;
+    externalReferenceId: string;
+    externalUrl: string | null;
+    observationType: string;
+    originalTitle: string;
+    amountMinor: bigint;
+    currency: string;
+    observedAt: Date;
+    soldAt: Date | null;
+    grader: string | null;
+    grade: string | null;
+    variant: string | null;
+    matchQuality: string;
+    exclusionReason: string | null;
+    includedInSnapshot: boolean;
+  }>;
+};
+function marketResearchProjection(research: ResearchRow) {
+  return {
+    id: research.id,
+    state: research.state,
+    dataQuality: research.dataQuality,
+    identity: research.identity,
+    sourceCoverage: research.sourceCoverage,
+    providerFailures: research.providerFailures,
+    snapshot: research.snapshot,
+    collectedAt: research.collectedAt.toISOString(),
+    observations: research.observations.map((item) => ({
+      ...item,
+      amountMinor: item.amountMinor.toString(),
+      observedAt: item.observedAt.toISOString(),
+      soldAt: item.soldAt?.toISOString() ?? null,
     })),
   };
 }

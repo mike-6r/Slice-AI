@@ -24,6 +24,7 @@ import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { SubmissionService } from '../application/submission.service';
+import { CollectibleMarketResearchService } from '../../market-research/market-research.service';
 import { LocalSubmissionStorage } from '../infrastructure/local-submission-storage';
 import { MAX_MEDIA_BYTES } from '../domain/submission.policy';
 
@@ -35,6 +36,7 @@ const draft = z
     setId: id.nullable().optional(),
     gradeScaleEntryId: id.nullable().optional(),
     declaredMetadata: metadata,
+    marketResearchId: id.optional(),
   })
   .strict();
 const draftPatch = draft.extend({ version: z.number().int().min(1) }).strict();
@@ -76,6 +78,13 @@ const ownerListQuery = z
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
+const marketResearch = z
+  .object({
+    categoryId: id,
+    declaredMetadata: z.record(z.unknown()),
+    refresh: z.boolean().optional(),
+  })
+  .strict();
 
 @Controller()
 export class SubmissionController {
@@ -83,6 +92,7 @@ export class SubmissionController {
     private readonly submissions: SubmissionService,
     private readonly limiter: ControlRateLimitService,
     private readonly localStorage: LocalSubmissionStorage,
+    private readonly research: CollectibleMarketResearchService,
   ) {}
 
   /** Staging-only upload capability endpoint. The opaque one-use token is the
@@ -115,6 +125,20 @@ export class SubmissionController {
         req.requestId ?? 'unknown',
         key!,
       ),
+    );
+  }
+  @Post('submissions/market-research')
+  @UseGuards(AccessTokenGuard)
+  async marketCheck(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    await this.limiter.enforce(
+      'marketResearch',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.research.research(
+      req.actor!,
+      parse(marketResearch, body),
+      req.requestId ?? 'unknown',
     );
   }
   @Get('submissions')
