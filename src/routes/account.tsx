@@ -30,7 +30,8 @@ import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-pr
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "Account Center | Slice" }] }),
-  validateSearch: (search) => ({ sessions: search.sessions === "all" ? "all" : undefined }),
+  validateSearch: (search): { sessions?: "all" } =>
+    search.sessions === "all" ? { sessions: "all" } : {},
   component: AccountPageForTest,
 });
 
