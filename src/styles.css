@@ -20246,6 +20246,8 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   align-self: center;
   display: grid;
   gap: 0.85rem;
+  /* Reserve the lower detail strip so the final lifecycle step clears its divider. */
+  padding-bottom: 1.25rem;
 }
 .vault-live-visual__step {
   position: relative;
