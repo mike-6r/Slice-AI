@@ -439,7 +439,7 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
       asset?.gradeScaleEntry?.company.code ??
       declaredGrader(submission.declaredMetadata),
     grade: asset?.gradeScaleEntry
-      ? `${asset.gradeScaleEntry.company.code} ${asset.gradeScaleEntry.grade.toFixed(2)}`
+      ? asset.gradeScaleEntry.grade.toFixed(2)
       : declaredGrade(submission.declaredMetadata),
     stage,
     submissionStatus: submission.status,
@@ -649,7 +649,17 @@ function friendlyMediaLabel(slot: string) {
   return `${slot.replaceAll('_', ' ')} evidence`;
 }
 function stageLabel(stage: WorkspaceStage) {
-  return stage.replaceAll('_', ' ').toLocaleLowerCase();
+  return (
+    {
+      DRAFT: 'Draft',
+      SUBMITTED: 'Submitted',
+      REVIEW: 'In Review',
+      VALUATION: 'Valuation',
+      CUSTODY: 'Custody',
+      VAULT_READY: 'Vault Ready',
+      MARKET_LIVE: 'Market Live',
+    } as const
+  )[stage];
 }
 function activityTitle(action: string) {
   if (action.includes('MEDIA')) return 'Evidence updated';

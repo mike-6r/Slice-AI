@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   Archive,
@@ -48,6 +48,14 @@ import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
 
 export const Route = createFileRoute("/collector-workspace")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.collectible === "string" && search.collectible.length > 0
+      ? { collectible: search.collectible.slice(0, 120) }
+      : {}),
+    ...(typeof search.tab === "string" && isAssetDetailSection(search.tab)
+      ? { tab: search.tab }
+      : {}),
+  }),
   head: () => ({ meta: [{ title: "Collector Workspace | Slice" }] }),
   component: CollectorWorkspacePage,
 });
@@ -110,9 +118,13 @@ function CollectorWorkspacePage() {
 function CollectorWorkspace() {
   const { repositories } = useAppServices();
   const client = useQueryClient();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const routeSearch = Route.useSearch();
   const [active, setActive] = useState<WorkspaceSection>("overview");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailSection, setDetailSection] = useState<AssetDetailSection>("overview");
+  const [selectedId, setSelectedId] = useState<string | null>(routeSearch.collectible ?? null);
+  const [detailSection, setDetailSection] = useState<AssetDetailSection>(
+    routeSearch.tab ?? "overview",
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const overview = useQuery({
@@ -128,9 +140,18 @@ function CollectorWorkspace() {
   });
   const updateProfile = useMutation({
     mutationFn: repositories.collectorWorkspace.updatePublicProfile,
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
+      void client.invalidateQueries({ queryKey: queryKeys.collectors.all });
+    },
   });
+
+  useEffect(() => {
+    if (!routeSearch.collectible) return;
+    setSelectedId(routeSearch.collectible);
+    setActive("asset");
+    setDetailSection(routeSearch.tab ?? "overview");
+  }, [routeSearch.collectible, routeSearch.tab]);
 
   if (overview.isLoading) return <WorkspaceState title="Loading your collector workspace" />;
   if (overview.isError || !overview.data)
@@ -146,10 +167,19 @@ function CollectorWorkspace() {
   const selected = selectedId
     ? (collectibleDetail.data?.asset ?? data.assets.find((item) => item.id === selectedId) ?? null)
     : null;
+
   const open = (section: WorkspaceSection, assetId?: string, tab?: AssetDetailSection) => {
     setActive(section);
     if (assetId) setSelectedId(assetId);
     if (section === "asset") setDetailSection(tab ?? "overview");
+    if (section === "asset" && assetId) {
+      void navigate({
+        search: { collectible: assetId, ...(tab ? { tab } : {}) },
+        replace: true,
+      });
+    } else if (routeSearch.collectible) {
+      void navigate({ search: {}, replace: true });
+    }
     setMobileOpen(false);
   };
   const matchingAssets = filterAssets(data.assets, query);
@@ -225,16 +255,23 @@ function CollectorWorkspace() {
         ) : active === "documents" ? (
           <Documents assets={matchingAssets} open={open} />
         ) : active === "profile" ? (
-          <PublicProfile data={data} save={updateProfile.mutate} saving={updateProfile.isPending} />
+          <PublicProfile
+            data={data}
+            save={updateProfile.mutate}
+            saving={updateProfile.isPending}
+            saveFailed={updateProfile.isError}
+          />
         ) : active === "activity" ? (
           <ActivityView data={data} />
         ) : active === "settings" ? (
-          <SettingsView />
+          <SettingsView open={open} />
         ) : selected ? (
           <AssetManagement
             asset={selected}
             detail={collectibleDetail.data}
             initialSection={detailSection}
+            detailFailed={collectibleDetail.isError}
+            onSectionChange={(section) => open("asset", selected.id, section)}
           />
         ) : (
           <WorkspaceState title="Select a collectible" />
@@ -283,7 +320,7 @@ function WorkspaceTopbar({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search collectibles, submissions, documents…"
+          placeholder="Filter your collectibles, submissions and evidence"
         />
       </label>
       <div className="collector-workspace-topbar__meta">
@@ -294,8 +331,12 @@ function WorkspaceTopbar({
         <span>
           <Globe2 aria-hidden="true" /> Country <strong>{data.collector.countryCode ?? "—"}</strong>
         </span>
-        <button className="collector-workspace-overview-button" onClick={onOverview}>
-          <Bell aria-hidden="true" />
+        <button
+          className="collector-workspace-overview-button"
+          onClick={onOverview}
+          aria-label="Return to collector overview"
+        >
+          <Home aria-hidden="true" />
         </button>
       </div>
     </header>
@@ -1017,7 +1058,7 @@ function RequestCards({
             <button
               key={item.id}
               className="collector-request-card"
-              onClick={() => open("asset", item.id)}
+              onClick={() => open("asset", item.id, "submission")}
             >
               <span className="collector-request-card__image">
                 {media ? <img src={media.src} alt="" /> : <Bell aria-hidden="true" />}
@@ -1068,7 +1109,7 @@ function DocumentGroups({
           <article key={asset.id} className="collector-panel collector-document-group">
             <button
               className="collector-document-group__heading"
-              onClick={() => open("asset", asset.id)}
+              onClick={() => open("asset", asset.id, "media")}
             >
               <AssetThumbnail asset={asset} />
               <span>
@@ -1103,6 +1144,7 @@ function PublicProfile({
   data: source,
   save,
   saving,
+  saveFailed,
 }: {
   data: CollectorWorkspaceOverview;
   save: (input: {
@@ -1111,11 +1153,9 @@ function PublicProfile({
     isPublic?: boolean;
   }) => void;
   saving: boolean;
+  saveFailed: boolean;
 }) {
-  const data = {
-    ...source,
-    collector: { ...source.collector, publicProfile: source.collector.publicProfile! },
-  };
+  const data = source;
   const [headline, setHeadline] = useState(data.collector.publicProfile?.headline ?? "");
   const [specialism, setSpecialism] = useState(data.collector.publicProfile?.specialism ?? "");
   const [isPublic, setIsPublic] = useState(data.collector.publicProfile?.isPublic ?? false);
@@ -1126,76 +1166,12 @@ function PublicProfile({
       specialism={specialism}
       isPublic={isPublic}
       saving={saving}
+      saveFailed={saveFailed}
       setHeadline={setHeadline}
       setSpecialism={setSpecialism}
       setIsPublic={setIsPublic}
       save={save}
     />
-  );
-  /* legacy layout retained below temporarily for the existing typed form contract. */
-  return (
-    <WorkspacePage
-      title="Public Profile"
-      detail="Your account username is the canonical collector identity. Profile visibility is managed separately."
-    >
-      <section className="collector-panel collector-profile-editor">
-        <label>
-          Display name
-          <input value={data.collector.displayName} disabled />
-        </label>
-        <label>
-          Username
-          <input
-            value={data.collector.username ? `@${data.collector.username}` : "Not set"}
-            disabled
-          />
-        </label>
-        <label>
-          Collector bio
-          <textarea
-            value={headline}
-            onChange={(event) => setHeadline(event.target.value)}
-            maxLength={500}
-          />
-        </label>
-        <label>
-          Specialties / categories
-          <input
-            value={specialism}
-            onChange={(event) => setSpecialism(event.target.value)}
-            placeholder="Pokémon TCG · Sports Cards"
-          />
-        </label>
-        <label className="collector-profile-editor__toggle">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(event) => setIsPublic(event.target.checked)}
-          />{" "}
-          Publish my collector profile
-        </label>
-        <div>
-          <button
-            className="collector-button collector-button--primary"
-            disabled={saving}
-            onClick={() =>
-              save({ headline: headline || null, specialism: specialism || null, isPublic })
-            }
-          >
-            {saving ? "Saving…" : "Save public profile"}
-          </button>
-          {data.collector.publicProfile?.isPublic ? (
-            <Link
-              className="collector-button"
-              to="/collector/$id"
-              params={{ id: data.collector.publicProfile!.slug }}
-            >
-              Preview public profile <ArrowRight aria-hidden="true" />
-            </Link>
-          ) : null}
-        </div>
-      </section>
-    </WorkspacePage>
   );
 }
 
@@ -1205,6 +1181,7 @@ function PublicProfileEditor({
   specialism,
   isPublic,
   saving,
+  saveFailed,
   setHeadline,
   setSpecialism,
   setIsPublic,
@@ -1215,6 +1192,7 @@ function PublicProfileEditor({
   specialism: string;
   isPublic: boolean;
   saving: boolean;
+  saveFailed: boolean;
   setHeadline: (value: string) => void;
   setSpecialism: (value: string) => void;
   setIsPublic: (value: boolean) => void;
@@ -1276,6 +1254,11 @@ function PublicProfileEditor({
             >
               {saving ? "Saving…" : "Save public profile"}
             </button>
+            {saveFailed ? (
+              <p className="collector-form-error" role="alert">
+                We couldn&apos;t save your public profile. Please try again.
+              </p>
+            ) : null}
           </div>
         </div>
         <aside className="collector-panel collector-profile-preview">
@@ -1326,41 +1309,32 @@ function ActivityView({ data }: { data: CollectorWorkspaceOverview }) {
   );
 }
 
-function SettingsView() {
-  return <SettingsCards />;
-  /* legacy layout retained below temporarily for the existing route contract. */
-  return (
-    <WorkspacePage
-      title="Collector Settings"
-      detail="Account security and canonical profile settings remain in your Account center."
-    >
-      <section className="collector-panel collector-settings">
-        <div>
-          <strong>Account settings</strong>
-          <span>Manage account profile, security, sessions and notifications in Account.</span>
-          <Link to="/account" className="collector-button">
-            Open account settings <ArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-        <div>
-          <strong>Public profile settings</strong>
-          <span>Manage profile visibility and collector specialties in Public Profile.</span>
-        </div>
-      </section>
-    </WorkspacePage>
-  );
+function SettingsView({ open }: { open: Open }) {
+  return <SettingsCards open={open} />;
 }
 
 function AssetManagement({
   asset,
   detail,
   initialSection,
+  detailFailed,
+  onSectionChange,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
   initialSection: AssetDetailSection;
+  detailFailed: boolean;
+  onSectionChange: (section: AssetDetailSection) => void;
 }) {
-  return <AssetManagementView asset={asset} detail={detail} initialSection={initialSection} />;
+  return (
+    <AssetManagementView
+      asset={asset}
+      detail={detail}
+      initialSection={initialSection}
+      detailFailed={detailFailed}
+      onSectionChange={onSectionChange}
+    />
+  );
   /* legacy detail layout retained below temporarily for the existing detail content.
   return (
     <WorkspacePage
@@ -1468,7 +1442,7 @@ function AssetManagement({
   */
 }
 
-function SettingsCards() {
+function SettingsCards({ open }: { open: Open }) {
   return (
     <WorkspacePage
       title="Collector Settings"
@@ -1491,6 +1465,9 @@ function SettingsCards() {
           </span>
           <strong>Public profile settings</strong>
           <p>Manage profile visibility and collector specialties in your public profile.</p>
+          <button className="collector-button" onClick={() => open("profile")}>
+            Manage public profile <ArrowRight aria-hidden="true" />
+          </button>
         </article>
         <article className="collector-panel">
           <span className="collector-settings__icon">
@@ -1511,10 +1488,14 @@ function AssetManagementView({
   asset,
   detail,
   initialSection,
+  detailFailed,
+  onSectionChange,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
   initialSection: AssetDetailSection;
+  detailFailed: boolean;
+  onSectionChange: (section: AssetDetailSection) => void;
 }) {
   const sections: Array<{ id: AssetDetailSection; label: string }> = [
     { id: "overview", label: "Overview" },
@@ -1584,13 +1565,22 @@ function AssetManagementView({
                 role="tab"
                 aria-selected={section === id}
                 className={section === id ? "is-active" : ""}
-                onClick={() => setSection(id)}
+                onClick={() => {
+                  setSection(id);
+                  onSectionChange(id);
+                }}
               >
                 {label}
               </button>
             ))}
           </div>
           <DetailPanel title={sections.find((item) => item.id === section)?.label ?? "Details"}>
+            {detailFailed ? (
+              <p className="collector-form-error" role="alert">
+                We couldn&apos;t load the latest detail update. Showing the current workspace
+                summary.
+              </p>
+            ) : null}
             {content[section]}
           </DetailPanel>
         </div>
@@ -1648,7 +1638,7 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
         }
       />
       <Detail label="Allowed action" value={submissionNextStep(asset)} />
-      <Link to="/list" className="collector-button">
+      <Link to="/submissions/$id" params={{ id: asset.id }} className="collector-button">
         {asset.submissionStatus === "CHANGES_REQUESTED"
           ? "Review requested changes"
           : asset.stage === "DRAFT"
@@ -1721,7 +1711,7 @@ function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           <small>
             {sentence(item.status)} · Uploaded {date(item.updatedAt)}
           </small>
-          <em>Secure evidence preview</em>
+          <em>Evidence metadata only</em>
         </article>
       ))}
     </div>
@@ -1950,7 +1940,11 @@ function detailAction(asset: CollectorWorkspaceAsset) {
       </Link>
     );
   return (
-    <Link to="/list" className="collector-button collector-button--primary">
+    <Link
+      to="/submissions/$id"
+      params={{ id: asset.id }}
+      className="collector-button collector-button--primary"
+    >
       {asset.submissionStatus === "CHANGES_REQUESTED"
         ? "Review request"
         : asset.stage === "DRAFT"
@@ -2180,12 +2174,24 @@ const stageCopy = (stage: CollectorWorkspaceStage) =>
   ({
     DRAFT: { label: "Draft", icon: FileText },
     SUBMITTED: { label: "Submitted", icon: Upload },
-    REVIEW: { label: "Review", icon: ClipboardList },
+    REVIEW: { label: "In Review", icon: ClipboardList },
     VALUATION: { label: "Valuation", icon: BadgeCheck },
     CUSTODY: { label: "Custody", icon: Box },
     VAULT_READY: { label: "Vault Ready", icon: Vault },
     MARKET_LIVE: { label: "Market Live", icon: BarChart3 },
   })[stage];
+function isAssetDetailSection(value: string): value is AssetDetailSection {
+  return [
+    "overview",
+    "submission",
+    "market-data",
+    "media",
+    "valuation",
+    "custody",
+    "market",
+    "activity",
+  ].includes(value);
+}
 function StageIcon({ stage }: { stage: CollectorWorkspaceStage }) {
   const Icon = stageCopy(stage).icon;
   return <Icon aria-hidden="true" />;

@@ -10,11 +10,11 @@ const activeStreams = new Set<string>();
 // staging keeps the stream feature disabled until the deployment enables it.
 const realtimeEnabled = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
-export function useNotificationStream(userId = "current") {
+export function useNotificationStream(userId = "current", enabled = true) {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useSession();
   useEffect(() => {
-    if (!realtimeEnabled || !isAuthenticated || activeStreams.has(userId)) return;
+    if (!enabled || !realtimeEnabled || !isAuthenticated || activeStreams.has(userId)) return;
     activeStreams.add(userId);
     const abort = new AbortController();
     let reconnect: ReturnType<typeof setTimeout> | undefined;
@@ -65,5 +65,5 @@ export function useNotificationStream(userId = "current") {
       if (reconnect) clearTimeout(reconnect);
       activeStreams.delete(userId);
     };
-  }, [isAuthenticated, queryClient, userId]);
+  }, [enabled, isAuthenticated, queryClient, userId]);
 }

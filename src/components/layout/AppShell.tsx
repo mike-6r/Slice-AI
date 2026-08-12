@@ -6,10 +6,10 @@ import { useNotificationStream } from "@/notifications/use-notification-stream";
 import { useRouterState } from "@tanstack/react-router";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  useNotificationStream();
   const collectorWorkspace = useRouterState({
     select: (state) => state.location.pathname === "/collector-workspace",
   });
+  useNotificationStream("current", !collectorWorkspace);
   if (collectorWorkspace)
     return (
       <div className="flex min-h-screen flex-col bg-background text-foreground">{children}</div>

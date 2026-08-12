@@ -24487,6 +24487,16 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   font-style: normal;
   font-weight: 700;
 }
+.collector-form-error {
+  margin: 0;
+  border: 1px solid rgba(238, 106, 106, 0.42);
+  border-radius: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(121, 30, 36, 0.18);
+  color: #ffbabd;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
 .collector-detail-valuation__primary {
   display: grid;
   gap: 0.35rem;
