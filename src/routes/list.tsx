@@ -15,7 +15,12 @@ import { useState } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import { LISTING_STEPS, submissionName, SUBMISSION_EMPTY } from "./-list-presentation";
+import {
+  LISTING_STEPS,
+  submissionName,
+  submissionStatusLabel,
+  SUBMISSION_EMPTY,
+} from "./-list-presentation";
 
 export const Route = createFileRoute("/list")({
   head: () => ({ meta: [{ title: "Submit an asset | Slice" }] }),
@@ -28,6 +33,8 @@ type ListingForm = {
   manufacturer: string;
   year: string;
   condition: string;
+  grader: string;
+  grade: string;
   certificationNumber: string;
   cardNumber: string;
   language: string;
@@ -39,6 +46,8 @@ const blank: ListingForm = {
   manufacturer: "",
   year: "",
   condition: "",
+  grader: "",
+  grade: "",
   certificationNumber: "",
   cardNumber: "",
   language: "",
@@ -70,6 +79,8 @@ export function SubmissionPage() {
           ...(form.manufacturer.trim() ? { manufacturer: form.manufacturer.trim() } : {}),
           ...(form.year.trim() ? { year: form.year.trim() } : {}),
           ...(form.condition.trim() ? { condition: form.condition.trim() } : {}),
+          ...(form.grader.trim() ? { grader: form.grader.trim() } : {}),
+          ...(form.grade.trim() ? { grade: form.grade.trim() } : {}),
           ...(form.certificationNumber.trim()
             ? { certificationNumber: form.certificationNumber.trim() }
             : {}),
@@ -202,12 +213,28 @@ export function SubmissionPage() {
                 detail="Add category-relevant details that help reviewers assess your submission."
               >
                 <div className="list-form-grid">
-                  <Field label="Condition / grade">
+                  <Field label="Condition">
                     <input
                       value={form.condition}
                       onChange={(e) => update("condition", e.target.value)}
                       maxLength={500}
                       placeholder="Optional submitted condition"
+                    />
+                  </Field>
+                  <Field label="Grading company">
+                    <input
+                      value={form.grader}
+                      onChange={(e) => update("grader", e.target.value)}
+                      maxLength={120}
+                      placeholder="e.g. PSA, BGS or CGC"
+                    />
+                  </Field>
+                  <Field label="Grade">
+                    <input
+                      value={form.grade}
+                      onChange={(e) => update("grade", e.target.value)}
+                      maxLength={120}
+                      placeholder="e.g. 10, 9.5 or Near Mint"
                     />
                   </Field>
                   <Field label="Certification number">
@@ -370,7 +397,7 @@ export function SubmissionPage() {
 function ListSidebar({
   drafts,
 }: {
-  drafts: Array<{ id: string; declaredMetadata: Record<string, unknown> | null }>;
+  drafts: Array<{ id: string; status: string; declaredMetadata: Record<string, unknown> | null }>;
 }) {
   return (
     <aside className="list-sidebar">
@@ -393,7 +420,8 @@ function ListSidebar({
           <strong>Saved drafts</strong>
           {drafts.slice(0, 3).map((draft) => (
             <Link key={draft.id} to="/submissions/$id" params={{ id: draft.id }}>
-              {submissionName(draft.declaredMetadata)}
+              <span>{submissionName(draft.declaredMetadata)}</span>
+              <small>{submissionStatusLabel(draft.status)}</small>
             </Link>
           ))}
         </section>

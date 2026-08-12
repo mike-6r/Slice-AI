@@ -87,6 +87,8 @@ export interface CreateSubmissionDraft {
     cardNumber?: string;
     language?: string;
     condition?: string;
+    grader?: string;
+    grade?: string;
     certificationNumber?: string;
     details?: string;
   };

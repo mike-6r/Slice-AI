@@ -1,11 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Check, CircleAlert, FileUp, ImagePlus, Trash2, UploadCloud } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
+
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import type { SubmissionMedia } from "@/domain/submission";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 
 export const Route = createFileRoute("/submissions/$id")({ component: SubmissionDetailPage });
+
+const REQUIRED_EVIDENCE_SLOTS = ["front", "back"] as const;
+const ACCEPTED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 
 function SubmissionDetailPage() {
   const { id } = Route.useParams();
@@ -13,12 +28,28 @@ function SubmissionDetailPage() {
   const session = useSession();
   const client = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const previewUrls = useRef<Record<string, string>>({});
   const detail = useQuery({
     queryKey: ["submissions", id],
     queryFn: () => services.repositories.submissions.getOwn(id),
     enabled: session.isAuthenticated,
   });
+  const categories = useQuery({
+    queryKey: ["catalogue", "submission-categories"],
+    queryFn: () => services.repositories.catalogue.listSubmissionCategories(),
+    enabled: session.isAuthenticated,
+  });
+
+  useEffect(
+    () => () => {
+      Object.values(previewUrls.current).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [],
+  );
+
   const refresh = () =>
     void Promise.all([
       detail.refetch(),
@@ -29,40 +60,21 @@ function SubmissionDetailPage() {
       services.repositories.submissions.updateDraft(id, {
         version: detail.data!.version,
         categoryId: String(form.get("categoryId") ?? detail.data!.categoryId),
-        declaredMetadata: {
-          name: String(form.get("name") ?? "").trim(),
-          ...(String(form.get("manufacturer") ?? "").trim()
-            ? { manufacturer: String(form.get("manufacturer")).trim() }
-            : {}),
-          ...(String(form.get("year") ?? "").trim()
-            ? { year: String(form.get("year")).trim() }
-            : {}),
-          ...(String(form.get("details") ?? "").trim()
-            ? { details: String(form.get("details")).trim() }
-            : {}),
-          ...(String(form.get("condition") ?? "").trim()
-            ? { condition: String(form.get("condition")).trim() }
-            : {}),
-          ...(String(form.get("certificationNumber") ?? "").trim()
-            ? { certificationNumber: String(form.get("certificationNumber")).trim() }
-            : {}),
-          ...(String(form.get("cardNumber") ?? "").trim()
-            ? { cardNumber: String(form.get("cardNumber")).trim() }
-            : {}),
-          ...(String(form.get("language") ?? "").trim()
-            ? { language: String(form.get("language")).trim() }
-            : {}),
-        },
+        declaredMetadata: metadataFromForm(form),
       }),
     onSuccess: () => {
-      setNotice("Saved from the authoritative submission service.");
+      setNotice("Draft saved. You can continue editing it whenever it is eligible for changes.");
+      setLocalError(null);
       refresh();
     },
   });
   const submit = useMutation({
     mutationFn: () => services.repositories.submissions.submit(id, detail.data!.version),
     onSuccess: () => {
-      setNotice("Submission sent for review.");
+      setNotice(
+        "Submission sent for review. It will not be published until the approved review workflow completes.",
+      );
+      setLocalError(null);
       refresh();
     },
   });
@@ -75,18 +87,41 @@ function SubmissionDetailPage() {
     },
   });
   const media = useMutation({
-    mutationFn: ({ slot, file }: { slot: string; file: File }) =>
-      services.repositories.submissions.createMediaIntent(id, { slot, file }),
-    onSuccess: () => {
-      setNotice("Evidence uploaded and checked by the approved submission storage workflow.");
+    mutationFn: async ({
+      slot,
+      file,
+      replaceMediaId,
+    }: {
+      slot: string;
+      file: File;
+      replaceMediaId?: string;
+    }) => {
+      if (replaceMediaId) {
+        const current = await services.repositories.submissions.getOwn(id);
+        await services.repositories.submissions.removeMedia(id, replaceMediaId, current.version);
+      }
+      return services.repositories.submissions.createMediaIntent(id, { slot, file });
+    },
+    onSuccess: (_detail, variables) => {
+      setNotice(
+        `${slotLabel(variables.slot)} image uploaded. Its review readiness is shown below.`,
+      );
+      setLocalError(null);
+      clearPreview(variables.slot, previewUrls, setPreviews);
       refresh();
     },
   });
   const remove = useMutation({
-    mutationFn: (mediaId: string) =>
-      services.repositories.submissions.removeMedia(id, mediaId, detail.data!.version),
-    onSuccess: refresh,
+    mutationFn: async (mediaId: string) => {
+      const current = await services.repositories.submissions.getOwn(id);
+      return services.repositories.submissions.removeMedia(id, mediaId, current.version);
+    },
+    onSuccess: () => {
+      setNotice("Evidence removed from this draft.");
+      refresh();
+    },
   });
+
   if (!session.isAuthenticated || (detail.error instanceof ApiError && detail.error.status === 401))
     return (
       <State
@@ -96,7 +131,9 @@ function SubmissionDetailPage() {
       />
     );
   if (detail.isLoading)
-    return <State title="Loading submission" detail="Retrieving its authoritative status." />;
+    return (
+      <State title="Loading submission" detail="Retrieving its saved details and review status." />
+    );
   if (detail.isError || !detail.data)
     return (
       <State
@@ -105,172 +142,230 @@ function SubmissionDetailPage() {
         retry={() => void detail.refetch()}
       />
     );
+
   const item = detail.data;
   const editable = item.status === "DRAFT" || item.status === "CHANGES_REQUESTED";
+  const cancellable = editable || item.status === "SUBMITTED";
   const actionError = update.error ?? submit.error ?? cancel.error ?? media.error ?? remove.error;
+  const categoryName =
+    categories.data?.find((category) => category.id === item.categoryId)?.name ?? "Saved category";
+  const activeMedia = REQUIRED_EVIDENCE_SLOTS.map((slot) => findActiveMedia(item.media, slot));
+  const evidenceReady = activeMedia.every((entry) => entry?.status === "SAFE");
+
+  const beginUpload = (slot: string, file: File, existing?: SubmissionMedia) => {
+    const error = fileValidationError(file);
+    if (error) {
+      setLocalError(error);
+      return;
+    }
+    setPreview(slot, file, previewUrls, setPreviews);
+    media.mutate({ slot, file, replaceMediaId: existing?.id });
+  };
+
   return (
     <main className="page-shell space-y-7 py-10">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="page-kicker">Private asset submission</p>
-          <h1 className="page-title mt-2">
-            {String(item.declaredMetadata?.name ?? "Untitled asset")}
-          </h1>
+          <h1 className="page-title mt-2">{submissionName(item.declaredMetadata)}</h1>
           <p className="mt-2 text-sm text-subtle">
-            Status: <strong>{item.status.replaceAll("_", " ")}</strong>
-            {item.decisionCode ? ` — ${item.decisionCode.replaceAll("_", " ")}` : ""}
+            <strong>{submissionStatusLabel(item.status)}</strong>
+            {item.status === "SUBMITTED" ? " — awaiting review" : ""}
           </p>
         </div>
         <Link to="/list" className="text-sm font-semibold text-accent">
           Back to submissions
         </Link>
       </header>
-      {notice && (
-        <p
-          role="status"
-          className="rounded-lg border border-positive/30 bg-positive/10 p-3 text-sm"
-        >
-          {notice}
-        </p>
-      )}
-      {actionError && (
-        <p
-          role="alert"
-          className="rounded-lg border border-negative/30 bg-negative/10 p-3 text-sm text-negative"
-        >
-          The requested server action was not completed. Refresh and try again.
-        </p>
-      )}
+
+      {notice ? <Notice>{notice}</Notice> : null}
+      {localError ? <ErrorNotice>{localError}</ErrorNotice> : null}
+      {actionError ? <ErrorNotice>{friendlyError(actionError)}</ErrorNotice> : null}
+
       <section className="rounded-2xl border border-border bg-elevated p-6">
-        <h2 className="text-lg font-semibold">Submission details</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">Asset details</h2>
+            <p className="mt-1 text-sm text-subtle">Save the draft before moving on to review.</p>
+          </div>
+          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-subtle">
+            {categoryName}
+          </span>
+        </div>
         {editable ? (
           <form
-            className="mt-4 grid gap-4 md:grid-cols-2"
+            className="mt-5 grid gap-4 md:grid-cols-2"
             onSubmit={(event) => {
               event.preventDefault();
               update.mutate(new FormData(event.currentTarget));
             }}
           >
+            <label className="grid gap-2 text-sm font-medium">
+              Asset category
+              <select name="categoryId" defaultValue={item.categoryId}>
+                {!categories.data?.some((category) => category.id === item.categoryId) ? (
+                  <option value={item.categoryId}>{categoryName}</option>
+                ) : null}
+                {categories.data?.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Field
               name="name"
-              label="Asset name"
-              defaultValue={String(item.declaredMetadata?.name ?? "")}
+              label="Asset title"
+              defaultValue={metadataValue(item.declaredMetadata, "name")}
               required
             />
             <Field
               name="manufacturer"
-              label="Manufacturer or issuer"
-              defaultValue={String(item.declaredMetadata?.manufacturer ?? "")}
+              label="Brand, manufacturer or creator"
+              defaultValue={metadataValue(item.declaredMetadata, "manufacturer")}
             />
             <Field
               name="year"
               label="Year"
-              defaultValue={String(item.declaredMetadata?.year ?? "")}
+              defaultValue={metadataValue(item.declaredMetadata, "year")}
             />
             <Field
               name="condition"
-              label="Condition / grade"
-              defaultValue={String(item.declaredMetadata?.condition ?? "")}
+              label="Condition"
+              defaultValue={metadataValue(item.declaredMetadata, "condition")}
+            />
+            <Field
+              name="grader"
+              label="Grading company"
+              defaultValue={metadataValue(item.declaredMetadata, "grader")}
+            />
+            <Field
+              name="grade"
+              label="Grade"
+              defaultValue={metadataValue(item.declaredMetadata, "grade")}
             />
             <Field
               name="certificationNumber"
               label="Certification number"
-              defaultValue={String(item.declaredMetadata?.certificationNumber ?? "")}
+              defaultValue={metadataValue(item.declaredMetadata, "certificationNumber")}
             />
             <Field
               name="cardNumber"
-              label="Edition / reference number"
-              defaultValue={String(item.declaredMetadata?.cardNumber ?? "")}
+              label="Set, edition or reference number"
+              defaultValue={metadataValue(item.declaredMetadata, "cardNumber")}
             />
             <Field
               name="language"
               label="Language"
-              defaultValue={String(item.declaredMetadata?.language ?? "")}
+              defaultValue={metadataValue(item.declaredMetadata, "language")}
             />
             <label className="grid gap-2 text-sm font-medium md:col-span-2">
               Description
               <textarea
                 name="details"
                 rows={4}
-                defaultValue={String(item.declaredMetadata?.details ?? "")}
+                defaultValue={metadataValue(item.declaredMetadata, "details")}
+                maxLength={2000}
               />
             </label>
-            <input type="hidden" name="categoryId" value={item.categoryId} />
             <button className="button-primary w-fit" disabled={update.isPending}>
-              {update.isPending ? "Saving…" : "Save changes"}
+              {update.isPending ? "Saving…" : "Save draft"}
             </button>
           </form>
         ) : (
-          <SafeMetadata metadata={item.declaredMetadata} />
+          <SafeMetadata metadata={item.declaredMetadata} categoryName={categoryName} />
         )}
       </section>
+
       <section className="rounded-2xl border border-border bg-elevated p-6">
-        <h2 className="text-lg font-semibold">Evidence</h2>
-        <p className="mt-1 text-sm text-subtle">
-          Required evidence slots are front and back. File acceptance and scanning remain
-          backend-controlled.
-        </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {["front", "back"].map((slot) => {
-            const existing = item.media.find(
-              (entry) => entry.slot === slot && entry.status !== "DELETED",
-            );
+        <div>
+          <h2 className="text-lg font-semibold">Front and back images</h2>
+          <p className="mt-1 text-sm text-subtle">
+            Upload a clear image of each side. File validation and review readiness remain
+            controlled by the submission service.
+          </p>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
+            const existing = findActiveMedia(item.media, slot);
+            const preview = previews[slot];
             return (
-              <div key={slot} className="rounded-lg border border-border p-3">
-                <p className="text-sm font-semibold capitalize">{slot}</p>
-                <p className="mt-1 text-xs text-muted">
-                  {existing
-                    ? `${existing.status.replaceAll("_", " ")} · ${existing.mimeType}`
-                    : "No evidence selected"}
-                </p>
-                {editable && !existing && (
-                  <label className="mt-3 block text-sm font-medium">
-                    Select evidence
-                    <input
-                      aria-label={`Select ${slot} evidence`}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="mt-2 block w-full text-xs"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) media.mutate({ slot, file });
-                      }}
-                    />
-                  </label>
-                )}
-                {editable && existing && (
-                  <button
-                    type="button"
-                    className="mt-3 text-sm font-semibold text-negative"
-                    onClick={() => remove.mutate(existing.id)}
-                  >
-                    Remove evidence
-                  </button>
-                )}
-              </div>
+              <EvidenceCard
+                key={slot}
+                slot={slot}
+                existing={existing}
+                preview={preview}
+                editable={editable}
+                uploadPending={media.isPending}
+                removePending={remove.isPending}
+                onSelect={(file) => beginUpload(slot, file, existing)}
+                onRemove={() => existing && remove.mutate(existing.id)}
+              />
             );
           })}
         </div>
       </section>
-      <section className="flex flex-wrap gap-3 rounded-2xl border border-border bg-elevated p-6">
-        {editable && (
-          <button
-            type="button"
-            className="button-primary"
-            disabled={submit.isPending}
-            onClick={() => submit.mutate()}
-          >
-            {item.status === "CHANGES_REQUESTED" ? "Resubmit for review" : "Submit for review"}
-          </button>
-        )}
-        {editable && !confirmCancel && (
-          <button type="button" className="button-secondary" onClick={() => setConfirmCancel(true)}>
-            Cancel submission
-          </button>
-        )}
-        {editable && confirmCancel && (
-          <>
-            <span className="self-center text-sm text-subtle">Cancel this submission?</span>
+
+      <section className="rounded-2xl border border-border bg-elevated p-6">
+        <h2 className="text-lg font-semibold">Review and submit</h2>
+        <p className="mt-1 text-sm text-subtle">
+          Submitting sends this saved submission into review. It does not publish the asset.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
+            const entry = findActiveMedia(item.media, slot);
+            return (
+              <div
+                key={slot}
+                className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
+              >
+                {entry?.status === "SAFE" ? (
+                  <Check className="size-4 text-positive" aria-hidden />
+                ) : (
+                  <CircleAlert className="size-4 text-warning" aria-hidden />
+                )}
+                <span>
+                  <strong>{slotLabel(slot)} image:</strong>{" "}
+                  {entry ? mediaStatusLabel(entry.status) : "Required"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {editable ? (
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="button-primary"
+              disabled={submit.isPending || media.isPending}
+              onClick={() => {
+                if (!evidenceReady) {
+                  setLocalError(
+                    "Front and back images must both be marked ready before you submit this asset for review.",
+                  );
+                  return;
+                }
+                submit.mutate();
+              }}
+            >
+              {item.status === "CHANGES_REQUESTED" ? "Resubmit for review" : "Submit for review"}
+            </button>
+            {cancellable && !confirmCancel ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setConfirmCancel(true)}
+              >
+                Cancel submission
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {cancellable && confirmCancel ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-subtle">
+              Cancel this submission? This cannot be undone from this screen.
+            </span>
             <button
               type="button"
               className="button-secondary"
@@ -284,14 +379,108 @@ function SubmissionDetailPage() {
               className="text-sm font-semibold"
               onClick={() => setConfirmCancel(false)}
             >
-              Keep it
+              Keep submission
             </button>
-          </>
-        )}
+          </div>
+        ) : null}
+        {!editable && item.status !== "CANCELLED" ? (
+          <p className="mt-5 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
+            This submission is currently {submissionStatusLabel(item.status).toLowerCase()}. Editing
+            is available only when the review workflow permits changes.
+          </p>
+        ) : null}
       </section>
     </main>
   );
 }
+
+function EvidenceCard({
+  slot,
+  existing,
+  preview,
+  editable,
+  uploadPending,
+  removePending,
+  onSelect,
+  onRemove,
+}: {
+  slot: string;
+  existing?: SubmissionMedia;
+  preview?: string;
+  editable: boolean;
+  uploadPending: boolean;
+  removePending: boolean;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const inputId = `submission-${slot}-file`;
+  return (
+    <article className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex min-h-40 items-center justify-center border-b border-border bg-elevated p-4">
+        {preview ? (
+          <img
+            src={preview}
+            alt={`Selected ${slot} evidence preview`}
+            className="max-h-52 rounded-lg object-contain"
+          />
+        ) : existing ? (
+          <div className="text-center">
+            <FileUp className="mx-auto size-8 text-accent" aria-hidden />
+            <p className="mt-2 text-sm font-semibold">{slotLabel(slot)} image saved</p>
+            <p className="mt-1 text-xs text-subtle">{mediaStatusLabel(existing.status)}</p>
+          </div>
+        ) : (
+          <div className="text-center">
+            <ImagePlus className="mx-auto size-8 text-muted" aria-hidden />
+            <p className="mt-2 text-sm font-semibold">No {slot} image yet</p>
+            <p className="mt-1 text-xs text-subtle">JPG, PNG or WebP up to 10 MB</p>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-sm font-semibold">{slotLabel(slot)} image</p>
+          {existing ? (
+            <p className="mt-1 text-xs text-subtle">
+              {mediaStatusLabel(existing.status)} · {formatBytes(existing.sizeBytes)}
+            </p>
+          ) : null}
+        </div>
+        {editable ? (
+          <div className="flex gap-2">
+            <label htmlFor={inputId} className="button-secondary cursor-pointer text-sm">
+              {uploadPending ? "Uploading…" : existing ? "Replace" : "Upload"}
+              <input
+                id={inputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={uploadPending}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) onSelect(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {existing ? (
+              <button
+                type="button"
+                className="button-secondary text-negative"
+                disabled={removePending || uploadPending}
+                onClick={onRemove}
+                aria-label={`Remove ${slot} image`}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function Field({
   name,
   label,
@@ -310,31 +499,127 @@ function Field({
     </label>
   );
 }
-function SafeMetadata({ metadata }: { metadata: Record<string, unknown> | null }) {
+
+function SafeMetadata({
+  metadata,
+  categoryName,
+}: {
+  metadata: Record<string, unknown> | null;
+  categoryName: string;
+}) {
+  const rows = [
+    ["Asset category", categoryName],
+    ["Asset title", metadataValue(metadata, "name")],
+    ["Brand, manufacturer or creator", metadataValue(metadata, "manufacturer")],
+    ["Year", metadataValue(metadata, "year")],
+    ["Condition", metadataValue(metadata, "condition")],
+    ["Grading company", metadataValue(metadata, "grader")],
+    ["Grade", metadataValue(metadata, "grade")],
+    ["Certification number", metadataValue(metadata, "certificationNumber")],
+    ["Set, edition or reference number", metadataValue(metadata, "cardNumber")],
+    ["Language", metadataValue(metadata, "language")],
+    ["Description", metadataValue(metadata, "details")],
+  ].filter(([, value]) => Boolean(value));
   return (
-    <dl className="mt-4 grid gap-3 text-sm">
-      {Object.entries(metadata ?? {})
-        .filter(([key]) =>
-          [
-            "name",
-            "manufacturer",
-            "year",
-            "details",
-            "condition",
-            "certificationNumber",
-            "cardNumber",
-            "language",
-          ].includes(key),
-        )
-        .map(([key, value]) => (
-          <div key={key}>
-            <dt className="font-medium capitalize">{key}</dt>
-            <dd className="text-subtle">{String(value)}</dd>
-          </div>
-        ))}
+    <dl className="mt-5 grid gap-4 text-sm md:grid-cols-2">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</dt>
+          <dd className="mt-1 text-subtle">{value}</dd>
+        </div>
+      ))}
     </dl>
   );
 }
+
+function Notice({ children }: { children: string }) {
+  return (
+    <p role="status" className="rounded-lg border border-positive/30 bg-positive/10 p-3 text-sm">
+      <Check className="mr-2 inline size-4 text-positive" aria-hidden />
+      {children}
+    </p>
+  );
+}
+function ErrorNotice({ children }: { children: string }) {
+  return (
+    <p
+      role="alert"
+      className="rounded-lg border border-negative/30 bg-negative/10 p-3 text-sm text-negative"
+    >
+      <CircleAlert className="mr-2 inline size-4" aria-hidden />
+      {children}
+    </p>
+  );
+}
+
+function metadataFromForm(form: FormData) {
+  const text = (key: string) => String(form.get(key) ?? "").trim();
+  const optional = (key: string) => (text(key) ? { [key]: text(key) } : {});
+  return {
+    name: text("name"),
+    ...optional("manufacturer"),
+    ...optional("year"),
+    ...optional("condition"),
+    ...optional("grader"),
+    ...optional("grade"),
+    ...optional("certificationNumber"),
+    ...optional("cardNumber"),
+    ...optional("language"),
+    ...optional("details"),
+  };
+}
+function metadataValue(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value : "";
+}
+function findActiveMedia(media: SubmissionMedia[], slot: string) {
+  return media.find((entry) => entry.slot === slot && entry.status !== "DELETED");
+}
+function slotLabel(slot: string) {
+  return slot.charAt(0).toUpperCase() + slot.slice(1);
+}
+function fileValidationError(file: File) {
+  if (!ACCEPTED_MEDIA_TYPES.has(file.type))
+    return "Choose a JPG, PNG or WebP image for this evidence slot.";
+  if (file.size > MAX_MEDIA_BYTES) return "Each evidence image must be 10 MB or smaller.";
+  return null;
+}
+function setPreview(
+  slot: string,
+  file: File,
+  urls: MutableRefObject<Record<string, string>>,
+  setPreviews: Dispatch<SetStateAction<Record<string, string>>>,
+) {
+  const oldUrl = urls.current[slot];
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  const url = URL.createObjectURL(file);
+  urls.current[slot] = url;
+  setPreviews((current) => ({ ...current, [slot]: url }));
+}
+function clearPreview(
+  slot: string,
+  urls: MutableRefObject<Record<string, string>>,
+  setPreviews: Dispatch<SetStateAction<Record<string, string>>>,
+) {
+  const oldUrl = urls.current[slot];
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  delete urls.current[slot];
+  setPreviews((current) => {
+    const next = { ...current };
+    delete next[slot];
+    return next;
+  });
+}
+function formatBytes(bytes: number) {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+function friendlyError(error: unknown) {
+  if (error instanceof ApiError) return error.message;
+  return "The requested action could not be completed. Check the saved details and try again.";
+}
+
 function State({
   title,
   detail,
