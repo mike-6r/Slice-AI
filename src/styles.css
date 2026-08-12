@@ -21084,7 +21084,8 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
 .collector-discovery-summary dt { color: rgba(157,176,184,.78); font-size: .65rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
 .collector-discovery-summary dd { margin-top: .32rem; color: #f1f7f5; font-family: var(--font-display); font-size: 1.35rem; font-weight: 700; }
 .collector-discovery-empty { margin-top: .85rem; padding: 1rem; }
-.collectors-directory-grid > :only-child { grid-column: span 2; }
+.collectors-directory-grid.is-compact-directory { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.collectors-directory-grid > :only-child { grid-column: auto; max-width: 42rem; }
 
 @media (min-width: 820px) and (max-width: 1100px) {
   .collectors-shell, body:has(.collectors-page) .site-shell { width: min(calc(100% - 3.5rem),100rem); }
@@ -21115,7 +21116,9 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
   .collectors-directory { padding-top: 2.5rem; }
   .collectors-directory-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.25rem; }
 }
-@media (max-width: 599px) { .collectors-directory-grid > :only-child { grid-column: auto; } }
+@media (max-width: 599px) {
+  .collectors-directory-grid.is-compact-directory { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Asset-specific D14 order entry. Financial and ownership values remain API authoritative. */
 .trading-order-page {

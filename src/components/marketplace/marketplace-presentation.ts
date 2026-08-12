@@ -22,7 +22,7 @@ export type MarketCategoryPresentation = {
 };
 
 const CATEGORY_PRESENTATIONS: Record<string, MarketCategoryPresentation> = {
-  "pokemon-tcg": { slug: "pokemon-tcg", label: "Pokémon TCG", icon: Gem },
+  "pokemon-tcg": { slug: "pokemon-tcg", label: "Pok\u00e9mon TCG", icon: Gem },
   "sports-cards": { slug: "sports-cards", label: "Sports Cards", icon: Trophy },
   "magic-the-gathering": {
     slug: "magic-the-gathering",
@@ -37,7 +37,6 @@ const CATEGORY_PRESENTATIONS: Record<string, MarketCategoryPresentation> = {
 
 const CATEGORY_ALIASES: Record<string, string> = {
   pokemon: "pokemon-tcg",
-  pokémon: "pokemon-tcg",
   "poke-mon": "pokemon-tcg",
   "pokemon-tcg": "pokemon-tcg",
   sports: "sports-cards",
@@ -55,13 +54,21 @@ const CATEGORY_ALIASES: Record<string, string> = {
   "disney-lorcana": "disney-lorcana",
 };
 
-const normalizeToken = (value: string) =>
-  value
+const normalizeToken = (value: string) => {
+  const repaired = value
+    .replace(/\u00c3\u00a9/g, "\u00e9")
+    .replace(/\u00c2\u00b7/g, "\u00b7")
+    .replace(/\u00e2\u20ac\u2122/g, "\u2019");
+
+  return repaired
     .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[’']/g, "")
-    .replace(/[^a-z0-9é]+/g, "-")
+    .replace(/[\u2019']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+};
 
 export function marketCategoryPresentation(category: string): MarketCategoryPresentation {
   const normalized = normalizeToken(category);

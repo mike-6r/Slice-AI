@@ -175,7 +175,9 @@ function CollectorsPage() {
         {!result.isLoading &&
           !result.isError &&
           (collectors.length ? (
-            <div className="collectors-directory-grid">
+            <div
+              className={`collectors-directory-grid${collectors.length <= 2 ? " is-compact-directory" : ""}`}
+            >
               {collectors.map((collector, index) => (
                 <CollectorCard key={collector.userId} collector={collector} toneIndex={index} />
               ))}

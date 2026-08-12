@@ -3,7 +3,7 @@ import { ArrowRight, BadgeCheck, Box, Sparkles } from "lucide-react";
 import type { CollectorProfile, CollectorPublishedListing } from "@/domain";
 import { formatCurrency } from "@/lib/format";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
-import { collectorSpecialties } from "./collector-specialties";
+import { collectorCategoryLabel, collectorSpecialties } from "./collector-specialties";
 
 export function CollectorAvatar({
   collector,
@@ -50,7 +50,7 @@ export function CollectorAssetPreview({
       {compact ? (
         <>
           <AssetMedia listing={listing} />
-          <span>{listing.category}</span>
+          <span>{collectorCategoryLabel(listing.category)}</span>
         </>
       ) : (
         <>
@@ -60,7 +60,7 @@ export function CollectorAssetPreview({
           </div>
           <div className="featured-holding-copy">
             <h4>{listing.title}</h4>
-            <p>{listing.category}</p>
+            <p>{collectorCategoryLabel(listing.category)}</p>
             <div>
               <strong>
                 {listing.estimatedMarketValue
@@ -96,7 +96,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
             <BadgeCheck aria-label="Public collector" />
           </h2>
           <strong>@{collector.handle}</strong>
-          <p>{collector.focus}</p>
+          <p>Authenticated collectibles</p>
         </div>
       </div>
       {specialties.length > 0 && (
@@ -124,7 +124,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         <div className="featured-holdings">
           <h3>Published collectibles</h3>
           <div className="featured-holdings-grid">
-            {listings.slice(0, 4).map((listing) => (
+            {listings.slice(0, 3).map((listing) => (
               <CollectorAssetPreview key={listing.assetId} listing={listing} />
             ))}
           </div>
@@ -148,7 +148,8 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
 
 export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorProfile[] }) {
   const specialties = [...new Set(collectors.flatMap(collectorSpecialties))].slice(0, 6);
-  const listings = collectors.flatMap((collector) => collector.publishedListings ?? []).slice(0, 4);
+  const allListings = collectors.flatMap((collector) => collector.publishedListings ?? []);
+  const listings = allListings.slice(0, 3);
 
   return (
     <aside className="collector-discovery-panel">
@@ -179,8 +180,8 @@ export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorP
           <dd>{collectors.length}</dd>
         </div>
         <div>
-          <dt>Published catalogues</dt>
-          <dd>{listings.length}</dd>
+          <dt>Published collectibles</dt>
+          <dd>{allListings.length}</dd>
         </div>
       </dl>
       {specialties.length === 0 && listings.length === 0 && (
@@ -225,10 +226,8 @@ export function CollectorCard({
         </span>
       </header>
       <div className="collector-profile-copy">
-        <strong>
-          {specialties.length ? specialties.join(" \u00b7 ") : "Public collector profile"}
-        </strong>
-        <p>{collector.focus}</p>
+        <strong>Public collector profile</strong>
+        <p>{specialties.length ? specialties.join(" \u00b7 ") : collector.focus}</p>
       </div>
       <dl className="collector-profile-stats">
         <div>
@@ -249,16 +248,16 @@ export function CollectorCard({
           className="collector-mini-strip"
           aria-label={`${collector.displayName} published collectibles`}
         >
-          {listings.slice(0, 4).map((listing) => (
+          {listings.slice(0, 3).map((listing) => (
             <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
           ))}
-          {count > 4 && (
+          {count > 3 && (
             <Link
               to="/collector/$id/assets"
               params={{ id: collector.handle }}
               className="collector-more-assets"
             >
-              +{count - 4}
+              +{count - 3}
             </Link>
           )}
         </div>
@@ -288,7 +287,7 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
         )}
       </div>
       <div>
-        <p>{listing.category}</p>
+        <p>{collectorCategoryLabel(listing.category)}</p>
         <h3>{listing.title}</h3>
         <strong>
           {listing.estimatedMarketValue
