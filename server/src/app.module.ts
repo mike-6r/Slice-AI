@@ -24,6 +24,7 @@ import { PhoneVerificationModule } from './modules/identity/phone-verification/p
 import { MarketResearchModule } from './modules/market-research/market-research.module';
 import { CollectorWorkspaceModule } from './modules/collector-workspace/collector-workspace.module';
 import { CurrencyModule } from './modules/currency/currency.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CurrencyModule } from './modules/currency/currency.module';
     CatalogueModule,
     MarketModule,
     CurrencyModule,
+    AdminModule,
     MarketResearchModule,
     CollectorWorkspaceModule,
     ReadsModule,

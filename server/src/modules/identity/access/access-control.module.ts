@@ -17,6 +17,7 @@ import { AccountCapabilityController } from './account-capability.controller';
   providers: [
     AuthorizationService,
     PermissionGuard,
+    AuthorizationService,
     ControlRateLimitService,
     RecentAuthService,
     AccessControlService,

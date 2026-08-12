@@ -73,7 +73,7 @@ export class AccessControlController {
   ) {}
 
   @Post('users/:id/status')
-  @RequirePermission('admin.access')
+  @RequirePermission('users.status.manage')
   async transitionStatus(
     @Param('id') id: string,
     @Body() body: unknown,
@@ -97,7 +97,7 @@ export class AccessControlController {
   }
 
   @Post('users/:id/roles')
-  @RequirePermission('admin.access')
+  @RequirePermission('users.roles.manage')
   async grantRole(
     @Param('id') id: string,
     @Body() body: unknown,
@@ -126,7 +126,7 @@ export class AccessControlController {
 
   @Delete('users/:id/roles/:assignmentId')
   @HttpCode(204)
-  @RequirePermission('admin.access')
+  @RequirePermission('users.roles.manage')
   async revokeRole(
     @Param('id') id: string,
     @Param('assignmentId') assignmentId: string,

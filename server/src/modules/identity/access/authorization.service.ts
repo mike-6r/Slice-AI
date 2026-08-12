@@ -96,6 +96,10 @@ export class AuthorizationService {
 
 function isPrivileged(permission: Permission) {
   return (
+    permission === 'admin.console.read' ||
+    permission === 'users.read' ||
+    permission === 'users.roles.manage' ||
+    permission === 'users.status.manage' ||
     permission === 'role.assign' ||
     permission === 'role.remove' ||
     permission === 'account.status.change' ||
@@ -105,6 +109,10 @@ function isPrivileged(permission: Permission) {
     permission === 'trading.manage' ||
     permission === 'community.moderate' ||
     permission === 'governance.manage' ||
-    permission === 'distribution.manage'
+    permission === 'distribution.manage' ||
+    permission === 'finance.read' ||
+    permission === 'finance.adjust' ||
+    permission === 'feature_flags.manage' ||
+    permission === 'integrations.manage'
   );
 }

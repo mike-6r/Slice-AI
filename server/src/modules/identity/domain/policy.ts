@@ -33,10 +33,14 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     return own ? allow(action) : deny('FORBIDDEN', action);
   if (action === 'session.revoke.self')
     return own ? allow(action) : deny('FORBIDDEN', action);
-  if (action === 'user.read.support')
+  if (action === 'user.read.support' || action === 'users.read')
     return actor.roles.includes('SUPPORT') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
+  if (action === 'admin.console.read' || action === 'system.read')
+    return admin ? allow(action) : deny('FORBIDDEN', action);
+  if (action === 'users.roles.manage' || action === 'users.status.manage')
+    return admin ? allow(action) : deny('FORBIDDEN', action);
   if (
     action === 'role.assign' ||
     action === 'role.remove' ||
@@ -57,7 +61,7 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     return actor.roles.includes('ASSET_REVIEWER') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
-  if (action === 'valuation.manage')
+  if (action === 'valuation.manage' || action === 'valuations.manage')
     return actor.roles.includes('COMPLIANCE_ANALYST') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
@@ -65,20 +69,40 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     return actor.roles.includes('VAULT_OPERATOR') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
-  if (action === 'insurance.manage' || action === 'publication.manage')
+  if (
+    action === 'insurance.manage' ||
+    action === 'publication.manage' ||
+    action === 'publishing.manage'
+  )
     return actor.roles.includes('COMPLIANCE_ANALYST') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
   if (action === 'ownership.issue' || action === 'ownership.manage')
     return admin ? allow(action) : deny('FORBIDDEN', action);
-  if (action === 'finance.manage')
+  if (
+    action === 'finance.manage' ||
+    action === 'finance.read' ||
+    action === 'finance.adjust'
+  )
     return admin ? allow(action) : deny('FORBIDDEN', action);
   if (action === 'trading.manage')
     return admin ? allow(action) : deny('FORBIDDEN', action);
+  if (action === 'compliance.read')
+    return actor.roles.includes('COMPLIANCE_ANALYST') || admin
+      ? allow(action)
+      : deny('FORBIDDEN', action);
   if (action === 'compliance.manage' || action === 'provider.manage')
     return actor.roles.includes('COMPLIANCE_ANALYST') || admin
       ? allow(action)
       : deny('FORBIDDEN', action);
+  if (action === 'support.manage')
+    return actor.roles.includes('SUPPORT') || admin
+      ? allow(action)
+      : deny('FORBIDDEN', action);
+  if (action === 'feature_flags.read' || action === 'integrations.read')
+    return admin ? allow(action) : deny('FORBIDDEN', action);
+  if (action === 'feature_flags.manage' || action === 'integrations.manage')
+    return admin ? allow(action) : deny('FORBIDDEN', action);
   if (
     action === 'community.moderate' ||
     action === 'governance.manage' ||
