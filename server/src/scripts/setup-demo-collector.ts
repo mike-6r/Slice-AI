@@ -1785,12 +1785,16 @@ async function ensureDemoOrderBook(
   spec: DemoAsset,
 ) {
   const price = spec.illustrativeValueMinor / 1000n;
+  const orderBookUnits = 50n;
+  const minimumBidPrice =
+    (tradingPolicy.defaultMinimumNotionalMinor + orderBookUnits - 1n) /
+    orderBookUnits;
   const levels = [
     { actor: seller, side: 'SELL' as const, price: price + 50n, key: 'ask' },
     {
       actor: buyer,
       side: 'BUY' as const,
-      price: price > 50n ? price - 50n : 1n,
+      price: price > 50n ? price - 50n : minimumBidPrice,
       key: 'bid',
     },
   ];
@@ -1813,7 +1817,7 @@ async function ensureDemoOrderBook(
           side: level.side,
           type: 'LIMIT',
           timeInForce: 'GTC',
-          units: '50',
+          units: orderBookUnits.toString(),
           limitPriceMinor: level.price.toString(),
         },
         `staging-demo-book-${level.key}:${spec.key}`,
