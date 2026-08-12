@@ -475,12 +475,13 @@ export class TradingService {
   async ownOrders(userId: string, cursor?: string, limit = 20) {
     const rows = await this.db.tradingOrder.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
+      include: { asset: { select: { slug: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
     const page = rows.slice(0, limit);
     return {
-      items: page.map((row) => this.publicOrder(row)),
+      items: page.map((row) => this.publicOrder(row, row.asset.slug)),
       nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
     };
   }
@@ -538,13 +539,14 @@ export class TradingService {
   async orderForUser(userId: string, orderId: string) {
     const order = await this.db.tradingOrder.findFirst({
       where: { id: orderId, userId },
+      include: { asset: { select: { slug: true } } },
     });
     if (!order)
       throw new NotFoundException({
         code: 'ORDER_NOT_FOUND',
         message: 'Order not found.',
       });
-    return this.publicOrder(order);
+    return this.publicOrder(order, order.asset.slug);
   }
 
   async publicBook(slug: string, depth: number) {
@@ -1297,10 +1299,11 @@ export class TradingService {
     }));
   }
 
-  private publicOrder(order: TradingOrder) {
+  private publicOrder(order: TradingOrder, assetSlug?: string) {
     return {
       id: order.id,
       assetId: order.assetId,
+      assetSlug: assetSlug ?? null,
       side: order.side,
       type: order.type,
       timeInForce: order.timeInForce,

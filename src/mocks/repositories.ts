@@ -365,6 +365,7 @@ export const mockRepositories: AppRepositories = {
       return {
         id: order.id,
         assetId: order.assetId,
+        assetSlug: null,
         side: input.side,
         type: "LIMIT" as const,
         timeInForce: input.timeInForce,
@@ -383,6 +384,7 @@ export const mockRepositories: AppRepositories = {
       return {
         id: order.id,
         assetId: order.assetId,
+        assetSlug: null,
         side: order.side === "buy" ? ("BUY" as const) : ("SELL" as const),
         type: "LIMIT" as const,
         timeInForce: "GTC" as const,

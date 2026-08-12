@@ -228,6 +228,8 @@ const mapTradingOrder = (raw: unknown): TradingOrderView => {
   return {
     id: stringField(value.id, "order.id"),
     assetId: stringField(value.assetId, "order.assetId"),
+    assetSlug:
+      value.assetSlug === undefined ? null : nullableString(value.assetSlug, "order.assetSlug"),
     side,
     type: "LIMIT",
     timeInForce: tif,

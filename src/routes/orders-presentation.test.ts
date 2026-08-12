@@ -16,6 +16,7 @@ const createdAt = "2026-08-09T00:00:00.000Z" as TradingOrderView["createdAt"];
 const open: TradingOrderView = {
   id: "order-safe",
   assetId: "asset-safe",
+  assetSlug: "safe-asset",
   side: "BUY",
   type: "LIMIT",
   timeInForce: "GTC",

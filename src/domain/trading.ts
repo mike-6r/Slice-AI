@@ -71,6 +71,7 @@ export interface TradingOrderPreview {
 export interface TradingOrderView {
   id: string;
   assetId: string;
+  assetSlug: string | null;
   side: TradingOrderSide;
   type: "LIMIT";
   timeInForce: "GTC" | "IOC";

@@ -2,20 +2,24 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tan
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  CircleCheckBig,
   CircleHelp,
-  Clock3,
   Funnel,
   Landmark,
   ListOrdered,
+  LockKeyhole,
+  PoundSterling,
   RefreshCw,
   ShoppingCart,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import type { Asset, OrderBook, TradingExecution, TradingOrderView } from "@/domain";
+import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import type { Asset, PortfolioSummary, TradingExecution, TradingOrderView } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import {
@@ -25,7 +29,6 @@ import {
   isOpenOrder,
   ORDER_EMPTY_STATES,
   ORDER_ERROR_STATES,
-  orderBookSummary,
   orderNotionalMinor,
   ordersForSide,
   ordersForTab,
@@ -63,12 +66,10 @@ export function Orders() {
     enabled: isAuthenticated,
     staleTime: 30_000,
   });
-  const activeBookAssetId =
-    orders.data?.items.find(isOpenOrder)?.assetId ?? orders.data?.items[0]?.assetId;
-  const orderBook = useQuery({
-    queryKey: queryKeys.market.orderBook(activeBookAssetId ?? "none"),
-    queryFn: () => services.market.orderBook(activeBookAssetId as never),
-    enabled: isAuthenticated && Boolean(activeBookAssetId),
+  const portfolio = useQuery({
+    queryKey: queryKeys.portfolio.summary,
+    queryFn: services.portfolio.portfolio,
+    enabled: isAuthenticated,
     staleTime: 15_000,
   });
   const cancellation = useMutation({
@@ -90,14 +91,29 @@ export function Orders() {
 
   const allOrders = orders.data?.items ?? [];
   const orderedItems = sortOrders(ordersForSide(ordersForTab(allOrders, tab), side), sort);
-  const assetsById = new Map((assets.data?.items ?? []).map((asset) => [asset.id, asset]));
+  const assetsById = new Map(
+    (assets.data?.items ?? []).map((asset) => [String(asset.id), asset] as const),
+  );
+  const assetsBySlug = new Map(
+    (assets.data?.items ?? []).flatMap((asset) =>
+      asset.slug ? [[asset.slug, asset] as const] : [],
+    ),
+  );
+  const resolveAsset = (order: TradingOrderView) =>
+    (order.assetSlug ? assetsBySlug.get(order.assetSlug) : undefined) ??
+    assetsById.get(order.assetId);
   return (
     <main className="orders-page">
       <div className="page-shell orders-shell">
         <OrdersHeading />
         <section className="orders-layout" aria-label="Orders workspace">
           <div className="orders-layout__main">
-            <OrderKpis query={orders} executions={executions} onTabChange={setTab} />
+            <OrderKpis
+              query={orders}
+              executions={executions}
+              portfolio={portfolio}
+              onTabChange={setTab}
+            />
             <OrdersTable
               query={orders}
               items={orderedItems}
@@ -107,19 +123,19 @@ export function Orders() {
               setSide={setSide}
               sort={sort}
               setSort={setSort}
-              assets={assetsById}
+              resolveAsset={resolveAsset}
               confirmingOrderId={confirmingOrderId}
               setConfirmingOrderId={setConfirmingOrderId}
               cancellation={cancellation}
             />
-            <FilledOrdersPanel query={executions} assets={assetsById} />
+            <RecentExecutionsPanel query={executions} assets={assetsBySlug} />
           </div>
-          <aside className="orders-layout__side" aria-label="Order book and recent order activity">
-            <OrderBookPanel
-              query={orderBook}
-              asset={activeBookAssetId ? assetsById.get(activeBookAssetId as never) : undefined}
-            />
-            <ActivityPanel query={orders} assets={assetsById} />
+          <aside
+            className="orders-layout__side"
+            aria-label="Reservations and recent order activity"
+          >
+            <ReservationContextPanel query={portfolio} />
+            <ActivityPanel query={orders} resolveAsset={resolveAsset} />
             <HelpPanel />
           </aside>
         </section>
@@ -141,10 +157,12 @@ function OrdersHeading() {
 function OrderKpis({
   query,
   executions,
+  portfolio,
   onTabChange,
 }: {
   query: UseQueryResult<{ items: TradingOrderView[] }>;
   executions: UseQueryResult<{ items: TradingExecution[] }>;
+  portfolio: UseQueryResult<PortfolioSummary>;
   onTabChange: (tab: OrderTab) => void;
 }) {
   if (query.isLoading) return <OrdersKpiSkeletons />;
@@ -155,12 +173,21 @@ function OrderKpis({
       </OrdersPanel>
     );
   const open = query.data.items.filter(isOpenOrder);
-  const filled = query.data.items.filter((order) => order.status === "FILLED");
-  const cancelled = query.data.items.filter((order) => order.status === "CANCELLED");
+  const executionItems = executions.data?.items ?? [];
+  const tradedMinor = executionItems.reduce(
+    (sum, execution) => sum + BigInt(execution.priceMinor) * BigInt(execution.units),
+    0n,
+  );
+  const reservedShareHoldings =
+    portfolio.data?.holdings.filter((holding) => BigInt(holding.reservedUnits) > 0n) ?? [];
+  const reservedShares = reservedShareHoldings.reduce(
+    (sum, holding) => sum + BigInt(holding.reservedUnits),
+    0n,
+  );
   return (
     <section className="orders-kpis" aria-label="Order summary">
       <OrderKpi
-        icon={<ListOrdered />}
+        icon={ListOrdered}
         label="Open orders"
         value={String(open.length)}
         detail={
@@ -172,31 +199,30 @@ function OrderKpis({
         action="View open orders"
       />
       <OrderKpi
-        icon={<Clock3 />}
-        label="Filled orders"
-        value={String(filled.length)}
-        detail={
-          executions.data
-            ? `${executions.data.items.length} recorded executions`
-            : "Execution history loading"
-        }
+        icon={CircleCheckBig}
+        label="Executions"
+        value={String(executionItems.length)}
+        detail={`${query.data.items.filter((order) => order.status === "FILLED").length} filled orders`}
         onClick={() => onTabChange("FILLED")}
         action="View filled orders"
       />
       <OrderKpi
-        icon={<XCircle />}
-        label="Cancelled orders"
-        value={String(cancelled.length)}
-        detail={cancelled.length ? "Cancelled order history" : "No cancelled orders."}
-        onClick={() => onTabChange("CANCELLED")}
-        action="View cancelled orders"
+        icon={PoundSterling}
+        label="Total traded"
+        value={formatOrderMoney(tradedMinor.toString())}
+        detail="Gross value across executions"
+        action="Execution history"
       />
       <OrderKpi
-        icon={<Clock3 />}
-        label="Avg. fill time"
-        value="Unavailable"
-        detail="No fill-time data"
-        action="No fill-time metric"
+        icon={LockKeyhole}
+        label="Reserved resources"
+        value={portfolio.data ? formatOrderMoney(portfolio.data.cash.reservedMinor) : "Unavailable"}
+        detail={
+          portfolio.data
+            ? `${reservedShares} shares across ${reservedShareHoldings.length} holdings`
+            : "Reservation summary unavailable"
+        }
+        action="Excluded from available balances"
       />
     </section>
   );
@@ -210,7 +236,7 @@ function OrderKpi({
   action,
   onClick,
 }: {
-  icon: ReactNode;
+  icon: LucideIcon;
   label: string;
   value: string;
   detail: string;
@@ -219,9 +245,7 @@ function OrderKpi({
 }) {
   return (
     <article className="orders-kpi">
-      <span className="orders-kpi__icon" aria-hidden="true">
-        {icon}
-      </span>
+      <KpiIconTile icon={icon} />
       <div>
         <p>{label}</p>
         <strong>{value}</strong>
@@ -261,7 +285,7 @@ function OrdersTable({
   setSide,
   sort,
   setSort,
-  assets,
+  resolveAsset,
   confirmingOrderId,
   setConfirmingOrderId,
   cancellation,
@@ -274,7 +298,7 @@ function OrdersTable({
   setSide: (side: OrderSideFilter) => void;
   sort: "newest" | "oldest";
   setSort: (sort: "newest" | "oldest") => void;
-  assets: Map<string, Asset>;
+  resolveAsset: (order: TradingOrderView) => Asset | undefined;
   confirmingOrderId: string | null;
   setConfirmingOrderId: (id: string | null) => void;
   cancellation: ReturnType<typeof useMutation<TradingOrderView, Error, string>>;
@@ -335,10 +359,12 @@ function OrdersTable({
                 <tr>
                   <th>Asset</th>
                   <th>Side</th>
-                  <th>Type</th>
-                  <th>Units</th>
+                  <th>Shares</th>
+                  <th>Filled</th>
+                  <th>Remaining</th>
                   <th>Limit price</th>
                   <th>Total value</th>
+                  <th>TIF</th>
                   <th>Status</th>
                   <th>Placed</th>
                   <th>Actions</th>
@@ -350,7 +376,7 @@ function OrdersTable({
                     <OrderRow
                       key={order.id}
                       order={order}
-                      asset={assets.get(order.assetId)}
+                      asset={resolveAsset(order)}
                       confirming={confirmingOrderId === order.id}
                       setConfirming={() => setConfirmingOrderId(order.id)}
                       clearConfirming={() => setConfirmingOrderId(null)}
@@ -359,7 +385,7 @@ function OrdersTable({
                   ))
                 ) : (
                   <tr className="orders-table__empty-row">
-                    <td colSpan={9}>
+                    <td colSpan={11}>
                       <strong>{emptyOrdersMessage(tab)}</strong>
                       <span>Orders you place will appear here.</span>
                     </td>
@@ -393,19 +419,19 @@ function OrderRow({
   return (
     <tr>
       <td>
-        <AssetLabel asset={asset} fallback={order.assetId} />
+        <AssetLabel asset={asset} />
       </td>
       <td>
         <SidePill side={order.side} />
       </td>
-      <td>Limit · {order.timeInForce}</td>
+      <td>{order.originalUnits}</td>
       <td>
-        {order.filledUnits !== "0"
-          ? `${order.filledUnits} / ${order.originalUnits}`
-          : order.originalUnits}
+        <OrderFillProgress order={order} />
       </td>
+      <td>{order.remainingUnits}</td>
       <td>{formatOrderMoney(order.limitPriceMinor)}</td>
       <td>{formatOrderMoney(orderNotionalMinor(order))}</td>
+      <td>{order.timeInForce}</td>
       <td>
         <StatusPill status={order.status} />
       </td>
@@ -443,7 +469,27 @@ function OrderRow({
   );
 }
 
-function FilledOrdersPanel({
+function OrderFillProgress({ order }: { order: TradingOrderView }) {
+  const original = BigInt(order.originalUnits);
+  const filled = BigInt(order.filledUnits);
+  const percentage = original > 0n ? Number((filled * 10_000n) / original) / 100 : 0;
+
+  return (
+    <div
+      className="orders-fill-progress"
+      aria-label={`${order.filledUnits} of ${order.originalUnits} shares filled`}
+    >
+      <span>
+        {order.filledUnits} / {order.originalUnits}
+      </span>
+      <span className="orders-fill-progress__track" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, percentage)}%` }} />
+      </span>
+    </div>
+  );
+}
+
+function RecentExecutionsPanel({
   query,
   assets,
 }: {
@@ -452,8 +498,8 @@ function FilledOrdersPanel({
 }) {
   return (
     <OrdersPanel
-      title="Recent filled orders"
-      action="View all filled orders"
+      title="Recent executions"
+      action="Authoritative execution history"
       className="orders-panel--filled"
     >
       <div className="orders-panel__body">
@@ -472,11 +518,11 @@ function FilledOrdersPanel({
                 <tr>
                   <th>Asset</th>
                   <th>Side</th>
-                  <th>Units</th>
-                  <th>Fill price</th>
-                  <th>Total value</th>
-                  <th>Filled</th>
-                  <th>Status</th>
+                  <th>Shares</th>
+                  <th>Price / share</th>
+                  <th>Gross value</th>
+                  <th>Executed</th>
+                  <th>Settlement</th>
                 </tr>
               </thead>
               <tbody>
@@ -488,7 +534,6 @@ function FilledOrdersPanel({
                           asset={[...assets.values()].find(
                             (asset) => asset.slug === execution.assetSlug,
                           )}
-                          fallback={execution.assetSlug}
                         />
                       </td>
                       <td>
@@ -510,8 +555,8 @@ function FilledOrdersPanel({
                 ) : (
                   <tr className="orders-table__empty-row">
                     <td colSpan={7}>
-                      <strong>No filled orders yet.</strong>
-                      <span>Completed executions will appear here.</span>
+                      <strong>No executions yet.</strong>
+                      <span>Authoritative fills will appear here.</span>
                     </td>
                   </tr>
                 )}
@@ -524,91 +569,73 @@ function FilledOrdersPanel({
   );
 }
 
-function OrderBookPanel({ query, asset }: { query: UseQueryResult<OrderBook>; asset?: Asset }) {
+function ReservationContextPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+  const reservedHoldings =
+    query.data?.holdings.filter((holding) => BigInt(holding.reservedUnits) > 0n) ?? [];
+  const reservedShares = reservedHoldings.reduce(
+    (total, holding) => total + BigInt(holding.reservedUnits),
+    0n,
+  );
+
   return (
-    <OrdersPanel title="Order book depth" className="orders-panel--book" action="Current">
+    <OrdersPanel
+      title="Reservation context"
+      action="Authoritative balances"
+      className="orders-panel--reservation"
+    >
       <div className="orders-panel__body">
         {query.isLoading ? (
-          <BookSkeleton />
-        ) : query.isError ? (
-          <PanelError message={ORDER_ERROR_STATES.book} retry={() => void query.refetch()} />
-        ) : query.data && (query.data.bids.length || query.data.asks.length) ? (
-          <BookVisual book={query.data} asset={asset} />
+          <RowsSkeleton rows={3} />
+        ) : query.isError || !query.data ? (
+          <PanelError
+            message="Reservation balances are temporarily unavailable."
+            retry={() => void query.refetch()}
+          />
         ) : (
-          <OrderBookEmpty />
+          <>
+            <div className="orders-reservation-summary">
+              <div>
+                <span>Reserved cash</span>
+                <strong>{formatOrderMoney(query.data.cash.reservedMinor)}</strong>
+              </div>
+              <div>
+                <span>Reserved shares</span>
+                <strong>{reservedShares.toString()}</strong>
+              </div>
+              <div>
+                <span>Affected holdings</span>
+                <strong>{reservedHoldings.length}</strong>
+              </div>
+            </div>
+            {reservedHoldings.length ? (
+              <ul className="orders-reservation-holdings">
+                {reservedHoldings.slice(0, 4).map((holding) => (
+                  <li key={holding.assetId}>
+                    <span>{holding.title ?? "Collectible position"}</span>
+                    <strong>{holding.reservedUnits} shares</strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="orders-reservation-empty">No ownership shares are reserved.</p>
+            )}
+            <p className="orders-reservation-note">
+              Reserved resources remain excluded from available balances until an order fills or is
+              cancelled.
+            </p>
+          </>
         )}
       </div>
     </OrdersPanel>
   );
 }
 
-function BookVisual({ book, asset }: { book: OrderBook; asset?: Asset }) {
-  const summary = orderBookSummary(book);
-  const allLevels = [...book.bids, ...book.asks];
-  const maximum = Math.max(...allLevels.map((level) => level.units), 1);
-  return (
-    <>
-      <p className="orders-book-asset">{asset?.details.title ?? "Current asset book"}</p>
-      <div className="orders-depth" role="img" aria-label="Aggregate current order-book depth">
-        <div className="orders-depth__side is-bids">
-          {book.bids.slice(0, 8).map((level) => (
-            <span
-              key={`bid-${level.pricePerUnit.amount}-${level.units}`}
-              style={{ width: `${(level.units / maximum) * 100}%` }}
-              title={`${formatOrderMoney(String(level.pricePerUnit.amount))}: ${level.units} units`}
-            />
-          ))}
-        </div>
-        <div className="orders-depth__mid">
-          <span>Current</span>
-          <strong>
-            {summary.spread === null ? "Unavailable" : formatOrderMoney(summary.spread)}
-          </strong>
-          <small>spread</small>
-        </div>
-        <div className="orders-depth__side is-asks">
-          {book.asks.slice(0, 8).map((level) => (
-            <span
-              key={`ask-${level.pricePerUnit.amount}-${level.units}`}
-              style={{ width: `${(level.units / maximum) * 100}%` }}
-              title={`${formatOrderMoney(String(level.pricePerUnit.amount))}: ${level.units} units`}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="orders-book-summary">
-        <div>
-          <span>Bids</span>
-          <strong>{formatOrderMoney(summary.bidNotional)}</strong>
-          <small>
-            {summary.bestBid ? `Best ${formatOrderMoney(summary.bestBid)}` : "Unavailable"}
-          </small>
-        </div>
-        <div>
-          <span>Spread</span>
-          <strong>
-            {summary.spread === null ? "Unavailable" : formatOrderMoney(summary.spread)}
-          </strong>
-          <small>Aggregate current book</small>
-        </div>
-        <div>
-          <span>Asks</span>
-          <strong>{formatOrderMoney(summary.askNotional)}</strong>
-          <small>
-            {summary.bestAsk ? `Best ${formatOrderMoney(summary.bestAsk)}` : "Unavailable"}
-          </small>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function ActivityPanel({
   query,
-  assets,
+  resolveAsset,
 }: {
   query: UseQueryResult<{ items: TradingOrderView[] }>;
-  assets: Map<string, Asset>;
+  resolveAsset: (order: TradingOrderView) => Asset | undefined;
 }) {
   const items = useMemo(
     () => (query.data ? sortOrders(query.data.items, "newest").slice(0, 5) : []),
@@ -638,7 +665,7 @@ function ActivityPanel({
                 </span>
                 <div>
                   <strong>{activityLabel(order)}</strong>
-                  <p>{assets.get(order.assetId)?.details.title ?? "Marketplace order"}</p>
+                  <p>{activityDetail(order, resolveAsset(order))}</p>
                 </div>
                 <time>{formatOrderDate(order.closedAt ?? order.createdAt)}</time>
               </li>
@@ -692,10 +719,11 @@ function OrdersPanel({
     </section>
   );
 }
-function AssetLabel({ asset, fallback }: { asset?: Asset; fallback: string }) {
+function AssetLabel({ asset }: { asset?: Asset }) {
   const media = asset?.media.find((item) => item.kind === "image");
-  return (
-    <div className="orders-asset">
+  const grade = asset?.grade ? `${asset.grade.company} ${asset.grade.label}` : null;
+  const content = (
+    <>
       {media ? (
         <img src={media.url} alt="" />
       ) : (
@@ -704,15 +732,23 @@ function AssetLabel({ asset, fallback }: { asset?: Asset; fallback: string }) {
         </span>
       )}
       <div>
-        <strong>{asset?.details.title ?? "Asset"}</strong>
+        <strong>{asset?.details.title ?? "Collectible asset"}</strong>
         <small>
-          {asset?.details.card?.set ??
-            asset?.details.category ??
-            (asset ? "Collectible" : "Asset reference unavailable")}
+          {grade ?? asset?.details.card?.set ?? asset?.details.category ?? "Public asset"}
         </small>
       </div>
-    </div>
+    </>
   );
+
+  if (asset?.slug) {
+    return (
+      <Link to="/asset/$id" params={{ id: asset.slug }} className="orders-asset">
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="orders-asset">{content}</div>;
 }
 function SidePill({ side }: { side: "BUY" | "SELL" }) {
   return <span className={`orders-side is-${side.toLowerCase()}`}>{side}</span>;
@@ -722,27 +758,6 @@ function StatusPill({ status }: { status: string }) {
     <span className={`orders-status is-${status.toLowerCase().replaceAll("_", "-")}`}>
       {formatOrderStatus(status as TradingOrderView["status"])}
     </span>
-  );
-}
-function OrderBookEmpty() {
-  return (
-    <div className="orders-book-empty" aria-label="No order book data available">
-      <div className="orders-book-empty__grid" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="orders-book-empty__mid">
-        <strong>No order book data available.</strong>
-        <span>New public orders will form the current book.</span>
-      </div>
-      <div className="orders-book-empty__labels">
-        <span>Bids</span>
-        <span>Current</span>
-        <span>Asks</span>
-      </div>
-    </div>
   );
 }
 function ActivityEmpty() {
@@ -775,14 +790,6 @@ function RowsSkeleton({ rows }: { rows: number }) {
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="customer-skeleton h-12" />
       ))}
-    </div>
-  );
-}
-function BookSkeleton() {
-  return (
-    <div className="orders-book-skeleton" aria-label="Loading order book depth">
-      <div className="customer-skeleton h-36" />
-      <div className="customer-skeleton h-10" />
     </div>
   );
 }
@@ -830,6 +837,10 @@ function activityLabel(order: TradingOrderView) {
   if (order.status === "OPEN") return `${order.side === "BUY" ? "Buy" : "Sell"} order placed`;
   if (order.status === "PARTIALLY_FILLED") return "Order partially filled";
   return `Order ${formatOrderStatus(order.status).toLowerCase()}`;
+}
+function activityDetail(order: TradingOrderView, asset?: Asset) {
+  const title = asset?.details.title ?? "Collectible asset";
+  return `${order.side === "BUY" ? "Buy" : "Sell"} ${order.originalUnits} shares of ${title} at ${formatOrderMoney(order.limitPriceMinor)} per share`;
 }
 function formatOrderDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(
