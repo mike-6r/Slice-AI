@@ -21375,6 +21375,62 @@ body:has(.collectors-page) .site-shell { width: min(calc(100% - clamp(2rem, 6vw,
   color: var(--color-subtle);
 }
 
+/* The featured profile is an ordinary vertical flow: keep the identity below
+ * its kicker and let its title truncate within the available card width. */
+.featured-collector-identity {
+  min-width: 0;
+  margin-top: 0.55rem;
+}
+.featured-collector-identity__copy {
+  flex: 1 1 0;
+}
+.featured-collector-identity h2 {
+  min-width: 0;
+}
+.featured-collector-identity h2 > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.featured-holdings-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* The generic portfolio span styling also matches the text wrapper. Give the
+ * identity children explicit, more specific flex roles so title copy can
+ * never occupy the thumbnail's column. */
+.portfolio-asset {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+}
+.portfolio-asset > .portfolio-asset__icon {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 2.15rem;
+  place-items: center;
+}
+.portfolio-asset > .portfolio-asset__copy {
+  display: block;
+  width: 0;
+  height: auto;
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.portfolio-asset > .portfolio-asset__copy strong,
+.portfolio-asset > .portfolio-asset__copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The featured Vault Live path is a real grid: the lifecycle track and its
  * public-asset detail occupy separate rows, so the final timeline item never
  * competes with the divider below it. */
