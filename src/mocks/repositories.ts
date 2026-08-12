@@ -372,6 +372,21 @@ export const mockRepositories: AppRepositories = {
     async updatePublicProfile() {
       return { slug: "demo-collector", headline: null, specialism: null, isPublic: false };
     },
+    async getCollectibles() {
+      return [];
+    },
+    async getCollectibleDetail() {
+      throw new Error("Collector collectible not found");
+    },
+    async getRequests() {
+      return [];
+    },
+    async getDocuments() {
+      return [];
+    },
+    async search() {
+      return { items: [] };
+    },
   },
   ownership: {
     async getWatchlist(userId) {

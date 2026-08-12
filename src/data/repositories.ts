@@ -158,6 +158,23 @@ export interface CollectorRepository {
 }
 export interface CollectorWorkspaceRepository {
   getOverview(): Promise<import("@/domain").CollectorWorkspaceOverview>;
+  getCollectibles(): Promise<import("@/domain").CollectorWorkspaceAsset[]>;
+  getCollectibleDetail(id: string): Promise<{
+    asset: import("@/domain").CollectorWorkspaceAsset;
+    requests: Array<CollectorWorkspaceRequest>;
+    activity: Array<{
+      id: string;
+      type: string;
+      title: string;
+      detail: string;
+      occurredAt: string;
+    }>;
+  }>;
+  getRequests(): Promise<Array<CollectorWorkspaceRequest>>;
+  getDocuments(): Promise<Array<CollectorWorkspaceDocument>>;
+  search(query: string): Promise<{
+    items: Array<{ entityType: string; title: string; subtitle: string; route: string }>;
+  }>;
   updatePublicProfile(input: {
     headline?: string | null;
     specialism?: string | null;
@@ -169,6 +186,30 @@ export interface CollectorWorkspaceRepository {
     isPublic: boolean;
   }>;
 }
+
+export type CollectorWorkspaceRequest = {
+  id: string;
+  submissionId: string;
+  collectibleId: string | null;
+  destination: string;
+  status: "OPEN";
+  reason: string;
+  badge: string;
+  action: string;
+  asset: import("@/domain").CollectorWorkspaceAsset;
+};
+
+export type CollectorWorkspaceDocument = {
+  id: string;
+  submissionId: string;
+  collectibleId: string | null;
+  title: string;
+  slot: string;
+  label: string;
+  filename: string;
+  status: string;
+  uploadedAt: string;
+};
 
 export interface OwnershipRepository {
   getWatchlist(userId: UserId): Promise<Watchlist>;

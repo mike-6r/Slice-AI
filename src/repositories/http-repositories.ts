@@ -1135,6 +1135,39 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           "/collector-workspace/overview",
         );
       },
+      async getCollectibles() {
+        return client.get<import("@/domain").CollectorWorkspaceAsset[]>(
+          "/collector-workspace/collectibles",
+        );
+      },
+      async getCollectibleDetail(id) {
+        return client.get<{
+          asset: import("@/domain").CollectorWorkspaceAsset;
+          requests: import("@/data/repositories").CollectorWorkspaceRequest[];
+          activity: Array<{
+            id: string;
+            type: string;
+            title: string;
+            detail: string;
+            occurredAt: string;
+          }>;
+        }>(`/collector-workspace/collectibles/${encodeURIComponent(id)}`);
+      },
+      async getRequests() {
+        return client.get<import("@/data/repositories").CollectorWorkspaceRequest[]>(
+          "/collector-workspace/requests",
+        );
+      },
+      async getDocuments() {
+        return client.get<import("@/data/repositories").CollectorWorkspaceDocument[]>(
+          "/collector-workspace/documents",
+        );
+      },
+      async search(query) {
+        return client.get<{
+          items: Array<{ entityType: string; title: string; subtitle: string; route: string }>;
+        }>("/collector-workspace/search", { query });
+      },
       async updatePublicProfile(input) {
         return client.request<{
           slug: string;

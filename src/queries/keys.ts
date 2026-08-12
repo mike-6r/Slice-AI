@@ -26,7 +26,11 @@ export const queryKeys = {
     transactions: (cursor?: string) => ["portfolio", "transactions", cursor ?? null] as const,
   },
   collectors: { all: ["collectors"] as const, detail: (id: string) => ["collectors", id] as const },
-  collectorWorkspace: { overview: ["collector-workspace", "overview"] as const },
+  collectorWorkspace: {
+    overview: ["collector-workspace", "overview"] as const,
+    detail: (submissionId: string | null) =>
+      ["collector-workspace", "collectible", submissionId] as const,
+  },
   watchlist: (userId: string) => ["watchlist", userId] as const,
   user: {
     current: ["user", "current"] as const,

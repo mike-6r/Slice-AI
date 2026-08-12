@@ -3,7 +3,9 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Param,
   Patch,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -26,6 +28,10 @@ const profilePatch = z
     'At least one field is required.',
   );
 
+const searchQuery = z
+  .object({ query: z.string().trim().min(1).max(120) })
+  .strict();
+
 @Controller('collector-workspace')
 @UseGuards(AccessTokenGuard)
 export class CollectorWorkspaceController {
@@ -34,6 +40,40 @@ export class CollectorWorkspaceController {
   @Get('overview')
   overview(@Req() request: AuthenticatedRequest) {
     return this.workspace.overview(this.collectorId(request));
+  }
+
+  @Get('collectibles')
+  collectibles(@Req() request: AuthenticatedRequest) {
+    return this.workspace.collectibles(this.collectorId(request));
+  }
+
+  @Get('collectibles/:id')
+  collectibleDetail(
+    @Param('id') submissionId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.workspace.collectibleDetail(
+      this.collectorId(request),
+      submissionId,
+    );
+  }
+
+  @Get('requests')
+  requests(@Req() request: AuthenticatedRequest) {
+    return this.workspace.requests(this.collectorId(request));
+  }
+
+  @Get('documents')
+  documents(@Req() request: AuthenticatedRequest) {
+    return this.workspace.documents(this.collectorId(request));
+  }
+
+  @Get('search')
+  search(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    return this.workspace.search(
+      this.collectorId(request),
+      searchQuery.parse(query).query,
+    );
   }
 
   @Patch('profile')

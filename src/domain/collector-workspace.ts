@@ -9,13 +9,21 @@ export type CollectorWorkspaceAsset = {
   slug: string | null;
   title: string;
   year: number | null;
+  manufacturer: string | null;
   set: string | null;
+  cardNumber: string | null;
   category: string | null;
+  grader: string | null;
   grade: string | null;
   stage: CollectorWorkspaceStage;
   submissionStatus: string;
+  nextAction: string;
   updatedAt: string;
   referenceValue: (CollectorWorkspaceMoney & { source: string; asOf: string }) | null;
+  valuation: {
+    supportedValue: (CollectorWorkspaceMoney & { source: string; asOf: string }) | null;
+    externalReference: (CollectorWorkspaceMoney & { source: string; asOf: string }) | null;
+  };
   marketResearch: {
     state: string;
     collectedAt: string;

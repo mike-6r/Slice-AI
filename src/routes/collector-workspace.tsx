@@ -102,6 +102,12 @@ function CollectorWorkspace() {
     queryFn: repositories.collectorWorkspace.getOverview,
     staleTime: 30_000,
   });
+  const collectibleDetail = useQuery({
+    queryKey: queryKeys.collectorWorkspace.detail(selectedId),
+    queryFn: () => repositories.collectorWorkspace.getCollectibleDetail(selectedId!),
+    enabled: Boolean(selectedId),
+    staleTime: 30_000,
+  });
   const updateProfile = useMutation({
     mutationFn: repositories.collectorWorkspace.updatePublicProfile,
     onSuccess: () =>
@@ -119,7 +125,9 @@ function CollectorWorkspace() {
     );
 
   const data = overview.data;
-  const selected = data.assets.find((item) => item.id === selectedId) ?? null;
+  const selected = selectedId
+    ? (collectibleDetail.data?.asset ?? data.assets.find((item) => item.id === selectedId) ?? null)
+    : null;
   const open = (section: WorkspaceSection, assetId?: string) => {
     setActive(section);
     if (assetId) setSelectedId(assetId);
@@ -1415,13 +1423,19 @@ function AssetManagementView({ asset }: { asset: CollectorWorkspaceAsset }) {
     ),
     valuation: (
       <>
-        <Detail label="Current value" value={money(asset.referenceValue)} />
+        <Detail label="Slice-supported valuation" value={money(asset.valuation.supportedValue)} />
+        <Detail
+          label="External market reference"
+          value={money(asset.valuation.externalReference)}
+        />
         <Detail
           label="Authority"
           value={
-            asset.referenceValue?.source === "SLICE_SUPPORTED_VALUATION"
+            asset.valuation.supportedValue
               ? "Staff-supported Slice valuation"
-              : "External market reference only"
+              : asset.valuation.externalReference
+                ? "External market reference only"
+                : "No supported valuation available"
           }
         />
       </>
