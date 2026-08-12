@@ -22681,3 +22681,17 @@ body:has(.collectors-page) .site-shell {
     max-width: none;
   }
 }
+
+/* The compact header stays an opaque surface above scrolling page content.
+ * Desktop navigation keeps its existing presentation. */
+@media (max-width: 1279px) {
+  .main-navigation {
+    z-index: 60;
+    background: #08090c;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .main-navigation > .site-shell {
+    background: #08090c;
+  }
+}
