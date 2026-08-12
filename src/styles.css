@@ -23010,6 +23010,60 @@ body:has(.collectors-page) .site-shell {
   }
 }
 
+/* Navigation is shared application chrome. Page content may use a wider or
+ * narrower reading measure, but it must never resize the header or footer as
+ * routes change. Reserve the scrollbar track as well, so switching between a
+ * short page and a long page does not move the centred layout sideways. */
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  overflow-y: scroll;
+}
+
+body:has(.markets-page) .main-navigation .site-shell,
+body:has(.collectors-page) .main-navigation .site-shell,
+body:has(.markets-page) .slice-footer .site-shell,
+body:has(.collectors-page) .slice-footer .site-shell,
+.main-navigation .site-shell,
+.slice-footer .site-shell {
+  width: min(calc(100% - 3rem), 90rem);
+  margin-inline: auto;
+}
+
+.main-navigation > .site-shell {
+  height: 66px;
+}
+
+body:has(.asset-detail-page) .main-navigation > .site-shell,
+body:has(.collectors-page) .main-navigation > .site-shell {
+  height: 66px;
+}
+
+@media (min-width: 1280px) {
+  .main-navigation form[role="search"] {
+    max-width: 17.5rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .main-navigation form[role="search"] {
+    max-width: 21rem;
+  }
+}
+
+@media (max-width: 640px) {
+  body:has(.markets-page) .main-navigation .site-shell,
+  body:has(.collectors-page) .main-navigation .site-shell,
+  body:has(.markets-page) .slice-footer .site-shell,
+  body:has(.collectors-page) .slice-footer .site-shell,
+  .main-navigation .site-shell,
+  .slice-footer .site-shell {
+    width: min(calc(100% - 2rem), 90rem);
+  }
+}
+
 /* Keep the educational trading example directly with the featured asset,
  * while preserving a compact footprint in the hero column. */
 .approved-home__featured-stack {
