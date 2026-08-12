@@ -27,6 +27,8 @@ import {
   assertExpectedVersion,
   assertMediaProperties,
   assertRequiredSafeMedia,
+  assertSubmissionDetails,
+  assertSubmissionTerms,
   assertReviewerIsNotOwner,
   assertVerifiedMediaContent,
 } from '../domain/submission.policy';
@@ -52,6 +54,12 @@ const metadataAllowedKeys = new Set([
   'grade',
   'certificationNumber',
   'details',
+  'playerOrCharacter',
+  'variant',
+  'inPossession',
+  'provenanceNotes',
+  'knownDefects',
+  'termsAcknowledged',
 ]);
 
 @Injectable()
@@ -559,6 +567,8 @@ export class SubmissionService {
         });
         assertEditableStatus(submission.status);
         assertExpectedVersion(submission.version, version);
+        assertSubmissionDetails(submission.declaredMetadata);
+        assertSubmissionTerms(submission.declaredMetadata);
         assertRequiredSafeMedia(submission.media);
         const updated = await db.assetSubmission.update({
           where: { id },

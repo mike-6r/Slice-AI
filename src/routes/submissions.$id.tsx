@@ -12,13 +12,31 @@ import {
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import type { SubmissionMedia } from "@/domain/submission";
+import type { CreateSubmissionDraft, SubmissionMedia } from "@/domain/submission";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 
 export const Route = createFileRoute("/submissions/$id")({ component: SubmissionDetailPage });
 
 const REQUIRED_EVIDENCE_SLOTS = ["front", "back"] as const;
+const OPTIONAL_EVIDENCE_SLOTS = [
+  {
+    slot: "grading-label",
+    title: "Grading label / certification close-up",
+    detail:
+      "Optional. Use when a closer photo helps make the label or certification number readable.",
+  },
+  {
+    slot: "condition-detail",
+    title: "Condition or damage detail",
+    detail: "Optional. Add a clear close-up of any important condition detail or defect.",
+  },
+  {
+    slot: "additional-image",
+    title: "Additional collectible image",
+    detail: "Optional. Add another well-lit view of the actual collectible.",
+  },
+] as const;
 const ACCEPTED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 
@@ -57,17 +75,21 @@ function SubmissionDetailPage() {
       client.invalidateQueries({ queryKey: ["submissions", "mine"] }),
     ]);
   const update = useMutation({
-    mutationFn: (form: FormData) =>
+    mutationFn: (input: {
+      categoryId: string;
+      declaredMetadata: CreateSubmissionDraft["declaredMetadata"];
+      nextStep?: 1 | 2 | 3 | 4;
+    }) =>
       services.repositories.submissions.updateDraft(id, {
         version: detail.data!.version,
-        categoryId: String(form.get("categoryId") ?? detail.data!.categoryId),
-        declaredMetadata: metadataFromForm(form),
+        categoryId: input.categoryId,
+        declaredMetadata: input.declaredMetadata,
       }),
-    onSuccess: () => {
+    onSuccess: (_detail, input) => {
       setNotice("Draft saved. You can continue editing it whenever it is eligible for changes.");
       setLocalError(null);
       refresh();
-      setStep(2);
+      setStep(input.nextStep ?? 2);
     },
   });
   const submit = useMutation({
@@ -154,6 +176,7 @@ function SubmissionDetailPage() {
   const activeMedia = REQUIRED_EVIDENCE_SLOTS.map((slot) => findActiveMedia(item.media, slot));
   const evidenceReady = activeMedia.every((entry) => entry?.status === "SAFE");
   const detailsReady = Boolean(metadataValue(item.declaredMetadata, "name") && item.categoryId);
+  const termsReady = metadataBoolean(item.declaredMetadata, "termsAcknowledged");
 
   const beginUpload = (slot: string, file: File, existing?: SubmissionMedia) => {
     const error = fileValidationError(file);
@@ -209,6 +232,7 @@ function SubmissionDetailPage() {
       <SubmissionSteps
         step={step}
         detailsReady={detailsReady}
+        termsReady={termsReady}
         evidenceReady={evidenceReady}
         onSelect={setStep}
       />
@@ -229,7 +253,12 @@ function SubmissionDetailPage() {
               className="mt-5 grid gap-4 md:grid-cols-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                update.mutate(new FormData(event.currentTarget));
+                const form = new FormData(event.currentTarget);
+                update.mutate({
+                  categoryId: String(form.get("categoryId") ?? item.categoryId),
+                  declaredMetadata: metadataFromForm(form, item.declaredMetadata),
+                  nextStep: 2,
+                });
               }}
             >
               <label className="grid gap-2 text-sm font-medium">
@@ -287,6 +316,16 @@ function SubmissionDetailPage() {
                 defaultValue={metadataValue(item.declaredMetadata, "cardNumber")}
               />
               <Field
+                name="playerOrCharacter"
+                label="Player or character"
+                defaultValue={metadataValue(item.declaredMetadata, "playerOrCharacter")}
+              />
+              <Field
+                name="variant"
+                label="Variant or parallel"
+                defaultValue={metadataValue(item.declaredMetadata, "variant")}
+              />
+              <Field
                 name="language"
                 label="Language"
                 defaultValue={metadataValue(item.declaredMetadata, "language")}
@@ -297,7 +336,7 @@ function SubmissionDetailPage() {
                   name="details"
                   rows={4}
                   defaultValue={metadataValue(item.declaredMetadata, "details")}
-                  maxLength={2000}
+                  maxLength={500}
                 />
               </label>
               <button className="button-primary w-fit" disabled={update.isPending}>
@@ -310,17 +349,33 @@ function SubmissionDetailPage() {
         </section>
       ) : null}
 
-      {step === 2 ? <TermsStep onBack={() => setStep(1)} onContinue={() => setStep(3)} /> : null}
+      {step === 2 ? (
+        <TermsStep
+          metadata={item.declaredMetadata}
+          editable={editable}
+          saving={update.isPending}
+          onBack={() => setStep(1)}
+          onSave={(form) =>
+            update.mutate({
+              categoryId: item.categoryId,
+              declaredMetadata: metadataFromTermsForm(form, item.declaredMetadata),
+              nextStep: 3,
+            })
+          }
+          onContinue={() => setStep(3)}
+        />
+      ) : null}
 
       {step === 3 ? (
         <section className="rounded-2xl border border-border bg-elevated p-6">
           <div>
-            <h2 className="text-lg font-semibold">Front and back images</h2>
+            <h2 className="text-lg font-semibold">Photos and supporting evidence</h2>
             <p className="mt-1 text-sm text-subtle">
-              Upload a clear image of each side. File validation and review readiness remain
-              controlled by the submission service.
+              Upload the two required photos first, then add optional supporting images if they help
+              review. Images are checked by the submission service before they are ready.
             </p>
           </div>
+          <PhotoGuidelines graded={Boolean(metadataValue(item.declaredMetadata, "grader"))} />
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
               const existing = findActiveMedia(item.media, slot);
@@ -329,6 +384,12 @@ function SubmissionDetailPage() {
                 <EvidenceCard
                   key={slot}
                   slot={slot}
+                  title={`${slotLabel(slot)} of collectible — Required`}
+                  helper={
+                    slot === "front"
+                      ? "Upload a clear, well-lit photo of the entire front. Keep the full card or slab visible and avoid glare, blur, filters, or screenshots."
+                      : "Upload a clear photo of the entire back. Make sure edges, corners, labels, and identifying details are visible."
+                  }
                   existing={existing}
                   preview={preview}
                   editable={editable}
@@ -339,6 +400,33 @@ function SubmissionDetailPage() {
                 />
               );
             })}
+          </div>
+          <div className="mt-6 border-t border-border pt-5">
+            <h3 className="text-sm font-semibold">Optional supporting images</h3>
+            <p className="mt-1 text-xs text-subtle">
+              Image evidence only. Add receipts or provenance as notes in Details &amp; terms;
+              document uploads are not supported by this workflow.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              {OPTIONAL_EVIDENCE_SLOTS.map(({ slot, title, detail: helper }) => {
+                const existing = findActiveMedia(item.media, slot);
+                return (
+                  <EvidenceCard
+                    key={slot}
+                    slot={slot}
+                    title={title}
+                    helper={helper}
+                    existing={existing}
+                    preview={previews[slot]}
+                    editable={editable}
+                    uploadPending={media.isPending}
+                    removePending={remove.isPending}
+                    onSelect={(file) => beginUpload(slot, file, existing)}
+                    onRemove={() => existing && remove.mutate({ mediaId: existing.id, slot })}
+                  />
+                );
+              })}
+            </div>
           </div>
           <div className="mt-6 flex gap-3">
             <button type="button" className="button-secondary" onClick={() => setStep(2)}>
@@ -363,26 +451,37 @@ function SubmissionDetailPage() {
             Submitting sends this saved submission into review. It does not publish the asset.
           </p>
           <SafeMetadata metadata={item.declaredMetadata} categoryName={categoryName} />
+          <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
+            <strong className="text-foreground">Terms:</strong>{" "}
+            {termsReady ? "Acknowledged and saved." : "Still required before submission."}
+          </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {REQUIRED_EVIDENCE_SLOTS.map((slot) => {
-              const entry = findActiveMedia(item.media, slot);
-              return (
-                <div
-                  key={slot}
-                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
-                >
-                  {entry?.status === "SAFE" ? (
-                    <Check className="size-4 text-positive" aria-hidden />
-                  ) : (
-                    <CircleAlert className="size-4 text-warning" aria-hidden />
-                  )}
-                  <span>
-                    <strong>{slotLabel(slot)} image:</strong>{" "}
-                    {entry ? mediaStatusLabel(entry.status) : "Required"}
-                  </span>
-                </div>
-              );
-            })}
+            {[...REQUIRED_EVIDENCE_SLOTS, ...OPTIONAL_EVIDENCE_SLOTS.map((item) => item.slot)]
+              .filter(
+                (slot) =>
+                  REQUIRED_EVIDENCE_SLOTS.includes(
+                    slot as (typeof REQUIRED_EVIDENCE_SLOTS)[number],
+                  ) || findActiveMedia(item.media, slot),
+              )
+              .map((slot) => {
+                const entry = findActiveMedia(item.media, slot);
+                return (
+                  <div
+                    key={slot}
+                    className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
+                  >
+                    {entry?.status === "SAFE" ? (
+                      <Check className="size-4 text-positive" aria-hidden />
+                    ) : (
+                      <CircleAlert className="size-4 text-warning" aria-hidden />
+                    )}
+                    <span>
+                      <strong>{slotLabel(slot)} image:</strong>{" "}
+                      {entry ? mediaStatusLabel(entry.status) : "Required"}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
           {editable ? (
             <div className="mt-5 flex flex-wrap gap-3">
@@ -453,19 +552,21 @@ function SubmissionDetailPage() {
 function SubmissionSteps({
   step,
   detailsReady,
+  termsReady,
   evidenceReady,
   onSelect,
 }: {
   step: 1 | 2 | 3 | 4;
   detailsReady: boolean;
+  termsReady: boolean;
   evidenceReady: boolean;
   onSelect: (step: 1 | 2 | 3 | 4) => void;
 }) {
   const steps = [
     [1, "Asset details", true],
     [2, "Details & terms", detailsReady],
-    [3, "Media & documents", detailsReady],
-    [4, "Review & submit", evidenceReady],
+    [3, "Media & documents", detailsReady && termsReady],
+    [4, "Review & submit", detailsReady && termsReady && evidenceReady],
   ] as const;
   return (
     <nav aria-label="Submission steps" className="rounded-2xl border border-border bg-elevated p-3">
@@ -488,7 +589,22 @@ function SubmissionSteps({
   );
 }
 
-function TermsStep({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+function TermsStep({
+  metadata,
+  editable,
+  saving,
+  onBack,
+  onSave,
+  onContinue,
+}: {
+  metadata: Record<string, unknown> | null;
+  editable: boolean;
+  saving: boolean;
+  onBack: () => void;
+  onSave: (form: FormData) => void;
+  onContinue: () => void;
+}) {
+  const termsAcknowledged = metadataBoolean(metadata, "termsAcknowledged");
   return (
     <section className="rounded-2xl border border-border bg-elevated p-6">
       <p className="page-kicker">Details &amp; terms</p>
@@ -507,20 +623,106 @@ function TermsStep({ onBack, onContinue }: { onBack: () => void; onContinue: () 
           <dd className="mt-1 font-medium">Arranged only after review</dd>
         </div>
       </dl>
-      <div className="mt-6 flex gap-3">
-        <button type="button" className="button-secondary" onClick={onBack}>
-          Back
-        </button>
-        <button type="button" className="button-primary" onClick={onContinue}>
-          Save and continue
-        </button>
-      </div>
+      {editable ? (
+        <form
+          className="mt-6 grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave(new FormData(event.currentTarget));
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              name="playerOrCharacter"
+              label="Player or character"
+              defaultValue={metadataValue(metadata, "playerOrCharacter")}
+            />
+            <Field
+              name="variant"
+              label="Variant or parallel"
+              defaultValue={metadataValue(metadata, "variant")}
+            />
+            <label className="grid gap-2 text-sm font-medium md:col-span-2">
+              Provenance or acquisition notes
+              <textarea
+                name="provenanceNotes"
+                rows={3}
+                maxLength={500}
+                defaultValue={metadataValue(metadata, "provenanceNotes")}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium md:col-span-2">
+              Known defects or condition notes
+              <textarea
+                name="knownDefects"
+                rows={3}
+                maxLength={500}
+                defaultValue={metadataValue(metadata, "knownDefects")}
+              />
+            </label>
+          </div>
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
+            <input
+              name="inPossession"
+              type="checkbox"
+              defaultChecked={metadataBoolean(metadata, "inPossession")}
+            />
+            <span>I confirm the collectible is currently in my possession.</span>
+          </label>
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-surface p-3 text-sm text-subtle">
+            <input name="termsAcknowledged" type="checkbox" defaultChecked={termsAcknowledged} />
+            <span>
+              I understand that submission does not guarantee acceptance, valuation is determined
+              during review, custody instructions come later if required, and publication is not
+              automatic. Slice may request more information.
+            </span>
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className="button-secondary" onClick={onBack}>
+              Back
+            </button>
+            <button className="button-primary" disabled={saving}>
+              {saving ? "Saving…" : "Save terms"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {termsAcknowledged ? (
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" className="button-secondary" onClick={onBack}>
+            Back
+          </button>
+          <button type="button" className="button-primary" onClick={onContinue}>
+            Continue to media
+          </button>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function PhotoGuidelines({ graded }: { graded: boolean }) {
+  return (
+    <aside className="mt-5 rounded-xl border border-accent/20 bg-accent/5 p-4">
+      <h3 className="text-sm font-semibold text-accent">Photo guidelines</h3>
+      <ul className="mt-2 grid gap-1 text-xs text-subtle sm:grid-cols-2">
+        <li>Photograph the actual collectible, not a screenshot or stock image.</li>
+        <li>Show the full front and back with all important edges visible.</li>
+        <li>Use good lighting and avoid glare, blur, filters, and cropped corners.</li>
+        <li>
+          {graded
+            ? "Keep the slab, grading label, and certification number readable."
+            : "Keep identifying details clearly visible."}
+        </li>
+      </ul>
+    </aside>
   );
 }
 
 function EvidenceCard({
   slot,
+  title,
+  helper,
   existing,
   preview,
   editable,
@@ -530,6 +732,8 @@ function EvidenceCard({
   onRemove,
 }: {
   slot: string;
+  title: string;
+  helper: string;
   existing?: SubmissionMedia;
   preview?: string;
   editable: boolean;
@@ -557,14 +761,15 @@ function EvidenceCard({
         ) : (
           <div className="text-center">
             <ImagePlus className="mx-auto size-8 text-muted" aria-hidden />
-            <p className="mt-2 text-sm font-semibold">No {slot} image yet</p>
+            <p className="mt-2 text-sm font-semibold">No {title.toLowerCase()} yet</p>
             <p className="mt-1 text-xs text-subtle">JPG, PNG or WebP up to 10 MB</p>
           </div>
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
-          <p className="text-sm font-semibold">{slotLabel(slot)} image</p>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 max-w-sm text-xs text-subtle">{helper}</p>
           {existing ? (
             <p className="mt-1 text-xs text-subtle">
               {mediaStatusLabel(existing.status)} · {formatBytes(existing.sizeBytes)}
@@ -642,7 +847,11 @@ function SafeMetadata({
     ["Grade", metadataValue(metadata, "grade")],
     ["Certification number", metadataValue(metadata, "certificationNumber")],
     ["Set, edition or reference number", metadataValue(metadata, "cardNumber")],
+    ["Player or character", metadataValue(metadata, "playerOrCharacter")],
+    ["Variant or parallel", metadataValue(metadata, "variant")],
     ["Language", metadataValue(metadata, "language")],
+    ["Provenance or acquisition notes", metadataValue(metadata, "provenanceNotes")],
+    ["Known defects or condition notes", metadataValue(metadata, "knownDefects")],
     ["Description", metadataValue(metadata, "details")],
   ].filter(([, value]) => Boolean(value));
   return (
@@ -677,10 +886,14 @@ function ErrorNotice({ children }: { children: string }) {
   );
 }
 
-function metadataFromForm(form: FormData) {
+function metadataFromForm(
+  form: FormData,
+  existing: Record<string, unknown> | null,
+): CreateSubmissionDraft["declaredMetadata"] {
   const text = (key: string) => String(form.get(key) ?? "").trim();
   const optional = (key: string) => (text(key) ? { [key]: text(key) } : {});
   return {
+    ...existing,
     name: text("name"),
     ...optional("manufacturer"),
     ...optional("year"),
@@ -691,11 +904,33 @@ function metadataFromForm(form: FormData) {
     ...optional("cardNumber"),
     ...optional("language"),
     ...optional("details"),
+    ...optional("playerOrCharacter"),
+    ...optional("variant"),
+  };
+}
+function metadataFromTermsForm(
+  form: FormData,
+  existing: Record<string, unknown> | null,
+): CreateSubmissionDraft["declaredMetadata"] {
+  const text = (key: string) => String(form.get(key) ?? "").trim();
+  const optional = (key: string) => (text(key) ? { [key]: text(key) } : {});
+  return {
+    ...existing,
+    name: metadataValue(existing, "name"),
+    ...optional("playerOrCharacter"),
+    ...optional("variant"),
+    ...optional("provenanceNotes"),
+    ...optional("knownDefects"),
+    inPossession: form.get("inPossession") === "on",
+    termsAcknowledged: form.get("termsAcknowledged") === "on",
   };
 }
 function metadataValue(metadata: Record<string, unknown> | null, key: string) {
   const value = metadata?.[key];
   return typeof value === "string" ? value : "";
+}
+function metadataBoolean(metadata: Record<string, unknown> | null, key: string) {
+  return metadata?.[key] === true;
 }
 function findActiveMedia(media: SubmissionMedia[], slot: string) {
   return media.find((entry) => entry.slot === slot && entry.status !== "DELETED");

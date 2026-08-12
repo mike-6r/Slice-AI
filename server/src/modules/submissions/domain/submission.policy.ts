@@ -46,6 +46,35 @@ export function assertRequiredSafeMedia(
   }
 }
 
+export function assertSubmissionTerms(metadata: unknown) {
+  if (
+    !metadata ||
+    typeof metadata !== 'object' ||
+    Array.isArray(metadata) ||
+    (metadata as Record<string, unknown>).termsAcknowledged !== true
+  ) {
+    throw new UnprocessableEntityException({
+      code: 'SUBMISSION_TERMS_REQUIRED',
+      message: 'Confirm the submission terms before sending this asset for review.',
+    });
+  }
+}
+
+export function assertSubmissionDetails(metadata: unknown) {
+  if (
+    !metadata ||
+    typeof metadata !== 'object' ||
+    Array.isArray(metadata) ||
+    typeof (metadata as Record<string, unknown>).name !== 'string' ||
+    !(metadata as Record<string, string>).name.trim()
+  ) {
+    throw new UnprocessableEntityException({
+      code: 'SUBMISSION_DETAILS_REQUIRED',
+      message: 'Add an asset title before sending this asset for review.',
+    });
+  }
+}
+
 export function assertMediaProperties(input: {
   mimeType: string;
   sizeBytes: number;

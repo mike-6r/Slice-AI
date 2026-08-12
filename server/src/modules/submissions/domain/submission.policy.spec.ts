@@ -1,7 +1,9 @@
 import {
   assertEditableStatus,
   assertMediaProperties,
+  assertSubmissionDetails,
   assertRequiredSafeMedia,
+  assertSubmissionTerms,
   assertVerifiedMediaContent,
 } from './submission.policy';
 
@@ -46,5 +48,19 @@ describe('submission policy', () => {
         height: 100_000,
       }),
     ).toThrow('dimensions are not supported');
+  });
+
+  it('requires a saved acknowledgement before a submission can be sent for review', () => {
+    expect(() => assertSubmissionTerms({ name: 'Example card' })).toThrow(
+      'Confirm the submission terms before sending this asset for review.',
+    );
+    expect(() => assertSubmissionTerms({ termsAcknowledged: true })).not.toThrow();
+  });
+
+  it('requires an asset title before a submission can be sent for review', () => {
+    expect(() => assertSubmissionDetails({ termsAcknowledged: true })).toThrow(
+      'Add an asset title before sending this asset for review.',
+    );
+    expect(() => assertSubmissionDetails({ name: 'Example card' })).not.toThrow();
   });
 });

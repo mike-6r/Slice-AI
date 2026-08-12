@@ -139,6 +139,12 @@ export interface CreateSubmissionDraft {
     grade?: string;
     certificationNumber?: string;
     details?: string;
+    playerOrCharacter?: string;
+    variant?: string;
+    inPossession?: boolean;
+    provenanceNotes?: string;
+    knownDefects?: string;
+    termsAcknowledged?: boolean;
   };
   marketResearchId?: string;
 }

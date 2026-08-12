@@ -39,6 +39,8 @@ type ListingForm = {
   grade: string;
   certificationNumber: string;
   cardNumber: string;
+  playerOrCharacter: string;
+  variant: string;
   language: string;
   details: string;
 };
@@ -52,6 +54,8 @@ const blank: ListingForm = {
   grade: "",
   certificationNumber: "",
   cardNumber: "",
+  playerOrCharacter: "",
+  variant: "",
   language: "",
   details: "",
 };
@@ -88,6 +92,10 @@ export function SubmissionPage() {
             ? { certificationNumber: form.certificationNumber.trim() }
             : {}),
           ...(form.cardNumber.trim() ? { cardNumber: form.cardNumber.trim() } : {}),
+          ...(form.playerOrCharacter.trim()
+            ? { playerOrCharacter: form.playerOrCharacter.trim() }
+            : {}),
+          ...(form.variant.trim() ? { variant: form.variant.trim() } : {}),
           ...(form.language.trim() ? { language: form.language.trim() } : {}),
           ...(form.details.trim() ? { details: form.details.trim() } : {}),
         },
@@ -311,6 +319,22 @@ export function SubmissionPage() {
                     <input
                       value={form.cardNumber}
                       onChange={(e) => update("cardNumber", e.target.value)}
+                      maxLength={500}
+                      placeholder="Optional"
+                    />
+                  </Field>
+                  <Field label="Player / character">
+                    <input
+                      value={form.playerOrCharacter}
+                      onChange={(e) => update("playerOrCharacter", e.target.value)}
+                      maxLength={500}
+                      placeholder="Optional"
+                    />
+                  </Field>
+                  <Field label="Variant / parallel">
+                    <input
+                      value={form.variant}
+                      onChange={(e) => update("variant", e.target.value)}
                       maxLength={500}
                       placeholder="Optional"
                     />
