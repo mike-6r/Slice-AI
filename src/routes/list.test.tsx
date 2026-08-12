@@ -47,12 +47,12 @@ function renderList() {
 describe("Document 010 list asset UI", () => {
   it("renders submission review workflow and never offers fabricated auction, price, shipping, or publication controls", () => {
     const html = renderList();
-    expect(html).toContain("Create your submission");
-    expect(html).toContain("Asset details");
-    expect(html).toContain("Valuation pending");
-    expect(html).toContain("Auction and offers unavailable");
-    expect(html).toContain("Custody details after review");
-    expect(html).toContain("No media added yet");
+    expect(html).toContain("List your card in a few simple steps.");
+    expect(html).toContain("What are you listing?");
+    expect(html).toContain("Check the market");
+    expect(html).toContain("Add photos");
+    expect(html).toContain("Review &amp; submit");
+    expect(html).toContain("My submissions");
     expect(html).not.toContain("£2,500");
     expect(html).not.toContain("Publish now");
     expect(html).not.toContain("seller payout");

@@ -46,6 +46,7 @@ type UpdateInput = DraftInput & { version: number };
 const metadataAllowedKeys = new Set([
   'name',
   'manufacturer',
+  'set',
   'year',
   'cardNumber',
   'language',
@@ -307,6 +308,37 @@ export class SubmissionService {
         assertEditableStatus(current.status);
         assertExpectedVersion(current.version, input.version);
         await this.assertReferences(db, input);
+        if (input.marketResearchId) {
+          const research = await db.submissionMarketResearch.findFirst({
+            where: {
+              id: input.marketResearchId,
+              ownerUserId: actor.userId,
+              OR: [{ submissionId: null }, { submissionId: id }],
+            },
+            select: { identityHash: true },
+          });
+          if (
+            !research ||
+            research.identityHash !==
+              marketResearchIdentityHash({
+                categoryId: input.categoryId,
+                declaredMetadata: input.declaredMetadata ?? {},
+              })
+          )
+            throw new UnprocessableEntityException({
+              code: 'MARKET_RESEARCH_UNAVAILABLE',
+              message:
+                'Refresh market research after changing the collectible identity.',
+            });
+          await db.submissionMarketResearch.updateMany({
+            where: {
+              id: input.marketResearchId,
+              ownerUserId: actor.userId,
+              submissionId: null,
+            },
+            data: { submissionId: id },
+          });
+        }
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -320,6 +352,9 @@ export class SubmissionService {
         });
         await audit('SUBMISSION_DRAFT_UPDATED', 'submission', id, {
           version: updated.version,
+          ...(input.marketResearchId
+            ? { marketResearchId: input.marketResearchId }
+            : {}),
         });
         return ownerProjection(updated);
       },

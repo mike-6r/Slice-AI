@@ -131,6 +131,7 @@ export interface CreateSubmissionDraft {
   declaredMetadata: {
     name: string;
     manufacturer?: string;
+    set?: string;
     year?: string;
     cardNumber?: string;
     language?: string;

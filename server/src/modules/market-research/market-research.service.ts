@@ -22,6 +22,7 @@ type Identity = {
   categoryId: string;
   name: string;
   manufacturer: string | null;
+  set: string | null;
   year: string | null;
   cardNumber: string | null;
   language: string | null;
@@ -253,12 +254,13 @@ function canonicalIdentity(input: MarketResearchInput): Identity {
     categoryId: input.categoryId,
     name,
     manufacturer: read('manufacturer'),
+    set: read('set'),
     year: read('year'),
     cardNumber: read('cardNumber'),
     language: read('language'),
     grader: read('grader'),
     grade: read('grade'),
-    variant: read('details'),
+    variant: read('variant'),
   };
 }
 function hashIdentity(identity: Identity) {
