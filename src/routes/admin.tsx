@@ -9,6 +9,9 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   ClipboardCheck,
   Database,
   FileClock,
@@ -24,14 +27,16 @@ import {
   Menu,
   PackageCheck,
   Search,
+  RefreshCw,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
   Users,
+  UserRound,
   WalletCards,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { logout } from "@/auth/actions";
@@ -41,10 +46,19 @@ import { Wordmark } from "@/components/layout/MainNavigation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary } from "@/domain/submission";
+import type {
+  AdminComplianceCase,
+  AdminFinanceSummary,
+  AdminIntegrationsSummary,
+  AdminOverview,
+  AdminUserDetail,
+  AdminUserSummary,
+} from "@/data/repositories";
 
 export const Route = createFileRoute("/admin")({
   validateSearch: (search: Record<string, unknown>) => ({
     section: isAdminSection(search.section) ? search.section : "control",
+    user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
   }),
   head: () => ({ meta: [{ title: "Admin Console | Slice" }] }),
   component: AdminPage,
@@ -95,8 +109,13 @@ function AdminConsole() {
   const services = useAppServices();
   const navigate = useNavigate({ from: Route.fullPath });
   const { section } = Route.useSearch();
+  const { user: selectedUser } = Route.useSearch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [userStatus, setUserStatus] = useState("");
+  const [usersCursor, setUsersCursor] = useState<string | undefined>();
+  useEffect(() => setUsersCursor(undefined), [search]);
   const user = useQuery({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
@@ -112,9 +131,60 @@ function AdminConsole() {
     queryFn: () => services.repositories.lifecycle.listOperations(),
     staleTime: 30_000,
   });
+  const overview = useQuery({
+    queryKey: ["admin", "overview"],
+    queryFn: () => services.repositories.admin.getOverview(),
+    staleTime: 30_000,
+  });
+  const users = useQuery({
+    queryKey: ["admin", "users", search, userRole, userStatus, usersCursor],
+    queryFn: () =>
+      services.repositories.admin.listUsers({
+        q: search || undefined,
+        role: userRole || undefined,
+        status: userStatus || undefined,
+        cursor: usersCursor,
+        limit: 20,
+      }),
+    enabled: section === "users",
+    staleTime: 30_000,
+  });
+  const userDetail = useQuery({
+    queryKey: ["admin", "user", selectedUser],
+    queryFn: () => services.repositories.admin.getUser(selectedUser!),
+    enabled: section === "users" && Boolean(selectedUser),
+    staleTime: 30_000,
+  });
+  const compliance = useQuery({
+    queryKey: ["admin", "compliance"],
+    queryFn: () => services.repositories.admin.listComplianceCases({ limit: 50 }),
+    enabled: section === "compliance",
+    staleTime: 30_000,
+  });
+  const finance = useQuery({
+    queryKey: ["admin", "finance"],
+    queryFn: () => services.repositories.admin.getFinanceSummary(),
+    enabled: section === "payments",
+    staleTime: 30_000,
+  });
+  const integrations = useQuery({
+    queryKey: ["admin", "integrations"],
+    queryFn: () => services.repositories.admin.getIntegrations(),
+    enabled: section === "integrations",
+    staleTime: 30_000,
+  });
+  const globalSearch = useQuery({
+    queryKey: ["admin", "search", search],
+    queryFn: () => services.repositories.admin.search(search, 8),
+    enabled: search.trim().length >= 2,
+    staleTime: 15_000,
+  });
   const select = (next: AdminSection) => {
-    void navigate({ search: { section: next }, replace: true });
+    void navigate({ search: { section: next, user: undefined }, replace: true });
     setMobileOpen(false);
+  };
+  const openUser = (id: string) => {
+    void navigate({ search: { section: "users", user: id }, replace: true });
   };
   const reviewItems = reviews.data?.items ?? [];
   const operationItems = operations.data ?? [];
@@ -194,6 +264,37 @@ function AdminConsole() {
               aria-label="Search this workspace"
             />
           </label>
+          {globalSearch.data?.items.length ? (
+            <div className="admin-search-results" role="listbox" aria-label="Admin search results">
+              {globalSearch.data.items.map((result) => {
+                const content = (
+                  <>
+                    <small>{sentence(result.entityType)}</small>
+                    <strong>{result.title}</strong>
+                    <span>{result.subtitle}</span>
+                  </>
+                );
+                return result.entityType === "USER" ? (
+                  <Link
+                    key={`${result.entityType}-${result.id}`}
+                    to="/admin"
+                    search={{ section: "users", user: result.id }}
+                    onClick={() => setSearch("")}
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <a
+                    key={`${result.entityType}-${result.id}`}
+                    href={result.target}
+                    onClick={() => setSearch("")}
+                  >
+                    {content}
+                  </a>
+                );
+              })}
+            </div>
+          ) : null}
         </header>
         {section === "control" ? (
           <ControlCenter
@@ -207,6 +308,7 @@ function AdminConsole() {
               void operations.refetch();
             }}
             select={select}
+            overview={overview.data}
           />
         ) : section === "moderation" ? (
           <AssetModeration
@@ -216,22 +318,37 @@ function AdminConsole() {
             retry={() => void operations.refetch()}
           />
         ) : section === "users" ? (
-          <UnavailablePage
-            title="Users & Roles"
-            detail="A safe admin user directory read is not exposed to this client yet."
-            icon={Users}
+          <UsersWorkspace
+            users={users.data?.items ?? []}
+            loading={users.isLoading}
+            failed={users.isError}
+            retry={() => void users.refetch()}
+            selected={userDetail.data}
+            selectedLoading={userDetail.isLoading}
+            selectedFailed={userDetail.isError}
+            openUser={openUser}
+            clearUser={() => select("users")}
+            nextCursor={users.data?.nextCursor ?? null}
+            nextPage={(cursor) => setUsersCursor(cursor)}
+            role={userRole}
+            status={userStatus}
+            setRole={setUserRole}
+            setStatus={setUserStatus}
           />
         ) : section === "compliance" ? (
-          <UnavailablePage
-            title="Compliance"
-            detail="No admin-safe compliance case projection is available in this client yet."
-            icon={ShieldCheck}
+          <ComplianceWorkspace
+            cases={compliance.data?.items ?? []}
+            loading={compliance.isLoading}
+            failed={compliance.isError}
+            retry={() => void compliance.refetch()}
+            overview={overview.data}
           />
         ) : section === "payments" ? (
-          <UnavailablePage
-            title="Payments & Wallets"
-            detail="Ledger and provider movements remain authoritative on their existing pages; no balance editing is available here."
-            icon={WalletCards}
+          <PaymentsWorkspace
+            summary={finance.data}
+            loading={finance.isLoading}
+            failed={finance.isError}
+            retry={() => void finance.refetch()}
           />
         ) : section === "support" ? (
           <UnavailablePage
@@ -258,7 +375,7 @@ function AdminConsole() {
             icon={Flag}
           />
         ) : section === "integrations" ? (
-          <Integrations />
+          <Integrations query={integrations} />
         ) : (
           <AdminSettings select={select} />
         )}
@@ -275,6 +392,7 @@ function ControlCenter({
   failed,
   retry,
   select,
+  overview,
 }: {
   reviews: Array<{ id: string; status: string; submittedAt: string }>;
   operations: Array<{
@@ -290,6 +408,7 @@ function ControlCenter({
   failed: boolean;
   retry: () => void;
   select: (section: AdminSection) => void;
+  overview?: import("@/data/repositories").AdminOverview;
 }) {
   if (loading)
     return (
@@ -304,9 +423,13 @@ function ControlCenter({
       />
     );
   const counts = {
-    submissions: reviews.length,
-    valuation: operations.filter((item) => item.valuationStatus === "ACTIVE").length,
-    custody: operations.filter((item) => item.custodyStatus !== "SECURED").length,
+    submissions: overview?.reviews.pending ?? reviews.length,
+    valuation:
+      overview?.assets.valuationPending ??
+      operations.filter((item) => item.valuationStatus === "ACTIVE").length,
+    custody:
+      overview?.assets.custodyActions ??
+      operations.filter((item) => item.custodyStatus !== "SECURED").length,
     market: operations.filter((item) => item.publicationStatus === "PUBLISHED").length,
   };
   return (
@@ -324,10 +447,14 @@ function ControlCenter({
         </span>
       </section>
       <div className="admin-kpi-grid">
-        <AdminKpi icon={ClipboardCheck} label="Pending Reviews" value={reviews.length} />
-        <AdminKpi icon={BadgeCheck} label="Valuations Active" value={counts.valuation} />
+        <AdminKpi icon={ClipboardCheck} label="Pending Reviews" value={counts.submissions} />
+        <AdminKpi icon={BadgeCheck} label="Valuation Pending" value={counts.valuation} />
         <AdminKpi icon={PackageCheck} label="Custody Work" value={counts.custody} />
-        <AdminKpi icon={BarChart3} label="Market Live" value={counts.market} />
+        <AdminKpi
+          icon={ShieldCheck}
+          label="Open Compliance"
+          value={overview?.complianceCases ?? 0}
+        />
       </div>
       <div className="admin-dashboard-grid">
         <section className="admin-panel">
@@ -395,8 +522,21 @@ function ControlCenter({
           <AdminEmpty detail="No admin-safe activity projection is connected yet." />
         </section>
         <section className="admin-panel">
-          <AdminPanelHeading title="Open Cases" />
-          <AdminEmpty detail="No support or compliance case projection is available." />
+          <AdminPanelHeading
+            title="Open Cases"
+            action="Open compliance"
+            onClick={() => select("compliance")}
+          />
+          {overview?.complianceCases ? (
+            <AdminAttention
+              type="Compliance"
+              subject={`${overview.complianceCases} case${overview.complianceCases === 1 ? "" : "s"} need review`}
+              detail="Open the compliance workspace for normalized case details."
+              tone="warning"
+            />
+          ) : (
+            <AdminEmpty detail="No open compliance cases." />
+          )}
         </section>
       </div>
     </div>
@@ -459,20 +599,506 @@ function AssetModeration({
   );
 }
 
-function Integrations() {
+function UsersWorkspace({
+  users,
+  loading,
+  failed,
+  retry,
+  selected,
+  selectedLoading,
+  selectedFailed,
+  openUser,
+  clearUser,
+  nextCursor,
+  nextPage,
+  role,
+  status,
+  setRole,
+  setStatus,
+}: {
+  users: AdminUserSummary[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  selected?: AdminUserDetail;
+  selectedLoading: boolean;
+  selectedFailed: boolean;
+  openUser: (id: string) => void;
+  clearUser: () => void;
+  nextCursor: string | null;
+  nextPage: (cursor: string) => void;
+  role: string;
+  status: string;
+  setRole: (value: string) => void;
+  setStatus: (value: string) => void;
+}) {
+  if (selected || selectedLoading || selectedFailed) {
+    return (
+      <UserDetail
+        user={selected}
+        loading={selectedLoading}
+        failed={selectedFailed}
+        retry={retry}
+        back={clearUser}
+      />
+    );
+  }
+  return (
+    <AdminPageSection
+      title="Users & Roles"
+      detail="Search the account directory and inspect access safely. Role and status mutations remain protected backend workflows."
+    >
+      {loading ? (
+        <AdminState title="Loading users" detail="Reading the admin-safe user projection." />
+      ) : failed ? (
+        <AdminState
+          title="Users unavailable"
+          detail="The user directory could not be loaded safely."
+          retry={retry}
+        />
+      ) : (
+        <>
+          <div className="admin-filter-row">
+            {[
+              ["", "All"],
+              ["INVESTOR", "Investor"],
+              ["COLLECTOR", "Collector"],
+              ["STAFF", "Staff"],
+              ["ADMIN", "Admin"],
+            ].map(([value, label]) => (
+              <button
+                className={`admin-filter-chip ${role === value ? "is-active" : ""}`}
+                key={value || "all"}
+                onClick={() => setRole(value)}
+              >
+                {label}
+              </button>
+            ))}
+            {[
+              ["", "All status"],
+              ["RESTRICTED", "Restricted"],
+              ["SUSPENDED", "Suspended"],
+            ].map(([value, label]) => (
+              <button
+                className={`admin-filter-chip ${status === value ? "is-active" : ""}`}
+                key={value || "all-status"}
+                onClick={() => setStatus(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {users.length ? (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Roles</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th>Activity</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id}>
+                      <td>
+                        <div className="admin-user-cell">
+                          <span className="admin-record-icon">
+                            <UserRound aria-hidden="true" />
+                          </span>
+                          <span>
+                            <strong>{user.displayName}</strong>
+                            <small>{user.username ? `@${user.username}` : "No username"}</small>
+                          </span>
+                        </div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <div className="admin-tag-list">
+                          {user.roles.length ? (
+                            user.roles.map((role) => (
+                              <span className="admin-tag" key={role.id}>
+                                {sentence(role.role)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="admin-muted">Investor</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+                        >
+                          {sentence(user.accountStatus)}
+                        </span>
+                      </td>
+                      <td>{date(user.createdAt)}</td>
+                      <td>{user.lastActivityAt ? date(user.lastActivityAt) : "—"}</td>
+                      <td>
+                        <button className="admin-inline-action" onClick={() => openUser(user.id)}>
+                          Open <ArrowRight aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <AdminEmpty detail="No users match these filters." icon={Users} />
+          )}
+          <div className="admin-pagination">
+            <span>{users.length ? `${users.length} users shown` : "No results"}</span>
+            <button disabled={!nextCursor} onClick={() => nextCursor && nextPage(nextCursor)}>
+              Next page <ChevronRight aria-hidden="true" />
+            </button>
+          </div>
+        </>
+      )}
+    </AdminPageSection>
+  );
+}
+
+function UserDetail({
+  user,
+  loading,
+  failed,
+  retry,
+  back,
+}: {
+  user?: AdminUserDetail;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  back: () => void;
+}) {
+  const [tab, setTab] = useState("Overview");
+  if (loading)
+    return <AdminState title="Loading user" detail="Reading account and access projections." />;
+  if (failed || !user)
+    return (
+      <AdminState
+        title="User unavailable"
+        detail="This user detail could not be loaded safely."
+        retry={retry}
+      />
+    );
+  const tabs = [
+    "Overview",
+    "Roles & Access",
+    "Account",
+    "Submissions",
+    "Compliance",
+    "Wallet & Finance",
+    "Activity",
+    "Audit",
+  ];
+  return (
+    <div className="admin-console-content">
+      <button className="admin-back-link" onClick={back}>
+        <ChevronLeft aria-hidden="true" /> Users & Roles
+      </button>
+      <section className="admin-user-hero">
+        <span className="admin-user-avatar">
+          <UserRound aria-hidden="true" />
+        </span>
+        <div>
+          <p className="admin-console-eyebrow">User operations hub</p>
+          <h2>{user.displayName}</h2>
+          <span>
+            {user.username ? `@${user.username} · ` : ""}
+            {user.email} · ID {shortId(user.id)}
+          </span>
+        </div>
+        <span
+          className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+        >
+          {sentence(user.accountStatus)}
+        </span>
+      </section>
+      <nav className="admin-tabs" aria-label="User detail sections">
+        {tabs.map((item) => (
+          <button
+            className={tab === item ? "is-active" : ""}
+            key={item}
+            onClick={() => setTab(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </nav>
+      {tab === "Overview" ? (
+        <div className="admin-kpi-grid admin-kpi-grid--compact">
+          <AdminKpi
+            icon={ShieldCheck}
+            label="Account status"
+            value={user.accountStatus === "ACTIVE" ? 1 : 0}
+          />
+          <AdminKpi icon={Users} label="Active roles" value={user.roles.length} />
+          <AdminKpi
+            icon={ClipboardCheck}
+            label="Open submissions"
+            value={user.counts.submissions}
+          />
+          <AdminKpi
+            icon={ShieldCheck}
+            label="Compliance cases"
+            value={user.counts.complianceCases}
+          />
+        </div>
+      ) : tab === "Roles & Access" ? (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Current roles" />
+          <div className="admin-tag-list">
+            {user.roles.length ? (
+              user.roles.map((role) => (
+                <span className="admin-tag" key={role.id}>
+                  {sentence(role.role)}
+                </span>
+              ))
+            ) : (
+              <AdminEmpty detail="No elevated roles assigned." />
+            )}
+          </div>
+          <p className="admin-safe-note">
+            Role changes require protected server authorization, recent authentication, and any
+            configured approval workflow.
+          </p>
+        </section>
+      ) : tab === "Account" ? (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Account status history" />
+          <div className="admin-record-list">
+            {user.statusHistory.length ? (
+              user.statusHistory.map((entry) => (
+                <article className="admin-record" key={`${entry.createdAt}-${entry.toStatus}`}>
+                  <Clock3 aria-hidden="true" />
+                  <div>
+                    <strong>{sentence(entry.toStatus)}</strong>
+                    <small>
+                      {entry.reason ?? "No reason supplied"} · {date(entry.createdAt)}
+                    </small>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <AdminEmpty detail="No status changes recorded." />
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="admin-panel">
+          <AdminPanelHeading title={tab} />
+          <AdminEmpty
+            detail={`${tab} data is kept in its authoritative workspace and is not duplicated in this summary.`}
+          />
+        </section>
+      )}
+    </div>
+  );
+}
+
+function ComplianceWorkspace({
+  cases,
+  loading,
+  failed,
+  retry,
+  overview,
+}: {
+  cases: AdminComplianceCase[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  overview?: AdminOverview;
+}) {
+  return (
+    <AdminPageSection
+      title="Compliance"
+      detail="Review normalized case status without exposing provider payloads or secrets."
+    >
+      <div className="admin-kpi-grid admin-kpi-grid--compact">
+        <AdminKpi
+          icon={ShieldCheck}
+          label="Open cases"
+          value={overview?.complianceCases ?? cases.length}
+        />
+        <AdminKpi
+          icon={AlertTriangle}
+          label="Needs review"
+          value={cases.filter((item) => item.status !== "APPROVED").length}
+        />
+        <AdminKpi icon={Users} label="Restricted users" value={0} />
+        <AdminKpi icon={Globe2} label="Provider issues" value={overview?.providerAlerts ?? 0} />
+      </div>
+      <div className="admin-filter-row">
+        {["All", "Identity / KYC", "KYT", "Manual Review", "Provider Issue", "Resolved"].map(
+          (label) => (
+            <span className="admin-filter-chip" key={label}>
+              {label}
+            </span>
+          ),
+        )}
+      </div>
+      {loading ? (
+        <AdminState title="Loading compliance" detail="Reading safe case projections." />
+      ) : failed ? (
+        <AdminState
+          title="Compliance unavailable"
+          detail="Cases could not be loaded safely."
+          retry={retry}
+        />
+      ) : cases.length ? (
+        <div className="admin-record-list">
+          {cases.map((item) => (
+            <article className="admin-record admin-record--case" key={item.id}>
+              <span className="admin-record-icon">
+                <ShieldCheck aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <strong>{sentence(item.type)}</strong>
+                <small>
+                  {item.user.displayName} {item.user.username ? `· @${item.user.username}` : ""}
+                </small>
+                <small>
+                  {item.provider} · updated {date(item.updatedAt)}
+                </small>
+              </div>
+              <span className="admin-status-pill">{sentence(item.status)}</span>
+              <button className="admin-inline-action">
+                Open <ArrowRight aria-hidden="true" />
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <AdminEmpty detail="No open compliance cases." icon={ShieldCheck} />
+      )}
+    </AdminPageSection>
+  );
+}
+
+function PaymentsWorkspace({
+  summary,
+  loading,
+  failed,
+  retry,
+}: {
+  summary?: AdminFinanceSummary;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  return (
+    <AdminPageSection
+      title="Payments & Wallets"
+      detail="GBP finance operations summary. Ledger authority remains in the existing finance workflows; balances are never edited here."
+    >
+      {loading ? (
+        <AdminState
+          title="Loading finance operations"
+          detail="Reading authoritative movement counts."
+        />
+      ) : failed ? (
+        <AdminState
+          title="Finance unavailable"
+          detail="The finance projection could not be loaded safely."
+          retry={retry}
+        />
+      ) : (
+        <>
+          <div className="admin-kpi-grid">
+            <AdminKpi
+              icon={WalletCards}
+              label="Pending movements"
+              value={summary?.pendingMovements ?? 0}
+            />
+            <AdminKpi
+              icon={AlertTriangle}
+              label="Provider exceptions"
+              value={summary?.exceptions ?? 0}
+            />
+            <AdminKpi
+              icon={RefreshCw}
+              label="Reconciliation mismatches"
+              value={summary?.reconciliationMismatches ?? 0}
+            />
+            <AdminKpi
+              icon={Landmark}
+              label="GBP authority"
+              value={summary?.currency === "GBP" ? 1 : 0}
+            />
+          </div>
+          <div className="admin-filter-row">
+            {["Movements", "Wallets", "Reservations", "Reconciliation", "Adjustments"].map(
+              (label) => (
+                <span className="admin-filter-chip" key={label}>
+                  {label}
+                </span>
+              ),
+            )}
+          </div>
+          <section className="admin-panel">
+            <AdminPanelHeading title="Safe finance operations" />
+            <AdminEmpty
+              detail="Detailed movements, wallet views, and compensating entries stay in protected finance workflows. No direct balance editing is available."
+              icon={WalletCards}
+            />
+          </section>
+        </>
+      )}
+    </AdminPageSection>
+  );
+}
+
+function Integrations({
+  query,
+}: {
+  query: {
+    data?: AdminIntegrationsSummary;
+    isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
+  };
+}) {
+  if (query.isLoading)
+    return (
+      <AdminState title="Loading integrations" detail="Reading provider-safe status summaries." />
+    );
+  if (query.isError)
+    return (
+      <AdminState
+        title="Provider status unavailable"
+        detail="Integration health could not be loaded safely."
+        retry={() => void query.refetch()}
+      />
+    );
   return (
     <AdminPageSection
       title="Integrations"
       detail="Configuration summaries will appear when an admin-safe provider projection is connected."
     >
       <div className="admin-integration-grid">
-        {["Payments", "Compliance", "Market data", "Email & notifications"].map((name) => (
-          <article className="admin-integration" key={name}>
-            <SlidersHorizontal aria-hidden="true" />
-            <strong>{name}</strong>
-            <span>Unknown · not exposed</span>
-          </article>
-        ))}
+        {["Plaid", "Bridge", "BlockchainAnalysis.io", "Market Data", "Email", "Notifications"].map(
+          (name) => (
+            <article className="admin-integration" key={name}>
+              <SlidersHorizontal aria-hidden="true" />
+              <strong>{name}</strong>
+              <small>
+                {name === "Notifications"
+                  ? `${query.data?.failedWebhooks ?? 0} failed webhooks`
+                  : "No secrets displayed"}
+              </small>
+              <span>
+                {query.data?.providerIncidents ? "Degraded" : "Operational"} · safe summary
+              </span>
+            </article>
+          ),
+        )}
       </div>
     </AdminPageSection>
   );

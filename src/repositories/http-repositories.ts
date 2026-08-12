@@ -1,5 +1,16 @@
 import { ApiClient, ApiError } from "@/api/http-client";
-import type { AppRepositories, AssetRepository } from "@/data/repositories";
+import type {
+  AdminComplianceCase,
+  AdminFinanceSummary,
+  AdminIntegrationsSummary,
+  AdminOverview,
+  AdminRepository,
+  AdminSearchResult,
+  AdminUserDetail,
+  AdminUserSummary,
+  AppRepositories,
+  AssetRepository,
+} from "@/data/repositories";
 import type {
   Asset,
   AssetId,
@@ -695,6 +706,177 @@ const mapSaleProposalPage = (raw: unknown): SaleProposalPage => {
   };
 };
 
+const mapAdminRole = (raw: unknown) => {
+  const value = objectField(raw, "admin role");
+  return {
+    id: stringField(value.id, "admin role.id"),
+    role: stringField(value.role, "admin role.role"),
+    scopeType: stringField(value.scopeType, "admin role.scopeType"),
+    scopeId: nullableString(value.scopeId, "admin role.scopeId"),
+    createdAt: stringField(value.createdAt, "admin role.createdAt"),
+  };
+};
+
+const mapAdminUser = (raw: unknown): AdminUserSummary => {
+  const value = objectField(raw, "admin user");
+  return {
+    id: stringField(value.id, "admin user.id"),
+    displayName: stringField(value.displayName, "admin user.displayName"),
+    username: nullableString(value.username, "admin user.username"),
+    email: stringField(value.email, "admin user.email"),
+    accountStatus: stringField(value.accountStatus, "admin user.accountStatus"),
+    roles: Array.isArray(value.roles) ? value.roles.map(mapAdminRole) : [],
+    createdAt: stringField(value.createdAt, "admin user.createdAt"),
+    lastActivityAt: nullableString(value.lastActivityAt, "admin user.lastActivityAt"),
+  };
+};
+
+const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
+  const value = objectField(raw, "admin user detail");
+  const user = mapAdminUser(value);
+  const profile = value.profile === null ? null : objectField(value.profile, "admin user profile");
+  const counts = objectField(value.counts, "admin user counts");
+  return {
+    ...user,
+    profile: profile
+      ? {
+          displayName: nullableString(profile.displayName, "profile.displayName"),
+          publicUsername: nullableString(profile.publicUsername, "profile.publicUsername"),
+          countryCode: nullableString(profile.countryCode, "profile.countryCode"),
+          timezone: nullableString(profile.timezone, "profile.timezone"),
+          preferredCurrency: nullableString(profile.preferredCurrency, "profile.preferredCurrency"),
+        }
+      : null,
+    statusHistory: Array.isArray(value.statusHistory)
+      ? value.statusHistory.map((rawEntry) => {
+          const entry = objectField(rawEntry, "admin status history");
+          return {
+            fromStatus: nullableString(entry.fromStatus, "statusHistory.fromStatus"),
+            toStatus: stringField(entry.toStatus, "statusHistory.toStatus"),
+            reason: nullableString(entry.reason, "statusHistory.reason"),
+            actorUserId: nullableString(entry.actorUserId, "statusHistory.actorUserId"),
+            createdAt: stringField(entry.createdAt, "statusHistory.createdAt"),
+          };
+        })
+      : [],
+    counts: {
+      submissions: Number(counts.submissions ?? 0),
+      complianceCases: Number(counts.complianceCases ?? 0),
+      financialAccounts: Number(counts.financialAccounts ?? 0),
+      moneyMovements: Number(counts.moneyMovements ?? 0),
+      auditEvents: Number(counts.auditEvents ?? 0),
+    },
+  };
+};
+
+const mapAdminComplianceCase = (raw: unknown): AdminComplianceCase => {
+  const value = objectField(raw, "admin compliance case");
+  const user = objectField(value.user, "admin compliance case.user");
+  return {
+    id: stringField(value.id, "complianceCase.id"),
+    provider: stringField(value.provider, "complianceCase.provider"),
+    type: stringField(value.type, "complianceCase.type"),
+    status: stringField(value.status, "complianceCase.status"),
+    createdAt: stringField(value.createdAt, "complianceCase.createdAt"),
+    updatedAt: stringField(value.updatedAt, "complianceCase.updatedAt"),
+    user: {
+      id: stringField(user.id, "complianceCase.user.id"),
+      displayName: stringField(user.displayName, "complianceCase.user.displayName"),
+      username: nullableString(user.username, "complianceCase.user.username"),
+    },
+  };
+};
+
+const adminRepository = (client: ApiClient): AdminRepository => ({
+  async getOverview() {
+    const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
+    const users = objectField(value.users, "admin overview.users");
+    const reviews = objectField(value.reviews, "admin overview.reviews");
+    const assets = objectField(value.assets, "admin overview.assets");
+    return {
+      users: { active: Number(users.active ?? 0) },
+      reviews: {
+        pending: Number(reviews.pending ?? 0),
+        changesRequested: Number(reviews.changesRequested ?? 0),
+      },
+      assets: {
+        valuationPending: Number(assets.valuationPending ?? 0),
+        custodyActions: Number(assets.custodyActions ?? 0),
+        vaultReady: Number(assets.vaultReady ?? 0),
+      },
+      complianceCases: Number(value.complianceCases ?? 0),
+      paymentExceptions: Number(value.paymentExceptions ?? 0),
+      providerAlerts: Number(value.providerAlerts ?? 0),
+      generatedAt: stringField(value.generatedAt, "admin overview.generatedAt"),
+    } satisfies AdminOverview;
+  },
+  async listUsers(input) {
+    const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
+    return {
+      items: Array.isArray(value.items) ? value.items.map(mapAdminUser) : [],
+      nextCursor: nullableString(value.nextCursor, "admin users.nextCursor"),
+    };
+  },
+  async getUser(id) {
+    return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
+  },
+  async listComplianceCases(input) {
+    const value = objectField(
+      await client.get<unknown>("/admin/compliance/cases", input),
+      "admin compliance cases",
+    );
+    return {
+      items: Array.isArray(value.items) ? value.items.map(mapAdminComplianceCase) : [],
+    };
+  },
+  async getFinanceSummary() {
+    const value = objectField(
+      await client.get<unknown>("/admin/finance/summary"),
+      "admin finance summary",
+    );
+    return {
+      currency: "GBP",
+      pendingMovements: Number(value.pendingMovements ?? 0),
+      exceptions: Number(value.exceptions ?? 0),
+      reconciliationMismatches: Number(value.reconciliationMismatches ?? 0),
+    } satisfies AdminFinanceSummary;
+  },
+  async getIntegrations() {
+    const value = objectField(
+      await client.get<unknown>("/admin/integrations"),
+      "admin integrations",
+    );
+    return {
+      providerIncidents: Number(value.providerIncidents ?? 0),
+      failedWebhooks: Number(value.failedWebhooks ?? 0),
+      secrets: "redacted",
+    } satisfies AdminIntegrationsSummary;
+  },
+  async search(query, limit) {
+    const value = objectField(
+      await client.get<unknown>("/admin/search", { q: query, limit }),
+      "admin search",
+    );
+    return {
+      items: Array.isArray(value.items)
+        ? value.items.map((raw) => {
+            const item = objectField(raw, "admin search result");
+            return {
+              entityType: stringField(
+                item.entityType,
+                "admin search.entityType",
+              ) as AdminSearchResult["entityType"],
+              id: stringField(item.id, "admin search.id"),
+              title: stringField(item.title, "admin search.title"),
+              subtitle: stringField(item.subtitle, "admin search.subtitle"),
+              target: stringField(item.target, "admin search.target"),
+            };
+          })
+        : [],
+    };
+  },
+});
+
 export function createHttpRepositories(client = new ApiClient()): AppRepositories {
   const idempotencyKey = () => crypto.randomUUID();
   const assets: AssetRepository = {
@@ -727,6 +909,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
   };
 
   return {
+    admin: adminRepository(client),
     assets,
     catalogue: {
       async listSubmissionCategories() {

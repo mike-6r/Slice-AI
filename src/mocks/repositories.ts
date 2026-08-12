@@ -82,6 +82,42 @@ const priceFor = (id: AssetId) => findAsset(id)?.marketValue ?? gbp(0);
 const total = (money: Money, units: number) => gbp((money.amount / 100) * units);
 
 export const mockRepositories: AppRepositories = {
+  admin: {
+    async getOverview() {
+      return {
+        users: { active: 0 },
+        reviews: { pending: 0, changesRequested: 0 },
+        assets: { valuationPending: 0, custodyActions: 0, vaultReady: 0 },
+        complianceCases: 0,
+        paymentExceptions: 0,
+        providerAlerts: 0,
+        generatedAt: now(),
+      };
+    },
+    async listUsers() {
+      return { items: [], nextCursor: null };
+    },
+    async getUser() {
+      throw new Error("Admin user directory requires the API service.");
+    },
+    async listComplianceCases() {
+      return { items: [] };
+    },
+    async getFinanceSummary() {
+      return {
+        currency: "GBP" as const,
+        pendingMovements: 0,
+        exceptions: 0,
+        reconciliationMismatches: 0,
+      };
+    },
+    async getIntegrations() {
+      return { providerIncidents: 0, failedWebhooks: 0, secrets: "redacted" as const };
+    },
+    async search() {
+      return { items: [] };
+    },
+  },
   assets: {
     async listAssets(input) {
       const q = input?.query?.trim().toLowerCase();

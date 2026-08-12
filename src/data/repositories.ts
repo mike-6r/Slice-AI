@@ -130,6 +130,104 @@ export interface AssetLifecycleRepository {
   publish(assetId: string): Promise<unknown>;
 }
 
+export type AdminOverview = {
+  users: { active: number };
+  reviews: { pending: number; changesRequested: number };
+  assets: { valuationPending: number; custodyActions: number; vaultReady: number };
+  complianceCases: number;
+  paymentExceptions: number;
+  providerAlerts: number;
+  generatedAt: string;
+};
+
+export type AdminUserSummary = {
+  id: string;
+  displayName: string;
+  username: string | null;
+  email: string;
+  accountStatus: string;
+  roles: Array<{
+    id: string;
+    role: string;
+    scopeType: string;
+    scopeId: string | null;
+    createdAt: string;
+  }>;
+  createdAt: string;
+  lastActivityAt: string | null;
+};
+
+export type AdminUserDetail = AdminUserSummary & {
+  profile: {
+    displayName: string | null;
+    publicUsername: string | null;
+    countryCode: string | null;
+    timezone: string | null;
+    preferredCurrency: string | null;
+  } | null;
+  statusHistory: Array<{
+    fromStatus: string | null;
+    toStatus: string;
+    reason: string | null;
+    actorUserId: string | null;
+    createdAt: string;
+  }>;
+  counts: {
+    submissions: number;
+    complianceCases: number;
+    financialAccounts: number;
+    moneyMovements: number;
+    auditEvents: number;
+  };
+};
+
+export type AdminComplianceCase = {
+  id: string;
+  provider: string;
+  type: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; displayName: string; username: string | null };
+};
+
+export type AdminFinanceSummary = {
+  currency: "GBP";
+  pendingMovements: number;
+  exceptions: number;
+  reconciliationMismatches: number;
+};
+
+export type AdminIntegrationsSummary = {
+  providerIncidents: number;
+  failedWebhooks: number;
+  secrets: "redacted";
+};
+
+export type AdminSearchResult = {
+  entityType: "USER" | "COLLECTIBLE" | "SUBMISSION" | "CASE";
+  id: string;
+  title: string;
+  subtitle: string;
+  target: string;
+};
+
+export interface AdminRepository {
+  getOverview(): Promise<AdminOverview>;
+  listUsers(input?: {
+    q?: string;
+    role?: string;
+    status?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{ items: AdminUserSummary[]; nextCursor: string | null }>;
+  getUser(id: string): Promise<AdminUserDetail>;
+  listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
+  getFinanceSummary(): Promise<AdminFinanceSummary>;
+  getIntegrations(): Promise<AdminIntegrationsSummary>;
+  search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
+}
+
 export interface MarketRepository {
   getMarketSummary(): Promise<MarketSummary>;
   getPriceHistory(assetId: AssetId, range: TimeRange): Promise<PricePoint[]>;
@@ -544,6 +642,7 @@ export interface AppRepositories {
   submissions: SubmissionRepository;
   reviews: SubmissionReviewRepository;
   lifecycle: AssetLifecycleRepository;
+  admin: AdminRepository;
   market: MarketRepository;
   portfolio: PortfolioRepository;
   collectors: CollectorRepository;
