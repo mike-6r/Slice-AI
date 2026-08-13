@@ -49,6 +49,7 @@ import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
+import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -58,7 +59,6 @@ import type {
   AdminOverview,
   AdminIntakeRow,
   AdminIntakeResponse,
-  AdminMembershipRow,
   AdminOperationsOverview,
   AdminUserDetail,
   AdminUserSummary,
@@ -73,6 +73,7 @@ export const Route = createFileRoute("/admin")({
     asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
     tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
     q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
+    plan: typeof search.plan === "string" ? search.plan : undefined,
     priority: typeof search.priority === "string" ? search.priority : undefined,
     status: typeof search.status === "string" ? search.status : undefined,
     evidence: typeof search.evidence === "string" ? search.evidence : undefined,
@@ -117,6 +118,7 @@ type AdminSearch = {
   asset?: string;
   tab?: string;
   q?: string;
+  plan?: string;
   priority?: string;
   status?: string;
   evidence?: string;
@@ -197,6 +199,7 @@ function AdminConsole() {
     tab: selectedUserTab,
     asset: selectedAsset,
     q: reviewQuery,
+    plan: membershipPlan,
     priority: reviewPriority,
     status: reviewStatus,
     evidence: reviewEvidence,
@@ -216,6 +219,19 @@ function AdminConsole() {
     priority: operationsPriority,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
+  const membershipStatus = [
+    "ACTIVE",
+    "PAST_DUE",
+    "CANCELLED",
+    "CANCEL_AT_PERIOD_END",
+    "TRIALING",
+    "EXPIRED",
+  ].includes(reviewStatus ?? "")
+    ? reviewStatus
+    : undefined;
+  const membershipPlanFilter = ["STARTER", "PRO", "ELITE"].includes(membershipPlan ?? "")
+    ? membershipPlan
+    : undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -370,8 +386,26 @@ function AdminConsole() {
     staleTime: 30_000,
   });
   const memberships = useQuery({
-    queryKey: ["admin", "memberships"],
-    queryFn: () => services.repositories.admin.listMemberships({ limit: 100 }),
+    queryKey: [
+      "admin",
+      "memberships",
+      reviewQuery,
+      membershipPlanFilter,
+      membershipStatus,
+      reviewPageParam,
+      reviewSort,
+      reviewSortDirection,
+    ],
+    queryFn: () =>
+      services.repositories.admin.listMemberships({
+        q: reviewQuery,
+        plan: membershipPlanFilter,
+        status: membershipStatus,
+        page: Math.max(1, Number(reviewPageParam ?? 1)),
+        pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
+        sort: reviewSort,
+        sortDirection: reviewSortDirection === "asc" ? "asc" : "desc",
+      }),
     enabled: section === "memberships",
     staleTime: 30_000,
   });
@@ -704,11 +738,23 @@ function AdminConsole() {
             }
           />
         ) : section === "memberships" ? (
-          <MembershipsWorkspace
-            rows={memberships.data?.items ?? []}
+          <AdminMemberships
+            data={memberships.data}
             loading={memberships.isLoading}
             failed={memberships.isError}
             retry={() => void memberships.refetch()}
+            query={reviewQuery ?? ""}
+            plan={membershipPlanFilter ?? ""}
+            status={membershipStatus ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            sort={reviewSort ?? "updated"}
+            sortDirection={reviewSortDirection === "asc" ? "asc" : "desc"}
+            update={(patch) =>
+              void navigate({
+                search: (current) => ({ ...current, ...patch }),
+                replace: true,
+              })
+            }
           />
         ) : section === "users" ? (
           <AccountsWorkspace
@@ -1477,91 +1523,6 @@ function OperationsQueueWorkspace({
         </div>
       ) : (
         <AdminEmpty detail="No records currently require work." />
-      )}
-    </AdminPageSection>
-  );
-}
-
-function MembershipsWorkspace({
-  rows,
-  loading,
-  failed,
-  retry,
-}: {
-  rows: AdminMembershipRow[];
-  loading: boolean;
-  failed: boolean;
-  retry: () => void;
-}) {
-  if (loading)
-    return (
-      <AdminState
-        title="Loading collector memberships"
-        detail="Reading subscription and entitlement projections."
-      />
-    );
-  if (failed)
-    return (
-      <AdminState
-        title="Collector memberships unavailable"
-        detail="The membership projection could not be loaded safely."
-        retry={retry}
-      />
-    );
-  return (
-    <AdminPageSection
-      title="Collector Memberships"
-      detail="Plan, status and usage are shown from the backend subscription authority. Provider identifiers and payment secrets stay redacted."
-    >
-      {rows.length ? (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Collector</th>
-                <th>Plan</th>
-                <th>Status</th>
-                <th>Usage</th>
-                <th>Period end</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <strong>{row.collector.displayName}</strong>
-                    <small>
-                      {row.collector.username ? `@${row.collector.username}` : row.collector.email}
-                    </small>
-                  </td>
-                  <td>{row.plan.displayName}</td>
-                  <td>
-                    <span className="admin-status-pill">{sentence(row.status)}</span>
-                  </td>
-                  <td>
-                    <strong>
-                      {row.usage.activeCollectibles} / {row.usage.activeCollectiblesLimit ?? "—"}{" "}
-                      active
-                    </strong>
-                    <small>
-                      {row.usage.monthlySubmissions} / {row.usage.monthlySubmissionsLimit ?? "—"}{" "}
-                      monthly · {row.usage.concurrentIntake} /{" "}
-                      {row.usage.concurrentIntakeLimit ?? "—"} intake
-                    </small>
-                  </td>
-                  <td>
-                    {row.currentPeriodEnd ? date(row.currentPeriodEnd) : "—"}
-                    {row.cancelAtPeriodEnd ? " · Cancels" : ""}
-                  </td>
-                  <td>{date(row.updatedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <AdminEmpty detail="No collector memberships found." />
       )}
     </AdminPageSection>
   );

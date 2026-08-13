@@ -179,7 +179,14 @@ export const mockRepositories: AppRepositories = {
       throw new Error("Physical intake requires the API service.");
     },
     async listMemberships() {
-      return { items: [] };
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
+        kpis: { active: 0, starter: 0, pro: 0, elite: 0, pastDue: 0, trialing: 0, total: 0 },
+        statusOverview: {},
+        planDistribution: {},
+        recentActivity: [],
+      };
     },
     async listUsers() {
       return {

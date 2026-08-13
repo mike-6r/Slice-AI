@@ -23,10 +23,7 @@ import {
 import { Inject } from '@nestjs/common';
 import { marketResearchIdentityHash } from '../../market-research/market-research.service';
 import {
-  activeCollectorSubmissionStatuses,
-  billingPeriod,
-  numberEntitlement,
-  openCollectorSubmissionStatuses,
+  collectorUsageFor,
 } from '../../collector-workspace/collector-entitlements';
 import {
   assertEditableStatus,
@@ -179,59 +176,17 @@ export class SubmissionService {
       });
     }
     const entitlements = subscription.plan.entitlements;
-    const maxActive = numberEntitlement(entitlements, 'maxActiveCollectibles');
-    const maxDrafts = numberEntitlement(entitlements, 'maxOpenDrafts');
-    const maxOpenSubmissions = numberEntitlement(
-      entitlements,
-      'maxOpenSubmissions',
-    );
-    const maxConcurrentIntake = numberEntitlement(
-      entitlements,
-      'maxConcurrentIntake',
-    );
-    const monthlyLimit = numberEntitlement(
-      entitlements,
-      'monthlySubmissionLimit',
-    );
-    const period = billingPeriod();
-    const [active, drafts, monthly, openSubmissions, concurrentIntake] =
-      await Promise.all([
-        this.prisma.assetSubmission.count({
-          where: {
-            ownerUserId: actor.userId,
-            status: { in: [...activeCollectorSubmissionStatuses] },
-          },
-        }),
-        this.prisma.assetSubmission.count({
-          where: {
-            ownerUserId: actor.userId,
-            status: { in: [...openCollectorSubmissionStatuses] },
-          },
-        }),
-        this.prisma.submissionIntake.count({
-          where: {
-            submission: { ownerUserId: actor.userId },
-            status: {
-              in: [
-                'VAULT_SELECTED',
-                'SHIPPING_REQUIRED',
-                'IN_TRANSIT',
-                'DELIVERED',
-              ],
-            },
-          },
-        }),
-        this.prisma.assetSubmission.count({
-          where: { ownerUserId: actor.userId, status: 'DRAFT' },
-        }),
-        this.prisma.assetSubmission.count({
-          where: {
-            ownerUserId: actor.userId,
-            createdAt: { gte: period.start, lt: period.end },
-            status: { not: 'CANCELLED' },
-          },
-        }),
-      ]);
+    const usage = await collectorUsageFor(this.prisma, actor.userId, entitlements);
+    const maxActive = usage.maxActiveCollectibles;
+    const maxDrafts = usage.maxOpenDrafts;
+    const maxOpenSubmissions = usage.maxOpenSubmissions;
+    const maxConcurrentIntake = usage.maxConcurrentIntake;
+    const monthlyLimit = usage.maxMonthlySubmissions;
+    const active = usage.activeCollectibles;
+    const drafts = usage.openDrafts;
+    const monthly = usage.monthlySubmissionsUsed;
+    const openSubmissions = usage.openSubmissions;
+    const concurrentIntake = usage.concurrentIntake;
     if (maxActive !== null && active >= maxActive) {
       throw new ConflictException({
         code: 'PLAN_LIMIT_REACHED',

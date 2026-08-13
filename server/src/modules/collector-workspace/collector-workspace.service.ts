@@ -8,11 +8,8 @@ import {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
-  activeCollectorSubmissionStatuses,
-  billingPeriod,
   collectorPlanRegistry,
-  numberEntitlement,
-  openCollectorSubmissionStatuses,
+  collectorUsageFor,
   planJson,
 } from './collector-entitlements';
 
@@ -599,91 +596,7 @@ export class CollectorWorkspaceService {
     userId: string,
     entitlements: Prisma.JsonValue | null,
   ) {
-    const period = billingPeriod();
-    const [
-      activeCollectibles,
-      openSubmissions,
-      openDrafts,
-      monthlySubmissions,
-      concurrentIntake,
-    ] = await Promise.all([
-      this.db.assetSubmission.count({
-        where: {
-          ownerUserId: userId,
-          status: { in: [...activeCollectorSubmissionStatuses] },
-        },
-      }),
-      this.db.assetSubmission.count({
-        where: {
-          ownerUserId: userId,
-          status: { in: [...openCollectorSubmissionStatuses] },
-        },
-      }),
-      this.db.assetSubmission.count({
-        where: { ownerUserId: userId, status: 'DRAFT' },
-      }),
-      this.db.assetSubmission.count({
-        where: {
-          ownerUserId: userId,
-          createdAt: { gte: period.start, lt: period.end },
-          status: { not: 'CANCELLED' },
-        },
-      }),
-      this.db.submissionIntake.count({
-        where: {
-          submission: { ownerUserId: userId },
-          status: {
-            in: [
-              'VAULT_SELECTED',
-              'SHIPPING_REQUIRED',
-              'IN_TRANSIT',
-              'DELIVERED',
-            ],
-          },
-        },
-      }),
-    ]);
-    const maxActiveCollectibles = numberEntitlement(
-      entitlements ?? {},
-      'maxActiveCollectibles',
-    );
-    const maxOpenSubmissions = numberEntitlement(
-      entitlements ?? {},
-      'maxOpenSubmissions',
-    );
-    const maxOpenDrafts = numberEntitlement(
-      entitlements ?? {},
-      'maxOpenDrafts',
-    );
-    const maxMonthlySubmissions = numberEntitlement(
-      entitlements ?? {},
-      'monthlySubmissionLimit',
-    );
-    const maxConcurrentIntake = numberEntitlement(
-      entitlements ?? {},
-      'maxConcurrentIntake',
-    );
-    return {
-      activeCollectibles,
-      maxActiveCollectibles,
-      openSubmissions,
-      maxOpenSubmissions,
-      openDrafts,
-      maxOpenDrafts,
-      monthlySubmissionsUsed: monthlySubmissions,
-      maxMonthlySubmissions,
-      concurrentIntake,
-      maxConcurrentIntake,
-      remainingCatalogueCapacity:
-        maxActiveCollectibles === null
-          ? null
-          : Math.max(maxActiveCollectibles - activeCollectibles, 0),
-      billingPeriodStart: period.start.toISOString(),
-      billingPeriodEnd: period.end.toISOString(),
-      // Keep the previous names in the response for older clients during the
-      // rollout; the normalized fields above are authoritative.
-      monthlySubmissions,
-    };
+    return collectorUsageFor(this.db, userId, entitlements);
   }
 
   /** Customer-safe list projection. All records are scoped to D10 ownership. */

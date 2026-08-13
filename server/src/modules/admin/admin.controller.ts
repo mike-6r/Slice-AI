@@ -64,6 +64,19 @@ const operationsQuery = z
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
+const membershipsQuery = z
+  .object({
+    q: z.string().trim().max(120).optional(),
+    plan: z.enum(['STARTER', 'PRO', 'ELITE']).optional(),
+    status: z
+      .enum(['ACTIVE', 'PAST_DUE', 'CANCELLED', 'CANCEL_AT_PERIOD_END', 'TRIALING', 'EXPIRED'])
+      .optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+    sort: z.enum(['collector', 'plan', 'status', 'billing', 'updated']).default('updated'),
+    sortDirection: z.enum(['asc', 'desc']).default('desc'),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -119,10 +132,11 @@ export class AdminController {
   @Get('memberships')
   @RequirePermission('admin.console.read')
   memberships(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
-    const input = this.parse(operationsQuery, query);
+    const input = this.parse(membershipsQuery, query);
     return this.admin.listMemberships(request.actor!, {
       ...input,
-      limit: input.limit ?? 50,
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 10,
     });
   }
 

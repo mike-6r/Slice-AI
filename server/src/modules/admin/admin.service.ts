@@ -9,9 +9,7 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
 import {
-  activeCollectorSubmissionStatuses,
-  billingPeriod,
-  numberEntitlement,
+  collectorUsageForMany,
 } from '../collector-workspace/collector-entitlements';
 
 type AdminAttention = {
@@ -1453,136 +1451,212 @@ export class AdminService {
 
   async listMemberships(
     actor: Actor,
-    input: { status?: string; q?: string; limit: number },
+    input: {
+      status?: string;
+      plan?: string;
+      q?: string;
+      page: number;
+      pageSize: number;
+      sort?: string;
+      sortDirection?: 'asc' | 'desc';
+    },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
-    const rows = await this.db.collectorSubscription.findMany({
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: input.limit,
-      include: {
-        plan: {
-          select: {
-            code: true,
-            displayName: true,
-            monthlyPriceMinor: true,
-            currency: true,
-            entitlements: true,
+    const baseWhere: Prisma.CollectorSubscriptionWhereInput = {
+      ...(input.plan
+        ? { plan: { code: input.plan as 'STARTER' | 'PRO' | 'ELITE' } }
+        : {}),
+      ...(input.q
+        ? {
+            user: {
+              OR: [
+                { email: { contains: input.q, mode: 'insensitive' } },
+                { profile: { displayName: { contains: input.q, mode: 'insensitive' } } },
+                { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } },
+                { id: { contains: input.q, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+    const where: Prisma.CollectorSubscriptionWhereInput = {
+      ...baseWhere,
+      ...(input.status
+        ? { status: input.status as Prisma.CollectorSubscriptionWhereInput['status'] }
+        : {}),
+    };
+    const orderBy =
+      input.sort === 'collector'
+        ? { user: { profile: { displayName: input.sortDirection ?? 'asc' } } }
+        : input.sort === 'plan'
+          ? { plan: { displayName: input.sortDirection ?? 'asc' } }
+          : input.sort === 'billing'
+            ? { currentPeriodEnd: input.sortDirection ?? 'asc' }
+            : input.sort === 'status'
+              ? { status: input.sortDirection ?? 'asc' }
+              : { updatedAt: 'desc' as const };
+    const [rows, total, statusRows, activePlanRows, recentEvents] = await Promise.all([
+      this.db.collectorSubscription.findMany({
+        where,
+        orderBy: [orderBy, { id: 'desc' }],
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+        include: {
+          plan: {
+            select: {
+              code: true,
+              displayName: true,
+              monthlyPriceMinor: true,
+              currency: true,
+              entitlements: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
           },
         },
-        user: {
-          select: {
-            id: true,
-            email: true,
-            profile: { select: { displayName: true, publicUsername: true } },
-            _count: { select: { submissions: true } },
-          },
+      }),
+      this.db.collectorSubscription.count({ where }),
+      this.db.collectorSubscription.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      this.db.collectorSubscription.findMany({
+        where: {
+          ...baseWhere,
+          status: { notIn: ['CANCELLED', 'EXPIRED'] },
         },
-      },
-    });
+        select: { plan: { select: { code: true } } },
+      }),
+      this.db.auditEvent.findMany({
+        where: {
+          OR: [
+            { action: { contains: 'MEMBERSHIP', mode: 'insensitive' } },
+            { action: { contains: 'SUBSCRIPTION', mode: 'insensitive' } },
+            { resourceType: { contains: 'membership', mode: 'insensitive' } },
+            { resourceType: { contains: 'subscription', mode: 'insensitive' } },
+          ],
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: { id: true, action: true, resourceId: true, createdAt: true },
+      }),
+    ]);
     const userIds = rows.map((row) => row.user.id);
-    const period = billingPeriod();
-    const submissions = userIds.length
-      ? await this.db.assetSubmission.findMany({
-          where: { ownerUserId: { in: userIds } },
-          select: {
-            ownerUserId: true,
-            status: true,
-            createdAt: true,
-            intake: { select: { status: true } },
-          },
-        })
-      : [];
-    const usageByUser = new Map<
-      string,
-      { active: number; monthly: number; concurrentIntake: number }
-    >();
-    for (const submission of submissions) {
-      const usage = usageByUser.get(submission.ownerUserId) ?? {
-        active: 0,
-        monthly: 0,
-        concurrentIntake: 0,
+    const entitlementByUser = new Map(
+      rows.map((row) => [row.user.id, row.plan.entitlements]),
+    );
+    const usageByUser = await collectorUsageForMany(
+      this.db,
+      userIds,
+      entitlementByUser,
+    );
+    const statusOverview = {
+      ACTIVE: 0,
+      PAST_DUE: 0,
+      CANCELLED: 0,
+      CANCEL_AT_PERIOD_END: 0,
+      TRIALING: 0,
+      EXPIRED: 0,
+    } as Record<string, number>;
+    for (const row of statusRows) statusOverview[row.status] = row._count._all;
+    const planDistribution = { STARTER: 0, PRO: 0, ELITE: 0 };
+    for (const row of activePlanRows) planDistribution[row.plan.code] += 1;
+    const activityTitle = (action: string) => {
+      if (action.includes('PAYMENT') || action.includes('INVOICE')) return 'Payment activity';
+      if (action.includes('CANCEL')) return 'Membership canceled';
+      if (action.includes('PLAN') || action.includes('UPGRADE')) return 'Plan updated';
+      if (action.includes('TRIAL')) return 'Trial started';
+      if (action.includes('RESUME')) return 'Membership resumed';
+      return 'Membership activity';
+    };
+    const items = rows.map((item) => {
+      const usage = usageByUser.get(item.user.id)!;
+      const monthlyLimit = usage.maxMonthlySubmissions;
+      const monthlyPercent = monthlyLimit
+        ? Math.min(100, Math.round((usage.monthlySubmissionsUsed / monthlyLimit) * 100))
+        : null;
+      const activeLimit = usage.maxActiveCollectibles;
+      const activePercent = activeLimit
+        ? Math.min(100, Math.round((usage.activeCollectibles / activeLimit) * 100))
+        : null;
+      return {
+        id: item.id,
+        collector: {
+          id: item.user.id,
+          displayName: item.user.profile?.displayName ?? 'Unnamed collector',
+          username: item.user.profile?.publicUsername ?? null,
+          email: item.user.email,
+        },
+        membership: {
+          planId: item.plan.code,
+          planName: item.plan.displayName,
+          status: item.status,
+          source: item.provider === 'STAGING_DEMO' ? 'STAGING_DEMO' : item.provider ? 'PROVIDER' : 'MANUAL',
+          currentPeriodStart: null,
+          currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
+          cancelAtPeriodEnd: item.cancelAtPeriodEnd,
+          trialEnd: null,
+          providerConfigured: Boolean(item.provider && item.provider !== 'STAGING_DEMO'),
+        },
+        plan: {
+          code: item.plan.code,
+          displayName: item.plan.displayName,
+          monthlyPriceMinor: item.plan.monthlyPriceMinor.toString(),
+          currency: item.plan.currency,
+        },
+        usage: {
+          activeCollectibles: usage.activeCollectibles,
+          activeCollectiblesLimit: activeLimit,
+          activeCollectiblesPercent: activePercent,
+          monthlySubmissions: usage.monthlySubmissionsUsed,
+          monthlySubmissionsLimit: monthlyLimit,
+          monthlySubmissionsPercent: monthlyPercent,
+          concurrentIntake: usage.concurrentIntake,
+          concurrentIntakeLimit: usage.maxConcurrentIntake,
+          concurrentIntakeAtLimit:
+            usage.maxConcurrentIntake !== null && usage.concurrentIntake >= usage.maxConcurrentIntake,
+          billingPeriodStart: usage.billingPeriodStart,
+          billingPeriodEnd: usage.billingPeriodEnd,
+        },
+        billing: {
+          nextBillingDate: item.currentPeriodEnd?.toISOString() ?? null,
+          health: item.status === 'PAST_DUE' ? 'PAST_DUE' : 'CURRENT',
+        },
+        updatedAt: item.updatedAt.toISOString(),
       };
-      if (
-        (activeCollectorSubmissionStatuses as readonly string[]).includes(
-          submission.status,
-        )
-      )
-        usage.active += 1;
-      if (
-        submission.createdAt >= period.start &&
-        submission.createdAt < period.end &&
-        submission.status !== 'CANCELLED'
-      )
-        usage.monthly += 1;
-      if (
-        submission.intake &&
-        [
-          'VAULT_SELECTED',
-          'SHIPPING_REQUIRED',
-          'IN_TRANSIT',
-          'DELIVERED',
-        ].includes(submission.intake.status)
-      )
-        usage.concurrentIntake += 1;
-      usageByUser.set(submission.ownerUserId, usage);
-    }
+    });
+    const count = (status: string) => statusOverview[status] ?? 0;
     return {
-      items: rows
-        .map((item) => {
-          const usage = usageByUser.get(item.user.id) ?? {
-            active: 0,
-            monthly: 0,
-            concurrentIntake: 0,
-          };
-          return {
-            id: item.id,
-            collector: {
-              id: item.user.id,
-              displayName:
-                item.user.profile?.displayName ?? 'Unnamed collector',
-              username: item.user.profile?.publicUsername ?? null,
-              email: item.user.email,
-            },
-            plan: {
-              code: item.plan.code,
-              displayName: item.plan.displayName,
-              monthlyPriceMinor: item.plan.monthlyPriceMinor.toString(),
-              currency: item.plan.currency,
-            },
-            status: item.status,
-            currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
-            cancelAtPeriodEnd: item.cancelAtPeriodEnd,
-            usage: {
-              activeCollectibles: usage.active,
-              activeCollectiblesLimit: numberEntitlement(
-                item.plan.entitlements,
-                'maxActiveCollectibles',
-              ),
-              monthlySubmissions: usage.monthly,
-              monthlySubmissionsLimit: numberEntitlement(
-                item.plan.entitlements,
-                'monthlySubmissionLimit',
-              ),
-              concurrentIntake: usage.concurrentIntake,
-              concurrentIntakeLimit: numberEntitlement(
-                item.plan.entitlements,
-                'maxConcurrentIntake',
-              ),
-              billingPeriodStart: period.start.toISOString(),
-              billingPeriodEnd: period.end.toISOString(),
-            },
-            submissionCount: item.user._count.submissions,
-            updatedAt: item.updatedAt.toISOString(),
-          };
-        })
-        .filter((item) => !input.status || item.status === input.status)
-        .filter(
-          (item) =>
-            !input.q ||
-            `${item.collector.displayName} ${item.collector.username ?? ''} ${item.collector.email}`
-              .toLowerCase()
-              .includes(input.q.toLowerCase()),
-        ),
+      items,
+      pagination: {
+        page: input.page,
+        pageSize: input.pageSize,
+        total,
+        totalPages: Math.ceil(total / input.pageSize),
+      },
+      kpis: {
+        active: count('ACTIVE'),
+        starter: planDistribution.STARTER,
+        pro: planDistribution.PRO,
+        elite: planDistribution.ELITE,
+        pastDue: count('PAST_DUE'),
+        trialing: count('TRIALING'),
+        total,
+      },
+      statusOverview,
+      planDistribution,
+      recentActivity: recentEvents.map((event) => ({
+        id: event.id,
+        title: activityTitle(event.action),
+        reference: event.resourceId,
+        occurredAt: event.createdAt.toISOString(),
+      })),
     };
   }
 

@@ -539,21 +539,54 @@ export type AdminMembershipRow = {
   id: string;
   collector: { id: string; displayName: string; username: string | null; email: string };
   plan: { code: string; displayName: string; monthlyPriceMinor: string; currency: string };
-  status: string;
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
+  membership: {
+    planId: string;
+    planName: string;
+    status: string;
+    source: string;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    trialEnd: string | null;
+    providerConfigured: boolean;
+  };
   usage: {
     activeCollectibles: number;
     activeCollectiblesLimit: number | null;
+    activeCollectiblesPercent: number | null;
     monthlySubmissions: number;
     monthlySubmissionsLimit: number | null;
+    monthlySubmissionsPercent: number | null;
     concurrentIntake: number;
     concurrentIntakeLimit: number | null;
+    concurrentIntakeAtLimit: boolean;
     billingPeriodStart: string;
     billingPeriodEnd: string;
   };
-  submissionCount: number;
+  billing: { nextBillingDate: string | null; health: string };
   updatedAt: string;
+};
+
+export type AdminMembershipDirectoryResponse = {
+  items: AdminMembershipRow[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  kpis: {
+    active: number;
+    starter: number;
+    pro: number;
+    elite: number;
+    pastDue: number;
+    trialing: number;
+    total: number;
+  };
+  statusOverview: Record<string, number>;
+  planDistribution: Record<string, number>;
+  recentActivity: Array<{
+    id: string;
+    title: string;
+    reference: string | null;
+    occurredAt: string;
+  }>;
 };
 
 export type AdminSearchResult = {
@@ -802,9 +835,13 @@ export interface AdminRepository {
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
   listMemberships(input?: {
     status?: string;
+    plan?: string;
     q?: string;
-    limit?: number;
-  }): Promise<{ items: AdminMembershipRow[] }>;
+    page?: number;
+    pageSize?: number;
+    sort?: string;
+    sortDirection?: "asc" | "desc";
+  }): Promise<AdminMembershipDirectoryResponse>;
   listUsers(input?: {
     q?: string;
     role?: string;

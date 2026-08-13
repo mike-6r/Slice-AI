@@ -6,6 +6,7 @@ import type {
   AdminOverview,
   AdminOperationsOverview,
   AdminIntakeRow,
+  AdminMembershipDirectoryResponse,
   AdminMembershipRow,
   AdminRiskOperations,
   AdminComplianceDetail,
@@ -1221,21 +1222,47 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
       ),
       currency: stringField(plan.currency, "admin membership.plan.currency"),
     },
-    status: stringField(value.status, "admin membership.status"),
-    currentPeriodEnd: nullableString(value.currentPeriodEnd, "admin membership.currentPeriodEnd"),
-    cancelAtPeriodEnd: Boolean(value.cancelAtPeriodEnd),
+    membership: (() => {
+      const membership = objectField(value.membership, "admin membership.membership");
+      return {
+        planId: stringField(membership.planId, "admin membership.membership.planId"),
+        planName: stringField(membership.planName, "admin membership.membership.planName"),
+        status: stringField(membership.status, "admin membership.membership.status"),
+        source: stringField(membership.source, "admin membership.membership.source"),
+        currentPeriodStart: nullableString(
+          membership.currentPeriodStart,
+          "admin membership.membership.currentPeriodStart",
+        ),
+        currentPeriodEnd: nullableString(
+          membership.currentPeriodEnd,
+          "admin membership.membership.currentPeriodEnd",
+        ),
+        cancelAtPeriodEnd: Boolean(membership.cancelAtPeriodEnd),
+        trialEnd: nullableString(membership.trialEnd, "admin membership.membership.trialEnd"),
+        providerConfigured: Boolean(membership.providerConfigured),
+      };
+    })(),
     usage: (() => {
       const usage = objectField(value.usage, "admin membership.usage");
       return {
         activeCollectibles: Number(usage.activeCollectibles ?? 0),
         activeCollectiblesLimit:
           typeof usage.activeCollectiblesLimit === "number" ? usage.activeCollectiblesLimit : null,
+        activeCollectiblesPercent:
+          typeof usage.activeCollectiblesPercent === "number"
+            ? usage.activeCollectiblesPercent
+            : null,
         monthlySubmissions: Number(usage.monthlySubmissions ?? 0),
         monthlySubmissionsLimit:
           typeof usage.monthlySubmissionsLimit === "number" ? usage.monthlySubmissionsLimit : null,
+        monthlySubmissionsPercent:
+          typeof usage.monthlySubmissionsPercent === "number"
+            ? usage.monthlySubmissionsPercent
+            : null,
         concurrentIntake: Number(usage.concurrentIntake ?? 0),
         concurrentIntakeLimit:
           typeof usage.concurrentIntakeLimit === "number" ? usage.concurrentIntakeLimit : null,
+        concurrentIntakeAtLimit: Boolean(usage.concurrentIntakeAtLimit),
         billingPeriodStart: stringField(
           usage.billingPeriodStart,
           "admin membership.usage.billingPeriodStart",
@@ -1246,8 +1273,60 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
         ),
       };
     })(),
-    submissionCount: Number(value.submissionCount ?? 0),
+    billing: (() => {
+      const billing = objectField(value.billing, "admin membership.billing");
+      return {
+        nextBillingDate: nullableString(
+          billing.nextBillingDate,
+          "admin membership.billing.nextBillingDate",
+        ),
+        health: stringField(billing.health, "admin membership.billing.health"),
+      };
+    })(),
     updatedAt: stringField(value.updatedAt, "admin membership.updatedAt"),
+  };
+};
+
+const mapAdminMembershipDirectory = (raw: unknown): AdminMembershipDirectoryResponse => {
+  const value = objectField(raw, "admin memberships");
+  const pagination = objectField(value.pagination, "admin memberships.pagination");
+  const kpis = objectField(value.kpis, "admin memberships.kpis");
+  const numericRecord = (input: unknown) => {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+    return Object.fromEntries(
+      Object.entries(input).map(([key, entry]) => [key, Number(entry ?? 0)]),
+    );
+  };
+  return {
+    items: Array.isArray(value.items) ? value.items.map(mapAdminMembership) : [],
+    pagination: {
+      page: Number(pagination.page ?? 1),
+      pageSize: Number(pagination.pageSize ?? 10),
+      total: Number(pagination.total ?? 0),
+      totalPages: Number(pagination.totalPages ?? 0),
+    },
+    kpis: {
+      active: Number(kpis.active ?? 0),
+      starter: Number(kpis.starter ?? 0),
+      pro: Number(kpis.pro ?? 0),
+      elite: Number(kpis.elite ?? 0),
+      pastDue: Number(kpis.pastDue ?? 0),
+      trialing: Number(kpis.trialing ?? 0),
+      total: Number(kpis.total ?? 0),
+    },
+    statusOverview: numericRecord(value.statusOverview),
+    planDistribution: numericRecord(value.planDistribution),
+    recentActivity: Array.isArray(value.recentActivity)
+      ? value.recentActivity.map((entry) => {
+          const activity = objectField(entry, "admin membership activity");
+          return {
+            id: stringField(activity.id, "admin membership activity.id"),
+            title: stringField(activity.title, "admin membership activity.title"),
+            reference: nullableString(activity.reference, "admin membership activity.reference"),
+            occurredAt: stringField(activity.occurredAt, "admin membership activity.occurredAt"),
+          };
+        })
+      : [],
   };
 };
 
@@ -1665,7 +1744,7 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       await client.get<unknown>("/admin/memberships", input),
       "admin memberships",
     );
-    return { items: Array.isArray(value.items) ? value.items.map(mapAdminMembership) : [] };
+    return mapAdminMembershipDirectory(value);
   },
   async listUsers(input) {
     const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
