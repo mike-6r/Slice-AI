@@ -297,7 +297,19 @@ export const mockRepositories: AppRepositories = {
   },
   reviews: {
     async listQueue() {
-      return { items: [], nextCursor: null };
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+        counts: {
+          all: 0,
+          highPriority: 0,
+          awaitingEvidence: 0,
+          researchPending: 0,
+          readyToReview: 0,
+        },
+        summary: { highPriority: 0, awaitingEvidence: 0, researchPending: 0, readyToReview: 0 },
+        nextCursor: null,
+      };
     },
     async getDetail() {
       throw new Error("Review requires the API service.");

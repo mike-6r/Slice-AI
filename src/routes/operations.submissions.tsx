@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/operations/submissions")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    submission: typeof search.submission === "string" ? search.submission : undefined,
+  }),
   component: SubmissionOperationsPage,
 });
 
@@ -13,9 +16,11 @@ export function SubmissionOperationsPage() {
   const services = useAppServices();
   const session = useSession();
   const client = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const { submission: deepLinkedSubmission } = Route.useSearch();
+  const [selected, setSelected] = useState<string | null>(deepLinkedSubmission ?? null);
   const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
   const [note, setNote] = useState("");
+  useEffect(() => setSelected(deepLinkedSubmission ?? null), [deepLinkedSubmission]);
   const queue = useQuery({
     queryKey: ["review", "queue"],
     queryFn: () => services.repositories.reviews.listQueue({ limit: 50 }),
@@ -79,7 +84,9 @@ export function SubmissionOperationsPage() {
                   className="w-full py-3 text-left hover:text-accent"
                 >
                   <span className="block font-mono text-xs text-muted">{item.id}</span>
-                  <span className="text-sm font-medium">{item.status.replaceAll("_", " ")}</span>
+                  <span className="text-sm font-medium">
+                    {item.reviewState.replaceAll("_", " ")}
+                  </span>
                 </button>
               </li>
             ))}

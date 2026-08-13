@@ -87,6 +87,70 @@ export interface SubmissionReviewSummary {
   gradeScaleEntryId: string | null;
 }
 
+export type ReviewQueuePriority = "HIGH" | "MEDIUM" | "LOW";
+export type ReviewQueueEvidenceStatus = "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";
+export type ReviewQueueResearchStatus =
+  "COMPLETED" | "IN_PROGRESS" | "PENDING" | "UNAVAILABLE" | "NOT_REQUESTED";
+
+export interface SubmissionReviewQueueItem {
+  id: string;
+  submissionReference: string;
+  reviewState: string;
+  category: string;
+  collector: {
+    displayName: string;
+    username: string | null;
+    membership: string | null;
+  };
+  collectible: {
+    title: string;
+    variant: string | null;
+    set: string | null;
+    grader: string | null;
+    grade: string | null;
+    cardNumber: string | null;
+  };
+  thumbnailUrl: string | null;
+  evidence: {
+    percent: number;
+    status: ReviewQueueEvidenceStatus;
+    missingRequired: number;
+    presentRequired: number;
+    required: number;
+    itemCount: number;
+  };
+  research: {
+    status: ReviewQueueResearchStatus;
+    observedAt: string | null;
+  };
+  priority: ReviewQueuePriority;
+  submittedAt: ISODateTime;
+}
+
+export interface SubmissionReviewQueueResponse {
+  items: SubmissionReviewQueueItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  counts: {
+    all: number;
+    highPriority: number;
+    awaitingEvidence: number;
+    researchPending: number;
+    readyToReview: number;
+  };
+  summary: {
+    highPriority: number;
+    awaitingEvidence: number;
+    researchPending: number;
+    readyToReview: number;
+  };
+  nextCursor: string | null;
+}
+
 export interface SubmissionReviewDetail extends SubmissionReviewSummary {
   version: number;
   declaredMetadata: Record<string, unknown> | null;

@@ -32,6 +32,7 @@ import type {
   SubmissionCategory,
   SubmissionDetail,
   SubmissionReviewDetail,
+  SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
   PublicationReadiness,
   UpdateSubmissionDraft,
@@ -94,10 +95,21 @@ export interface SubmissionRepository {
   cancel(id: string, version: number): Promise<SubmissionDetail>;
 }
 export interface SubmissionReviewRepository {
-  listQueue(input?: { cursor?: string; limit?: number }): Promise<{
-    items: SubmissionReviewSummary[];
-    nextCursor: string | null;
-  }>;
+  listQueue(input?: {
+    cursor?: string;
+    limit?: number;
+    q?: string;
+    priority?: "HIGH" | "MEDIUM" | "LOW";
+    status?: string;
+    evidence?: "complete" | "missing" | "partial";
+    research?: "completed" | "in_progress" | "pending" | "unavailable" | "not_requested";
+    submittedFrom?: string;
+    submittedTo?: string;
+    sort?: "submitted" | "priority" | "collector" | "research" | "evidence";
+    sortDirection?: "asc" | "desc";
+    page?: number;
+    pageSize?: number;
+  }): Promise<SubmissionReviewQueueResponse>;
   getDetail(id: string): Promise<SubmissionReviewDetail>;
   claim(id: string): Promise<{ submissionId: string; status: string }>;
   decide(

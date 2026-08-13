@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -49,7 +49,7 @@ import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
-import type { AssetOperationSummary } from "@/domain/submission";
+import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
 import type {
   AdminAccountsSummary,
   AdminComplianceCase,
@@ -62,10 +62,21 @@ import type {
 } from "@/data/repositories";
 
 export const Route = createFileRoute("/admin")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): AdminSearch => ({
     section: isAdminSection(search.section) ? search.section : "control",
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
     tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
+    q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
+    priority: typeof search.priority === "string" ? search.priority : undefined,
+    status: typeof search.status === "string" ? search.status : undefined,
+    evidence: typeof search.evidence === "string" ? search.evidence : undefined,
+    research: typeof search.research === "string" ? search.research : undefined,
+    submittedFrom: typeof search.submittedFrom === "string" ? search.submittedFrom : undefined,
+    submittedTo: typeof search.submittedTo === "string" ? search.submittedTo : undefined,
+    sort: typeof search.sort === "string" ? search.sort : undefined,
+    sortDirection: typeof search.sortDirection === "string" ? search.sortDirection : undefined,
+    page: typeof search.page === "string" ? search.page : undefined,
+    pageSize: typeof search.pageSize === "string" ? search.pageSize : undefined,
   }),
   head: () => ({ meta: [{ title: "Admin Console | Slice" }] }),
   component: AdminPage,
@@ -88,6 +99,23 @@ type AdminSection =
   | "flags"
   | "integrations"
   | "settings";
+
+type AdminSearch = {
+  section: AdminSection;
+  user?: string;
+  tab?: string;
+  q?: string;
+  priority?: string;
+  status?: string;
+  evidence?: string;
+  research?: string;
+  submittedFrom?: string;
+  submittedTo?: string;
+  sort?: string;
+  sortDirection?: string;
+  page?: string;
+  pageSize?: string;
+};
 
 type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashboard };
 
@@ -132,9 +160,22 @@ function AdminPage() {
 
 function AdminConsole() {
   const services = useAppServices();
-  const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { section, tab: selectedUserTab } = Route.useSearch();
+  const {
+    section,
+    tab: selectedUserTab,
+    q: reviewQuery,
+    priority: reviewPriority,
+    status: reviewStatus,
+    evidence: reviewEvidence,
+    research: reviewResearch,
+    submittedFrom: reviewSubmittedFrom,
+    submittedTo: reviewSubmittedTo,
+    sort: reviewSort,
+    sortDirection: reviewSortDirection,
+    page: reviewPageParam,
+    pageSize: reviewPageSizeParam,
+  } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -158,6 +199,7 @@ function AdminConsole() {
   const [accountFiltersOpen, setAccountFiltersOpen] = useState(false);
   const [complianceFilter, setComplianceFilter] = useState("All");
   const [selectedComplianceCase, setSelectedComplianceCase] = useState<string | undefined>();
+  const [reviewSearchInput, setReviewSearchInput] = useState(reviewQuery ?? "");
   useEffect(() => {
     const timer = window.setTimeout(() => setAccountSearch(accountSearchInput.trim()), 350);
     return () => window.clearTimeout(timer);
@@ -169,32 +211,82 @@ function AdminConsole() {
     const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+  useEffect(() => {
+    setReviewSearchInput(reviewQuery ?? "");
+  }, [reviewQuery]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = reviewSearchInput.trim() || undefined;
+      if (next === reviewQuery) return;
+      void navigate({
+        search: (current) => ({ ...current, q: next, page: "1" }),
+        replace: true,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [navigate, reviewQuery, reviewSearchInput]);
   const user = useQuery({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
     staleTime: 60_000,
   });
   const reviews = useQuery({
-    queryKey: ["admin", "reviews"],
-    queryFn: () => services.repositories.reviews.listQueue({ limit: 100 }),
+    queryKey: [
+      "admin",
+      "reviews",
+      reviewQuery,
+      reviewPriority,
+      reviewStatus,
+      reviewEvidence,
+      reviewResearch,
+      reviewSubmittedFrom,
+      reviewSubmittedTo,
+      reviewSort,
+      reviewSortDirection,
+      reviewPageParam,
+      reviewPageSizeParam,
+    ],
+    queryFn: () =>
+      services.repositories.reviews.listQueue(
+        section === "moderation"
+          ? {
+              q: reviewQuery,
+              priority: ["HIGH", "MEDIUM", "LOW"].includes(reviewPriority ?? "")
+                ? (reviewPriority as "HIGH" | "MEDIUM" | "LOW")
+                : undefined,
+              status: ["SUBMITTED", "IN_REVIEW"].includes(reviewStatus ?? "")
+                ? (reviewStatus as "SUBMITTED" | "IN_REVIEW")
+                : undefined,
+              evidence: ["complete", "missing", "partial"].includes(reviewEvidence ?? "")
+                ? (reviewEvidence as "complete" | "missing" | "partial")
+                : undefined,
+              research: [
+                "completed",
+                "in_progress",
+                "pending",
+                "unavailable",
+                "not_requested",
+              ].includes(reviewResearch ?? "")
+                ? (reviewResearch as
+                    "completed" | "in_progress" | "pending" | "unavailable" | "not_requested")
+                : undefined,
+              submittedFrom: reviewSubmittedFrom,
+              submittedTo: reviewSubmittedTo,
+              sort: ["submitted", "priority", "collector", "research", "evidence"].includes(
+                reviewSort ?? "",
+              )
+                ? (reviewSort as "submitted" | "priority" | "collector" | "research" | "evidence")
+                : undefined,
+              sortDirection: ["asc", "desc"].includes(reviewSortDirection ?? "")
+                ? (reviewSortDirection as "asc" | "desc")
+                : undefined,
+              page: Math.max(1, Number(reviewPageParam ?? 1)),
+              pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
+            }
+          : { limit: 100 },
+      ),
     enabled: section === "control" || section === "moderation",
     staleTime: 30_000,
-  });
-  const reviewDecision = useMutation({
-    mutationFn: async ({
-      id,
-      decision,
-    }: {
-      id: string;
-      decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
-    }) => {
-      await services.repositories.reviews.claim(id);
-      return services.repositories.reviews.decide(id, decision, { reasonCode: "STAFF_REVIEW" });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "operations", "overview"] });
-    },
   });
   const operations = useQuery({
     queryKey: ["admin", "operations"],
@@ -284,10 +376,21 @@ function AdminConsole() {
     void navigate({ search: { section: next, user: undefined, tab: undefined }, replace: true });
     setMobileOpen(false);
   };
+  const updateReviewSearch = (patch: Partial<AdminSearch>) => {
+    void navigate({
+      search: (current) => ({ ...current, section: "moderation", ...patch }),
+      replace: true,
+    });
+  };
   const openUser = (id: string) => {
     void navigate({ search: { section: "users", user: id, tab: undefined }, replace: true });
   };
-  const reviewItems = reviews.data?.items ?? [];
+  const reviewItems =
+    reviews.data?.items.map((item) => ({
+      id: item.id,
+      status: item.reviewState,
+      submittedAt: item.submittedAt,
+    })) ?? [];
   const operationItems = operations.data ?? [];
   const attentionOperations = operationItems.filter(
     (item) => item.valuationStatus === "MISSING" || item.custodyStatus !== "SECURED",
@@ -435,18 +538,26 @@ function AdminConsole() {
             risk={riskOperations.data}
           />
         ) : section === "moderation" ? (
-          <AssetModeration
-            reviews={reviewItems}
-            operations={operationItems}
-            loading={operations.isLoading || reviews.isLoading}
-            failed={operations.isError || reviews.isError}
-            retry={() => {
-              void operations.refetch();
-              void reviews.refetch();
+          <ReviewQueue
+            data={reviews.data}
+            loading={reviews.isLoading}
+            failed={reviews.isError}
+            retry={() => void reviews.refetch()}
+            searchInput={reviewSearchInput}
+            setSearchInput={setReviewSearchInput}
+            filters={{
+              priority: reviewPriority ?? "",
+              status: reviewStatus ?? "",
+              evidence: reviewEvidence ?? "",
+              research: reviewResearch ?? "",
+              submittedFrom: reviewSubmittedFrom ?? "",
+              submittedTo: reviewSubmittedTo ?? "",
+              sort: reviewSort ?? "submitted",
+              sortDirection: reviewSortDirection ?? "asc",
+              page: Math.max(1, Number(reviewPageParam ?? 1)),
+              pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
             }}
-            deciding={reviewDecision.isPending}
-            decisionError={reviewDecision.isError}
-            decide={(id, decision) => reviewDecision.mutate({ id, decision })}
+            updateSearch={updateReviewSearch}
           />
         ) : section === "intake" ? (
           <PhysicalIntakeWorkspace
@@ -1229,6 +1340,719 @@ function ControlCenter({
       </div>
     </div>
   );
+}
+
+type ReviewQueueFilters = {
+  priority: string;
+  status: string;
+  evidence: string;
+  research: string;
+  submittedFrom: string;
+  submittedTo: string;
+  sort: string;
+  sortDirection: string;
+  page: number;
+  pageSize: number;
+};
+
+function ReviewQueue({
+  data,
+  loading,
+  failed,
+  retry,
+  searchInput,
+  setSearchInput,
+  filters,
+  updateSearch,
+}: {
+  data: SubmissionReviewQueueResponse | undefined;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  searchInput: string;
+  setSearchInput: (value: string) => void;
+  filters: ReviewQueueFilters;
+  updateSearch: (patch: Partial<AdminSearch>) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const items = data?.items ?? [];
+  const counts = data?.counts ?? {
+    all: 0,
+    highPriority: 0,
+    awaitingEvidence: 0,
+    researchPending: 0,
+    readyToReview: 0,
+  };
+  const totalPages = data?.pagination.totalPages ?? 1;
+  const tab =
+    filters.priority === "HIGH"
+      ? "high"
+      : filters.evidence === "missing"
+        ? "evidence"
+        : filters.research === "pending" || filters.research === "in_progress"
+          ? "research"
+          : filters.evidence === "complete" && filters.status === "SUBMITTED"
+            ? "ready"
+            : "all";
+  const selectTab = (next: "all" | "high" | "evidence" | "research" | "ready") => {
+    updateSearch({
+      priority: next === "high" ? "HIGH" : undefined,
+      evidence: next === "evidence" ? "missing" : next === "ready" ? "complete" : undefined,
+      research: next === "research" ? "pending" : undefined,
+      status: next === "ready" ? "SUBMITTED" : undefined,
+      page: "1",
+    });
+    setSelected([]);
+  };
+  const toggleSelected = (id: string) =>
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => setSelected(allSelected ? [] : items.map((item) => item.id));
+  const clearFilters = () => {
+    setSearchInput("");
+    updateSearch({
+      q: undefined,
+      priority: undefined,
+      status: undefined,
+      evidence: undefined,
+      research: undefined,
+      submittedFrom: undefined,
+      submittedTo: undefined,
+      sort: "submitted",
+      sortDirection: "asc",
+      page: "1",
+    });
+  };
+  if (loading)
+    return (
+      <AdminPageSection
+        title="Review Queue"
+        detail="Loading the authorized submission review queue."
+      >
+        <div className="admin-review-queue-skeleton" aria-label="Loading review queue">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </AdminPageSection>
+    );
+  if (failed)
+    return (
+      <AdminState
+        title="We couldn't load the review queue"
+        detail="The queue could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <div className="admin-review-queue">
+      <div className="admin-review-queue-heading">
+        <div>
+          <p className="admin-breadcrumb">
+            Submissions <span>›</span> Review Queue
+          </p>
+          <h2>Review Queue</h2>
+          <p>Review and evaluate submissions before acceptance into Slice.</p>
+        </div>
+      </div>
+      <div className="admin-review-kpis">
+        <ReviewKpi
+          icon={ClipboardCheck}
+          label="Total in queue"
+          value={counts.all}
+          detail="Current reviewable submissions"
+        />
+        <ReviewKpi
+          icon={AlertTriangle}
+          label="High priority"
+          value={counts.highPriority}
+          detail="Operational age rule"
+          tone="warning"
+        />
+        <ReviewKpi
+          icon={Archive}
+          label="Awaiting evidence"
+          value={counts.awaitingEvidence}
+          detail="Missing required evidence"
+          tone="purple"
+        />
+        <ReviewKpi
+          icon={BarChart3}
+          label="Research pending"
+          value={counts.researchPending}
+          detail="Research not complete"
+          tone="blue"
+        />
+        <ReviewKpi
+          icon={CheckCircle2}
+          label="Ready to review"
+          value={counts.readyToReview}
+          detail="Evidence complete"
+          tone="positive"
+        />
+      </div>
+      <div className="admin-review-queue-layout">
+        <section className="admin-panel admin-review-table-panel">
+          <div className="admin-review-tabs" role="tablist" aria-label="Review queue filters">
+            <ReviewTab
+              active={tab === "all"}
+              label="All"
+              count={counts.all}
+              onClick={() => selectTab("all")}
+            />
+            <ReviewTab
+              active={tab === "high"}
+              label="High Priority"
+              count={counts.highPriority}
+              onClick={() => selectTab("high")}
+            />
+            <ReviewTab
+              active={tab === "evidence"}
+              label="Awaiting Evidence"
+              count={counts.awaitingEvidence}
+              onClick={() => selectTab("evidence")}
+            />
+            <ReviewTab
+              active={tab === "research"}
+              label="Research Pending"
+              count={counts.researchPending}
+              onClick={() => selectTab("research")}
+            />
+            <ReviewTab
+              active={tab === "ready"}
+              label="Ready to Review"
+              count={counts.readyToReview}
+              onClick={() => selectTab("ready")}
+            />
+          </div>
+          <div className="admin-review-toolbar">
+            <label className="admin-review-search">
+              <Search aria-hidden="true" />
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search by collector, card, submission ID..."
+                aria-label="Search review queue"
+              />
+            </label>
+            <ReviewSelect
+              label="Priority"
+              value={filters.priority}
+              options={[
+                ["", "Priority: All"],
+                ["HIGH", "High"],
+                ["MEDIUM", "Medium"],
+                ["LOW", "Low"],
+              ]}
+              onChange={(value) => updateSearch({ priority: value || undefined, page: "1" })}
+            />
+            <ReviewSelect
+              label="Status"
+              value={filters.status}
+              options={[
+                ["", "Status: All"],
+                ["SUBMITTED", "Submitted"],
+                ["IN_REVIEW", "In Review"],
+              ]}
+              onChange={(value) => updateSearch({ status: value || undefined, page: "1" })}
+            />
+            <ReviewSelect
+              label="Evidence"
+              value={filters.evidence}
+              options={[
+                ["", "Evidence: All"],
+                ["complete", "Complete"],
+                ["missing", "Missing Required"],
+                ["partial", "Partial"],
+              ]}
+              onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
+            />
+          </div>
+          <div className="admin-review-table-wrap">
+            <table className="admin-review-table">
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label="Select all visible submissions"
+                    />
+                  </th>
+                  <th>Submission</th>
+                  <th>Collector</th>
+                  <th>Card / Item</th>
+                  <th>Evidence</th>
+                  <th>Research</th>
+                  <th>Priority</th>
+                  <th>Submitted</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length ? (
+                  items.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(item.id)}
+                          onChange={() => toggleSelected(item.id)}
+                          aria-label={`Select ${item.submissionReference}`}
+                        />
+                      </td>
+                      <td>
+                        <div className="admin-review-submission-cell">
+                          <span className="admin-review-thumb">
+                            {item.thumbnailUrl ? (
+                              <img src={item.thumbnailUrl} alt="" />
+                            ) : (
+                              <Archive aria-hidden="true" />
+                            )}
+                          </span>
+                          <span>
+                            <strong>{item.submissionReference}</strong>
+                            <small>
+                              {item.category} · {item.evidence.itemCount} item
+                              {item.evidence.itemCount === 1 ? "" : "s"}
+                            </small>
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-review-collector">
+                          <strong>{item.collector.displayName}</strong>
+                          <small>
+                            {item.collector.username
+                              ? `@${item.collector.username}`
+                              : "No username"}
+                          </small>
+                          {item.collector.membership ? <em>{item.collector.membership}</em> : null}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-review-collectible">
+                          <strong>{item.collectible.title}</strong>
+                          <small>
+                            {[
+                              item.collectible.variant,
+                              item.collectible.set,
+                              item.collectible.cardNumber,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "Identity details pending"}
+                          </small>
+                          <small>
+                            {[item.collectible.grader, item.collectible.grade]
+                              .filter(Boolean)
+                              .join(" ") || "Grade not provided"}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <div
+                          className={`admin-review-evidence admin-review-evidence--${item.evidence.status.toLowerCase()}`}
+                        >
+                          <strong>{item.evidence.percent}%</strong>
+                          <small>
+                            {item.evidence.status === "COMPLETE"
+                              ? "Complete"
+                              : `Missing (${item.evidence.missingRequired})`}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <div
+                          className={`admin-review-research admin-review-research--${item.research.status.toLowerCase()}`}
+                        >
+                          <strong>{reviewResearchLabel(item.research.status)}</strong>
+                          <small>
+                            {item.research.observedAt ? date(item.research.observedAt) : "—"}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`admin-review-priority admin-review-priority--${item.priority.toLowerCase()}`}
+                        >
+                          {item.priority === "HIGH" ? "↑" : item.priority === "MEDIUM" ? "↑" : "↓"}{" "}
+                          {sentence(item.priority)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="admin-review-submitted">
+                          {reviewDateTime(item.submittedAt)}
+                        </span>
+                      </td>
+                      <td>
+                        <Link
+                          className="admin-review-action"
+                          to="/operations/submissions"
+                          search={{ submission: item.id }}
+                        >
+                          Review <ArrowRight aria-hidden="true" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9}>
+                      <AdminEmpty
+                        detail={
+                          searchInput || filters.priority || filters.evidence || filters.research
+                            ? "No submissions match these filters."
+                            : "No submissions currently need review."
+                        }
+                      />
+                      {searchInput || filters.priority || filters.evidence || filters.research ? (
+                        <button
+                          type="button"
+                          className="admin-inline-action"
+                          onClick={clearFilters}
+                        >
+                          Clear filters
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="admin-review-pagination">
+            <span>
+              Showing {items.length ? (filters.page - 1) * filters.pageSize + 1 : 0} to{" "}
+              {Math.min(filters.page * filters.pageSize, data?.pagination.total ?? 0)} of{" "}
+              {data?.pagination.total ?? 0} submissions
+            </span>
+            <div>
+              <button
+                type="button"
+                disabled={filters.page <= 1}
+                onClick={() => updateSearch({ page: String(filters.page - 1) })}
+              >
+                ‹
+              </button>
+              <strong>{filters.page}</strong>
+              <button
+                type="button"
+                disabled={filters.page >= totalPages}
+                onClick={() => updateSearch({ page: String(filters.page + 1) })}
+              >
+                ›
+              </button>
+              <ReviewSelect
+                label="Page size"
+                value={String(filters.pageSize)}
+                options={[
+                  ["10", "10 / page"],
+                  ["25", "25 / page"],
+                  ["50", "50 / page"],
+                ]}
+                onChange={(value) => updateSearch({ pageSize: value, page: "1" })}
+              />
+            </div>
+          </div>
+        </section>
+        <aside className="admin-review-rail">
+          <section className="admin-panel">
+            <AdminPanelHeading title="Queue Summary" />
+            <div className="admin-review-summary">
+              <strong>{counts.all}</strong>
+              <span>Total</span>
+            </div>
+            <ReviewSummaryBar
+              label="High Priority"
+              value={counts.highPriority}
+              total={counts.all}
+              tone="warning"
+            />
+            <ReviewSummaryBar
+              label="Awaiting Evidence"
+              value={counts.awaitingEvidence}
+              total={counts.all}
+              tone="purple"
+            />
+            <ReviewSummaryBar
+              label="Research Pending"
+              value={counts.researchPending}
+              total={counts.all}
+              tone="blue"
+            />
+            <ReviewSummaryBar
+              label="Ready to Review"
+              value={counts.readyToReview}
+              total={counts.all}
+              tone="positive"
+            />
+            <small className="admin-muted">
+              Categories can overlap; counts are intentionally not presented as exclusive
+              percentages.
+            </small>
+          </section>
+          <section className="admin-panel">
+            <AdminPanelHeading title="Filters" action="Clear all" onClick={clearFilters} />
+            <label className="admin-review-side-field">
+              Search
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Collector, card, ID..."
+                aria-label="Filter review queue"
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Priority
+              <ReviewSelect
+                label="Filter priority"
+                value={filters.priority}
+                options={[
+                  ["", "All priorities"],
+                  ["HIGH", "High"],
+                  ["MEDIUM", "Medium"],
+                  ["LOW", "Low"],
+                ]}
+                onChange={(value) => updateSearch({ priority: value || undefined, page: "1" })}
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Status
+              <ReviewSelect
+                label="Filter status"
+                value={filters.status}
+                options={[
+                  ["", "All statuses"],
+                  ["SUBMITTED", "Submitted"],
+                  ["IN_REVIEW", "In Review"],
+                ]}
+                onChange={(value) => updateSearch({ status: value || undefined, page: "1" })}
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Evidence completeness
+              <ReviewSelect
+                label="Filter evidence completeness"
+                value={filters.evidence}
+                options={[
+                  ["", "All levels"],
+                  ["complete", "Complete"],
+                  ["missing", "Missing required"],
+                  ["partial", "Partial"],
+                ]}
+                onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Market Research
+              <ReviewSelect
+                label="Market research"
+                value={filters.research}
+                options={[
+                  ["", "All states"],
+                  ["completed", "Completed"],
+                  ["in_progress", "In Progress"],
+                  ["pending", "Pending"],
+                  ["unavailable", "Unavailable"],
+                  ["not_requested", "Not Requested"],
+                ]}
+                onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Submitted date
+              <div className="admin-review-date-fields">
+                <input
+                  type="date"
+                  value={filters.submittedFrom}
+                  onChange={(event) =>
+                    updateSearch({ submittedFrom: event.target.value || undefined, page: "1" })
+                  }
+                  aria-label="Submitted from"
+                />
+                <input
+                  type="date"
+                  value={filters.submittedTo}
+                  onChange={(event) =>
+                    updateSearch({ submittedTo: event.target.value || undefined, page: "1" })
+                  }
+                  aria-label="Submitted to"
+                />
+              </div>
+            </label>
+            <label className="admin-review-side-field">
+              Sort by
+              <ReviewSelect
+                label="Sort by"
+                value={filters.sort}
+                options={[
+                  ["submitted", "Submitted"],
+                  ["priority", "Priority"],
+                  ["collector", "Collector"],
+                  ["research", "Research"],
+                  ["evidence", "Evidence"],
+                ]}
+                onChange={(value) => updateSearch({ sort: value, page: "1" })}
+              />
+            </label>
+            <label className="admin-review-side-field">
+              Direction
+              <ReviewSelect
+                label="Sort direction"
+                value={filters.sortDirection}
+                options={[
+                  ["asc", "Oldest first"],
+                  ["desc", "Newest first"],
+                ]}
+                onChange={(value) => updateSearch({ sortDirection: value, page: "1" })}
+              />
+            </label>
+          </section>
+          <section className="admin-panel">
+            <AdminPanelHeading title="Quick Actions" />
+            {selected[0] ? (
+              <Link
+                className="admin-detail-action"
+                to="/operations/submissions"
+                search={{ submission: selected[0] }}
+              >
+                <ClipboardCheck aria-hidden="true" /> Open selected review
+              </Link>
+            ) : (
+              <button type="button" className="admin-detail-action" disabled>
+                <ClipboardCheck aria-hidden="true" /> Select submissions to review
+              </button>
+            )}
+            <p className="admin-safe-note">
+              Bulk accept/reject and evidence requests are not available without a structured batch
+              workflow.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function ReviewKpi({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  icon: typeof ClipboardCheck;
+  label: string;
+  value: number;
+  detail: string;
+  tone?: string;
+}) {
+  return (
+    <article className={`admin-review-kpi admin-review-kpi--${tone ?? "default"}`}>
+      <span>
+        <Icon aria-hidden="true" />
+      </span>
+      <small>{label}</small>
+      <strong>{value}</strong>
+      <em>{detail}</em>
+    </article>
+  );
+}
+
+function ReviewTab({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={active ? "is-active" : ""}
+      onClick={onClick}
+    >
+      {label} ({count})
+    </button>
+  );
+}
+
+function ReviewSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+      {options.map(([optionValue, optionLabel]) => (
+        <option key={optionValue} value={optionValue}>
+          {optionLabel}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ReviewSummaryBar({
+  label,
+  value,
+  total,
+  tone,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: string;
+}) {
+  return (
+    <div className="admin-review-summary-row">
+      <span>
+        <i className={`admin-review-dot admin-review-dot--${tone}`} />
+        {label}
+      </span>
+      <strong>
+        {value}
+        {total ? ` (${Math.round((value / total) * 100)}%)` : ""}
+      </strong>
+    </div>
+  );
+}
+
+function reviewResearchLabel(status: string) {
+  return (
+    {
+      COMPLETED: "Completed",
+      IN_PROGRESS: "In Progress",
+      PENDING: "Pending",
+      UNAVAILABLE: "Unavailable",
+      NOT_REQUESTED: "Not Requested",
+    }[status] ?? "Pending"
+  );
+}
+
+function reviewDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function AssetModeration({

@@ -42,6 +42,7 @@ import type {
   SubmissionDetail,
   SubmissionMedia,
   SubmissionReviewDetail,
+  SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
   MarketResearchSnapshot,
   CollectibleReferenceImport,
@@ -555,6 +556,98 @@ const mapReviewSummary = (raw: unknown): SubmissionReviewSummary => {
     categoryId: stringField(value.categoryId, "review.categoryId"),
     setId: nullableString(value.setId, "review.setId"),
     gradeScaleEntryId: nullableString(value.gradeScaleEntryId, "review.gradeScaleEntryId"),
+  };
+};
+const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
+  const value = objectField(raw, "review queue");
+  if (!Array.isArray(value.items))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue items from service.");
+  const pagination = objectField(value.pagination, "review queue.pagination");
+  const counts = objectField(value.counts, "review queue.counts");
+  const summary = objectField(value.summary, "review queue.summary");
+  const mapCount = (source: Record<string, unknown>, key: string) => {
+    const count = Number(source[key]);
+    if (!Number.isSafeInteger(count) || count < 0)
+      throw new ApiError("CLIENT_CONTRACT_ERROR", `Invalid review queue.${key}.`);
+    return count;
+  };
+  return {
+    items: value.items.map((rawItem) => {
+      const item = objectField(rawItem, "review queue item");
+      const collector = objectField(item.collector, "review queue collector");
+      const collectible = objectField(item.collectible, "review queue collectible");
+      const evidence = objectField(item.evidence, "review queue evidence");
+      const research = objectField(item.research, "review queue research");
+      const priority = stringField(item.priority, "review queue priority");
+      const evidenceStatus = stringField(evidence.status, "review queue evidence.status");
+      const researchStatus = stringField(research.status, "review queue research.status");
+      if (!["HIGH", "MEDIUM", "LOW"].includes(priority))
+        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue priority.");
+      if (!["COMPLETE", "PARTIAL", "MISSING_REQUIRED"].includes(evidenceStatus))
+        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue evidence status.");
+      if (
+        !["COMPLETED", "IN_PROGRESS", "PENDING", "UNAVAILABLE", "NOT_REQUESTED"].includes(
+          researchStatus,
+        )
+      )
+        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue research status.");
+      return {
+        id: stringField(item.id, "review queue item.id"),
+        submissionReference: stringField(item.submissionReference, "review queue item.reference"),
+        reviewState: stringField(item.reviewState, "review queue item.reviewState"),
+        category: stringField(item.category, "review queue item.category"),
+        collector: {
+          displayName: stringField(collector.displayName, "review queue collector.displayName"),
+          username: nullableString(collector.username, "review queue collector.username"),
+          membership: nullableString(collector.membership, "review queue collector.membership"),
+        },
+        collectible: {
+          title: stringField(collectible.title, "review queue collectible.title"),
+          variant: nullableString(collectible.variant, "review queue collectible.variant"),
+          set: nullableString(collectible.set, "review queue collectible.set"),
+          grader: nullableString(collectible.grader, "review queue collectible.grader"),
+          grade: nullableString(collectible.grade, "review queue collectible.grade"),
+          cardNumber: nullableString(collectible.cardNumber, "review queue collectible.cardNumber"),
+        },
+        thumbnailUrl: nullableString(item.thumbnailUrl, "review queue item.thumbnailUrl"),
+        evidence: {
+          percent: Number(evidence.percent),
+          status:
+            evidenceStatus as SubmissionReviewQueueResponse["items"][number]["evidence"]["status"],
+          missingRequired: Number(evidence.missingRequired),
+          presentRequired: Number(evidence.presentRequired),
+          required: Number(evidence.required),
+          itemCount: Number(evidence.itemCount),
+        },
+        research: {
+          status:
+            researchStatus as SubmissionReviewQueueResponse["items"][number]["research"]["status"],
+          observedAt: nullableString(research.observedAt, "review queue research.observedAt"),
+        },
+        priority: priority as SubmissionReviewQueueResponse["items"][number]["priority"],
+        submittedAt: stringField(item.submittedAt, "review queue item.submittedAt") as ISODateTime,
+      };
+    }),
+    pagination: {
+      page: mapCount(pagination, "page"),
+      pageSize: mapCount(pagination, "pageSize"),
+      total: mapCount(pagination, "total"),
+      totalPages: mapCount(pagination, "totalPages"),
+    },
+    counts: {
+      all: mapCount(counts, "all"),
+      highPriority: mapCount(counts, "highPriority"),
+      awaitingEvidence: mapCount(counts, "awaitingEvidence"),
+      researchPending: mapCount(counts, "researchPending"),
+      readyToReview: mapCount(counts, "readyToReview"),
+    },
+    summary: {
+      highPriority: mapCount(summary, "highPriority"),
+      awaitingEvidence: mapCount(summary, "awaitingEvidence"),
+      researchPending: mapCount(summary, "researchPending"),
+      readyToReview: mapCount(summary, "readyToReview"),
+    },
+    nextCursor: nullableString(value.nextCursor, "review queue.nextCursor"),
   };
 };
 const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
@@ -1744,16 +1837,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
     },
     reviews: {
       async listQueue(input) {
-        const page = objectField(
-          await client.get<unknown>("/reviews/submissions", input),
-          "review queue",
-        );
-        if (!Array.isArray(page.items))
-          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue from service.");
-        return {
-          items: page.items.map(mapReviewSummary),
-          nextCursor: nullableString(page.nextCursor, "review queue.nextCursor"),
-        };
+        return mapReviewQueue(await client.get<unknown>("/reviews/submissions", input));
       },
       async getDetail(id) {
         return mapReviewDetail(await client.get<unknown>(`/reviews/submissions/${id}`));

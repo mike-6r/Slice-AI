@@ -789,43 +789,171 @@ export class SubmissionService {
     );
   }
 
-  async queue(actor: Actor, cursor: string | undefined, limit: number) {
-    const before = decodeCursor(cursor, 'review-queue');
+  async queue(
+    actor: Actor,
+    input: {
+      cursor?: string;
+      limit?: number;
+      q?: string;
+      priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+      status?: 'SUBMITTED' | 'IN_REVIEW';
+      evidence?: 'complete' | 'missing' | 'partial';
+      research?:
+        | 'completed'
+        | 'in_progress'
+        | 'pending'
+        | 'unavailable'
+        | 'not_requested';
+      submittedFrom?: string;
+      submittedTo?: string;
+      sort?: 'submitted' | 'priority' | 'collector' | 'research' | 'evidence';
+      sortDirection?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+    },
+  ) {
     const isAdmin = actor.roles.includes('ADMIN');
-    const rows = await this.prisma.assetSubmission.findMany({
-      where: {
-        ...(isAdmin
+    const submittedFrom = parseDateBoundary(input.submittedFrom, false);
+    const submittedTo = parseDateBoundary(input.submittedTo, true);
+    const search = input.q?.trim();
+    const where: Prisma.AssetSubmissionWhereInput = {
+      AND: [
+        isAdmin
           ? { status: { in: ['SUBMITTED', 'IN_REVIEW'] } }
           : {
               OR: [
                 { status: 'SUBMITTED', reviewerId: null },
                 { status: 'IN_REVIEW', reviewerId: actor.userId },
               ],
-            }),
-        ...(before
-          ? {
-              OR: [
-                { submittedAt: { lt: before.at } },
-                { submittedAt: before.at, id: { lt: before.id } },
-              ],
-            }
-          : {}),
+            },
+        ...(input.status ? [{ status: input.status }] : []),
+        ...(submittedFrom || submittedTo
+          ? [
+              {
+                submittedAt: {
+                  ...(submittedFrom ? { gte: submittedFrom } : {}),
+                  ...(submittedTo ? { lt: submittedTo } : {}),
+                },
+              },
+            ]
+          : []),
+        ...(search
+          ? [
+              {
+                OR: [
+                  { id: { contains: search, mode: 'insensitive' as const } },
+                  {
+                    owner: {
+                      email: { contains: search, mode: 'insensitive' as const },
+                    },
+                  },
+                  {
+                    owner: {
+                      profile: {
+                        OR: [
+                          {
+                            displayName: {
+                              contains: search,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                          {
+                            publicUsername: {
+                              contains: search,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    asset: {
+                      title: { contains: search, mode: 'insensitive' as const },
+                    },
+                  },
+                  {
+                    category: {
+                      name: { contains: search, mode: 'insensitive' as const },
+                    },
+                  },
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
+    const rows = await this.prisma.assetSubmission.findMany({
+      where,
+      orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
+      include: {
+        owner: {
+          select: {
+            email: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+            collectorSubscriptions: {
+              where: { status: 'ACTIVE' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: { plan: { select: { displayName: true } } },
+            },
+          },
+        },
+        category: { select: { name: true } },
+        asset: {
+          select: {
+            title: true,
+            edition: true,
+            cardNumber: true,
+            collectibleSet: { select: { name: true } },
+            gradeScaleEntry: {
+              select: { label: true, company: { select: { code: true } } },
+            },
+          },
+        },
+        collectibleSet: { select: { name: true } },
+        gradeScaleEntry: {
+          select: { label: true, company: { select: { code: true } } },
+        },
+        media: { select: { slot: true, status: true, deletedAt: true } },
+        marketResearch: {
+          orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { state: true, collectedAt: true },
+        },
       },
-      orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
     });
-    const items = rows.slice(0, limit).map(reviewProjection);
-    const final = rows[limit - 1];
+    const projected = rows.map(reviewQueueProjection);
+    const counts = queueCounts(projected);
+    const filtered = projected.filter((item) => {
+      if (input.priority && item.priority !== input.priority) return false;
+      if (input.evidence && !matchesEvidence(item, input.evidence))
+        return false;
+      if (input.research && !matchesResearch(item, input.research))
+        return false;
+      return true;
+    });
+    const sorted = filtered.sort((left, right) =>
+      compareQueueItems(left, right, input.sort, input.sortDirection),
+    );
+    const pageSize = input.pageSize ?? input.limit ?? 10;
+    const page = input.page ?? 1;
+    const start = Math.max(0, (page - 1) * pageSize);
+    const items = sorted.slice(start, start + pageSize);
+    const final = items[items.length - 1];
     return {
       items,
-      nextCursor:
-        rows.length > limit && final
-          ? encodeCursor(
-              'review-queue',
-              final.submittedAt ?? final.createdAt,
-              final.id,
-            )
-          : null,
+      pagination: {
+        page,
+        pageSize,
+        total: filtered.length,
+        totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+      },
+      counts,
+      summary: counts,
+      nextCursor: final
+        ? encodeCursor('review-queue', new Date(final.submittedAt), final.id)
+        : null,
     };
   }
 
@@ -1282,6 +1410,235 @@ function reviewProjection(submission: {
     setId: submission.setId,
     gradeScaleEntryId: submission.gradeScaleEntryId,
   };
+}
+
+type ReviewQueueRow = {
+  id: string;
+  status: string;
+  submittedAt: Date | null;
+  createdAt: Date;
+  category: { name: string };
+  owner: {
+    email: string;
+    profile: { displayName: string; publicUsername: string | null } | null;
+    collectorSubscriptions: Array<{ plan: { displayName: string } }>;
+  };
+  asset: {
+    title: string;
+    edition: string | null;
+    cardNumber: string | null;
+    collectibleSet: { name: string } | null;
+    gradeScaleEntry: {
+      label: string;
+      company: { code: string };
+    } | null;
+  } | null;
+  collectibleSet: { name: string } | null;
+  gradeScaleEntry: { label: string; company: { code: string } } | null;
+  declaredMetadata: Prisma.JsonValue | null;
+  media: Array<{ slot: string; status: string; deletedAt: Date | null }>;
+  marketResearch: Array<{ state: string; collectedAt: Date }>;
+};
+
+const REQUIRED_QUEUE_EVIDENCE = ['front', 'back'];
+
+function reviewQueueProjection(submission: ReviewQueueRow) {
+  const metadata =
+    submission.declaredMetadata &&
+    typeof submission.declaredMetadata === 'object'
+      ? (submission.declaredMetadata as Record<string, unknown>)
+      : {};
+  const safeMedia = submission.media.filter(
+    (media) => media.status === 'SAFE' && media.deletedAt === null,
+  );
+  const presentRequired = REQUIRED_QUEUE_EVIDENCE.filter((slot) =>
+    safeMedia.some((media) => media.slot === slot),
+  ).length;
+  const missingRequired = REQUIRED_QUEUE_EVIDENCE.length - presentRequired;
+  const evidenceStatus =
+    missingRequired === 0
+      ? 'COMPLETE'
+      : presentRequired > 0
+        ? 'PARTIAL'
+        : 'MISSING_REQUIRED';
+  const research = submission.marketResearch[0];
+  const researchStatus = researchStatusFor(research?.state);
+  const assetGrade =
+    submission.asset?.gradeScaleEntry ?? submission.gradeScaleEntry;
+  const title =
+    submission.asset?.title ??
+    stringMetadata(metadata.name) ??
+    'Untitled submission';
+  const submittedAt = submission.submittedAt ?? submission.createdAt;
+  return {
+    id: submission.id,
+    submissionReference: submission.id,
+    reviewState: submission.status,
+    category: submission.category.name,
+    collector: {
+      displayName:
+        submission.owner.profile?.displayName ?? submission.owner.email,
+      username: submission.owner.profile?.publicUsername ?? null,
+      membership:
+        submission.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
+    },
+    collectible: {
+      title,
+      variant:
+        stringMetadata(metadata.variant) ?? submission.asset?.edition ?? null,
+      set:
+        submission.asset?.collectibleSet?.name ??
+        submission.collectibleSet?.name ??
+        stringMetadata(metadata.set) ??
+        null,
+      grader:
+        assetGrade?.company.code ?? stringMetadata(metadata.grader) ?? null,
+      grade: assetGrade?.label ?? stringMetadata(metadata.grade) ?? null,
+      cardNumber:
+        submission.asset?.cardNumber ??
+        stringMetadata(metadata.cardNumber) ??
+        null,
+    },
+    thumbnailUrl: null,
+    evidence: {
+      percent: Math.round(
+        (presentRequired / REQUIRED_QUEUE_EVIDENCE.length) * 100,
+      ),
+      status: evidenceStatus,
+      missingRequired,
+      presentRequired,
+      required: REQUIRED_QUEUE_EVIDENCE.length,
+      itemCount: safeMedia.length,
+    },
+    research: {
+      status: researchStatus,
+      observedAt: research?.collectedAt.toISOString() ?? null,
+    },
+    priority: reviewPriority(submittedAt),
+    submittedAt: submittedAt.toISOString(),
+  };
+}
+
+function stringMetadata(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function researchStatusFor(state: string | undefined) {
+  if (!state) return 'NOT_REQUESTED' as const;
+  if (['FOUND', 'LIMITED', 'NO_MATCHES', 'COMPLETED'].includes(state))
+    return 'COMPLETED' as const;
+  if (state === 'UNAVAILABLE') return 'UNAVAILABLE' as const;
+  if (['IN_PROGRESS', 'PROCESSING'].includes(state))
+    return 'IN_PROGRESS' as const;
+  return 'PENDING' as const;
+}
+
+/** Explicit queue priority rule used until a persisted operational priority exists.
+ * Age is the only authoritative operational signal currently available; membership
+ * and external research never influence priority. */
+function reviewPriority(submittedAt: Date) {
+  const ageMs = Date.now() - submittedAt.getTime();
+  if (ageMs >= 7 * 24 * 60 * 60 * 1000) return 'HIGH' as const;
+  if (ageMs >= 3 * 24 * 60 * 60 * 1000) return 'MEDIUM' as const;
+  return 'LOW' as const;
+}
+
+function queueCounts(items: ReturnType<typeof reviewQueueProjection>[]) {
+  return {
+    all: items.length,
+    highPriority: items.filter((item) => item.priority === 'HIGH').length,
+    awaitingEvidence: items.filter(
+      (item) => item.evidence.status !== 'COMPLETE',
+    ).length,
+    researchPending: items.filter((item) =>
+      ['IN_PROGRESS', 'PENDING'].includes(item.research.status),
+    ).length,
+    readyToReview: items.filter(
+      (item) =>
+        item.reviewState === 'SUBMITTED' && item.evidence.status === 'COMPLETE',
+    ).length,
+  };
+}
+
+function matchesEvidence(
+  item: ReturnType<typeof reviewQueueProjection>,
+  value: 'complete' | 'missing' | 'partial',
+) {
+  if (value === 'complete') return item.evidence.status === 'COMPLETE';
+  if (value === 'partial') return item.evidence.status === 'PARTIAL';
+  return item.evidence.status !== 'COMPLETE';
+}
+
+function matchesResearch(
+  item: ReturnType<typeof reviewQueueProjection>,
+  value:
+    'completed' | 'in_progress' | 'pending' | 'unavailable' | 'not_requested',
+) {
+  if (value === 'pending')
+    return ['PENDING', 'IN_PROGRESS'].includes(item.research.status);
+  return item.research.status ===
+    ({
+      completed: 'COMPLETED',
+      in_progress: 'IN_PROGRESS',
+      unavailable: 'UNAVAILABLE',
+      not_requested: 'NOT_REQUESTED',
+    } as const)[value];
+}
+
+function compareQueueItems(
+  left: ReturnType<typeof reviewQueueProjection>,
+  right: ReturnType<typeof reviewQueueProjection>,
+  sort:
+    | 'submitted'
+    | 'priority'
+    | 'collector'
+    | 'research'
+    | 'evidence'
+    | undefined,
+  direction: 'asc' | 'desc' | undefined,
+) {
+  const defaultSort = sort === undefined;
+  const activeSort = sort ?? 'priority';
+  const multiplier = (defaultSort || direction === 'desc') ? -1 : 1;
+  const priorityRank = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+  const leftValue =
+    activeSort === 'priority'
+      ? priorityRank[left.priority]
+      : activeSort === 'collector'
+        ? left.collector.displayName.toLowerCase()
+        : activeSort === 'research'
+          ? left.research.status
+          : activeSort === 'evidence'
+            ? left.evidence.percent
+            : left.submittedAt;
+  const rightValue =
+    activeSort === 'priority'
+      ? priorityRank[right.priority]
+      : activeSort === 'collector'
+        ? right.collector.displayName.toLowerCase()
+        : activeSort === 'research'
+          ? right.research.status
+          : activeSort === 'evidence'
+            ? right.evidence.percent
+            : right.submittedAt;
+  const result =
+    typeof leftValue === 'number' && typeof rightValue === 'number'
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue));
+  if (result !== 0) return result * multiplier;
+  if (defaultSort && left.submittedAt !== right.submittedAt)
+    return left.submittedAt.localeCompare(right.submittedAt);
+  return left.id.localeCompare(right.id);
+}
+
+function parseDateBoundary(value: string | undefined, end: boolean) {
+  if (!value) return undefined;
+  const parsed = new Date(
+    `${value}${end ? 'T00:00:00.000Z' : 'T00:00:00.000Z'}`,
+  );
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  if (end) parsed.setUTCDate(parsed.getUTCDate() + 1);
+  return parsed;
 }
 type ReviewDetailRow = {
   id: string;
