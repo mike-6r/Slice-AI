@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1), DISCORD_CLIENT_ID: z.string().min(1),
-  DISCORD_DEV_GUILD_ID: z.string().min(1).optional(), SLICE_API_BASE_URL: z.string().url().optional(),
+  DISCORD_DEV_GUILD_ID: z.string().min(1).optional(), SLICE_API_BASE_URL: z.string().url().optional(), SLICE_WEB_BASE_URL: z.string().url().optional(),
   SLICE_BOT_SERVICE_TOKEN: z.string().min(1).optional(), DATABASE_URL: z.string().url(),
   SLICE_DISCORD_DELIVERY_URL: z.string().url().optional(),
   OFFICIAL_DISCORD_INVITE_URL: z.string().url().optional(),

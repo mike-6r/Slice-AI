@@ -1,4 +1,4 @@
-version: 8
+version: 9
 
 roles:
   - { key: owner, name: Owner, color: "#F6C85F", hoist: true, staff: true }
@@ -29,12 +29,13 @@ roles:
   - { key: level-50, name: Level 50, color: "#F56B6B" }
 
 categories:
-  - { key: start, name: "01 - START" }
-  - { key: slice, name: "02 - SLICE PLATFORM" }
-  - { key: marketplace, name: "03 - MARKETPLACE" }
-  - { key: community, name: "04 - COMMUNITY" }
-  - { key: support, name: "05 - SUPPORT" }
-  - { key: staff, name: "06 - STAFF OPS", staff: true }
+  - { key: start, name: "01 - START HERE" }
+  - { key: slice, name: "02 - MY SLICE" }
+  - { key: marketplace, name: "03 - MARKET" }
+  - { key: collectors, name: "04 - COLLECTORS" }
+  - { key: community, name: "05 - COMMUNITY" }
+  - { key: support, name: "06 - SUPPORT" }
+  - { key: staff, name: "07 - STAFF / OPERATIONS", staff: true }
 
 channels:
   - { key: welcome, name: welcome, category: start, order: 1, read_only: true, topic: "Start here: what Slice is, how to stay safe, and where to go next." }
@@ -44,16 +45,18 @@ channels:
   - { key: roles, name: roles, category: start, order: 5, read_only: true, topic: "Choose only the notifications you actually want." }
   - { key: faq, name: faq, category: start, order: 6, read_only: true, topic: "Fast answers before opening a ticket." }
   - { key: roadmap, name: roadmap, category: start, order: 7, read_only: true, topic: "High-level product direction without speculative dates." }
-  - { key: announcements, name: announcements, category: slice, order: 1, read_only: true, topic: "Official Slice announcements only." }
-  - { key: platform-updates, name: platform-updates, category: slice, order: 2, read_only: true, topic: "Release notes, maintenance notes, and platform updates." }
-  - { key: market-feed, name: market-feed, category: slice, order: 3, read_only: true, topic: "Curated marketplace activity from Slice." }
-  - { key: recent-sales, name: recent-sales, category: slice, order: 4, read_only: true, topic: "Recent public sale signals when available." }
-  - { key: price-alerts, name: price-alerts, category: slice, order: 5, read_only: true, topic: "Price movement and alert information." }
-  - { key: market-discussion, name: market-discussion, category: slice, order: 6, topic: "Discuss market signals without making offers or financial claims." }
-  - { key: new-listings, name: new-listings, category: marketplace, order: 1, topic: "Discover new Slice listings and discuss public details." }
-  - { key: watchlists, name: watchlists, category: marketplace, order: 2, topic: "Track items, interests, and collecting themes." }
-  - { key: portfolio-showcase, name: portfolio-showcase, category: marketplace, order: 3, topic: "Optional community-safe showcases only. No private account details." }
-  - { key: market-analysis, name: market-analysis, category: marketplace, order: 4, topic: "Research, context, and public market discussion." }
+  - { key: my-slice, name: my-slice, category: slice, order: 1, read_only: true, topic: "Open your Slice account, portfolio, orders, and transactions securely on Slice." }
+  - { key: announcements, name: announcements, category: slice, order: 2, read_only: true, topic: "Official Slice announcements only." }
+  - { key: platform-updates, name: platform-updates, category: slice, order: 3, read_only: true, topic: "Release notes, maintenance notes, and platform updates." }
+  - { key: market-feed, name: market-feed, category: marketplace, order: 1, read_only: true, topic: "Curated marketplace activity from Slice." }
+  - { key: recent-sales, name: recent-sales, category: marketplace, order: 2, read_only: true, topic: "Recent public sale signals when available." }
+  - { key: price-alerts, name: price-alerts, category: marketplace, order: 3, read_only: true, topic: "Price movement and alert information." }
+  - { key: market-discussion, name: market-discussion, category: marketplace, order: 4, topic: "Discuss market signals without making offers or financial claims." }
+  - { key: new-listings, name: new-listings, category: marketplace, order: 5, topic: "Discover new Slice listings and discuss public details." }
+  - { key: watchlists, name: watchlists, category: marketplace, order: 6, topic: "Track items, interests, and collecting themes." }
+  - { key: portfolio-showcase, name: portfolio-showcase, category: marketplace, order: 7, topic: "Optional community-safe showcases only. No private account details." }
+  - { key: market-analysis, name: market-analysis, category: marketplace, order: 8, topic: "Research, context, and public market discussion." }
+  - { key: collector-workspace, name: collector-workspace, category: collectors, order: 1, read_only: true, topic: "Collector submissions, Your Actions, vault selection, shipping, and membership are managed on Slice." }
   - { key: general, name: general, category: community, order: 1, topic: "General collector conversation." }
   - { key: collecting, name: collecting, category: community, order: 2, topic: "Cards, sets, grading, collecting stories, and hobby talk." }
   - { key: investment-discussion, name: investment-discussion, category: community, order: 3, topic: "Educational market discussion only. No financial advice." }
@@ -136,6 +139,15 @@ panels:
       If the answer depends on your account, use private support.
     color: info
     footer: "Slice AI | Help center"
+  my-slice:
+    title: "My Slice"
+    description: |
+      **Your account stays private.**
+      Open Slice to manage your account, portfolio, orders, transactions, and account preferences.
+
+      Discord is a companion. Slice remains authoritative for account, financial, and verification information.
+    color: info
+    footer: "Slice AI | Your private account"
   announcements:
     title: "Official Announcements"
     description: |
@@ -199,6 +211,17 @@ panels:
       Keep claims sourced and avoid financial advice.
     color: info
     footer: "Slice AI | Research space"
+  collector-workspace:
+    title: "Collector Workspace"
+    description: |
+      **Manage your collectible journey on Slice.**
+      Submit an asset, review only the actions that need your attention, choose a vault, add tracking, and follow receipt, verification, valuation, vault readiness, and Market Live on Slice.
+
+      Carrier delivery and receipt confirmation are different steps. Slice confirms physical receipt after intake.
+
+      Collector membership plans and capacity limits are always shown by Slice.
+    color: info
+    footer: "Slice AI | Collector workflow"
   create-a-ticket:
     title: "Open the Right Request"
     description: |
@@ -224,3 +247,12 @@ panels:
       Check here before opening a ticket. If your issue is account-specific or security-sensitive, open private support.
     color: warning
     footer: "Slice Support | Status and workarounds"
+  staff:
+    title: "Staff / Operations"
+    description: |
+      **Attention and support routing only.**
+      Use Slice for authorized review, physical intake, verification, valuation, membership, and operational workflows.
+
+      Discord does not confirm receipt, publish assets, change memberships, or replace the Admin Console.
+    color: staff
+    footer: "Slice AI | Authorized staff only"
