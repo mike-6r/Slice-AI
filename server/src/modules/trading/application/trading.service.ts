@@ -47,6 +47,13 @@ type OrderInput = {
   units: string;
   limitPriceMinor: string;
 };
+type OwnershipPreviewInput = {
+  assetId: string;
+  side: 'BUY' | 'SELL';
+  desiredOwnershipPercent: string;
+  limitPriceMinor?: string;
+  timeInForce: 'GTC' | 'IOC';
+};
 
 const activeStatuses = ['OPEN', 'PARTIALLY_FILLED'] as const;
 
@@ -93,6 +100,147 @@ export class TradingService {
         normalized.side === 'SELL' ? normalized.units.toString() : null,
       marketStatus: market.status,
       eligibility: actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
+    };
+  }
+
+  /**
+   * Converts a customer-facing whole-collectible percentage into exact D14
+   * ownership units and projects executable liquidity without creating an
+   * order. The place() path still revalidates every value at reservation time.
+   */
+  async previewOwnership(actor: Actor, input: OwnershipPreviewInput) {
+    const assetId = await this.resolveAssetId(input.assetId);
+    const market = await this.marketForInput(assetId);
+    const supply = await this.db.ownershipAssetSupply.findUnique({
+      where: { assetId },
+      select: { totalUnits: true, issuedUnits: true, status: true },
+    });
+    if (!supply || supply.status !== 'ACTIVE' || supply.totalUnits < 1n)
+      throw conflict('OWNERSHIP_NOT_TRADABLE', 'Ownership issuance is not active for this asset.');
+
+    const [asks, bids, snapshot, account, cashAccount] = await Promise.all([
+      this.bookLevels(assetId, 'SELL', 100, 'asc'),
+      this.bookLevels(assetId, 'BUY', 100, 'desc'),
+      this.db.assetMarketSnapshot.findFirst({
+        where: { assetId, status: 'LIVE' },
+        orderBy: { asOf: 'desc' },
+        select: { estimatedMarketValueMinor: true },
+      }),
+      this.db.ownershipAccount.findUnique({ where: { userId: actor.userId } }),
+      this.db.financialAccount.findFirst({
+        where: { ownerType: 'USER', ownerUserId: actor.userId, code: 'CASH_AVAILABLE', currency: 'GBP' },
+        include: { balance: true },
+      }),
+    ]);
+    const position = account
+      ? await this.db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId, accountId: account.id } } })
+      : null;
+    const total = supply.totalUnits;
+    const owned = position?.settledUnits ?? 0n;
+    const availableOwned = position ? position.settledUnits - position.reservedUnits : 0n;
+    const levels = input.side === 'BUY' ? asks : bids;
+    const available = input.side === 'BUY'
+      ? levels.reduce((sum, level) => sum + BigInt(level.units), 0n)
+      : (availableOwned > 0n ? availableOwned : 0n);
+    const bestBookPrice = levels[0] ? BigInt(levels[0].priceMinor) : null;
+    const fallbackPrice = snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null;
+    const marketPrice = bestBookPrice ?? fallbackPrice;
+    const limitPrice = input.limitPriceMinor ? BigInt(input.limitPriceMinor) : marketPrice;
+    const requestedBps = parseOwnershipBps(input.desiredOwnershipPercent);
+    const numerator = requestedBps * total;
+    const lowerSlices = numerator / 10_000n;
+    const exact = numerator % 10_000n === 0n;
+    const upperSlices = exact ? lowerSlices : lowerSlices + 1n;
+    const requestedSlices = exact ? lowerSlices : null;
+    const maximumExceeded = requestedSlices !== null && available > 0n && requestedSlices > available;
+    const executable = requestedSlices && limitPrice
+      ? executableProjection(levels, input.side, requestedSlices, limitPrice)
+      : { units: 0n, gross: 0n, worst: null };
+    const open = requestedSlices ? requestedSlices - executable.units : 0n;
+    const grossAtLimit = requestedSlices && limitPrice ? requestedSlices * limitPrice : null;
+    const fee = grossAtLimit === null ? null : feeMinor(grossAtLimit, input.side === 'BUY' ? market.takerFeeBps : market.makerFeeBps);
+    const cashTotal = cashAccount?.balance
+      ? accountAuthority(cashAccount.normalSide, cashAccount.balance.postedDebitMinor, cashAccount.balance.postedCreditMinor) - cashAccount.balance.reservedMinor
+      : null;
+    const onePercentSlices = total % 100n === 0n ? total / 100n : null;
+    const onePercentValue = onePercentSlices !== null && marketPrice !== null ? onePercentSlices * marketPrice : null;
+    return {
+      assetId: input.assetId,
+      side: input.side,
+      requestedOwnershipPercent: input.desiredOwnershipPercent,
+      requestedSlices: requestedSlices?.toString() ?? null,
+      ownershipIncrementPercent: formatOwnershipPercent(1n, total),
+      totalSlices: total.toString(),
+      availableSlices: available.toString(),
+      availableOwnershipPercent: formatOwnershipPercent(available, total),
+      ownedSlices: owned.toString(),
+      ownedOwnershipPercent: formatOwnershipPercent(owned, total),
+      slicePriceMinor: marketPrice?.toString() ?? null,
+      impliedWholeValueMinor: marketPrice === null ? null : (marketPrice * total).toString(),
+      externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,
+      onePercentSlices: onePercentSlices?.toString() ?? null,
+      onePercentValueMinor: onePercentValue?.toString() ?? null,
+      limitPriceMinor: limitPrice?.toString() ?? null,
+      estimatedCostMinor: requestedSlices && limitPrice
+        ? (executable.gross + (open > 0n && limitPrice ? open * limitPrice : 0n)).toString()
+        : null,
+      estimatedAveragePriceMinor: requestedSlices && requestedSlices > 0n && limitPrice
+        ? ((executable.gross + (open > 0n ? open * limitPrice : 0n)) / requestedSlices).toString()
+        : null,
+      estimatedReservationMinor: grossAtLimit === null || fee === null ? null : (grossAtLimit + fee).toString(),
+      feeMinor: fee?.toString() ?? null,
+      executableSlices: executable.units.toString(),
+      openSlices: open.toString(),
+      bestMarketPriceMinor: bestBookPrice?.toString() ?? null,
+      worstExpectedPriceMinor: executable.worst?.toString() ?? null,
+      lowerSnap: { slices: lowerSlices.toString(), ownershipPercent: formatOwnershipPercent(lowerSlices, total) },
+      upperSnap: exact ? null : { slices: upperSlices.toString(), ownershipPercent: formatOwnershipPercent(upperSlices, total) },
+      hasImmediateLiquidity: executable.units > 0n,
+      marketStatus: market.status,
+      eligibility: actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
+      availableCashMinor: cashTotal?.toString() ?? null,
+      cashShortfallMinor:
+        input.side === 'BUY' && cashTotal !== null && grossAtLimit !== null && fee !== null && grossAtLimit + fee > cashTotal
+          ? (grossAtLimit + fee - cashTotal).toString()
+          : null,
+      maximumExceeded,
+    };
+  }
+
+  async publicOwnershipSummary(slug: string) {
+    const asset = await this.db.asset.findFirst({
+      where: { slug, status: 'PUBLISHED' },
+      select: { id: true },
+    });
+    if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
+    const [market, supply, asks, bids, snapshot] = await Promise.all([
+      this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
+      this.db.ownershipAssetSupply.findUnique({ where: { assetId: asset.id }, select: { totalUnits: true, status: true } }),
+      this.bookLevels(asset.id, 'SELL', 100, 'asc'),
+      this.bookLevels(asset.id, 'BUY', 100, 'desc'),
+      this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE' }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
+    ]);
+    const total = supply?.totalUnits ?? 0n;
+    const available = asks.reduce((sum, level) => sum + BigInt(level.units), 0n);
+    const bestAsk = asks[0] ? BigInt(asks[0].priceMinor) : null;
+    const bestBid = bids[0] ? BigInt(bids[0].priceMinor) : null;
+    const slicePrice = bestAsk ?? bestBid ?? (snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null);
+    const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
+    return {
+      assetId: asset.id,
+      totalSlices: total.toString(),
+      availableSlices: available.toString(),
+      availableOwnershipPercent: formatOwnershipPercent(available, total),
+      ownershipIncrementPercent: formatOwnershipPercent(1n, total),
+      slicePriceMinor: slicePrice?.toString() ?? null,
+      impliedWholeValueMinor: slicePrice === null ? null : (slicePrice * total).toString(),
+      externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,
+      onePercentSlices: onePercentSlices?.toString() ?? null,
+      onePercentValueMinor: onePercentSlices !== null && slicePrice !== null ? (onePercentSlices * slicePrice).toString() : null,
+      bestAskMinor: bestAsk?.toString() ?? null,
+      bestBidMinor: bestBid?.toString() ?? null,
+      hasImmediateLiquidity: available > 0n,
+      marketStatus: market?.status ?? 'CLOSED',
     };
   }
 
@@ -1546,4 +1694,43 @@ export class TradingService {
 
 function conflict(code: string, message: string): never {
   throw new ConflictException({ code, message });
+}
+
+function parseOwnershipBps(value: string) {
+  const [whole, fraction = ''] = value.split('.');
+  const bps = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+  if (bps < 0n || bps > 10_000n) throw conflict('INVALID_OWNERSHIP_PERCENT', 'Ownership percentage must be between 0% and 100%.');
+  return bps;
+}
+
+function formatOwnershipPercent(units: bigint, total: bigint) {
+  if (total < 1n) return '0';
+  const scaled = (units * 10_000n * 10_000n) / total;
+  const whole = scaled / 10_000n;
+  const fraction = (scaled % 10_000n).toString().padStart(4, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function executableProjection(
+  levels: Array<{ priceMinor: string; units: string }>,
+  side: 'BUY' | 'SELL',
+  requested: bigint,
+  limit: bigint,
+) {
+  let remaining = requested;
+  let units = 0n;
+  let gross = 0n;
+  let worst: bigint | null = null;
+  for (const level of levels) {
+    const price = BigInt(level.priceMinor);
+    if ((side === 'BUY' && price > limit) || (side === 'SELL' && price < limit)) break;
+    const fill = remaining < BigInt(level.units) ? remaining : BigInt(level.units);
+    if (fill <= 0n) break;
+    units += fill;
+    gross += fill * price;
+    worst = price;
+    remaining -= fill;
+    if (remaining === 0n) break;
+  }
+  return { units, gross, worst };
 }

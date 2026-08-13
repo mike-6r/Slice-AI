@@ -61,6 +61,11 @@ function AssetPage() {
     enabled: Boolean(assetQuery.data),
     queryFn: () => services.market.orderBook(id as never),
   });
+  const ownershipSummaryQuery = useQuery({
+    queryKey: ["ownership", "market-summary", id],
+    enabled: Boolean(assetQuery.data),
+    queryFn: () => services.trading.ownershipMarketSummary(id),
+  });
   const tradesQuery = useQuery({
     queryKey: queryKeys.market.recentTrades(id),
     enabled: Boolean(assetQuery.data),
@@ -102,6 +107,15 @@ function AssetPage() {
     availabilityBps: asset.availabilityBps,
     ownUnits: ownPositionQuery.data?.settledUnits,
   });
+  const slicePriceMinor = ownershipSummaryQuery.data?.slicePriceMinor
+    ? Number(ownershipSummaryQuery.data.slicePriceMinor)
+    : shares.sharePriceMinor;
+  const issuedSlices = ownershipSummaryQuery.data?.totalSlices
+    ? Number(ownershipSummaryQuery.data.totalSlices)
+    : shares.issuedShares;
+  const availableSlices = ownershipSummaryQuery.data?.availableSlices
+    ? Number(ownershipSummaryQuery.data.availableSlices)
+    : shares.availableShares;
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const category = marketCategoryPresentation(asset.category);
 
@@ -155,17 +169,15 @@ function AssetPage() {
                 <Stat
                   label="Share price"
                   value={
-                    shares.sharePriceMinor === undefined
-                      ? "Unavailable"
-                      : formatCurrency(shares.sharePriceMinor)
+                    slicePriceMinor === undefined ? "Unavailable" : formatCurrency(slicePriceMinor)
                   }
                 />
                 <Stat
                   label="Available"
                   value={
-                    asset.availabilityBps === undefined
+                    !ownershipSummaryQuery.data
                       ? "Unavailable"
-                      : `${(asset.availabilityBps / 100).toFixed(1)}%`
+                      : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
                   }
                 />
                 <Stat
@@ -181,11 +193,12 @@ function AssetPage() {
                 isError={orderBookQuery.isError}
                 retry={() => void orderBookQuery.refetch()}
                 id={id}
-                sharePriceMinor={shares.sharePriceMinor}
-                issuedShares={shares.issuedShares}
-                availableShares={shares.availableShares}
+                sharePriceMinor={slicePriceMinor}
+                issuedShares={issuedSlices}
+                availableShares={availableSlices}
                 ownShares={shares.ownShares}
                 isAuthenticated={isAuthenticated}
+                ownershipSummary={ownershipSummaryQuery.data}
               />
               <RecentTrades
                 trades={tradesQuery.data ?? []}
@@ -198,10 +211,10 @@ function AssetPage() {
 
           <AssetOwnershipGuide
             title={asset.title}
-            issuedSlices={shares.issuedShares}
-            availableSlices={shares.availableShares}
+            issuedSlices={issuedSlices}
+            availableSlices={availableSlices}
             ownSlices={shares.ownShares}
-            sharePriceMinor={shares.sharePriceMinor}
+            sharePriceMinor={slicePriceMinor}
             owners={asset.ownersCount}
             isAuthenticated={isAuthenticated}
             status={assetQuery.data.status}
@@ -219,9 +232,7 @@ function AssetPage() {
               <Stat
                 label="Share price"
                 value={
-                  shares.sharePriceMinor === undefined
-                    ? "Unavailable"
-                    : formatCurrency(shares.sharePriceMinor)
+                  slicePriceMinor === undefined ? "Unavailable" : formatCurrency(slicePriceMinor)
                 }
               />
               <Stat
@@ -236,18 +247,14 @@ function AssetPage() {
               <Stat
                 label="Availability"
                 value={
-                  asset.availabilityBps === undefined
+                  !ownershipSummaryQuery.data
                     ? "Unavailable"
-                    : `${(asset.availabilityBps / 100).toFixed(1)}%`
+                    : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
                 }
               />
               <Stat
                 label="Shares issued"
-                value={
-                  shares.issuedShares === undefined
-                    ? "Unavailable"
-                    : shares.issuedShares.toLocaleString()
-                }
+                value={issuedSlices === undefined ? "Unavailable" : issuedSlices.toLocaleString()}
               />
               <Stat
                 label="Last valuation"
@@ -328,9 +335,9 @@ function AssetPage() {
                 <div className="asset-donut">
                   <span>
                     <strong>
-                      {asset.availabilityBps === undefined
-                        ? "—"
-                        : `${(asset.availabilityBps / 100).toFixed(1)}%`}
+                      {ownershipSummaryQuery.data
+                        ? `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
+                        : "—"}
                     </strong>
                     available
                   </span>
@@ -340,9 +347,9 @@ function AssetPage() {
                     <i className="is-emerald" />
                     <span>Shares available</span>
                     <strong>
-                      {shares.availableShares === undefined
+                      {availableSlices === undefined
                         ? "Unavailable"
-                        : `${shares.availableShares.toLocaleString()} shares`}
+                        : `${availableSlices.toLocaleString()} Slices`}
                     </strong>
                   </li>
                   <li>
@@ -356,9 +363,7 @@ function AssetPage() {
                     <i className="is-amber" />
                     <span>Shares issued</span>
                     <strong>
-                      {shares.issuedShares === undefined
-                        ? "Unavailable"
-                        : shares.issuedShares.toLocaleString()}
+                      {issuedSlices === undefined ? "Unavailable" : issuedSlices.toLocaleString()}
                     </strong>
                   </li>
                 </ul>
@@ -426,9 +431,9 @@ function AssetPage() {
               <div>
                 <span>Ownership available</span>
                 <strong>
-                  {asset.availabilityBps === undefined
+                  {!ownershipSummaryQuery.data
                     ? "Unavailable"
-                    : `${(asset.availabilityBps / 100).toFixed(1)}%`}
+                    : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`}
                 </strong>
               </div>
               <div>
@@ -689,6 +694,7 @@ function TradingPanel({
   availableShares,
   ownShares,
   isAuthenticated,
+  ownershipSummary,
 }: {
   book: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["orderBook"]>> | undefined;
   isLoading: boolean;
@@ -700,6 +706,9 @@ function TradingPanel({
   availableShares?: number;
   ownShares?: number;
   isAuthenticated: boolean;
+  ownershipSummary:
+    | Awaited<ReturnType<ReturnType<typeof useAppServices>["trading"]["ownershipMarketSummary"]>>
+    | undefined;
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
@@ -710,36 +719,51 @@ function TradingPanel({
         <strong>Ownership &amp; trading</strong>
       </header>
       <p className="asset-trade-helper">
-        Choose a number of Slices, review your total, then place a limit order. It may remain open
-        until it matches.
+        Choose what percentage of the whole collectible you want to own. Slice converts it into
+        whole Slices, checks live liquidity, and takes you to a protected review step.
       </p>
       <div className="asset-trading-summary">
         <Stat
-          label="Price per Slice"
-          value={sharePriceMinor === undefined ? "Unavailable" : formatCurrency(sharePriceMinor)}
-        />
-        <Stat
-          label="Available"
+          label="Slice market value"
           value={
-            availableShares === undefined
-              ? "Unavailable"
-              : `${availableShares.toLocaleString()} Slices`
+            ownershipSummary?.impliedWholeValueMinor
+              ? formatCurrency(Number(ownershipSummary.impliedWholeValueMinor))
+              : "Unavailable"
           }
         />
         <Stat
-          label="Your position"
+          label="Available ownership"
           value={
-            !isAuthenticated
-              ? "Sign in to view"
-              : ownShares === undefined
-                ? "No shares held"
-                : `${ownShares.toLocaleString()} Slices`
+            !ownershipSummary ? "Unavailable" : `${ownershipSummary.availableOwnershipPercent}%`
+          }
+        />
+        <Stat
+          label="Value of 1%"
+          value={
+            ownershipSummary?.onePercentValueMinor
+              ? formatCurrency(Number(ownershipSummary.onePercentValueMinor))
+              : "Unavailable"
           }
         />
       </div>
-      {isAuthenticated && ownShares !== undefined && issuedShares !== undefined && (
-        <p className="asset-position-copy">{formatOwnershipPercent(ownShares, issuedShares)}</p>
-      )}
+      <p className="asset-position-copy">
+        {isAuthenticated && ownShares !== undefined && issuedShares !== undefined
+          ? `You currently own ${formatOwnershipPercent(ownShares, issuedShares)}. Choose another percentage to see the resulting Slice quantity.`
+          : "The collectible is divided into whole Slices. External reference values are shown separately from executable Slice pricing."}
+      </p>
+      <div className="asset-ownership-callout">
+        <strong>Percentage-first buying</strong>
+        <span>
+          {ownershipSummary?.onePercentSlices
+            ? `1% equals ${ownershipSummary.onePercentSlices} Slices at the current issuance.`
+            : "Slice will show the valid ownership increment for this issuance."}
+        </span>
+        {!ownershipSummary?.hasImmediateLiquidity && (
+          <small>
+            No Slices are currently offered at the market price, but you can place a limit order.
+          </small>
+        )}
+      </div>
       {isLoading ? (
         <p>Loading order book…</p>
       ) : isError ? (
@@ -773,10 +797,10 @@ function TradingPanel({
       )}
       <div className="asset-order-actions">
         <Link to="/buy/$id" params={{ id }}>
-          {customerTerms.own}
+          Review buy order
         </Link>
         <Link to="/sell/$id" params={{ id }}>
-          {customerTerms.sell}
+          Review sell order
         </Link>
       </div>
     </section>

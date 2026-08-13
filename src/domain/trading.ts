@@ -67,7 +67,74 @@ export interface TradingOrderPreview {
   reservationUnits: string | null;
   marketStatus: "OPEN" | "CLOSED" | "HALTED";
   eligibility: "ELIGIBLE" | "INELIGIBLE";
+  /** Optional D14 executable-liquidity projection returned by ownership preview. */
+  estimatedGrossMinor?: string;
+  estimatedAveragePriceMinor?: string | null;
+  executableUnits?: string;
+  openUnits?: string;
+  bestMarketPriceMinor?: string | null;
+  worstExpectedPriceMinor?: string | null;
 }
+
+export type OwnershipPreviewInput = {
+  assetId: string;
+  side: TradingOrderSide;
+  desiredOwnershipPercent: string;
+  limitPriceMinor?: string;
+  timeInForce: "GTC" | "IOC";
+};
+
+export type OwnershipOrderPreview = {
+  assetId: string;
+  side: TradingOrderSide;
+  requestedOwnershipPercent: string;
+  requestedSlices: string | null;
+  ownershipIncrementPercent: string;
+  totalSlices: string;
+  availableSlices: string;
+  availableOwnershipPercent: string;
+  ownedSlices: string;
+  ownedOwnershipPercent: string;
+  slicePriceMinor: string | null;
+  impliedWholeValueMinor: string | null;
+  externalReferenceMinor: string | null;
+  onePercentSlices: string | null;
+  onePercentValueMinor: string | null;
+  limitPriceMinor: string | null;
+  estimatedCostMinor: string | null;
+  estimatedAveragePriceMinor: string | null;
+  estimatedReservationMinor: string | null;
+  feeMinor: string | null;
+  executableSlices: string;
+  openSlices: string;
+  availableCashMinor: string | null;
+  cashShortfallMinor: string | null;
+  maximumExceeded: boolean;
+  bestMarketPriceMinor: string | null;
+  worstExpectedPriceMinor: string | null;
+  lowerSnap: { slices: string; ownershipPercent: string } | null;
+  upperSnap: { slices: string; ownershipPercent: string } | null;
+  hasImmediateLiquidity: boolean;
+  marketStatus: "OPEN" | "CLOSED" | "HALTED";
+  eligibility: "ELIGIBLE" | "INELIGIBLE";
+};
+
+export type OwnershipMarketSummary = {
+  assetId: string;
+  totalSlices: string;
+  availableSlices: string;
+  availableOwnershipPercent: string;
+  ownershipIncrementPercent: string;
+  slicePriceMinor: string | null;
+  impliedWholeValueMinor: string | null;
+  externalReferenceMinor: string | null;
+  onePercentSlices: string | null;
+  onePercentValueMinor: string | null;
+  bestAskMinor: string | null;
+  bestBidMinor: string | null;
+  hasImmediateLiquidity: boolean;
+  marketStatus: "OPEN" | "CLOSED" | "HALTED";
+};
 export interface TradingOrderView {
   id: string;
   assetId: string;

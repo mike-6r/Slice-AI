@@ -45,6 +45,10 @@ export class TradingService {
   constructor(private readonly repositories: AppRepositories) {}
   previewOrder = (input: import("@/domain").TradingOrderInput) =>
     this.repositories.trading.previewOrder(input);
+  previewOwnershipOrder = (input: import("@/domain").OwnershipPreviewInput) =>
+    this.repositories.trading.previewOwnershipOrder(input);
+  ownershipMarketSummary = (assetSlug: string) =>
+    this.repositories.trading.getOwnershipMarketSummary(assetSlug);
   placeOrder = (input: import("@/domain").TradingOrderInput) =>
     this.repositories.trading.placeOrder(input);
   cancelOrder = (orderId: string) => this.repositories.trading.cancelOrder(orderId);

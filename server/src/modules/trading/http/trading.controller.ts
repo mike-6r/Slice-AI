@@ -31,6 +31,15 @@ const orderInput = z
     limitPriceMinor: z.string().min(1).max(32),
   })
   .strict();
+const ownershipPreviewInput = z
+  .object({
+    assetId: z.string().min(1).max(128),
+    side: z.enum(['BUY', 'SELL']),
+    desiredOwnershipPercent: z.string().regex(/^\d{1,3}(?:\.\d{1,4})?$/),
+    limitPriceMinor: z.string().regex(/^[1-9]\d*$/).optional(),
+    timeInForce: z.enum(['GTC', 'IOC']).default('GTC'),
+  })
+  .strict();
 const page = z
   .object({
     cursor: z.string().min(1).max(128).optional(),
@@ -58,6 +67,21 @@ export class TradingController {
   @UseGuards(AccessTokenGuard)
   preview(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     return this.trading.preview(req.actor!, this.parse(orderInput, body));
+  }
+
+  @Post('trading/orders/ownership-preview')
+  @UseGuards(AccessTokenGuard)
+  ownershipPreview(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(ownershipPreviewInput, body);
+    return this.trading.previewOwnership(req.actor!, {
+      ...input,
+      timeInForce: input.timeInForce ?? 'GTC',
+    });
+  }
+
+  @Get('market/assets/:slug/ownership/market-summary')
+  marketOwnershipSummary(@Param('slug') slug: string) {
+    return this.trading.publicOwnershipSummary(slug);
   }
 
   @Post('trading/orders')

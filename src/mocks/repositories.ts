@@ -716,6 +716,67 @@ export const mockRepositories: AppRepositories = {
     },
   },
   trading: {
+    async getOwnershipMarketSummary(assetId) {
+      return {
+        assetId,
+        totalSlices: "200",
+        availableSlices: "100",
+        availableOwnershipPercent: "50",
+        ownershipIncrementPercent: "0.5",
+        slicePriceMinor: "1000",
+        impliedWholeValueMinor: "200000",
+        externalReferenceMinor: "200000",
+        onePercentSlices: "2",
+        onePercentValueMinor: "2000",
+        bestAskMinor: "1000",
+        bestBidMinor: "980",
+        hasImmediateLiquidity: true,
+        marketStatus: "OPEN" as const,
+      };
+    },
+    async previewOwnershipOrder(input) {
+      const total = 200n;
+      const parsed = Number(input.desiredOwnershipPercent);
+      const slices = Number.isFinite(parsed)
+        ? Math.max(0, Math.round((parsed / 100) * Number(total)))
+        : 0;
+      const priceMinor = 1000n;
+      const requested = String(slices);
+      return {
+        assetId: input.assetId,
+        side: input.side,
+        requestedOwnershipPercent: input.desiredOwnershipPercent,
+        requestedSlices: requested,
+        ownershipIncrementPercent: "0.5",
+        totalSlices: total.toString(),
+        availableSlices: "100",
+        availableOwnershipPercent: "50",
+        ownedSlices: "0",
+        ownedOwnershipPercent: "0",
+        slicePriceMinor: priceMinor.toString(),
+        impliedWholeValueMinor: (priceMinor * total).toString(),
+        externalReferenceMinor: (priceMinor * total).toString(),
+        onePercentSlices: "2",
+        onePercentValueMinor: (priceMinor * 2n).toString(),
+        limitPriceMinor: input.limitPriceMinor ?? priceMinor.toString(),
+        estimatedCostMinor: (priceMinor * BigInt(slices)).toString(),
+        estimatedAveragePriceMinor: priceMinor.toString(),
+        estimatedReservationMinor: (priceMinor * BigInt(slices)).toString(),
+        feeMinor: "0",
+        executableSlices: requested,
+        openSlices: "0",
+        availableCashMinor: "100000",
+        cashShortfallMinor: null,
+        maximumExceeded: slices > 100,
+        bestMarketPriceMinor: priceMinor.toString(),
+        worstExpectedPriceMinor: priceMinor.toString(),
+        lowerSnap: null,
+        upperSnap: null,
+        hasImmediateLiquidity: true,
+        marketStatus: "OPEN" as const,
+        eligibility: "ELIGIBLE" as const,
+      };
+    },
     async previewOrder(input) {
       const orderPreview = preview(
         input.assetId as AssetId,

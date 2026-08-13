@@ -41,6 +41,8 @@ import type {
   TradingOrderInput,
   TradingOrderPage,
   TradingOrderPreview,
+  OwnershipOrderPreview,
+  OwnershipMarketSummary,
   TradingOrderView,
   UserId,
   WalletMovementPage,
@@ -355,6 +357,149 @@ const mapTradingPreview = (raw: unknown): TradingOrderPreview => {
       value.eligibility,
       "preview.eligibility",
     ) as TradingOrderPreview["eligibility"],
+    estimatedGrossMinor:
+      value.estimatedGrossMinor === undefined
+        ? undefined
+        : stringField(value.estimatedGrossMinor, "preview.estimatedGrossMinor"),
+    estimatedAveragePriceMinor:
+      value.estimatedAveragePriceMinor === undefined
+        ? undefined
+        : nullableString(value.estimatedAveragePriceMinor, "preview.estimatedAveragePriceMinor"),
+    executableUnits:
+      value.executableUnits === undefined
+        ? undefined
+        : stringField(value.executableUnits, "preview.executableUnits"),
+    openUnits:
+      value.openUnits === undefined ? undefined : stringField(value.openUnits, "preview.openUnits"),
+    bestMarketPriceMinor:
+      value.bestMarketPriceMinor === undefined
+        ? undefined
+        : nullableString(value.bestMarketPriceMinor, "preview.bestMarketPriceMinor"),
+    worstExpectedPriceMinor:
+      value.worstExpectedPriceMinor === undefined
+        ? undefined
+        : nullableString(value.worstExpectedPriceMinor, "preview.worstExpectedPriceMinor"),
+  };
+};
+const mapOwnershipPreview = (raw: unknown): OwnershipOrderPreview => {
+  const value = objectField(raw, "ownership preview");
+  const snap = (input: unknown, label: string) => {
+    if (input === null || input === undefined) return null;
+    const item = objectField(input, label);
+    return {
+      slices: stringField(item.slices, `${label}.slices`),
+      ownershipPercent: stringField(item.ownershipPercent, `${label}.ownershipPercent`),
+    };
+  };
+  return {
+    assetId: stringField(value.assetId, "ownershipPreview.assetId"),
+    side: value.side as OwnershipOrderPreview["side"],
+    requestedOwnershipPercent: stringField(
+      value.requestedOwnershipPercent,
+      "ownershipPreview.requestedOwnershipPercent",
+    ),
+    requestedSlices: nullableString(value.requestedSlices, "ownershipPreview.requestedSlices"),
+    ownershipIncrementPercent: stringField(
+      value.ownershipIncrementPercent,
+      "ownershipPreview.ownershipIncrementPercent",
+    ),
+    totalSlices: stringField(value.totalSlices, "ownershipPreview.totalSlices"),
+    availableSlices: stringField(value.availableSlices, "ownershipPreview.availableSlices"),
+    availableOwnershipPercent: stringField(
+      value.availableOwnershipPercent,
+      "ownershipPreview.availableOwnershipPercent",
+    ),
+    ownedSlices: stringField(value.ownedSlices, "ownershipPreview.ownedSlices"),
+    ownedOwnershipPercent: stringField(
+      value.ownedOwnershipPercent,
+      "ownershipPreview.ownedOwnershipPercent",
+    ),
+    slicePriceMinor: nullableString(value.slicePriceMinor, "ownershipPreview.slicePriceMinor"),
+    impliedWholeValueMinor: nullableString(
+      value.impliedWholeValueMinor,
+      "ownershipPreview.impliedWholeValueMinor",
+    ),
+    externalReferenceMinor: nullableString(
+      value.externalReferenceMinor,
+      "ownershipPreview.externalReferenceMinor",
+    ),
+    onePercentSlices: nullableString(value.onePercentSlices, "ownershipPreview.onePercentSlices"),
+    onePercentValueMinor: nullableString(
+      value.onePercentValueMinor,
+      "ownershipPreview.onePercentValueMinor",
+    ),
+    limitPriceMinor: nullableString(value.limitPriceMinor, "ownershipPreview.limitPriceMinor"),
+    estimatedCostMinor: nullableString(
+      value.estimatedCostMinor,
+      "ownershipPreview.estimatedCostMinor",
+    ),
+    estimatedAveragePriceMinor: nullableString(
+      value.estimatedAveragePriceMinor,
+      "ownershipPreview.estimatedAveragePriceMinor",
+    ),
+    estimatedReservationMinor: nullableString(
+      value.estimatedReservationMinor,
+      "ownershipPreview.estimatedReservationMinor",
+    ),
+    feeMinor: nullableString(value.feeMinor, "ownershipPreview.feeMinor"),
+    executableSlices: stringField(value.executableSlices, "ownershipPreview.executableSlices"),
+    openSlices: stringField(value.openSlices, "ownershipPreview.openSlices"),
+    availableCashMinor: nullableString(
+      value.availableCashMinor,
+      "ownershipPreview.availableCashMinor",
+    ),
+    cashShortfallMinor: nullableString(
+      value.cashShortfallMinor,
+      "ownershipPreview.cashShortfallMinor",
+    ),
+    maximumExceeded: Boolean(value.maximumExceeded),
+    bestMarketPriceMinor: nullableString(
+      value.bestMarketPriceMinor,
+      "ownershipPreview.bestMarketPriceMinor",
+    ),
+    worstExpectedPriceMinor: nullableString(
+      value.worstExpectedPriceMinor,
+      "ownershipPreview.worstExpectedPriceMinor",
+    ),
+    lowerSnap: snap(value.lowerSnap, "ownershipPreview.lowerSnap"),
+    upperSnap: snap(value.upperSnap, "ownershipPreview.upperSnap"),
+    hasImmediateLiquidity: Boolean(value.hasImmediateLiquidity),
+    marketStatus: value.marketStatus as OwnershipOrderPreview["marketStatus"],
+    eligibility: value.eligibility as OwnershipOrderPreview["eligibility"],
+  };
+};
+const mapOwnershipMarketSummary = (raw: unknown): OwnershipMarketSummary => {
+  const value = objectField(raw, "ownership market summary");
+  return {
+    assetId: stringField(value.assetId, "summary.assetId"),
+    totalSlices: stringField(value.totalSlices, "summary.totalSlices"),
+    availableSlices: stringField(value.availableSlices, "summary.availableSlices"),
+    availableOwnershipPercent: stringField(
+      value.availableOwnershipPercent,
+      "summary.availableOwnershipPercent",
+    ),
+    ownershipIncrementPercent: stringField(
+      value.ownershipIncrementPercent,
+      "summary.ownershipIncrementPercent",
+    ),
+    slicePriceMinor: nullableString(value.slicePriceMinor, "summary.slicePriceMinor"),
+    impliedWholeValueMinor: nullableString(
+      value.impliedWholeValueMinor,
+      "summary.impliedWholeValueMinor",
+    ),
+    externalReferenceMinor: nullableString(
+      value.externalReferenceMinor,
+      "summary.externalReferenceMinor",
+    ),
+    onePercentSlices: nullableString(value.onePercentSlices, "summary.onePercentSlices"),
+    onePercentValueMinor: nullableString(
+      value.onePercentValueMinor,
+      "summary.onePercentValueMinor",
+    ),
+    bestAskMinor: nullableString(value.bestAskMinor, "summary.bestAskMinor"),
+    bestBidMinor: nullableString(value.bestBidMinor, "summary.bestBidMinor"),
+    hasImmediateLiquidity: Boolean(value.hasImmediateLiquidity),
+    marketStatus: value.marketStatus as OwnershipMarketSummary["marketStatus"],
   };
 };
 const mapTradingPage = (raw: unknown): TradingOrderPage => {
@@ -2748,9 +2893,24 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
     trading: {
+      async getOwnershipMarketSummary(assetSlug) {
+        return mapOwnershipMarketSummary(
+          await client.get<unknown>(
+            `/market/assets/${encodeURIComponent(assetSlug)}/ownership/market-summary`,
+          ),
+        );
+      },
       async previewOrder(input) {
         return mapTradingPreview(
           await client.request<unknown>("/trading/orders/preview", { method: "POST", body: input }),
+        );
+      },
+      async previewOwnershipOrder(input) {
+        return mapOwnershipPreview(
+          await client.request<unknown>("/trading/orders/ownership-preview", {
+            method: "POST",
+            body: input,
+          }),
         );
       },
       async placeOrder(input) {
