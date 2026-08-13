@@ -26,6 +26,7 @@ import {
   activeCollectorSubmissionStatuses,
   billingPeriod,
   numberEntitlement,
+  openCollectorSubmissionStatuses,
 } from '../../collector-workspace/collector-entitlements';
 import {
   assertEditableStatus,
@@ -180,16 +181,27 @@ export class SubmissionService {
     const entitlements = subscription.plan.entitlements;
     const maxActive = numberEntitlement(entitlements, 'maxActiveCollectibles');
     const maxDrafts = numberEntitlement(entitlements, 'maxOpenDrafts');
+    const maxOpenSubmissions = numberEntitlement(entitlements, 'maxOpenSubmissions');
+    const maxConcurrentIntake = numberEntitlement(entitlements, 'maxConcurrentIntake');
     const monthlyLimit = numberEntitlement(
       entitlements,
       'monthlySubmissionLimit',
     );
     const period = billingPeriod();
-    const [active, drafts, monthly] = await Promise.all([
+    const [active, drafts, monthly, openSubmissions, concurrentIntake] = await Promise.all([
       this.prisma.assetSubmission.count({
         where: {
           ownerUserId: actor.userId,
           status: { in: [...activeCollectorSubmissionStatuses] },
+        },
+      }),
+      this.prisma.assetSubmission.count({
+        where: { ownerUserId: actor.userId, status: { in: [...openCollectorSubmissionStatuses] } },
+      }),
+      this.prisma.submissionIntake.count({
+        where: {
+          submission: { ownerUserId: actor.userId },
+          status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'] },
         },
       }),
       this.prisma.assetSubmission.count({
@@ -231,6 +243,26 @@ export class SubmissionService {
         maximum: monthlyLimit,
         plan: subscription.plan.code,
         message: `You've reached your ${subscription.plan.displayName} monthly submission allowance.`,
+      });
+    }
+    if (maxOpenSubmissions !== null && openSubmissions >= maxOpenSubmissions) {
+      throw new ConflictException({
+        code: 'PLAN_LIMIT_REACHED',
+        limitType: 'OPEN_SUBMISSIONS',
+        current: openSubmissions,
+        maximum: maxOpenSubmissions,
+        plan: subscription.plan.code,
+        message: `You've reached your ${subscription.plan.displayName} open submission limit.`,
+      });
+    }
+    if (maxConcurrentIntake !== null && concurrentIntake >= maxConcurrentIntake) {
+      throw new ConflictException({
+        code: 'PLAN_LIMIT_REACHED',
+        limitType: 'CONCURRENT_INTAKE',
+        current: concurrentIntake,
+        maximum: maxConcurrentIntake,
+        plan: subscription.plan.code,
+        message: `You've reached your ${subscription.plan.displayName} concurrent intake limit.`,
       });
     }
   }
