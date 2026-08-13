@@ -888,6 +888,28 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
     status: stringField(value.status, "admin membership.status"),
     currentPeriodEnd: nullableString(value.currentPeriodEnd, "admin membership.currentPeriodEnd"),
     cancelAtPeriodEnd: Boolean(value.cancelAtPeriodEnd),
+    usage: (() => {
+      const usage = objectField(value.usage, "admin membership.usage");
+      return {
+        activeCollectibles: Number(usage.activeCollectibles ?? 0),
+        activeCollectiblesLimit:
+          typeof usage.activeCollectiblesLimit === "number" ? usage.activeCollectiblesLimit : null,
+        monthlySubmissions: Number(usage.monthlySubmissions ?? 0),
+        monthlySubmissionsLimit:
+          typeof usage.monthlySubmissionsLimit === "number" ? usage.monthlySubmissionsLimit : null,
+        concurrentIntake: Number(usage.concurrentIntake ?? 0),
+        concurrentIntakeLimit:
+          typeof usage.concurrentIntakeLimit === "number" ? usage.concurrentIntakeLimit : null,
+        billingPeriodStart: stringField(
+          usage.billingPeriodStart,
+          "admin membership.usage.billingPeriodStart",
+        ),
+        billingPeriodEnd: stringField(
+          usage.billingPeriodEnd,
+          "admin membership.usage.billingPeriodEnd",
+        ),
+      };
+    })(),
     submissionCount: Number(value.submissionCount ?? 0),
     updatedAt: stringField(value.updatedAt, "admin membership.updatedAt"),
   };

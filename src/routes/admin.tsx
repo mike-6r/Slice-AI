@@ -741,7 +741,7 @@ function MembershipsWorkspace({
                 <th>Collector</th>
                 <th>Plan</th>
                 <th>Status</th>
-                <th>Submissions</th>
+                <th>Usage</th>
                 <th>Period end</th>
                 <th>Updated</th>
               </tr>
@@ -759,7 +759,17 @@ function MembershipsWorkspace({
                   <td>
                     <span className="admin-status-pill">{sentence(row.status)}</span>
                   </td>
-                  <td>{row.submissionCount}</td>
+                  <td>
+                    <strong>
+                      {row.usage.activeCollectibles} / {row.usage.activeCollectiblesLimit ?? "—"}{" "}
+                      active
+                    </strong>
+                    <small>
+                      {row.usage.monthlySubmissions} / {row.usage.monthlySubmissionsLimit ?? "—"}{" "}
+                      monthly · {row.usage.concurrentIntake} /{" "}
+                      {row.usage.concurrentIntakeLimit ?? "—"} intake
+                    </small>
+                  </td>
                   <td>
                     {row.currentPeriodEnd ? date(row.currentPeriodEnd) : "—"}
                     {row.cancelAtPeriodEnd ? " · Cancels" : ""}

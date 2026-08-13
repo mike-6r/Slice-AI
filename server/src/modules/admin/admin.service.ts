@@ -3,6 +3,11 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
+import {
+  activeCollectorSubmissionStatuses,
+  billingPeriod,
+  numberEntitlement,
+} from '../collector-workspace/collector-entitlements';
 
 type AdminAttention = {
   id: string;
@@ -777,6 +782,7 @@ export class AdminService {
             displayName: true,
             monthlyPriceMinor: true,
             currency: true,
+            entitlements: true,
           },
         },
         user: {
@@ -789,28 +795,94 @@ export class AdminService {
         },
       },
     });
+    const userIds = rows.map((row) => row.user.id);
+    const period = billingPeriod();
+    const submissions = userIds.length
+      ? await this.db.assetSubmission.findMany({
+          where: { ownerUserId: { in: userIds } },
+          select: {
+            ownerUserId: true,
+            status: true,
+            createdAt: true,
+            intake: { select: { status: true } },
+          },
+        })
+      : [];
+    const usageByUser = new Map<
+      string,
+      { active: number; monthly: number; concurrentIntake: number }
+    >();
+    for (const submission of submissions) {
+      const usage = usageByUser.get(submission.ownerUserId) ?? {
+        active: 0,
+        monthly: 0,
+        concurrentIntake: 0,
+      };
+      if ((activeCollectorSubmissionStatuses as readonly string[]).includes(submission.status))
+        usage.active += 1;
+      if (
+        submission.createdAt >= period.start &&
+        submission.createdAt < period.end &&
+        submission.status !== 'CANCELLED'
+      )
+        usage.monthly += 1;
+      if (
+        submission.intake &&
+        ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'].includes(
+          submission.intake.status,
+        )
+      )
+        usage.concurrentIntake += 1;
+      usageByUser.set(submission.ownerUserId, usage);
+    }
     return {
       items: rows
-        .map((item) => ({
-          id: item.id,
-          collector: {
-            id: item.user.id,
-            displayName: item.user.profile?.displayName ?? 'Unnamed collector',
-            username: item.user.profile?.publicUsername ?? null,
-            email: item.user.email,
-          },
-          plan: {
-            code: item.plan.code,
-            displayName: item.plan.displayName,
-            monthlyPriceMinor: item.plan.monthlyPriceMinor.toString(),
-            currency: item.plan.currency,
-          },
-          status: item.status,
-          currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
-          cancelAtPeriodEnd: item.cancelAtPeriodEnd,
-          submissionCount: item.user._count.submissions,
-          updatedAt: item.updatedAt.toISOString(),
-        }))
+        .map((item) => {
+          const usage = usageByUser.get(item.user.id) ?? {
+            active: 0,
+            monthly: 0,
+            concurrentIntake: 0,
+          };
+          return {
+            id: item.id,
+            collector: {
+              id: item.user.id,
+              displayName: item.user.profile?.displayName ?? 'Unnamed collector',
+              username: item.user.profile?.publicUsername ?? null,
+              email: item.user.email,
+            },
+            plan: {
+              code: item.plan.code,
+              displayName: item.plan.displayName,
+              monthlyPriceMinor: item.plan.monthlyPriceMinor.toString(),
+              currency: item.plan.currency,
+            },
+            status: item.status,
+            currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
+            cancelAtPeriodEnd: item.cancelAtPeriodEnd,
+            usage: {
+              activeCollectibles: usage.active,
+              activeCollectiblesLimit: numberEntitlement(
+                item.plan.entitlements,
+                'maxActiveCollectibles',
+              ),
+              monthlySubmissions: usage.monthly,
+              monthlySubmissionsLimit: numberEntitlement(
+                item.plan.entitlements,
+                'monthlySubmissionLimit',
+              ),
+              concurrentIntake: usage.concurrentIntake,
+              concurrentIntakeLimit: numberEntitlement(
+                item.plan.entitlements,
+                'maxConcurrentIntake',
+              ),
+              billingPeriodStart: period.start.toISOString(),
+              billingPeriodEnd: period.end.toISOString(),
+            },
+            submissionCount: item.user._count.submissions,
+            updatedAt: item.updatedAt.toISOString(),
+          };
+        })
         .filter((item) => !input.status || item.status === input.status)
         .filter(
           (item) =>

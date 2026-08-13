@@ -366,6 +366,16 @@ export type AdminMembershipRow = {
   status: string;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  usage: {
+    activeCollectibles: number;
+    activeCollectiblesLimit: number | null;
+    monthlySubmissions: number;
+    monthlySubmissionsLimit: number | null;
+    concurrentIntake: number;
+    concurrentIntakeLimit: number | null;
+    billingPeriodStart: string;
+    billingPeriodEnd: string;
+  };
   submissionCount: number;
   updatedAt: string;
 };
