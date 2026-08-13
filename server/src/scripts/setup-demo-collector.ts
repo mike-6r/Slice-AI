@@ -884,7 +884,7 @@ async function ensureCollectorRoles(
         scopeId: '*',
       },
       `collector-role-${role.toLowerCase()}-${randomUUID()}`,
-      `staging-demo-collector-${role.toLowerCase()}`,
+      `staging-demo-collector:${userId}:${role.toLowerCase()}`,
     );
   }
 }
