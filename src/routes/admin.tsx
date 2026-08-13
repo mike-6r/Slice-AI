@@ -51,6 +51,7 @@ import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetai
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
+import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -72,9 +73,13 @@ export const Route = createFileRoute("/admin")({
     grader: typeof search.grader === "string" ? search.grader : undefined,
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
     asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
-    tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
+    tab:
+      typeof search.tab === "string" && search.tab.length > 0
+        ? search.tab
+        : legacyTrustTab(search.section),
     q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
     plan: typeof search.plan === "string" ? search.plan : undefined,
+    type: typeof search.type === "string" ? search.type : undefined,
     priority: typeof search.priority === "string" ? search.priority : undefined,
     status: typeof search.status === "string" ? search.status : undefined,
     evidence: typeof search.evidence === "string" ? search.evidence : undefined,
@@ -120,6 +125,7 @@ type AdminSearch = {
   tab?: string;
   q?: string;
   plan?: string;
+  type?: string;
   priority?: string;
   status?: string;
   evidence?: string;
@@ -158,9 +164,20 @@ function isAdminSection(value: unknown): value is AdminSection {
 }
 function normalizeAdminSection(value: unknown): AdminSection {
   if (["valuations", "custody", "marketplace"].includes(String(value))) return "collectibles";
-  if (["compliance"].includes(String(value))) return "support";
+  if (["compliance", "restrictions", "support", "cases", "escalations"].includes(String(value)))
+    return "support";
   if (["audit", "flags", "integrations", "settings"].includes(String(value))) return "health";
   return isAdminSection(value) ? value : "control";
+}
+
+function legacyTrustTab(value: unknown) {
+  const mapping: Record<string, string> = {
+    compliance: "compliance",
+    restrictions: "restrictions",
+    cases: "tickets",
+    escalations: "escalations",
+  };
+  return typeof value === "string" ? mapping[value] : undefined;
 }
 
 function pipelineSection(stage: string): AdminSection {
@@ -201,6 +218,7 @@ function AdminConsole() {
     asset: selectedAsset,
     q: reviewQuery,
     plan: membershipPlan,
+    type: trustTypeParam,
     priority: reviewPriority,
     status: reviewStatus,
     evidence: reviewEvidence,
@@ -270,6 +288,32 @@ function AdminConsole() {
   };
   const financeStatus = financeStatuses[financeTab]?.includes(reviewStatus ?? "")
     ? reviewStatus
+    : undefined;
+  const trustTabs = ["compliance", "restrictions", "tickets", "escalations"];
+  const trustTab = trustTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "compliance";
+  const trustStatuses: Record<string, string[]> = {
+    compliance: ["PENDING", "REVIEW", "MANUAL_REVIEW", "SUSPENDED"],
+    restrictions: ["ACTIVE", "RELEASED"],
+    tickets: [
+      "OPEN",
+      "CLAIMED",
+      "WAITING_USER",
+      "WAITING_STAFF",
+      "ESCALATED",
+      "RESOLVED",
+      "CLOSED",
+    ],
+    escalations: ["ESCALATED"],
+  };
+  const trustStatus = trustStatuses[trustTab]?.includes(reviewStatus ?? "")
+    ? reviewStatus
+    : undefined;
+  const trustType =
+    trustTab === "compliance" && ["KYC", "KYT"].includes(trustTypeParam ?? "")
+      ? trustTypeParam
+      : undefined;
+  const trustPriority = ["LOW", "NORMAL", "HIGH", "URGENT"].includes(reviewPriority ?? "")
+    ? reviewPriority
     : undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -474,6 +518,38 @@ function AdminConsole() {
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
       }),
     enabled: section === "payments",
+    staleTime: 20_000,
+  });
+  const trustSupportDashboard = useQuery({
+    queryKey: ["admin", "trust-support", "dashboard"],
+    queryFn: () => services.repositories.admin.getTrustSupportDashboard(),
+    enabled: section === "support",
+    staleTime: 20_000,
+  });
+  const trustSupportRecords = useQuery({
+    queryKey: [
+      "admin",
+      "trust-support",
+      "records",
+      trustTab,
+      reviewQuery,
+      trustStatus,
+      trustType,
+      trustPriority,
+      reviewPageParam,
+      reviewPageSizeParam,
+    ],
+    queryFn: () =>
+      services.repositories.admin.listTrustSupportRecords({
+        tab: trustTab,
+        q: reviewQuery,
+        status: trustStatus,
+        type: trustType,
+        priority: trustPriority,
+        page: Math.max(1, Number(reviewPageParam ?? 1)),
+        pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
+      }),
+    enabled: section === "support",
     staleTime: 20_000,
   });
   const riskOperations = useQuery({
@@ -926,10 +1002,25 @@ function AdminConsole() {
             }
           />
         ) : section === "support" ? (
-          <UnavailablePage
-            title="Support & Cases"
-            detail="No support case backend is connected to this admin foundation yet."
-            icon={LifeBuoy}
+          <AdminTrustSupport
+            dashboard={trustSupportDashboard.data}
+            records={trustSupportRecords.data}
+            dashboardLoading={trustSupportDashboard.isLoading}
+            recordsLoading={trustSupportRecords.isLoading}
+            failed={trustSupportRecords.isError}
+            retry={() => {
+              void trustSupportDashboard.refetch();
+              void trustSupportRecords.refetch();
+            }}
+            tab={trustTab}
+            query={reviewQuery ?? ""}
+            status={trustStatus ?? ""}
+            type={trustType ?? ""}
+            priority={trustPriority ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            update={(patch) =>
+              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
+            }
           />
         ) : section === "health" ? (
           <SystemHealthWorkspace
@@ -1936,7 +2027,11 @@ function ControlCenter({
           </div>
         </section>
         <section className="admin-panel">
-          <AdminPanelHeading title="Support & Cases" />
+          <AdminPanelHeading
+            title="Support & Cases"
+            action="Open Trust & Support"
+            onClick={() => select("support")}
+          />
           <AdminEmpty
             detail={operational?.support.message ?? "Support case metrics are unavailable."}
             icon={LifeBuoy}

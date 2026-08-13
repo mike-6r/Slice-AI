@@ -86,6 +86,20 @@ const financeRecordsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
   .strict();
+const trustSupportRecordsQuery = z
+  .object({
+    tab: z.enum(['compliance', 'restrictions', 'tickets', 'escalations']).default('compliance'),
+    q: z.string().trim().max(120).optional(),
+    status: z.string().trim().max(64).optional(),
+    type: z.string().trim().max(64).optional(),
+    severity: z.string().trim().max(32).optional(),
+    priority: z.string().trim().max(32).optional(),
+    scope: z.string().trim().max(64).optional(),
+    source: z.string().trim().max(64).optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -179,6 +193,24 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.admin.complianceCaseDetail(request.actor!, id);
+  }
+
+  @Get('trust-support/dashboard')
+  @RequirePermission('admin.console.read')
+  trustSupportDashboard(@Req() request: AuthenticatedRequest) {
+    return this.admin.trustSupportDashboard(request.actor!);
+  }
+
+  @Get('trust-support/records')
+  @RequirePermission('admin.console.read')
+  trustSupportRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(trustSupportRecordsQuery, query);
+    return this.admin.trustSupportRecords(request.actor!, {
+      ...input,
+      tab: input.tab ?? 'compliance',
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 10,
+    });
   }
 
   @Get('finance/summary')

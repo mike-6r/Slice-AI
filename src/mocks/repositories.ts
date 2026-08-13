@@ -253,6 +253,32 @@ export const mockRepositories: AppRepositories = {
         pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
       };
     },
+    async getTrustSupportDashboard() {
+      return {
+        kpis: {
+          openComplianceCases: 0,
+          restrictedAccounts: 0,
+          openTickets: 0,
+          unassignedTickets: 0,
+          escalations: 0,
+        },
+        overview: {
+          complianceCases: 0,
+          restrictedAccounts: 0,
+          openTickets: 0,
+          unassignedTickets: 0,
+          escalations: 0,
+        },
+        recentActivity: [],
+      };
+    },
+    async listTrustSupportRecords() {
+      return {
+        tab: "compliance",
+        items: [],
+        pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
+      };
+    },
     async getIntegrations() {
       return { providerIncidents: 0, failedWebhooks: 0, secrets: "redacted" as const };
     },

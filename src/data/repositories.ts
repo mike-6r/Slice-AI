@@ -446,6 +446,42 @@ export type AdminFinanceRecordsResponse = {
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 };
 
+export type AdminTrustSupportDashboard = {
+  kpis: {
+    openComplianceCases: number;
+    restrictedAccounts: number;
+    openTickets: number;
+    unassignedTickets: number;
+    escalations: number;
+  };
+  overview: {
+    complianceCases: number;
+    restrictedAccounts: number;
+    openTickets: number;
+    unassignedTickets: number;
+    escalations: number;
+  };
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    detail: string;
+    occurredAt: string;
+  }>;
+};
+
+export type AdminTrustSupportRecord = {
+  id: string;
+  kind: "compliance" | "restriction" | "ticket" | "escalation";
+  [key: string]: unknown;
+};
+
+export type AdminTrustSupportRecordsResponse = {
+  tab: string;
+  items: AdminTrustSupportRecord[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
 export type AdminIntegrationsSummary = {
   providerIncidents: number;
   failedWebhooks: number;
@@ -922,6 +958,19 @@ export interface AdminRepository {
     page?: number;
     pageSize?: number;
   }): Promise<AdminFinanceRecordsResponse>;
+  getTrustSupportDashboard(): Promise<AdminTrustSupportDashboard>;
+  listTrustSupportRecords(input?: {
+    tab?: string;
+    q?: string;
+    status?: string;
+    type?: string;
+    severity?: string;
+    priority?: string;
+    scope?: string;
+    source?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminTrustSupportRecordsResponse>;
   getIntegrations(): Promise<AdminIntegrationsSummary>;
   search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
   getCollectibleDetail(id: string, tab?: string): Promise<AdminCollectibleDetail>;

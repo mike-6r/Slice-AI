@@ -5,6 +5,9 @@ import type {
   AdminFinanceRecord,
   AdminFinanceRecordsResponse,
   AdminFinanceSummary,
+  AdminTrustSupportDashboard,
+  AdminTrustSupportRecord,
+  AdminTrustSupportRecordsResponse,
   AdminIntegrationsSummary,
   AdminOverview,
   AdminOperationsOverview,
@@ -1568,6 +1571,59 @@ const mapAdminFinanceRecords = (raw: unknown): AdminFinanceRecordsResponse => {
   };
 };
 
+const mapAdminTrustSupportDashboard = (raw: unknown): AdminTrustSupportDashboard => {
+  const value = objectField(raw, "admin trust support dashboard");
+  const kpis = objectField(value.kpis, "admin trust support dashboard.kpis");
+  const overview = objectField(value.overview, "admin trust support dashboard.overview");
+  return {
+    kpis: {
+      openComplianceCases: Number(kpis.openComplianceCases ?? 0),
+      restrictedAccounts: Number(kpis.restrictedAccounts ?? 0),
+      openTickets: Number(kpis.openTickets ?? 0),
+      unassignedTickets: Number(kpis.unassignedTickets ?? 0),
+      escalations: Number(kpis.escalations ?? 0),
+    },
+    overview: {
+      complianceCases: Number(overview.complianceCases ?? 0),
+      restrictedAccounts: Number(overview.restrictedAccounts ?? 0),
+      openTickets: Number(overview.openTickets ?? 0),
+      unassignedTickets: Number(overview.unassignedTickets ?? 0),
+      escalations: Number(overview.escalations ?? 0),
+    },
+    recentActivity: Array.isArray(value.recentActivity)
+      ? value.recentActivity.map((entry) => {
+          const item = objectField(entry, "admin trust support activity");
+          return {
+            id: stringField(item.id, "trust activity.id"),
+            type: stringField(item.type, "trust activity.type"),
+            title: stringField(item.title, "trust activity.title"),
+            detail: stringField(item.detail, "trust activity.detail"),
+            occurredAt: stringField(item.occurredAt, "trust activity.occurredAt"),
+          };
+        })
+      : [],
+  };
+};
+
+const mapAdminTrustSupportRecords = (raw: unknown): AdminTrustSupportRecordsResponse => {
+  const value = objectField(raw, "admin trust support records");
+  const pagination = objectField(value.pagination, "admin trust support records.pagination");
+  return {
+    tab: stringField(value.tab, "trust records.tab"),
+    items: Array.isArray(value.items)
+      ? value.items.map(
+          (entry) => objectField(entry, "admin trust support record") as AdminTrustSupportRecord,
+        )
+      : [],
+    pagination: {
+      page: Number(pagination.page ?? 1),
+      pageSize: Number(pagination.pageSize ?? 10),
+      total: Number(pagination.total ?? 0),
+      totalPages: Number(pagination.totalPages ?? 0),
+    },
+  };
+};
+
 const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
   const value = objectField(raw, "admin compliance detail");
   const user = objectField(value.user, "admin compliance detail.user");
@@ -1901,6 +1957,16 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async listFinanceRecords(input) {
     return mapAdminFinanceRecords(await client.get<unknown>("/admin/finance/records", input));
+  },
+  async getTrustSupportDashboard() {
+    return mapAdminTrustSupportDashboard(
+      await client.get<unknown>("/admin/trust-support/dashboard"),
+    );
+  },
+  async listTrustSupportRecords(input) {
+    return mapAdminTrustSupportRecords(
+      await client.get<unknown>("/admin/trust-support/records", input),
+    );
   },
   async getIntegrations() {
     const value = objectField(

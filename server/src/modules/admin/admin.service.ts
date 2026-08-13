@@ -541,6 +541,7 @@ export class AdminService {
     const [
       submissions,
       compliance,
+      supportTickets,
       payments,
       alerts,
       activeUsers,
@@ -584,6 +585,9 @@ export class AdminService {
         where: {
           status: { in: ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] },
         },
+      }),
+      this.db.discordTicket.count({
+        where: { status: { in: ['OPEN', 'CLAIMED', 'WAITING_USER', 'WAITING_STAFF', 'ESCALATED'] } },
       }),
       this.db.moneyMovement.count({
         where: { status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] } },
@@ -1069,8 +1073,9 @@ export class AdminService {
       accountMix,
       memberships: membershipSnapshot,
       support: {
-        available: false,
-        message: 'Support case metrics are not connected to Slice Admin.',
+        available: true,
+        message: supportTickets ? 'Open Discord support tickets require attention.' : 'No open support tickets.',
+        open: supportTickets,
       },
       counts: {
         pendingReviews,
@@ -2254,6 +2259,135 @@ export class AdminService {
         },
       })),
     };
+  }
+
+  async trustSupportDashboard(actor: Actor) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const openCaseStatuses = ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] as const;
+    const openTicketStatuses = ['OPEN', 'CLAIMED', 'WAITING_USER', 'WAITING_STAFF', 'ESCALATED'] as const;
+    const [openComplianceCases, restrictedUsers, openTickets, unassignedTickets, escalations, cases, holds, tickets, activity] = await Promise.all([
+      this.db.complianceCase.count({ where: { status: { in: [...openCaseStatuses] } } }),
+      this.db.complianceHold.findMany({ where: { status: 'ACTIVE' }, distinct: ['userId'], select: { userId: true } }),
+      this.db.discordTicket.count({ where: { status: { in: [...openTicketStatuses] } } }),
+      this.db.discordTicket.count({ where: { status: { in: [...openTicketStatuses] }, assignedStaffId: null } }),
+      this.db.discordTicket.count({ where: { status: 'ESCALATED' } }),
+      this.db.complianceCase.findMany({
+        where: { status: { in: [...openCaseStatuses] } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: { id: true, type: true, status: true, createdAt: true, updatedAt: true, user: { select: { profile: { select: { displayName: true, publicUsername: true } } } } },
+      }),
+      this.db.complianceHold.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: { id: true, scope: true, createdAt: true, user: { select: { profile: { select: { displayName: true, publicUsername: true } } } } },
+      }),
+      this.db.discordTicket.findMany({
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: { id: true, subject: true, category: true, status: true, priority: true, updatedAt: true, createdAt: true },
+      }),
+      this.db.auditEvent.findMany({
+        where: { OR: [
+          { action: { contains: 'COMPLIANCE', mode: 'insensitive' } },
+          { action: { contains: 'HOLD', mode: 'insensitive' } },
+          { action: { contains: 'TICKET', mode: 'insensitive' } },
+          { action: { contains: 'ESCALAT', mode: 'insensitive' } },
+        ] },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: { id: true, action: true, resourceType: true, resourceId: true, createdAt: true },
+      }),
+    ]);
+    const activityItems = [
+      ...activity.map((event) => ({ id: event.id, type: event.resourceType, title: event.action.replace(/_/g, ' '), detail: event.resourceId ? `Reference ${event.resourceId.slice(0, 12)}` : 'Trust & Support event', occurredAt: event.createdAt.toISOString() })),
+      ...tickets.map((ticket) => ({ id: `ticket-${ticket.id}`, type: 'support-ticket', title: `Support ticket ${ticket.status.toLowerCase().replace(/_/g, ' ')}`, detail: ticket.subject, occurredAt: ticket.updatedAt.toISOString() })),
+      ...holds.map((hold) => ({ id: `hold-${hold.id}`, type: 'restriction', title: 'Account restriction active', detail: `${hold.user.profile?.displayName ?? 'User'} · ${hold.scope}`, occurredAt: hold.createdAt.toISOString() })),
+      ...cases.map((item) => ({ id: `case-${item.id}`, type: 'compliance-case', title: `Compliance case ${item.status.toLowerCase().replace(/_/g, ' ')}`, detail: `${item.user.profile?.displayName ?? 'User'} · ${item.type}`, occurredAt: item.updatedAt.toISOString() })),
+    ].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 8);
+    return {
+      kpis: { openComplianceCases, restrictedAccounts: restrictedUsers.length, openTickets, unassignedTickets, escalations },
+      overview: {
+        complianceCases: openComplianceCases,
+        restrictedAccounts: restrictedUsers.length,
+        openTickets,
+        unassignedTickets,
+        escalations,
+      },
+      recentActivity: activityItems,
+    };
+  }
+
+  async trustSupportRecords(
+    actor: Actor,
+    input: { tab: string; q?: string; status?: string; type?: string; severity?: string; priority?: string; scope?: string; source?: string; page: number; pageSize: number },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const skip = (input.page - 1) * input.pageSize;
+    const take = input.pageSize;
+    const openCaseStatuses = ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] as const;
+    const ref = (prefix: string, id: string, at: Date) => `${prefix}-${at.getUTCFullYear()}-${id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
+    if (input.tab === 'compliance') {
+      const where: Prisma.ComplianceCaseWhereInput = {
+        status: input.status && openCaseStatuses.includes(input.status as (typeof openCaseStatuses)[number]) ? input.status as never : { in: [...openCaseStatuses] },
+        ...(input.type && ['KYC', 'KYT'].includes(input.type) ? { type: input.type as never } : {}),
+        ...(input.q ? { OR: [
+          { id: { contains: input.q, mode: 'insensitive' } },
+          { type: { equals: input.q.toUpperCase() as never } },
+          { user: { email: { contains: input.q, mode: 'insensitive' } } },
+          { user: { profile: { displayName: { contains: input.q, mode: 'insensitive' } } } },
+          { user: { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } } },
+        ] } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.complianceCase.findMany({ where, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], skip, take, select: { id: true, provider: true, type: true, status: true, createdAt: true, updatedAt: true, user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
+        this.db.complianceCase.count({ where }),
+      ]);
+      return this.trustSupportPage(input, total, rows.map((item) => ({ id: item.id, kind: 'compliance', caseReference: ref('COMP', item.id, item.createdAt), user: { id: item.user.id, displayName: item.user.profile?.displayName ?? 'Unnamed user', username: item.user.profile?.publicUsername ?? null, email: item.user.email }, caseType: item.type, status: item.status, severity: null, provider: item.provider, providerStatus: item.status === 'NOT_STARTED' ? 'UNKNOWN' : item.status, assignedTo: null, openedAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() })));
+    }
+    if (input.tab === 'restrictions') {
+      const where: Prisma.ComplianceHoldWhereInput = {
+        ...(input.status && ['ACTIVE', 'RELEASED'].includes(input.status) ? { status: input.status as never } : {}),
+        ...(input.scope ? { scope: { contains: input.scope, mode: 'insensitive' } } : {}),
+        ...(input.source ? { source: { contains: input.source, mode: 'insensitive' } } : {}),
+        ...(input.q ? { OR: [
+          { id: { contains: input.q, mode: 'insensitive' } },
+          { reasonCode: { contains: input.q, mode: 'insensitive' } },
+          { user: { email: { contains: input.q, mode: 'insensitive' } } },
+          { user: { profile: { displayName: { contains: input.q, mode: 'insensitive' } } } },
+          { user: { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } } },
+        ] } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.complianceHold.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip, take, select: { id: true, scope: true, source: true, reasonCode: true, status: true, createdAt: true, releasedAt: true, user: { select: { id: true, email: true, accountStatus: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
+        this.db.complianceHold.count({ where }),
+      ]);
+      return this.trustSupportPage(input, total, rows.map((item) => ({ id: item.id, kind: 'restriction', user: { id: item.user.id, displayName: item.user.profile?.displayName ?? 'Unnamed user', username: item.user.profile?.publicUsername ?? null, email: item.user.email }, restrictionType: item.scope, scope: item.scope, source: item.source, status: item.status, reasonSummary: item.reasonCode, accountStatus: item.user.accountStatus, appliedAt: item.createdAt.toISOString(), expiresAt: null, releasedAt: item.releasedAt?.toISOString() ?? null })));
+    }
+    const ticketWhere: Prisma.DiscordTicketWhereInput = {
+      ...(input.tab === 'escalations' ? { status: 'ESCALATED' } : input.status && ['OPEN', 'CLAIMED', 'WAITING_USER', 'WAITING_STAFF', 'ESCALATED', 'RESOLVED', 'CLOSED'].includes(input.status) ? { status: input.status as never } : {}),
+      ...(input.priority && ['LOW', 'NORMAL', 'HIGH', 'URGENT'].includes(input.priority) ? { priority: input.priority as never } : {}),
+      ...(input.q ? { OR: [
+        { id: { contains: input.q, mode: 'insensitive' } },
+        { subject: { contains: input.q, mode: 'insensitive' } },
+        { category: { contains: input.q, mode: 'insensitive' } },
+        { creatorDiscordId: { contains: input.q, mode: 'insensitive' } },
+        { safeReferenceId: { contains: input.q, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    const [tickets, total] = await Promise.all([
+      this.db.discordTicket.findMany({ where: ticketWhere, orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }], skip, take, select: { id: true, creatorDiscordId: true, category: true, subject: true, safeSummary: true, safeReferenceId: true, status: true, priority: true, assignedStaffId: true, createdAt: true, updatedAt: true, lastActivityAt: true } }),
+      this.db.discordTicket.count({ where: ticketWhere }),
+    ]);
+    if (input.tab === 'escalations') {
+      return this.trustSupportPage(input, total, tickets.map((ticket) => ({ id: ticket.id, kind: 'escalation', reference: ref('ESC', ticket.id, ticket.createdAt), sourceType: 'SUPPORT_TICKET', creatorDiscordId: ticket.creatorDiscordId, severity: null, priority: ticket.priority, reasonSummary: ticket.safeSummary, owner: ticket.assignedStaffId, status: ticket.status, createdAt: ticket.createdAt.toISOString(), updatedAt: ticket.updatedAt.toISOString() })));
+    }
+    return this.trustSupportPage(input, total, tickets.map((ticket) => ({ id: ticket.id, kind: 'ticket', ticketReference: ref('TICK', ticket.id, ticket.createdAt), creatorDiscordId: ticket.creatorDiscordId, category: ticket.category, subject: ticket.subject, safeSummary: ticket.safeSummary, safeReferenceId: ticket.safeReferenceId, priority: ticket.priority, status: ticket.status, assignedTo: ticket.assignedStaffId, createdAt: ticket.createdAt.toISOString(), updatedAt: ticket.updatedAt.toISOString(), lastActivityAt: ticket.lastActivityAt.toISOString() })));
+  }
+
+  private trustSupportPage(input: { tab: string; page: number; pageSize: number }, total: number, items: Array<Record<string, unknown>>) {
+    return { tab: input.tab, items, pagination: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
   }
 
   async financeSummary(actor: Actor) {
