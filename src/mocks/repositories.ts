@@ -217,6 +217,9 @@ export const mockRepositories: AppRepositories = {
     async getIntegrations() {
       return { providerIncidents: 0, failedWebhooks: 0, secrets: "redacted" as const };
     },
+    async getCollectibleDetail() {
+      throw new Error("Collectible admin detail requires the API service.");
+    },
     async search() {
       return { items: [] };
     },

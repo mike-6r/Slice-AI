@@ -1645,7 +1645,7 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
     const value = objectField(
       await client.request<unknown>(`/admin/intake/${id}/receipt`, {
         method: "POST",
-        headers: { "Idempotency-Key": idempotencyKey() },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
       }),
       "intake receipt",
     );
@@ -1743,6 +1743,12 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
           })
         : [],
     };
+  },
+  async getCollectibleDetail(id, tab) {
+    return client.get<import("@/data/repositories").AdminCollectibleDetail>(
+      `/admin/assets/${encodeURIComponent(id)}`,
+      tab ? { tab } : undefined,
+    );
   },
 });
 

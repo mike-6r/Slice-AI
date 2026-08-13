@@ -555,6 +555,158 @@ export type AdminSearchResult = {
   target: string;
 };
 
+export type AdminCollectibleDetail = {
+  id: string;
+  publicId: string;
+  slug: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  media: { slot: string; filename: string; status: string; url: string | null }[];
+  identity: {
+    category: string;
+    categorySlug: string;
+    set: string | null;
+    year: number | null;
+    manufacturer: string | null;
+    cardNumber: string | null;
+    language: string | null;
+    rarity: string | null;
+    variant: string | null;
+    edition: string | null;
+  };
+  grading: {
+    company: string;
+    grade: string;
+    label: string;
+    certificationNumber: string | null;
+    gradingDate: string | null;
+    population: number | null;
+    popHigher: number | null;
+  } | null;
+  valuation: {
+    current: {
+      minor: string;
+      currency: string;
+      asOf: string;
+      method: string;
+      actor: string | null;
+    } | null;
+    history: Array<{
+      id: string;
+      minor: string;
+      currency: string;
+      asOf: string;
+      method: string;
+      status: string;
+    }>;
+    marketReference: {
+      currentListing: {
+        minor: string;
+        currency: string;
+        source: string;
+        url: string;
+        imageUrl?: string;
+        observedAt: string;
+      } | null;
+      recentSale: {
+        minor: string;
+        currency: string;
+        source: string;
+        url: string;
+        imageUrl?: string;
+        observedAt: string;
+      } | null;
+    };
+  };
+  ownership: {
+    totalUnits: string | null;
+    issuedUnits: string | null;
+    availableUnits: string | null;
+    ownerCount: number | null;
+  };
+  lifecycle: {
+    current: string;
+    stages: Array<{
+      key: string;
+      label: string;
+      state: "complete" | "current" | "upcoming" | "exception";
+      at: string | null;
+    }>;
+  };
+  collector: {
+    id: string;
+    displayName: string;
+    username: string | null;
+    memberSince: string;
+    submissions: number;
+    accepted: number;
+  } | null;
+  intake: {
+    id: string;
+    status: string;
+    vault: string | null;
+    tracking: string | null;
+    carrier: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    receivedAt: string | null;
+    receiptConfirmedAt: string | null;
+    exception: boolean;
+  } | null;
+  verification: {
+    status: string;
+    verifiedBy: string | null;
+    verifiedAt: string | null;
+    decision: string | null;
+    note: string | null;
+  };
+  custody: {
+    status: string;
+    location: string | null;
+    receivedAt: string | null;
+    securedAt: string | null;
+    history: Array<{ status: string; at: string }>;
+  };
+  market: {
+    publication: string;
+    asking: { minor: string; currency: string } | null;
+    floor: { minor: string; currency: string } | null;
+    salesAverage: { minor: string; currency: string } | null;
+    salesCount: number;
+    lastUpdated: string | null;
+    readiness: { status: string; blockingCodes: string[] };
+  };
+  recentSales: Array<{
+    id: string;
+    date: string;
+    grade: string | null;
+    minor: string;
+    currency: string;
+    source: string;
+    url: string | null;
+  }>;
+  metrics: Array<{ label: string; value: string }>;
+  activity: Array<{
+    id: string;
+    action: string;
+    actor: string;
+    detail: string | null;
+    occurredAt: string;
+  }>;
+  submissions: Array<{
+    id: string;
+    status: string;
+    submittedAt: string | null;
+    reviewedAt: string | null;
+    reviewer: string | null;
+    decision: string | null;
+    note: string | null;
+  }>;
+  evidence: Array<{ slot: string; filename: string; status: string; url: string | null }>;
+};
+
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
   getRiskOperations(): Promise<AdminRiskOperations>;
@@ -608,6 +760,7 @@ export interface AdminRepository {
   getFinanceSummary(): Promise<AdminFinanceSummary>;
   getIntegrations(): Promise<AdminIntegrationsSummary>;
   search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
+  getCollectibleDetail(id: string, tab?: string): Promise<AdminCollectibleDetail>;
 }
 
 export interface MarketRepository {

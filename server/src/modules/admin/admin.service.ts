@@ -2260,11 +2260,498 @@ export class AdminService {
           id: asset.id,
           title: asset.title,
           subtitle: asset.status,
-          target: `/asset/${asset.slug}`,
+          target: `/admin?section=marketplace&asset=${asset.id}&tab=overview`,
         })),
       ].slice(0, limit),
     };
   }
+
+  async collectibleDetail(actor: Actor, reference: string, tab?: string) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    // The tab is accepted so the frontend can lazy-load by URL without changing the
+    // aggregate contract; heavy sections remain bounded in this projection.
+    void tab;
+    const asset = await this.db.asset.findFirst({
+      where: {
+        OR: [{ id: reference }, { publicId: reference }, { slug: reference }],
+      },
+      include: {
+        category: true,
+        collectibleSet: true,
+        gradeScaleEntry: { include: { company: true } },
+        submissions: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            owner: {
+              select: {
+                id: true,
+                createdAt: true,
+                profile: {
+                  select: { displayName: true, publicUsername: true },
+                },
+                _count: { select: { submissions: true } },
+              },
+            },
+            media: { where: { deletedAt: null }, orderBy: { slot: 'asc' } },
+            reviews: {
+              orderBy: { createdAt: 'desc' },
+              include: {
+                reviewer: {
+                  select: { profile: { select: { displayName: true } } },
+                },
+              },
+            },
+            intake: { include: { vault: true, shipment: true, receipt: true } },
+          },
+        },
+        valuationDecisions: {
+          orderBy: { decidedAt: 'desc' },
+          take: 50,
+          include: {
+            decidedBy: {
+              select: { profile: { select: { displayName: true } } },
+            },
+          },
+        },
+        valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 100 },
+        marketSnapshots: { orderBy: { asOf: 'desc' }, take: 50 },
+        custodyRecord: {
+          include: { events: { orderBy: { occurredAt: 'asc' } } },
+        },
+        publication: true,
+        ownershipSupply: {
+          include: {
+            positions: {
+              select: {
+                settledUnits: true,
+                reservedUnits: true,
+                accountId: true,
+              },
+            },
+          },
+        },
+        tradingMarket: true,
+        tradingExecutions: { orderBy: { executedAt: 'desc' }, take: 50 },
+        vaultPublicEvents: { orderBy: { occurredAt: 'asc' }, take: 50 },
+      },
+    });
+    if (!asset)
+      throw new NotFoundException({
+        code: 'ASSET_NOT_FOUND',
+        message: 'Collectible not found.',
+      });
+    const approved =
+      asset.submissions.find(
+        (submission) => submission.status === 'APPROVED',
+      ) ??
+      asset.submissions[0] ??
+      null;
+    const intake = approved?.intake ?? null;
+    const latestReview = approved?.reviews[0] ?? null;
+    const snapshot = asset.marketSnapshots[0] ?? null;
+    const activeDecision =
+      asset.valuationDecisions.find((item) => item.status === 'ACTIVE') ?? null;
+    const owner = approved?.owner ?? null;
+    const external = (sourceType: string) => {
+      const record = asset.valuationEvidence.find(
+        (item) => item.sourceType === sourceType,
+      );
+      if (!record) return null;
+      let parsed: { source?: string; listingUrl?: string; imageUrl?: string } =
+        {};
+      try {
+        parsed = JSON.parse(record.sourceRef ?? '{}') as typeof parsed;
+      } catch {
+        /* provenance is optional */
+      }
+      return {
+        minor: record.valueMinor.toString(),
+        currency: record.currency,
+        source: parsed.source ?? record.sourceType,
+        url: parsed.listingUrl ?? '',
+        ...(parsed.imageUrl ? { imageUrl: parsed.imageUrl } : {}),
+        observedAt: record.observedAt.toISOString(),
+      };
+    };
+    const listing = external('STAGING_CURRENT_LISTING');
+    const sale = external('STAGING_RECENT_COMPLETED_SALE');
+    const stages = detailStages(
+      asset,
+      approved,
+      intake,
+      latestReview,
+      activeDecision,
+    );
+    const current =
+      stages.find((stage) => stage.state === 'current')?.key ??
+      stages.filter((stage) => stage.state === 'complete').at(-1)?.key ??
+      asset.status;
+    const activityRows = await this.db.auditEvent.findMany({
+      where: { resourceType: 'asset', resourceId: asset.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        actor: { select: { profile: { select: { displayName: true } } } },
+      },
+    });
+    const issued = asset.ownershipSupply?.issuedUnits ?? 0n;
+    const available = asset.ownershipSupply
+      ? asset.ownershipSupply.totalUnits - issued
+      : null;
+    const sales = asset.valuationEvidence
+      .filter((item) => item.sourceType === 'STAGING_RECENT_COMPLETED_SALE')
+      .slice(0, 10);
+    const publicationBlockingCodes = readinessCodes(
+      asset.publication?.readiness,
+    );
+    const saleValues = sales.map((item) => item.valueMinor);
+    const avgSale = saleValues.length
+      ? saleValues.reduce((sum, value) => sum + value, 0n) /
+        BigInt(saleValues.length)
+      : null;
+    return {
+      id: asset.id,
+      publicId: asset.publicId,
+      slug: asset.slug,
+      title: asset.title,
+      status: asset.status,
+      createdAt: asset.createdAt.toISOString(),
+      updatedAt: asset.updatedAt.toISOString(),
+      media: asset.submissions.flatMap((submission) =>
+        submission.media
+          .filter((item) => item.status === 'SAFE')
+          .map((item) => ({
+            slot: item.slot,
+            filename: item.originalFilename,
+            status: item.status,
+            url: null,
+          })),
+      ),
+      identity: {
+        category: asset.category.name,
+        categorySlug: asset.category.slug,
+        set: asset.collectibleSet?.name ?? null,
+        year: asset.year,
+        manufacturer: asset.manufacturer,
+        cardNumber: asset.cardNumber,
+        language: null,
+        rarity: null,
+        variant: asset.edition,
+        edition: asset.edition,
+      },
+      grading: asset.gradeScaleEntry
+        ? {
+            company: asset.gradeScaleEntry.company.code,
+            grade: asset.gradeScaleEntry.grade.toFixed(2).replace(/\.00$/, ''),
+            label: asset.gradeScaleEntry.label,
+            certificationNumber: asset.certificationNumber,
+            gradingDate: null,
+            population: null,
+            popHigher: null,
+          }
+        : null,
+      valuation: {
+        current: activeDecision
+          ? {
+              minor: activeDecision.valueMinor.toString(),
+              currency: activeDecision.currency,
+              asOf: activeDecision.decidedAt.toISOString(),
+              method: activeDecision.methodologyCode,
+              actor: activeDecision.decidedBy.profile?.displayName ?? null,
+            }
+          : null,
+        history: asset.valuationDecisions.map((item) => ({
+          id: item.id,
+          minor: item.valueMinor.toString(),
+          currency: item.currency,
+          asOf: item.decidedAt.toISOString(),
+          method: item.methodologyCode,
+          status: item.status,
+        })),
+        marketReference: { currentListing: listing, recentSale: sale },
+      },
+      ownership: {
+        totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,
+        issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
+        availableUnits: available?.toString() ?? null,
+        ownerCount:
+          snapshot?.ownersCount ??
+          (asset.ownershipSupply
+            ? Number(
+                asset.ownershipSupply.positions.filter(
+                  (position) => position.settledUnits > 0n,
+                ).length,
+              )
+            : null),
+      },
+      lifecycle: { current, stages },
+      collector: owner
+        ? {
+            id: owner.id,
+            displayName: owner.profile?.displayName ?? 'Unnamed collector',
+            username: owner.profile?.publicUsername ?? null,
+            memberSince: owner.createdAt.toISOString(),
+            submissions: owner._count.submissions,
+            accepted: await this.db.assetSubmission.count({
+              where: { ownerUserId: owner.id, status: 'APPROVED' },
+            }),
+          }
+        : null,
+      intake: intake
+        ? {
+            id: intake.id,
+            status: intake.status,
+            vault: intake.vault.displayName,
+            tracking: intake.shipment?.trackingNumber ?? null,
+            carrier: intake.shipment?.carrier ?? null,
+            shippedAt: intake.shipment?.shippedAt.toISOString() ?? null,
+            deliveredAt: intake.shipment?.deliveredAt?.toISOString() ?? null,
+            receivedAt: intake.receivedAt?.toISOString() ?? null,
+            receiptConfirmedAt:
+              intake.receipt?.confirmedAt.toISOString() ?? null,
+            exception: intake.shipment?.status === 'EXCEPTION',
+          }
+        : null,
+      verification: {
+        status:
+          latestReview?.status ??
+          (asset.status === 'VERIFIED' || asset.status === 'PUBLISHED'
+            ? 'COMPLETED'
+            : 'PENDING'),
+        verifiedBy: latestReview?.reviewer.profile?.displayName ?? null,
+        verifiedAt: latestReview?.completedAt?.toISOString() ?? null,
+        decision: latestReview?.decision ?? null,
+        note: latestReview?.note ?? null,
+      },
+      custody: {
+        status: asset.custodyRecord?.status ?? 'NOT_STARTED',
+        location: asset.custodyRecord?.facilityCode ?? null,
+        receivedAt: asset.custodyRecord?.receivedAt?.toISOString() ?? null,
+        securedAt: asset.custodyRecord?.securedAt?.toISOString() ?? null,
+        history:
+          asset.custodyRecord?.events.map((event) => ({
+            status: event.toStatus,
+            at: event.occurredAt.toISOString(),
+          })) ?? [],
+      },
+      market: {
+        publication: asset.publication?.status ?? 'BLOCKED',
+        asking: listing
+          ? { minor: listing.minor, currency: listing.currency }
+          : null,
+        floor: null,
+        salesAverage:
+          avgSale === null
+            ? null
+            : { minor: avgSale.toString(), currency: sales[0]!.currency },
+        salesCount: sales.length,
+        lastUpdated: snapshot?.asOf.toISOString() ?? null,
+        readiness: {
+          status:
+            asset.publication?.status === 'PUBLISHED' ||
+            asset.publication?.status === 'READY'
+              ? 'READY'
+              : 'BLOCKED',
+          blockingCodes: publicationBlockingCodes,
+        },
+      },
+      recentSales: sales.map((item) => {
+        const parsed = parseSourceRef(item.sourceRef);
+        return {
+          id: item.id,
+          date: item.observedAt.toISOString(),
+          grade: null,
+          minor: item.valueMinor.toString(),
+          currency: item.currency,
+          source: parsed.source ?? item.sourceType,
+          url: parsed.listingUrl ?? null,
+        };
+      }),
+      metrics: [
+        ...(asset.gradeScaleEntry?.grade
+          ? [
+              {
+                label: 'Grade',
+                value: asset.gradeScaleEntry.grade
+                  .toFixed(2)
+                  .replace(/\.00$/, ''),
+              },
+            ]
+          : []),
+        ...(snapshot?.ownersCount !== null &&
+        snapshot?.ownersCount !== undefined
+          ? [{ label: 'Owners', value: String(snapshot.ownersCount) }]
+          : []),
+        ...(asset.ownershipSupply
+          ? [
+              {
+                label: 'Total supply',
+                value: asset.ownershipSupply.totalUnits.toString(),
+              },
+            ]
+          : []),
+      ],
+      activity: activityRows.map((item) => ({
+        id: item.id,
+        action: item.action,
+        actor: item.actor?.profile?.displayName ?? 'System',
+        detail:
+          typeof item.metadata === 'object' &&
+          item.metadata &&
+          'detail' in item.metadata
+            ? String((item.metadata as { detail?: unknown }).detail)
+            : null,
+        occurredAt: item.createdAt.toISOString(),
+      })),
+      submissions: asset.submissions.map((submission) => ({
+        id: submission.id,
+        status: submission.status,
+        submittedAt: submission.submittedAt?.toISOString() ?? null,
+        reviewedAt: submission.reviewedAt?.toISOString() ?? null,
+        reviewer: submission.reviews[0]?.reviewer.profile?.displayName ?? null,
+        decision: submission.decisionCode,
+        note: submission.decisionNote,
+      })),
+      evidence: asset.submissions.flatMap((submission) =>
+        submission.media
+          .filter((item) => item.status === 'SAFE')
+          .map((item) => ({
+            slot: item.slot,
+            filename: item.originalFilename,
+            status: item.status,
+            url: null,
+          })),
+      ),
+    };
+  }
+}
+
+function parseSourceRef(sourceRef: string | null) {
+  if (!sourceRef) return {} as { source?: string; listingUrl?: string };
+  try {
+    const value = JSON.parse(sourceRef) as {
+      source?: unknown;
+      listingUrl?: unknown;
+    };
+    return {
+      source: typeof value.source === 'string' ? value.source : undefined,
+      listingUrl:
+        typeof value.listingUrl === 'string' ? value.listingUrl : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function readinessCodes(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const codes = (value as { blockingCodes?: unknown }).blockingCodes;
+  return Array.isArray(codes)
+    ? codes.filter((code): code is string => typeof code === 'string')
+    : [];
+}
+
+function detailStages(
+  asset: {
+    status: string;
+    publishedAt: Date | null;
+    custodyRecord: {
+      status: string;
+      receivedAt: Date | null;
+      securedAt: Date | null;
+    } | null;
+  },
+  submission: {
+    submittedAt: Date | null;
+    reviewedAt: Date | null;
+    status: string;
+  } | null,
+  intake: {
+    selectedAt: Date;
+    shipment: { shippedAt: Date; deliveredAt: Date | null } | null;
+    receivedAt: Date | null;
+  } | null,
+  review: { status: string; completedAt: Date | null } | null,
+  valuation: { decidedAt: Date } | null,
+) {
+  const done = (at: Date | null | undefined) =>
+    at ? ('complete' as const) : ('upcoming' as const);
+  const stages = [
+    {
+      key: 'SUBMITTED',
+      label: 'Submitted',
+      at: submission?.submittedAt ?? null,
+      state: done(submission?.submittedAt),
+    },
+    {
+      key: 'ACCEPTED',
+      label: 'Accepted',
+      at: submission?.status === 'APPROVED' ? submission.reviewedAt : null,
+      state: done(
+        submission?.status === 'APPROVED' ? submission.reviewedAt : null,
+      ),
+    },
+    {
+      key: 'VAULT_SELECTED',
+      label: 'Vault Selected',
+      at: intake?.selectedAt ?? null,
+      state: done(intake?.selectedAt),
+    },
+    {
+      key: 'SHIPPED',
+      label: 'Shipped',
+      at: intake?.shipment?.shippedAt ?? null,
+      state: done(intake?.shipment?.shippedAt),
+    },
+    {
+      key: 'DELIVERED',
+      label: 'Carrier Delivered',
+      at: intake?.shipment?.deliveredAt ?? null,
+      state: done(intake?.shipment?.deliveredAt),
+    },
+    {
+      key: 'RECEIVED',
+      label: 'Received by Slice',
+      at: intake?.receivedAt ?? null,
+      state: done(intake?.receivedAt),
+    },
+    {
+      key: 'VERIFIED',
+      label: 'Verified',
+      at: review?.completedAt ?? null,
+      state: done(review?.completedAt),
+    },
+    {
+      key: 'VALUED',
+      label: 'Valued',
+      at: valuation?.decidedAt ?? null,
+      state: done(valuation?.decidedAt),
+    },
+    {
+      key: 'VAULT_READY',
+      label: 'Vault Ready',
+      at: asset.custodyRecord?.securedAt ?? null,
+      state: done(asset.custodyRecord?.securedAt),
+    },
+    {
+      key: 'MARKET_LIVE',
+      label: 'Market Live',
+      at: asset.publishedAt,
+      state: done(asset.publishedAt),
+    },
+  ];
+  const firstUpcoming = stages.findIndex((stage) => stage.state === 'upcoming');
+  return stages.map((stage, index) => ({
+    ...stage,
+    state:
+      stage.state === 'complete'
+        ? index === firstUpcoming - 1
+          ? 'complete'
+          : 'complete'
+        : index === firstUpcoming
+          ? 'current'
+          : stage.state,
+  }));
 }
 
 function mismatchCodes(value: unknown): string[] {

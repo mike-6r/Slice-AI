@@ -177,6 +177,16 @@ export class AdminController {
     return this.admin.search(request.actor!, input.q, input.limit ?? 20);
   }
 
+  @Get('assets/:id')
+  @RequirePermission('admin.console.read')
+  collectible(
+    @Param('id') id: string,
+    @Query('tab') tab: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.collectibleDetail(request.actor!, id, tab);
+  }
+
   private parse<T>(schema: z.ZodType<T>, value: unknown): T {
     const parsed = schema.safeParse(value);
     if (!parsed.success)

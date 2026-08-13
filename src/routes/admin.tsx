@@ -47,6 +47,7 @@ import { logout } from "@/auth/actions";
 import { canAccessAdmin } from "@/auth/workspace-access";
 import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
+import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -66,6 +67,7 @@ export const Route = createFileRoute("/admin")({
   validateSearch: (search: Record<string, unknown>): AdminSearch => ({
     section: isAdminSection(search.section) ? search.section : "control",
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
+    asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
     tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
     q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
     priority: typeof search.priority === "string" ? search.priority : undefined,
@@ -108,6 +110,7 @@ type AdminSection =
 type AdminSearch = {
   section: AdminSection;
   user?: string;
+  asset?: string;
   tab?: string;
   q?: string;
   priority?: string;
@@ -173,6 +176,7 @@ function AdminConsole() {
   const {
     section,
     tab: selectedUserTab,
+    asset: selectedAsset,
     q: reviewQuery,
     priority: reviewPriority,
     status: reviewStatus,
@@ -410,7 +414,10 @@ function AdminConsole() {
     staleTime: 15_000,
   });
   const select = (next: AdminSection) => {
-    void navigate({ search: { section: next, user: undefined, tab: undefined }, replace: true });
+    void navigate({
+      search: { section: next, user: undefined, asset: undefined, tab: undefined },
+      replace: true,
+    });
     setMobileOpen(false);
   };
   const updateReviewSearch = (patch: Partial<AdminSearch>) => {
@@ -527,6 +534,18 @@ function AdminConsole() {
                   >
                     {content}
                   </Link>
+                ) : result.entityType === "COLLECTIBLE" ? (
+                  <Link
+                    key={`${result.entityType}-${result.id}`}
+                    to="/admin"
+                    search={{ section: "marketplace", asset: result.id, tab: "overview" }}
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                    }}
+                  >
+                    {content}
+                  </Link>
                 ) : (
                   <a
                     key={`${result.entityType}-${result.id}`}
@@ -635,6 +654,20 @@ function AdminConsole() {
             loading={operations.isLoading}
             failed={operations.isError}
             retry={() => void operations.refetch()}
+          />
+        ) : section === "marketplace" && selectedAsset ? (
+          <AdminCollectibleDetail
+            assetId={selectedAsset}
+            tab={selectedUserTab}
+            onTab={(next) =>
+              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
+            }
+            onBack={() =>
+              void navigate({
+                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
+                replace: true,
+              })
+            }
           />
         ) : section === "marketplace" ? (
           <OperationsQueueWorkspace
