@@ -72,8 +72,21 @@ type WorkspaceItem = {
     id: string;
     status: string;
     intakeReference: string;
-    vault: { id: string; displayName: string; region: string; countryCode: string; customerSafeAddress: string; shippingInstructions: string };
-    shipment: { carrier: string; trackingNumber: string; status: string; shippedAt: string; deliveredAt: string | null } | null;
+    vault: {
+      id: string;
+      displayName: string;
+      region: string;
+      countryCode: string;
+      customerSafeAddress: string;
+      shippingInstructions: string;
+    };
+    shipment: {
+      carrier: string;
+      trackingNumber: string;
+      status: string;
+      shippedAt: string;
+      deliveredAt: string | null;
+    } | null;
     receivedAt: string | null;
   } | null;
   media: WorkspaceMedia[];
@@ -86,6 +99,29 @@ type WorkspaceItem = {
     executionVolumeMinor: string;
     latestSharePriceMinor: string | null;
   };
+};
+
+type CollectorRequestView = {
+  id: string;
+  type:
+    | 'CHOOSE_VAULT'
+    | 'ADD_REQUIRED_EVIDENCE'
+    | 'CHANGES_REQUESTED'
+    | 'ADD_TRACKING'
+    | 'SHIPPING_EXCEPTION'
+    | 'PROVIDE_INFORMATION';
+  category: 'SUBMISSION' | 'SHIPPING' | 'INFORMATION';
+  priority: 'BLOCKING' | 'IMPORTANT' | 'REMINDER';
+  reason: string;
+  badge: string;
+  action: string;
+  actionLabel: string;
+  targetRoute: string;
+  asset: WorkspaceItem;
+  submissionId: string;
+  collectibleId: string | null;
+  destination: string;
+  status: 'OPEN';
 };
 
 @Injectable()
@@ -107,6 +143,8 @@ export class CollectorWorkspaceService {
     ]);
     const assets = submissions.map(assetView);
     const requests = requestViews(assets);
+    const activity = await this.activityFor(userId, submissions, notifications);
+    const recentActivityCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const counts = stageCounts(assets);
     const valued = assets.filter((item) => item.referenceValue);
     const marketLive = assets.filter((item) => item.stage === 'MARKET_LIVE');
@@ -150,8 +188,31 @@ export class CollectorWorkspaceService {
         requestId: request.id,
         requestStatus: request.status,
         destination: request.destination,
+        type: request.type,
+        category: request.category,
+        priority: request.priority,
+        action: request.action,
+        actionLabel: request.actionLabel,
+        targetRoute: request.targetRoute,
       })),
-      activity: await this.activityFor(userId, submissions, notifications),
+      actionSummary: {
+        waitingOnYou: requests.length,
+        inProgress: assets.filter((asset) =>
+          [
+            'SUBMITTED',
+            'REVIEW',
+            'VALUATION',
+            'CUSTODY',
+            'VAULT_READY',
+          ].includes(asset.stage),
+        ).length,
+        completedRecently: activity.filter(
+          (item) =>
+            completedActivity(item.type) &&
+            Date.parse(item.occurredAt) >= recentActivityCutoff,
+        ).length,
+      },
+      activity,
       analytics: {
         catalogueReferenceValue:
           referenceTotal > 0n ? money(referenceTotal) : null,
@@ -172,15 +233,28 @@ export class CollectorWorkspaceService {
   async subscription(userId: string) {
     await this.ensurePlans();
     const [plans, current] = await Promise.all([
-      this.db.collectorPlan.findMany({ where: { active: true }, orderBy: { monthlyPriceMinor: 'asc' } }),
+      this.db.collectorPlan.findMany({
+        where: { active: true },
+        orderBy: { monthlyPriceMinor: 'asc' },
+      }),
       this.db.collectorSubscription.findFirst({
-        where: { userId, status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCEL_AT_PERIOD_END'] } },
+        where: {
+          userId,
+          status: {
+            in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCEL_AT_PERIOD_END'],
+          },
+        },
         include: { plan: true },
         orderBy: { updatedAt: 'desc' },
       }),
     ]);
-    const usage = await this.usageFor(userId, current?.plan.entitlements ?? null);
-    const billingConfigured = Boolean(current?.provider && current.provider !== 'STAGING_DEMO');
+    const usage = await this.usageFor(
+      userId,
+      current?.plan.entitlements ?? null,
+    );
+    const billingConfigured = Boolean(
+      current?.provider && current.provider !== 'STAGING_DEMO',
+    );
     return {
       current: current
         ? {
@@ -205,7 +279,7 @@ export class CollectorWorkspaceService {
       usage,
       billing: {
         configured: billingConfigured,
-        provider: billingConfigured ? current?.provider ?? null : null,
+        provider: billingConfigured ? (current?.provider ?? null) : null,
         paymentMethod: null,
         nextBillingDate: current?.currentPeriodEnd?.toISOString() ?? null,
       },
@@ -243,7 +317,8 @@ export class CollectorWorkspaceService {
     throw new ServiceUnavailableException({
       code: 'BILLING_CONFIGURATION_REQUIRED',
       action,
-      message: 'Membership billing is temporarily unavailable. Please try again later.',
+      message:
+        'Membership billing is temporarily unavailable. Please try again later.',
     });
   }
 
@@ -251,60 +326,222 @@ export class CollectorWorkspaceService {
     return this.db.vaultIntakeLocation.findMany({
       where: { active: true, intakeAvailable: true },
       orderBy: [{ countryCode: 'asc' }, { displayName: 'asc' }],
-      select: { id: true, displayName: true, region: true, countryCode: true, acceptedCategories: true, shippingInstructions: true, customerSafeAddress: true },
+      select: {
+        id: true,
+        displayName: true,
+        region: true,
+        countryCode: true,
+        acceptedCategories: true,
+        shippingInstructions: true,
+        customerSafeAddress: true,
+      },
     });
   }
 
   async selectVault(userId: string, submissionId: string, vaultId: string) {
-    const submission = await this.db.assetSubmission.findFirst({ where: { id: submissionId, ownerUserId: userId }, select: { id: true, status: true, categoryId: true, intake: { include: { shipment: true } } } });
-    if (!submission) throw new NotFoundException({ code: 'COLLECTIBLE_NOT_FOUND', message: 'Collectible not found.' });
-    if (submission.status !== 'APPROVED') throw new ConflictException({ code: 'SUBMISSION_NOT_ACCEPTED', message: 'A vault can only be selected after staff accepts the submission.' });
-    if (submission.intake?.shipment) throw new ConflictException({ code: 'SHIPMENT_ALREADY_STARTED', message: 'The destination cannot be changed after shipment starts.' });
-    const vault = await this.db.vaultIntakeLocation.findFirst({ where: { id: vaultId, active: true, intakeAvailable: true } });
-    if (!vault) throw new NotFoundException({ code: 'VAULT_NOT_AVAILABLE', message: 'That intake destination is no longer available.' });
-    const accepted = Array.isArray(vault.acceptedCategories) ? vault.acceptedCategories : null;
-    if (accepted && !accepted.includes(submission.categoryId)) throw new ConflictException({ code: 'VAULT_CATEGORY_UNSUPPORTED', message: 'That destination does not accept this category.' });
+    const submission = await this.db.assetSubmission.findFirst({
+      where: { id: submissionId, ownerUserId: userId },
+      select: {
+        id: true,
+        status: true,
+        categoryId: true,
+        intake: { include: { shipment: true } },
+      },
+    });
+    if (!submission)
+      throw new NotFoundException({
+        code: 'COLLECTIBLE_NOT_FOUND',
+        message: 'Collectible not found.',
+      });
+    if (submission.status !== 'APPROVED')
+      throw new ConflictException({
+        code: 'SUBMISSION_NOT_ACCEPTED',
+        message:
+          'A vault can only be selected after staff accepts the submission.',
+      });
+    if (submission.intake?.shipment)
+      throw new ConflictException({
+        code: 'SHIPMENT_ALREADY_STARTED',
+        message: 'The destination cannot be changed after shipment starts.',
+      });
+    const vault = await this.db.vaultIntakeLocation.findFirst({
+      where: { id: vaultId, active: true, intakeAvailable: true },
+    });
+    if (!vault)
+      throw new NotFoundException({
+        code: 'VAULT_NOT_AVAILABLE',
+        message: 'That intake destination is no longer available.',
+      });
+    const accepted = Array.isArray(vault.acceptedCategories)
+      ? vault.acceptedCategories
+      : null;
+    if (accepted && !accepted.includes(submission.categoryId))
+      throw new ConflictException({
+        code: 'VAULT_CATEGORY_UNSUPPORTED',
+        message: 'That destination does not accept this category.',
+      });
     return this.db.submissionIntake.upsert({
       where: { submissionId },
-      create: { submissionId, vaultId, intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`, status: 'SHIPPING_REQUIRED' },
+      create: {
+        submissionId,
+        vaultId,
+        intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
+        status: 'SHIPPING_REQUIRED',
+      },
       update: { vaultId, status: 'SHIPPING_REQUIRED', updatedAt: new Date() },
       include: { vault: true, shipment: true },
     });
   }
 
-  async addShipment(userId: string, submissionId: string, input: { carrier: string; trackingNumber: string; shippedAt: string; notes?: string }) {
-    const intake = await this.db.submissionIntake.findFirst({ where: { submissionId, submission: { ownerUserId: userId } }, include: { shipment: true, receipt: true } });
-    if (!intake) throw new ConflictException({ code: 'VAULT_SELECTION_REQUIRED', message: 'Choose an intake destination before adding shipment details.' });
-    if (intake.receipt) throw new ConflictException({ code: 'RECEIPT_ALREADY_CONFIRMED', message: 'Shipment details cannot be changed after Slice confirms receipt.' });
+  async addShipment(
+    userId: string,
+    submissionId: string,
+    input: {
+      carrier: string;
+      trackingNumber: string;
+      shippedAt: string;
+      notes?: string;
+    },
+  ) {
+    const intake = await this.db.submissionIntake.findFirst({
+      where: { submissionId, submission: { ownerUserId: userId } },
+      include: { shipment: true, receipt: true },
+    });
+    if (!intake)
+      throw new ConflictException({
+        code: 'VAULT_SELECTION_REQUIRED',
+        message: 'Choose an intake destination before adding shipment details.',
+      });
+    if (intake.receipt)
+      throw new ConflictException({
+        code: 'RECEIPT_ALREADY_CONFIRMED',
+        message:
+          'Shipment details cannot be changed after Slice confirms receipt.',
+      });
     const carrier = input.carrier.trim();
     const trackingNumber = input.trackingNumber.trim();
-    if (carrier.length < 2 || carrier.length > 40 || trackingNumber.length < 3 || trackingNumber.length > 120) throw new ConflictException({ code: 'SHIPMENT_DETAILS_INVALID', message: 'Enter a carrier and tracking reference.' });
+    if (
+      carrier.length < 2 ||
+      carrier.length > 40 ||
+      trackingNumber.length < 3 ||
+      trackingNumber.length > 120
+    )
+      throw new ConflictException({
+        code: 'SHIPMENT_DETAILS_INVALID',
+        message: 'Enter a carrier and tracking reference.',
+      });
     const shippedAt = new Date(input.shippedAt);
-    if (Number.isNaN(shippedAt.getTime())) throw new ConflictException({ code: 'SHIPMENT_DATE_INVALID', message: 'Enter a valid shipping date.' });
+    if (Number.isNaN(shippedAt.getTime()))
+      throw new ConflictException({
+        code: 'SHIPMENT_DATE_INVALID',
+        message: 'Enter a valid shipping date.',
+      });
     return this.db.$transaction(async (db) => {
-      await db.intakeShipment.upsert({ where: { intakeId: intake.id }, create: { intakeId: intake.id, carrier, trackingNumber, shippedAt, status: 'SHIPPED', notes: input.notes?.trim() || null }, update: { carrier, trackingNumber, shippedAt, status: 'SHIPPED', notes: input.notes?.trim() || null } });
-      return db.submissionIntake.update({ where: { id: intake.id }, data: { status: 'IN_TRANSIT', shippedAt }, include: { vault: true, shipment: true } });
+      await db.intakeShipment.upsert({
+        where: { intakeId: intake.id },
+        create: {
+          intakeId: intake.id,
+          carrier,
+          trackingNumber,
+          shippedAt,
+          status: 'SHIPPED',
+          notes: input.notes?.trim() || null,
+        },
+        update: {
+          carrier,
+          trackingNumber,
+          shippedAt,
+          status: 'SHIPPED',
+          notes: input.notes?.trim() || null,
+        },
+      });
+      return db.submissionIntake.update({
+        where: { id: intake.id },
+        data: { status: 'IN_TRANSIT', shippedAt },
+        include: { vault: true, shipment: true },
+      });
     });
   }
 
-  async confirmReceipt(actorId: string, intakeId: string, actorRoles: string[]) {
-    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role))) throw new ForbiddenException({ code: 'RECEIPT_CONFIRMATION_REQUIRES_STAFF', message: 'Only Slice staff can confirm physical receipt.' });
-    const intake = await this.db.submissionIntake.findUnique({ where: { id: intakeId }, include: { shipment: true } });
-    if (!intake) throw new NotFoundException({ code: 'INTAKE_NOT_FOUND', message: 'Intake record not found.' });
-    if (!intake.shipment || intake.shipment.status !== 'DELIVERED') throw new ConflictException({ code: 'DELIVERY_NOT_CONFIRMED', message: 'Confirm carrier delivery before recording Slice receipt.' });
+  async confirmReceipt(
+    actorId: string,
+    intakeId: string,
+    actorRoles: string[],
+  ) {
+    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role)))
+      throw new ForbiddenException({
+        code: 'RECEIPT_CONFIRMATION_REQUIRES_STAFF',
+        message: 'Only Slice staff can confirm physical receipt.',
+      });
+    const intake = await this.db.submissionIntake.findUnique({
+      where: { id: intakeId },
+      include: { shipment: true },
+    });
+    if (!intake)
+      throw new NotFoundException({
+        code: 'INTAKE_NOT_FOUND',
+        message: 'Intake record not found.',
+      });
+    if (!intake.shipment || intake.shipment.status !== 'DELIVERED')
+      throw new ConflictException({
+        code: 'DELIVERY_NOT_CONFIRMED',
+        message: 'Confirm carrier delivery before recording Slice receipt.',
+      });
     return this.db.$transaction(async (db) => {
-      await db.intakeReceiptConfirmation.upsert({ where: { intakeId }, create: { intakeId, confirmedById: actorId, shipmentRef: intake.shipment?.trackingNumber }, update: { confirmedById: actorId, confirmedAt: new Date(), shipmentRef: intake.shipment?.trackingNumber } });
-      return db.submissionIntake.update({ where: { id: intakeId }, data: { status: 'RECEIVED', receivedAt: new Date() }, include: { vault: true, shipment: true, receipt: true } });
+      await db.intakeReceiptConfirmation.upsert({
+        where: { intakeId },
+        create: {
+          intakeId,
+          confirmedById: actorId,
+          shipmentRef: intake.shipment?.trackingNumber,
+        },
+        update: {
+          confirmedById: actorId,
+          confirmedAt: new Date(),
+          shipmentRef: intake.shipment?.trackingNumber,
+        },
+      });
+      return db.submissionIntake.update({
+        where: { id: intakeId },
+        data: { status: 'RECEIVED', receivedAt: new Date() },
+        include: { vault: true, shipment: true, receipt: true },
+      });
     });
   }
 
-  async updateShipmentStatus(actorRoles: string[], intakeId: string, status: 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'EXCEPTION' | 'UNKNOWN') {
-    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role))) throw new ForbiddenException({ code: 'SHIPMENT_STATUS_REQUIRES_STAFF', message: 'Only Slice staff can update carrier status.' });
-    const shipment = await this.db.intakeShipment.findUnique({ where: { intakeId } });
-    if (!shipment) throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Shipment not found.' });
-    const deliveredAt = status === 'DELIVERED' ? new Date() : shipment.deliveredAt;
-    await this.db.intakeShipment.update({ where: { intakeId }, data: { status, deliveredAt, lastCheckedAt: new Date() } });
-    return this.db.submissionIntake.update({ where: { id: intakeId }, data: { status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT', deliveredAt }, include: { vault: true, shipment: true, receipt: true } });
+  async updateShipmentStatus(
+    actorRoles: string[],
+    intakeId: string,
+    status:
+      'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'EXCEPTION' | 'UNKNOWN',
+  ) {
+    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role)))
+      throw new ForbiddenException({
+        code: 'SHIPMENT_STATUS_REQUIRES_STAFF',
+        message: 'Only Slice staff can update carrier status.',
+      });
+    const shipment = await this.db.intakeShipment.findUnique({
+      where: { intakeId },
+    });
+    if (!shipment)
+      throw new NotFoundException({
+        code: 'SHIPMENT_NOT_FOUND',
+        message: 'Shipment not found.',
+      });
+    const deliveredAt =
+      status === 'DELIVERED' ? new Date() : shipment.deliveredAt;
+    await this.db.intakeShipment.update({
+      where: { intakeId },
+      data: { status, deliveredAt, lastCheckedAt: new Date() },
+    });
+    return this.db.submissionIntake.update({
+      where: { id: intakeId },
+      data: {
+        status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT',
+        deliveredAt,
+      },
+      include: { vault: true, shipment: true, receipt: true },
+    });
   }
 
   async deleteDraft(userId: string, submissionId: string, version: number) {
@@ -315,8 +552,25 @@ export class CollectorWorkspaceService {
     if (current?.status === 'CANCELLED' && current.cancelledAt) {
       return { submissionId, deleted: true, alreadyDeleted: true };
     }
-    const result = await this.db.assetSubmission.updateMany({ where: { id: submissionId, ownerUserId: userId, status: 'DRAFT', version }, data: { status: 'CANCELLED', cancelledAt: new Date(), version: { increment: 1 } } });
-    if (result.count !== 1) throw new ConflictException({ code: 'DRAFT_DELETE_CONFLICT', message: 'Only your current editable draft can be deleted. Refresh and try again.' });
+    const result = await this.db.assetSubmission.updateMany({
+      where: {
+        id: submissionId,
+        ownerUserId: userId,
+        status: 'DRAFT',
+        version,
+      },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        version: { increment: 1 },
+      },
+    });
+    if (result.count !== 1)
+      throw new ConflictException({
+        code: 'DRAFT_DELETE_CONFLICT',
+        message:
+          'Only your current editable draft can be deleted. Refresh and try again.',
+      });
     return { submissionId, deleted: true };
   }
 
@@ -339,20 +593,74 @@ export class CollectorWorkspaceService {
       });
   }
 
-  private async usageFor(userId: string, entitlements: Prisma.JsonValue | null) {
+  private async usageFor(
+    userId: string,
+    entitlements: Prisma.JsonValue | null,
+  ) {
     const period = billingPeriod();
-    const [activeCollectibles, openSubmissions, openDrafts, monthlySubmissions, concurrentIntake] = await Promise.all([
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { in: [...activeCollectorSubmissionStatuses] } } }),
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { in: [...openCollectorSubmissionStatuses] } } }),
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: 'DRAFT' } }),
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, createdAt: { gte: period.start, lt: period.end }, status: { not: 'CANCELLED' } } }),
-      this.db.submissionIntake.count({ where: { submission: { ownerUserId: userId }, status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'] } } }),
+    const [
+      activeCollectibles,
+      openSubmissions,
+      openDrafts,
+      monthlySubmissions,
+      concurrentIntake,
+    ] = await Promise.all([
+      this.db.assetSubmission.count({
+        where: {
+          ownerUserId: userId,
+          status: { in: [...activeCollectorSubmissionStatuses] },
+        },
+      }),
+      this.db.assetSubmission.count({
+        where: {
+          ownerUserId: userId,
+          status: { in: [...openCollectorSubmissionStatuses] },
+        },
+      }),
+      this.db.assetSubmission.count({
+        where: { ownerUserId: userId, status: 'DRAFT' },
+      }),
+      this.db.assetSubmission.count({
+        where: {
+          ownerUserId: userId,
+          createdAt: { gte: period.start, lt: period.end },
+          status: { not: 'CANCELLED' },
+        },
+      }),
+      this.db.submissionIntake.count({
+        where: {
+          submission: { ownerUserId: userId },
+          status: {
+            in: [
+              'VAULT_SELECTED',
+              'SHIPPING_REQUIRED',
+              'IN_TRANSIT',
+              'DELIVERED',
+            ],
+          },
+        },
+      }),
     ]);
-    const maxActiveCollectibles = numberEntitlement(entitlements ?? {}, 'maxActiveCollectibles');
-    const maxOpenSubmissions = numberEntitlement(entitlements ?? {}, 'maxOpenSubmissions');
-    const maxOpenDrafts = numberEntitlement(entitlements ?? {}, 'maxOpenDrafts');
-    const maxMonthlySubmissions = numberEntitlement(entitlements ?? {}, 'monthlySubmissionLimit');
-    const maxConcurrentIntake = numberEntitlement(entitlements ?? {}, 'maxConcurrentIntake');
+    const maxActiveCollectibles = numberEntitlement(
+      entitlements ?? {},
+      'maxActiveCollectibles',
+    );
+    const maxOpenSubmissions = numberEntitlement(
+      entitlements ?? {},
+      'maxOpenSubmissions',
+    );
+    const maxOpenDrafts = numberEntitlement(
+      entitlements ?? {},
+      'maxOpenDrafts',
+    );
+    const maxMonthlySubmissions = numberEntitlement(
+      entitlements ?? {},
+      'monthlySubmissionLimit',
+    );
+    const maxConcurrentIntake = numberEntitlement(
+      entitlements ?? {},
+      'maxConcurrentIntake',
+    );
     return {
       activeCollectibles,
       maxActiveCollectibles,
@@ -364,7 +672,10 @@ export class CollectorWorkspaceService {
       maxMonthlySubmissions,
       concurrentIntake,
       maxConcurrentIntake,
-      remainingCatalogueCapacity: maxActiveCollectibles === null ? null : Math.max(maxActiveCollectibles - activeCollectibles, 0),
+      remainingCatalogueCapacity:
+        maxActiveCollectibles === null
+          ? null
+          : Math.max(maxActiveCollectibles - activeCollectibles, 0),
       billingPeriodStart: period.start.toISOString(),
       billingPeriodEnd: period.end.toISOString(),
       // Keep the previous names in the response for older clients during the
@@ -670,7 +981,12 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
     stage,
     submissionStatus: submission.status,
     version: submission.version,
-    nextAction: nextActionFor(submission.status, stage, media, submission.intake),
+    nextAction: nextActionFor(
+      submission.status,
+      stage,
+      media,
+      submission.intake,
+    ),
     updatedAt: submission.updatedAt.toISOString(),
     // Kept for current workspace clients: it is always labelled with its source.
     referenceValue: supportedValue ?? externalReference,
@@ -707,7 +1023,8 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
                 trackingNumber: submission.intake.shipment.trackingNumber,
                 status: submission.intake.shipment.status,
                 shippedAt: submission.intake.shipment.shippedAt.toISOString(),
-                deliveredAt: submission.intake.shipment.deliveredAt?.toISOString() ?? null,
+                deliveredAt:
+                  submission.intake.shipment.deliveredAt?.toISOString() ?? null,
               }
             : null,
           receivedAt: submission.intake.receivedAt?.toISOString() ?? null,
@@ -730,11 +1047,26 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
   };
 }
 
-function requestViews(assets: WorkspaceItem[]) {
-  return assets.flatMap((asset) => requestFor(asset));
+function requestViews(assets: WorkspaceItem[]): CollectorRequestView[] {
+  const priority = { BLOCKING: 0, IMPORTANT: 1, REMINDER: 2 } as const;
+  return assets
+    .flatMap((asset) => requestFor(asset))
+    .sort(
+      (a, b) =>
+        priority[a.priority] - priority[b.priority] ||
+        b.asset.updatedAt.localeCompare(a.asset.updatedAt),
+    );
 }
 
-function requestFor(asset: WorkspaceItem) {
+function requestFor(asset: WorkspaceItem): CollectorRequestView[] {
+  // A published/secured asset has already completed its intake journey. Do
+  // not surface a stale pre-intake action from the original submission.
+  if (
+    asset.market.isLive ||
+    asset.stage === 'MARKET_LIVE' ||
+    asset.stage === 'VAULT_READY'
+  )
+    return [];
   const base = {
     asset,
     submissionId: asset.id,
@@ -747,9 +1079,14 @@ function requestFor(asset: WorkspaceItem) {
       {
         ...base,
         id: `submission:${asset.id}:changes`,
+        type: 'CHANGES_REQUESTED' as const,
+        category: 'SUBMISSION' as const,
+        priority: 'BLOCKING' as const,
         reason: 'Staff requested changes before review can continue.',
         badge: 'Action required',
-        action: 'Review and resubmit',
+        action: 'Review changes',
+        actionLabel: 'Review changes',
+        targetRoute: 'submission',
       },
     ];
   if (
@@ -760,9 +1097,14 @@ function requestFor(asset: WorkspaceItem) {
       {
         ...base,
         id: `submission:${asset.id}:evidence`,
+        type: 'ADD_REQUIRED_EVIDENCE' as const,
+        category: 'SUBMISSION' as const,
+        priority: 'REMINDER' as const,
         reason: 'Add the required front and back evidence before submitting.',
         badge: 'Evidence needed',
-        action: 'Add evidence',
+        action: 'Add photos',
+        actionLabel: 'Add photos',
+        targetRoute: 'media',
       },
     ];
   if (asset.media.some((media) => media.status === 'REJECTED'))
@@ -770,9 +1112,14 @@ function requestFor(asset: WorkspaceItem) {
       {
         ...base,
         id: `submission:${asset.id}:replace-evidence`,
+        type: 'ADD_REQUIRED_EVIDENCE' as const,
+        category: 'SUBMISSION' as const,
+        priority: 'BLOCKING' as const,
         reason: 'Replace rejected evidence to continue the submission.',
         badge: 'Evidence needed',
-        action: 'Replace evidence',
+        action: 'Add photos',
+        actionLabel: 'Add photos',
+        targetRoute: 'media',
       },
     ];
   if (asset.submissionStatus === 'APPROVED' && !asset.intake)
@@ -780,9 +1127,15 @@ function requestFor(asset: WorkspaceItem) {
       {
         ...base,
         id: `submission:${asset.id}:vault`,
-        reason: 'Your submission was accepted. Choose an intake destination to continue.',
+        type: 'CHOOSE_VAULT' as const,
+        category: 'SHIPPING' as const,
+        priority: 'BLOCKING' as const,
+        reason:
+          'Your submission was accepted. Choose an intake destination to continue.',
         badge: 'Choose vault',
         action: 'Choose vault',
+        actionLabel: 'Choose vault',
+        targetRoute: 'custody',
       },
     ];
   if (asset.intake?.status === 'SHIPPING_REQUIRED' && !asset.intake.shipment)
@@ -790,9 +1143,14 @@ function requestFor(asset: WorkspaceItem) {
       {
         ...base,
         id: `submission:${asset.id}:shipping`,
+        type: 'ADD_TRACKING' as const,
+        category: 'SHIPPING' as const,
+        priority: 'BLOCKING' as const,
         reason: 'Add your carrier and tracking details before shipping.',
         badge: 'Add tracking',
         action: 'Add tracking',
+        actionLabel: 'Add tracking',
+        targetRoute: 'custody',
       },
     ];
   return [];
@@ -938,11 +1296,23 @@ function stageLabel(stage: WorkspaceStage) {
   )[stage];
 }
 function activityTitle(action: string) {
-  if (action.includes('MEDIA')) return 'Evidence updated';
-  if (action.includes('SUBMISSION')) return 'Submission activity';
+  if (action.includes('ACCEPT')) return 'Submission accepted';
+  if (action.includes('VAULT')) return 'Vault selected';
+  if (action.includes('TRACK')) return 'Tracking added';
+  if (action.includes('CHANGES')) return 'Changes requested';
+  if (action.includes('MEDIA')) return 'Photos uploaded';
+  if (action.includes('RECEIPT')) return 'Received by Slice';
+  if (action.includes('VERIF')) return 'Verification completed';
   if (action.includes('VALUATION')) return 'Valuation updated';
+  if (action.includes('PUBLISHED')) return 'Market published';
   if (action.includes('CUSTODY')) return 'Custody updated';
-  if (action.includes('PUBLISHED')) return 'Market listing approved';
   if (action.includes('PROFILE')) return 'Profile updated';
-  return 'Collector activity';
+  if (action.includes('SUBMISSION')) return 'Submission updated';
+  return 'Workflow update';
+}
+
+function completedActivity(action: string) {
+  return ['VAULT', 'TRACK', 'RECEIPT', 'VERIF', 'PUBLISHED', 'ACCEPT'].some(
+    (token) => action.includes(token),
+  );
 }

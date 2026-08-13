@@ -394,6 +394,11 @@ export const mockRepositories: AppRepositories = {
         })) as import("@/domain").CollectorWorkspaceOverview["pipeline"],
         assets: [],
         attention: [],
+        actionSummary: {
+          waitingOnYou: 0,
+          inProgress: 0,
+          completedRecently: 0,
+        },
         activity: [],
         analytics: {
           catalogueReferenceValue: null,

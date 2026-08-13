@@ -87,7 +87,26 @@ export type CollectorWorkspaceOverview = {
   };
   pipeline: Array<{ stage: CollectorWorkspaceStage; count: number }>;
   assets: CollectorWorkspaceAsset[];
-  attention: Array<CollectorWorkspaceAsset & { reason: string; badge: string }>;
+  attention: Array<
+    CollectorWorkspaceAsset & {
+      reason: string;
+      badge: string;
+      requestId: string;
+      requestStatus: "OPEN";
+      destination: string;
+      type: string;
+      category: "SUBMISSION" | "SHIPPING" | "INFORMATION";
+      priority: "BLOCKING" | "IMPORTANT" | "REMINDER";
+      action: string;
+      actionLabel: string;
+      targetRoute: string;
+    }
+  >;
+  actionSummary: {
+    waitingOnYou: number;
+    inProgress: number;
+    completedRecently: number;
+  };
   activity: Array<{ id: string; type: string; title: string; detail: string; occurredAt: string }>;
   analytics: {
     catalogueReferenceValue: CollectorWorkspaceMoney | null;

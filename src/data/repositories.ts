@@ -376,9 +376,20 @@ export type CollectorWorkspaceRequest = {
   collectibleId: string | null;
   destination: string;
   status: "OPEN";
+  type:
+    | "CHOOSE_VAULT"
+    | "ADD_REQUIRED_EVIDENCE"
+    | "CHANGES_REQUESTED"
+    | "ADD_TRACKING"
+    | "SHIPPING_EXCEPTION"
+    | "PROVIDE_INFORMATION";
+  category: "SUBMISSION" | "SHIPPING" | "INFORMATION";
+  priority: "BLOCKING" | "IMPORTANT" | "REMINDER";
   reason: string;
   badge: string;
   action: string;
+  actionLabel: string;
+  targetRoute: string;
   asset: import("@/domain").CollectorWorkspaceAsset;
 };
 

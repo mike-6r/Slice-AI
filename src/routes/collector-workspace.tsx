@@ -100,7 +100,7 @@ const navigation: Array<{ id: WorkspaceSection; label: string; icon: typeof Home
   { id: "overview", label: "Overview", icon: Home },
   { id: "collectibles", label: "My Collectibles", icon: LayoutGrid },
   { id: "submissions", label: "Submissions", icon: ClipboardList },
-  { id: "requests", label: "Requests", icon: Bell },
+  { id: "requests", label: "Your Actions", icon: Bell },
   { id: "subscription", label: "Subscription", icon: CreditCard },
   { id: "profile", label: "Public Profile", icon: Globe2 },
   { id: "settings", label: "Settings", icon: Settings },
@@ -1059,25 +1059,202 @@ function MarketSnapshot({ data }: { data: CollectorWorkspaceOverview }) {
 }
 
 function Requests({ data, open }: { data: CollectorWorkspaceOverview; open: Open }) {
-  if (data.attention.length) return <RequestCards items={data.attention} open={open} />;
+  const [filter, setFilter] = useState<"ALL" | "SUBMISSION" | "SHIPPING" | "INFORMATION">("ALL");
+  const actions =
+    filter === "ALL" ? data.attention : data.attention.filter((item) => item.category === filter);
+  const required = actions.filter((item) => item.priority !== "REMINDER");
+  const reminders = actions.filter((item) => item.priority === "REMINDER");
   return (
     <WorkspacePage
-      title="Requests"
-      detail="Requests are derived from current actionable workflow states; private staff notes are never shown."
+      title="Your Actions"
+      detail="Complete these steps to keep your collectibles moving."
     >
-      <section className="collector-panel">
-        {data.attention.length ? (
-          <ul className="collector-request-list">
-            {data.attention.map((item) => (
-              <AttentionRow key={item.id} item={item} open={open} />
+      <div className="collector-actions-count">
+        {data.actionSummary.waitingOnYou} items need your attention
+      </div>
+      <div className="collector-actions-layout">
+        <div className="collector-actions-main">
+          <div className="collector-actions-filterbar" role="tablist" aria-label="Filter actions">
+            {(
+              [
+                ["ALL", "All"],
+                ["SUBMISSION", "Submission"],
+                ["SHIPPING", "Shipping"],
+                ["INFORMATION", "Information"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={filter === value}
+                className={filter === value ? "is-active" : ""}
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </button>
             ))}
-          </ul>
-        ) : (
-          <Empty detail="You're all caught up. There are no active requests." />
-        )}
-      </section>
+          </div>
+          <ActionSection
+            title="Required now"
+            count={required.length}
+            actions={required}
+            open={open}
+            empty="You're all caught up. None of your collectibles need anything from you right now."
+          />
+          {reminders.length ? (
+            <ActionSection
+              title="Draft reminders"
+              count={reminders.length}
+              actions={reminders}
+              open={open}
+            />
+          ) : null}
+        </div>
+        <aside className="collector-actions-rail">
+          <ActionSummary summary={data.actionSummary} />
+          <RecentActions activity={data.activity.slice(0, 5)} open={() => open("activity")} />
+        </aside>
+      </div>
     </WorkspacePage>
   );
+}
+
+function ActionSection({
+  title,
+  count,
+  actions,
+  open,
+  empty,
+}: {
+  title: string;
+  count: number;
+  actions: CollectorWorkspaceOverview["attention"];
+  open: Open;
+  empty?: string;
+}) {
+  return (
+    <section className="collector-actions-section">
+      <div className="collector-actions-section__heading">
+        <h2>{title}</h2>
+        <span>{count}</span>
+      </div>
+      {actions.length ? (
+        <div className="collector-actions-list">
+          {actions.map((item) => (
+            <ActionRow key={item.requestId} item={item} open={open} />
+          ))}
+        </div>
+      ) : empty ? (
+        <div className="collector-actions-empty">{empty}</div>
+      ) : null}
+    </section>
+  );
+}
+
+function ActionRow({
+  item,
+  open,
+}: {
+  item: CollectorWorkspaceOverview["attention"][number];
+  open: Open;
+}) {
+  const tab =
+    item.targetRoute === "media"
+      ? "media"
+      : item.targetRoute === "custody"
+        ? "custody"
+        : "submission";
+  return (
+    <article className="collector-action-row">
+      <AssetThumbnail asset={item} className="collector-action-row__image" />
+      <div className="collector-action-row__identity">
+        <span>{actionCategoryLabel(item.category)}</span>
+        <h3>{item.title}</h3>
+        <p>{assetMetadata(item)}</p>
+        <small>Submission #{item.id.slice(-6).toUpperCase()}</small>
+      </div>
+      <div className="collector-action-row__message">
+        <strong>{item.badge}</strong>
+        <p>{item.reason}</p>
+      </div>
+      <div className="collector-action-row__cta">
+        <time dateTime={item.updatedAt}>Updated {date(item.updatedAt)}</time>
+        <button
+          type="button"
+          className={
+            item.priority === "BLOCKING"
+              ? "collector-button collector-button--primary"
+              : "collector-button"
+          }
+          onClick={() => open("asset", item.id, tab)}
+        >
+          {item.actionLabel} <ArrowRight aria-hidden="true" />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ActionSummary({ summary }: { summary: CollectorWorkspaceOverview["actionSummary"] }) {
+  return (
+    <section className="collector-panel collector-actions-summary">
+      <PanelHeader title="Action summary" />
+      <div>
+        <strong>Waiting on you</strong>
+        <span>{summary.waitingOnYou}</span>
+        <small>Items that need your action</small>
+      </div>
+      <div>
+        <strong>In progress</strong>
+        <span>{summary.inProgress}</span>
+        <small>Moving through the pipeline</small>
+      </div>
+      <div>
+        <strong>Completed recently</strong>
+        <span>{summary.completedRecently}</span>
+        <small>Meaningful milestones</small>
+      </div>
+    </section>
+  );
+}
+
+function RecentActions({
+  activity,
+  open,
+}: {
+  activity: CollectorWorkspaceOverview["activity"];
+  open: () => void;
+}) {
+  return (
+    <section className="collector-panel collector-recent-actions">
+      <PanelHeader title="Recent activity" />
+      {activity.length ? (
+        <ul>
+          {activity.map((item) => (
+            <li key={item.id}>
+              <strong>{item.title}</strong>
+              <span>{item.detail}</span>
+              <small>{date(item.occurredAt)}</small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty detail="Your recent workflow milestones will appear here." />
+      )}
+      <button className="collector-button" onClick={open}>
+        View all activity <ArrowRight aria-hidden="true" />
+      </button>
+    </section>
+  );
+}
+
+function actionCategoryLabel(category: "SUBMISSION" | "SHIPPING" | "INFORMATION") {
+  return {
+    SUBMISSION: "Submission",
+    SHIPPING: "Shipping",
+    INFORMATION: "Information",
+  }[category];
 }
 
 function Documents({ assets, open }: { assets: CollectorWorkspaceAsset[]; open: Open }) {
