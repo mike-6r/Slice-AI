@@ -492,6 +492,42 @@ export class TradingService {
     };
   }
 
+  /** Compact, customer-safe D14 projection for authenticated companion
+   * surfaces. Trading mutations remain exclusively in the web workflow. */
+  async customerOpenOrderSummary(userId: string) {
+    const where = {
+      userId,
+      status: { in: [...activeStatuses] },
+      asset: { status: 'PUBLISHED' as const },
+    };
+    const [openCount, rows] = await Promise.all([
+      this.db.tradingOrder.count({ where }),
+      this.db.tradingOrder.findMany({
+      where: {
+        userId,
+        status: { in: [...activeStatuses] },
+        asset: { status: 'PUBLISHED' },
+      },
+      include: { asset: { select: { slug: true, title: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 3,
+      }),
+    ]);
+    return {
+      openCount,
+      recent: rows.map((row) => ({
+        assetTitle: row.asset.title,
+        assetSlug: row.asset.slug,
+        side: row.side,
+        status: row.status,
+        remainingUnits: row.remainingUnits.toString(),
+        filledUnits: row.filledUnits.toString(),
+        limitPriceMinor: row.limitPriceMinor.toString(),
+        currency: 'GBP' as const,
+      })),
+    };
+  }
+
   async ownExecutions(userId: string, cursor?: string, limit = 20) {
     const before = cursor ? this.executionCursor(cursor, userId) : undefined;
     const rows = await this.db.tradingExecution.findMany({

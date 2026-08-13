@@ -185,4 +185,21 @@ describe('DiscordLinkService', () => {
     await expect(service.botAdminOperations('discord-user')).resolves.toEqual({ counts: { pendingReviews: 1 } });
     expect(operationsOverview).toHaveBeenCalledWith(expect.objectContaining({ userId: 'admin-user', roles: ['ADMIN'] }));
   });
+
+  it('returns My Slice data only for the account bound to the Discord identity', async () => {
+    const db = database();
+    db.discordAccountLink.findUnique.mockResolvedValue({
+      userId: 'linked-user',
+      user: { profile: { publicUsername: 'collector', displayName: 'Collector', preferredCurrency: 'GBP' }, roleAssignments: [{ role: 'COLLECTOR' }] },
+    });
+    const portfolio = { portfolioForUser: jest.fn().mockResolvedValue({ currency: 'GBP', estimatedPortfolioValueMinor: '100', estimatedHoldingsValueMinor: '50', cash: { accounts: [{ availableMinor: '40', reservedMinor: '10' }] }, holdings: [], valuationStatus: 'AVAILABLE' }) };
+    const trading = { customerOpenOrderSummary: jest.fn().mockResolvedValue({ openCount: 1, recent: [] }) };
+    const workspace = { overview: jest.fn().mockResolvedValue({ kpis: { totalCollectibles: 1, marketLive: 0, inReview: 1 }, actionSummary: { waitingOnYou: 0 } }), subscription: jest.fn().mockResolvedValue({ current: null, usage: {} }) };
+    const service = new DiscordLinkService(db as unknown as PrismaService, config, workspace as never, undefined, portfolio as never, trading as never);
+
+    await expect(service.botMySlice('discord-user')).resolves.toMatchObject({ linked: true, identity: { username: 'collector', capabilities: { collector: true } }, orders: { openCount: 1 } });
+    expect(db.discordAccountLink.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { discordUserId: 'discord-user' } }));
+    expect(portfolio.portfolioForUser).toHaveBeenCalledWith('linked-user');
+    expect(trading.customerOpenOrderSummary).toHaveBeenCalledWith('linked-user');
+  });
 });

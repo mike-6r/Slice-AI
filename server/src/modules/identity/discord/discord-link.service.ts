@@ -8,9 +8,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
-import { Inject } from '@nestjs/common';
+import { Inject, Optional } from '@nestjs/common';
 import { CollectorWorkspaceService } from '../../collector-workspace/collector-workspace.service';
 import { AdminService } from '../../admin/admin.service';
+import { PortfolioQueryService } from '../../finance/application/portfolio-query.service';
+import { TradingService } from '../../trading/application/trading.service';
 
 type DiscordIdentity = {
   id: string;
@@ -25,6 +27,8 @@ export class DiscordLinkService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly collectorWorkspace?: CollectorWorkspaceService,
     private readonly admin?: AdminService,
+    @Optional() private readonly portfolio?: PortfolioQueryService,
+    @Optional() private readonly trading?: TradingService,
   ) {}
 
   async createBotChallenge(
@@ -223,6 +227,50 @@ export class DiscordLinkService {
         message: action.reason,
         actionUrl: action.targetRoute,
       })),
+    };
+  }
+
+  /** One customer-safe summary bound to the canonical Discord link. This is
+   * intentionally a read/navigation projection, never a Discord trading or
+   * billing authority. Optional sections fail independently. */
+  async botMySlice(discordUserId: string) {
+    const link = await this.db.discordAccountLink.findUnique({
+      where: { discordUserId: requiredText(discordUserId, 'Discord identity') },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            profile: {
+              select: {
+                publicUsername: true,
+                displayName: true,
+                preferredCurrency: true,
+              },
+            },
+            roleAssignments: { where: { revokedAt: null }, select: { role: true } },
+          },
+        },
+      },
+    });
+    if (!link) return { linked: false as const };
+    const roles = [...new Set(link.user.roleAssignments.map((assignment) => assignment.role))];
+    const collector = roles.includes('COLLECTOR');
+    const [portfolio, orders, collectorData] = await Promise.allSettled([
+      this.customerPortfolio(link.userId),
+      this.trading ? this.trading.customerOpenOrderSummary(link.userId) : Promise.resolve(null),
+      collector ? this.customerCollector(link.userId) : Promise.resolve(null),
+    ]);
+    return {
+      linked: true as const,
+      identity: {
+        username: link.user.profile?.publicUsername ?? null,
+        displayName: link.user.profile?.displayName ?? null,
+        preferredCurrency: link.user.profile?.preferredCurrency ?? 'GBP',
+        capabilities: { investor: true, collector },
+      },
+      portfolio: settled(portfolio),
+      orders: settled(orders),
+      collector: settled(collectorData),
     };
   }
 
@@ -466,23 +514,74 @@ export class DiscordLinkService {
       this.collectorWorkspace.overview(userId),
     ]);
     const current = subscription.current;
+    const usage = collectorUsage(subscription.usage);
     return {
       enabled: true,
       membership: current
         ? {
             planName: current.displayName,
             status: current.status,
-            activeCollectibles: subscription.usage.activeCollectibles,
-            maxActiveCollectibles: subscription.usage.maxActiveCollectibles,
-            monthlySubmissions: subscription.usage.monthlySubmissionsUsed,
-            monthlyLimit: subscription.usage.maxMonthlySubmissions,
-            concurrentIntake: subscription.usage.concurrentIntake,
-            concurrentIntakeLimit: subscription.usage.maxConcurrentIntake,
+            activeCollectibles: usage.activeCollectibles,
+            maxActiveCollectibles: usage.maxActiveCollectibles,
+            monthlySubmissions: usage.monthlySubmissionsUsed,
+            monthlyLimit: usage.maxMonthlySubmissions,
+            concurrentIntake: usage.concurrentIntake,
+            concurrentIntakeLimit: usage.maxConcurrentIntake,
             billingState: subscription.billing.configured ? current.status : 'UNCONFIGURED',
             manageUrl: '/collector-workspace',
           }
         : null,
       openActionCount: overview.actionSummary.waitingOnYou,
+    };
+  }
+
+  private async customerPortfolio(userId: string) {
+    if (!this.portfolio) return null;
+    const summary = await this.portfolio.portfolioForUser(userId);
+    const availableCashMinor = summary.cash.accounts.reduce(
+      (total, account) => total + BigInt(account.availableMinor),
+      0n,
+    );
+    const reservedCashMinor = summary.cash.accounts.reduce(
+      (total, account) => total + BigInt(account.reservedMinor),
+      0n,
+    );
+    return {
+      currency: summary.currency,
+      estimatedPortfolioValueMinor: summary.estimatedPortfolioValueMinor,
+      estimatedHoldingsValueMinor: summary.estimatedHoldingsValueMinor,
+      availableCashMinor: availableCashMinor.toString(),
+      reservedCashMinor: reservedCashMinor.toString(),
+      holdings: summary.holdings.length,
+      valuationStatus: summary.valuationStatus,
+    };
+  }
+
+  private async customerCollector(userId: string) {
+    if (!this.collectorWorkspace) return null;
+    const [overview, subscription] = await Promise.all([
+      this.collectorWorkspace.overview(userId),
+      this.collectorWorkspace.subscription(userId),
+    ]);
+    const current = subscription.current;
+    const usage = collectorUsage(subscription.usage);
+    return {
+      collectibles: overview.kpis.totalCollectibles,
+      marketLive: overview.kpis.marketLive,
+      inReview: overview.kpis.inReview,
+      openActionCount: overview.actionSummary.waitingOnYou,
+      membership: current
+        ? {
+            planName: current.displayName,
+            status: current.status,
+            activeCollectibles: usage.activeCollectibles,
+            maxActiveCollectibles: usage.maxActiveCollectibles,
+            monthlySubmissions: usage.monthlySubmissionsUsed,
+            monthlyLimit: usage.maxMonthlySubmissions,
+            concurrentIntake: usage.concurrentIntake,
+            concurrentIntakeLimit: usage.maxConcurrentIntake,
+          }
+        : null,
     };
   }
 
@@ -528,6 +627,22 @@ function requiredText(value: string | null | undefined, label: string): string {
     throw new UnauthorizedException({ code: 'DISCORD_BOT_INPUT_INVALID', message: `${label} is invalid.` });
   }
   return result;
+}
+
+function settled<T>(result: PromiseSettledResult<T>): T | null {
+  return result.status === 'fulfilled' ? result.value : null;
+}
+
+function collectorUsage(value: unknown) {
+  const usage = value as {
+    activeCollectibles: number;
+    maxActiveCollectibles: number | null;
+    monthlySubmissionsUsed: number;
+    maxMonthlySubmissions: number | null;
+    concurrentIntake: number;
+    maxConcurrentIntake: number | null;
+  };
+  return usage;
 }
 
 function optionalText(value: string | null | undefined): string | null {

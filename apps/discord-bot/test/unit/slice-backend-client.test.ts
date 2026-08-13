@@ -33,4 +33,12 @@ describe('SliceBackendClient account linking', () => {
     expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/admin/operations/discord-user');
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer service-secret' } });
   });
+
+  it('reads My Slice only through the linked-user service endpoint', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ linked: true, identity: { username: 'collector', displayName: 'Collector', preferredCurrency: 'GBP', capabilities: { investor: true, collector: true } }, portfolio: null, orders: null, collector: null }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(client().getMySliceSummary('discord-user')).resolves.toMatchObject({ ok: true, value: { linked: true, identity: { username: 'collector' } } });
+    expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/links/discord-user/my-slice');
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer service-secret' } });
+  });
 });

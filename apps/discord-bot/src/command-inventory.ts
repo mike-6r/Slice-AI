@@ -10,10 +10,11 @@ import { priceAlertCommand } from './commands/price-alerts.js';
 import { aboutCommand, askCommand, helpCommand, insightsCommand, statusCommand, summaryCommand, trendingCommand } from './commands/intelligence.js';
 import { announceCommand, inviteCommand, offerCommand, requestCommand, roadmapCommand } from './commands/gap-sweep.js';
 import { opsCommand } from './staff-operations.js';
+import { sliceCommand } from './my-slice.js';
 
 /** Single source of truth for runtime registration and deployment synchronization. */
 export const discordCommandInventory = [
-  setupCommand, configurationCommand, accountCommand, rolesCommand, faqCommand, supportCommand, opsCommand, ticketCommand,
+  setupCommand, configurationCommand, accountCommand, sliceCommand, rolesCommand, faqCommand, supportCommand, opsCommand, ticketCommand,
   warnCommand, noteCommand, timeoutCommand, untimeoutCommand, banCommand, unbanCommand, modcaseCommand, modhistoryCommand,
   levelCommand, leaderboardCommand, repCommand, reputationCommand, achievementsCommand, dailyCommand,
   notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand,

@@ -93,6 +93,12 @@ export class DiscordLinkController {
     return this.links.botStatus(discordUserId);
   }
 
+  @Get('discord/bot/links/:discordUserId/my-slice')
+  @UseGuards(DiscordBotServiceGuard)
+  botMySlice(@Param('discordUserId') discordUserId: string) {
+    return this.links.botMySlice(discordUserId);
+  }
+
   @Get('discord/bot/links/:discordUserId/collector-actions')
   @UseGuards(DiscordBotServiceGuard)
   botCollectorActions(@Param('discordUserId') discordUserId: string) {
