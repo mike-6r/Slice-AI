@@ -464,11 +464,25 @@ export type AdminOperationsOverview = {
 export type AdminIntakeRow = {
   id: string;
   submissionId: string;
+  intakeReference: string | null;
   title: string;
+  category: string | null;
+  variant: string | null;
+  grader: string | null;
+  grade: string | null;
+  itemCount: number;
   collector: { id: string; displayName: string; username: string | null };
+  membership: string | null;
   submissionStatus: string;
   stage: string;
-  vault: { id: string; displayName: string; region: string; countryCode: string } | null;
+  currentStageSince: string;
+  vault: {
+    id: string;
+    displayName: string;
+    region: string;
+    countryCode: string;
+    code: string | null;
+  } | null;
   shipment: {
     carrier: string;
     trackingNumber: string;
@@ -479,6 +493,37 @@ export type AdminIntakeRow = {
   receipt: { confirmedAt: string; confirmedById: string } | null;
   updatedAt: string;
   nextAction: string;
+  valuationStatus: string | null;
+  custodyStatus: string | null;
+  exception: { code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" } | null;
+};
+
+export type AdminIntakeOverview = {
+  all: number;
+  accepted: number;
+  shipped: number;
+  delivered: number;
+  received: number;
+  verified: number;
+  readyForVault: number;
+  exceptions: number;
+};
+export type AdminIntakeResponse = {
+  items: AdminIntakeRow[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  counts: AdminIntakeOverview;
+  overview: AdminIntakeOverview;
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    reference: string;
+    occurredAt: string;
+  }>;
+  filters: {
+    vaults: Array<{ id: string; displayName: string; code: string | null }>;
+    carriers: string[];
+  };
 };
 
 export type AdminMembershipRow = {
@@ -518,8 +563,19 @@ export interface AdminRepository {
   listIntake(input?: {
     status?: string;
     q?: string;
+    vaultId?: string;
+    carrier?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    pageSize?: number;
+    sort?: string;
+    sortDirection?: "asc" | "desc";
     limit?: number;
-  }): Promise<{ items: AdminIntakeRow[] }>;
+  }): Promise<AdminIntakeResponse>;
+  confirmIntakeReceipt(
+    id: string,
+  ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
   listMemberships(input?: {
     status?: string;
     q?: string;

@@ -1120,20 +1120,36 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
   return {
     id: stringField(value.id, "admin intake.id"),
     submissionId: stringField(value.submissionId, "admin intake.submissionId"),
+    intakeReference:
+      value.intakeReference === null
+        ? null
+        : nullableString(value.intakeReference, "admin intake.intakeReference"),
     title: stringField(value.title, "admin intake.title"),
+    category:
+      value.category === null ? null : nullableString(value.category, "admin intake.category"),
+    variant: value.variant === null ? null : nullableString(value.variant, "admin intake.variant"),
+    grader: value.grader === null ? null : nullableString(value.grader, "admin intake.grader"),
+    grade: value.grade === null ? null : nullableString(value.grade, "admin intake.grade"),
+    itemCount: Number(value.itemCount ?? 0),
     collector: {
       id: stringField(collector.id, "admin intake.collector.id"),
       displayName: stringField(collector.displayName, "admin intake.collector.displayName"),
       username: nullableString(collector.username, "admin intake.collector.username"),
     },
+    membership:
+      value.membership === null
+        ? null
+        : nullableString(value.membership, "admin intake.membership"),
     submissionStatus: stringField(value.submissionStatus, "admin intake.submissionStatus"),
     stage: stringField(value.stage, "admin intake.stage"),
+    currentStageSince: stringField(value.currentStageSince, "admin intake.currentStageSince"),
     vault: vault
       ? {
           id: stringField(vault.id, "admin intake.vault.id"),
           displayName: stringField(vault.displayName, "admin intake.vault.displayName"),
           region: stringField(vault.region, "admin intake.vault.region"),
           countryCode: stringField(vault.countryCode, "admin intake.vault.countryCode"),
+          code: vault.code === null ? null : nullableString(vault.code, "admin intake.vault.code"),
         }
       : null,
     shipment: shipment
@@ -1156,6 +1172,26 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
       : null,
     updatedAt: stringField(value.updatedAt, "admin intake.updatedAt"),
     nextAction: stringField(value.nextAction, "admin intake.nextAction"),
+    valuationStatus:
+      value.valuationStatus === null
+        ? null
+        : nullableString(value.valuationStatus, "admin intake.valuationStatus"),
+    custodyStatus:
+      value.custodyStatus === null
+        ? null
+        : nullableString(value.custodyStatus, "admin intake.custodyStatus"),
+    exception:
+      value.exception === null
+        ? null
+        : (() => {
+            const exception = objectField(value.exception, "admin intake.exception");
+            return {
+              code: stringField(exception.code, "admin intake.exception.code"),
+              label: stringField(exception.label, "admin intake.exception.label"),
+              severity: stringField(exception.severity, "admin intake.exception.severity") as
+                "LOW" | "MEDIUM" | "HIGH",
+            };
+          })(),
   };
 };
 
@@ -1556,7 +1592,68 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async listIntake(input) {
     const value = objectField(await client.get<unknown>("/admin/intake", input), "admin intake");
-    return { items: Array.isArray(value.items) ? value.items.map(mapAdminIntake) : [] };
+    const pagination = objectField(value.pagination, "admin intake.pagination");
+    const mapInt = (key: string) =>
+      Number(objectField(value.counts, "admin intake.counts")[key] ?? 0);
+    const filters = objectField(value.filters, "admin intake.filters");
+    return {
+      items: Array.isArray(value.items) ? value.items.map(mapAdminIntake) : [],
+      pagination: {
+        page: Number(pagination.page),
+        pageSize: Number(pagination.pageSize),
+        total: Number(pagination.total),
+        totalPages: Number(pagination.totalPages),
+      },
+      counts: {
+        all: mapInt("all"),
+        accepted: mapInt("accepted"),
+        shipped: mapInt("shipped"),
+        delivered: mapInt("delivered"),
+        received: mapInt("received"),
+        verified: mapInt("verified"),
+        readyForVault: mapInt("readyForVault"),
+        exceptions: mapInt("exceptions"),
+      },
+      overview: {
+        all: mapInt("all"),
+        accepted: mapInt("accepted"),
+        shipped: mapInt("shipped"),
+        delivered: mapInt("delivered"),
+        received: mapInt("received"),
+        verified: mapInt("verified"),
+        readyForVault: mapInt("readyForVault"),
+        exceptions: mapInt("exceptions"),
+      },
+      recentActivity: Array.isArray(value.recentActivity)
+        ? (value.recentActivity as Array<{
+            id: string;
+            type: string;
+            title: string;
+            reference: string;
+            occurredAt: string;
+          }>)
+        : [],
+      filters: {
+        vaults: Array.isArray(filters.vaults)
+          ? (filters.vaults as Array<{ id: string; displayName: string; code: string | null }>)
+          : [],
+        carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
+      },
+    };
+  },
+  async confirmIntakeReceipt(id) {
+    const value = objectField(
+      await client.request<unknown>(`/admin/intake/${id}/receipt`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+      }),
+      "intake receipt",
+    );
+    return {
+      intakeId: stringField(value.intakeId, "intake receipt.intakeId"),
+      status: stringField(value.status, "intake receipt.status"),
+      confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
+    };
   },
   async listMemberships(input) {
     const value = objectField(

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
@@ -69,6 +74,7 @@ function intakeStage(item: {
 }) {
   if (!item.intake)
     return item.status === 'APPROVED' ? 'ACCEPTED_AWAITING_VAULT' : item.status;
+  if (item.intake.shipment?.status === 'EXCEPTION') return 'EXCEPTION';
   if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
     return 'DELIVERED_AWAITING_RECEIPT';
   if (
@@ -79,6 +85,8 @@ function intakeStage(item: {
   )
     return 'IN_TRANSIT';
   if (item.intake.status === 'COMPLETE') return 'VAULT_READY';
+  if (item.intake.status === 'RECEIVED') return 'RECEIVED';
+  if (item.intake.status === 'VERIFICATION') return 'VERIFICATION';
   return item.intake.status;
 }
 
@@ -94,6 +102,38 @@ function nextIntakeAction(intake: {
   if (intake.status === 'RECEIVED') return 'Start verification';
   if (intake.status === 'COMPLETE') return 'No action';
   return 'Monitor shipment';
+}
+
+function stageLabel(stage: string) {
+  return stage
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function intakeCounts(items: Array<{ stage: string }>) {
+  return {
+    all: items.length,
+    accepted: items.filter((item) =>
+      [
+        'ACCEPTED_AWAITING_VAULT',
+        'VAULT_SELECTED',
+        'SHIPPING_REQUIRED',
+      ].includes(item.stage),
+    ).length,
+    shipped: items.filter((item) =>
+      ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(item.stage),
+    ).length,
+    delivered: items.filter(
+      (item) => item.stage === 'DELIVERED_AWAITING_RECEIPT',
+    ).length,
+    received: items.filter((item) =>
+      ['RECEIVED', 'VERIFICATION'].includes(item.stage),
+    ).length,
+    verified: items.filter((item) => item.stage === 'VERIFIED').length,
+    readyForVault: items.filter((item) => item.stage === 'VAULT_READY').length,
+    exceptions: items.filter((item) => item.stage === 'EXCEPTION').length,
+  };
 }
 
 @Injectable()
@@ -553,7 +593,11 @@ export class AdminService {
       this.db.providerIncident.count({ where: { status: 'OPEN' } }),
       this.db.user.count({ where: { accountStatus: 'ACTIVE' } }),
       this.db.roleAssignment.findMany({
-        where: { role: 'COLLECTOR', revokedAt: null, user: { accountStatus: 'ACTIVE' } },
+        where: {
+          role: 'COLLECTOR',
+          revokedAt: null,
+          user: { accountStatus: 'ACTIVE' },
+        },
         distinct: ['userId'],
         select: { userId: true },
       }),
@@ -575,7 +619,11 @@ export class AdminService {
         select: { userId: true },
       }),
       this.db.roleAssignment.findMany({
-        where: { role: 'ADMIN', revokedAt: null, user: { accountStatus: 'ACTIVE' } },
+        where: {
+          role: 'ADMIN',
+          revokedAt: null,
+          user: { accountStatus: 'ACTIVE' },
+        },
         distinct: ['userId'],
         select: { userId: true },
       }),
@@ -1054,79 +1102,353 @@ export class AdminService {
 
   async listIntake(
     actor: Actor,
-    input: { status?: string; q?: string; limit: number },
+    input: {
+      status?: string;
+      q?: string;
+      vaultId?: string;
+      carrier?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      page?: number;
+      pageSize?: number;
+      sort?: string;
+      sortDirection?: 'asc' | 'desc';
+      limit: number;
+    },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
+    const intakeWhere: Prisma.AssetSubmissionWhereInput = {
+      AND: [
+        { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
+        ...(input.vaultId ? [{ intake: { vaultId: input.vaultId } }] : []),
+        ...(input.q
+          ? [
+              {
+                OR: [
+                  {
+                    id: {
+                      contains: input.q,
+                      mode: 'insensitive' as Prisma.QueryMode,
+                    },
+                  },
+                  {
+                    asset: {
+                      title: {
+                        contains: input.q,
+                        mode: 'insensitive' as Prisma.QueryMode,
+                      },
+                    },
+                  },
+                  {
+                    owner: {
+                      profile: {
+                        publicUsername: {
+                          contains: input.q,
+                          mode: 'insensitive' as Prisma.QueryMode,
+                        },
+                      },
+                    },
+                  },
+                  {
+                    owner: {
+                      profile: {
+                        displayName: {
+                          contains: input.q,
+                          mode: 'insensitive' as Prisma.QueryMode,
+                        },
+                      },
+                    },
+                  },
+                  {
+                    intake: {
+                      intakeReference: {
+                        contains: input.q,
+                        mode: 'insensitive' as Prisma.QueryMode,
+                      },
+                    },
+                  },
+                  {
+                    intake: {
+                      shipment: {
+                        trackingNumber: {
+                          contains: input.q,
+                          mode: 'insensitive' as Prisma.QueryMode,
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
     const rows = await this.db.assetSubmission.findMany({
-      where: { intake: { isNot: null } },
+      where: intakeWhere,
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: input.limit,
+      take: Math.max(input.limit, 5000),
       include: {
         owner: {
           select: {
             id: true,
             email: true,
             profile: { select: { displayName: true, publicUsername: true } },
+            collectorSubscriptions: {
+              where: { status: 'ACTIVE' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: { plan: { select: { displayName: true } } },
+            },
           },
         },
-        asset: { select: { title: true } },
+        category: { select: { name: true } },
+        asset: {
+          select: {
+            title: true,
+            edition: true,
+            cardNumber: true,
+            gradeScaleEntry: {
+              select: { label: true, company: { select: { code: true } } },
+            },
+            custodyRecord: { select: { status: true } },
+            valuationDecisions: {
+              where: { status: 'ACTIVE' },
+              take: 1,
+              select: { id: true },
+            },
+          },
+        },
         intake: { include: { vault: true, shipment: true, receipt: true } },
+        media: { where: { deletedAt: null }, select: { id: true } },
       },
     });
+    const projected = rows.map((item) => {
+      const intake = item.intake;
+      const stage =
+        item.asset?.custodyRecord?.status === 'INSPECTED'
+          ? 'VERIFIED'
+          : intakeStage(item);
+      const metadata =
+        item.declaredMetadata &&
+        typeof item.declaredMetadata === 'object' &&
+        !Array.isArray(item.declaredMetadata)
+          ? (item.declaredMetadata as Record<string, unknown>)
+          : {};
+      const metadataString = (key: string) =>
+        typeof metadata[key] === 'string' && String(metadata[key]).trim()
+          ? String(metadata[key])
+          : null;
+      const exception =
+        stage === 'EXCEPTION'
+          ? {
+              code: 'SHIPMENT_EXCEPTION',
+              label: 'Shipping exception',
+              severity: 'HIGH' as const,
+            }
+          : null;
+      return {
+        id: intake?.id ?? item.id,
+        submissionId: item.id,
+        intakeReference: intake?.intakeReference ?? null,
+        title:
+          item.asset?.title ??
+          metadataString('name') ??
+          `Submission ${item.id.slice(0, 8)}`,
+        category: item.category.name,
+        variant: metadataString('variant') ?? item.asset?.edition ?? null,
+        grader:
+          metadataString('grader') ??
+          item.asset?.gradeScaleEntry?.company.code ??
+          null,
+        grade:
+          metadataString('grade') ?? item.asset?.gradeScaleEntry?.label ?? null,
+        itemCount: item.media.length,
+        collector: {
+          id: item.owner.id,
+          displayName: item.owner.profile?.displayName ?? 'Unnamed collector',
+          username: item.owner.profile?.publicUsername ?? null,
+        },
+        membership:
+          item.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
+        submissionStatus: item.status,
+        stage,
+        currentStageSince: (intake?.updatedAt ?? item.updatedAt).toISOString(),
+        vault: intake?.vault
+          ? {
+              id: intake.vault.id,
+              displayName: intake.vault.displayName,
+              region: intake.vault.region,
+              countryCode: intake.vault.countryCode,
+              code: intake.vault.id.slice(0, 6).toUpperCase(),
+            }
+          : null,
+        shipment: intake?.shipment
+          ? {
+              carrier: intake.shipment.carrier,
+              trackingNumber: intake.shipment.trackingNumber,
+              status: intake.shipment.status,
+              shippedAt: intake.shipment.shippedAt.toISOString(),
+              deliveredAt: intake.shipment.deliveredAt?.toISOString() ?? null,
+            }
+          : null,
+        receipt: intake?.receipt
+          ? {
+              confirmedAt: intake.receipt.confirmedAt.toISOString(),
+              confirmedById: intake.receipt.confirmedById,
+            }
+          : null,
+        updatedAt: item.updatedAt.toISOString(),
+        nextAction: intake ? nextIntakeAction(intake) : 'Await vault selection',
+        valuationStatus: item.asset
+          ? item.asset.valuationDecisions.length
+            ? 'ACTIVE'
+            : 'PENDING'
+          : null,
+        custodyStatus: item.asset?.custodyRecord?.status ?? null,
+        exception,
+      };
+    });
+    const filtered = projected
+      .filter((item) => !input.status || item.stage === input.status)
+      .filter(
+        (item) => !input.carrier || item.shipment?.carrier === input.carrier,
+      )
+      .filter(
+        (item) =>
+          !input.dateFrom ||
+          item.currentStageSince >= `${input.dateFrom}T00:00:00.000Z`,
+      )
+      .filter(
+        (item) =>
+          !input.dateTo ||
+          item.currentStageSince < `${input.dateTo}T23:59:59.999Z`,
+      );
+    const counts = intakeCounts(filtered);
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? input.limit;
+    const start = Math.max(0, (page - 1) * pageSize);
+    const items = filtered.slice(start, start + pageSize);
+    const recentActivity = items.slice(0, 8).map((item) => ({
+      id: item.id,
+      type: item.stage,
+      title: `${item.title} · ${stageLabel(item.stage)}`,
+      reference: item.intakeReference ?? item.submissionId,
+      occurredAt: item.currentStageSince,
+    }));
+    const vaults = await this.db.vaultIntakeLocation.findMany({
+      where: { active: true, intakeAvailable: true },
+      select: { id: true, displayName: true },
+    });
     return {
-      items: rows
-        .map((item) => {
-          const intake = item.intake!;
-          const stage = intakeStage(item);
-          return {
-            id: intake.id,
-            submissionId: item.id,
-            title: item.asset?.title ?? `Submission ${item.id.slice(0, 8)}`,
-            collector: {
-              id: item.owner.id,
-              displayName:
-                item.owner.profile?.displayName ?? 'Unnamed collector',
-              username: item.owner.profile?.publicUsername ?? null,
-            },
-            submissionStatus: item.status,
-            stage,
-            vault: intake.vault
-              ? {
-                  id: intake.vault.id,
-                  displayName: intake.vault.displayName,
-                  region: intake.vault.region,
-                  countryCode: intake.vault.countryCode,
-                }
-              : null,
-            shipment: intake.shipment
-              ? {
-                  carrier: intake.shipment.carrier,
-                  trackingNumber: intake.shipment.trackingNumber,
-                  status: intake.shipment.status,
-                  shippedAt: intake.shipment.shippedAt.toISOString(),
-                  deliveredAt:
-                    intake.shipment.deliveredAt?.toISOString() ?? null,
-                }
-              : null,
-            receipt: intake.receipt
-              ? {
-                  confirmedAt: intake.receipt.confirmedAt.toISOString(),
-                  confirmedById: intake.receipt.confirmedById,
-                }
-              : null,
-            updatedAt: item.updatedAt.toISOString(),
-            nextAction: nextIntakeAction(intake),
-          };
-        })
-        .filter((item) => !input.status || item.stage === input.status)
-        .filter(
-          (item) =>
-            !input.q ||
-            `${item.title} ${item.collector.displayName} ${item.collector.username ?? ''} ${item.shipment?.trackingNumber ?? ''}`
-              .toLowerCase()
-              .includes(input.q.toLowerCase()),
-        ),
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total: filtered.length,
+        totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+      },
+      counts,
+      overview: counts,
+      recentActivity,
+      filters: {
+        vaults: vaults.map((vault) => ({
+          id: vault.id,
+          displayName: vault.displayName,
+          code: vault.id.slice(0, 6).toUpperCase(),
+        })),
+        carriers: [
+          ...new Set(
+            projected
+              .map((item) => item.shipment?.carrier)
+              .filter((carrier): carrier is string => Boolean(carrier)),
+          ),
+        ].sort(),
+      },
     };
+  }
+
+  async confirmIntakeReceipt(
+    actor: Actor,
+    intakeId: string,
+    idempotencyKey: string,
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.findUnique({
+        where: { id: intakeId },
+        include: {
+          shipment: true,
+          receipt: true,
+          submission: { select: { ownerUserId: true } },
+        },
+      });
+      if (!intake)
+        throw new NotFoundException({
+          code: 'INTAKE_NOT_FOUND',
+          message: 'Intake record not found.',
+        });
+      if (intake.receipt?.auditReference === idempotencyKey)
+        return {
+          intakeId,
+          status: 'RECEIVED',
+          confirmedAt: intake.receipt.confirmedAt.toISOString(),
+          confirmedById: intake.receipt.confirmedById,
+          receiptId: intake.receipt.id,
+          replayed: true,
+        };
+      if (intake.receipt)
+        throw new ConflictException({
+          code: 'RECEIPT_ALREADY_CONFIRMED',
+          message: 'This intake has already been received by Slice.',
+        });
+      if (!intake.shipment || intake.shipment.status !== 'DELIVERED')
+        throw new ConflictException({
+          code: 'DELIVERY_NOT_CONFIRMED',
+          message: 'Confirm carrier delivery before recording Slice receipt.',
+        });
+      const now = new Date();
+      const receipt = await db.intakeReceiptConfirmation.create({
+        data: {
+          intakeId,
+          confirmedById: actor.userId,
+          shipmentRef: intake.shipment.trackingNumber,
+          auditReference: idempotencyKey,
+        },
+      });
+      await db.submissionIntake.update({
+        where: { id: intakeId },
+        data: { status: 'RECEIVED', receivedAt: now },
+      });
+      await db.auditEvent.create({
+        data: {
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'INTAKE_RECEIPT_CONFIRMED',
+          resourceType: 'intake',
+          resourceId: intakeId,
+          result: 'SUCCESS',
+          metadata: { submissionId: intake.submissionId, idempotencyKey },
+        },
+      });
+      await db.notification.create({
+        data: {
+          id: randomUUID(),
+          userId: intake.submission.ownerUserId,
+          type: 'INTAKE_RECEIVED',
+          title: 'Slice received your collectible',
+          body: 'Your collectible has been physically received by Slice and is moving to verification.',
+          resourceType: 'submission',
+          resourceId: intake.submissionId,
+        },
+      });
+      return {
+        intakeId,
+        status: 'RECEIVED',
+        confirmedAt: now.toISOString(),
+        confirmedById: actor.userId,
+        receiptId: receipt.id,
+      };
+    });
   }
 
   async listMemberships(
@@ -1180,7 +1502,11 @@ export class AdminService {
         monthly: 0,
         concurrentIntake: 0,
       };
-      if ((activeCollectorSubmissionStatuses as readonly string[]).includes(submission.status))
+      if (
+        (activeCollectorSubmissionStatuses as readonly string[]).includes(
+          submission.status,
+        )
+      )
         usage.active += 1;
       if (
         submission.createdAt >= period.start &&
@@ -1190,9 +1516,12 @@ export class AdminService {
         usage.monthly += 1;
       if (
         submission.intake &&
-        ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'].includes(
-          submission.intake.status,
-        )
+        [
+          'VAULT_SELECTED',
+          'SHIPPING_REQUIRED',
+          'IN_TRANSIT',
+          'DELIVERED',
+        ].includes(submission.intake.status)
       )
         usage.concurrentIntake += 1;
       usageByUser.set(submission.ownerUserId, usage);
@@ -1209,7 +1538,8 @@ export class AdminService {
             id: item.id,
             collector: {
               id: item.user.id,
-              displayName: item.user.profile?.displayName ?? 'Unnamed collector',
+              displayName:
+                item.user.profile?.displayName ?? 'Unnamed collector',
               username: item.user.profile?.publicUsername ?? null,
               email: item.user.email,
             },
@@ -1715,7 +2045,7 @@ export class AdminService {
     const kytCase = complianceCases.find((item) => item.type.includes('KYT'));
     const collectorEnabled = Boolean(
       user.collectorSubscriptions.length ||
-        user.roleAssignments.some((role) => role.role === 'COLLECTOR'),
+      user.roleAssignments.some((role) => role.role === 'COLLECTOR'),
     );
     return {
       id: user.id,
@@ -1733,23 +2063,22 @@ export class AdminService {
         createdAt: entry.createdAt.toISOString(),
       })),
       counts: user._count,
-      collector:
-        collectorEnabled
-          ? {
-              subscription: user.collectorSubscriptions[0]
-                ? {
-                    plan: user.collectorSubscriptions[0].plan.displayName,
-                    status: user.collectorSubscriptions[0].status,
-                    currentPeriodEnd:
-                      user.collectorSubscriptions[0].currentPeriodEnd?.toISOString() ??
-                      null,
-                    cancelAtPeriodEnd:
-                      user.collectorSubscriptions[0].cancelAtPeriodEnd,
-                  }
-                : null,
-              activeIntakes,
-            }
-          : null,
+      collector: collectorEnabled
+        ? {
+            subscription: user.collectorSubscriptions[0]
+              ? {
+                  plan: user.collectorSubscriptions[0].plan.displayName,
+                  status: user.collectorSubscriptions[0].status,
+                  currentPeriodEnd:
+                    user.collectorSubscriptions[0].currentPeriodEnd?.toISOString() ??
+                    null,
+                  cancelAtPeriodEnd:
+                    user.collectorSubscriptions[0].cancelAtPeriodEnd,
+                }
+              : null,
+            activeIntakes,
+          }
+        : null,
       identity: {
         phone: user.phoneE164,
         country: user.profile?.countryCode ?? null,

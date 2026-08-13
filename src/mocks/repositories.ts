@@ -156,7 +156,27 @@ export const mockRepositories: AppRepositories = {
       };
     },
     async listIntake() {
-      return { items: [] };
+      const empty = {
+        all: 0,
+        accepted: 0,
+        shipped: 0,
+        delivered: 0,
+        received: 0,
+        verified: 0,
+        readyForVault: 0,
+        exceptions: 0,
+      };
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+        counts: empty,
+        overview: empty,
+        recentActivity: [],
+        filters: { vaults: [], carriers: [] },
+      };
+    },
+    async confirmIntakeReceipt() {
+      throw new Error("Physical intake requires the API service.");
     },
     async listMemberships() {
       return { items: [] };

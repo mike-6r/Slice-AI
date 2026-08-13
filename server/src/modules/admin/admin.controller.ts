@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Headers,
   Param,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -45,6 +47,20 @@ const operationsQuery = z
   .object({
     status: z.string().trim().max(64).optional(),
     q: z.string().trim().max(120).optional(),
+    vaultId: z.string().trim().max(80).optional(),
+    carrier: z.string().trim().max(80).optional(),
+    dateFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    dateTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    sort: z.string().trim().max(40).optional(),
+    sortDirection: z.enum(['asc', 'desc']).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
@@ -80,6 +96,24 @@ export class AdminController {
       ...input,
       limit: input.limit ?? 50,
     });
+  }
+  @Post('intake/:id/receipt')
+  @RequirePermission('admin.console.read')
+  confirmReceipt(
+    @Param('id') intakeId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.confirmIntakeReceipt(
+      request.actor!,
+      intakeId,
+      idempotencyKey,
+    );
   }
 
   @Get('memberships')
