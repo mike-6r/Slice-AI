@@ -3,6 +3,7 @@ descriptions:
   config: "Reload safe Slice presentation configuration"
   ticket: "Manage the current Slice support ticket"
   ticket_claim: "Claim the current ticket"
+  ticket_unclaim: "Unclaim the current ticket"
   ticket_status: "Set the ticket waiting state"
   ticket_priority: "Set ticket priority"
   ticket_transfer: "Transfer the current ticket"

@@ -19,7 +19,7 @@ export function createDiscordTicketAuthorization(guild: Guild, repository: Setup
     const admin = member.permissions.has(PermissionFlagsBits.Administrator) || heldKeys.has('owner') || heldKeys.has('administrator');
     const staff = admin || heldKeys.size > 0;
     const eligible = admin || staffRolesForCategory(ticket.category).some((key) => heldKeys.has(key));
-    return { id: userId, staff, admin, eligible };
+    return { id: userId, staff, admin, eligible, owner: ticket.creatorId === userId };
   };
   return { actor: resolve, target: resolve };
 }

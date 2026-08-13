@@ -16,6 +16,7 @@ timings:
   inactivity_close_hours: 120
 controls:
   claim: "Claim"
+  unclaim: "Unclaim"
   waiting-user: "Waiting on Member"
   waiting-staff: "Waiting on Staff"
   escalate: "Escalate"

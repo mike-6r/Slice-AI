@@ -14,7 +14,7 @@ import { PrismaSetupRepository } from './persistence/setup-repository.js';
 import { PrismaTicketRepository } from './persistence/ticket-repository.js';
 import { SetupProvisioner } from './setup/provisioner.js';
 import { TicketCreationError, TicketCreationService } from './ticket-creation.js';
-import { createTicketDiscordBoundary, refreshTicketMessage, type TicketControlMessage } from './ticket-discord.js';
+import { createTicketDiscordBoundary, lockTicketChannel, refreshTicketMessage, type TicketControlMessage } from './ticket-discord.js';
 import { TicketLifecycleService } from './ticket-lifecycle.js';
 import { parseTicketControlId, ticketControlId, TicketInteractionRouter, type TicketRouteAction, type TicketRouteContext, type TicketRouteResult } from './ticket-routing.js';
 import { TicketTranscriptService, type TicketHistory } from './ticket-transcripts.js';
@@ -97,6 +97,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand() && ['ask', 'help', 'summary', 'insights', 'trending', 'about', 'status'].includes(interaction.commandName)) return void await handleIntelligence(interaction, ai, market);
     if (interaction.isChatInputCommand() && ['invite', 'roadmap', 'announce', 'request', 'offer'].includes(interaction.commandName)) return void await handleGapSweep(interaction, repository, config.OFFICIAL_DISCORD_INVITE_URL);
     if (interaction.isButton() && interaction.customId.startsWith('slice:setup:')) { if (!interaction.guild) return; await interaction.deferUpdate(); const result = await handleSetupButton(interaction.customId, interaction.user.id, interaction.guild.id, async () => provisioner.apply(interaction.guild!)); return void await interaction.editReply({ embeds: [SliceEmbed.success(result.title, result.body)], components: [] }); }
+    if (interaction.isButton() && interaction.customId === 'slice:ticket:open') return void await openTicketPicker(interaction);
+    if (interaction.isButton() && interaction.customId === 'slice:ticket:mine') return void await listMyTickets(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketButton(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:ticket:create') return void await handleTicketCreationCategory(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketPriority(interaction);
@@ -117,8 +119,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
 async function handleTicketCreationCategory(interaction: StringSelectMenuInteraction): Promise<void> {
   const category = interaction.values[0];
   if (!interaction.guildId || !categories.has(category)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Invalid ticket category', 'Choose a category from the Slice ticket panel.')] });
-  const modal = new ModalBuilder().setCustomId(`slice:ticket:intake:${category}`).setTitle('Create support ticket').addComponents(row('subject', 'Subject', TextInputStyle.Short, true, 120), row('description', 'Description', TextInputStyle.Paragraph, true, 1800), row('reference', 'Optional safe reference ID', TextInputStyle.Short, false, 120), row('urgency', 'Requested urgency: LOW, NORMAL, HIGH, URGENT', TextInputStyle.Short, false, 6));
+  const modal = new ModalBuilder().setCustomId(`slice:ticket:intake:${category}`).setTitle('Create support ticket').addComponents(row('subject', 'Subject', TextInputStyle.Short, true, 120), row('description', 'Short description', TextInputStyle.Paragraph, true, 1800), row('reference', 'Optional safe reference ID', TextInputStyle.Short, false, 120));
   await interaction.showModal(modal);
+}
+
+async function openTicketPicker(interaction: ButtonInteraction): Promise<void> {
+  const config = presentationConfig()['tickets.yml'];
+  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Open support ticket', 'Choose the support topic that best matches your request.')], components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('slice:ticket:create').setPlaceholder('Choose the support path that fits best').addOptions(config.categories.map((category) => ({ label: category.label, value: category.key, description: renderTemplate(category.description), emoji: category.emoji }))))] });
+}
+
+async function listMyTickets(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.guildId) return void await interaction.reply(ticketError('This ticket control is unavailable.'));
+  const rows = await tickets.listForCreator(interaction.guildId, interaction.user.id);
+  const open = rows.filter((ticket) => ticket.status !== 'CLOSED');
+  const closed = rows.filter((ticket) => ticket.status === 'CLOSED').slice(0, 3);
+  const render = (ticket: import('./ticket-lifecycle.js').LifecycleTicket) => `• **${ticket.category.replace(/-/g, ' ')}** · ${ticket.status.replace(/_/g, ' ')}${ticket.channelId ? ` · <#${ticket.channelId}>` : ''}`;
+  const body = rows.length ? [`**Open**`, open.length ? open.map(render).join('\n') : 'No open tickets.', '', `**Closed recently**`, closed.length ? closed.map(render).join('\n') : 'No recently closed tickets.'].join('\n') : 'You do not have any support tickets yet.';
+  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('My Tickets', body)] });
 }
 
 async function handleTicketIntake(interaction: ModalSubmitInteraction): Promise<void> {
@@ -128,7 +145,7 @@ async function handleTicketIntake(interaction: ModalSubmitInteraction): Promise<
   const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'support');
   if (!support) throw new TicketCreationError('Slice support category is missing. Ask an administrator to run /setup repair.');
   const service = new TicketCreationService(tickets, createTicketDiscordBoundary(interaction.guild, support.discordId), { getRoleId: async (guildId, key) => (await repository.getResource(guildId, 'ROLE', key))?.discordId ?? null });
-  const ticket = await service.create({ guildId: interaction.guildId, creatorDiscordId: interaction.user.id, category, subject: interaction.fields.getTextInputValue('subject'), description: interaction.fields.getTextInputValue('description'), referenceId: interaction.fields.getTextInputValue('reference') || undefined, requestedUrgency: interaction.fields.getTextInputValue('urgency') || undefined });
+  const ticket = await service.create({ guildId: interaction.guildId, creatorDiscordId: interaction.user.id, category, subject: interaction.fields.getTextInputValue('subject'), description: interaction.fields.getTextInputValue('description'), referenceId: interaction.fields.getTextInputValue('reference') || undefined });
   await interaction.editReply({ embeds: [SliceEmbed.success('Ticket created', `Your private ticket is ready: <#${ticket.channelId}>`)] });
 }
 
@@ -192,7 +209,7 @@ async function openTransferPicker(interaction: ButtonInteraction, router: Ticket
 }
 
 async function openConfirmation(interaction: ButtonInteraction, router: TicketInteractionRouter, context: TicketRouteContext, action: 'resolve' | 'close'): Promise<void> {
-  const authorized = await router.authorize(context);
+  const authorized = action === 'close' ? await router.authorizeClose(context) : await router.authorize(context);
   if (!authorized.ok) return void await interaction.reply(ticketError(authorized.message));
   await interaction.reply(confirmationPayload(action, context.ticketId!));
 }
@@ -219,7 +236,7 @@ async function executeTicketAction(interaction: { guildId: string | null; channe
     } catch (error) {
       logger.warn('ticket.refresh_failed', { ticketId: result.ticket.id, name: error instanceof Error ? error.name : 'unknown' });
     }
-    if (action === 'close-confirm' && interaction.guild) await generateTranscript(interaction.guild, result.ticket.id);
+    if (action === 'close-confirm' && interaction.guild) { await generateTranscript(interaction.guild, result.ticket.id); await lockTicketChannel(interaction.guild, result.ticket).catch((error) => logger.warn('ticket.lock_failed', { ticketId: result.ticket?.id, name: error instanceof Error ? error.name : 'unknown' })); }
   }
   await interaction.editReply({ embeds: [SliceEmbed.success(result.changed ? 'Ticket updated' : 'No ticket change', result.message)] });
 }

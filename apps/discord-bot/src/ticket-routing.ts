@@ -2,7 +2,7 @@ import { TicketLifecycleError, TicketLifecycleService, type LifecycleActor, type
 import type { TicketPriority } from './tickets.js';
 
 export const TICKET_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
-export const TICKET_ACTIONS = ['claim', 'waiting-user', 'waiting-staff', 'escalate', 'priority', 'transfer', 'resolve', 'close'] as const;
+export const TICKET_ACTIONS = ['claim', 'unclaim', 'waiting-user', 'waiting-staff', 'escalate', 'priority', 'transfer', 'resolve', 'close'] as const;
 export type TicketAction = typeof TICKET_ACTIONS[number];
 export type TicketRouteAction = Exclude<TicketAction, 'priority' | 'transfer' | 'resolve' | 'close'> | 'priority-submit' | 'transfer-submit' | 'resolve-confirm' | 'close-confirm';
 
@@ -30,8 +30,18 @@ export class TicketInteractionRouter {
     return { ok: true, changed: false, message: 'Ticket action is authorized.', ticket };
   }
 
+  async authorizeClose(context: TicketRouteContext): Promise<TicketRouteResult> {
+    const ticket = await this.resolve(context);
+    if (!ticket) return unavailable();
+    const actor = await this.authorization.actor(ticket, context.actorId);
+    if (!actor.staff && !actor.owner) return forbidden();
+    return { ok: true, changed: false, message: 'Ticket close is authorized.', ticket };
+  }
+
   async execute(action: TicketRouteAction, context: TicketRouteContext, options: { priority?: string; targetId?: string } = {}): Promise<TicketRouteResult> {
-    const authorized = await this.authorize(context);
+    const authorized = action === 'close-confirm'
+      ? await this.authorizeClose(context)
+      : await this.authorize(context);
     if (!authorized.ok || !authorized.ticket || !context.guildId || !context.ticketId) return authorized;
     const actor = await this.authorization.actor(authorized.ticket, context.actorId);
     try {
@@ -39,6 +49,7 @@ export class TicketInteractionRouter {
       let escalationTarget: string | undefined;
       switch (action) {
         case 'claim': result = await this.lifecycle.claim(context.ticketId, context.guildId, actor); break;
+        case 'unclaim': result = await this.lifecycle.unclaim(context.ticketId, context.guildId, actor); break;
         case 'waiting-user': result = await this.lifecycle.status(context.ticketId, context.guildId, actor, 'WAITING_USER'); break;
         case 'waiting-staff': result = await this.lifecycle.status(context.ticketId, context.guildId, actor, 'WAITING_STAFF'); break;
         case 'priority-submit':
