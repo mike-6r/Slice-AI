@@ -68,6 +68,7 @@ export type CollectorWorkspaceOverview = {
   collector: {
     displayName: string;
     username: string | null;
+    avatarReference: string | null;
     countryCode: string | null;
     collectorSince: string;
     publicProfile: {

@@ -368,6 +368,7 @@ export const mockRepositories: AppRepositories = {
         collector: {
           displayName: "Demo collector",
           username: null,
+          avatarReference: null,
           countryCode: "GB",
           collectorSince: now(),
           publicProfile: null,

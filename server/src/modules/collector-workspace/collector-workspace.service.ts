@@ -425,7 +425,9 @@ export class CollectorWorkspaceService {
 
   private submissionsFor(userId: string) {
     return this.db.assetSubmission.findMany({
-      where: { ownerUserId: userId },
+      // Cancelled submissions are retained for audit/replay safety, but are
+      // no longer part of the collector's active workspace projection.
+      where: { ownerUserId: userId, status: { not: 'CANCELLED' } },
       include: workspaceSubmissionInclude,
       orderBy: { updatedAt: 'desc' },
     });
@@ -770,6 +772,7 @@ function collectorView(user: {
   profile: {
     displayName: string;
     publicUsername: string | null;
+    avatarReference: string | null;
     countryCode: string;
   } | null;
   publicCollectorProfile: {
@@ -782,6 +785,7 @@ function collectorView(user: {
   return {
     displayName: user.profile?.displayName ?? 'Collector',
     username: user.profile?.publicUsername ?? null,
+    avatarReference: user.profile?.avatarReference ?? null,
     countryCode: user.profile?.countryCode ?? null,
     collectorSince: user.createdAt.toISOString(),
     publicProfile: user.publicCollectorProfile

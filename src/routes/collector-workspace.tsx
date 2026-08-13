@@ -225,19 +225,31 @@ function CollectorWorkspace() {
           ))}
         </nav>
         <div className="collector-workspace-sidebar__account">
-          <div className="collector-workspace-avatar">{initials(data.collector.displayName)}</div>
-          <div>
-            <strong>{data.collector.displayName}</strong>
-            <span>
-              {data.collector.username ? `@${data.collector.username}` : "Username not set"}
-            </span>
+          <div className="collector-workspace-sidebar__identity">
+            <div className="collector-workspace-avatar">
+              {data.collector.avatarReference ? (
+                <img src={data.collector.avatarReference} alt="" />
+              ) : (
+                initials(data.collector.displayName)
+              )}
+            </div>
+            <div className="collector-workspace-sidebar__identity-copy">
+              <strong title={data.collector.displayName}>{data.collector.displayName}</strong>
+              <span
+                title={data.collector.username ? `@${data.collector.username}` : "Username not set"}
+              >
+                {data.collector.username ? `@${data.collector.username}` : "Username not set"}
+              </span>
+            </div>
           </div>
-          <Link to="/dashboard" className="collector-workspace-sidebar__link">
-            <Home aria-hidden="true" /> Switch to Investor
-          </Link>
-          <button className="collector-workspace-sidebar__link" onClick={() => void logout()}>
-            <LogOut aria-hidden="true" /> Log out
-          </button>
+          <div className="collector-workspace-sidebar__actions">
+            <Link to="/dashboard" className="collector-workspace-sidebar__link">
+              <Home aria-hidden="true" /> <span>Switch to Investor</span>
+            </Link>
+            <button className="collector-workspace-sidebar__link" onClick={() => void logout()}>
+              <LogOut aria-hidden="true" /> <span>Log out</span>
+            </button>
+          </div>
         </div>
       </aside>
       {mobileOpen ? (

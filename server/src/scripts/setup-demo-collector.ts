@@ -335,6 +335,44 @@ async function archiveRetiredDemoAssets(db: PrismaService) {
   });
 }
 
+/**
+ * Retire the old collector-only staging queue without touching customer data.
+ * The current showcase submissions have stable certification identifiers; all
+ * other submissions belonging to this dedicated demo account are cancelled so
+ * they remain auditable but disappear from the active workspace projection.
+ */
+async function archiveRetiredDemoSubmissions(
+  db: PrismaService,
+  ownerUserId: string,
+) {
+  const currentCertificationNumbers = new Set(
+    assets.map((asset) => `STG-${asset.key.toUpperCase()}`),
+  );
+  const submissions = await db.assetSubmission.findMany({
+    where: { ownerUserId, status: { not: 'CANCELLED' } },
+    select: { id: true, declaredMetadata: true },
+  });
+  const retiredIds = submissions
+    .filter((submission) => {
+      const metadata =
+        submission.declaredMetadata &&
+        typeof submission.declaredMetadata === 'object' &&
+        !Array.isArray(submission.declaredMetadata)
+          ? (submission.declaredMetadata as { certificationNumber?: unknown })
+          : {};
+      return !(
+        typeof metadata.certificationNumber === 'string' &&
+        currentCertificationNumbers.has(metadata.certificationNumber)
+      );
+    })
+    .map((submission) => submission.id);
+  if (!retiredIds.length) return;
+  await db.assetSubmission.updateMany({
+    where: { id: { in: retiredIds }, ownerUserId, status: { not: 'CANCELLED' } },
+    data: { status: 'CANCELLED', cancelledAt: new Date(), version: { increment: 1 } },
+  });
+}
+
 /*
  * Historical fixture retained only as a source migration map. It is never
  * created or published by this setup.
@@ -588,6 +626,7 @@ export async function runCollectorDemoSetup() {
     await ensureCollectorEntitlementsAndVaults(db, collector.userId);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
     await archiveRetiredDemoAssets(db);
+    await archiveRetiredDemoSubmissions(db, collector.userId);
     await db.publicCollectorProfile.upsert({
       where: { userId: collector.userId },
       create: {
