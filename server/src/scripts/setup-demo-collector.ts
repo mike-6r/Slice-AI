@@ -585,6 +585,7 @@ export async function runCollectorDemoSetup() {
     );
     await ensureCollectorRoles(access, db, admin, collector.userId);
     await ensureCollectorRoles(access, db, admin, collectorB.userId);
+    await ensureCollectorEntitlementsAndVaults(db, collector.userId);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
     await archiveRetiredDemoAssets(db);
     await db.publicCollectorProfile.upsert({
@@ -770,6 +771,28 @@ async function loginActor(
     { userAgent: 'slice-staging-collector-demo' },
   );
   return auth.actor(session.accessToken);
+}
+
+async function ensureCollectorEntitlementsAndVaults(db: PrismaService, userId: string) {
+  const plans = [
+    ['STARTER', 'Collector Starter', 900n, { maxActiveCollectibles: 10, maxOpenDrafts: 3, maxConcurrentSubmissions: 3, monthlySubmissionLimit: 10, bulkImportEnabled: false, advancedAnalyticsEnabled: false, marketResearchHistoryDepth: 3, featuredProfileAssetLimit: 2, prioritySupport: false, exportEnabled: false }],
+    ['PRO', 'Collector Pro', 1900n, { maxActiveCollectibles: 50, maxOpenDrafts: 10, maxConcurrentSubmissions: 10, monthlySubmissionLimit: 20, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 12, featuredProfileAssetLimit: 6, prioritySupport: true, exportEnabled: false }],
+    ['ELITE', 'Collector Elite', 4900n, { maxActiveCollectibles: 250, maxOpenDrafts: 30, maxConcurrentSubmissions: 30, monthlySubmissionLimit: 100, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 36, featuredProfileAssetLimit: 12, prioritySupport: true, exportEnabled: true }],
+  ] as const;
+  const planIds = new Map<string, string>();
+  for (const [code, displayName, monthlyPriceMinor, entitlements] of plans) {
+    const plan = await db.collectorPlan.upsert({ where: { code }, create: { code, displayName, monthlyPriceMinor, entitlements }, update: { displayName, monthlyPriceMinor, entitlements, active: true } });
+    planIds.set(code, plan.id);
+  }
+  const current = await db.collectorSubscription.findFirst({ where: { userId }, orderBy: { updatedAt: 'desc' } });
+  if (!current) await db.collectorSubscription.create({ data: { userId, planId: planIds.get('PRO')!, status: 'ACTIVE', provider: 'STAGING_DEMO', currentPeriodEnd: new Date(Date.now() + 30 * 86400000) } });
+  const destinations = [
+    ['Slice London Vault', 'London', 'GB', 'Ship using a tracked service. Include the intake reference on the outer packaging.', 'Slice Collectable\nIntake team\nLondon, United Kingdom'],
+    ['Slice US East Intake', 'US East', 'US', 'Use protective packaging and a tracked service. Include the intake reference with your shipment.', 'Slice Collectable\nUS East Intake\nUnited States'],
+  ] as const;
+  for (const [displayName, region, countryCode, shippingInstructions, customerSafeAddress] of destinations) {
+    await db.vaultIntakeLocation.upsert({ where: { id: `staging-${countryCode.toLowerCase()}-intake` }, create: { id: `staging-${countryCode.toLowerCase()}-intake`, displayName, region, countryCode, shippingInstructions, customerSafeAddress, acceptedCategories: [] }, update: { displayName, region, countryCode, shippingInstructions, customerSafeAddress, active: true, intakeAvailable: true } });
+  }
 }
 
 async function ensureCollectorB(

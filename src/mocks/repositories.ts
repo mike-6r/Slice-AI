@@ -423,6 +423,26 @@ export const mockRepositories: AppRepositories = {
     async search() {
       return { items: [] };
     },
+    async getSubscription() {
+      return {
+        current: null,
+        plans: [],
+        usage: { activeCollectibles: 0, openDrafts: 0, monthlySubmissions: 0 },
+        billing: { configured: false, provider: null },
+      };
+    },
+    async listVaults() {
+      return [];
+    },
+    async selectVault() {
+      return {};
+    },
+    async addShipment() {
+      return {};
+    },
+    async deleteDraft(submissionId: string) {
+      return { submissionId, deleted: true };
+    },
   },
   ownership: {
     async getWatchlist(userId) {

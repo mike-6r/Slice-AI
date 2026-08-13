@@ -423,6 +423,41 @@ enum CustodyStatus {
   EXCEPTION
 }
 
+enum CollectorPlanCode {
+  STARTER
+  PRO
+  ELITE
+}
+
+enum CollectorSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCEL_AT_PERIOD_END
+  CANCELLED
+  EXPIRED
+}
+
+enum IntakeShipmentStatus {
+  LABEL_CREATED
+  SHIPPED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  EXCEPTION
+  UNKNOWN
+}
+
+enum IntakeStatus {
+  VAULT_SELECTED
+  SHIPPING_REQUIRED
+  IN_TRANSIT
+  DELIVERED
+  RECEIVED
+  VERIFICATION
+  COMPLETE
+}
+
 enum InsuranceCoverageStatus {
   PENDING
   ACTIVE
@@ -559,6 +594,8 @@ model User {
   twoFactorLoginChallenges    TwoFactorLoginChallenge[]
   deletionRequests            AccountDeletionRequest[]
   consentAcceptances          ConsentAcceptance[]
+  collectorSubscriptions      CollectorSubscription[]
+  receiptConfirmations        IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
 
   @@index([accountStatus])
 }
@@ -702,19 +739,19 @@ model DiscordOAuthState {
 }
 
 model UserProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
+  id                String    @id @default(cuid())
+  userId            String    @unique
   displayName       String
-  publicUsername    String?  @unique
+  publicUsername    String?   @unique
   usernameChangedAt DateTime?
   avatarReference   String?
-  countryCode       String   @default("GB")
-  preferredCurrency String   @default("GBP")
-  timezone          String   @default("Europe/London")
-  locale            String   @default("en-GB")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  countryCode       String    @default("GB")
+  preferredCurrency String    @default("GBP")
+  timezone          String    @default("Europe/London")
+  locale            String    @default("en-GB")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -971,11 +1008,11 @@ model NotificationPreference {
 }
 
 model AssetSubmission {
-  id                String               @id @default(cuid())
+  id                String                     @id @default(cuid())
   ownerUserId       String
   assetId           String?
-  status            SubmissionStatus     @default(DRAFT)
-  version           Int                  @default(1)
+  status            SubmissionStatus           @default(DRAFT)
+  version           Int                        @default(1)
   categoryId        String
   setId             String?
   gradeScaleEntryId String?
@@ -986,16 +1023,17 @@ model AssetSubmission {
   decisionCode      String?
   decisionNote      String?
   cancelledAt       DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  owner             User                 @relation("SubmissionOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  asset             Asset?               @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  category          Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  collectibleSet    CollectibleSet?      @relation(fields: [setId], references: [id], onDelete: Restrict)
-  gradeScaleEntry   GradeScaleEntry?     @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  owner             User                       @relation("SubmissionOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  asset             Asset?                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  category          Category                   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet    CollectibleSet?            @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry   GradeScaleEntry?           @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
   media             SubmissionMedia[]
   reviews           VerificationReview[]
   marketResearch    SubmissionMarketResearch[]
+  intake            SubmissionIntake?
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
@@ -1006,21 +1044,21 @@ model AssetSubmission {
 /// It is supporting research only: D11 valuation and publication remain separate
 /// staff-controlled lifecycle decisions.
 model SubmissionMarketResearch {
-  id                String   @id @default(cuid())
-  submissionId      String?
-  ownerUserId       String
-  identityHash      String
-  identity          Json
-  state             String
-  dataQuality       String?
-  sourceCoverage    Json
-  providerFailures  Json
-  snapshot          Json
-  collectedAt       DateTime
-  expiresAt         DateTime
-  createdAt         DateTime @default(now())
-  submission        AssetSubmission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
-  observations      SubmissionMarketObservation[]
+  id               String                        @id @default(cuid())
+  submissionId     String?
+  ownerUserId      String
+  identityHash     String
+  identity         Json
+  state            String
+  dataQuality      String?
+  sourceCoverage   Json
+  providerFailures Json
+  snapshot         Json
+  collectedAt      DateTime
+  expiresAt        DateTime
+  createdAt        DateTime                      @default(now())
+  submission       AssetSubmission?              @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  observations     SubmissionMarketObservation[]
 
   @@index([ownerUserId, identityHash, expiresAt])
   @@index([submissionId, collectedAt, id])
@@ -1029,7 +1067,7 @@ model SubmissionMarketResearch {
 /// Normalized whole-card market observation. Original currency and source
 /// provenance are retained; this model never represents Slice share trading.
 model SubmissionMarketObservation {
-  id                  String   @id @default(cuid())
+  id                  String                   @id @default(cuid())
   researchId          String
   providerCode        String
   externalReferenceId String
@@ -1045,8 +1083,8 @@ model SubmissionMarketObservation {
   variant             String?
   matchQuality        String
   exclusionReason     String?
-  includedInSnapshot  Boolean  @default(false)
-  ingestedAt          DateTime @default(now())
+  includedInSnapshot  Boolean                  @default(false)
+  ingestedAt          DateTime                 @default(now())
   research            SubmissionMarketResearch @relation(fields: [researchId], references: [id], onDelete: Restrict)
 
   @@unique([researchId, providerCode, externalReferenceId])
@@ -1212,6 +1250,107 @@ model VaultPublicEvent {
 
   @@index([status, occurredAt, id])
   @@index([assetId, occurredAt])
+}
+
+/// Central, backend-owned collector plan configuration. Entitlements are read
+/// by the API and are never duplicated as numeric constants in the client.
+model CollectorPlan {
+  id                String                  @id @default(cuid())
+  code              CollectorPlanCode       @unique
+  displayName       String
+  monthlyPriceMinor BigInt
+  currency          String                  @default("GBP")
+  entitlements      Json
+  active            Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  subscriptions     CollectorSubscription[]
+}
+
+model CollectorSubscription {
+  id                     String                      @id @default(cuid())
+  userId                 String
+  planId                 String
+  status                 CollectorSubscriptionStatus @default(ACTIVE)
+  provider               String?
+  providerSubscriptionId String?                     @unique
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean                     @default(false)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  user                   User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan                   CollectorPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, updatedAt])
+}
+
+/// Customer-safe intake destinations. Facility/security metadata is kept out
+/// of this projection and remains staff-controlled.
+model VaultIntakeLocation {
+  id                   String             @id @default(cuid())
+  displayName          String
+  region               String
+  countryCode          String
+  active               Boolean            @default(true)
+  intakeAvailable      Boolean            @default(true)
+  acceptedCategories   Json?
+  shippingInstructions String
+  customerSafeAddress  String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  intakes              SubmissionIntake[]
+
+  @@index([active, intakeAvailable, countryCode, id])
+}
+
+model SubmissionIntake {
+  id              String                     @id @default(cuid())
+  submissionId    String                     @unique
+  vaultId         String
+  status          IntakeStatus               @default(VAULT_SELECTED)
+  intakeReference String                     @unique
+  selectedAt      DateTime                   @default(now())
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  receivedAt      DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  submission      AssetSubmission            @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  vault           VaultIntakeLocation        @relation(fields: [vaultId], references: [id], onDelete: Restrict)
+  shipment        IntakeShipment?
+  receipt         IntakeReceiptConfirmation?
+
+  @@index([vaultId, status, updatedAt, id])
+}
+
+model IntakeShipment {
+  id             String               @id @default(cuid())
+  intakeId       String               @unique
+  carrier        String
+  trackingNumber String
+  shippedAt      DateTime
+  status         IntakeShipmentStatus @default(SHIPPED)
+  deliveredAt    DateTime?
+  lastCheckedAt  DateTime?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  intake         SubmissionIntake     @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt, id])
+}
+
+model IntakeReceiptConfirmation {
+  id             String           @id @default(cuid())
+  intakeId       String           @unique
+  confirmedAt    DateTime         @default(now())
+  confirmedById  String
+  shipmentRef    String?
+  auditReference String?
+  intake         SubmissionIntake @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+  confirmedBy    User             @relation("ReceiptConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@index([confirmedById, confirmedAt, id])
 }
 
 model MarketSnapshot {

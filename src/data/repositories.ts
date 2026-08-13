@@ -283,7 +283,49 @@ export interface CollectorWorkspaceRepository {
     specialism: string | null;
     isPublic: boolean;
   }>;
+  getSubscription(): Promise<CollectorSubscriptionProjection>;
+  listVaults(): Promise<CollectorVaultProjection[]>;
+  selectVault(submissionId: string, vaultId: string): Promise<unknown>;
+  addShipment(
+    submissionId: string,
+    input: { carrier: string; trackingNumber: string; shippedAt: string; notes?: string },
+  ): Promise<unknown>;
+  deleteDraft(
+    submissionId: string,
+    version: number,
+  ): Promise<{ submissionId: string; deleted: boolean }>;
 }
+
+export type CollectorSubscriptionProjection = {
+  current: {
+    id: string;
+    code: "STARTER" | "PRO" | "ELITE";
+    displayName: string;
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    entitlements: Record<string, unknown>;
+  } | null;
+  plans: Array<{
+    code: "STARTER" | "PRO" | "ELITE";
+    displayName: string;
+    monthlyPriceMinor: string;
+    currency: string;
+    entitlements: Record<string, unknown>;
+  }>;
+  usage: { activeCollectibles: number; openDrafts: number; monthlySubmissions: number };
+  billing: { configured: boolean; provider: string | null };
+};
+
+export type CollectorVaultProjection = {
+  id: string;
+  displayName: string;
+  region: string;
+  countryCode: string;
+  acceptedCategories: unknown;
+  shippingInstructions: string;
+  customerSafeAddress: string;
+};
 
 export type CollectorWorkspaceRequest = {
   id: string;

@@ -9,6 +9,7 @@ import {
   Bell,
   Box,
   ClipboardList,
+  CreditCard,
   FileText,
   FolderOpen,
   Globe2,
@@ -27,6 +28,9 @@ import {
   Upload,
   Vault,
   X,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -73,6 +77,7 @@ type WorkspaceSection =
   | "profile"
   | "activity"
   | "settings"
+  | "subscription"
   | "asset";
 
 type AssetDetailSection =
@@ -95,14 +100,9 @@ const navigation: Array<{ id: WorkspaceSection; label: string; icon: typeof Home
   { id: "overview", label: "Overview", icon: Home },
   { id: "collectibles", label: "My Collectibles", icon: LayoutGrid },
   { id: "submissions", label: "Submissions", icon: ClipboardList },
-  { id: "valuations", label: "Valuations", icon: BadgeCheck },
-  { id: "custody", label: "Custody & Vault", icon: Vault },
-  { id: "market", label: "Market Listings", icon: BarChart3 },
-  { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "requests", label: "Requests", icon: Bell },
-  { id: "documents", label: "Documents", icon: FolderOpen },
+  { id: "subscription", label: "Subscription", icon: CreditCard },
   { id: "profile", label: "Public Profile", icon: Globe2 },
-  { id: "activity", label: "Activity", icon: Activity },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -137,6 +137,21 @@ function CollectorWorkspace() {
     queryFn: () => repositories.collectorWorkspace.getCollectibleDetail(selectedId!),
     enabled: Boolean(selectedId),
     staleTime: 30_000,
+  });
+  const subscription = useQuery({
+    queryKey: ["collector-workspace", "subscription"],
+    queryFn: repositories.collectorWorkspace.getSubscription,
+    enabled: active === "subscription",
+    staleTime: 60_000,
+  });
+  const deleteDraft = useMutation({
+    mutationFn: ({ id, version }: { id: string; version: number }) =>
+      repositories.collectorWorkspace.deleteDraft(id, version),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
+      setSelectedId(null);
+      setActive("collectibles");
+    },
   });
   const updateProfile = useMutation({
     mutationFn: repositories.collectorWorkspace.updatePublicProfile,
@@ -252,6 +267,8 @@ function CollectorWorkspace() {
           <Performance data={data} open={open} />
         ) : active === "requests" ? (
           <Requests data={data} open={open} />
+        ) : active === "subscription" ? (
+          <SubscriptionPage data={subscription.data} loading={subscription.isLoading} />
         ) : active === "documents" ? (
           <Documents assets={matchingAssets} open={open} />
         ) : active === "profile" ? (
@@ -271,6 +288,8 @@ function CollectorWorkspace() {
             detail={collectibleDetail.data}
             initialSection={detailSection}
             detailFailed={collectibleDetail.isError}
+            deleting={deleteDraft.isPending}
+            onDeleteDraft={(id, version) => deleteDraft.mutate({ id, version })}
             onSectionChange={(section) => open("asset", selected.id, section)}
           />
         ) : (
@@ -1313,17 +1332,133 @@ function SettingsView({ open }: { open: Open }) {
   return <SettingsCards open={open} />;
 }
 
+function SubscriptionPage({
+  data,
+  loading,
+}: {
+  data?: import("@/data/repositories").CollectorSubscriptionProjection;
+  loading: boolean;
+}) {
+  if (loading || !data) return <WorkspaceState title="Loading your subscription" />;
+  const current = data.current;
+  return (
+    <WorkspacePage
+      title="Subscription"
+      detail="Your Collector plan controls catalogue capacity and optional tools. Trust, grading, custody and publication standards are the same on every plan."
+    >
+      <section className="collector-subscription-layout">
+        <article className="collector-panel collector-subscription-current">
+          <span className="collector-advanced-card__eyebrow">Your plan</span>
+          <h2>{current?.displayName ?? "No active Collector plan"}</h2>
+          <StatusBadge stage={current?.status === "ACTIVE" ? "MARKET_LIVE" : "DRAFT"} />
+          <p>
+            {current
+              ? `${sentence(current.status)}${current.currentPeriodEnd ? ` · Renews ${date(current.currentPeriodEnd)}` : ""}`
+              : "Choose a plan to unlock Collector workspace capacity."}
+          </p>
+          <div className="collector-subscription-usage">
+            <Usage
+              label="Active collectibles"
+              value={data.usage.activeCollectibles}
+              limit={numberEntitlement(current?.entitlements.maxActiveCollectibles)}
+            />
+            <Usage
+              label="Open submissions"
+              value={data.usage.openDrafts}
+              limit={numberEntitlement(current?.entitlements.maxOpenDrafts)}
+            />
+            <Usage
+              label="Monthly submissions"
+              value={data.usage.monthlySubmissions}
+              limit={numberEntitlement(current?.entitlements.monthlySubmissionLimit)}
+            />
+          </div>
+          {!data.billing.configured ? (
+            <small>
+              Billing checkout is not configured in this environment. Plan state remains
+              backend-authoritative.
+            </small>
+          ) : null}
+        </article>
+        <article className="collector-panel">
+          <PanelHeader title="Plan features" />
+          <ul className="collector-subscription-features">
+            {featureLabels(current?.entitlements).map((feature) => (
+              <li key={feature}>{feature}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+      <section className="collector-panel collector-plan-compare">
+        <PanelHeader title="Compare plans" />
+        <div className="collector-plan-grid">
+          {data.plans.map((plan) => (
+            <article key={plan.code}>
+              <span className="collector-advanced-card__eyebrow">{plan.displayName}</span>
+              <strong>{formatPlanPrice(plan.monthlyPriceMinor, plan.currency)} / month</strong>
+              <p>
+                {numberEntitlement(plan.entitlements.maxActiveCollectibles)} active collectibles ·{" "}
+                {numberEntitlement(plan.entitlements.monthlySubmissionLimit)} monthly submissions
+              </p>
+              <button className="collector-button" disabled={current?.code === plan.code}>
+                {current?.code === plan.code ? "Current plan" : "Contact Slice to change plan"}
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+    </WorkspacePage>
+  );
+}
+
+function Usage({ label, value, limit }: { label: string; value: number; limit: number | null }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>
+        {value} / {limit ?? "—"}
+      </strong>
+    </div>
+  );
+}
+
+function numberEntitlement(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function featureLabels(entitlements: Record<string, unknown> | undefined) {
+  if (!entitlements) return ["Backend plan required for Collector submissions"];
+  return [
+    numberEntitlement(entitlements.maxActiveCollectibles)
+      ? `${entitlements.maxActiveCollectibles} active collectibles`
+      : null,
+    entitlements.bulkImportEnabled ? "Bulk workflow tools" : "Standard submission workflow",
+    entitlements.advancedAnalyticsEnabled ? "Enhanced analytics" : "Basic performance metrics",
+    entitlements.prioritySupport ? "Priority support" : "Standard support",
+  ].filter((item): item is string => Boolean(item));
+}
+
+function formatPlanPrice(value: string, currency: string) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(
+    Number(value) / 100,
+  );
+}
+
 function AssetManagement({
   asset,
   detail,
   initialSection,
   detailFailed,
+  deleting,
+  onDeleteDraft,
   onSectionChange,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
+  deleting: boolean;
+  onDeleteDraft: (id: string, version: number) => void;
   onSectionChange: (section: AssetDetailSection) => void;
 }) {
   return (
@@ -1332,6 +1467,8 @@ function AssetManagement({
       detail={detail}
       initialSection={initialSection}
       detailFailed={detailFailed}
+      deleting={deleting}
+      onDeleteDraft={onDeleteDraft}
       onSectionChange={onSectionChange}
     />
   );
@@ -1489,12 +1626,16 @@ function AssetManagementView({
   detail,
   initialSection,
   detailFailed,
+  deleting,
+  onDeleteDraft,
   onSectionChange,
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
+  deleting: boolean;
+  onDeleteDraft: (id: string, version: number) => void;
   onSectionChange: (section: AssetDetailSection) => void;
 }) {
   const sections: Array<{ id: AssetDetailSection; label: string }> = [
@@ -1582,6 +1723,20 @@ function AssetManagementView({
               </p>
             ) : null}
             {content[section]}
+            {asset.submissionStatus === "DRAFT" ? (
+              <div className="collector-detail-danger-zone">
+                <button
+                  className="collector-button collector-button--danger"
+                  disabled={deleting}
+                  onClick={() => {
+                    if (window.confirm("Delete this editable draft? This cannot be undone."))
+                      onDeleteDraft(asset.id, asset.version);
+                  }}
+                >
+                  <Trash2 aria-hidden="true" /> {deleting ? "Deleting draft…" : "Delete draft"}
+                </button>
+              </div>
+            ) : null}
           </DetailPanel>
         </div>
       </section>
@@ -1624,6 +1779,24 @@ function DetailOverview({ asset }: { asset: CollectorWorkspaceAsset }) {
 }
 
 function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  const { repositories } = useAppServices();
+  const client = useQueryClient();
+  const vaults = useQuery({
+    queryKey: ["collector-workspace", "vaults"],
+    queryFn: repositories.collectorWorkspace.listVaults,
+    enabled: asset.submissionStatus === "APPROVED" && !asset.intake,
+  });
+  const selectVault = useMutation({
+    mutationFn: (vaultId: string) => repositories.collectorWorkspace.selectVault(asset.id, vaultId),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview }),
+  });
+  const addShipment = useMutation({
+    mutationFn: (input: { carrier: string; trackingNumber: string; shippedAt: string }) =>
+      repositories.collectorWorkspace.addShipment(asset.id, input),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview }),
+  });
   return (
     <div className="collector-detail-summary-grid">
       <Detail label="Submission status" value={sentence(asset.submissionStatus)} />
@@ -1646,7 +1819,88 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
             : "View submission"}{" "}
         <ArrowRight aria-hidden="true" />
       </Link>
+      {asset.submissionStatus === "APPROVED" && !asset.intake ? (
+        <div className="collector-intake-action">
+          <strong>Choose a vault</strong>
+          <small>
+            Your submission has been accepted for physical intake. Select a customer-safe
+            destination to continue.
+          </small>
+          {vaults.data?.map((vault) => (
+            <button
+              key={vault.id}
+              className="collector-button"
+              disabled={selectVault.isPending}
+              onClick={() => selectVault.mutate(vault.id)}
+            >
+              {vault.displayName} · {vault.countryCode}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {asset.intake?.status === "SHIPPING_REQUIRED" && !asset.intake.shipment ? (
+        <ShipmentForm
+          submitting={addShipment.isPending}
+          onSubmit={(input) => addShipment.mutate(input)}
+        />
+      ) : null}
+      {asset.intake?.shipment ? (
+        <div className="collector-intake-status">
+          <strong>
+            {asset.intake.shipment.status === "DELIVERED" ? "Delivered to intake" : "In transit"}
+          </strong>
+          <span>
+            {asset.intake.shipment.carrier} · {asset.intake.shipment.trackingNumber}
+          </span>
+          <small>
+            {asset.intake.vault.displayName} · {asset.intake.intakeReference}
+          </small>
+          {asset.intake.shipment.status === "DELIVERED" && !asset.intake.receivedAt ? (
+            <em>
+              Waiting for Slice to confirm receipt. Carrier delivery is not custody confirmation.
+            </em>
+          ) : null}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function ShipmentForm({
+  submitting,
+  onSubmit,
+}: {
+  submitting: boolean;
+  onSubmit: (input: { carrier: string; trackingNumber: string; shippedAt: string }) => void;
+}) {
+  const [carrier, setCarrier] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  return (
+    <form
+      className="collector-intake-action"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({ carrier, trackingNumber, shippedAt: new Date().toISOString() });
+      }}
+    >
+      <strong>Add shipment details</strong>
+      <input
+        value={carrier}
+        onChange={(event) => setCarrier(event.target.value)}
+        placeholder="Carrier"
+        required
+      />
+      <input
+        value={trackingNumber}
+        onChange={(event) => setTrackingNumber(event.target.value)}
+        placeholder="Tracking number"
+        required
+      />
+      <button className="collector-button collector-button--primary" disabled={submitting}>
+        {submitting ? "Saving…" : "Mark as shipped"}
+      </button>
+    </form>
   );
 }
 
@@ -1696,27 +1950,88 @@ function MarketResearchDetail({
 }
 
 function MediaDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
-  return asset.media.length ? (
-    <div className="collector-media-gallery">
-      {asset.media.map((item) => (
-        <article key={item.id} className="collector-media-tile">
-          {asset.slug ? (
+  const [selected, setSelected] = useState<number | null>(null);
+  useEffect(() => {
+    if (selected === null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelected(null);
+      if (event.key === "ArrowRight")
+        setSelected((value) => (value === null ? 0 : (value + 1) % asset.media.length));
+      if (event.key === "ArrowLeft")
+        setSelected((value) =>
+          value === null ? 0 : (value - 1 + asset.media.length) % asset.media.length,
+        );
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, asset.media.length]);
+  if (!asset.media.length)
+    return <Empty detail="No evidence has been uploaded for this collectible yet." />;
+  const current = selected === null ? null : asset.media[selected];
+  return (
+    <>
+      <div className="collector-media-gallery">
+        {asset.media.map((item, index) => (
+          <button
+            type="button"
+            key={item.id}
+            className="collector-media-tile"
+            onClick={() => setSelected(index)}
+            aria-label={`View ${friendlyMediaLabel(item.slot)}`}
+          >
             <AssetThumbnail asset={asset} className="collector-media-tile__preview" />
-          ) : (
-            <span>
-              <Image aria-hidden="true" />
-            </span>
-          )}
-          <strong>{friendlyMediaLabel(item.slot)}</strong>
-          <small>
-            {sentence(item.status)} · Uploaded {date(item.updatedAt)}
-          </small>
-          <em>Evidence metadata only</em>
-        </article>
-      ))}
-    </div>
-  ) : (
-    <Empty detail="No evidence has been uploaded for this collectible yet." />
+            <strong>{friendlyMediaLabel(item.slot)}</strong>
+            <small>
+              {sentence(item.status)} · Uploaded {date(item.updatedAt)}
+            </small>
+            <em>Click to view full image</em>
+          </button>
+        ))}
+      </div>
+      {current ? (
+        <div
+          className="collector-media-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={friendlyMediaLabel(current.slot)}
+          onClick={() => setSelected(null)}
+        >
+          <button
+            type="button"
+            className="collector-media-lightbox__close"
+            onClick={() => setSelected(null)}
+          >
+            <X aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="collector-media-lightbox__previous"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelected((value) =>
+                value === null ? 0 : (value - 1 + asset.media.length) % asset.media.length,
+              );
+            }}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </button>
+          <AssetThumbnail asset={asset} className="collector-media-lightbox__image" />
+          <div className="collector-media-lightbox__label">
+            {friendlyMediaLabel(current.slot)} · {sentence(current.status)}
+          </div>
+          <button
+            type="button"
+            className="collector-media-lightbox__next"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelected((value) => (value === null ? 0 : (value + 1) % asset.media.length));
+            }}
+          >
+            <ChevronRight aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 

@@ -1359,6 +1359,34 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           isPublic: boolean;
         }>("/collector-workspace/profile", { method: "PATCH", body: input });
       },
+      async getSubscription() {
+        return client.get<import("@/data/repositories").CollectorSubscriptionProjection>(
+          "/collector-workspace/subscription",
+        );
+      },
+      async listVaults() {
+        return client.get<import("@/data/repositories").CollectorVaultProjection[]>(
+          "/collector-workspace/vaults",
+        );
+      },
+      async selectVault(submissionId, vaultId) {
+        return client.request(
+          `/collector-workspace/collectibles/${encodeURIComponent(submissionId)}/vault`,
+          { method: "POST", body: { vaultId } },
+        );
+      },
+      async addShipment(submissionId, input) {
+        return client.request(
+          `/collector-workspace/collectibles/${encodeURIComponent(submissionId)}/shipment`,
+          { method: "POST", body: input },
+        );
+      },
+      async deleteDraft(submissionId, version) {
+        return client.request<{ submissionId: string; deleted: boolean }>(
+          `/collector-workspace/collectibles/${encodeURIComponent(submissionId)}/delete-draft`,
+          { method: "POST", body: { version } },
+        );
+      },
     },
     ownership: {
       async getWatchlist(userId) {

@@ -64,6 +64,14 @@ const metadataAllowedKeys = new Set([
   'customerReference',
 ]);
 
+function numberEntitlement(value: Prisma.JsonValue, key: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === 'number' && Number.isFinite(candidate)
+    ? candidate
+    : null;
+}
+
 @Injectable()
 export class SubmissionService {
   constructor(
@@ -80,6 +88,7 @@ export class SubmissionService {
     key: string,
   ) {
     await this.capabilities?.require(actor, 'LIST_ASSET');
+    await this.assertCollectorCapacity(actor);
     return this.mutate(
       actor,
       'submission.create',
@@ -151,6 +160,70 @@ export class SubmissionService {
         return ownerProjection(submission);
       },
     );
+  }
+
+  private async assertCollectorCapacity(actor: Actor) {
+    if (!actor.roles.includes('COLLECTOR') || actor.roles.includes('ADMIN'))
+      return;
+    const subscription = await this.prisma.collectorSubscription.findFirst({
+      where: {
+        userId: actor.userId,
+        status: { in: ['TRIALING', 'ACTIVE', 'CANCEL_AT_PERIOD_END'] },
+      },
+      include: { plan: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!subscription) {
+      throw new ConflictException({
+        code: 'COLLECTOR_PLAN_REQUIRED',
+        message:
+          'An active Collector plan is required before creating a submission.',
+      });
+    }
+    const entitlements = subscription.plan.entitlements;
+    const maxActive = numberEntitlement(entitlements, 'maxActiveCollectibles');
+    const maxDrafts = numberEntitlement(entitlements, 'maxOpenDrafts');
+    const monthlyLimit = numberEntitlement(
+      entitlements,
+      'monthlySubmissionLimit',
+    );
+    const monthStart = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      1,
+    );
+    const [active, drafts, monthly] = await Promise.all([
+      this.prisma.assetSubmission.count({
+        where: {
+          ownerUserId: actor.userId,
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+      }),
+      this.prisma.assetSubmission.count({
+        where: { ownerUserId: actor.userId, status: 'DRAFT' },
+      }),
+      this.prisma.assetSubmission.count({
+        where: { ownerUserId: actor.userId, submittedAt: { gte: monthStart } },
+      }),
+    ]);
+    if (maxActive !== null && active >= maxActive) {
+      throw new ConflictException({
+        code: 'COLLECTOR_ACTIVE_LIMIT_REACHED',
+        message: `You've reached your current Collector plan limit (${active} / ${maxActive} active collectibles).`,
+      });
+    }
+    if (maxDrafts !== null && drafts >= maxDrafts) {
+      throw new ConflictException({
+        code: 'COLLECTOR_DRAFT_LIMIT_REACHED',
+        message: `You've reached your current Collector plan limit (${drafts} / ${maxDrafts} open drafts).`,
+      });
+    }
+    if (monthlyLimit !== null && monthly >= monthlyLimit) {
+      throw new ConflictException({
+        code: 'COLLECTOR_MONTHLY_LIMIT_REACHED',
+        message: `You've reached your monthly Collector submission allowance (${monthly} / ${monthlyLimit}).`,
+      });
+    }
   }
 
   async getOwned(actor: Actor, id: string) {

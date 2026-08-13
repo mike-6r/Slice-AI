@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -31,6 +32,13 @@ const profilePatch = z
 const searchQuery = z
   .object({ query: z.string().trim().min(1).max(120) })
   .strict();
+
+const shipmentInput = z.object({
+  carrier: z.string().trim().min(2).max(40),
+  trackingNumber: z.string().trim().min(3).max(120),
+  shippedAt: z.string().datetime(),
+  notes: z.string().trim().max(500).optional(),
+}).strict();
 
 @Controller('collector-workspace')
 @UseGuards(AccessTokenGuard)
@@ -66,6 +74,48 @@ export class CollectorWorkspaceController {
   @Get('documents')
   documents(@Req() request: AuthenticatedRequest) {
     return this.workspace.documents(this.collectorId(request));
+  }
+
+  @Get('subscription')
+  subscription(@Req() request: AuthenticatedRequest) {
+    return this.workspace.subscription(this.collectorId(request));
+  }
+
+  @Get('vaults')
+  vaults() {
+    return this.workspace.vaults();
+  }
+
+  @Post('collectibles/:id/vault')
+  selectVault(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = z.object({ vaultId: z.string().min(1) }).strict().parse(body);
+    return this.workspace.selectVault(this.collectorId(request), submissionId, input.vaultId);
+  }
+
+  @Post('collectibles/:id/shipment')
+  addShipment(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    return this.workspace.addShipment(this.collectorId(request), submissionId, shipmentInput.parse(body));
+  }
+
+  @Post('collectibles/:id/delete-draft')
+  deleteDraft(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = z.object({ version: z.number().int().min(1) }).strict().parse(body);
+    return this.workspace.deleteDraft(this.collectorId(request), submissionId, input.version);
+  }
+
+  @Post('intake/:id/receipt')
+  confirmReceipt(@Param('id') intakeId: string, @Req() request: AuthenticatedRequest) {
+    const actor = request.actor;
+    if (!actor) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
+    return this.workspace.confirmReceipt(actor.userId, intakeId, actor.roles);
+  }
+
+  @Patch('intake/:id/shipment')
+  updateShipmentStatus(@Param('id') intakeId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const actor = request.actor;
+    if (!actor) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
+    const input = z.object({ status: z.enum(['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'EXCEPTION', 'UNKNOWN']) }).strict().parse(body);
+    return this.workspace.updateShipmentStatus(actor.roles, intakeId, input.status);
   }
 
   @Get('search')

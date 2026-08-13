@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -44,6 +45,7 @@ type WorkspaceItem = {
   grade: string | null;
   stage: WorkspaceStage;
   submissionStatus: string;
+  version: number;
   nextAction: string;
   updatedAt: string;
   referenceValue: WorkspaceMoney | null;
@@ -57,6 +59,14 @@ type WorkspaceItem = {
     snapshot: Prisma.JsonValue;
   } | null;
   custody: { status: string; updatedAt: string } | null;
+  intake: {
+    id: string;
+    status: string;
+    intakeReference: string;
+    vault: { id: string; displayName: string; region: string; countryCode: string; customerSafeAddress: string; shippingInstructions: string };
+    shipment: { carrier: string; trackingNumber: string; status: string; shippedAt: string; deliveredAt: string | null } | null;
+    receivedAt: string | null;
+  } | null;
   media: WorkspaceMedia[];
   market: {
     isLive: boolean;
@@ -148,6 +158,125 @@ export class CollectorWorkspaceService {
         owners: ownerCount || null,
       },
     };
+  }
+
+  async subscription(userId: string) {
+    await this.ensurePlans();
+    const [plans, current, usage] = await Promise.all([
+      this.db.collectorPlan.findMany({ where: { active: true }, orderBy: { monthlyPriceMinor: 'asc' } }),
+      this.db.collectorSubscription.findFirst({
+        where: { userId, status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCEL_AT_PERIOD_END'] } },
+        include: { plan: true },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.usageFor(userId),
+    ]);
+    return {
+      current: current
+        ? {
+            id: current.id,
+            code: current.plan.code,
+            displayName: current.plan.displayName,
+            status: current.status,
+            currentPeriodEnd: current.currentPeriodEnd?.toISOString() ?? null,
+            cancelAtPeriodEnd: current.cancelAtPeriodEnd,
+            entitlements: current.plan.entitlements,
+          }
+        : null,
+      plans: plans.map((plan) => ({
+        code: plan.code,
+        displayName: plan.displayName,
+        monthlyPriceMinor: plan.monthlyPriceMinor.toString(),
+        currency: plan.currency,
+        entitlements: plan.entitlements,
+      })),
+      usage,
+      billing: { configured: Boolean(current?.provider), provider: current?.provider ?? null },
+    };
+  }
+
+  async vaults() {
+    return this.db.vaultIntakeLocation.findMany({
+      where: { active: true, intakeAvailable: true },
+      orderBy: [{ countryCode: 'asc' }, { displayName: 'asc' }],
+      select: { id: true, displayName: true, region: true, countryCode: true, acceptedCategories: true, shippingInstructions: true, customerSafeAddress: true },
+    });
+  }
+
+  async selectVault(userId: string, submissionId: string, vaultId: string) {
+    const submission = await this.db.assetSubmission.findFirst({ where: { id: submissionId, ownerUserId: userId }, select: { id: true, status: true, categoryId: true, intake: { include: { shipment: true } } } });
+    if (!submission) throw new NotFoundException({ code: 'COLLECTIBLE_NOT_FOUND', message: 'Collectible not found.' });
+    if (submission.status !== 'APPROVED') throw new ConflictException({ code: 'SUBMISSION_NOT_ACCEPTED', message: 'A vault can only be selected after staff accepts the submission.' });
+    if (submission.intake?.shipment) throw new ConflictException({ code: 'SHIPMENT_ALREADY_STARTED', message: 'The destination cannot be changed after shipment starts.' });
+    const vault = await this.db.vaultIntakeLocation.findFirst({ where: { id: vaultId, active: true, intakeAvailable: true } });
+    if (!vault) throw new NotFoundException({ code: 'VAULT_NOT_AVAILABLE', message: 'That intake destination is no longer available.' });
+    const accepted = Array.isArray(vault.acceptedCategories) ? vault.acceptedCategories : null;
+    if (accepted && !accepted.includes(submission.categoryId)) throw new ConflictException({ code: 'VAULT_CATEGORY_UNSUPPORTED', message: 'That destination does not accept this category.' });
+    return this.db.submissionIntake.upsert({
+      where: { submissionId },
+      create: { submissionId, vaultId, intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`, status: 'SHIPPING_REQUIRED' },
+      update: { vaultId, status: 'SHIPPING_REQUIRED', updatedAt: new Date() },
+      include: { vault: true, shipment: true },
+    });
+  }
+
+  async addShipment(userId: string, submissionId: string, input: { carrier: string; trackingNumber: string; shippedAt: string; notes?: string }) {
+    const intake = await this.db.submissionIntake.findFirst({ where: { submissionId, submission: { ownerUserId: userId } }, include: { shipment: true, receipt: true } });
+    if (!intake) throw new ConflictException({ code: 'VAULT_SELECTION_REQUIRED', message: 'Choose an intake destination before adding shipment details.' });
+    if (intake.receipt) throw new ConflictException({ code: 'RECEIPT_ALREADY_CONFIRMED', message: 'Shipment details cannot be changed after Slice confirms receipt.' });
+    const carrier = input.carrier.trim();
+    const trackingNumber = input.trackingNumber.trim();
+    if (carrier.length < 2 || carrier.length > 40 || trackingNumber.length < 3 || trackingNumber.length > 120) throw new ConflictException({ code: 'SHIPMENT_DETAILS_INVALID', message: 'Enter a carrier and tracking reference.' });
+    const shippedAt = new Date(input.shippedAt);
+    if (Number.isNaN(shippedAt.getTime())) throw new ConflictException({ code: 'SHIPMENT_DATE_INVALID', message: 'Enter a valid shipping date.' });
+    return this.db.$transaction(async (db) => {
+      await db.intakeShipment.upsert({ where: { intakeId: intake.id }, create: { intakeId: intake.id, carrier, trackingNumber, shippedAt, status: 'SHIPPED', notes: input.notes?.trim() || null }, update: { carrier, trackingNumber, shippedAt, status: 'SHIPPED', notes: input.notes?.trim() || null } });
+      return db.submissionIntake.update({ where: { id: intake.id }, data: { status: 'IN_TRANSIT', shippedAt }, include: { vault: true, shipment: true } });
+    });
+  }
+
+  async confirmReceipt(actorId: string, intakeId: string, actorRoles: string[]) {
+    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role))) throw new ForbiddenException({ code: 'RECEIPT_CONFIRMATION_REQUIRES_STAFF', message: 'Only Slice staff can confirm physical receipt.' });
+    const intake = await this.db.submissionIntake.findUnique({ where: { id: intakeId }, include: { shipment: true } });
+    if (!intake) throw new NotFoundException({ code: 'INTAKE_NOT_FOUND', message: 'Intake record not found.' });
+    if (!intake.shipment || intake.shipment.status !== 'DELIVERED') throw new ConflictException({ code: 'DELIVERY_NOT_CONFIRMED', message: 'Confirm carrier delivery before recording Slice receipt.' });
+    return this.db.$transaction(async (db) => {
+      await db.intakeReceiptConfirmation.upsert({ where: { intakeId }, create: { intakeId, confirmedById: actorId, shipmentRef: intake.shipment?.trackingNumber }, update: { confirmedById: actorId, confirmedAt: new Date(), shipmentRef: intake.shipment?.trackingNumber } });
+      return db.submissionIntake.update({ where: { id: intakeId }, data: { status: 'RECEIVED', receivedAt: new Date() }, include: { vault: true, shipment: true, receipt: true } });
+    });
+  }
+
+  async updateShipmentStatus(actorRoles: string[], intakeId: string, status: 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'EXCEPTION' | 'UNKNOWN') {
+    if (!actorRoles.some((role) => ['ADMIN', 'ASSET_REVIEWER'].includes(role))) throw new ForbiddenException({ code: 'SHIPMENT_STATUS_REQUIRES_STAFF', message: 'Only Slice staff can update carrier status.' });
+    const shipment = await this.db.intakeShipment.findUnique({ where: { intakeId } });
+    if (!shipment) throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Shipment not found.' });
+    const deliveredAt = status === 'DELIVERED' ? new Date() : shipment.deliveredAt;
+    await this.db.intakeShipment.update({ where: { intakeId }, data: { status, deliveredAt, lastCheckedAt: new Date() } });
+    return this.db.submissionIntake.update({ where: { id: intakeId }, data: { status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT', deliveredAt }, include: { vault: true, shipment: true, receipt: true } });
+  }
+
+  async deleteDraft(userId: string, submissionId: string, version: number) {
+    const result = await this.db.assetSubmission.updateMany({ where: { id: submissionId, ownerUserId: userId, status: 'DRAFT', version }, data: { status: 'CANCELLED', cancelledAt: new Date(), version: { increment: 1 } } });
+    if (result.count !== 1) throw new ConflictException({ code: 'DRAFT_DELETE_CONFLICT', message: 'Only your current editable draft can be deleted. Refresh and try again.' });
+    return { submissionId, deleted: true };
+  }
+
+  private async ensurePlans() {
+    const configs = [
+      ['STARTER', 'Collector Starter', 900n, { maxActiveCollectibles: 10, maxOpenDrafts: 3, maxConcurrentSubmissions: 3, monthlySubmissionLimit: 10, bulkImportEnabled: false, advancedAnalyticsEnabled: false, marketResearchHistoryDepth: 3, featuredProfileAssetLimit: 2, prioritySupport: false, exportEnabled: false }],
+      ['PRO', 'Collector Pro', 1900n, { maxActiveCollectibles: 50, maxOpenDrafts: 10, maxConcurrentSubmissions: 10, monthlySubmissionLimit: 20, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 12, featuredProfileAssetLimit: 6, prioritySupport: true, exportEnabled: false }],
+      ['ELITE', 'Collector Elite', 4900n, { maxActiveCollectibles: 250, maxOpenDrafts: 30, maxConcurrentSubmissions: 30, monthlySubmissionLimit: 100, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 36, featuredProfileAssetLimit: 12, prioritySupport: true, exportEnabled: true }],
+    ] as const;
+    for (const [code, displayName, monthlyPriceMinor, entitlements] of configs) await this.db.collectorPlan.upsert({ where: { code }, create: { code, displayName, monthlyPriceMinor, entitlements }, update: { displayName, monthlyPriceMinor, entitlements, active: true } });
+  }
+
+  private async usageFor(userId: string) {
+    const [activeCollectibles, openDrafts, monthlySubmissions] = await Promise.all([
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { notIn: ['DRAFT', 'CANCELLED'] } } }),
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: 'DRAFT' } }),
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, submittedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } }),
+    ]);
+    return { activeCollectibles, openDrafts, monthlySubmissions };
   }
 
   /** Customer-safe list projection. All records are scoped to D10 ownership. */
@@ -366,6 +495,7 @@ export class CollectorWorkspaceService {
 }
 
 const workspaceSubmissionInclude = {
+  intake: { include: { vault: true, shipment: true, receipt: true } },
   media: { orderBy: { updatedAt: 'desc' as const } },
   marketResearch: { orderBy: { collectedAt: 'desc' as const }, take: 1 },
   asset: {
@@ -443,7 +573,8 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
       : declaredGrade(submission.declaredMetadata),
     stage,
     submissionStatus: submission.status,
-    nextAction: nextActionFor(submission.status, stage, media),
+    version: submission.version,
+    nextAction: nextActionFor(submission.status, stage, media, submission.intake),
     updatedAt: submission.updatedAt.toISOString(),
     // Kept for current workspace clients: it is always labelled with its source.
     referenceValue: supportedValue ?? externalReference,
@@ -459,6 +590,31 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
       ? {
           status: asset.custodyRecord.status,
           updatedAt: asset.custodyRecord.updatedAt.toISOString(),
+        }
+      : null,
+    intake: submission.intake
+      ? {
+          id: submission.intake.id,
+          status: submission.intake.status,
+          intakeReference: submission.intake.intakeReference,
+          vault: {
+            id: submission.intake.vault.id,
+            displayName: submission.intake.vault.displayName,
+            region: submission.intake.vault.region,
+            countryCode: submission.intake.vault.countryCode,
+            customerSafeAddress: submission.intake.vault.customerSafeAddress,
+            shippingInstructions: submission.intake.vault.shippingInstructions,
+          },
+          shipment: submission.intake.shipment
+            ? {
+                carrier: submission.intake.shipment.carrier,
+                trackingNumber: submission.intake.shipment.trackingNumber,
+                status: submission.intake.shipment.status,
+                shippedAt: submission.intake.shipment.shippedAt.toISOString(),
+                deliveredAt: submission.intake.shipment.deliveredAt?.toISOString() ?? null,
+              }
+            : null,
+          receivedAt: submission.intake.receivedAt?.toISOString() ?? null,
         }
       : null,
     media,
@@ -523,6 +679,26 @@ function requestFor(asset: WorkspaceItem) {
         action: 'Replace evidence',
       },
     ];
+  if (asset.submissionStatus === 'APPROVED' && !asset.intake)
+    return [
+      {
+        ...base,
+        id: `submission:${asset.id}:vault`,
+        reason: 'Your submission was accepted. Choose an intake destination to continue.',
+        badge: 'Choose vault',
+        action: 'Choose vault',
+      },
+    ];
+  if (asset.intake?.status === 'SHIPPING_REQUIRED' && !asset.intake.shipment)
+    return [
+      {
+        ...base,
+        id: `submission:${asset.id}:shipping`,
+        reason: 'Add your carrier and tracking details before shipping.',
+        badge: 'Add tracking',
+        action: 'Add tracking',
+      },
+    ];
   return [];
 }
 
@@ -561,11 +737,13 @@ function nextActionFor(
   status: string,
   stage: WorkspaceStage,
   media: WorkspaceMedia[],
+  intake: WorkspaceSubmission['intake'],
 ) {
   if (status === 'CHANGES_REQUESTED') return 'Review requested changes';
   if (status === 'DRAFT' && missingRequiredEvidence(media))
     return 'Add required evidence';
   if (status === 'DRAFT') return 'Finish your draft';
+  if (status === 'APPROVED' && !intake) return 'Choose an intake destination';
   if (stage === 'SUBMITTED' || stage === 'REVIEW')
     return 'Awaiting staff review';
   if (stage === 'VALUATION') return 'Valuation in progress';

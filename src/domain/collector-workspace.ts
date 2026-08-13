@@ -17,6 +17,7 @@ export type CollectorWorkspaceAsset = {
   grade: string | null;
   stage: CollectorWorkspaceStage;
   submissionStatus: string;
+  version: number;
   nextAction: string;
   updatedAt: string;
   referenceValue: (CollectorWorkspaceMoney & { source: string; asOf: string }) | null;
@@ -30,6 +31,27 @@ export type CollectorWorkspaceAsset = {
     snapshot: Record<string, unknown>;
   } | null;
   custody: { status: string; updatedAt: string } | null;
+  intake: {
+    id: string;
+    status: string;
+    intakeReference: string;
+    vault: {
+      id: string;
+      displayName: string;
+      region: string;
+      countryCode: string;
+      customerSafeAddress: string;
+      shippingInstructions: string;
+    };
+    shipment: {
+      carrier: string;
+      trackingNumber: string;
+      status: string;
+      shippedAt: string;
+      deliveredAt: string | null;
+    } | null;
+    receivedAt: string | null;
+  } | null;
   media: Array<{ id: string; slot: string; filename: string; status: string; updatedAt: string }>;
   market: {
     isLive: boolean;
