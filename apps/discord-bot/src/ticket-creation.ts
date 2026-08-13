@@ -75,6 +75,14 @@ export class TicketCreationService {
     );
     const same = existing.find((ticket) => ticket.category === input.category);
     if (same) {
+      if (!same.channelId)
+        return this.provision({
+          ...same,
+          creatorDiscordId: input.creatorDiscordId,
+          referenceId: input.referenceId
+            ? sanitizeTicketText(input.referenceId)
+            : undefined,
+        });
       const destination = same.channelId
         ? `: <#${same.channelId}>`
         : '. Support is still preparing it; please do not open another.';
@@ -107,6 +115,10 @@ export class TicketCreationService {
     // Persist before Discord provisioning. A Discord outage therefore preserves
     // the support request rather than leaving an orphan channel as its authority.
     await this.repository.create(persisted);
+    return this.provision(persisted);
+  }
+
+  private async provision(persisted: PersistedTicket): Promise<CreatedTicket> {
     let channel: TicketChannel;
     try {
       channel = await this.discord.createPrivateChannel({
@@ -149,7 +161,7 @@ export class TicketCreationService {
         provisioningReason(error),
       );
       throw new TicketCreationError(
-        "Your ticket was saved, but Discord couldn't finish preparing it. A staff member can recover it safely.",
+        "Your ticket was saved, but Discord couldn't finish preparing it. Try again shortly to resume setup safely.",
       );
     }
     return ticket;
