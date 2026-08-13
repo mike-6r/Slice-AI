@@ -256,6 +256,13 @@ export class CollectorWorkspaceService {
   }
 
   async deleteDraft(userId: string, submissionId: string, version: number) {
+    const current = await this.db.assetSubmission.findFirst({
+      where: { id: submissionId, ownerUserId: userId },
+      select: { status: true, cancelledAt: true },
+    });
+    if (current?.status === 'CANCELLED' && current.cancelledAt) {
+      return { submissionId, deleted: true, alreadyDeleted: true };
+    }
     const result = await this.db.assetSubmission.updateMany({ where: { id: submissionId, ownerUserId: userId, status: 'DRAFT', version }, data: { status: 'CANCELLED', cancelledAt: new Date(), version: { increment: 1 } } });
     if (result.count !== 1) throw new ConflictException({ code: 'DRAFT_DELETE_CONFLICT', message: 'Only your current editable draft can be deleted. Refresh and try again.' });
     return { submissionId, deleted: true };
