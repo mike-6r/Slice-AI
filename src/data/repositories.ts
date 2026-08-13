@@ -310,6 +310,41 @@ export type AdminIntegrationsSummary = {
 };
 
 export type AdminOperationsOverview = {
+  kpis: {
+    totalUsers: number;
+    collectors: number;
+    investors: number;
+    activeListings: number;
+    openOrders: number;
+    needsAttention: number;
+  };
+  pipeline: Array<{ id: string; label: string; count: number }>;
+  attentionGroups: Array<{
+    id: string;
+    label: string;
+    count: number;
+    description: string;
+    severity: string;
+    section: string;
+  }>;
+  recentActivity: Array<{ id: string; title: string; context: string; occurredAt: string }>;
+  systemHealth: Array<{ name: string; status: string; summary: string }>;
+  accountMix: {
+    collectors: number;
+    investors: number;
+    staff: number;
+    admins: number;
+    overlapping: boolean;
+  };
+  memberships: {
+    starter: number;
+    pro: number;
+    elite: number;
+    trialing: number;
+    pastDue: number;
+    mrrMinor: string;
+  };
+  support: { available: boolean; message: string; open?: number };
   counts: {
     pendingReviews: number;
     collectorActionsWaiting: number;
@@ -771,6 +806,7 @@ export interface UserRepository {
     linkedAt: string | null;
   }>;
   beginDiscordLink(): Promise<{ authorizationUrl: string }>;
+  consumeDiscordBotLink(challenge: string): Promise<{ connected: boolean }>;
   disconnectDiscordLink(): Promise<{ disconnected: boolean }>;
 }
 

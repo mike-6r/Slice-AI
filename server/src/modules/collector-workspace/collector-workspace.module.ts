@@ -7,5 +7,6 @@ import { CollectorWorkspaceService } from './collector-workspace.service';
   imports: [AuthModule],
   controllers: [CollectorWorkspaceController],
   providers: [CollectorWorkspaceService],
+  exports: [CollectorWorkspaceService],
 })
 export class CollectorWorkspaceModule {}

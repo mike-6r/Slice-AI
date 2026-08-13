@@ -1,4 +1,4 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { AppConfig } from '../../../config/app-config';
 import type { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
@@ -78,10 +78,12 @@ function database() {
     discordOAuthState: { deleteMany: jest.fn(), create: jest.fn() },
     auditEvent: { create: jest.fn() },
     discordAccountLink: { findUnique: jest.fn(), delete: jest.fn() },
+    discordBotLinkChallenge: { deleteMany: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
   };
   return {
     discordAccountLink: { findUnique: jest.fn() },
     discordOAuthState: { findUnique: jest.fn(), updateMany: jest.fn() },
+    discordBotLinkChallenge: { findUnique: jest.fn() },
     $transaction: jest.fn((work) => work(tx)),
     tx,
   };
@@ -120,5 +122,20 @@ describe('DiscordLinkService', () => {
         }),
       }),
     );
+  });
+
+  it('stores only a hash for a bot-created link challenge and binds it to the Discord identity', async () => {
+    const db = database();
+    const service = new DiscordLinkService(db as unknown as PrismaService, config);
+    const result = await service.createBotChallenge({ discordUserId: 'discord-user', discordUsername: 'slice-member', guildId: 'guild' }, 'request');
+    expect(result.challengeUrl).toContain('/account?discordLink=');
+    expect(db.tx.discordBotLinkChallenge.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ discordUserId: 'discord-user', tokenHash: expect.not.stringContaining('discord-user') }) }));
+    expect(JSON.stringify(db.tx.discordBotLinkChallenge.create.mock.calls)).not.toContain(new URL(result.challengeUrl).searchParams.get('discordLink')!);
+  });
+
+  it('rejects expired, used, or unknown bot link challenges', async () => {
+    const db = database();
+    const service = new DiscordLinkService(db as unknown as PrismaService, config);
+    await expect(service.consumeBotChallenge(actor, 'unknown-token', 'request')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

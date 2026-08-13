@@ -1,4 +1,4 @@
-version: 9
+version: 10
 
 roles:
   - { key: owner, name: Owner, color: "#F6C85F", hoist: true, staff: true }
@@ -9,6 +9,7 @@ roles:
   - { key: moderator, name: Community Moderator, color: "#36E39A", staff: true }
   - { key: developer, name: Developer, color: "#8E7CFF", staff: true }
   - { key: verified, name: Verified Member, color: "#36E39A", hoist: true }
+  - { key: slice-member, name: Slice Member, color: "#27D7B1" }
   - { key: collector, name: Collector, color: "#F6C85F" }
   - { key: seller, name: Seller, color: "#6CA8FF" }
   - { key: beta, name: Beta Access, color: "#A98BFF" }

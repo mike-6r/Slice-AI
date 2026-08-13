@@ -1,7 +1,9 @@
 import {
   Controller,
+  Body,
   Delete,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -16,6 +18,7 @@ import {
   type AuthenticatedRequest,
 } from '../auth/access-token.guard';
 import { DiscordLinkService } from './discord-link.service';
+import { DiscordBotServiceGuard } from './discord-bot-service.guard';
 
 @Controller()
 export class DiscordLinkController {
@@ -41,6 +44,62 @@ export class DiscordLinkController {
   async disconnect(@Req() request: AuthenticatedRequest) {
     await this.links.disconnect(request.actor!, request.requestId ?? 'unknown');
     return { disconnected: true };
+  }
+
+  @Post('me/integrations/discord/bot-link')
+  @UseGuards(AccessTokenGuard)
+  async consumeBotLink(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: { challenge?: unknown },
+  ) {
+    return this.links.consumeBotChallenge(
+      request.actor!,
+      typeof body.challenge === 'string' ? body.challenge : '',
+      request.requestId ?? 'unknown',
+    );
+  }
+
+  @Post('discord/bot/link-challenges')
+  @UseGuards(DiscordBotServiceGuard)
+  createBotChallenge(
+    @Req() request: AuthenticatedRequest,
+    @Body()
+    body: {
+      discordUserId?: unknown;
+      discordUsername?: unknown;
+      discordDisplayName?: unknown;
+      guildId?: unknown;
+    },
+  ) {
+    return this.links.createBotChallenge(
+      {
+        discordUserId:
+          typeof body.discordUserId === 'string' ? body.discordUserId : '',
+        discordUsername:
+          typeof body.discordUsername === 'string' ? body.discordUsername : '',
+        discordDisplayName:
+          typeof body.discordDisplayName === 'string'
+            ? body.discordDisplayName
+            : null,
+        guildId: typeof body.guildId === 'string' ? body.guildId : null,
+      },
+      request.requestId ?? 'unknown',
+    );
+  }
+
+  @Get('discord/bot/links/:discordUserId')
+  @UseGuards(DiscordBotServiceGuard)
+  botStatus(@Param('discordUserId') discordUserId: string) {
+    return this.links.botStatus(discordUserId);
+  }
+
+  @Delete('discord/bot/links/:discordUserId')
+  @UseGuards(DiscordBotServiceGuard)
+  unlinkBotLink(
+    @Param('discordUserId') discordUserId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.links.unlinkDiscordUser(discordUserId, request.requestId ?? 'unknown');
   }
 
   @Get('auth/discord/callback')

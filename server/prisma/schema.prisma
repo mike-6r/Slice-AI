@@ -738,6 +738,23 @@ model DiscordOAuthState {
   @@index([userId, expiresAt])
 }
 
+/// Bot-issued handoff for a Slice-authenticated user to claim their Discord identity.
+/// The raw challenge is returned once to Discord and is never persisted.
+model DiscordBotLinkChallenge {
+  id                 String    @id @default(cuid())
+  tokenHash          String    @unique
+  discordUserId      String
+  discordUsername    String
+  discordDisplayName String?
+  guildId            String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([discordUserId, expiresAt])
+  @@index([expiresAt])
+}
+
 model UserProfile {
   id                String    @id @default(cuid())
   userId            String    @unique

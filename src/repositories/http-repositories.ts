@@ -2181,6 +2181,12 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async beginDiscordLink() {
         return client.request("/me/integrations/discord/authorize", { method: "POST" });
       },
+      async consumeDiscordBotLink(challenge) {
+        return client.request("/me/integrations/discord/bot-link", {
+          method: "POST",
+          body: { challenge },
+        });
+      },
       async disconnectDiscordLink() {
         return client.request("/me/integrations/discord", { method: "DELETE" });
       },

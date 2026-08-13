@@ -8,6 +8,7 @@ import {
 import { FAQ, SliceWebsiteHandoffClient } from '../onboarding.js';
 import { SliceEmbed } from '../embeds/slice-embed.js';
 import { presentationConfig } from '../presentation-config.js';
+import { SliceBackendClient, type BackendResult, type DiscordLinkStatus } from '../slice-backend-client.js';
 
 const copy = presentationConfig()['commands.yml'];
 
@@ -33,15 +34,12 @@ export const supportCommand = new SlashCommandBuilder()
 export async function handleOnboardingCommand(
   interaction: ChatInputCommandInteraction,
   website: SliceWebsiteHandoffClient,
+  backend: SliceBackendClient,
 ): Promise<void> {
   if (interaction.commandName === 'account') {
-    return void (await replyWithHandoff(
-      interaction,
-      website,
-      'account',
-      'My Slice account',
-      'Open Slice to securely connect or manage your account. Discord never collects credentials or identity documents.',
-    ));
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.editReply(accountStatusPayload(await backend.getLinkStatus(interaction.user.id), website));
+    return;
   }
   if (interaction.commandName === 'roles') {
     await interaction.reply({
@@ -71,6 +69,15 @@ export async function handleOnboardingCommand(
     ephemeral: true,
     embeds: [SliceEmbed.configured('onboarding.yml', 'support')],
   });
+}
+
+export function accountStatusPayload(result: BackendResult<DiscordLinkStatus>, website: SliceWebsiteHandoffClient) {
+  if (!result.ok) return { embeds: [SliceEmbed.warning('Slice unavailable', result.message)] };
+  if (!result.value.linked) return { embeds: [SliceEmbed.info('Connect your Slice account', 'Connect your account through the secure Slice handoff. Discord never collects credentials, codes, or identity documents.')], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:connect').setLabel('Connect account').setStyle(ButtonStyle.Primary))] };
+  const account = result.value.user;
+  const handoff = website.handoff('account');
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...(handoff.available ? [new ButtonBuilder().setLabel('Account settings').setStyle(ButtonStyle.Link).setURL(handoff.url)] : []), new ButtonBuilder().setCustomId('slice:onboarding:unlink').setLabel('Disconnect').setStyle(ButtonStyle.Secondary));
+  return { embeds: [SliceEmbed.success('Slice account connected', [account.username ? `@${account.username}` : 'Slice account connected', account.roles.join(' / ') || 'Investor', account.preferredCurrency ? `Preferred currency: ${account.preferredCurrency}` : null].filter(Boolean).join('\n'))], components: [row] };
 }
 
 export async function replyWithHandoff(

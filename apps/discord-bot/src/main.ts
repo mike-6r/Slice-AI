@@ -2,7 +2,7 @@ import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Eve
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { PrismaClient } from '../generated/prisma/index.js';
-import { accountCommand, faqCommand, handleOnboardingCommand, rolesCommand, supportCommand } from './commands/onboarding.js';
+import { accountCommand, accountStatusPayload, faqCommand, handleOnboardingCommand, rolesCommand, supportCommand } from './commands/onboarding.js';
 import { ticketCommand, ticketCommandInput } from './commands/tickets.js';
 import { handleSetup, handleSetupButton, setupCommand } from './commands/setup.js';
 import { loadConfig } from './config.js';
@@ -87,7 +87,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === 'setup') return void await handleSetup(interaction, repository, provisioner);
     if (interaction.isChatInputCommand() && interaction.commandName === 'config') return void await handleConfigurationCommand(interaction);
-    if (interaction.isChatInputCommand() && ['account', 'roles', 'faq', 'support'].includes(interaction.commandName)) return void await handleOnboardingCommand(interaction, links);
+    if (interaction.isChatInputCommand() && ['account', 'roles', 'faq', 'support'].includes(interaction.commandName)) return void await handleOnboardingCommand(interaction, links, market);
     if (interaction.isChatInputCommand() && interaction.commandName === 'ticket') return void await handleTicketCommand(interaction);
     if (interaction.isChatInputCommand() && ['warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory'].includes(interaction.commandName)) return void await handleModerationCommand(interaction, moderationForGuild(interaction.guild!), await moderationActor(interaction), (id, action) => moderationTarget(interaction.guild!, id, action));
     if (interaction.isChatInputCommand() && ['level', 'leaderboard', 'rep', 'reputation', 'achievements', 'daily'].includes(interaction.commandName)) return void await handleProgressionCommand(interaction, progression);
@@ -268,7 +268,66 @@ async function reconcileNotificationMember(member: GuildMember): Promise<void> {
 async function refreshSuggestion(suggestion: import('./persistence/community-repository.js').Suggestion): Promise<void> { if (!suggestion.channelId || !suggestion.messageId) return; const guild = await client.guilds.fetch(suggestion.guildId); const channel = await guild.channels.fetch(suggestion.channelId).catch(() => null); if (!channel?.isTextBased() || !('messages' in channel)) return; const message = await channel.messages.fetch(suggestion.messageId).catch(() => null); if (message) await message.edit(suggestionPayload(suggestion, await community.suggestionCounts(suggestion.id))); }
 async function handleSuggestionVote(interaction: ButtonInteraction): Promise<void> { const [, , , id, choice] = interaction.customId.split(':'); if (!id || (choice !== 'up' && choice !== 'down')) return; const suggestion = await community.suggestion(id); if (!suggestion || suggestion.guildId !== interaction.guildId) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Suggestion unavailable', 'This suggestion is unavailable.')] }); await community.suggestionVote(id, interaction.user.id, choice === 'up' ? 1 : -1); const updated = await community.suggestion(id); if (updated) await interaction.update(suggestionPayload(updated, await community.suggestionCounts(id))); }
 async function handlePollVote(interaction: StringSelectMenuInteraction): Promise<void> { const id = interaction.customId.split(':')[3]; const poll = id ? await community.pollVote(id, interaction.user.id, Number(interaction.values[0])) : null; if (!poll || poll.guildId !== interaction.guildId) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Poll unavailable', 'This poll is closed or unavailable.')] }); await interaction.update(pollPayload(poll, await community.pollCounts(poll.id, poll.options.length))); }
-async function handleOnboardingButton(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; const handoffs: Partial<Record<string, { destination: SliceDestination; title: string; description: string }>> = { connect: { destination: 'account', title: 'Connect your Slice account', description: 'Continue on Slice to securely connect or manage your account.' }, verify: { destination: 'account', title: 'Verify on Slice', description: 'Identity and verification steps are handled only on the official Slice website.' }, 'my-slice': { destination: 'account', title: 'My Slice', description: 'Open Slice to view your account and linked services.' }, marketplace: { destination: 'marketplace', title: 'Marketplace', description: 'Open Slice for current listings and market activity.' }, portfolio: { destination: 'portfolio', title: 'Portfolio', description: 'Open Slice to view your private portfolio.' }, orders: { destination: 'orders', title: 'Orders', description: 'Open Slice to view your private order activity.' }, transactions: { destination: 'transactions', title: 'Transactions', description: 'Open Slice to view your private transaction activity.' }, 'collector-workspace': { destination: 'collector-workspace', title: 'Collector Workspace', description: 'Open Slice to view your collector workspace, if enabled for your account.' }, 'your-actions': { destination: 'your-actions', title: 'Your Actions', description: 'Open Slice to see the collector actions that currently need your attention.' }, membership: { destination: 'membership', title: 'Collector Membership', description: 'Open Slice to view membership and capacity information.' }, list: { destination: 'list', title: 'List an Asset', description: 'Open Slice to start a submission using the current review workflow.' }, 'admin-console': { destination: 'admin-console', title: 'Slice Admin Console', description: 'Open Slice to review authorized operational queues.' } }; const handoff = handoffs[action]; if (handoff) { const response = links.handoff(handoff.destination); if (!response.available) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Slice unavailable', response.message)] }); return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info(handoff.title, handoff.description)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('Open Slice').setStyle(ButtonStyle.Link).setURL(response.url))] }); } if (action === 'faq') { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Slice FAQ', Object.entries(FAQ).slice(0, 6).map(([key, value]) => `**${key}** — ${value}`).join('\n\n'))] }); return; } await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Support', 'Choose a category in #create-a-ticket to open private support.')] }); }
+async function handleOnboardingButton(interaction: ButtonInteraction): Promise<void> {
+  const action = interaction.customId.split(':')[2];
+  if (action === 'connect') {
+    await interaction.deferReply({ ephemeral: true });
+    const status = await market.getLinkStatus(interaction.user.id);
+    if (status.ok && status.value.linked) {
+      await syncLinkedAccountRoles(interaction, status.value.user.roles);
+      await interaction.editReply(accountStatusPayload(status, links));
+      return;
+    }
+    const challenge = await market.createLinkChallenge({ discordUserId: interaction.user.id, discordUsername: interaction.user.username, discordDisplayName: interaction.user.globalName, guildId: interaction.guildId });
+    if (!challenge.ok) {
+      await interaction.editReply({ embeds: [SliceEmbed.warning('Slice unavailable', challenge.message)] });
+      return;
+    }
+    await interaction.editReply({ embeds: [SliceEmbed.info('Connect your Slice account', 'Continue on Slice to securely connect your Discord account.')], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('Connect account').setStyle(ButtonStyle.Link).setURL(challenge.value.challengeUrl))] });
+    return;
+  }
+  if (action === 'unlink') {
+    await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Disconnect Slice account', 'Disconnecting removes only Slice-managed display roles. Your Slice account and history stay intact.')], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:unlink-confirm').setLabel('Confirm disconnect').setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId('slice:onboarding:unlink-cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary))] });
+    return;
+  }
+  if (action === 'unlink-cancel') {
+    await interaction.update({ embeds: [SliceEmbed.info('Disconnect cancelled', 'Your Slice account remains connected.')], components: [] });
+    return;
+  }
+  if (action === 'unlink-confirm') {
+    await interaction.deferUpdate();
+    const result = await market.unlink(interaction.user.id);
+    if (!result.ok) {
+      await interaction.editReply({ embeds: [SliceEmbed.warning('Disconnect unavailable', result.message)], components: [] });
+      return;
+    }
+    await syncLinkedAccountRoles(interaction, []);
+    await interaction.editReply({ embeds: [SliceEmbed.success('Slice account disconnected', 'Your Slice account and history were not changed.')], components: [] });
+    return;
+  }
+  const handoffs: Partial<Record<string, { destination: SliceDestination; title: string; description: string }>> = { verify: { destination: 'account', title: 'Verify on Slice', description: 'Identity and verification steps are handled only on the official Slice website.' }, 'my-slice': { destination: 'account', title: 'My Slice', description: 'Open Slice to view your account and linked services.' }, marketplace: { destination: 'marketplace', title: 'Marketplace', description: 'Open Slice for current listings and market activity.' }, portfolio: { destination: 'portfolio', title: 'Portfolio', description: 'Open Slice to view your private portfolio.' }, orders: { destination: 'orders', title: 'Orders', description: 'Open Slice to view your private order activity.' }, transactions: { destination: 'transactions', title: 'Transactions', description: 'Open Slice to view your private transaction activity.' }, 'collector-workspace': { destination: 'collector-workspace', title: 'Collector Workspace', description: 'Open Slice to view your collector workspace, if enabled for your account.' }, 'your-actions': { destination: 'your-actions', title: 'Your Actions', description: 'Open Slice to see the collector actions that currently need your attention.' }, membership: { destination: 'membership', title: 'Collector Membership', description: 'Open Slice to view membership and capacity information.' }, list: { destination: 'list', title: 'List an Asset', description: 'Open Slice to start a submission using the current review workflow.' }, 'admin-console': { destination: 'admin-console', title: 'Slice Admin Console', description: 'Open Slice to review authorized operational queues.' } };
+  const handoff = handoffs[action];
+  if (handoff) {
+    const response = links.handoff(handoff.destination);
+    if (!response.available) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Slice unavailable', response.message)] });
+    await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info(handoff.title, handoff.description)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('Open Slice').setStyle(ButtonStyle.Link).setURL(response.url))] });
+    return;
+  }
+  if (action === 'faq') { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Slice FAQ', Object.entries(FAQ).slice(0, 6).map(([key, value]) => `**${key}** — ${value}`).join('\n\n'))] }); return; }
+  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Support', 'Choose a category in #create-a-ticket to open private support.')] });
+}
+
+async function syncLinkedAccountRoles(interaction: ButtonInteraction, sliceRoles: string[]): Promise<void> {
+  if (!interaction.guild) return;
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  if (!member) return;
+  for (const [key, enabled] of [['slice-member', sliceRoles.length > 0], ['collector', sliceRoles.includes('COLLECTOR')]] as const) {
+    const managed = await repository.getResource(interaction.guild.id, 'ROLE', key);
+    if (!managed) continue;
+    if (enabled && !member.roles.cache.has(managed.discordId)) await member.roles.add(managed.discordId, 'Slice account link role sync').catch(() => undefined);
+    if (!enabled && member.roles.cache.has(managed.discordId)) await member.roles.remove(managed.discordId, 'Slice account unlink role sync').catch(() => undefined);
+  }
+}
 function ticketError(message: string) { return { ephemeral: true, embeds: [SliceEmbed.error('Ticket action unavailable', message)] }; }
 function row(id: string, label: string, style: TextInputStyle, required: boolean, maxLength: number): ActionRowBuilder<TextInputBuilder> { return new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(required).setMaxLength(maxLength)); }
 async function start(): Promise<void> { await repository.connect(); health.listen(config.HEALTH_PORT); const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN); const commands = [setupCommand, accountCommand, rolesCommand, faqCommand, supportCommand, ticketCommand, warnCommand, noteCommand, timeoutCommand, untimeoutCommand, banCommand, unbanCommand, modcaseCommand, modhistoryCommand, levelCommand, leaderboardCommand, repCommand, reputationCommand, achievementsCommand, dailyCommand, notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand, cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand, askCommand, helpCommand, summaryCommand, insightsCommand, trendingCommand, aboutCommand, statusCommand, inviteCommand, roadmapCommand, announceCommand, requestCommand, offerCommand].map((command) => command.toJSON()); const route = config.DISCORD_DEV_GUILD_ID ? Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_DEV_GUILD_ID) : Routes.applicationCommands(config.DISCORD_CLIENT_ID); await rest.put(route, { body: commands }); await client.login(config.DISCORD_BOT_TOKEN); }

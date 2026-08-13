@@ -792,6 +792,9 @@ export const mockRepositories: AppRepositories = {
     async beginDiscordLink() {
       throw new ApiError("FEATURE_UNAVAILABLE", "Discord linking requires the authoritative API.");
     },
+    async consumeDiscordBotLink() {
+      throw new ApiError("FEATURE_UNAVAILABLE", "Discord linking requires the authoritative API.");
+    },
     async disconnectDiscordLink() {
       return { disconnected: false };
     },

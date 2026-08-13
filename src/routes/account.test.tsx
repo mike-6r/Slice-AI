@@ -120,6 +120,7 @@ function renderAccount() {
         linkedAt: null,
       }),
       beginDiscordLink: async () => ({ authorizationUrl: "https://discord.com/oauth2/authorize" }),
+      consumeDiscordBotLink: async () => ({ connected: true }),
       disconnectDiscordLink: async () => ({ disconnected: true }),
     },
     providers: {

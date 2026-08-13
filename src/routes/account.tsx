@@ -19,7 +19,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -32,8 +32,10 @@ import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-pr
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "Account Center | Slice" }] }),
-  validateSearch: (search): { sessions?: "all" } =>
-    search.sessions === "all" ? { sessions: "all" } : {},
+  validateSearch: (search): { sessions?: "all"; discordLink?: string } => ({
+    ...(search.sessions === "all" ? { sessions: "all" as const } : {}),
+    ...(typeof search.discordLink === "string" ? { discordLink: search.discordLink } : {}),
+  }),
   component: AccountPageForTest,
 });
 
@@ -54,7 +56,7 @@ const date = (value: string | null | undefined) =>
     : "Not available";
 
 export function AccountPageForTest() {
-  const { sessions: sessionsView } = Route.useSearch();
+  const { sessions: sessionsView, discordLink } = Route.useSearch();
   const { isAuthenticated } = useSession();
   const services = useAppServices();
   const client = useQueryClient();
@@ -119,6 +121,19 @@ export function AccountPageForTest() {
     queryFn: services.repositories.users.getDiscordLink,
     enabled,
   });
+  const consumeDiscordLink = useMutation({
+    mutationFn: services.repositories.users.consumeDiscordBotLink,
+    onSuccess: () => {
+      refresh();
+      globalThis.history.replaceState({}, "", "/account");
+    },
+  });
+  const [consumedChallenge, setConsumedChallenge] = useState<string | null>(null);
+  useEffect(() => {
+    if (!discordLink || discordLink === consumedChallenge) return;
+    setConsumedChallenge(discordLink);
+    void consumeDiscordLink.mutateAsync(discordLink).catch(() => undefined);
+  }, [consumeDiscordLink, consumedChallenge, discordLink]);
   const refresh = () => void client.invalidateQueries({ queryKey: ["account"] });
   const showAllSessions = sessionsView === "all";
 
@@ -184,7 +199,13 @@ export function AccountPageForTest() {
               <SecurityPanel email={email} phone={phone} twoFactor={twoFactor} refresh={refresh} />
               <AccountAccessPanel query={capabilities} />
               <SessionsPanel sessions={sessions} refresh={refresh} showAll={showAllSessions} />
-              <LinkedPanel banks={banks} discord={discord} refresh={refresh} />
+              <LinkedPanel
+                banks={banks}
+                discord={discord}
+                refresh={refresh}
+                botLinkError={consumeDiscordLink.error}
+                botLinkPending={consumeDiscordLink.isPending}
+              />
               <PreferencesPanel query={preferences} refresh={refresh} />
               <NotificationPreferencesPanel query={notificationPreferences} refresh={refresh} />
               <ActivityPanel query={activity} />
@@ -1051,10 +1072,14 @@ function LinkedPanel({
   banks,
   discord,
   refresh,
+  botLinkError,
+  botLinkPending,
 }: {
   banks: UseQueryResult<BankConnection[], Error>;
   discord: UseQueryResult<DiscordLink, Error>;
   refresh: () => void;
+  botLinkError: unknown;
+  botLinkPending: boolean;
 }) {
   const { repositories } = useAppServices();
   const disconnect = useMutation({
@@ -1124,6 +1149,15 @@ function LinkedPanel({
             </button>
           )}
         </div>
+        {botLinkPending ? <small>Connecting your Discord account securely…</small> : null}
+        {botLinkError ? (
+          <small className="account-form-error">
+            {errorCopy(
+              botLinkError,
+              "This Discord link could not be completed. Return to Discord and try again.",
+            )}
+          </small>
+        ) : null}
       </div>
     </Panel>
   );
