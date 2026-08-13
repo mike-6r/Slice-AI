@@ -4,14 +4,11 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  BanknoteArrowDown,
   ChartNoAxesCombined,
   CircleGauge,
   Clock3,
   Landmark,
   Layers3,
-  ListOrdered,
-  LockKeyhole,
   RefreshCw,
   WalletCards,
   type LucideIcon,
@@ -38,7 +35,6 @@ import {
   PORTFOLIO_EMPTY_STATES,
   PORTFOLIO_ERROR_STATES,
   deriveCategoryAllocation,
-  deriveHoldingAllocation,
   deriveHoldingValuation,
   derivePortfolioValuationSnapshot,
   formatPortfolioMoney,
@@ -117,54 +113,53 @@ export function Portfolio() {
     (summary.error instanceof ApiError && summary.error.status === 401);
   if (authRequired) return <PortfolioAccessRequired />;
 
+  const holdingsForOrders = holdings.data ?? summary.data?.holdings ?? [];
+
   return (
     <main className="portfolio-page portfolio-page--approved">
       <div className="page-shell portfolio-shell">
         <PortfolioHeading query={summary} />
         <PortfolioTabs active={tab} />
         <PortfolioKpis query={summary} />
-        {tab === "orders" ? <PortfolioOrdersSection query={orders} /> : null}
-        <section
-          className={`portfolio-workspace-grid${tab === "orders" ? " sr-only" : ""}`}
-          aria-label="Portfolio holdings workspace"
-        >
-          <div className="portfolio-workspace-grid__main">
-            <PortfolioPerformancePanel
-              query={summary}
-              performance={performance}
-              range={performanceRange}
-              onRangeChange={setPerformanceRange}
-            />
-            <HoldingsPanel
-              summary={summary}
-              query={holdings}
-              categories={categories}
-              filter={holdingFilter}
-              onFilterChange={setHoldingFilter}
-              visibleHoldings={visibleHoldings}
-            />
-          </div>
-          <aside className="portfolio-workspace-grid__side" aria-label="Portfolio account summary">
-            <AllocationPanel query={summary} />
-            <CurrentPerformancePanel query={summary} performance={performance} />
-            <PortfolioBreakdownPanel query={summary} />
-            <OpenOrdersPanel summary={summary} query={orders} />
-          </aside>
-        </section>
-        <section
-          className={`portfolio-activity-grid${tab === "activity" || tab === "overview" ? "" : " sr-only"}`}
-          aria-label="Portfolio activity and transactions"
-        >
+        {tab === "overview" ? (
+          <>
+            <section className="portfolio-overview-content" aria-label="Portfolio overview">
+              <HoldingsPanel
+                summary={summary}
+                query={holdings}
+                categories={categories}
+                filter={holdingFilter}
+                onFilterChange={setHoldingFilter}
+                visibleHoldings={visibleHoldings?.slice(0, 5)}
+                compact
+              />
+              <PortfolioPerformancePanel
+                query={summary}
+                performance={performance}
+                range={performanceRange}
+                onRangeChange={setPerformanceRange}
+              />
+              <AllocationPanel query={summary} />
+            </section>
+            <section className="portfolio-overview-bottom" aria-label="Recent portfolio updates">
+              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+              <ActivityPanel query={transactions} compact />
+            </section>
+          </>
+        ) : tab === "holdings" ? (
+          <HoldingsPanel
+            summary={summary}
+            query={holdings}
+            categories={categories}
+            filter={holdingFilter}
+            onFilterChange={setHoldingFilter}
+            visibleHoldings={visibleHoldings}
+          />
+        ) : tab === "orders" ? (
+          <PortfolioOrdersSection query={orders} holdings={holdingsForOrders} />
+        ) : (
           <ActivityPanel query={transactions} />
-          <TransactionsPanel query={transactions} />
-        </section>
-        <section
-          className={`portfolio-insights-grid${tab === "overview" ? "" : " sr-only"}`}
-          aria-label="Portfolio insights"
-        >
-          <TopHoldingPanel query={summary} />
-          <PortfolioInsightsPanel query={summary} />
-        </section>
+        )}
       </div>
     </main>
   );
@@ -202,10 +197,21 @@ function PortfolioTabs({ active }: { active: PortfolioTab }) {
   );
 }
 
-function PortfolioOrdersSection({ query }: { query: UseQueryResult<TradingOrderPage> }) {
+function PortfolioOrdersSection({
+  query,
+  holdings,
+}: {
+  query: UseQueryResult<TradingOrderPage>;
+  holdings: PortfolioHolding[];
+}) {
   const items = query.data?.items ?? [];
+  const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
   return (
-    <PortfolioPanel title="Orders" className="mb-6">
+    <PortfolioPanel
+      title="Orders"
+      className="portfolio-orders-page"
+      header={<span className="portfolio-panel__status">Your trading activity</span>}
+    >
       {query.isLoading ? (
         <RowsSkeleton rows={4} />
       ) : query.isError ? (
@@ -215,40 +221,134 @@ function PortfolioOrdersSection({ query }: { query: UseQueryResult<TradingOrderP
           No orders yet. Orders you place will appear here.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
+        <div className="portfolio-orders-table-wrap">
+          <table className="portfolio-orders-table">
             <thead className="text-xs uppercase tracking-[0.12em] text-muted">
               <tr>
-                <th className="px-3 py-3 font-semibold">Order</th>
-                <th className="px-3 py-3 font-semibold">Side</th>
-                <th className="px-3 py-3 font-semibold">Shares</th>
-                <th className="px-3 py-3 font-semibold">Status</th>
-                <th className="px-3 py-3 font-semibold">Created</th>
+                <th>Asset</th>
+                <th>Side</th>
+                <th>Ownership</th>
+                <th>Quantity</th>
+                <th>Price per Slice</th>
+                <th>Status</th>
+                <th>Created</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {items.map((order) => (
                 <tr key={order.id}>
-                  <td className="max-w-[260px] truncate px-3 py-4 font-semibold text-foreground">
-                    {order.assetSlug ?? order.assetId}
+                  <td>
+                    <OrderAssetIdentity order={order} holding={holdingByAsset.get(order.assetId)} />
                   </td>
-                  <td
-                    className={
-                      order.side === "BUY" ? "px-3 py-4 text-positive" : "px-3 py-4 text-negative"
-                    }
-                  >
-                    {order.side}
+                  <td className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</td>
+                  <td>
+                    {order.requestedOwnershipPercent
+                      ? `${order.requestedOwnershipPercent}% requested`
+                      : "Ownership unavailable"}
+                    {order.filledOwnershipPercent ? (
+                      <small>{order.filledOwnershipPercent}% filled</small>
+                    ) : null}
                   </td>
-                  <td className="px-3 py-4 text-subtle">
-                    {order.filledUnits} / {order.originalUnits}
+                  <td>
+                    <strong>{order.filledUnits}</strong>
+                    <small>of {order.originalUnits} units</small>
                   </td>
-                  <td className="px-3 py-4 text-subtle">{formatPortfolioOrderStatus(order)}</td>
-                  <td className="px-3 py-4 text-subtle">{formatDateTime(order.createdAt)}</td>
+                  <td>{formatPortfolioMoney(order.limitPriceMinor)}</td>
+                  <td>
+                    <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+                      {formatPortfolioOrderStatus(order)}
+                    </span>
+                  </td>
+                  <td>{formatDateTime(order.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+    </PortfolioPanel>
+  );
+}
+
+function OrderAssetIdentity({
+  order,
+  holding,
+}: {
+  order: TradingOrderView;
+  holding?: PortfolioHolding;
+}) {
+  const slug = holding?.slug ?? order.assetSlug;
+  const media = slug ? assetShowcaseMedia(slug) : undefined;
+  const content = (
+    <>
+      <span className="portfolio-order-asset__icon" aria-hidden="true">
+        {media ? <img src={media.src} alt="" /> : <Landmark />}
+      </span>
+      <span className="portfolio-order-asset__copy">
+        <strong>
+          {holdingDisplayLabel(holding ?? ({ title: order.assetSlug, slug } as PortfolioHolding))}
+        </strong>
+        <small>
+          {[holding?.category, holding?.grade].filter(Boolean).join(" · ") || "Collectible"}
+        </small>
+      </span>
+    </>
+  );
+  return slug ? (
+    <Link to="/asset/$id" params={{ id: slug }} className="portfolio-order-asset">
+      {content}
+    </Link>
+  ) : (
+    <div className="portfolio-order-asset">{content}</div>
+  );
+}
+
+function RecentOrdersPanel({
+  query,
+  holdings,
+}: {
+  query: UseQueryResult<TradingOrderPage>;
+  holdings: PortfolioHolding[];
+}) {
+  const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
+  const items = (query.data?.items ?? []).slice(0, 4);
+  return (
+    <PortfolioPanel
+      title="Recent orders"
+      className="portfolio-panel--recent-orders"
+      header={
+        <Link to="/portfolio" search={{ tab: "orders" }} className="portfolio-panel__link">
+          View all orders <ArrowRight aria-hidden="true" />
+        </Link>
+      }
+    >
+      {query.isLoading ? (
+        <RowsSkeleton rows={3} />
+      ) : query.isError ? (
+        <PanelError message="Unable to load orders." retry={() => void query.refetch()} />
+      ) : items.length ? (
+        <div className="portfolio-recent-orders">
+          {items.map((order) => {
+            const holding = holdingByAsset.get(order.assetId);
+            return (
+              <div key={order.id} className="portfolio-recent-order">
+                <OrderAssetIdentity order={order} holding={holding} />
+                <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</span>
+                <span>
+                  {order.requestedOwnershipPercent
+                    ? `${order.requestedOwnershipPercent}%`
+                    : `${order.originalUnits} units`}
+                </span>
+                <span>{formatPortfolioMoney(order.limitPriceMinor)}</span>
+                <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+                  {formatPortfolioOrderStatus(order)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <PanelEmpty message="You don't have any recent orders." />
       )}
     </PortfolioPanel>
   );
@@ -308,7 +408,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         icon={Layers3}
         detail={
           summary.valuationStatus === "FULL"
-            ? "Current account value"
+            ? "Total account value"
             : valuationDescription(summary.valuationStatus)
         }
       />
@@ -316,7 +416,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         label="Available cash"
         value={formatPortfolioMoney(summary.cash.availableMinor)}
         icon={WalletCards}
-        detail="Available to place eligible orders"
+        detail="Available to invest"
       />
       <PortfolioKpi
         label="Holdings value"
@@ -326,16 +426,10 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
             : formatPortfolioMoney(summary.estimatedHoldingsValueMinor)
         }
         icon={Landmark}
-        detail={`${summary.holdings.length} current marked position${summary.holdings.length === 1 ? "" : "s"}`}
+        detail={`Across ${summary.holdings.length} position${summary.holdings.length === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
-        label="Invested cost"
-        value={valuation ? formatPortfolioMoney(valuation.investedCostMinor) : "Unavailable"}
-        icon={BanknoteArrowDown}
-        detail={valuation ? "Open-position cost basis" : "Cost basis is not complete"}
-      />
-      <PortfolioKpi
-        label="Unrealised gain/loss"
+        label="Unrealised P/L"
         value={
           valuation ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor) : "Unavailable"
         }
@@ -349,7 +443,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         }
         detail={
           unrealisedPercent === null
-            ? "Marked value less open cost"
+            ? "Compared with open cost"
             : `${unrealisedPercent} vs. open cost`
         }
       />
@@ -360,7 +454,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 function KpiSkeletons() {
   return (
     <section className="portfolio-kpis" aria-label="Loading portfolio summary">
-      {[0, 1, 2, 3, 4].map((item) => (
+      {[0, 1, 2, 3].map((item) => (
         <article key={item} className="portfolio-summary-kpi portfolio-summary-kpi--loading">
           <div className="customer-skeleton size-11" />
           <div className="min-w-0 flex-1">
@@ -644,6 +738,7 @@ function HoldingsPanel({
   filter,
   onFilterChange,
   visibleHoldings,
+  compact = false,
 }: {
   summary: UseQueryResult<PortfolioSummary>;
   query: UseQueryResult<PortfolioHolding[]>;
@@ -651,6 +746,7 @@ function HoldingsPanel({
   filter: HoldingFilter;
   onFilterChange: (filter: HoldingFilter) => void;
   visibleHoldings: PortfolioHolding[] | undefined;
+  compact?: boolean;
 }) {
   return (
     <PortfolioPanel
@@ -658,35 +754,43 @@ function HoldingsPanel({
       className="portfolio-panel--holdings"
       header={
         <div className="portfolio-holdings-header">
-          <div className="portfolio-holding-filters" role="tablist" aria-label="Filter holdings">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={filter === "ALL"}
-              className={filter === "ALL" ? "is-active" : ""}
-              onClick={() => onFilterChange("ALL")}
-            >
-              All holdings
-            </button>
-            {categories.map((category) => (
+          {!compact ? (
+            <div className="portfolio-holding-filters" role="tablist" aria-label="Filter holdings">
               <button
-                key={category}
                 type="button"
                 role="tab"
-                aria-selected={filter === category}
-                className={filter === category ? "is-active" : ""}
-                onClick={() => onFilterChange(category)}
+                aria-selected={filter === "ALL"}
+                className={filter === "ALL" ? "is-active" : ""}
+                onClick={() => onFilterChange("ALL")}
               >
-                {category}
+                All holdings
               </button>
-            ))}
-          </div>
-          <span className="portfolio-market-freshness">
-            Market values updated{" "}
-            {query.data?.[0]?.valuationAsOf
-              ? formatDateTime(query.data[0].valuationAsOf)
-              : "when marks are available"}
-          </span>
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === category}
+                  className={filter === category ? "is-active" : ""}
+                  onClick={() => onFilterChange(category)}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Link to="/portfolio" search={{ tab: "holdings" }} className="portfolio-panel__link">
+              View all holdings <ArrowRight aria-hidden="true" />
+            </Link>
+          )}
+          {!compact ? (
+            <span className="portfolio-market-freshness">
+              Market values updated{" "}
+              {query.data?.[0]?.valuationAsOf
+                ? formatDateTime(query.data[0].valuationAsOf)
+                : "when marks are available"}
+            </span>
+          ) : null}
         </div>
       }
     >
@@ -700,24 +804,18 @@ function HoldingsPanel({
             <thead>
               <tr>
                 <th>Asset</th>
-                <th>Ownership / units</th>
-                <th>Avg. cost</th>
+                <th>Ownership</th>
+                <th>Available</th>
+                <th>Price per Slice</th>
                 <th>Current value</th>
-                <th>Allocation</th>
-                <th>Unrealised P/L</th>
+                <th>P/L (unrealised)</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {visibleHoldings?.length ? (
                 visibleHoldings.map((holding) => (
-                  <HoldingRow
-                    key={holding.assetId}
-                    holding={holding}
-                    allocation={
-                      summary.data ? allocationForHolding(summary.data, holding.assetId) : null
-                    }
-                  />
+                  <HoldingRow key={holding.assetId} holding={holding} />
                 ))
               ) : (
                 <tr className="portfolio-table__empty-row">
@@ -743,15 +841,12 @@ function HoldingsPanel({
   );
 }
 
-function HoldingRow({
-  holding,
-  allocation,
-}: {
-  holding: PortfolioHolding;
-  allocation: string | null;
-}) {
+function HoldingRow({ holding }: { holding: PortfolioHolding }) {
   const valuation = deriveHoldingValuation(holding);
-  const averageCost = averageUnitCost(holding);
+  const currentSlicePrice =
+    holding.estimatedValueMinor && BigInt(holding.ownedUnits) > 0n
+      ? (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString()
+      : null;
   return (
     <tr>
       <td data-label="Asset">
@@ -769,35 +864,36 @@ function HoldingRow({
           </div>
         )}
       </td>
-      <td data-label="Qty / shares">
+      <td data-label="Ownership">
         <span className="portfolio-table__quantity">
           <strong>
             {holding.totalUnits
-              ? `${ownershipPercent(holding.ownedUnits, holding.totalUnits)}% owned`
+              ? `${ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
               : "Ownership unavailable"}
           </strong>
-          <strong>{holding.ownedUnits}</strong>
-          {holding.totalUnits ? (
-            <small>
-              {holding.issuedUnits
-                ? `${ownershipPercent(holding.issuedUnits, holding.totalUnits)}% sold · ${ownershipPercent((BigInt(holding.totalUnits) - BigInt(holding.issuedUnits)).toString(), holding.totalUnits)}% available`
-                : "Availability unavailable"}
-            </small>
-          ) : null}
-          <small>
-            {holding.availableUnits} available · {holding.reservedUnits} reserved
-          </small>
+          <small>{holding.ownedUnits} units owned</small>
         </span>
       </td>
-      <td data-label="Avg. cost">{averageCost ?? "Unavailable"}</td>
+      <td data-label="Available">
+        <span className="portfolio-table__quantity">
+          <strong>
+            {holding.totalUnits
+              ? `${ownershipPercent(holding.availableUnits, holding.totalUnits)}%`
+              : "Unavailable"}
+          </strong>
+          <small>{holding.availableUnits} units available</small>
+        </span>
+      </td>
+      <td data-label="Price per Slice">
+        {currentSlicePrice ? formatPortfolioMoney(currentSlicePrice) : "Unavailable"}
+      </td>
       <td data-label="Current value">
         {holding.estimatedValueMinor
           ? formatPortfolioMoney(holding.estimatedValueMinor)
           : "Unavailable"}
       </td>
-      <td data-label="Allocation">{allocation ?? "Unavailable"}</td>
       <td
-        data-label="Unrealised P/L"
+        data-label="P/L (unrealised)"
         className={
           valuation && BigInt(valuation.unrealisedValueMinor) < 0n ? "is-debit" : "is-credit"
         }
@@ -846,167 +942,26 @@ function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
   );
 }
 
-function CurrentPerformancePanel({
+function ActivityPanel({
   query,
-  performance,
+  compact = false,
 }: {
-  query: UseQueryResult<PortfolioSummary>;
-  performance: UseQueryResult<PortfolioPerformance>;
+  query: UseQueryResult<{ items: PortfolioTransaction[] }>;
+  compact?: boolean;
 }) {
-  const valuation = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
-  return (
-    <PortfolioPanel title="Current performance" className="portfolio-panel--current-performance">
-      {query.isLoading ? (
-        <RowsSkeleton rows={3} />
-      ) : query.isError ? (
-        <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
-      ) : valuation ? (
-        <>
-          <dl className="portfolio-performance-snapshot">
-            <div>
-              <dt>Market value</dt>
-              <dd>{formatPortfolioMoney(valuation.holdingsValueMinor)}</dd>
-            </div>
-            <div>
-              <dt>Open position cost</dt>
-              <dd>{formatPortfolioMoney(valuation.investedCostMinor)}</dd>
-            </div>
-            <div>
-              <dt>Unrealised change</dt>
-              <dd
-                className={BigInt(valuation.unrealisedValueMinor) >= 0n ? "is-credit" : "is-debit"}
-              >
-                {formatSignedPortfolioMoney(valuation.unrealisedValueMinor)}
-              </dd>
-            </div>
-          </dl>
-          <p className="portfolio-performance-note">
-            {performance.data?.periodChangeMinor === null ||
-            performance.data?.periodChangeMinor === undefined
-              ? "Performance will appear as market and trading history is recorded."
-              : `${performance.data.direction === "POSITIVE" ? "+" : performance.data.direction === "NEGATIVE" ? "" : ""}${formatSignedPortfolioMoney(performance.data.periodChangeMinor)} over ${performance.data.range}.`}
-          </p>
-        </>
-      ) : (
-        <PortfolioEmptyState
-          icon={<ChartNoAxesCombined aria-hidden="true" />}
-          message={PORTFOLIO_EMPTY_STATES.performance}
-          detail="Current marked value and open cost will appear once every holding has supported data."
-        />
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function PortfolioBreakdownPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
-  const summary = query.data;
-  const total = summary?.estimatedPortfolioValueMinor ?? null;
-  const collectibles = summary?.estimatedHoldingsValueMinor ?? null;
-  return (
-    <PortfolioPanel title="Portfolio breakdown" className="portfolio-panel--breakdown">
-      {query.isLoading ? (
-        <RowsSkeleton rows={4} />
-      ) : query.isError || !summary ? (
-        <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
-      ) : (
-        <dl className="portfolio-breakdown">
-          <BreakdownRow label="Available cash" value={summary.cash.availableMinor} total={total} />
-          <BreakdownRow label="Collectibles" value={collectibles} total={total} />
-          <BreakdownRow
-            label="Reserved for orders"
-            value={summary.cash.reservedMinor}
-            total={total}
-          />
-          <BreakdownRow label="Total" value={total} total={total} totalRow />
-        </dl>
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function BreakdownRow({
-  label,
-  value,
-  total,
-  totalRow = false,
-}: {
-  label: string;
-  value: string | null;
-  total: string | null;
-  totalRow?: boolean;
-}) {
-  return (
-    <div className={totalRow ? "portfolio-breakdown__total" : undefined}>
-      <dt>{label}</dt>
-      <dd>{value === null ? "Unavailable" : formatPortfolioMoney(value)}</dd>
-      <small>
-        {totalRow
-          ? "100%"
-          : value === null || total === null
-            ? "Unavailable"
-            : (percentageOf(value, total) ?? "Unavailable")}
-      </small>
-    </div>
-  );
-}
-
-function OpenOrdersPanel({
-  summary,
-  query,
-}: {
-  summary: UseQueryResult<PortfolioSummary>;
-  query: UseQueryResult<TradingOrderPage>;
-}) {
-  const openOrders =
-    query.data?.items.filter(
-      (order) => order.status === "OPEN" || order.status === "PARTIALLY_FILLED",
-    ) ?? [];
-  const reservedShares =
-    summary.data?.holdings.reduce((total, holding) => total + BigInt(holding.reservedUnits), 0n) ??
-    null;
-  return (
-    <PortfolioPanel
-      title="Open orders / reserved cash"
-      className="portfolio-panel--open-orders"
-      header={
-        <Link to="/portfolio" search={{ tab: "orders" }}>
-          View orders <ArrowRight aria-hidden="true" />
-        </Link>
-      }
-    >
-      {query.isLoading || summary.isLoading ? (
-        <RowsSkeleton rows={3} />
-      ) : query.isError || !summary.data ? (
-        <PanelError
-          message="Unable to load open order summary."
-          retry={() => void query.refetch()}
-        />
-      ) : (
-        <dl className="portfolio-open-orders">
-          <div>
-            <dt>Open orders</dt>
-            <dd>{query.isError ? "Unavailable" : String(openOrders.length)}</dd>
-          </div>
-          <div>
-            <dt>Reserved cash</dt>
-            <dd>{formatPortfolioMoney(summary.data.cash.reservedMinor)}</dd>
-          </div>
-          <div>
-            <dt>Reserved shares</dt>
-            <dd>{reservedShares === null ? "Unavailable" : reservedShares.toString()}</dd>
-          </div>
-        </dl>
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function ActivityPanel({ query }: { query: UseQueryResult<{ items: PortfolioTransaction[] }> }) {
   return (
     <PortfolioPanel
       title="Recent activity"
       className="portfolio-panel--activity"
-      header={<span className="portfolio-panel__status">Account events</span>}
+      header={
+        compact ? (
+          <Link to="/portfolio" search={{ tab: "activity" }} className="portfolio-panel__link">
+            View all activity <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className="portfolio-panel__status">Account events</span>
+        )
+      }
     >
       {query.isLoading ? (
         <RowsSkeleton rows={4} />
@@ -1017,7 +972,7 @@ function ActivityPanel({ query }: { query: UseQueryResult<{ items: PortfolioTran
         />
       ) : query.data?.items.length ? (
         <ul className="portfolio-activity">
-          {query.data.items.map((item, index) => (
+          {query.data.items.slice(0, compact ? 3 : undefined).map((item, index) => (
             <li key={`${item.reference ?? item.type}-${item.effectiveAt}-${index}`}>
               <span
                 className={item.side === "CREDIT" ? "is-credit" : "is-debit"}
@@ -1040,127 +995,6 @@ function ActivityPanel({ query }: { query: UseQueryResult<{ items: PortfolioTran
         </ul>
       ) : (
         <PanelEmpty message="No recent activity." />
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function TransactionsPanel({
-  query,
-}: {
-  query: UseQueryResult<{ items: PortfolioTransaction[] }>;
-}) {
-  return (
-    <PortfolioPanel
-      title="Recent transactions"
-      className="portfolio-panel--transactions"
-      header={<span className="portfolio-panel__status">Authoritative ledger</span>}
-    >
-      {query.isLoading ? (
-        <RowsSkeleton rows={5} />
-      ) : query.isError ? (
-        <PanelError
-          message={PORTFOLIO_ERROR_STATES.transactions}
-          retry={() => void query.refetch()}
-        />
-      ) : query.data?.items.length ? (
-        <div className="portfolio-transactions-table">
-          {query.data.items.map((item, index) => (
-            <div key={`${item.reference ?? item.type}-${item.effectiveAt}-${index}`}>
-              <span className={`portfolio-transaction-pill is-${item.side.toLowerCase()}`}>
-                {transactionLabel(item)}
-              </span>
-              <p>{transactionDetail(item)}</p>
-              <strong className={item.side === "CREDIT" ? "is-credit" : "is-debit"}>
-                {formatTransactionMoney(item)}
-              </strong>
-              <time dateTime={item.effectiveAt}>{formatDate(item.effectiveAt)}</time>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <PanelEmpty message={PORTFOLIO_EMPTY_STATES.transactions} />
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function TopHoldingPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
-  const topHolding = query.data ? highestMarkedHolding(query.data) : null;
-  return (
-    <PortfolioPanel title="Top holding" className="portfolio-panel--top-holding">
-      {query.isLoading ? (
-        <RowsSkeleton rows={2} />
-      ) : query.isError ? (
-        <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
-      ) : topHolding ? (
-        <div className="portfolio-top-holding">
-          {topHolding.slug ? (
-            <Link to="/asset/$id" params={{ id: topHolding.slug }} className="portfolio-asset">
-              <HoldingIdentity holding={topHolding} />
-            </Link>
-          ) : (
-            <div className="portfolio-asset">
-              <HoldingIdentity holding={topHolding} />
-            </div>
-          )}
-          <div>
-            <span>Current value</span>
-            <strong>{formatPortfolioMoney(topHolding.estimatedValueMinor as string)}</strong>
-            <small>
-              {query.data
-                ? (allocationForHolding(query.data, topHolding.assetId) ?? "Allocation unavailable")
-                : "Allocation unavailable"}
-            </small>
-          </div>
-          {topHolding.slug ? (
-            <Link
-              to="/asset/$id"
-              params={{ id: topHolding.slug }}
-              className="portfolio-top-holding__action"
-            >
-              View asset <ArrowRight aria-hidden="true" />
-            </Link>
-          ) : null}
-        </div>
-      ) : (
-        <PanelEmpty message="No marked holdings yet." />
-      )}
-    </PortfolioPanel>
-  );
-}
-
-function PortfolioInsightsPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
-  const summary = query.data;
-  const categories = summary
-    ? new Set(summary.holdings.map((holding) => holding.category).filter(Boolean)).size
-    : 0;
-  const reservedPositions =
-    summary?.holdings.filter((holding) => BigInt(holding.reservedUnits) > 0n).length ?? 0;
-  return (
-    <PortfolioPanel title="Portfolio insights" className="portfolio-panel--insights">
-      {query.isLoading ? (
-        <RowsSkeleton rows={3} />
-      ) : query.isError || !summary ? (
-        <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
-      ) : (
-        <dl className="portfolio-insights">
-          <div>
-            <dt>Held assets</dt>
-            <dd>{summary.holdings.length}</dd>
-            <small>Current positions</small>
-          </div>
-          <div>
-            <dt>Categories</dt>
-            <dd>{categories}</dd>
-            <small>Represented in your holdings</small>
-          </div>
-          <div>
-            <dt>Positions reserved</dt>
-            <dd>{reservedPositions}</dd>
-            <small>With shares reserved for open orders</small>
-          </div>
-        </dl>
       )}
     </PortfolioPanel>
   );
@@ -1285,27 +1119,6 @@ function allocationGradient(bps: number[]) {
       return result;
     })
     .join(", ")})`;
-}
-function allocationForHolding(summary: PortfolioSummary, assetId: string) {
-  const row = deriveHoldingAllocation(summary)?.find((item) => item.assetId === assetId);
-  return row ? formatBps(row.percentageBps) : null;
-}
-function averageUnitCost(holding: PortfolioHolding) {
-  if (holding.costBasisMinor === null || BigInt(holding.ownedUnits) <= 0n) return null;
-  return formatPortfolioMoney(
-    (BigInt(holding.costBasisMinor) / BigInt(holding.ownedUnits)).toString(),
-  );
-}
-function highestMarkedHolding(summary: PortfolioSummary) {
-  return summary.holdings.reduce<PortfolioHolding | null>((highest, holding) => {
-    if (holding.estimatedValueMinor === null) return highest;
-    if (
-      !highest ||
-      BigInt(holding.estimatedValueMinor) > BigInt(highest.estimatedValueMinor as string)
-    )
-      return holding;
-    return highest;
-  }, null);
 }
 function percentageOf(value: string, total: string) {
   const numerator = BigInt(value);

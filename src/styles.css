@@ -2248,6 +2248,121 @@ body:has(.collectors-page) .site-shell {
   }
 }
 
+/* Portfolio redesign composition: customer-readable hierarchy with four KPIs,
+   holdings first, and distinct tab content. */
+.portfolio-page--approved .portfolio-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.portfolio-page--approved .portfolio-kpi__content strong { font-size: clamp(1.35rem, 2.1vw, 1.85rem); }
+.portfolio-page--approved .portfolio-kpi__content p { font-size: 0.7rem; }
+.portfolio-page--approved .portfolio-kpi__content span { font-size: 0.62rem; }
+.portfolio-overview-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(16rem, 0.95fr) minmax(15rem, 0.9fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  align-items: stretch;
+}
+.portfolio-overview-content > .portfolio-panel--holdings { grid-row: span 1; }
+.portfolio-overview-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.portfolio-panel__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #2addad;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.portfolio-panel__link svg { width: 0.78rem; height: 0.78rem; }
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel { min-height: 21rem; }
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel--holdings { min-width: 0; }
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel--hero-performance,
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel--allocation { min-width: 0; }
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel__head h2,
+.portfolio-page--approved .portfolio-overview-bottom .portfolio-panel__head h2 { font-size: 0.98rem; }
+.portfolio-page--approved .portfolio-overview-content .portfolio-panel__body { padding-inline: 0.8rem; }
+.portfolio-page--approved .portfolio-table--holdings { font-size: 0.73rem; }
+.portfolio-page--approved .portfolio-table--holdings th { font-size: 0.6rem; padding-inline: 0.3rem; }
+.portfolio-page--approved .portfolio-table--holdings td { padding: 0.72rem 0.3rem; }
+.portfolio-page--approved .portfolio-table--holdings th:first-child,
+.portfolio-page--approved .portfolio-table--holdings td:first-child { width: 35%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(2),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(2) { width: 13%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(3),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(3) { width: 12%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(4),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(4) { width: 13%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(5),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(5) { width: 13%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(6),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(6) { width: 12%; }
+.portfolio-page--approved .portfolio-table--holdings th:nth-child(7),
+.portfolio-page--approved .portfolio-table--holdings td:nth-child(7) { width: 9%; }
+.portfolio-page--approved .portfolio-asset__icon { flex-basis: 2.8rem; width: 2.8rem; height: 3.2rem; }
+.portfolio-page--approved .portfolio-asset__copy strong { font-size: 0.74rem; }
+.portfolio-page--approved .portfolio-asset__copy small { font-size: 0.6rem; }
+.portfolio-page--approved .portfolio-table__quantity strong { font-size: 0.74rem; }
+.portfolio-page--approved .portfolio-table__quantity small { font-size: 0.58rem; }
+.portfolio-page--approved .portfolio-panel--recent-orders,
+.portfolio-page--approved .portfolio-panel--activity { min-height: 15rem; }
+.portfolio-recent-orders { display: grid; }
+.portfolio-recent-order {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1.7fr) 3rem 5.3rem 5.5rem 7rem;
+  min-width: 0;
+  gap: 0.65rem;
+  align-items: center;
+  border-top: 1px solid rgba(158,174,194,0.1);
+  padding: 0.62rem 0;
+  color: #a7b3bd;
+  font-size: 0.64rem;
+}
+.portfolio-recent-order:first-child { border-top: 0; }
+.portfolio-order-asset { display: flex; min-width: 0; align-items: center; gap: 0.5rem; color: inherit; }
+.portfolio-order-asset__icon { display: grid; flex: 0 0 1.8rem; width: 1.8rem; height: 2.3rem; place-items: center; overflow: hidden; border: 1px solid rgba(158,174,194,0.18); border-radius: 0.28rem; background: #0b1117; }
+.portfolio-order-asset__icon img { width: 100%; height: 100%; object-fit: contain; }
+.portfolio-order-asset__icon svg { width: 0.9rem; color: #2addad; }
+.portfolio-order-asset__copy { min-width: 0; }
+.portfolio-order-asset__copy strong { display: block; overflow: hidden; color: #e6eeec; font-size: 0.67rem; text-overflow: ellipsis; white-space: nowrap; }
+.portfolio-order-asset__copy small { display: block; overflow: hidden; margin-top: 0.12rem; color: #83919f; font-size: 0.56rem; text-overflow: ellipsis; white-space: nowrap; }
+.portfolio-recent-order > .is-buy,.portfolio-orders-table .is-buy { color: #2addad; font-weight: 750; }
+.portfolio-recent-order > .is-sell,.portfolio-orders-table .is-sell { color: #ff8089; font-weight: 750; }
+.portfolio-order-status { display: inline-flex; width: fit-content; border: 1px solid rgba(158,174,194,0.25); border-radius: 0.3rem; padding: 0.24rem 0.4rem; color: #b5c0c8; font-size: 0.58rem; font-weight: 700; white-space: nowrap; }
+.portfolio-order-status.is-filled { border-color: rgba(42,221,173,0.45); background: rgba(42,221,173,0.1); color: #2addad; }
+.portfolio-order-status.is-open,.portfolio-order-status.is-partially_filled { border-color: rgba(244,188,40,0.35); color: #f4bc28; }
+.portfolio-order-status.is-cancelled,.portfolio-order-status.is-rejected { border-color: rgba(255,128,137,0.35); color: #ff8089; }
+.portfolio-orders-page { margin-top: 0.75rem; }
+.portfolio-orders-table-wrap { overflow-x: auto; }
+.portfolio-orders-table { width: 100%; min-width: 52rem; border-collapse: collapse; table-layout: fixed; font-size: 0.73rem; }
+.portfolio-orders-table th { padding: 0.6rem 0.45rem; color: #84939f; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; text-align: left; text-transform: uppercase; }
+.portfolio-orders-table td { min-width: 0; border-top: 1px solid rgba(158,174,194,0.1); padding: 0.72rem 0.45rem; color: #b5c0c8; vertical-align: middle; }
+.portfolio-orders-table td small { display: block; margin-top: 0.17rem; color: #84939f; font-size: 0.57rem; }
+.portfolio-orders-table td:nth-child(1) { width: 28%; }
+.portfolio-orders-table td:nth-child(3) { width: 14%; }
+.portfolio-orders-table td:nth-child(4) { width: 12%; }
+.portfolio-orders-table td:nth-child(5) { width: 14%; }
+.portfolio-orders-table td:nth-child(6) { width: 14%; }
+@media (max-width: 1100px) {
+  .portfolio-overview-content { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .portfolio-overview-content > .portfolio-panel--holdings { grid-column: 1 / -1; }
+  .portfolio-page--approved .portfolio-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .portfolio-page--approved .portfolio-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-page--approved .portfolio-summary-kpi:last-child { grid-column: 1 / -1; }
+  .portfolio-overview-content,.portfolio-overview-bottom { grid-template-columns: 1fr; }
+  .portfolio-overview-content > .portfolio-panel--holdings { grid-column: auto; }
+  .portfolio-page--approved .portfolio-overview-content .portfolio-panel { min-height: 0; }
+  .portfolio-recent-order { grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.45rem; }
+  .portfolio-recent-order > .portfolio-order-asset { grid-column: 1 / -1; }
+  .portfolio-recent-order > span:nth-child(4) { display: none; }
+  .portfolio-page--approved .portfolio-table--holdings td:nth-child(n) { width: auto; }
+}
+
 .wallet-page {
   min-height: calc(100vh - 4.75rem);
   background:
