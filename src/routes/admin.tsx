@@ -51,8 +51,6 @@ import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary } from "@/domain/submission";
 import type {
   AdminComplianceCase,
-  AdminFinanceSummary,
-  AdminIntegrationsSummary,
   AdminOverview,
   AdminIntakeRow,
   AdminMembershipRow,
@@ -159,7 +157,7 @@ function AdminConsole() {
       id: string;
       decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
     }) => {
-      await services.repositories.reviews.claim(id).catch(() => undefined);
+      await services.repositories.reviews.claim(id);
       return services.repositories.reviews.decide(id, decision, { reasonCode: "STAFF_REVIEW" });
     },
     onSuccess: () => {
@@ -234,18 +232,6 @@ function AdminConsole() {
     queryKey: ["admin", "compliance"],
     queryFn: () => services.repositories.admin.listComplianceCases({ limit: 50 }),
     enabled: section === "compliance",
-    staleTime: 30_000,
-  });
-  const finance = useQuery({
-    queryKey: ["admin", "finance"],
-    queryFn: () => services.repositories.admin.getFinanceSummary(),
-    enabled: section === "payments",
-    staleTime: 30_000,
-  });
-  const integrations = useQuery({
-    queryKey: ["admin", "integrations"],
-    queryFn: () => services.repositories.admin.getIntegrations(),
-    enabled: section === "integrations",
     staleTime: 30_000,
   });
   const globalSearch = useQuery({
@@ -419,6 +405,7 @@ function AdminConsole() {
               void reviews.refetch();
             }}
             deciding={reviewDecision.isPending}
+            decisionError={reviewDecision.isError}
             decide={(id, decision) => reviewDecision.mutate({ id, decision })}
           />
         ) : section === "intake" ? (
@@ -504,10 +491,9 @@ function AdminConsole() {
           />
         ) : section === "payments" ? (
           <PaymentsWorkspace
-            summary={finance.data}
-            loading={finance.isLoading}
-            failed={finance.isError}
-            retry={() => void finance.refetch()}
+            loading={riskOperations.isLoading}
+            failed={riskOperations.isError}
+            retry={() => void riskOperations.refetch()}
             risk={riskOperations.data}
             riskLoading={riskOperations.isLoading}
             riskFailed={riskOperations.isError}
@@ -541,7 +527,6 @@ function AdminConsole() {
           />
         ) : section === "integrations" ? (
           <Integrations
-            query={integrations}
             risk={riskOperations.data}
             riskLoading={riskOperations.isLoading}
             riskFailed={riskOperations.isError}
@@ -973,10 +958,26 @@ function ControlCenter({
         <section className="admin-panel">
           <AdminPanelHeading title="System Status" />
           <div className="admin-status-list">
-            <StatusRow label="API reads" status="Operational" icon={Gauge} />
-            <StatusRow label="Database / queues" status="Unknown" icon={Database} />
-            <StatusRow label="Notifications" status="Unknown" icon={Activity} />
-            <StatusRow label="Provider health" status="Unknown" icon={Globe2} />
+            {risk?.system.length ? (
+              risk.system.map((item) => (
+                <StatusRow
+                  key={item.name}
+                  label={item.name}
+                  status={item.status}
+                  icon={
+                    item.name === "PostgreSQL"
+                      ? Database
+                      : item.name === "Notifications"
+                        ? Activity
+                        : item.name === "Market data"
+                          ? Globe2
+                          : Gauge
+                  }
+                />
+              ))
+            ) : (
+              <AdminEmpty detail="No system health telemetry is available." />
+            )}
           </div>
         </section>
       </div>
@@ -1032,6 +1033,7 @@ function AssetModeration({
   failed,
   retry,
   deciding,
+  decisionError,
   decide,
 }: {
   reviews: Array<{ id: string; status: string; submittedAt: string }>;
@@ -1040,6 +1042,7 @@ function AssetModeration({
   failed: boolean;
   retry: () => void;
   deciding: boolean;
+  decisionError: boolean;
   decide: (id: string, decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED") => void;
 }) {
   if (loading)
@@ -1064,6 +1067,12 @@ function AssetModeration({
     >
       <section className="admin-panel">
         <AdminPanelHeading title="Review queue" />
+        {decisionError ? (
+          <p className="admin-safe-note" role="alert">
+            This review action could not be completed. Refresh the queue and confirm the current
+            workflow state before trying again.
+          </p>
+        ) : null}
         {reviews.length ? (
           <div className="admin-record-list">
             {reviews.map((review) => (
@@ -1583,7 +1592,7 @@ function ComplianceWorkspace({
             <AdminKpi
               icon={ShieldCheck}
               label="Provider status"
-              value={detail.providerStatus === "APPROVED" ? 1 : 0}
+              value={sentence(detail.providerStatus)}
             />
             <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
             <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
@@ -1646,7 +1655,6 @@ function ComplianceWorkspace({
 }
 
 function PaymentsWorkspace({
-  summary,
   loading,
   failed,
   retry,
@@ -1655,7 +1663,6 @@ function PaymentsWorkspace({
   riskFailed,
   retryRisk,
 }: {
-  summary?: AdminFinanceSummary;
   loading: boolean;
   failed: boolean;
   retry: () => void;
@@ -1690,38 +1697,29 @@ function PaymentsWorkspace({
               icon={WalletCards}
               label="Pending movements"
               value={
-                summary?.pendingMovements ??
                 risk?.finance.movements.filter((item) =>
                   ["CREATED", "PENDING_PROVIDER", "PROCESSING"].includes(item.status),
-                ).length ??
-                0
+                ).length ?? 0
               }
             />
             <AdminKpi
               icon={AlertTriangle}
               label="Provider exceptions"
               value={
-                summary?.exceptions ??
                 risk?.finance.movements.filter((item) =>
                   ["FAILED", "MANUAL_REVIEW", "HELD"].includes(item.status),
-                ).length ??
-                0
+                ).length ?? 0
               }
             />
             <AdminKpi
               icon={RefreshCw}
               label="Reconciliation mismatches"
               value={
-                summary?.reconciliationMismatches ??
                 risk?.finance.reconciliation.filter((item) => item.status === "MISMATCH").length ??
                 0
               }
             />
-            <AdminKpi
-              icon={Landmark}
-              label="GBP authority"
-              value={summary?.currency === "GBP" ? 1 : 0}
-            />
+            <AdminKpi icon={Landmark} label="Ledger currency" value="GBP" />
           </div>
           <div className="admin-filter-row">
             {["Movements", "Wallets", "Reservations", "Reconciliation", "Adjustments"].map(
@@ -1847,57 +1845,49 @@ function PaymentsWorkspace({
 }
 
 function Integrations({
-  query,
   risk,
   riskLoading,
   riskFailed,
   retryRisk,
 }: {
-  query: {
-    data?: AdminIntegrationsSummary;
-    isLoading: boolean;
-    isError: boolean;
-    refetch: () => unknown;
-  };
   risk?: import("@/data/repositories").AdminRiskOperations;
   riskLoading: boolean;
   riskFailed: boolean;
   retryRisk: () => void;
 }) {
-  if (query.isLoading || riskLoading)
+  if (riskLoading)
     return (
       <AdminState title="Loading integrations" detail="Reading provider-safe status summaries." />
     );
-  if (query.isError || riskFailed)
+  if (riskFailed)
     return (
       <AdminState
         title="Provider status unavailable"
         detail="Integration health could not be loaded safely."
-        retry={() => {
-          void query.refetch();
-          retryRisk();
-        }}
+        retry={retryRisk}
       />
     );
   return (
     <AdminPageSection
       title="Integrations"
-      detail={`Provider status is only shown where the backend can determine it. ${query.data?.providerIncidents ?? 0} open incidents · ${query.data?.failedWebhooks ?? 0} failed webhooks.`}
+      detail="Provider status is only shown where the backend can determine it. Secrets and private credentials remain redacted."
     >
       <div className="admin-integration-grid">
-        {["Plaid", "Bridge", "BlockchainAnalysis.io", "Market Data", "Email", "Notifications"].map(
-          (name) => (
-            <article className="admin-integration" key={name}>
+        {risk?.integrations.length ? (
+          risk.integrations.map((integration) => (
+            <article className="admin-integration" key={integration.name}>
               <SlidersHorizontal aria-hidden="true" />
-              <strong>{name}</strong>
-              <small>
-                {name === "Notifications"
-                  ? `${query.data?.failedWebhooks ?? 0} failed webhooks`
-                  : "No secrets displayed"}
-              </small>
-              <span>Unknown · safe summary</span>
+              <strong>{integration.name}</strong>
+              <small>{integration.summary}</small>
+              <span className="admin-status-pill">{integration.status}</span>
+              <span>
+                {integration.configured ? "Configured" : "Configuration not exposed"}
+                {integration.failedEvents ? ` · ${integration.failedEvents} failed events` : ""}
+              </span>
             </article>
-          ),
+          ))
+        ) : (
+          <AdminEmpty detail="No integration status records are available." />
         )}
       </div>
       <section className="admin-panel">
@@ -2109,7 +2099,7 @@ function AdminKpi({
 }: {
   icon: typeof ClipboardCheck;
   label: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <section className="admin-kpi">

@@ -246,7 +246,6 @@ export class AdminService {
     const dbCheckedAt = new Date().toISOString();
     const integration = (
       name: string,
-      provider: string,
       configured: boolean,
       summary: string,
       failedEvents = 0,
@@ -347,11 +346,9 @@ export class AdminService {
         },
         {
           name: 'Market data',
-          status: marketSnapshots
-            ? ('Operational' as const)
-            : ('Unknown' as const),
+          status: 'Unknown' as const,
           summary: marketSnapshots
-            ? 'Market snapshot records are available.'
+            ? 'Snapshot records are available; provider health telemetry is not exposed.'
             : 'No market snapshot telemetry is available.',
           lastCheckedAt: dbCheckedAt,
         },
@@ -381,8 +378,7 @@ export class AdminService {
       integrations: [
         integration(
           'Plaid',
-          'PLAID',
-          Boolean(incidentCounts.get('PLAID')),
+          false,
           incidentCounts.get('PLAID')
             ? 'Open provider incident.'
             : 'Provider configuration is not exposed in Admin.',
@@ -390,8 +386,7 @@ export class AdminService {
         ),
         integration(
           'Bridge',
-          'BRIDGE',
-          Boolean(incidentCounts.get('BRIDGE')),
+          false,
           incidentCounts.get('BRIDGE')
             ? 'Open provider incident.'
             : 'Provider configuration is not exposed in Admin.',
@@ -399,8 +394,7 @@ export class AdminService {
         ),
         integration(
           'BlockchainAnalysis.io',
-          'BLOCKCHAIN_ANALYSIS',
-          Boolean(incidentCounts.get('BLOCKCHAIN_ANALYSIS')),
+          false,
           incidentCounts.get('BLOCKCHAIN_ANALYSIS')
             ? 'Open provider incident.'
             : 'Provider configuration is not exposed in Admin.',
@@ -408,8 +402,7 @@ export class AdminService {
         ),
         integration(
           'Market Data',
-          'MARKET_DATA',
-          marketSnapshots > 0,
+          false,
           marketSnapshots > 0
             ? 'Snapshots available.'
             : 'No configured market telemetry.',
@@ -417,8 +410,7 @@ export class AdminService {
         ),
         integration(
           'Notifications',
-          'NOTIFICATIONS',
-          true,
+          false,
           notificationFailures
             ? 'Delivery failures require review.'
             : 'No current failure telemetry.',
