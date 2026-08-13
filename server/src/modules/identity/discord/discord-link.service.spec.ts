@@ -1,4 +1,8 @@
-import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { AppConfig } from '../../../config/app-config';
 import type { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
@@ -137,5 +141,30 @@ describe('DiscordLinkService', () => {
     const db = database();
     const service = new DiscordLinkService(db as unknown as PrismaService, config);
     await expect(service.consumeBotChallenge(actor, 'unknown-token', 'request')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('blocks cross-account claims and concurrent replay of a bot challenge', async () => {
+    const record = {
+      id: 'challenge',
+      tokenHash: 'hash',
+      discordUserId: 'discord-user',
+      discordUsername: 'member',
+      discordDisplayName: null,
+      guildId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      consumedAt: null,
+      createdAt: new Date(),
+    };
+    const db = database();
+    db.discordBotLinkChallenge.findUnique.mockResolvedValue(record);
+    db.tx.discordBotLinkChallenge.updateMany.mockResolvedValue({ count: 1 });
+    db.tx.discordAccountLink.findUnique
+      .mockResolvedValueOnce({ userId: 'other-user' })
+      .mockResolvedValueOnce(null);
+    const service = new DiscordLinkService(db as unknown as PrismaService, config);
+    await expect(service.consumeBotChallenge(actor, 'token', 'request')).rejects.toBeInstanceOf(ConflictException);
+
+    db.tx.discordBotLinkChallenge.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.consumeBotChallenge(actor, 'token', 'request')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
