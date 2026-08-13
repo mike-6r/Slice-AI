@@ -167,4 +167,22 @@ describe('DiscordLinkService', () => {
     db.tx.discordBotLinkChallenge.updateMany.mockResolvedValue({ count: 0 });
     await expect(service.consumeBotChallenge(actor, 'token', 'request')).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it('delegates operations data to the existing Admin projection using current Slice roles', async () => {
+    const db = database();
+    db.discordAccountLink.findUnique.mockResolvedValue({
+      userId: 'admin-user',
+      user: { accountStatus: 'ACTIVE', roleAssignments: [{ role: 'ADMIN' }] },
+    });
+    const operationsOverview = jest.fn().mockResolvedValue({ counts: { pendingReviews: 1 } });
+    const service = new DiscordLinkService(
+      db as unknown as PrismaService,
+      config,
+      undefined,
+      { operationsOverview } as never,
+    );
+
+    await expect(service.botAdminOperations('discord-user')).resolves.toEqual({ counts: { pendingReviews: 1 } });
+    expect(operationsOverview).toHaveBeenCalledWith(expect.objectContaining({ userId: 'admin-user', roles: ['ADMIN'] }));
+  });
 });

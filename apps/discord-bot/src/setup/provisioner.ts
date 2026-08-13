@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, Guild, StringSelectMenuBuilder, type GuildBasedChannel, type Role } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, Guild, PermissionFlagsBits, StringSelectMenuBuilder, type GuildBasedChannel, type Role } from 'discord.js';
 import { renderArtwork } from '../artwork.js';
 import { SliceEmbed } from '../embeds/slice-embed.js';
 import { colorNumber, presentationConfig, renderTemplate } from '../presentation-config.js';
@@ -43,10 +43,25 @@ export class SetupProvisioner {
   private async role(guild: Guild, id: string): Promise<Role | undefined> { return (await guild.roles.fetch(id).catch(() => undefined)) ?? undefined; }
   private async channel(guild: Guild, id: string): Promise<GuildBasedChannel | undefined> { return (await guild.channels.fetch(id).catch(() => undefined)) ?? undefined; }
   private staffRoleIds(guildId: string): Promise<string[]> { return Promise.all(['owner', 'administrator', 'operations', 'compliance', 'support', 'moderator', 'developer'].map((key) => this.repository.getResource(guildId, 'ROLE', key))).then((rows) => rows.flatMap((row) => row ? [row.discordId] : [])); }
-  private async applyStaffPermissions(channel: GuildBasedChannel, guild: Guild, staff: boolean): Promise<void> { void channel; void guild; void staff; return; }
-  private async applyReadOnlyPermissions(channel: GuildBasedChannel, guild: Guild, readOnly: boolean): Promise<void> { void channel; void guild; void readOnly; return; }
-  private async staffPermissionDrift(channel: GuildBasedChannel, guild: Guild): Promise<boolean> { void channel; void guild; return false; }
-  private readOnlyPermissionDrift(channel: GuildBasedChannel, guild: Guild): boolean { void channel; void guild; return false; }
+  private async applyStaffPermissions(channel: GuildBasedChannel, guild: Guild, staff: boolean): Promise<void> {
+    if (!staff || !('permissionOverwrites' in channel)) return;
+    await channel.permissionOverwrites.edit(guild.roles.everyone.id, { ViewChannel: false }, { reason: 'Slice AI staff channel access' });
+    for (const roleId of await this.staffRoleIds(guild.id)) await channel.permissionOverwrites.edit(roleId, { ViewChannel: true, ReadMessageHistory: true }, { reason: 'Slice AI staff channel access' });
+  }
+  private async applyReadOnlyPermissions(channel: GuildBasedChannel, guild: Guild, readOnly: boolean): Promise<void> {
+    if (!readOnly || !('permissionOverwrites' in channel)) return;
+    await channel.permissionOverwrites.edit(guild.roles.everyone.id, { SendMessages: false }, { reason: 'Slice AI read-only panel' });
+  }
+  private async staffPermissionDrift(channel: GuildBasedChannel, guild: Guild): Promise<boolean> {
+    if (!('permissionOverwrites' in channel)) return true;
+    const everyone = channel.permissionOverwrites.cache.get(guild.roles.everyone.id);
+    if (!everyone?.deny.has(PermissionFlagsBits.ViewChannel)) return true;
+    return (await this.staffRoleIds(guild.id)).some((roleId) => !channel.permissionOverwrites.cache.get(roleId)?.allow.has(PermissionFlagsBits.ViewChannel));
+  }
+  private readOnlyPermissionDrift(channel: GuildBasedChannel, guild: Guild): boolean {
+    if (!('permissionOverwrites' in channel)) return true;
+    return !channel.permissionOverwrites.cache.get(guild.roles.everyone.id)?.deny.has(PermissionFlagsBits.SendMessages);
+  }
 }
 function panelPayload(key: typeof PANEL_CHANNELS[number]) { return { embeds: [panelEmbed(key)], components: panelComponents(key) }; }
 function panelEmbed(key: string): EmbedBuilder {
@@ -66,7 +81,11 @@ function panelComponents(key: string) {
   if (key === 'start-here') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:connect').setLabel('Connect account').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:onboarding:verify').setLabel('Verify identity').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:faq').setLabel('Open FAQ').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:support').setLabel('Get support').setStyle(ButtonStyle.Secondary))];
   if (key === 'my-slice') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:my-slice').setLabel('My Account').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:onboarding:portfolio').setLabel('Portfolio').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:orders').setLabel('Orders').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:transactions').setLabel('Transactions').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:marketplace').setLabel('Marketplace').setStyle(ButtonStyle.Secondary))];
   if (key === 'collector-workspace') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:collector-workspace').setLabel('Collector Workspace').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:onboarding:your-actions').setLabel('Your Actions').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:membership').setLabel('Membership').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:list').setLabel('List an Asset').setStyle(ButtonStyle.Secondary))];
-  if (key === 'staff') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:admin-console').setLabel('Open Admin Console').setStyle(ButtonStyle.Primary))];
+  if (key === 'staff') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:staff:ops').setLabel('Open Operations').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:onboarding:admin-console').setLabel('Open Admin Console').setStyle(ButtonStyle.Secondary))];
+  if (key === 'operations') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:staff:asset-operations').setLabel('Open Asset Operations').setStyle(ButtonStyle.Primary))];
+  if (key === 'compliance-alerts') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:staff:physical-intake').setLabel('Open Physical Intake').setStyle(ButtonStyle.Primary))];
+  if (key === 'support-log') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:ticket:open').setLabel('Open Ticket').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:staff:support-queue').setLabel('Open Trust & Support').setStyle(ButtonStyle.Secondary))];
+  if (key === 'bot-log') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:staff:system-alerts').setLabel('Open Platform Operations').setStyle(ButtonStyle.Primary))];
   if (key === 'roles') return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('slice:roles:notifications').setPlaceholder(config['notifications.yml'].menu.placeholder).setMinValues(0).setMaxValues(config['notifications.yml'].roles.length).addOptions(config['notifications.yml'].roles.map((role) => ({ label: role.label, value: role.key, description: role.description, emoji: role.emoji }))))];
   if (key === 'create-a-ticket') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:ticket:open').setLabel('Open Ticket').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('slice:ticket:mine').setLabel('My Tickets').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:faq').setLabel('Help / FAQ').setStyle(ButtonStyle.Secondary))];
   if (key === 'faq') return [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('slice:onboarding:faq').setLabel('Browse FAQ').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('slice:onboarding:support').setLabel('Open support').setStyle(ButtonStyle.Primary))];

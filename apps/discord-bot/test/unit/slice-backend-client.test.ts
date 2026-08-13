@@ -25,4 +25,12 @@ describe('SliceBackendClient account linking', () => {
     await expect(client().getCollectorActions('discord-user')).resolves.toMatchObject({ ok: true, value: [expect.objectContaining({ type: 'ADD_TRACKING' })] });
     expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/links/discord-user/collector-actions');
   });
+
+  it('reads the existing authorized Admin operations projection through the service boundary', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ counts: { pendingReviews: 1, deliveredAwaitingReceipt: 2, verificationQueue: 3, valuationQueue: 4, marketplaceReady: 5, compliance: 6, alerts: 7 }, memberships: { pastDue: 8 }, support: { available: true, open: 9 } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(client().getAdminOpsSummary('discord-user')).resolves.toMatchObject({ ok: true, value: { counts: { deliveredAwaitingReceipt: 2 }, support: { open: 9 } } });
+    expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/admin/operations/discord-user');
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer service-secret' } });
+  });
 });

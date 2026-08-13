@@ -99,6 +99,12 @@ export class DiscordLinkController {
     return this.links.botCollectorActions(discordUserId);
   }
 
+  @Get('discord/bot/admin/operations/:discordUserId')
+  @UseGuards(DiscordBotServiceGuard)
+  botAdminOperations(@Param('discordUserId') discordUserId: string) {
+    return this.links.botAdminOperations(discordUserId);
+  }
+
   @Delete('discord/bot/links/:discordUserId')
   @UseGuards(DiscordBotServiceGuard)
   unlinkBotLink(

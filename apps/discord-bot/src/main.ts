@@ -2,9 +2,9 @@ import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Eve
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { PrismaClient } from '../generated/prisma/index.js';
-import { accountCommand, accountStatusPayload, faqCommand, handleOnboardingCommand, rolesCommand, supportCommand } from './commands/onboarding.js';
-import { ticketCommand, ticketCommandInput } from './commands/tickets.js';
-import { handleSetup, handleSetupButton, setupCommand } from './commands/setup.js';
+import { accountStatusPayload, handleOnboardingCommand } from './commands/onboarding.js';
+import { ticketCommandInput } from './commands/tickets.js';
+import { handleSetup, handleSetupButton } from './commands/setup.js';
 import { loadConfig } from './config.js';
 import { createDiscordTicketAuthorization } from './discord-ticket-authorization.js';
 import { SliceEmbed } from './embeds/slice-embed.js';
@@ -18,27 +18,29 @@ import { createTicketDiscordBoundary, lockTicketChannel, refreshTicketMessage, t
 import { TicketLifecycleService } from './ticket-lifecycle.js';
 import { parseTicketControlId, ticketControlId, TicketInteractionRouter, type TicketRouteAction, type TicketRouteContext, type TicketRouteResult } from './ticket-routing.js';
 import { TicketTranscriptService, type TicketHistory } from './ticket-transcripts.js';
-import { banCommand, handleModerationCommand, modcaseCommand, modhistoryCommand, noteCommand, timeoutCommand, unbanCommand, untimeoutCommand, warnCommand } from './commands/moderation.js';
+import { handleModerationCommand } from './commands/moderation.js';
 import { DiscordModerationAuthorization, evaluateAutomod, ManualModerationService, ModerationService } from './moderation.js';
 import { PrismaModerationRepository } from './persistence/moderation-repository.js';
 import { createDiscordModerationTransport } from './discord-moderation.js';
 import { PrismaProgressionRepository } from './persistence/progression-repository.js';
 import { MemberProgressionService } from './progression.js';
 import { handleProgressionCommand } from './commands/progression.js';
-import { achievementsCommand, dailyCommand, leaderboardCommand, levelCommand, repCommand, reputationCommand } from './commands/progression.js';
-import { birthdayCommand, handleCommunityCommand, notificationsCommand, pollCommand, pollPayload, suggestCommand, suggestionCommand, suggestionPayload } from './commands/community.js';
+import { handleCommunityCommand, pollPayload, suggestionPayload } from './commands/community.js';
 import { PrismaCommunityRepository } from './persistence/community-repository.js';
 import { NotificationRoleReconciliationService, notificationMenu } from './notification-roles.js';
-import { balanceCommand, cardCommand, handleMarketCommand, historyCommand, portfolioCommand, priceCommand, profileCommand, searchCommand, topCommand, transactionsCommand, valueCommand, watchlistCommand } from './commands/market.js';
+import { handleMarketCommand } from './commands/market.js';
 import { SliceBackendClient } from './slice-backend-client.js';
 import { PrismaInvestorProfileRepository } from './persistence/investor-profile-repository.js';
-import { handlePriceAlert, priceAlertCommand } from './commands/price-alerts.js';
+import { handlePriceAlert } from './commands/price-alerts.js';
 import { PrismaDiscordDeliveryRepository } from './persistence/discord-delivery-repository.js';
-import { aboutCommand, askCommand, handleIntelligence, helpCommand, insightsCommand, statusCommand, summaryCommand, trendingCommand } from './commands/intelligence.js';
+import { handleIntelligence } from './commands/intelligence.js';
 import { SliceAiService } from './slice-ai.js';
-import { announceCommand, handleGapSweep, inviteCommand, offerCommand, requestCommand, roadmapCommand } from './commands/gap-sweep.js';
+import { handleGapSweep } from './commands/gap-sweep.js';
 import { handleConfigurationCommand } from './commands/configuration.js';
 import { presentationConfig, renderTemplate } from './presentation-config.js';
+import { isSliceStaff, staffOperationsPayload, staffPanelPayload } from './staff-operations.js';
+import { SliceAdminRouteBuilder } from './admin-routes.js';
+import { discordCommandInventory } from './command-inventory.js';
 
 const config = loadConfig();
 const logger = new Logger();
@@ -58,6 +60,7 @@ const discordDeliveries = new PrismaDiscordDeliveryRepository(prisma);
 const ai = new SliceAiService(config);
 const provisioner = new SetupProvisioner(repository, join(process.cwd(), 'assets', 'generated'));
 const links = new SliceWebsiteHandoffClient(config.SLICE_WEB_BASE_URL);
+const adminRoutes = new SliceAdminRouteBuilder(config.SLICE_WEB_BASE_URL);
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const categories = new Set(presentationConfig()['tickets.yml'].categories.map((category) => category.key));
 const messageSafetyWindow = new Map<string, { timestamps: number[]; messages: Array<{ content: string; at: number }> }>();
@@ -87,6 +90,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === 'setup') return void await handleSetup(interaction, repository, provisioner);
     if (interaction.isChatInputCommand() && interaction.commandName === 'config') return void await handleConfigurationCommand(interaction);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'ops') return void await handleStaffOperations(interaction);
     if (interaction.isChatInputCommand() && ['account', 'roles', 'faq', 'support'].includes(interaction.commandName)) return void await handleOnboardingCommand(interaction, links, market);
     if (interaction.isChatInputCommand() && interaction.commandName === 'ticket') return void await handleTicketCommand(interaction);
     if (interaction.isChatInputCommand() && ['warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory'].includes(interaction.commandName)) return void await handleModerationCommand(interaction, moderationForGuild(interaction.guild!), await moderationActor(interaction), (id, action) => moderationTarget(interaction.guild!, id, action));
@@ -107,6 +111,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:roles:notifications') return void await handleNotificationRoles(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:community:suggestion:')) return void await handleSuggestionVote(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:community:poll:')) return void await handlePollVote(interaction);
+    if (interaction.isButton() && interaction.customId.startsWith('slice:staff:')) return void await handleStaffPanel(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:onboarding:')) return void await handleOnboardingButton(interaction);
   } catch (error) {
     const ref = `SLC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -268,6 +273,8 @@ async function reconcileNotificationMember(member: GuildMember): Promise<void> {
 async function refreshSuggestion(suggestion: import('./persistence/community-repository.js').Suggestion): Promise<void> { if (!suggestion.channelId || !suggestion.messageId) return; const guild = await client.guilds.fetch(suggestion.guildId); const channel = await guild.channels.fetch(suggestion.channelId).catch(() => null); if (!channel?.isTextBased() || !('messages' in channel)) return; const message = await channel.messages.fetch(suggestion.messageId).catch(() => null); if (message) await message.edit(suggestionPayload(suggestion, await community.suggestionCounts(suggestion.id))); }
 async function handleSuggestionVote(interaction: ButtonInteraction): Promise<void> { const [, , , id, choice] = interaction.customId.split(':'); if (!id || (choice !== 'up' && choice !== 'down')) return; const suggestion = await community.suggestion(id); if (!suggestion || suggestion.guildId !== interaction.guildId) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Suggestion unavailable', 'This suggestion is unavailable.')] }); await community.suggestionVote(id, interaction.user.id, choice === 'up' ? 1 : -1); const updated = await community.suggestion(id); if (updated) await interaction.update(suggestionPayload(updated, await community.suggestionCounts(id))); }
 async function handlePollVote(interaction: StringSelectMenuInteraction): Promise<void> { const id = interaction.customId.split(':')[3]; const poll = id ? await community.pollVote(id, interaction.user.id, Number(interaction.values[0])) : null; if (!poll || poll.guildId !== interaction.guildId) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Poll unavailable', 'This poll is closed or unavailable.')] }); await interaction.update(pollPayload(poll, await community.pollCounts(poll.id, poll.options.length))); }
+async function handleStaffOperations(interaction: ChatInputCommandInteraction): Promise<void> { await interaction.deferReply({ ephemeral: true }); const status = await market.getLinkStatus(interaction.user.id); if (!status.ok || !status.value.linked) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account', 'Connect the Slice account that holds your staff role to use operations shortcuts.')] }); const summary = status.value.user.roles.includes('ADMIN') ? await market.getAdminOpsSummary(interaction.user.id) : undefined; await interaction.editReply(staffOperationsPayload(status.value.user.roles, adminRoutes, summary)); }
+async function handleStaffPanel(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; await interaction.deferReply({ ephemeral: true }); const status = await market.getLinkStatus(interaction.user.id); if (!status.ok || !status.value.linked) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account', 'Connect the Slice account that holds your staff role to use operations shortcuts.')] }); if (action === 'ops') { const summary = status.value.user.roles.includes('ADMIN') ? await market.getAdminOpsSummary(interaction.user.id) : undefined; return void await interaction.editReply(staffOperationsPayload(status.value.user.roles, adminRoutes, summary)); } if (!isSliceStaff(status.value.user.roles)) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Staff access required', 'Your linked Slice account does not have staff operations access.')] }); await interaction.editReply(staffPanelPayload(action, adminRoutes)); }
 async function handleOnboardingButton(interaction: ButtonInteraction): Promise<void> {
   const action = interaction.customId.split(':')[2];
   if (action === 'connect') {
@@ -330,5 +337,5 @@ async function syncLinkedAccountRoles(interaction: ButtonInteraction, sliceRoles
 }
 function ticketError(message: string) { return { ephemeral: true, embeds: [SliceEmbed.error('Ticket action unavailable', message)] }; }
 function row(id: string, label: string, style: TextInputStyle, required: boolean, maxLength: number): ActionRowBuilder<TextInputBuilder> { return new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(required).setMaxLength(maxLength)); }
-async function start(): Promise<void> { await repository.connect(); health.listen(config.HEALTH_PORT); const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN); const commands = [setupCommand, accountCommand, rolesCommand, faqCommand, supportCommand, ticketCommand, warnCommand, noteCommand, timeoutCommand, untimeoutCommand, banCommand, unbanCommand, modcaseCommand, modhistoryCommand, levelCommand, leaderboardCommand, repCommand, reputationCommand, achievementsCommand, dailyCommand, notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand, cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand, askCommand, helpCommand, summaryCommand, insightsCommand, trendingCommand, aboutCommand, statusCommand, inviteCommand, roadmapCommand, announceCommand, requestCommand, offerCommand].map((command) => command.toJSON()); const route = config.DISCORD_DEV_GUILD_ID ? Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_DEV_GUILD_ID) : Routes.applicationCommands(config.DISCORD_CLIENT_ID); await rest.put(route, { body: commands }); await client.login(config.DISCORD_BOT_TOKEN); }
+async function start(): Promise<void> { await repository.connect(); health.listen(config.HEALTH_PORT); const rest = new REST({ version: '10' }).setToken(config.DISCORD_BOT_TOKEN); const commands = discordCommandInventory.map((command) => command.toJSON()); const route = config.DISCORD_DEV_GUILD_ID ? Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_DEV_GUILD_ID) : Routes.applicationCommands(config.DISCORD_CLIENT_ID); await rest.put(route, { body: commands }); await client.login(config.DISCORD_BOT_TOKEN); }
 void start();

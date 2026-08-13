@@ -1,4 +1,4 @@
-version: 10
+version: 11
 
 roles:
   - { key: owner, name: Owner, color: "#F6C85F", hoist: true, staff: true }
@@ -67,13 +67,13 @@ channels:
   - { key: create-a-ticket, name: create-a-ticket, category: support, order: 1, read_only: true, topic: "Open the right private support request." }
   - { key: support-information, name: support-information, category: support, order: 2, read_only: true, topic: "What support can help with and what not to post publicly." }
   - { key: known-issues, name: known-issues, category: support, order: 3, read_only: true, topic: "Known issues, maintenance notes, and safe workarounds." }
-  - { key: staff, name: staff-hub, category: staff, order: 1, staff: true, topic: "Staff navigation and private operating notes." }
-  - { key: operations, name: operations, category: staff, order: 2, staff: true, topic: "Operational queue, support pressure, and marketplace review context." }
-  - { key: compliance-alerts, name: compliance-alerts, category: staff, order: 3, staff: true, topic: "Compliance-sensitive reviews and escalations." }
-  - { key: support-log, name: support-log, category: staff, order: 4, staff: true, topic: "Ticket lifecycle and support activity." }
+  - { key: staff, name: ops-center, category: staff, order: 1, staff: true, read_only: true, topic: "High-signal Slice operations summary and authorised workspace shortcuts." }
+  - { key: operations, name: asset-operations, category: staff, order: 2, staff: true, read_only: true, topic: "Verification, valuation, custody, market readiness, and asset exceptions." }
+  - { key: compliance-alerts, name: physical-intake, category: staff, order: 3, staff: true, read_only: true, topic: "Carrier delivery, receipt-pending, shipping exception, and intake handoff alerts." }
+  - { key: support-log, name: support-queue, category: staff, order: 4, staff: true, read_only: true, topic: "Canonical Discord ticket workflow and Trust & Support handoff." }
   - { key: moderation-log, name: moderation-log, category: staff, order: 5, staff: true, topic: "Moderation cases and enforcement records." }
-  - { key: bot-log, name: bot-log, category: staff, order: 6, staff: true, topic: "Bot health, setup, and automation events." }
-  - { key: provider-status, name: provider-status, category: staff, order: 7, staff: true, topic: "External provider and integration status." }
+  - { key: bot-log, name: system-alerts, category: staff, order: 6, staff: true, read_only: true, topic: "Meaningful platform degradation, job, webhook, and provider alerts only." }
+  - { key: provider-status, name: staff-chat, category: staff, order: 7, staff: true, topic: "Private staff coordination. No customer or provider secrets." }
 
 panels:
   welcome:
@@ -249,11 +249,43 @@ panels:
     color: warning
     footer: "Slice Support | Status and workarounds"
   staff:
-    title: "Staff / Operations"
+    title: "Operations Center"
     description: |
-      **Attention and support routing only.**
-      Use Slice for authorized review, physical intake, verification, valuation, membership, and operational workflows.
+      **Fast operational companion.**
+      Open an authorised Slice workspace for review, intake, asset operations, memberships, Trust & Support, Finance & Trading, or Platform Operations.
 
-      Discord does not confirm receipt, publish assets, change memberships, or replace the Admin Console.
+      Discord does not confirm receipt, publish assets, change memberships, alter balances, or replace the Admin Console.
     color: staff
-    footer: "Slice AI | Authorized staff only"
+    footer: "Slice AI | Authorised staff only"
+  operations:
+    title: "Asset Operations"
+    description: |
+      **Use this feed for meaningful operational handoffs.**
+      Verification, valuation, custody, market readiness, and exceptions are reviewed in Slice.
+
+      Discord never creates a second lifecycle state machine or auto-publishes an asset.
+    color: staff
+    footer: "Slice AI | Asset operations"
+  compliance-alerts:
+    title: "Physical Intake"
+    description: |
+      **Carrier delivery is not Slice receipt confirmation.**
+      Review delivered, receipt-pending, shipping-exception, and verification handoffs in the authoritative Physical Intake workspace.
+
+      Receipt confirmation remains in Slice Admin.
+    color: warning
+    footer: "Slice AI | Physical intake"
+  support-log:
+    title: "Support Queue"
+    description: |
+      **Discord tickets remain the canonical Discord support workflow.**
+      Use this channel for ticket activity; open Slice for account, compliance, and escalation context.
+    color: staff
+    footer: "Slice AI | Trust & Support"
+  bot-log:
+    title: "System Alerts"
+    description: |
+      **High-signal platform alerts only.**
+      Provider degradation, failed jobs, webhook exceptions, and protected configuration changes are investigated in Slice Platform Operations.
+    color: warning
+    footer: "Slice AI | Platform operations"

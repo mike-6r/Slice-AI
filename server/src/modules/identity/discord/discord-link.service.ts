@@ -10,6 +10,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
 import { Inject } from '@nestjs/common';
 import { CollectorWorkspaceService } from '../../collector-workspace/collector-workspace.service';
+import { AdminService } from '../../admin/admin.service';
 
 type DiscordIdentity = {
   id: string;
@@ -23,6 +24,7 @@ export class DiscordLinkService {
     private readonly db: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly collectorWorkspace?: CollectorWorkspaceService,
+    private readonly admin?: AdminService,
   ) {}
 
   async createBotChallenge(
@@ -222,6 +224,18 @@ export class DiscordLinkService {
         actionUrl: action.targetRoute,
       })),
     };
+  }
+
+  /** The bot only relays the existing Admin Operations projection after the
+   * linked Slice account passes the same RBAC check as the web console. */
+  async botAdminOperations(discordUserId: string) {
+    if (!this.admin) {
+      throw new ServiceUnavailableException({
+        code: 'DISCORD_ADMIN_OPERATIONS_UNAVAILABLE',
+        message: 'Slice operations are temporarily unavailable.',
+      });
+    }
+    return this.admin.operationsOverview(await this.botActor(discordUserId));
   }
 
   async self(userId: string) {
@@ -469,6 +483,41 @@ export class DiscordLinkService {
           }
         : null,
       openActionCount: overview.actionSummary.waitingOnYou,
+    };
+  }
+
+  private async botActor(discordUserId: string): Promise<Actor> {
+    const link = await this.db.discordAccountLink.findUnique({
+      where: { discordUserId: requiredText(discordUserId, 'Discord identity') },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            accountStatus: true,
+            roleAssignments: {
+              where: { revokedAt: null, scopeType: 'GLOBAL', scopeId: '*' },
+              select: { role: true },
+            },
+          },
+        },
+      },
+    });
+    if (!link) {
+      throw new UnauthorizedException({
+        code: 'DISCORD_ACCOUNT_NOT_LINKED',
+        message: 'Connect your Slice account to use this feature.',
+      });
+    }
+    return {
+      userId: link.userId as Actor['userId'],
+      // A bot service call has no browser session; the canonical linked user
+      // and current backend roles remain the authorization subject.
+      sessionId: `discord-bot:${link.userId}`,
+      status: link.user.accountStatus,
+      roles: link.user.roleAssignments.map((assignment) => assignment.role),
+      sessionRevokedAt: null,
+      sessionRevocationReason: null,
+      authenticatedAt: new Date(),
     };
   }
 }

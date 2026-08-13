@@ -19,6 +19,11 @@ export type DiscordLinkStatus =
     };
 export type DiscordLinkChallenge = { challengeUrl: string; expiresAt: string };
 export type CollectorAction = { id: string; title: string; grade: string | null; type: string; message: string; actionUrl: string };
+export type AdminOperationsSummary = {
+  counts: { pendingReviews: number; deliveredAwaitingReceipt: number; verificationQueue: number; valuationQueue: number; marketplaceReady: number; compliance: number; alerts: number };
+  memberships: { pastDue: number };
+  support: { available: boolean; open?: number };
+};
 
 /** The only HTTP boundary for Discord reads and account-linking operations. */
 export class SliceBackendClient {
@@ -35,6 +40,7 @@ export class SliceBackendClient {
   async getLinkStatus(discordUserId: string): Promise<BackendResult<DiscordLinkStatus>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}`, 'GET', undefined, linkStatus); }
   async unlink(discordUserId: string): Promise<BackendResult<{ disconnected: boolean }>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}`, 'DELETE', undefined, disconnected); }
   async getCollectorActions(discordUserId: string): Promise<BackendResult<CollectorAction[]>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}/collector-actions`, 'GET', undefined, collectorActions); }
+  async getAdminOpsSummary(discordUserId: string): Promise<BackendResult<AdminOperationsSummary>> { return this.serviceRequest(`/discord/bot/admin/operations/${encodeURIComponent(discordUserId)}`, 'GET', undefined, adminOperations); }
   async getPortfolioSummary(): Promise<BackendResult<never>> { return { ok: false, code: 'BACKEND_SEAM_REQUIRED', message: 'Portfolio delivery is not available to Discord yet.' }; }
   async getOrdersSummary(): Promise<BackendResult<never>> { return { ok: false, code: 'BACKEND_SEAM_REQUIRED', message: 'Order delivery is not available to Discord yet.' }; }
 
@@ -87,3 +93,4 @@ function challenge(value: unknown): DiscordLinkChallenge | null { const item = o
 function disconnected(value: unknown): { disconnected: boolean } | null { const item = object(value); return typeof item.disconnected === 'boolean' ? { disconnected: item.disconnected } : null; }
 function linkStatus(value: unknown): DiscordLinkStatus | null { const item = object(value); if (item.linked === false) return { linked: false }; if (item.linked === true && item.user && typeof item.user === 'object') return item as unknown as DiscordLinkStatus; return null; }
 function collectorActions(value: unknown): CollectorAction[] | null { const item = object(value); return Array.isArray(item.actions) ? item.actions.filter((action): action is CollectorAction => { const row = object(action); return typeof row.id === 'string' && typeof row.title === 'string' && typeof row.type === 'string' && typeof row.message === 'string' && typeof row.actionUrl === 'string' && (typeof row.grade === 'string' || row.grade === null); }) : null; }
+function adminOperations(value: unknown): AdminOperationsSummary | null { const item = object(value); const counts = object(item.counts); const memberships = object(item.memberships); const support = object(item.support); const fields = ['pendingReviews', 'deliveredAwaitingReceipt', 'verificationQueue', 'valuationQueue', 'marketplaceReady', 'compliance', 'alerts']; if (!fields.every((key) => typeof counts[key] === 'number') || typeof memberships.pastDue !== 'number' || typeof support.available !== 'boolean') return null; return { counts: { pendingReviews: counts.pendingReviews as number, deliveredAwaitingReceipt: counts.deliveredAwaitingReceipt as number, verificationQueue: counts.verificationQueue as number, valuationQueue: counts.valuationQueue as number, marketplaceReady: counts.marketplaceReady as number, compliance: counts.compliance as number, alerts: counts.alerts as number }, memberships: { pastDue: memberships.pastDue as number }, support: { available: support.available as boolean, ...(typeof support.open === 'number' ? { open: support.open } : {}) } }; }
