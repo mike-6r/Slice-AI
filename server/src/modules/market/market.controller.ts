@@ -82,6 +82,9 @@ export class MarketController {
     const input = parse(moversQuery, query);
     return this.market.movers(input.kind ?? 'gainers', input.limit ?? 12);
   }
+  @Get('providers/health') providerHealth() {
+    return this.market.providerHealth();
+  }
 }
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);

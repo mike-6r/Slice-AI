@@ -37,6 +37,8 @@ export class PortfolioService {
   lots = () => this.repositories.portfolio.getLots();
   transactions = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.portfolio.getTransactions(input);
+  performance = (range?: import("@/domain").PortfolioPerformanceRange) =>
+    this.repositories.portfolio.getPerformance(range);
 }
 
 export class TradingService {

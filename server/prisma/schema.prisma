@@ -596,6 +596,7 @@ model User {
   consentAcceptances          ConsentAcceptance[]
   collectorSubscriptions      CollectorSubscription[]
   receiptConfirmations        IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
+  portfolioSnapshots          PortfolioSnapshot[]
 
   @@index([accountStatus])
 }
@@ -920,46 +921,49 @@ model GradeScaleEntry {
 }
 
 model Asset {
-  id                  String                @id @default(cuid())
-  publicId            String                @unique
-  slug                String                @unique
-  categoryId          String
-  setId               String?
-  title               String
-  shortName           String?
-  year                Int?
-  manufacturer        String?
-  edition             String?
-  cardNumber          String?
-  description         String?
-  gradeScaleEntryId   String?
-  certificationNumber String?
-  status              AssetCatalogueStatus  @default(DRAFT)
-  heroMediaId         String?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  publishedAt         DateTime?
-  category            Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  collectibleSet      CollectibleSet?       @relation(fields: [setId], references: [id], onDelete: Restrict)
-  gradeScaleEntry     GradeScaleEntry?      @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
-  valuationPoints     AssetValuationPoint[]
-  marketSnapshots     AssetMarketSnapshot[]
-  watchlistItems      WatchlistItem[]
-  vaultPublicEvents   VaultPublicEvent[]
-  submissions         AssetSubmission[]
-  valuationEvidence   ValuationEvidence[]
-  valuationDecisions  ValuationDecision[]
-  custodyRecord       VaultCustodyRecord?
-  custodyEvents       CustodyEvent[]
-  insuranceCoverage   InsuranceCoverage[]
-  publication         AssetPublication?
-  ownershipSupply     OwnershipAssetSupply?
-  portfolioLots       PortfolioLot[]
-  tradingMarket       TradingMarket?
-  tradingOrders       TradingOrder[]
-  tradingExecutions   TradingExecution[]
-  discussionPosts     DiscussionPost[]
-  saleProposals       SaleProposal[]
+  id                     String                  @id @default(cuid())
+  publicId               String                  @unique
+  slug                   String                  @unique
+  categoryId             String
+  setId                  String?
+  title                  String
+  shortName              String?
+  year                   Int?
+  manufacturer           String?
+  edition                String?
+  cardNumber             String?
+  description            String?
+  gradeScaleEntryId      String?
+  certificationNumber    String?
+  status                 AssetCatalogueStatus    @default(DRAFT)
+  heroMediaId            String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  publishedAt            DateTime?
+  category               Category                @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet         CollectibleSet?         @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry        GradeScaleEntry?        @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  valuationPoints        AssetValuationPoint[]
+  marketSnapshots        AssetMarketSnapshot[]
+  marketProviderMappings MarketProviderMapping[]
+  marketObservations     MarketObservation[]
+  marketRefreshJobs      MarketRefreshJob[]
+  watchlistItems         WatchlistItem[]
+  vaultPublicEvents      VaultPublicEvent[]
+  submissions            AssetSubmission[]
+  valuationEvidence      ValuationEvidence[]
+  valuationDecisions     ValuationDecision[]
+  custodyRecord          VaultCustodyRecord?
+  custodyEvents          CustodyEvent[]
+  insuranceCoverage      InsuranceCoverage[]
+  publication            AssetPublication?
+  ownershipSupply        OwnershipAssetSupply?
+  portfolioLots          PortfolioLot[]
+  tradingMarket          TradingMarket?
+  tradingOrders          TradingOrder[]
+  tradingExecutions      TradingExecution[]
+  discussionPosts        DiscussionPost[]
+  saleProposals          SaleProposal[]
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
@@ -1414,12 +1418,123 @@ model AssetMarketSnapshot {
   confidence                Int?
   source                    String
   status                    MarketDataStatus
+  markSource                String           @default("SUPPORTED_VALUATION")
+  freshness                 String           @default("UNAVAILABLE")
+  lastSuccessfulRefreshAt   DateTime?
   createdAt                 DateTime         @default(now())
   asset                     Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@unique([assetId, source, asOf])
   @@index([assetId, asOf, id])
   @@index([asOf, change24hBps, id])
+}
+
+/// Provider identity authority. Mappings are reused by scheduled refreshes;
+/// provider-specific IDs are never rediscovered on a page render.
+model MarketProviderMapping {
+  id                 String              @id @default(cuid())
+  assetId            String
+  providerCode       String
+  providerExternalId String
+  providerUrl        String?
+  identityHash       String
+  status             String              @default("AUTO_MATCHED")
+  matchQuality       String              @default("STRONG")
+  lastVerifiedAt     DateTime?
+  lastSuccessAt      DateTime?
+  lastFailureAt      DateTime?
+  lastFailureCode    String?
+  cooldownUntil      DateTime?
+  nextRefreshAt      DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  asset              Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  observations       MarketObservation[]
+  refreshJobs        MarketRefreshJob[]
+
+  @@unique([assetId, providerCode])
+  @@unique([providerCode, providerExternalId])
+  @@index([status, nextRefreshAt, assetId])
+  @@index([providerCode, status, lastSuccessAt])
+}
+
+/// Normalized whole-collectible observation history. Completed sales, active
+/// listings, guides, and other approved references remain separate types.
+model MarketObservation {
+  id                 String                 @id @default(cuid())
+  assetId            String
+  mappingId          String?
+  providerCode       String
+  providerExternalId String
+  observationType    String
+  priceMinor         BigInt
+  currency           String
+  grader             String?
+  grade              String?
+  title              String
+  externalUrl        String?
+  occurredAt         DateTime?
+  observedAt         DateTime
+  matchQuality       String
+  included           Boolean                @default(true)
+  exclusionReason    String?
+  sourceFingerprint  String
+  provenance         Json?
+  createdAt          DateTime               @default(now())
+  asset              Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  mapping            MarketProviderMapping? @relation(fields: [mappingId], references: [id], onDelete: SetNull)
+
+  @@unique([providerCode, sourceFingerprint])
+  @@index([assetId, observationType, matchQuality, observedAt])
+  @@index([providerCode, providerExternalId, observedAt])
+}
+
+/// Durable refresh work with leases and idempotency protection.
+model MarketRefreshJob {
+  id             String                 @id @default(cuid())
+  assetId        String
+  mappingId      String?
+  providerCode   String
+  status         String                 @default("QUEUED")
+  idempotencyKey String                 @unique
+  attempts       Int                    @default(0)
+  availableAt    DateTime               @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  leaseExpiresAt DateTime?
+  lastErrorCode  String?
+  lastErrorAt    DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  asset          Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  mapping        MarketProviderMapping? @relation(fields: [mappingId], references: [id], onDelete: SetNull)
+
+  @@index([status, availableAt, createdAt, id])
+  @@index([assetId, providerCode, status, availableAt])
+}
+
+/// Server-owned portfolio mark snapshots. Historical points are only recorded
+/// from ledger, holdings, and persisted market marks.
+model PortfolioSnapshot {
+  id                        String   @id @default(cuid())
+  userId                    String
+  bucketStart               DateTime
+  cashValueMinor            BigInt
+  reservedValueMinor        BigInt
+  holdingsMarketValueMinor  BigInt
+  portfolioMarketValueMinor BigInt
+  costBasisMinor            BigInt
+  unrealizedPnlMinor        BigInt
+  realizedPnlMinor          BigInt
+  currency                  String
+  marketDataFreshness       String
+  source                    String
+  createdAt                 DateTime @default(now())
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bucketStart])
+  @@index([userId, bucketStart, id])
 }
 
 /// Per-asset cap-table authority. Document 012 issues fixed, indivisible units;

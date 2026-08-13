@@ -87,6 +87,15 @@ function renderPortfolio() {
       getHoldings: async () => summary.holdings,
       getLots: async () => lots,
       getTransactions: async () => transactions,
+      getPerformance: async () => ({
+        range: "1M" as const,
+        points: [],
+        periodChangeMinor: null,
+        periodChangeBps: null,
+        netCashFlowMinor: "0",
+        direction: "NEUTRAL" as const,
+        freshness: "UNAVAILABLE",
+      }),
     },
   };
   return renderToStaticMarkup(

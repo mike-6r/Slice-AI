@@ -59,6 +59,7 @@ import type {
   CollectibleReferenceImport,
   PublicationReadiness,
   AccountCapability,
+  MarketSummary,
 } from "@/domain";
 import { basisPoints, minorUnits, percentage } from "@/domain";
 import { createFinanceApiRepository } from "./finance-api-repository";
@@ -84,6 +85,9 @@ type MarketAssetDto = {
   ownersCount?: number | null;
   confidence: number | null;
   source: string | null;
+  markSource?: string | null;
+  freshness?: string | null;
+  lastSuccessfulRefreshAt?: string | null;
   dataStatus: "DEMO" | "DELAYED" | "LIVE" | null;
   asOf: string | null;
   marketReference: {
@@ -195,6 +199,9 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         }
       : undefined,
     source: value.source ?? undefined,
+    markSource: value.markSource ?? undefined,
+    freshness: value.freshness ?? undefined,
+    lastSuccessfulRefreshAt: value.lastSuccessfulRefreshAt as ISODateTime | undefined,
     asOf: (value.asOf ?? undefined) as ISODateTime | undefined,
     confidence: value.confidence === null ? undefined : percentage(value.confidence),
     dataStatus: value.dataStatus ?? undefined,
@@ -2487,7 +2494,26 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
     market: {
-      getMarketSummary: unsupported("Market summary"),
+      async getMarketSummary() {
+        const value = await client.get<{
+          totalEstimatedMarketValue: { minor: string; currency: "GBP" } | null;
+          volume24h: { minor: string; currency: "GBP" } | null;
+          activeAssetCount: number;
+          collectorCount: number;
+        }>("/market/summary");
+        const empty = { amount: minorUnits(0), currency: "GBP" as const };
+        return {
+          totalMarketValue: value.totalEstimatedMarketValue
+            ? { amount: safeMinor(value.totalEstimatedMarketValue.minor), currency: "GBP" as const }
+            : empty,
+          volume24h: value.volume24h
+            ? { amount: safeMinor(value.volume24h.minor), currency: "GBP" as const }
+            : empty,
+          activeAssets: value.activeAssetCount,
+          verifiedAssets: value.activeAssetCount,
+          activeCollectors: value.collectorCount,
+        } satisfies MarketSummary;
+      },
       async getPriceHistory(assetId, range) {
         const backendRange = (
           { "24H": "1D", "7D": "7D", "30D": "30D", "90D": "3M", "1Y": "1Y", ALL: "ALL" } as const

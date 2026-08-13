@@ -219,6 +219,41 @@ const configSchema = z.object({
     .min(100)
     .max(3_600_000)
     .default(60_000),
+  MARKET_REFRESH_WORKER_ENABLED: z.enum(['true', 'false']).optional(),
+  MARKET_REFRESH_POLL_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(5_000)
+    .max(3_600_000)
+    .default(300_000),
+  MARKET_REFRESH_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  MARKET_REFRESH_LEASE_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .max(3_600_000)
+    .default(120_000),
+  MARKET_REFRESH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  MARKET_REFRESH_RETRY_BASE_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(300_000)
+    .default(30_000),
+  MARKET_REFRESH_RETRY_MAX_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .max(86_400_000)
+    .default(3_600_000),
+  PRICECHARTING_API_BASE_URL: z.string().url().optional(),
+  PRICECHARTING_API_KEY: z.string().min(1).optional(),
+  PRICECHARTING_REQUEST_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(30_000)
+    .default(10_000),
   // Operations controls are deliberately explicit. Production defaults to fail closed;
   // non-production environments retain their local test/development behavior unless set.
   OPERATIONAL_TRADING_ENABLED: z.enum(['true', 'false']).optional(),
@@ -319,6 +354,16 @@ export type AppConfig = {
   outboxMaxAttempts: number;
   outboxRetryBaseMs: number;
   outboxRetryMaxMs: number;
+  marketRefreshWorkerEnabled: boolean;
+  marketRefreshPollIntervalMs: number;
+  marketRefreshBatchSize: number;
+  marketRefreshLeaseMs: number;
+  marketRefreshMaxAttempts: number;
+  marketRefreshRetryBaseMs: number;
+  marketRefreshRetryMaxMs: number;
+  priceChartingApiBaseUrl?: string;
+  priceChartingApiKey?: string;
+  priceChartingRequestTimeoutMs: number;
   operationalFeatures: {
     trading: boolean;
     deposits: boolean;
@@ -704,6 +749,19 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     outboxMaxAttempts: parsed.OUTBOX_MAX_ATTEMPTS,
     outboxRetryBaseMs: parsed.OUTBOX_RETRY_BASE_MS,
     outboxRetryMaxMs: parsed.OUTBOX_RETRY_MAX_MS,
+    marketRefreshWorkerEnabled:
+      parsed.MARKET_REFRESH_WORKER_ENABLED === undefined
+        ? parsed.NODE_ENV !== 'test'
+        : parsed.MARKET_REFRESH_WORKER_ENABLED === 'true',
+    marketRefreshPollIntervalMs: parsed.MARKET_REFRESH_POLL_INTERVAL_MS,
+    marketRefreshBatchSize: parsed.MARKET_REFRESH_BATCH_SIZE,
+    marketRefreshLeaseMs: parsed.MARKET_REFRESH_LEASE_MS,
+    marketRefreshMaxAttempts: parsed.MARKET_REFRESH_MAX_ATTEMPTS,
+    marketRefreshRetryBaseMs: parsed.MARKET_REFRESH_RETRY_BASE_MS,
+    marketRefreshRetryMaxMs: parsed.MARKET_REFRESH_RETRY_MAX_MS,
+    priceChartingApiBaseUrl: parsed.PRICECHARTING_API_BASE_URL?.replace(/\/$/, ''),
+    priceChartingApiKey: parsed.PRICECHARTING_API_KEY,
+    priceChartingRequestTimeoutMs: parsed.PRICECHARTING_REQUEST_TIMEOUT_MS,
     operationalFeatures: {
       trading: parseOperationalFeature(
         parsed.OPERATIONAL_TRADING_ENABLED,

@@ -20,6 +20,7 @@ import { FinancialReconciliationService } from '../application/financial-reconci
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
+import { PortfolioSnapshotService, type PortfolioPerformanceRange } from '../application/portfolio-snapshot.service';
 
 const historyQuery = z
   .object({
@@ -33,6 +34,7 @@ const reversalBody = z
     reasonCode: z.string().min(1).max(64),
   })
   .strict();
+const performanceQuery = z.object({ range: z.enum(['1D', '1W', '1M', '3M', '1Y', 'ALL']).default('1M') }).strict();
 
 @Controller()
 export class FinanceController {
@@ -41,6 +43,7 @@ export class FinanceController {
     private readonly portfolio: PortfolioQueryService,
     private readonly reconciliation: FinancialReconciliationService,
     private readonly limiter: ControlRateLimitService,
+    private readonly snapshots: PortfolioSnapshotService,
   ) {}
 
   /** Self-only, derived projection. No account IDs, counterparty data, or journal metadata. */
@@ -76,6 +79,14 @@ export class FinanceController {
   @UseGuards(AccessTokenGuard)
   holdings(@Req() req: AuthenticatedRequest) {
     return this.portfolio.holdingsForUser(req.actor!.userId);
+  }
+
+  @Get('me/portfolio/performance')
+  @UseGuards(AccessTokenGuard)
+  performance(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = performanceQuery.safeParse(query);
+    if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Request validation failed.' });
+    return this.snapshots.performanceForUser(req.actor!.userId, parsed.data.range as PortfolioPerformanceRange);
   }
 
   @Get('me/portfolio/lots')

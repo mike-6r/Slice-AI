@@ -24,6 +24,9 @@ export interface PortfolioHolding {
   valuationAsOf: ISODateTime | null;
   valuationStatus: PortfolioValuationStatus;
   costBasisMinor: GbpMinorUnits | null;
+  valuationSource?: string | null;
+  valuationFreshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
+  lastSuccessfulRefreshAt?: ISODateTime | null;
 }
 
 export interface PortfolioLot {
@@ -57,4 +60,21 @@ export interface PortfolioSummary {
   estimatedHoldingsValueMinor: GbpMinorUnits | null;
   estimatedPortfolioValueMinor: GbpMinorUnits | null;
   valuationStatus: PortfolioValuationStatus;
+}
+
+export type PortfolioPerformanceRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
+export interface PortfolioPerformancePoint {
+  timestamp: ISODateTime;
+  valueMinor: GbpMinorUnits;
+  currency: "GBP";
+  freshness: string;
+}
+export interface PortfolioPerformance {
+  range: PortfolioPerformanceRange;
+  points: PortfolioPerformancePoint[];
+  periodChangeMinor: GbpMinorUnits | null;
+  periodChangeBps: number | null;
+  netCashFlowMinor: GbpMinorUnits;
+  direction: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+  freshness: string;
 }

@@ -9,6 +9,7 @@ import {
   CACHE_STORE,
   type CacheStore,
 } from '../../infrastructure/redis/redis.store';
+import { MarketProviderRegistry } from './market-provider.registry';
 
 const ranges = {
   '1D': 1,
@@ -21,7 +22,7 @@ const ranges = {
 type Range = keyof typeof ranges;
 const asMoney = (value: bigint, currency: string) => ({
   minor: value.toString(),
-  currency: currency === 'GBP' ? 'GBP' : 'GBP',
+  currency: ['GBP', 'USD', 'CAD', 'EUR'].includes(currency) ? currency : 'GBP',
 });
 const asOf = (date: Date) => date.toISOString();
 const status = (value: string) => value as 'DEMO' | 'DELAYED' | 'LIVE';
@@ -31,6 +32,7 @@ export class MarketService {
   constructor(
     private readonly db: PrismaService,
     @Inject(CACHE_STORE) private readonly cache: CacheStore,
+    private readonly providers: MarketProviderRegistry,
   ) {}
 
   async list(query: {
@@ -87,6 +89,11 @@ export class MarketService {
           where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
           orderBy: { observedAt: 'desc' },
           take: 2,
+        },
+        marketObservations: {
+          where: { included: true },
+          orderBy: { observedAt: 'desc' },
+          take: 50,
         },
         publication: true,
         custodyRecord: true,
@@ -185,6 +192,11 @@ export class MarketService {
           orderBy: { observedAt: 'desc' },
           take: 2,
         },
+        marketObservations: {
+          where: { included: true },
+          orderBy: { observedAt: 'desc' },
+          take: 50,
+        },
         publication: true,
         custodyRecord: true,
         insuranceCoverage: {
@@ -238,6 +250,11 @@ export class MarketService {
               orderBy: { observedAt: 'desc' },
               take: 2,
             },
+            marketObservations: {
+              where: { included: true },
+              orderBy: { observedAt: 'desc' },
+              take: 50,
+            },
           },
         },
       },
@@ -260,6 +277,15 @@ export class MarketService {
     await this.asset(slug);
     return { availability: 'NOT_AVAILABLE_UNTIL_TRADING', kind, items: [] };
   }
+  async providerHealth() {
+    const providers = await Promise.all(
+      this.providers.all().map(async (provider) => ({
+        provider: provider.providerId,
+        ...(await provider.health()),
+      })),
+    );
+    return { providers };
+  }
   private async asset(slug: string) {
     const asset = await this.db.asset.findFirst({
       where: { slug, status: 'PUBLISHED' },
@@ -268,11 +294,16 @@ export class MarketService {
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
-        valuationEvidence: {
-          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
-          orderBy: { observedAt: 'desc' },
-          take: 2,
-        },
+      valuationEvidence: {
+        where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+        orderBy: { observedAt: 'desc' },
+        take: 2,
+      },
+      marketObservations: {
+        where: { included: true },
+        orderBy: { observedAt: 'desc' },
+        take: 50,
+      },
       },
     });
     if (!asset)
@@ -311,6 +342,18 @@ type PublicAssetRow = {
     source: string;
     status: string;
     asOf: Date;
+    markSource?: string;
+    freshness?: string;
+    lastSuccessfulRefreshAt?: Date | null;
+  }>;
+  marketObservations?: Array<{
+    observationType: string;
+    priceMinor: bigint;
+    currency: string;
+    providerCode: string;
+    externalUrl: string | null;
+    observedAt: Date;
+    occurredAt: Date | null;
   }>;
   publication?: { status: string; publishedAt: Date | null } | null;
   custodyRecord?: { status: string; updatedAt: Date } | null;
@@ -356,6 +399,10 @@ function assetView(asset: PublicAssetRow) {
     ownersCount: market?.ownersCount ?? null,
     confidence: market?.confidence ?? null,
     source: market?.source ?? 'NO_MARKET_DATA',
+    markSource: market?.markSource ?? null,
+    freshness: market?.freshness ?? 'UNAVAILABLE',
+    lastSuccessfulRefreshAt: market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
+    marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference: externalMarketReference(asset.valuationEvidence ?? []),
     dataStatus: market ? status(market.status) : 'DEMO',
     asOf: market ? asOf(market.asOf) : null,
@@ -379,6 +426,37 @@ function assetView(asset: PublicAssetRow) {
           expiresAt: asset.insuranceCoverage[0].expiresAt.toISOString(),
         }
       : null,
+  };
+}
+
+function summarizeObservations(
+  observations: NonNullable<PublicAssetRow['marketObservations']>,
+) {
+  const summarize = (rows: typeof observations) => {
+    if (!rows.length) return null;
+    const currencies = new Set(rows.map((row) => row.currency));
+    if (currencies.size !== 1) return { count: rows.length, mixedCurrency: true };
+    const sorted = [...rows].sort((a, b) =>
+      a.priceMinor < b.priceMinor ? -1 : a.priceMinor > b.priceMinor ? 1 : 0,
+    );
+    const midpoint = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2
+      ? sorted[midpoint]!.priceMinor
+      : (sorted[midpoint - 1]!.priceMinor + sorted[midpoint]!.priceMinor) / 2n;
+    return {
+      count: rows.length,
+      currency: sorted[0]!.currency,
+      lowMinor: sorted[0]!.priceMinor.toString(),
+      highMinor: sorted.at(-1)!.priceMinor.toString(),
+      medianMinor: median.toString(),
+      latestMinor: sorted.at(-1)!.priceMinor.toString(),
+      latestAt: (sorted.at(-1)!.occurredAt ?? sorted.at(-1)!.observedAt).toISOString(),
+    };
+  };
+  return {
+    completedSales: summarize(observations.filter((item) => item.observationType === 'COMPLETED_SALE')),
+    activeListings: summarize(observations.filter((item) => item.observationType === 'ACTIVE_LISTING')),
+    providerCount: new Set(observations.map((item) => item.providerCode)).size,
   };
 }
 

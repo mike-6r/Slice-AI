@@ -5,6 +5,8 @@ import type {
   PortfolioHolding,
   PortfolioLot,
   PortfolioSummary,
+  PortfolioPerformance,
+  PortfolioPerformanceRange,
   PortfolioTransaction,
   PortfolioValuationStatus,
 } from "@/domain";
@@ -77,6 +79,11 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     valuationStatus: valuation(value.valuationStatus),
     costBasisMinor:
       value.costBasisMinor === null ? null : minor(value.costBasisMinor, "holding.costBasisMinor"),
+    valuationSource: nullableString(value.valuationSource),
+    valuationFreshness: nullableString(value.valuationFreshness) ?? "UNAVAILABLE",
+    lastSuccessfulRefreshAt: nullableString(
+      value.lastSuccessfulRefreshAt,
+    ) as PortfolioHolding["lastSuccessfulRefreshAt"],
   };
 };
 export const mapLot = (raw: unknown): PortfolioLot => {
@@ -128,6 +135,39 @@ export const mapPortfolio = (raw: unknown): PortfolioSummary => {
     valuationStatus: status,
   };
 };
+export const mapPerformance = (raw: unknown): PortfolioPerformance => {
+  const body = object(raw);
+  const range = body.range;
+  if (!["1D", "1W", "1M", "3M", "1Y", "ALL"].includes(String(range)) || !Array.isArray(body.points))
+    throw new Error("Invalid portfolio performance response.");
+  const direction =
+    body.direction === "POSITIVE" || body.direction === "NEGATIVE" || body.direction === "NEUTRAL"
+      ? body.direction
+      : "NEUTRAL";
+  return {
+    range: range as PortfolioPerformanceRange,
+    points: body.points.map((rawPoint) => {
+      const point = object(rawPoint);
+      return {
+        timestamp: requiredString(
+          point.timestamp,
+          "performance.timestamp",
+        ) as PortfolioPerformance["points"][number]["timestamp"],
+        valueMinor: minor(point.valueMinor, "performance.valueMinor"),
+        currency: "GBP" as const,
+        freshness: nullableString(point.freshness) ?? "UNAVAILABLE",
+      };
+    }),
+    periodChangeMinor:
+      body.periodChangeMinor === null
+        ? null
+        : minor(body.periodChangeMinor, "performance.periodChangeMinor"),
+    periodChangeBps: typeof body.periodChangeBps === "number" ? body.periodChangeBps : null,
+    netCashFlowMinor: minor(body.netCashFlowMinor, "performance.netCashFlowMinor"),
+    direction,
+    freshness: nullableString(body.freshness) ?? "UNAVAILABLE",
+  };
+};
 
 export const createFinanceApiRepository = (client: ApiClient): PortfolioRepository => ({
   async getPortfolio() {
@@ -147,5 +187,8 @@ export const createFinanceApiRepository = (client: ApiClient): PortfolioReposito
     const body = object(await client.get<unknown>("/me/wallet/transactions", input));
     if (!Array.isArray(body.items)) throw new Error("Invalid transaction history response.");
     return { items: body.items.map(mapTransaction), nextCursor: nullableString(body.nextCursor) };
+  },
+  async getPerformance(range = "1M") {
+    return mapPerformance(await client.get<unknown>("/me/portfolio/performance", { range }));
   },
 });

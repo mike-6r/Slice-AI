@@ -77,7 +77,7 @@ export class PortfolioQueryService {
           where: { currency: 'GBP' },
           orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
           take: 1,
-          select: { estimatedMarketValueMinor: true, asOf: true, status: true },
+          select: { estimatedMarketValueMinor: true, asOf: true, status: true, markSource: true, freshness: true, lastSuccessfulRefreshAt: true },
         },
       },
     });
@@ -122,7 +122,10 @@ export class PortfolioQueryService {
         ).toString(),
         estimatedValueMinor: estimated?.toString() ?? null,
         valuationAsOf: mark?.asOf.toISOString() ?? null,
-        valuationStatus: mark?.status ?? 'UNAVAILABLE',
+        valuationStatus: mark ? 'FULL' : 'UNAVAILABLE',
+        valuationSource: mark?.markSource ?? null,
+        valuationFreshness: mark?.freshness ?? 'UNAVAILABLE',
+        lastSuccessfulRefreshAt: mark?.lastSuccessfulRefreshAt?.toISOString() ?? null,
         costBasisMinor: relevantLots.length ? costBasis.toString() : null,
       };
     });

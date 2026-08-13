@@ -88,6 +88,9 @@ export interface Asset {
     asOf?: ISODateTime;
     confidence?: Percentage;
     dataStatus?: "DEMO" | "DELAYED" | "LIVE";
+    markSource?: string;
+    freshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
+    lastSuccessfulRefreshAt?: ISODateTime;
     change24hBps?: number;
     /** Public aggregate availability from the market snapshot, never account ownership. */
     availabilityBps?: BasisPoints;

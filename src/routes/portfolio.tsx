@@ -25,6 +25,8 @@ import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type {
   PortfolioHolding,
   PortfolioSummary,
+  PortfolioPerformance,
+  PortfolioPerformanceRange,
   PortfolioTransaction,
   TradingOrderPage,
   TradingOrderView,
@@ -66,6 +68,7 @@ export function Portfolio() {
   const { isAuthenticated } = useSession();
   const tab = usePortfolioTab();
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>("ALL");
+  const [performanceRange, setPerformanceRange] = useState<PortfolioPerformanceRange>("1M");
   const summary = useQuery({
     queryKey: queryKeys.portfolio.summary,
     queryFn: services.portfolio.portfolio,
@@ -84,6 +87,11 @@ export function Portfolio() {
   const orders = useQuery({
     queryKey: queryKeys.trading.orders,
     queryFn: () => services.trading.orders({ limit: 100 }),
+    enabled: isAuthenticated,
+  });
+  const performance = useQuery({
+    queryKey: ["portfolio", "performance", performanceRange],
+    queryFn: () => services.portfolio.performance(performanceRange),
     enabled: isAuthenticated,
   });
   const categories = useMemo(
@@ -121,7 +129,12 @@ export function Portfolio() {
           aria-label="Portfolio holdings workspace"
         >
           <div className="portfolio-workspace-grid__main">
-            <PortfolioPerformancePanel query={summary} />
+            <PortfolioPerformancePanel
+              query={summary}
+              performance={performance}
+              range={performanceRange}
+              onRangeChange={setPerformanceRange}
+            />
             <HoldingsPanel
               summary={summary}
               query={holdings}
@@ -133,7 +146,7 @@ export function Portfolio() {
           </div>
           <aside className="portfolio-workspace-grid__side" aria-label="Portfolio account summary">
             <AllocationPanel query={summary} />
-            <CurrentPerformancePanel query={summary} />
+            <CurrentPerformancePanel query={summary} performance={performance} />
             <PortfolioBreakdownPanel query={summary} />
             <OpenOrdersPanel summary={summary} query={orders} />
           </aside>
@@ -386,13 +399,23 @@ function PortfolioKpi({
   );
 }
 
-function PortfolioPerformancePanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+function PortfolioPerformancePanel({
+  query,
+  performance,
+  range,
+  onRangeChange,
+}: {
+  query: UseQueryResult<PortfolioSummary>;
+  performance: UseQueryResult<PortfolioPerformance>;
+  range: PortfolioPerformanceRange;
+  onRangeChange: (range: PortfolioPerformanceRange) => void;
+}) {
   const valuation = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
   return (
     <PortfolioPanel
       title="Portfolio performance"
       className="portfolio-panel--hero-performance"
-      header={<PerformancePeriods />}
+      header={<PerformancePeriods active={range} onChange={onRangeChange} />}
     >
       {query.isLoading ? (
         <ChartSkeleton />
@@ -412,16 +435,7 @@ function PortfolioPerformancePanel({ query }: { query: UseQueryResult<PortfolioS
               </p>
             ) : null}
           </div>
-          <div className="portfolio-performance-limited">
-            <ChartNoAxesCombined aria-hidden="true" />
-            <div>
-              <strong>Historical performance data is not yet available.</strong>
-              <p>
-                Slice will show period changes and a performance chart once sufficient portfolio
-                snapshots exist.
-              </p>
-            </div>
-          </div>
+          <PerformanceChart query={performance} />
           <dl className="portfolio-performance-periods">
             <div>
               <dt>Current marked value</dt>
@@ -451,7 +465,17 @@ function PortfolioPerformancePanel({ query }: { query: UseQueryResult<PortfolioS
             </div>
             <div>
               <dt>All-time high</dt>
-              <dd>Unavailable</dd>
+              <dd>
+                {performance.data?.points.length
+                  ? formatPortfolioMoney(
+                      performance.data.points.reduce(
+                        (max, point) =>
+                          BigInt(point.valueMinor) > BigInt(max) ? point.valueMinor : max,
+                        performance.data.points[0]!.valueMinor,
+                      ),
+                    )
+                  : "Insufficient history"}
+              </dd>
             </div>
           </dl>
         </div>
@@ -460,19 +484,77 @@ function PortfolioPerformancePanel({ query }: { query: UseQueryResult<PortfolioS
   );
 }
 
-function PerformancePeriods() {
+function PerformancePeriods({
+  active,
+  onChange,
+}: {
+  active: PortfolioPerformanceRange;
+  onChange: (range: PortfolioPerformanceRange) => void;
+}) {
+  const periods: PortfolioPerformanceRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
   return (
-    <div className="portfolio-periods" aria-label="Historical performance range unavailable">
-      {["1D", "7D", "30D", "90D", "1Y", "ALL"].map((period) => (
+    <div className="portfolio-periods" aria-label="Historical performance range">
+      {periods.map((period) => (
         <button
           key={period}
           type="button"
-          disabled
-          title="Historical snapshots are not available yet"
+          className={period === active ? "is-active" : undefined}
+          onClick={() => onChange(period)}
         >
           {period}
         </button>
       ))}
+    </div>
+  );
+}
+
+function PerformanceChart({ query }: { query: UseQueryResult<PortfolioPerformance> }) {
+  const points = query.data?.points ?? [];
+  if (query.isLoading) return <ChartSkeleton />;
+  if (points.length < 2) {
+    return (
+      <div className="portfolio-performance-limited">
+        <ChartNoAxesCombined aria-hidden="true" />
+        <div>
+          <strong>
+            Portfolio performance will appear here as market and trading history is recorded.
+          </strong>
+          <p>
+            {points.length
+              ? "One snapshot is recorded; a second legitimate point is needed to draw the chart."
+              : "Historical performance data is not yet available. No historical snapshots are available for this range yet."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const values = points.map((point) => Number(point.valueMinor));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  const line = points
+    .map(
+      (point, index) =>
+        `${(index / (points.length - 1)) * 100},${100 - ((Number(point.valueMinor) - min) / span) * 84 - 8}`,
+    )
+    .join(" ");
+  const direction = query.data?.direction ?? "NEUTRAL";
+  return (
+    <div
+      className={`portfolio-performance-chart portfolio-performance-chart--${direction.toLowerCase()}`}
+    >
+      <svg
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label="Portfolio value over the selected period"
+        preserveAspectRatio="none"
+      >
+        <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="portfolio-performance-chart__legend">
+        <span>{formatPortfolioMoney(points[0]!.valueMinor)}</span>
+        <span>{formatPortfolioMoney(points.at(-1)!.valueMinor)}</span>
+      </div>
     </div>
   );
 }
@@ -752,7 +834,13 @@ function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
   );
 }
 
-function CurrentPerformancePanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+function CurrentPerformancePanel({
+  query,
+  performance,
+}: {
+  query: UseQueryResult<PortfolioSummary>;
+  performance: UseQueryResult<PortfolioPerformance>;
+}) {
   const valuation = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
   return (
     <PortfolioPanel title="Current performance" className="portfolio-panel--current-performance">
@@ -781,7 +869,10 @@ function CurrentPerformancePanel({ query }: { query: UseQueryResult<PortfolioSum
             </div>
           </dl>
           <p className="portfolio-performance-note">
-            Historical performance data is not yet available.
+            {performance.data?.periodChangeMinor === null ||
+            performance.data?.periodChangeMinor === undefined
+              ? "Performance will appear as market and trading history is recorded."
+              : `${performance.data.direction === "POSITIVE" ? "+" : performance.data.direction === "NEGATIVE" ? "" : ""}${formatSignedPortfolioMoney(performance.data.periodChangeMinor)} over ${performance.data.range}.`}
           </p>
         </>
       ) : (

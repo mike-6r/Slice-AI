@@ -6,6 +6,8 @@ import { PortfolioLotService } from './application/portfolio-lot.service';
 import { PortfolioQueryService } from './application/portfolio-query.service';
 import { FinancialReconciliationService } from './application/financial-reconciliation.service';
 import { FinanceController } from './http/finance.controller';
+import { PortfolioSnapshotService } from './application/portfolio-snapshot.service';
+import { PortfolioSnapshotWorker } from './application/portfolio-snapshot.worker';
 
 @Module({
   imports: [AuthModule, AccessControlModule],
@@ -15,12 +17,15 @@ import { FinanceController } from './http/finance.controller';
     PortfolioLotService,
     PortfolioQueryService,
     FinancialReconciliationService,
+    PortfolioSnapshotService,
+    PortfolioSnapshotWorker,
   ],
   exports: [
     FinancialLedgerService,
     PortfolioLotService,
     PortfolioQueryService,
     FinancialReconciliationService,
+    PortfolioSnapshotService,
   ],
 })
 export class FinanceModule {}

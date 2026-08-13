@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MarketController } from './market.controller';
 import { MarketService } from './market.service';
-@Module({ controllers: [MarketController], providers: [MarketService] })
+import { MarketProviderRegistry } from './market-provider.registry';
+import { MarketRefreshService } from './market-refresh.service';
+import { MarketRefreshWorker } from './market-refresh.worker';
+@Module({ controllers: [MarketController], providers: [MarketService, MarketProviderRegistry, MarketRefreshService, MarketRefreshWorker], exports: [MarketService, MarketRefreshService, MarketProviderRegistry] })
 export class MarketModule {}

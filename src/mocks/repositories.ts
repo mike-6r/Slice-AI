@@ -545,6 +545,17 @@ export const mockRepositories: AppRepositories = {
     async getTransactions() {
       return { items: [], nextCursor: null };
     },
+    async getPerformance(range = "1M") {
+      return {
+        range,
+        points: [],
+        periodChangeMinor: null,
+        periodChangeBps: null,
+        netCashFlowMinor: "0",
+        direction: "NEUTRAL" as const,
+        freshness: "UNAVAILABLE",
+      };
+    },
   },
   collectors: {
     async listCollectors() {
