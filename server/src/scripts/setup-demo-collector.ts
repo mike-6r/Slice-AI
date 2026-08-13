@@ -925,21 +925,25 @@ async function ensureAsset(
   const publicId = `stg_collector_${spec.key}`;
   const existing = await db.asset.findUnique({ where: { publicId } });
   if (existing) {
+    const patch = {
+      title: spec.title,
+      shortName: spec.title,
+      year: spec.year,
+      manufacturer: spec.manufacturer,
+      edition: spec.set,
+      cardNumber: spec.cardNumber,
+      description: showcaseDescription(spec),
+      gradeScaleEntryId,
+    };
     await catalogue.updateAsset(
       admin,
       existing.id,
-      {
-        title: spec.title,
-        shortName: spec.title,
-        year: spec.year,
-        manufacturer: spec.manufacturer,
-        edition: spec.set,
-        cardNumber: spec.cardNumber,
-        description: showcaseDescription(spec),
-        gradeScaleEntryId,
-      },
+      patch,
       `collector-asset-refresh-${randomUUID()}`,
-      `collector-asset-refresh:${spec.key}`,
+      `collector-asset-refresh:${spec.key}:${createHash('sha256')
+        .update(JSON.stringify(patch))
+        .digest('hex')
+        .slice(0, 16)}`,
     );
     return db.asset.findUniqueOrThrow({ where: { id: existing.id } });
   }
