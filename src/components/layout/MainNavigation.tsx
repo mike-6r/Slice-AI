@@ -335,11 +335,13 @@ export function MainNavigation() {
                   Account
                 </Link>
                 <Link
-                  to="/list"
+                  to={canAccessCollectorWorkspace(roles) ? "/list" : "/onboarding"}
+                  search={canAccessCollectorWorkspace(roles) ? undefined : { returnTo: "/list" }}
                   onClick={() => setMobileOpen(false)}
                   className="primary-action mt-2 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold text-background"
                 >
-                  <Plus className="size-4" aria-hidden="true" /> List an Asset
+                  <Plus className="size-4" aria-hidden="true" />
+                  {canAccessCollectorWorkspace(roles) ? "List an Asset" : "Become a Collector"}
                 </Link>
               </>
             )}
@@ -451,10 +453,12 @@ function HeaderActions({
         )}
       </div>
       <Link
-        to="/list"
+        to={canAccessCollectorWorkspace(roles) ? "/list" : "/onboarding"}
+        search={canAccessCollectorWorkspace(roles) ? undefined : { returnTo: "/list" }}
         className="primary-action ml-1 inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-xs font-semibold text-background"
       >
-        <Plus className="size-4" aria-hidden="true" /> List an Asset
+        <Plus className="size-4" aria-hidden="true" />
+        {canAccessCollectorWorkspace(roles) ? "List an Asset" : "Become a Collector"}
       </Link>
     </>
   );
@@ -570,6 +574,15 @@ function ProfileMenu({
             close={close}
           />
         )}
+        {!canAccessCollectorWorkspace(roles) && (
+          <ProfileMenuLink
+            to="/onboarding"
+            search={{ returnTo: "/list" }}
+            icon={<ClipboardCheck />}
+            label="Become a Collector"
+            close={close}
+          />
+        )}
         <ProfileMenuLink to="/account" icon={<CircleUserRound />} label="Account" close={close} />
         <ProfileMenuLink
           to="/wallet"
@@ -607,11 +620,13 @@ function ProfileMenu({
 }
 function ProfileMenuLink({
   to,
+  search,
   icon,
   label,
   close,
 }: {
   to: string;
+  search?: Record<string, string>;
   icon: React.ReactNode;
   label: string;
   close: () => void;
@@ -619,6 +634,7 @@ function ProfileMenuLink({
   return (
     <Link
       to={to as never}
+      search={search as never}
       onClick={close}
       className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm text-subtle hover:bg-surface hover:text-foreground"
     >

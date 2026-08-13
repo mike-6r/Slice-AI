@@ -27,6 +27,7 @@ import type {
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
+import { customerTerms } from "@/lib/customer-terminology";
 import {
   averageCostMinor,
   bestOrderBookLevel,
@@ -45,7 +46,7 @@ const messageFor = (error: unknown) => {
     if (error.code === "INSUFFICIENT_FUNDS")
       return "Your available cash does not cover this order and its authoritative fee preview.";
     if (error.code === "INSUFFICIENT_UNITS")
-      return "You do not have enough available shares for this sell order.";
+      return "You do not have enough available Slices for this sell order.";
     if (error.code === "COMPLIANCE_REQUIRED")
       return "Complete the required verification step before placing this order.";
     if (error.code === "MARKET_NOT_OPEN") return "This market is not currently accepting orders.";
@@ -139,18 +140,18 @@ export function TradingOrderForm({
   const limitPriceMinor = gbpInputToMinor(price);
 
   const validationError = useMemo(() => {
-    if (shares && !parsedShares) return "Enter a whole number of shares greater than zero.";
+    if (shares && !parsedShares) return "Enter a whole number of Slices greater than zero.";
     if (price && (!limitPriceMinor || BigInt(limitPriceMinor) <= 0n))
       return "Enter a valid GBP price with no more than two decimal places.";
     if (parsedShares && side === "SELL" && parsedShares > availableOwned)
-      return `You can sell up to ${availableOwned.toLocaleString("en-GB")} available shares.`;
+      return `You can sell up to ${availableOwned.toLocaleString("en-GB")} available Slices.`;
     if (
       parsedShares &&
       side === "BUY" &&
       publicAvailable !== null &&
       parsedShares > publicAvailable
     )
-      return `Only ${publicAvailable.toLocaleString("en-GB")} shares are publicly available.`;
+      return `Only ${publicAvailable.toLocaleString("en-GB")} Slices are publicly available.`;
     return null;
   }, [availableOwned, limitPriceMinor, parsedShares, price, publicAvailable, shares, side]);
 
@@ -280,7 +281,7 @@ export function TradingOrderForm({
           </h1>
           <p>Slice returned the authoritative order state below.</p>
           <dl className="trading-summary-grid">
-            <Cell label="Shares" value={result.originalUnits} />
+            <Cell label={customerTerms.many} value={result.originalUnits} />
             <Cell label="Filled" value={result.filledUnits} />
             <Cell label="Remaining" value={result.remainingUnits} />
             <Cell label="Limit price" value={formatGbpMinor(result.limitPriceMinor)} />
@@ -321,11 +322,12 @@ export function TradingOrderForm({
       <header className="trading-order-header">
         <div>
           <p className="trading-eyebrow">
-            {side === "BUY" ? "Acquire ownership" : "Manage ownership"}
+            {side === "BUY" ? customerTerms.own : customerTerms.sell}
           </p>
           <h1>Place a {action.toLowerCase()} order</h1>
           <p>
-            Set your share quantity and limit price. Slice confirms fees, reservations and fills.
+            Choose how many Slices you want and your limit price. Slice confirms fees, reservations
+            and fills.
           </p>
         </div>
         <div className="trading-asset-chip">
@@ -356,12 +358,14 @@ export function TradingOrderForm({
                   <Scale aria-hidden="true" />
                 </span>
                 <div>
-                  <h2>Order details</h2>
-                  <p>Whole ownership shares only.</p>
+                  <h2>{side === "BUY" ? "Own Slices" : "Sell Slices"}</h2>
+                  <p>
+                    A Slice represents a portion of ownership linked to this physical collectible.
+                  </p>
                 </div>
               </div>
               <label className="trading-field-label" htmlFor="trading-shares">
-                Shares
+                Number of Slices
               </label>
               <input
                 id="trading-shares"
@@ -369,10 +373,10 @@ export function TradingOrderForm({
                 onChange={(event) => setShares(event.target.value)}
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="Enter number of shares"
+                placeholder="Enter number of Slices"
                 className="trading-input"
               />
-              <div className="trading-quick-row" aria-label="Quick share selection">
+              <div className="trading-quick-row" aria-label="Quick Slice selection">
                 {side === "BUY"
                   ? ["1", "5", "10", "25"].map((value) => (
                       <button key={value} type="button" onClick={() => setShares(value)}>
@@ -406,7 +410,7 @@ export function TradingOrderForm({
                 </button>
               </div>
               <label className="trading-field-label" htmlFor="trading-price">
-                Limit price per share
+                Limit price per Slice
               </label>
               <div className="trading-money-input">
                 <span>£</span>
@@ -429,8 +433,10 @@ export function TradingOrderForm({
                   : side === "SELL" && bestBid
                     ? `Pre-filled from the best bid: ${formatGbpMinor(BigInt(bestBid.pricePerUnit.amount))}.`
                     : referencePrice
-                      ? `No matching book level; using the public reference share price of ${formatGbpMinor(referencePrice)}.`
-                      : "Enter the highest buy price or lowest sell price you will accept."}
+                      ? `No matching book level; using the public reference Slice price of ${formatGbpMinor(referencePrice)}.`
+                      : side === "BUY"
+                        ? "Limit price is the highest price you are willing to pay per Slice."
+                        : "Limit price is the lowest price you are willing to accept per Slice."}
               </p>
               <fieldset className="trading-tif">
                 <legend>Time in force</legend>
@@ -505,7 +511,7 @@ export function TradingOrderForm({
                 <dl className="trading-summary-grid trading-review-grid">
                   <Cell label="Asset" value={asset.data.details.title} />
                   <Cell label="Side" value={action} />
-                  <Cell label="Shares" value={review.units} />
+                  <Cell label={customerTerms.many} value={review.units} />
                   <Cell label="Limit price" value={formatGbpMinor(review.limitPriceMinor)} />
                   <Cell label="Order value" value={formatGbpMinor(review.grossMinor)} />
                   <Cell label="Authoritative fee preview" value={formatGbpMinor(review.feeMinor)} />
@@ -567,7 +573,7 @@ export function TradingOrderForm({
               <dl className="trading-context-list">
                 <ContextRow label="Available cash" value={formatGbpMinor(availableCash)} />
                 <ContextRow
-                  label="Shares already owned"
+                  label={`${customerTerms.many} already owned`}
                   value={settledOwned.toLocaleString("en-GB")}
                 />
                 <ContextRow
@@ -578,11 +584,14 @@ export function TradingOrderForm({
                       : publicAvailable.toLocaleString("en-GB")
                   }
                 />
-                <ContextRow label="Minimum order" value="1 share" />
+                <ContextRow label="Minimum order" value="1 Slice" />
               </dl>
             ) : (
               <dl className="trading-context-list">
-                <ContextRow label="Owned shares" value={settledOwned.toLocaleString("en-GB")} />
+                <ContextRow
+                  label={`${customerTerms.many} owned`}
+                  value={settledOwned.toLocaleString("en-GB")}
+                />
                 <ContextRow
                   label="Reserved in open orders"
                   value={reservedOwned.toLocaleString("en-GB")}
@@ -592,7 +601,7 @@ export function TradingOrderForm({
                   value={availableOwned.toLocaleString("en-GB")}
                 />
                 <ContextRow
-                  label="Average cost per share"
+                  label="Average cost per Slice"
                   value={averageCost === null ? "Unavailable" : formatGbpMinor(averageCost)}
                 />
               </dl>
@@ -600,7 +609,7 @@ export function TradingOrderForm({
           </ContextCard>
           <ContextCard title="Market snapshot" icon={<BookOpen />}>
             <div className="trading-book-head">
-              <span>Shares</span>
+              <span>{customerTerms.many}</span>
               <span>Price</span>
             </div>
             <BookSide label="Asks" levels={orderBook.data?.asks.slice(0, 3)} tone="ask" />

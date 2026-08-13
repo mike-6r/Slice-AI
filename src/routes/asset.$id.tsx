@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Bookmark, ChevronRight } from "lucide-react";
+import { ArrowLeft, Bookmark, CheckCircle2, ChevronRight, Info } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
+import { customerTerms } from "@/lib/customer-terminology";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -194,6 +195,19 @@ function AssetPage() {
               />
             </aside>
           </section>
+
+          <AssetOwnershipGuide
+            title={asset.title}
+            issuedSlices={shares.issuedShares}
+            availableSlices={shares.availableShares}
+            ownSlices={shares.ownShares}
+            sharePriceMinor={shares.sharePriceMinor}
+            owners={asset.ownersCount}
+            isAuthenticated={isAuthenticated}
+            status={assetQuery.data.status}
+            verification={assetQuery.data.verification?.status}
+            vaultStatus={assetQuery.data.vault?.status}
+          />
 
           <section className="asset-market-stats" aria-label="Market statistics">
             <h2>Market snapshot</h2>
@@ -390,25 +404,23 @@ function AssetPage() {
               </div>
             </section>
             <section className="asset-details-panel">
-              <h2>Market information</h2>
+              <h2>External market data</h2>
               <div>
                 <span>Publication</span>
                 <strong>Published</strong>
               </div>
               <div>
-                <span>
-                  {asset.dataStatus === "DEMO" ? "Illustrative Slice basis" : "Valuation"}
-                </span>
+                <span>"External whole-collectible reference"</span>
                 <strong>
                   {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
                 </strong>
               </div>
               <ExternalReference
-                label="Current listing"
+                label="Current listing (asking price)"
                 observation={assetQuery.data.market?.reference?.currentListing}
               />
               <ExternalReference
-                label="Recent observed sale"
+                label="Recent completed sale"
                 observation={assetQuery.data.market?.reference?.recentCompletedSale}
               />
               <div>
@@ -440,6 +452,121 @@ function AssetPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+function AssetOwnershipGuide({
+  title,
+  issuedSlices,
+  availableSlices,
+  ownSlices,
+  sharePriceMinor,
+  owners,
+  isAuthenticated,
+  status,
+  verification,
+  vaultStatus,
+}: {
+  title: string;
+  issuedSlices?: number;
+  availableSlices?: number;
+  ownSlices?: number;
+  sharePriceMinor?: number;
+  owners?: number;
+  isAuthenticated: boolean;
+  status: string;
+  verification?: string;
+  vaultStatus?: string;
+}) {
+  const ownership =
+    ownSlices !== undefined && issuedSlices && issuedSlices > 0
+      ? formatOwnershipPercent(ownSlices, issuedSlices)
+      : null;
+  const marketValue =
+    ownSlices !== undefined && sharePriceMinor !== undefined
+      ? formatCurrency(ownSlices * sharePriceMinor)
+      : "Unavailable";
+  const stages = [
+    { label: "Physical collectible", complete: status !== "draft" },
+    { label: "Verified", complete: verification === "verified" },
+    { label: "Vault / custody ready", complete: vaultStatus === "stored" },
+    { label: "Market live", complete: status === "listed" },
+  ];
+  return (
+    <section className="asset-ownership-guide" aria-labelledby="ownership-guide-title">
+      <div className="asset-ownership-guide__heading">
+        <div>
+          <p className="asset-kicker">How ownership works</p>
+          <h2 id="ownership-guide-title">Own a portion of the real collectible.</h2>
+          <p>
+            A Slice represents a portion of ownership linked to <strong>{title}</strong>. The
+            physical collectible remains held through Slice&apos;s custody process.
+          </p>
+        </div>
+        <Info aria-hidden="true" />
+      </div>
+      <div className="asset-ownership-guide__facts">
+        <div>
+          <span>Total Slices</span>
+          <strong>{issuedSlices?.toLocaleString() ?? "Unavailable"}</strong>
+        </div>
+        <div>
+          <span>Slices available</span>
+          <strong>{availableSlices?.toLocaleString() ?? "Unavailable"}</strong>
+        </div>
+        <div>
+          <span>Owners</span>
+          <strong>{owners ?? "Unavailable"}</strong>
+        </div>
+        <div>
+          <span>Price per Slice</span>
+          <strong>
+            {sharePriceMinor === undefined ? "Unavailable" : formatCurrency(sharePriceMinor)}
+          </strong>
+        </div>
+      </div>
+      <div className="asset-ownership-guide__position">
+        <div>
+          <p className="asset-kicker">
+            {isAuthenticated && ownSlices !== undefined ? "Your ownership" : "Example ownership"}
+          </p>
+          <strong>
+            {isAuthenticated && ownSlices !== undefined
+              ? `${ownSlices.toLocaleString()} Slices`
+              : "Choose your Slices in the trade panel"}
+          </strong>
+          <span>
+            {isAuthenticated && ownSlices !== undefined
+              ? ownSlices > 0
+                ? `${ownership ?? "Ownership unavailable"} · current value ${marketValue}`
+                : `You don't currently own any Slices in this collectible.`
+              : "Your order may remain open until it matches. Once filled, your Slices appear in Portfolio."}
+          </span>
+        </div>
+        <ol className="asset-ownership-guide__steps" aria-label="How buying works">
+          <li>
+            <b>1</b> Choose how many Slices you want
+          </li>
+          <li>
+            <b>2</b> Review the total and place your order
+          </li>
+          <li>
+            <b>3</b> Monitor or sell later where trading is available
+          </li>
+        </ol>
+      </div>
+      <div className="asset-status-strip" aria-label="Asset journey">
+        {stages.map((stage) => (
+          <span key={stage.label} className={stage.complete ? "is-complete" : "is-pending"}>
+            <CheckCircle2 aria-hidden="true" /> {stage.label}
+          </span>
+        ))}
+        <details>
+          <summary>View asset journey</summary>
+          <p>Submitted → Received → Verified → Valued → Vault ready → Market live</p>
+        </details>
+      </div>
+    </section>
   );
 }
 
@@ -579,12 +706,16 @@ function TradingPanel({
   return (
     <section className="asset-order-book">
       <header>
-        <h2>Trade ownership</h2>
-        <strong>Live order book</strong>
+        <h2>{customerTerms.own}</h2>
+        <strong>Ownership &amp; trading</strong>
       </header>
+      <p className="asset-trade-helper">
+        Choose a number of Slices, review your total, then place a limit order. It may remain open
+        until it matches.
+      </p>
       <div className="asset-trading-summary">
         <Stat
-          label="Share price"
+          label="Price per Slice"
           value={sharePriceMinor === undefined ? "Unavailable" : formatCurrency(sharePriceMinor)}
         />
         <Stat
@@ -592,7 +723,7 @@ function TradingPanel({
           value={
             availableShares === undefined
               ? "Unavailable"
-              : `${availableShares.toLocaleString()} shares`
+              : `${availableShares.toLocaleString()} Slices`
           }
         />
         <Stat
@@ -602,7 +733,7 @@ function TradingPanel({
               ? "Sign in to view"
               : ownShares === undefined
                 ? "No shares held"
-                : `${ownShares.toLocaleString()} shares`
+                : `${ownShares.toLocaleString()} Slices`
           }
         />
       </div>
@@ -617,32 +748,35 @@ function TradingPanel({
         </button>
       ) : (
         <>
-          <div className="asset-order-head">
-            <span>Side</span>
-            <span>Shares</span>
-            <span>Price</span>
-            <span>Orders</span>
-          </div>
-          <OrderRows rows={asks} kind="ask" />
-          <div className="asset-spread-row">
-            <span>Spread</span>
-            <strong>
-              {bids[0] && asks[0]
-                ? formatCurrency(
-                    Math.max(asks[0].pricePerUnit.amount - bids[0].pricePerUnit.amount, 0),
-                  )
-                : "Unavailable"}
-            </strong>
-          </div>
-          <OrderRows rows={bids} kind="bid" />
+          <details className="asset-advanced-market-details">
+            <summary>View order book</summary>
+            <div className="asset-order-head">
+              <span>Side</span>
+              <span>{customerTerms.many}</span>
+              <span>Price</span>
+              <span>Orders</span>
+            </div>
+            <OrderRows rows={asks} kind="ask" />
+            <div className="asset-spread-row">
+              <span>Spread</span>
+              <strong>
+                {bids[0] && asks[0]
+                  ? formatCurrency(
+                      Math.max(asks[0].pricePerUnit.amount - bids[0].pricePerUnit.amount, 0),
+                    )
+                  : "Unavailable"}
+              </strong>
+            </div>
+            <OrderRows rows={bids} kind="bid" />
+          </details>
         </>
       )}
       <div className="asset-order-actions">
         <Link to="/buy/$id" params={{ id }}>
-          Buy shares
+          {customerTerms.own}
         </Link>
         <Link to="/sell/$id" params={{ id }}>
-          Sell shares
+          {customerTerms.sell}
         </Link>
       </div>
     </section>

@@ -575,28 +575,36 @@ function HoldingsPanel({
       title={query.data ? `Your holdings (${query.data.length})` : "Your holdings"}
       className="portfolio-panel--holdings"
       header={
-        <div className="portfolio-holding-filters" role="tablist" aria-label="Filter holdings">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "ALL"}
-            className={filter === "ALL" ? "is-active" : ""}
-            onClick={() => onFilterChange("ALL")}
-          >
-            All holdings
-          </button>
-          {categories.map((category) => (
+        <div className="portfolio-holdings-header">
+          <div className="portfolio-holding-filters" role="tablist" aria-label="Filter holdings">
             <button
-              key={category}
               type="button"
               role="tab"
-              aria-selected={filter === category}
-              className={filter === category ? "is-active" : ""}
-              onClick={() => onFilterChange(category)}
+              aria-selected={filter === "ALL"}
+              className={filter === "ALL" ? "is-active" : ""}
+              onClick={() => onFilterChange("ALL")}
             >
-              {category}
+              All holdings
             </button>
-          ))}
+            {categories.map((category) => (
+              <button
+                key={category}
+                type="button"
+                role="tab"
+                aria-selected={filter === category}
+                className={filter === category ? "is-active" : ""}
+                onClick={() => onFilterChange(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+          <span className="portfolio-market-freshness">
+            Market values updated{" "}
+            {query.data?.[0]?.valuationAsOf
+              ? formatDateTime(query.data[0].valuationAsOf)
+              : "when marks are available"}
+          </span>
         </div>
       }
     >

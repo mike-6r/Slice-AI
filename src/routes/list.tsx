@@ -116,6 +116,12 @@ export function SubmissionPage() {
     queryFn: () => services.repositories.submissions.listOwn({ limit: 20 }),
     enabled: session.isAuthenticated,
   });
+  const currentUser = useQuery({
+    queryKey: ["user", "current", "list-access"],
+    queryFn: () => services.repositories.users.getCurrentUser(),
+    enabled: session.isAuthenticated,
+    staleTime: 60_000,
+  });
   const membership = useQuery({
     queryKey: ["collector-workspace", "subscription", "list"],
     queryFn: () => services.repositories.collectorWorkspace.getSubscription(),
@@ -360,6 +366,13 @@ export function SubmissionPage() {
         detail="Preparing your saved drafts and supported categories."
       />
     );
+  if (
+    currentUser.data &&
+    !currentUser.data.roles.includes("COLLECTOR") &&
+    !currentUser.data.roles.includes("ADMIN")
+  ) {
+    return <CollectorAccessGate />;
+  }
   if (categories.isError || drafts.isError)
     return (
       <ListState
@@ -540,6 +553,31 @@ export function SubmissionPage() {
 
         <MySubmissions submissions={drafts.data?.items ?? []} />
       </div>
+    </main>
+  );
+}
+
+function CollectorAccessGate() {
+  return (
+    <main className="page-shell py-16">
+      <section className="customer-state text-center" aria-labelledby="collector-access-title">
+        <p className="page-kicker">Collector access</p>
+        <h1 id="collector-access-title" className="page-title">
+          Become a Collector before listing
+        </h1>
+        <p className="mt-3 text-subtle">
+          Listing is for accounts with Collector capability. We&apos;ll guide you through your
+          profile, verification, and any required membership before opening the submission
+          workspace.
+        </p>
+        <Link
+          to="/onboarding"
+          search={{ returnTo: "/list" }}
+          className="primary-action mt-6 inline-flex"
+        >
+          Become a Collector
+        </Link>
+      </section>
     </main>
   );
 }
