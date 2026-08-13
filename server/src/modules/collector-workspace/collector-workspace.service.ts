@@ -3,9 +3,18 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import {
+  activeCollectorSubmissionStatuses,
+  billingPeriod,
+  collectorPlanRegistry,
+  numberEntitlement,
+  openCollectorSubmissionStatuses,
+  planJson,
+} from './collector-entitlements';
 
 const pipeline = [
   'DRAFT',
@@ -162,15 +171,16 @@ export class CollectorWorkspaceService {
 
   async subscription(userId: string) {
     await this.ensurePlans();
-    const [plans, current, usage] = await Promise.all([
+    const [plans, current] = await Promise.all([
       this.db.collectorPlan.findMany({ where: { active: true }, orderBy: { monthlyPriceMinor: 'asc' } }),
       this.db.collectorSubscription.findFirst({
         where: { userId, status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCEL_AT_PERIOD_END'] } },
         include: { plan: true },
         orderBy: { updatedAt: 'desc' },
       }),
-      this.usageFor(userId),
     ]);
+    const usage = await this.usageFor(userId, current?.plan.entitlements ?? null);
+    const billingConfigured = Boolean(current?.provider && current.provider !== 'STAGING_DEMO');
     return {
       current: current
         ? {
@@ -181,6 +191,7 @@ export class CollectorWorkspaceService {
             currentPeriodEnd: current.currentPeriodEnd?.toISOString() ?? null,
             cancelAtPeriodEnd: current.cancelAtPeriodEnd,
             entitlements: current.plan.entitlements,
+            provider: current.provider,
           }
         : null,
       plans: plans.map((plan) => ({
@@ -189,10 +200,51 @@ export class CollectorWorkspaceService {
         monthlyPriceMinor: plan.monthlyPriceMinor.toString(),
         currency: plan.currency,
         entitlements: plan.entitlements,
+        recommended: plan.code === 'PRO',
       })),
       usage,
-      billing: { configured: Boolean(current?.provider), provider: current?.provider ?? null },
+      billing: {
+        configured: billingConfigured,
+        provider: billingConfigured ? current?.provider ?? null : null,
+        paymentMethod: null,
+        nextBillingDate: current?.currentPeriodEnd?.toISOString() ?? null,
+      },
     };
+  }
+
+  async plans() {
+    await this.ensurePlans();
+    const plans = await this.db.collectorPlan.findMany({
+      where: { active: true },
+      orderBy: { monthlyPriceMinor: 'asc' },
+    });
+    return plans.map((plan) => ({
+      id: plan.code,
+      displayName: plan.displayName,
+      monthlyPriceMinor: plan.monthlyPriceMinor.toString(),
+      currency: plan.currency,
+      billingInterval: 'month',
+      entitlements: plan.entitlements,
+      recommended: plan.code === 'PRO',
+      availability: 'AVAILABLE',
+    }));
+  }
+
+  async subscriptionAction(
+    userId: string,
+    action: 'CHECKOUT' | 'PORTAL' | 'CHANGE_PLAN' | 'CANCEL' | 'RESUME',
+    planCode?: string,
+  ): Promise<never> {
+    // No billing provider is configured in this environment. Keeping these
+    // commands backend-owned prevents the UI from ever fabricating payment or
+    // subscription state; a provider webhook must be the source of truth.
+    void userId;
+    void planCode;
+    throw new ServiceUnavailableException({
+      code: 'BILLING_CONFIGURATION_REQUIRED',
+      action,
+      message: 'Membership billing is temporarily unavailable. Please try again later.',
+    });
   }
 
   async vaults() {
@@ -269,21 +321,56 @@ export class CollectorWorkspaceService {
   }
 
   private async ensurePlans() {
-    const configs = [
-      ['STARTER', 'Collector Starter', 900n, { maxActiveCollectibles: 10, maxOpenDrafts: 3, maxConcurrentSubmissions: 3, monthlySubmissionLimit: 10, bulkImportEnabled: false, advancedAnalyticsEnabled: false, marketResearchHistoryDepth: 3, featuredProfileAssetLimit: 2, prioritySupport: false, exportEnabled: false }],
-      ['PRO', 'Collector Pro', 1900n, { maxActiveCollectibles: 50, maxOpenDrafts: 10, maxConcurrentSubmissions: 10, monthlySubmissionLimit: 20, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 12, featuredProfileAssetLimit: 6, prioritySupport: true, exportEnabled: false }],
-      ['ELITE', 'Collector Elite', 4900n, { maxActiveCollectibles: 250, maxOpenDrafts: 30, maxConcurrentSubmissions: 30, monthlySubmissionLimit: 100, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 36, featuredProfileAssetLimit: 12, prioritySupport: true, exportEnabled: true }],
-    ] as const;
-    for (const [code, displayName, monthlyPriceMinor, entitlements] of configs) await this.db.collectorPlan.upsert({ where: { code }, create: { code, displayName, monthlyPriceMinor, entitlements }, update: { displayName, monthlyPriceMinor, entitlements, active: true } });
+    for (const config of collectorPlanRegistry)
+      await this.db.collectorPlan.upsert({
+        where: { code: config.code },
+        create: {
+          code: config.code,
+          displayName: config.displayName,
+          monthlyPriceMinor: config.monthlyPriceMinor,
+          entitlements: planJson(config.entitlements),
+        },
+        update: {
+          displayName: config.displayName,
+          monthlyPriceMinor: config.monthlyPriceMinor,
+          entitlements: planJson(config.entitlements),
+          active: true,
+        },
+      });
   }
 
-  private async usageFor(userId: string) {
-    const [activeCollectibles, openDrafts, monthlySubmissions] = await Promise.all([
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { notIn: ['DRAFT', 'CANCELLED'] } } }),
+  private async usageFor(userId: string, entitlements: Prisma.JsonValue | null) {
+    const period = billingPeriod();
+    const [activeCollectibles, openSubmissions, openDrafts, monthlySubmissions, concurrentIntake] = await Promise.all([
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { in: [...activeCollectorSubmissionStatuses] } } }),
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, status: { in: [...openCollectorSubmissionStatuses] } } }),
       this.db.assetSubmission.count({ where: { ownerUserId: userId, status: 'DRAFT' } }),
-      this.db.assetSubmission.count({ where: { ownerUserId: userId, submittedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } }),
+      this.db.assetSubmission.count({ where: { ownerUserId: userId, createdAt: { gte: period.start, lt: period.end }, status: { not: 'CANCELLED' } } }),
+      this.db.submissionIntake.count({ where: { submission: { ownerUserId: userId }, status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'] } } }),
     ]);
-    return { activeCollectibles, openDrafts, monthlySubmissions };
+    const maxActiveCollectibles = numberEntitlement(entitlements ?? {}, 'maxActiveCollectibles');
+    const maxOpenSubmissions = numberEntitlement(entitlements ?? {}, 'maxOpenSubmissions');
+    const maxOpenDrafts = numberEntitlement(entitlements ?? {}, 'maxOpenDrafts');
+    const maxMonthlySubmissions = numberEntitlement(entitlements ?? {}, 'monthlySubmissionLimit');
+    const maxConcurrentIntake = numberEntitlement(entitlements ?? {}, 'maxConcurrentIntake');
+    return {
+      activeCollectibles,
+      maxActiveCollectibles,
+      openSubmissions,
+      maxOpenSubmissions,
+      openDrafts,
+      maxOpenDrafts,
+      monthlySubmissionsUsed: monthlySubmissions,
+      maxMonthlySubmissions,
+      concurrentIntake,
+      maxConcurrentIntake,
+      remainingCatalogueCapacity: maxActiveCollectibles === null ? null : Math.max(maxActiveCollectibles - activeCollectibles, 0),
+      billingPeriodStart: period.start.toISOString(),
+      billingPeriodEnd: period.end.toISOString(),
+      // Keep the previous names in the response for older clients during the
+      // rollout; the normalized fields above are authoritative.
+      monthlySubmissions,
+    };
   }
 
   /** Customer-safe list projection. All records are scoped to D10 ownership. */

@@ -1364,6 +1364,24 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           "/collector-workspace/subscription",
         );
       },
+      async getPlans() {
+        return client.get<import("@/data/repositories").CollectorPlanProjection[]>(
+          "/collector-workspace/plans",
+        );
+      },
+      async subscriptionAction(action, planCode) {
+        const paths = {
+          CHECKOUT: "checkout",
+          PORTAL: "portal",
+          CHANGE_PLAN: "change-plan",
+          CANCEL: "cancel",
+          RESUME: "resume",
+        } as const;
+        return client.request<never>(`/collector-workspace/subscription/${paths[action]}`, {
+          method: "POST",
+          body: planCode ? { planCode } : undefined,
+        });
+      },
       async listVaults() {
         return client.get<import("@/data/repositories").CollectorVaultProjection[]>(
           "/collector-workspace/vaults",

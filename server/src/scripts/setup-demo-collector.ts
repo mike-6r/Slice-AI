@@ -30,6 +30,7 @@ import {
   demoAccounts,
   requiredSecret,
 } from './staging-demo-safety';
+import { collectorPlanRegistry, planJson } from '../modules/collector-workspace/collector-entitlements';
 
 type DemoAsset = Readonly<{
   key: string;
@@ -813,15 +814,10 @@ async function loginActor(
 }
 
 async function ensureCollectorEntitlementsAndVaults(db: PrismaService, userId: string) {
-  const plans = [
-    ['STARTER', 'Collector Starter', 900n, { maxActiveCollectibles: 10, maxOpenDrafts: 3, maxConcurrentSubmissions: 3, monthlySubmissionLimit: 10, bulkImportEnabled: false, advancedAnalyticsEnabled: false, marketResearchHistoryDepth: 3, featuredProfileAssetLimit: 2, prioritySupport: false, exportEnabled: false }],
-    ['PRO', 'Collector Pro', 1900n, { maxActiveCollectibles: 50, maxOpenDrafts: 10, maxConcurrentSubmissions: 10, monthlySubmissionLimit: 20, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 12, featuredProfileAssetLimit: 6, prioritySupport: true, exportEnabled: false }],
-    ['ELITE', 'Collector Elite', 4900n, { maxActiveCollectibles: 250, maxOpenDrafts: 30, maxConcurrentSubmissions: 30, monthlySubmissionLimit: 100, bulkImportEnabled: true, advancedAnalyticsEnabled: true, marketResearchHistoryDepth: 36, featuredProfileAssetLimit: 12, prioritySupport: true, exportEnabled: true }],
-  ] as const;
   const planIds = new Map<string, string>();
-  for (const [code, displayName, monthlyPriceMinor, entitlements] of plans) {
-    const plan = await db.collectorPlan.upsert({ where: { code }, create: { code, displayName, monthlyPriceMinor, entitlements }, update: { displayName, monthlyPriceMinor, entitlements, active: true } });
-    planIds.set(code, plan.id);
+  for (const config of collectorPlanRegistry) {
+    const plan = await db.collectorPlan.upsert({ where: { code: config.code }, create: { code: config.code, displayName: config.displayName, monthlyPriceMinor: config.monthlyPriceMinor, entitlements: planJson(config.entitlements) }, update: { displayName: config.displayName, monthlyPriceMinor: config.monthlyPriceMinor, entitlements: planJson(config.entitlements), active: true } });
+    planIds.set(config.code, plan.id);
   }
   const current = await db.collectorSubscription.findFirst({ where: { userId }, orderBy: { updatedAt: 'desc' } });
   if (!current) await db.collectorSubscription.create({ data: { userId, planId: planIds.get('PRO')!, status: 'ACTIVE', provider: 'STAGING_DEMO', currentPeriodEnd: new Date(Date.now() + 30 * 86400000) } });

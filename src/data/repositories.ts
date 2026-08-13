@@ -284,6 +284,11 @@ export interface CollectorWorkspaceRepository {
     isPublic: boolean;
   }>;
   getSubscription(): Promise<CollectorSubscriptionProjection>;
+  getPlans(): Promise<CollectorPlanProjection[]>;
+  subscriptionAction(
+    action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME",
+    planCode?: "STARTER" | "PRO" | "ELITE",
+  ): Promise<never>;
   listVaults(): Promise<CollectorVaultProjection[]>;
   selectVault(submissionId: string, vaultId: string): Promise<unknown>;
   addShipment(
@@ -305,6 +310,7 @@ export type CollectorSubscriptionProjection = {
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
     entitlements: Record<string, unknown>;
+    provider: string | null;
   } | null;
   plans: Array<{
     code: "STARTER" | "PRO" | "ELITE";
@@ -312,9 +318,46 @@ export type CollectorSubscriptionProjection = {
     monthlyPriceMinor: string;
     currency: string;
     entitlements: Record<string, unknown>;
+    recommended: boolean;
   }>;
-  usage: { activeCollectibles: number; openDrafts: number; monthlySubmissions: number };
-  billing: { configured: boolean; provider: string | null };
+  usage: {
+    activeCollectibles: number;
+    maxActiveCollectibles: number | null;
+    openSubmissions: number;
+    maxOpenSubmissions: number | null;
+    openDrafts: number;
+    maxOpenDrafts: number | null;
+    monthlySubmissionsUsed: number;
+    maxMonthlySubmissions: number | null;
+    concurrentIntake: number;
+    maxConcurrentIntake: number | null;
+    remainingCatalogueCapacity: number | null;
+    billingPeriodStart: string;
+    billingPeriodEnd: string;
+    monthlySubmissions: number;
+  };
+  billing: {
+    configured: boolean;
+    provider: string | null;
+    paymentMethod: {
+      brand: string;
+      last4: string;
+      expiryMonth?: number;
+      expiryYear?: number;
+    } | null;
+    nextBillingDate: string | null;
+  };
+};
+
+export type CollectorPlanProjection = {
+  id: "STARTER" | "PRO" | "ELITE";
+  displayName: string;
+  monthlyPriceMinor: string;
+  currency: string;
+  billingInterval: string;
+  entitlements: Record<string, unknown>;
+  recommended: boolean;
+  availability: string;
 };
 
 export type CollectorVaultProjection = {

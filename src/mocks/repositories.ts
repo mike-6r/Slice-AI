@@ -428,9 +428,30 @@ export const mockRepositories: AppRepositories = {
       return {
         current: null,
         plans: [],
-        usage: { activeCollectibles: 0, openDrafts: 0, monthlySubmissions: 0 },
-        billing: { configured: false, provider: null },
+        usage: {
+          activeCollectibles: 0,
+          maxActiveCollectibles: null,
+          openSubmissions: 0,
+          maxOpenSubmissions: null,
+          openDrafts: 0,
+          maxOpenDrafts: null,
+          monthlySubmissionsUsed: 0,
+          maxMonthlySubmissions: null,
+          concurrentIntake: 0,
+          maxConcurrentIntake: null,
+          remainingCatalogueCapacity: null,
+          billingPeriodStart: now(),
+          billingPeriodEnd: now(),
+          monthlySubmissions: 0,
+        },
+        billing: { configured: false, provider: null, paymentMethod: null, nextBillingDate: null },
       };
+    },
+    async getPlans() {
+      return [];
+    },
+    async subscriptionAction() {
+      throw new Error("Membership billing is temporarily unavailable.");
     },
     async listVaults() {
       return [];

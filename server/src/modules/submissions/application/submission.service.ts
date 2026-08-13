@@ -23,6 +23,11 @@ import {
 import { Inject } from '@nestjs/common';
 import { marketResearchIdentityHash } from '../../market-research/market-research.service';
 import {
+  activeCollectorSubmissionStatuses,
+  billingPeriod,
+  numberEntitlement,
+} from '../../collector-workspace/collector-entitlements';
+import {
   assertEditableStatus,
   assertExpectedVersion,
   assertMediaProperties,
@@ -63,14 +68,6 @@ const metadataAllowedKeys = new Set([
   'termsAcknowledged',
   'customerReference',
 ]);
-
-function numberEntitlement(value: Prisma.JsonValue, key: string) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const candidate = (value as Record<string, unknown>)[key];
-  return typeof candidate === 'number' && Number.isFinite(candidate)
-    ? candidate
-    : null;
-}
 
 @Injectable()
 export class SubmissionService {
@@ -187,41 +184,53 @@ export class SubmissionService {
       entitlements,
       'monthlySubmissionLimit',
     );
-    const monthStart = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1,
-    );
+    const period = billingPeriod();
     const [active, drafts, monthly] = await Promise.all([
       this.prisma.assetSubmission.count({
         where: {
           ownerUserId: actor.userId,
-          status: { notIn: ['DRAFT', 'CANCELLED'] },
+          status: { in: [...activeCollectorSubmissionStatuses] },
         },
       }),
       this.prisma.assetSubmission.count({
         where: { ownerUserId: actor.userId, status: 'DRAFT' },
       }),
       this.prisma.assetSubmission.count({
-        where: { ownerUserId: actor.userId, submittedAt: { gte: monthStart } },
+        where: {
+          ownerUserId: actor.userId,
+          createdAt: { gte: period.start, lt: period.end },
+          status: { not: 'CANCELLED' },
+        },
       }),
     ]);
     if (maxActive !== null && active >= maxActive) {
       throw new ConflictException({
-        code: 'COLLECTOR_ACTIVE_LIMIT_REACHED',
-        message: `You've reached your current Collector plan limit (${active} / ${maxActive} active collectibles).`,
+        code: 'PLAN_LIMIT_REACHED',
+        limitType: 'ACTIVE_COLLECTIBLES',
+        current: active,
+        maximum: maxActive,
+        plan: subscription.plan.code,
+        message: `You've reached your ${subscription.plan.displayName} catalogue limit. ${active} of ${maxActive} active collectible slots are currently in use.`,
       });
     }
     if (maxDrafts !== null && drafts >= maxDrafts) {
       throw new ConflictException({
-        code: 'COLLECTOR_DRAFT_LIMIT_REACHED',
-        message: `You've reached your current Collector plan limit (${drafts} / ${maxDrafts} open drafts).`,
+        code: 'PLAN_LIMIT_REACHED',
+        limitType: 'OPEN_DRAFTS',
+        current: drafts,
+        maximum: maxDrafts,
+        plan: subscription.plan.code,
+        message: `You've reached your ${subscription.plan.displayName} open draft limit.`,
       });
     }
     if (monthlyLimit !== null && monthly >= monthlyLimit) {
       throw new ConflictException({
-        code: 'COLLECTOR_MONTHLY_LIMIT_REACHED',
-        message: `You've reached your monthly Collector submission allowance (${monthly} / ${monthlyLimit}).`,
+        code: 'PLAN_LIMIT_REACHED',
+        limitType: 'MONTHLY_SUBMISSIONS',
+        current: monthly,
+        maximum: monthlyLimit,
+        plan: subscription.plan.code,
+        message: `You've reached your ${subscription.plan.displayName} monthly submission allowance.`,
       });
     }
   }

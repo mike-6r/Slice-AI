@@ -81,6 +81,38 @@ export class CollectorWorkspaceController {
     return this.workspace.subscription(this.collectorId(request));
   }
 
+  @Get('plans')
+  plans() {
+    return this.workspace.plans();
+  }
+
+  @Post('subscription/checkout')
+  checkout(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = z.object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) }).strict().parse(body);
+    return this.workspace.subscriptionAction(this.collectorId(request), 'CHECKOUT', input.planCode);
+  }
+
+  @Post('subscription/portal')
+  billingPortal(@Req() request: AuthenticatedRequest) {
+    return this.workspace.subscriptionAction(this.collectorId(request), 'PORTAL');
+  }
+
+  @Post('subscription/change-plan')
+  changePlan(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = z.object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) }).strict().parse(body);
+    return this.workspace.subscriptionAction(this.collectorId(request), 'CHANGE_PLAN', input.planCode);
+  }
+
+  @Post('subscription/cancel')
+  cancelSubscription(@Req() request: AuthenticatedRequest) {
+    return this.workspace.subscriptionAction(this.collectorId(request), 'CANCEL');
+  }
+
+  @Post('subscription/resume')
+  resumeSubscription(@Req() request: AuthenticatedRequest) {
+    return this.workspace.subscriptionAction(this.collectorId(request), 'RESUME');
+  }
+
   @Get('vaults')
   vaults() {
     return this.workspace.vaults();

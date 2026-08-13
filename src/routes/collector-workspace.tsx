@@ -141,8 +141,19 @@ function CollectorWorkspace() {
   const subscription = useQuery({
     queryKey: ["collector-workspace", "subscription"],
     queryFn: repositories.collectorWorkspace.getSubscription,
-    enabled: active === "subscription",
+    enabled: active === "subscription" || active === "overview",
     staleTime: 60_000,
+  });
+  const subscriptionAction = useMutation({
+    mutationFn: ({
+      action,
+      planCode,
+    }: {
+      action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
+      planCode?: "STARTER" | "PRO" | "ELITE";
+    }) => repositories.collectorWorkspace.subscriptionAction(action, planCode),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["collector-workspace", "subscription"] }),
   });
   const deleteDraft = useMutation({
     mutationFn: ({ id, version }: { id: string; version: number }) =>
@@ -264,7 +275,12 @@ function CollectorWorkspace() {
           onOverview={() => open("overview")}
         />
         {active === "overview" ? (
-          <Overview data={data} assets={matchingAssets} open={open} />
+          <Overview
+            data={data}
+            assets={matchingAssets}
+            open={open}
+            subscription={subscription.data}
+          />
         ) : active === "collectibles" ? (
           <Collectibles data={data} assets={matchingAssets} open={open} />
         ) : active === "submissions" ? (
@@ -280,7 +296,13 @@ function CollectorWorkspace() {
         ) : active === "requests" ? (
           <Requests data={data} open={open} />
         ) : active === "subscription" ? (
-          <SubscriptionPage data={subscription.data} loading={subscription.isLoading} />
+          <SubscriptionPage
+            data={subscription.data}
+            loading={subscription.isLoading}
+            action={subscriptionAction.mutate}
+            actionPending={subscriptionAction.isPending}
+            actionFailed={subscriptionAction.isError}
+          />
         ) : active === "documents" ? (
           <Documents assets={matchingAssets} open={open} />
         ) : active === "profile" ? (
@@ -378,10 +400,12 @@ function Overview({
   data,
   assets,
   open,
+  subscription,
 }: {
   data: CollectorWorkspaceOverview;
   assets: CollectorWorkspaceAsset[];
   open: Open;
+  subscription?: import("@/data/repositories").CollectorSubscriptionProjection;
 }) {
   return (
     <div className="collector-workspace-content">
@@ -418,6 +442,22 @@ function Overview({
           attention
         />
       </section>
+      {subscription ? (
+        <section className="collector-membership-strip" aria-label="Collector membership">
+          <div>
+            <span className="collector-advanced-card__eyebrow">Membership</span>
+            <strong>{subscription.current?.displayName ?? "No active Collector plan"}</strong>
+            <small>
+              {subscription.current
+                ? `${subscription.usage.activeCollectibles} / ${subscription.usage.maxActiveCollectibles ?? "No limit"} collectibles`
+                : "Choose a plan to unlock Collector workspace capacity."}
+            </small>
+          </div>
+          <button type="button" onClick={() => open("subscription")}>
+            Manage plan <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      ) : null}
       <div className="collector-workspace-dashboard-grid">
         <div className="collector-workspace-dashboard-grid__main">
           <Pipeline data={data} open={open} />
@@ -1347,6 +1387,367 @@ function SettingsView({ open }: { open: Open }) {
 function SubscriptionPage({
   data,
   loading,
+  action,
+  actionPending,
+  actionFailed,
+}: {
+  data?: import("@/data/repositories").CollectorSubscriptionProjection;
+  loading: boolean;
+  action: (input: {
+    action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
+    planCode?: "STARTER" | "PRO" | "ELITE";
+  }) => void;
+  actionPending: boolean;
+  actionFailed: boolean;
+}) {
+  if (loading || !data) return <WorkspaceState title="Loading your subscription" />;
+  const current = data.current;
+  const activePlan = current
+    ? (data.plans.find((plan) => plan.code === current.code) ?? null)
+    : null;
+  return (
+    <WorkspacePage
+      title="Collector Membership"
+      detail="Choose the capacity and tools that fit your collection."
+    >
+      {actionFailed ? (
+        <div className="collector-membership-notice" role="status">
+          Membership billing is temporarily unavailable. Your current plan and collection remain
+          safe.
+        </div>
+      ) : null}
+      <section className="collector-subscription-layout">
+        <article className="collector-panel collector-subscription-current">
+          <div className="collector-membership-plan-summary">
+            <span className="collector-advanced-card__eyebrow">
+              {activePlan?.recommended ? "Most popular" : "Collector workspace"}
+            </span>
+            <div className="collector-membership-plan-heading">
+              <h2>{current?.displayName ?? "No active Collector plan"}</h2>
+              {current ? (
+                <span className="collector-membership-status">
+                  {subscriptionStatus(current.status, current.cancelAtPeriodEnd)}
+                </span>
+              ) : null}
+            </div>
+            {activePlan ? (
+              <strong className="collector-membership-price">
+                {formatPlanPrice(activePlan.monthlyPriceMinor, activePlan.currency)}{" "}
+                <small>/ month</small>
+              </strong>
+            ) : null}
+            <p>
+              {current
+                ? `${current.cancelAtPeriodEnd ? "Cancels" : "Renews"} ${current.currentPeriodEnd ? date(current.currentPeriodEnd) : "with your billing cycle"}`
+                : "Choose a plan to unlock Collector workspace capacity and new submissions."}
+            </p>
+            {!current ? (
+              <button
+                className="collector-button collector-button--primary"
+                onClick={() => action({ action: "CHECKOUT", planCode: "PRO" })}
+                disabled={actionPending}
+              >
+                Choose a plan <ArrowRight aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+          <div className="collector-subscription-usage collector-subscription-usage--meters">
+            <UsageMeter
+              icon={PackageCheck}
+              label="Active collectibles"
+              value={data.usage.activeCollectibles}
+              limit={data.usage.maxActiveCollectibles}
+            />
+            <UsageMeter
+              icon={ClipboardList}
+              label="Open submissions"
+              value={data.usage.openSubmissions}
+              limit={data.usage.maxOpenSubmissions}
+            />
+            <UsageMeter
+              icon={BarChart3}
+              label="Monthly submissions"
+              value={data.usage.monthlySubmissionsUsed}
+              limit={data.usage.maxMonthlySubmissions}
+            />
+          </div>
+          <div className="collector-membership-capacity">
+            {data.usage.remainingCatalogueCapacity === null
+              ? "Catalogue capacity follows your membership"
+              : `${data.usage.remainingCatalogueCapacity} catalogue slots remaining`}
+          </div>
+        </article>
+        <BillingDetails data={data} action={action} actionPending={actionPending} />
+      </section>
+      <section className="collector-plan-grid">
+        {data.plans.map((plan) => (
+          <PlanCard
+            key={plan.code}
+            plan={plan}
+            current={current}
+            action={action}
+            actionPending={actionPending}
+          />
+        ))}
+      </section>
+      <section className="collector-panel collector-plan-compare">
+        <PanelHeader title="Compare features" />
+        <ComparisonTable plans={data.plans} />
+      </section>
+      <section className="collector-membership-bottom-grid">
+        <article className="collector-panel collector-membership-info-card">
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <h3>Included on every plan</h3>
+            <p>Core infrastructure and workflows are always included.</p>
+            <ul>
+              {[
+                "Secure submission workflow",
+                "Staff review",
+                "Vault intake tracking",
+                "Shipment tracking",
+                "Collector profile",
+                "Market research",
+                "Custody status",
+              ].map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </article>
+        <article className="collector-panel collector-membership-info-card">
+          <BadgeCheck aria-hidden="true" />
+          <div>
+            <h3>Membership standards</h3>
+            <p>Your membership tier never changes our commitment to quality.</p>
+            <p>
+              Every submission and collectible is subject to the same Slice review, verification,
+              custody and publication standards - regardless of your plan.
+            </p>
+          </div>
+        </article>
+      </section>
+    </WorkspacePage>
+  );
+}
+
+function BillingDetails({
+  data,
+  action,
+  actionPending,
+}: {
+  data: import("@/data/repositories").CollectorSubscriptionProjection;
+  action: (input: {
+    action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
+    planCode?: "STARTER" | "PRO" | "ELITE";
+  }) => void;
+  actionPending: boolean;
+}) {
+  const current = data.current;
+  return (
+    <article className="collector-panel collector-membership-billing">
+      <PanelHeader title="Billing & plan details" />
+      <dl>
+        <div>
+          <dt>
+            <CreditCard aria-hidden="true" /> Next billing date
+          </dt>
+          <dd>
+            {data.billing.nextBillingDate ? date(data.billing.nextBillingDate) : "Not scheduled"}
+          </dd>
+        </div>
+        <div>
+          <dt>
+            <CreditCard aria-hidden="true" /> Payment method
+          </dt>
+          <dd>
+            {data.billing.paymentMethod
+              ? `${data.billing.paymentMethod.brand} **** ${data.billing.paymentMethod.last4}`
+              : "Managed securely by Slice billing"}
+          </dd>
+        </div>
+      </dl>
+      <p>Your subscription controls your catalogue capacity and workflow limits across Slice.</p>
+      <div className="collector-membership-billing-actions">
+        <button
+          className="collector-button"
+          onClick={() => action({ action: "PORTAL" })}
+          disabled={actionPending || !data.billing.configured}
+        >
+          Manage billing <ArrowRight aria-hidden="true" />
+        </button>
+        <button
+          className="collector-button"
+          onClick={() =>
+            action({
+              action: "CHANGE_PLAN",
+              planCode: current?.code === "STARTER" ? "PRO" : "ELITE",
+            })
+          }
+          disabled={actionPending || !data.billing.configured}
+        >
+          Change plan <ArrowRight aria-hidden="true" />
+        </button>
+        <button
+          className="collector-button"
+          onClick={() => action({ action: current?.cancelAtPeriodEnd ? "RESUME" : "CANCEL" })}
+          disabled={actionPending || !data.billing.configured}
+        >
+          {current?.cancelAtPeriodEnd ? "Resume membership" : "Cancel at period end"}{" "}
+          <ArrowRight aria-hidden="true" />
+        </button>
+      </div>
+      {!data.billing.configured ? (
+        <small className="collector-membership-billing-note">
+          Billing actions will be available when hosted membership billing is connected.
+        </small>
+      ) : null}
+    </article>
+  );
+}
+
+function PlanCard({
+  plan,
+  current,
+  action,
+  actionPending,
+}: {
+  plan: import("@/data/repositories").CollectorSubscriptionProjection["plans"][number];
+  current: import("@/data/repositories").CollectorSubscriptionProjection["current"];
+  action: (input: {
+    action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
+    planCode?: "STARTER" | "PRO" | "ELITE";
+  }) => void;
+  actionPending: boolean;
+}) {
+  const isCurrent = current?.code === plan.code;
+  return (
+    <article className={`collector-plan-card ${isCurrent ? "is-current" : ""}`}>
+      <div className="collector-plan-card__heading">
+        <span className="collector-advanced-card__eyebrow">{plan.displayName}</span>
+        {plan.recommended ? <em>Recommended</em> : null}
+      </div>
+      <strong className="collector-plan-card__price">
+        {formatPlanPrice(plan.monthlyPriceMinor, plan.currency)} <small>/ month</small>
+      </strong>
+      <ul className="collector-subscription-features">
+        {featureLabels(plan.entitlements).map((feature) => (
+          <li key={feature}>{feature}</li>
+        ))}
+      </ul>
+      <button
+        className={`collector-button ${isCurrent ? "collector-button--primary" : ""}`}
+        disabled={isCurrent || actionPending}
+        onClick={() => action({ action: "CHECKOUT", planCode: plan.code })}
+      >
+        {isCurrent
+          ? "Current plan"
+          : plan.code === "ELITE"
+            ? "Upgrade"
+            : `Choose ${plan.displayName.replace("Collector ", "")}`}{" "}
+        <ArrowRight aria-hidden="true" />
+      </button>
+    </article>
+  );
+}
+
+function ComparisonTable({
+  plans,
+}: {
+  plans: import("@/data/repositories").CollectorSubscriptionProjection["plans"];
+}) {
+  const rows: Array<{ label: string; key: string; format?: (value: unknown) => string }> = [
+    { label: "Active collectibles", key: "maxActiveCollectibles" },
+    { label: "Monthly submissions", key: "monthlySubmissionLimit" },
+    { label: "Concurrent intake", key: "maxConcurrentIntake" },
+    {
+      label: "Market research",
+      key: "marketResearchTier",
+      format: (value) =>
+        typeof value === "string" ? value[0] + value.slice(1).toLowerCase() : "-",
+    },
+    {
+      label: "Bulk import",
+      key: "bulkImportEnabled",
+      format: (value) => (value ? "Included" : "-"),
+    },
+    {
+      label: "Analytics",
+      key: "advancedAnalyticsEnabled",
+      format: (value) => (value ? "Advanced" : "Standard"),
+    },
+    {
+      label: "Catalogue export",
+      key: "exportEnabled",
+      format: (value) => (value ? "Included" : "-"),
+    },
+    {
+      label: "Priority support",
+      key: "prioritySupport",
+      format: (value) => (value ? "Priority" : "Standard"),
+    },
+  ];
+  return (
+    <div className="collector-comparison-table" role="table">
+      <div className="collector-comparison-row collector-comparison-row--header" role="row">
+        <span>Feature</span>
+        {plans.map((plan) => (
+          <strong key={plan.code}>{plan.displayName}</strong>
+        ))}
+      </div>
+      {rows.map((row) => (
+        <div className="collector-comparison-row" role="row" key={row.key}>
+          <span>{row.label}</span>
+          {plans.map((plan) => {
+            const value = plan.entitlements[row.key];
+            return (
+              <span key={plan.code}>{row.format ? row.format(value) : String(value ?? "-")}</span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsageMeter({
+  icon: Icon,
+  label,
+  value,
+  limit,
+}: {
+  icon: typeof PackageCheck;
+  label: string;
+  value: number;
+  limit: number | null;
+}) {
+  const percentage = limit && limit > 0 ? Math.min(100, (value / limit) * 100) : 0;
+  return (
+    <div className="collector-usage-meter">
+      <div className="collector-usage-meter__top">
+        <Icon aria-hidden="true" />
+        <span>{label}</span>
+        <strong>
+          {value} / {limit ?? "Plan required"}
+        </strong>
+      </div>
+      <div
+        className="collector-usage-meter__bar"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={limit ?? undefined}
+        aria-valuenow={limit === null ? undefined : value}
+      >
+        <span style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function LegacySubscriptionPage({
+  data,
+  loading,
 }: {
   data?: import("@/data/repositories").CollectorSubscriptionProjection;
   loading: boolean;
@@ -1439,15 +1840,30 @@ function numberEntitlement(value: unknown) {
 }
 
 function featureLabels(entitlements: Record<string, unknown> | undefined) {
-  if (!entitlements) return ["Backend plan required for Collector submissions"];
+  if (!entitlements) return ["Choose a plan to unlock capacity"];
   return [
     numberEntitlement(entitlements.maxActiveCollectibles)
       ? `${entitlements.maxActiveCollectibles} active collectibles`
       : null,
-    entitlements.bulkImportEnabled ? "Bulk workflow tools" : "Standard submission workflow",
-    entitlements.advancedAnalyticsEnabled ? "Enhanced analytics" : "Basic performance metrics",
+    entitlements.maxConcurrentIntake
+      ? `${entitlements.maxConcurrentIntake} concurrent intake`
+      : null,
+    typeof entitlements.marketResearchTier === "string"
+      ? `${String(entitlements.marketResearchTier).toLowerCase()} market research`
+      : null,
+    entitlements.bulkImportEnabled ? "Bulk link import" : "Standard market research",
+    entitlements.advancedAnalyticsEnabled ? "Advanced analytics" : "Standard analytics",
+    entitlements.exportEnabled ? "Catalogue export" : null,
     entitlements.prioritySupport ? "Priority support" : "Standard support",
   ].filter((item): item is string => Boolean(item));
+}
+
+function subscriptionStatus(status: string, cancelAtPeriodEnd: boolean) {
+  if (cancelAtPeriodEnd) return "Cancels at period end";
+  if (status === "PAST_DUE") return "Payment issue";
+  if (status === "TRIALING") return "Trial active";
+  if (status === "ACTIVE") return "Active";
+  return "Membership paused";
 }
 
 function formatPlanPrice(value: string, currency: string) {
