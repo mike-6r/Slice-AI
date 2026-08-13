@@ -27,6 +27,7 @@ import type {
   PortfolioSummary,
   PortfolioTransaction,
   TradingOrderPage,
+  TradingOrderView,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -48,15 +49,22 @@ import {
 
 export const Route = createFileRoute("/portfolio")({
   head: () => ({ meta: [{ title: "Portfolio | Slice" }] }),
+  validateSearch: (search: Record<string, unknown>): { tab?: PortfolioTab } => ({
+    tab: ["overview", "holdings", "orders", "activity"].includes(String(search.tab))
+      ? (String(search.tab) as PortfolioTab)
+      : "overview",
+  }),
   component: Portfolio,
 });
 
 type HoldingFilter = "ALL" | string;
+type PortfolioTab = "overview" | "holdings" | "orders" | "activity";
 
 export function Portfolio() {
   useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
+  const tab = usePortfolioTab();
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>("ALL");
   const summary = useQuery({
     queryKey: queryKeys.portfolio.summary,
@@ -105,8 +113,13 @@ export function Portfolio() {
     <main className="portfolio-page portfolio-page--approved">
       <div className="page-shell portfolio-shell">
         <PortfolioHeading query={summary} />
+        <PortfolioTabs active={tab} />
         <PortfolioKpis query={summary} />
-        <section className="portfolio-workspace-grid" aria-label="Portfolio holdings workspace">
+        {tab === "orders" ? <PortfolioOrdersSection query={orders} /> : null}
+        <section
+          className={`portfolio-workspace-grid${tab === "orders" ? " sr-only" : ""}`}
+          aria-label="Portfolio holdings workspace"
+        >
           <div className="portfolio-workspace-grid__main">
             <PortfolioPerformancePanel query={summary} />
             <HoldingsPanel
@@ -126,19 +139,113 @@ export function Portfolio() {
           </aside>
         </section>
         <section
-          className="portfolio-activity-grid"
+          className={`portfolio-activity-grid${tab === "activity" || tab === "overview" ? "" : " sr-only"}`}
           aria-label="Portfolio activity and transactions"
         >
           <ActivityPanel query={transactions} />
           <TransactionsPanel query={transactions} />
         </section>
-        <section className="portfolio-insights-grid" aria-label="Portfolio insights">
+        <section
+          className={`portfolio-insights-grid${tab === "overview" ? "" : " sr-only"}`}
+          aria-label="Portfolio insights"
+        >
           <TopHoldingPanel query={summary} />
           <PortfolioInsightsPanel query={summary} />
         </section>
       </div>
     </main>
   );
+}
+
+function usePortfolioTab(): PortfolioTab {
+  const routeSearch = Route.useSearch?.() ?? {};
+  return routeSearch.tab ?? "overview";
+}
+
+function PortfolioTabs({ active }: { active: PortfolioTab }) {
+  const tabs: Array<[PortfolioTab, string]> = [
+    ["overview", "Overview"],
+    ["holdings", "Holdings"],
+    ["orders", "Orders"],
+    ["activity", "Activity"],
+  ];
+  return (
+    <nav className="mb-6 flex flex-wrap gap-2" aria-label="Portfolio sections">
+      {tabs.map(([tab, label]) => (
+        <Link
+          key={tab}
+          to="/portfolio"
+          search={{ tab }}
+          className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+            active === tab
+              ? "border-accent/40 bg-accent/10 text-foreground"
+              : "border-border bg-surface text-subtle hover:border-accent/30 hover:text-foreground"
+          }`}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+function PortfolioOrdersSection({ query }: { query: UseQueryResult<TradingOrderPage> }) {
+  const items = query.data?.items ?? [];
+  return (
+    <PortfolioPanel title="Orders" className="mb-6">
+      {query.isLoading ? (
+        <RowsSkeleton rows={4} />
+      ) : query.isError ? (
+        <PanelError message="Unable to load orders." retry={() => void query.refetch()} />
+      ) : items.length === 0 ? (
+        <p className="py-6 text-sm text-subtle">
+          No orders yet. Orders you place will appear here.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-[0.12em] text-muted">
+              <tr>
+                <th className="px-3 py-3 font-semibold">Order</th>
+                <th className="px-3 py-3 font-semibold">Side</th>
+                <th className="px-3 py-3 font-semibold">Shares</th>
+                <th className="px-3 py-3 font-semibold">Status</th>
+                <th className="px-3 py-3 font-semibold">Created</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {items.map((order) => (
+                <tr key={order.id}>
+                  <td className="max-w-[260px] truncate px-3 py-4 font-semibold text-foreground">
+                    {order.assetSlug ?? order.assetId}
+                  </td>
+                  <td
+                    className={
+                      order.side === "BUY" ? "px-3 py-4 text-positive" : "px-3 py-4 text-negative"
+                    }
+                  >
+                    {order.side}
+                  </td>
+                  <td className="px-3 py-4 text-subtle">
+                    {order.filledUnits} / {order.originalUnits}
+                  </td>
+                  <td className="px-3 py-4 text-subtle">{formatPortfolioOrderStatus(order)}</td>
+                  <td className="px-3 py-4 text-subtle">{formatDateTime(order.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </PortfolioPanel>
+  );
+}
+
+function formatPortfolioOrderStatus(order: TradingOrderView) {
+  return order.status
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function PortfolioHeading({ query }: { query: UseQueryResult<PortfolioSummary> }) {
@@ -751,7 +858,7 @@ function OpenOrdersPanel({
       title="Open orders / reserved cash"
       className="portfolio-panel--open-orders"
       header={
-        <Link to="/orders">
+        <Link to="/portfolio" search={{ tab: "orders" }}>
           View orders <ArrowRight aria-hidden="true" />
         </Link>
       }

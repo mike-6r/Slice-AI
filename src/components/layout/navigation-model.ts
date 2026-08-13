@@ -2,14 +2,16 @@ export const PUBLIC_NAV = [
   { label: "Home", to: "/" },
   { label: "Markets", to: "/marketplace" },
   { label: "Collectors", to: "/collectors" },
-  { label: "Vault Live", to: "/vault-live" },
 ] as const;
 
 export const PRIVATE_NAV = [
-  { label: "Governance", to: "/governance" },
   { label: "Portfolio", to: "/portfolio" },
   { label: "Wallet", to: "/wallet" },
-  { label: "Orders", to: "/orders" },
+] as const;
+
+export const MORE_NAV = [
+  { label: "Vault Live", to: "/vault-live" },
+  { label: "Owner Voting", to: "/governance" },
 ] as const;
 
 export const primaryNavigationFor = (isAuthenticated: boolean) =>

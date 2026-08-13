@@ -103,6 +103,7 @@ export function SubmissionPage() {
   const lastSaved = useRef<string | null>(null);
   const version = useRef<number | null>(null);
   const saveStopped = useRef(false);
+  const revisionRecovery = useRef(false);
   const previewUrls = useRef<Record<string, string>>({});
 
   const categories = useQuery({
@@ -152,6 +153,7 @@ export function SubmissionPage() {
       version.current = created.version;
       lastSaved.current = fingerprint;
       saveStopped.current = false;
+      revisionRecovery.current = false;
       setNotice("Draft saved privately.");
       if (variables.nextStep) setStep(variables.nextStep);
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
@@ -178,7 +180,19 @@ export function SubmissionPage() {
       await client.invalidateQueries({ queryKey: ["submissions", "mine"] });
       if (variables.nextStep) setStep(variables.nextStep);
     },
-    onError: () => {
+    onError: async (error) => {
+      if (error instanceof ApiError && error.status === 409 && draft && !revisionRecovery.current) {
+        revisionRecovery.current = true;
+        const latest = await detail.refetch();
+        if (latest.data) {
+          setDraft(latest.data);
+          version.current = latest.data.version;
+          lastSaved.current = null;
+          saveStopped.current = false;
+          setNotice("Your draft was refreshed after another save. Please review and continue.");
+          return;
+        }
+      }
       saveStopped.current = true;
       setLocalError("We couldn't save your draft. Please try again.");
     },
@@ -305,6 +319,14 @@ export function SubmissionPage() {
     if (!validIdentity) {
       setLocalError("Choose a category and add the card or collectible name to continue.");
       return;
+    }
+    if (form.grade.trim()) {
+      const grade = Number(form.grade);
+      if (!Number.isFinite(grade) || grade < 1 || grade > 10) {
+        setLocalError("Grade must be between 1 and 10.");
+        setStep(2);
+        return;
+      }
     }
     if (draft) update.mutate({ nextStep: Math.min(step + 1, 5) });
     else create.mutate({ nextStep: Math.min(step + 1, 5) });
@@ -720,12 +742,14 @@ function DetailsStep({
           value={form.set}
           onChange={(value) => onChange("set", value)}
           placeholder="e.g. Evolving Skies"
+          help="Use the official set name when you know it."
         />
         <Input
           label="Card number"
           value={form.cardNumber}
           onChange={(value) => onChange("cardNumber", value)}
           placeholder="e.g. 215/203"
+          help="Enter the printed number, including the total when shown."
         />
         <Input
           label="Player or character"
@@ -738,6 +762,7 @@ function DetailsStep({
           value={form.variant}
           onChange={(value) => onChange("variant", value)}
           placeholder="e.g. Alternate Art"
+          help="Add a parallel, insert, or special artwork variant."
         />
         <Input
           label="Language"
@@ -762,13 +787,27 @@ function DetailsStep({
               value={form.grade}
               onChange={(value) => onChange("grade", value)}
               placeholder="e.g. 10"
+              inputMode="numeric"
+              type="number"
+              min={1}
+              max={10}
+              step={0.5}
             />
             <Input
               label="Certification number"
               value={form.certificationNumber}
               onChange={(value) => onChange("certificationNumber", value)}
               placeholder="Optional"
+              help="You can verify a PSA certificate after entering it."
             />
+            <a
+              href="https://www.psacard.com/cert"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-accent hover:text-foreground"
+            >
+              Verify a PSA certification number ↗
+            </a>
           </>
         ) : (
           <Input
@@ -1271,12 +1310,22 @@ function Input({
   onChange,
   placeholder,
   inputMode,
+  help,
+  type = "text",
+  min,
+  max,
+  step,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   inputMode?: "numeric";
+  help?: string;
+  type?: "text" | "number";
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   return (
     <label>
@@ -1286,8 +1335,13 @@ function Input({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         inputMode={inputMode}
+        type={type}
+        min={min}
+        max={max}
+        step={step}
         maxLength={160}
       />
+      {help ? <small className="mt-1 block text-xs text-muted">{help}</small> : null}
     </label>
   );
 }

@@ -33,12 +33,14 @@ const searchQuery = z
   .object({ query: z.string().trim().min(1).max(120) })
   .strict();
 
-const shipmentInput = z.object({
-  carrier: z.string().trim().min(2).max(40),
-  trackingNumber: z.string().trim().min(3).max(120),
-  shippedAt: z.string().datetime(),
-  notes: z.string().trim().max(500).optional(),
-}).strict();
+const shipmentInput = z
+  .object({
+    carrier: z.string().trim().min(2).max(40),
+    trackingNumber: z.string().trim().min(3).max(120),
+    shippedAt: z.string().datetime(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
 @Controller('collector-workspace')
 @UseGuards(AccessTokenGuard)
@@ -78,7 +80,15 @@ export class CollectorWorkspaceController {
 
   @Get('subscription')
   subscription(@Req() request: AuthenticatedRequest) {
-    return this.workspace.subscription(this.collectorId(request));
+    const actor = request.actor;
+    if (!actor)
+      throw new ForbiddenException({
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Authentication is required.',
+      });
+    // Subscription status is safe to read for any signed-in account. The
+    // workspace and billing mutation endpoints remain collector-gated.
+    return this.workspace.subscription(actor.userId);
   }
 
   @Get('plans')
@@ -88,29 +98,52 @@ export class CollectorWorkspaceController {
 
   @Post('subscription/checkout')
   checkout(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    const input = z.object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) }).strict().parse(body);
-    return this.workspace.subscriptionAction(this.collectorId(request), 'CHECKOUT', input.planCode);
+    const input = z
+      .object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) })
+      .strict()
+      .parse(body);
+    return this.workspace.subscriptionAction(
+      this.collectorId(request),
+      'CHECKOUT',
+      input.planCode,
+    );
   }
 
   @Post('subscription/portal')
   billingPortal(@Req() request: AuthenticatedRequest) {
-    return this.workspace.subscriptionAction(this.collectorId(request), 'PORTAL');
+    return this.workspace.subscriptionAction(
+      this.collectorId(request),
+      'PORTAL',
+    );
   }
 
   @Post('subscription/change-plan')
   changePlan(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    const input = z.object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) }).strict().parse(body);
-    return this.workspace.subscriptionAction(this.collectorId(request), 'CHANGE_PLAN', input.planCode);
+    const input = z
+      .object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) })
+      .strict()
+      .parse(body);
+    return this.workspace.subscriptionAction(
+      this.collectorId(request),
+      'CHANGE_PLAN',
+      input.planCode,
+    );
   }
 
   @Post('subscription/cancel')
   cancelSubscription(@Req() request: AuthenticatedRequest) {
-    return this.workspace.subscriptionAction(this.collectorId(request), 'CANCEL');
+    return this.workspace.subscriptionAction(
+      this.collectorId(request),
+      'CANCEL',
+    );
   }
 
   @Post('subscription/resume')
   resumeSubscription(@Req() request: AuthenticatedRequest) {
-    return this.workspace.subscriptionAction(this.collectorId(request), 'RESUME');
+    return this.workspace.subscriptionAction(
+      this.collectorId(request),
+      'RESUME',
+    );
   }
 
   @Get('vaults')
@@ -119,35 +152,95 @@ export class CollectorWorkspaceController {
   }
 
   @Post('collectibles/:id/vault')
-  selectVault(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    const input = z.object({ vaultId: z.string().min(1) }).strict().parse(body);
-    return this.workspace.selectVault(this.collectorId(request), submissionId, input.vaultId);
+  selectVault(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({ vaultId: z.string().min(1) })
+      .strict()
+      .parse(body);
+    return this.workspace.selectVault(
+      this.collectorId(request),
+      submissionId,
+      input.vaultId,
+    );
   }
 
   @Post('collectibles/:id/shipment')
-  addShipment(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    return this.workspace.addShipment(this.collectorId(request), submissionId, shipmentInput.parse(body));
+  addShipment(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.workspace.addShipment(
+      this.collectorId(request),
+      submissionId,
+      shipmentInput.parse(body),
+    );
   }
 
   @Post('collectibles/:id/delete-draft')
-  deleteDraft(@Param('id') submissionId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    const input = z.object({ version: z.number().int().min(1) }).strict().parse(body);
-    return this.workspace.deleteDraft(this.collectorId(request), submissionId, input.version);
+  deleteDraft(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = z
+      .object({ version: z.number().int().min(1) })
+      .strict()
+      .parse(body);
+    return this.workspace.deleteDraft(
+      this.collectorId(request),
+      submissionId,
+      input.version,
+    );
   }
 
   @Post('intake/:id/receipt')
-  confirmReceipt(@Param('id') intakeId: string, @Req() request: AuthenticatedRequest) {
+  confirmReceipt(
+    @Param('id') intakeId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const actor = request.actor;
-    if (!actor) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
+    if (!actor)
+      throw new ForbiddenException({
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Authentication is required.',
+      });
     return this.workspace.confirmReceipt(actor.userId, intakeId, actor.roles);
   }
 
   @Patch('intake/:id/shipment')
-  updateShipmentStatus(@Param('id') intakeId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+  updateShipmentStatus(
+    @Param('id') intakeId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const actor = request.actor;
-    if (!actor) throw new ForbiddenException({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication is required.' });
-    const input = z.object({ status: z.enum(['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'EXCEPTION', 'UNKNOWN']) }).strict().parse(body);
-    return this.workspace.updateShipmentStatus(actor.roles, intakeId, input.status);
+    if (!actor)
+      throw new ForbiddenException({
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Authentication is required.',
+      });
+    const input = z
+      .object({
+        status: z.enum([
+          'IN_TRANSIT',
+          'OUT_FOR_DELIVERY',
+          'DELIVERED',
+          'EXCEPTION',
+          'UNKNOWN',
+        ]),
+      })
+      .strict()
+      .parse(body);
+    return this.workspace.updateShipmentStatus(
+      actor.roles,
+      intakeId,
+      input.status,
+    );
   }
 
   @Get('search')

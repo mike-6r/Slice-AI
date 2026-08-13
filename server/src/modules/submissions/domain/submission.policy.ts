@@ -55,7 +55,8 @@ export function assertSubmissionTerms(metadata: unknown) {
   ) {
     throw new UnprocessableEntityException({
       code: 'SUBMISSION_TERMS_REQUIRED',
-      message: 'Confirm the submission terms before sending this asset for review.',
+      message:
+        'Confirm the submission terms before sending this asset for review.',
     });
   }
 }
@@ -71,6 +72,27 @@ export function assertSubmissionDetails(metadata: unknown) {
     throw new UnprocessableEntityException({
       code: 'SUBMISSION_DETAILS_REQUIRED',
       message: 'Add an asset title before sending this asset for review.',
+    });
+  }
+  assertGradeMetadata(metadata);
+}
+
+export function assertGradeMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+    return;
+  const value = (metadata as Record<string, unknown>).grade;
+  if (
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    value === 'Ungraded'
+  )
+    return;
+  const grade = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(grade) || grade < 1 || grade > 10) {
+    throw new UnprocessableEntityException({
+      code: 'GRADE_INVALID',
+      message: 'Enter a grading score between 1 and 10.',
     });
   }
 }

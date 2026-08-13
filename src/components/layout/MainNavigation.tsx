@@ -27,7 +27,7 @@ import {
   canAccessCollectorWorkspace,
   canAccessStaffWorkspace,
 } from "@/auth/workspace-access";
-import { primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
+import { MORE_NAV, primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
 
 export function Wordmark({ className }: { className?: string }) {
   return (
@@ -49,8 +49,10 @@ export function MainNavigation() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [accountOpen, setAccountOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -71,28 +73,34 @@ export function MainNavigation() {
   });
 
   useEffect(() => {
-    if (!accountOpen && !mobileOpen && !searchOpen) return;
+    if (!accountOpen && !moreOpen && !mobileOpen && !searchOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setAccountOpen(false);
+        setMoreOpen(false);
         setMobileOpen(false);
         setSearchOpen(false);
       }
     };
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [accountOpen, mobileOpen, searchOpen]);
+  }, [accountOpen, mobileOpen, moreOpen, searchOpen]);
 
   useEffect(() => {
-    if (!accountOpen) return;
+    if (!accountOpen && !moreOpen) return;
     const closeOnPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!menuRef.current?.contains(target) && !mobileProfileRef.current?.contains(target))
+      if (
+        accountOpen &&
+        !menuRef.current?.contains(target) &&
+        !mobileProfileRef.current?.contains(target)
+      )
         setAccountOpen(false);
+      if (moreOpen && !moreRef.current?.contains(target)) setMoreOpen(false);
     };
     document.addEventListener("mousedown", closeOnPointerDown);
     return () => document.removeEventListener("mousedown", closeOnPointerDown);
-  }, [accountOpen]);
+  }, [accountOpen, moreOpen]);
 
   const submitSearch = () => {
     setSearchOpen(false);
@@ -145,6 +153,31 @@ export function MainNavigation() {
               {item.label}
             </Link>
           ))}
+          <div ref={moreRef} className="relative">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((open) => !open)}
+              className="nav-link inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-2 text-[13px] font-medium text-subtle 2xl:px-3"
+            >
+              More <ChevronDown className="size-3.5" aria-hidden="true" />
+            </button>
+            {moreOpen ? (
+              <div className="absolute left-0 top-full z-50 mt-2 min-w-44 rounded-xl border border-border bg-surface p-1.5 shadow-card">
+                {MORE_NAV.map((item) => (
+                  <Link
+                    key={item.label}
+                    to={item.to}
+                    onClick={() => setMoreOpen(false)}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-subtle hover:bg-elevated hover:text-foreground"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </nav>
 
         <SearchForm
@@ -242,6 +275,21 @@ export function MainNavigation() {
                 {item.label}
               </Link>
             ))}
+            <div className="mt-2 border-t border-border pt-2">
+              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                More
+              </p>
+              {MORE_NAV.map((item) => (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  onClick={() => setMobileOpen(false)}
+                  className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
             {isAuthenticated && (
               <>
                 <Link

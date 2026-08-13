@@ -240,10 +240,24 @@ export class CollectibleMarketResearchService {
 
 function canonicalIdentity(input: MarketResearchInput): Identity {
   const metadata = input.declaredMetadata;
+  const reference =
+    metadata.customerReference &&
+    typeof metadata.customerReference === 'object' &&
+    !Array.isArray(metadata.customerReference)
+      ? (metadata.customerReference as Record<string, unknown>)
+      : null;
+  const extracted =
+    reference?.extractedIdentity &&
+    typeof reference.extractedIdentity === 'object' &&
+    !Array.isArray(reference.extractedIdentity)
+      ? (reference.extractedIdentity as Record<string, unknown>)
+      : null;
   const read = (key: string) =>
     typeof metadata[key] === 'string' && metadata[key].trim()
       ? metadata[key].trim()
-      : null;
+      : typeof extracted?.[key] === 'string' && extracted[key].trim()
+        ? (extracted[key] as string).trim()
+        : null;
   const name = read('name');
   if (!name)
     throw new ServiceUnavailableException({
@@ -362,7 +376,7 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
   const sourceCount = new Set(
     observations
       .filter((o) => o.included)
-      .map((o) => o.providerCode.replace(/^STAGING_REFERENCE_DATA:/, "")),
+      .map((o) => o.providerCode.replace(/^STAGING_REFERENCE_DATA:/, '')),
   ).size;
   const dataQuality =
     exactSales.length >= 5 && sourceCount >= 2
@@ -509,10 +523,10 @@ function refs(
   const base = Date.now();
   return [
     ...sales.map((amountMinor, index) => ({
-          providerCode:
-            index % 2
-              ? 'STAGING_REFERENCE_DATA:PRICECHARTING'
-              : 'STAGING_REFERENCE_DATA:EBAY',
+      providerCode:
+        index % 2
+          ? 'STAGING_REFERENCE_DATA:PRICECHARTING'
+          : 'STAGING_REFERENCE_DATA:EBAY',
       externalReferenceId: `sale-${index + 1}`,
       externalUrl: index % 2 ? saleUrl : listingUrl,
       observationType: 'SALE' as const,
@@ -525,9 +539,9 @@ function refs(
       grade,
     })),
     ...listings.map((amountMinor, index) => ({
-          providerCode: index
-            ? 'STAGING_REFERENCE_DATA:EBAY'
-            : 'STAGING_REFERENCE_DATA:PRICECHARTING',
+      providerCode: index
+        ? 'STAGING_REFERENCE_DATA:EBAY'
+        : 'STAGING_REFERENCE_DATA:PRICECHARTING',
       externalReferenceId: `listing-${index + 1}`,
       externalUrl: index ? listingUrl : saleUrl,
       observationType: 'LISTING' as const,

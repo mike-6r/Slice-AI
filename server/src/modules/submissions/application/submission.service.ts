@@ -22,14 +22,13 @@ import {
 } from '../ports/submission-storage.ports';
 import { Inject } from '@nestjs/common';
 import { marketResearchIdentityHash } from '../../market-research/market-research.service';
-import {
-  collectorUsageFor,
-} from '../../collector-workspace/collector-entitlements';
+import { collectorUsageFor } from '../../collector-workspace/collector-entitlements';
 import {
   assertEditableStatus,
   assertExpectedVersion,
   assertMediaProperties,
   assertRequiredSafeMedia,
+  assertGradeMetadata,
   assertSubmissionDetails,
   assertSubmissionTerms,
   assertReviewerIsNotOwner,
@@ -93,6 +92,7 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
+        assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
         const submission = await db.assetSubmission.create({
           data: {
@@ -176,7 +176,11 @@ export class SubmissionService {
       });
     }
     const entitlements = subscription.plan.entitlements;
-    const usage = await collectorUsageFor(this.prisma, actor.userId, entitlements);
+    const usage = await collectorUsageFor(
+      this.prisma,
+      actor.userId,
+      entitlements,
+    );
     const maxActive = usage.maxActiveCollectibles;
     const maxDrafts = usage.maxOpenDrafts;
     const maxOpenSubmissions = usage.maxOpenSubmissions;
@@ -396,7 +400,29 @@ export class SubmissionService {
       async (db, audit) => {
         const current = await this.ownerForUpdate(db, actor.userId, id);
         assertEditableStatus(current.status);
-        assertExpectedVersion(current.version, input.version);
+        if (current.version !== input.version) {
+          const sameDraft =
+            current.categoryId === input.categoryId &&
+            JSON.stringify(current.declaredMetadata) ===
+              JSON.stringify(input.declaredMetadata ?? null);
+          if (sameDraft) {
+            const latest = await db.assetSubmission.findUniqueOrThrow({
+              where: { id },
+              include: {
+                media: { orderBy: { slot: 'asc' } },
+                marketResearch: {
+                  orderBy: { collectedAt: 'desc' },
+                  include: {
+                    observations: { orderBy: { observedAt: 'desc' } },
+                  },
+                },
+              },
+            });
+            return ownerProjection(latest);
+          }
+          assertExpectedVersion(current.version, input.version);
+        }
+        assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
         if (input.marketResearchId) {
           const research = await db.submissionMarketResearch.findFirst({
@@ -571,7 +597,17 @@ export class SubmissionService {
           where: { id: mediaId, submissionId: id, deletedAt: null },
         });
         if (!media) this.notFound();
-        if (media!.status !== 'PENDING_UPLOAD') this.stateConflict();
+        if (media!.status !== 'PENDING_UPLOAD') {
+          // Upload completion can be retried after a client timeout. Treat the
+          // same already-safe checksum as a successful no-op.
+          if (media!.status === 'SAFE' && media!.sha256 === input.sha256) {
+            return {
+              media: mediaProjection(media!),
+              submissionVersion: submission.version,
+            };
+          }
+          this.stateConflict();
+        }
         const stored = await this.storage.head(media!.objectKey);
         if (!stored)
           throw new ServiceUnavailableException({

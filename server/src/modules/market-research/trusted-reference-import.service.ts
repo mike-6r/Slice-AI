@@ -77,6 +77,16 @@ const priceChartingCards: Record<string, ImportedIdentity> = {
     playerOrCharacter: 'Connor Bedard',
     variant: 'Young Guns',
   },
+  'pokemon-evolving-skies/rayquaza-vmax-218': {
+    categorySlug: 'pokemon-tcg',
+    name: 'Rayquaza VMAX',
+    manufacturer: 'The Pokémon Company',
+    year: '2021',
+    set: 'Evolving Skies',
+    cardNumber: '218/203',
+    playerOrCharacter: 'Rayquaza',
+    variant: 'Alternate Art',
+  },
 };
 
 /**
@@ -110,7 +120,9 @@ export class TrustedReferenceImportService {
       };
     }
 
-    const key = parsed.pathname.slice('/game/'.length).replace(/\/$/, '');
+    const key = decodeURIComponent(
+      parsed.pathname.slice('/game/'.length).replace(/\/+$/, ''),
+    ).toLowerCase();
     const identity = priceChartingCards[key];
     if (!identity) {
       const partial = partialIdentity(key);
@@ -170,6 +182,9 @@ function partialIdentity(key: string): ImportedIdentity | undefined {
       .split('-')
       .map((part) => part[0]?.toUpperCase() + part.slice(1))
       .join(' '),
+    ...(cardSlug.match(/-(\d+(?:-\d+)?)$/)?.[1]
+      ? { cardNumber: cardSlug.match(/-(\d+(?:-\d+)?)$/)![1] }
+      : {}),
   };
 }
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   CircleCheckBig,
@@ -14,7 +14,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -41,8 +41,20 @@ import {
 
 export const Route = createFileRoute("/orders")({
   head: () => ({ meta: [{ title: "Orders | Slice" }] }),
-  component: Orders,
+  component: OrdersRedirect,
 });
+
+function OrdersRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    void navigate({ to: "/portfolio", search: { tab: "orders" }, replace: true });
+  }, [navigate]);
+  return (
+    <main className="page-shell py-20 text-center">
+      <p className="text-sm text-subtle">Opening Orders in your Portfolio…</p>
+    </main>
+  );
+}
 
 export function Orders() {
   useCurrency();
