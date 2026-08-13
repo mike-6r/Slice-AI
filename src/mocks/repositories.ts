@@ -108,6 +108,35 @@ export const mockRepositories: AppRepositories = {
     },
     async getOperationsOverview() {
       return {
+        kpis: {
+          totalUsers: 0,
+          collectors: 0,
+          investors: 0,
+          activeListings: 0,
+          openOrders: 0,
+          needsAttention: 0,
+        },
+        pipeline: [
+          ["draft", "Draft"],
+          ["submitted", "Submitted"],
+          ["inReview", "In Review"],
+          ["accepted", "Accepted"],
+          ["shipping", "Shipping"],
+          ["received", "Received"],
+          ["verified", "Verified"],
+          ["valued", "Valued"],
+          ["vaultReady", "Vault Ready"],
+          ["marketLive", "Market Live"],
+        ].map(([id, label]) => ({ id, label, count: 0 })),
+        attentionGroups: [],
+        recentActivity: [],
+        systemHealth: [],
+        accountMix: { collectors: 0, investors: 0, staff: 0, admins: 0, overlapping: true },
+        memberships: { starter: 0, pro: 0, elite: 0, trialing: 0, pastDue: 0, mrrMinor: "0" },
+        support: {
+          available: false,
+          message: "Support case metrics are not connected to Slice Admin.",
+        },
         counts: {
           pendingReviews: 0,
           collectorActionsWaiting: 0,

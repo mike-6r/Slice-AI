@@ -500,7 +500,27 @@ export class AdminService {
    * a second lifecycle state machine. */
   async operationsOverview(actor: Actor) {
     await this.authorization.authorize(actor, 'admin.console.read');
-    const [submissions, compliance, payments, alerts] = await Promise.all([
+    const [
+      submissions,
+      compliance,
+      payments,
+      alerts,
+      activeUsers,
+      collectorUsers,
+      staffUsers,
+      adminUsers,
+      investorUsers,
+      activeListings,
+      openOrders,
+      stuckOrders,
+      pipelineRows,
+      membershipRows,
+      activityRows,
+      notificationFailures,
+      marketSnapshots,
+      outboxFailures,
+      reconciliationExceptions,
+    ] = await Promise.all([
       this.db.assetSubmission.findMany({
         where: { status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -531,6 +551,115 @@ export class AdminService {
         where: { status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] } },
       }),
       this.db.providerIncident.count({ where: { status: 'OPEN' } }),
+      this.db.user.count({ where: { accountStatus: 'ACTIVE' } }),
+      this.db.roleAssignment.findMany({
+        where: { role: 'COLLECTOR', revokedAt: null, user: { accountStatus: 'ACTIVE' } },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.db.roleAssignment.findMany({
+        where: {
+          revokedAt: null,
+          role: {
+            in: [
+              'SUPPORT',
+              'COMPLIANCE_ANALYST',
+              'ASSET_REVIEWER',
+              'VAULT_OPERATOR',
+              'FINANCE_OPERATOR',
+            ],
+          },
+          user: { accountStatus: 'ACTIVE' },
+        },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.db.roleAssignment.findMany({
+        where: { role: 'ADMIN', revokedAt: null, user: { accountStatus: 'ACTIVE' } },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.db.user.count({
+        where: {
+          accountStatus: 'ACTIVE',
+          OR: [
+            { portfolioLots: { some: { status: 'OPEN' } } },
+            {
+              tradingOrders: {
+                some: {
+                  status: { in: ['OPEN', 'PARTIALLY_FILLED', 'FILLED'] },
+                },
+              },
+            },
+          ],
+        },
+      }),
+      this.db.assetPublication.count({ where: { status: 'PUBLISHED' } }),
+      this.db.tradingOrder.count({
+        where: {
+          status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+        },
+      }),
+      this.db.tradingOrder.count({
+        where: {
+          status: 'PENDING_RESERVATION',
+          createdAt: { lt: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        },
+      }),
+      this.db.assetSubmission.findMany({
+        where: { status: { notIn: ['CANCELLED', 'REJECTED'] } },
+        select: {
+          id: true,
+          status: true,
+          media: { select: { status: true } },
+          intake: {
+            select: {
+              status: true,
+              shipment: { select: { status: true } },
+              receipt: { select: { id: true } },
+            },
+          },
+          asset: {
+            select: {
+              valuationDecisions: {
+                where: { status: 'ACTIVE' },
+                select: { id: true },
+                take: 1,
+              },
+              custodyRecord: { select: { status: true } },
+              publication: { select: { status: true } },
+            },
+          },
+        },
+      }),
+      this.db.collectorSubscription.findMany({
+        where: { status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+        select: {
+          status: true,
+          plan: { select: { code: true, monthlyPriceMinor: true } },
+        },
+      }),
+      this.db.auditEvent.findMany({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+        select: {
+          id: true,
+          action: true,
+          resourceType: true,
+          resourceId: true,
+          createdAt: true,
+        },
+      }),
+      this.db.notificationDelivery.count({
+        where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
+      }),
+      this.db.assetMarketSnapshot.count(),
+      this.db.outboxEvent.count({
+        where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
+      }),
+      this.db.financialReconciliationRun.count({
+        where: { status: 'MISMATCH' },
+      }),
     ]);
     const pendingReviews = submissions.filter((item) =>
       ['SUBMITTED', 'IN_REVIEW'].includes(item.status),
@@ -663,7 +792,240 @@ export class AdminService {
         return [];
       })
       .slice(0, 24);
+    const pipeline = {
+      draft: 0,
+      submitted: 0,
+      inReview: 0,
+      accepted: 0,
+      shipping: 0,
+      received: 0,
+      verified: 0,
+      valued: 0,
+      vaultReady: 0,
+      marketLive: 0,
+    };
+    for (const row of pipelineRows) {
+      const publication = row.asset?.publication?.status;
+      const custody = row.asset?.custodyRecord?.status;
+      const receipt = Boolean(row.intake?.receipt);
+      const shipment = row.intake?.shipment?.status;
+      let stage: keyof typeof pipeline;
+      if (publication === 'PUBLISHED') stage = 'marketLive';
+      else if (custody === 'SECURED') stage = 'vaultReady';
+      else if (row.asset?.valuationDecisions.length) stage = 'valued';
+      else if (custody === 'INSPECTED' || row.intake?.status === 'VERIFICATION')
+        stage = 'verified';
+      else if (receipt) stage = 'received';
+      else if (row.status === 'DRAFT') stage = 'draft';
+      else if (row.status === 'SUBMITTED') stage = 'submitted';
+      else if (row.status === 'IN_REVIEW') stage = 'inReview';
+      else if (row.status === 'APPROVED' && !row.intake) stage = 'accepted';
+      else if (shipment || row.intake?.status) stage = 'shipping';
+      else stage = 'accepted';
+      pipeline[stage] += 1;
+    }
+    const missingEvidence = pipelineRows.filter(
+      (row) =>
+        ['SUBMITTED', 'IN_REVIEW'].includes(row.status) &&
+        !row.media.some((media) => media.status === 'SAFE'),
+    ).length;
+    const deliveryExceptions = pipelineRows.filter(
+      (row) =>
+        ['EXCEPTION', 'UNKNOWN'].includes(row.intake?.shipment?.status ?? '') ||
+        (row.intake?.shipment?.status === 'DELIVERED' && !row.intake.receipt),
+    ).length;
+    const accountMix = {
+      collectors: collectorUsers.length,
+      investors: investorUsers,
+      staff: staffUsers.length,
+      admins: adminUsers.length,
+      overlapping: true,
+    };
+    const membershipSnapshot = {
+      starter: membershipRows.filter((row) => row.plan.code === 'STARTER')
+        .length,
+      pro: membershipRows.filter((row) => row.plan.code === 'PRO').length,
+      elite: membershipRows.filter((row) => row.plan.code === 'ELITE').length,
+      trialing: membershipRows.filter((row) => row.status === 'TRIALING')
+        .length,
+      pastDue: membershipRows.filter((row) => row.status === 'PAST_DUE').length,
+      mrrMinor: membershipRows
+        .filter((row) =>
+          ['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCEL_AT_PERIOD_END'].includes(
+            row.status,
+          ),
+        )
+        .reduce((total, row) => total + row.plan.monthlyPriceMinor, 0n)
+        .toString(),
+    };
+    const activityTitle = (action: string) => {
+      if (action.includes('VALUATION')) return 'Valuation completed';
+      if (action.includes('SUBMISSION_APPROVED')) return 'Submission accepted';
+      if (action.includes('RECEIPT')) return 'Receipt confirmed';
+      if (action.includes('PUBLISH')) return 'Listing published';
+      if (action.includes('ORDER')) return 'Order activity';
+      if (action.includes('USER')) return 'Account activity';
+      if (action.includes('MEMBERSHIP')) return 'Membership changed';
+      return 'Admin activity';
+    };
+    const systemHealth = [
+      {
+        name: 'API',
+        status: 'Operational',
+        summary: 'Aggregate request completed.',
+      },
+      {
+        name: 'Database',
+        status: 'Operational',
+        summary: 'Operational projection query completed.',
+      },
+      {
+        name: 'Background Jobs',
+        status: outboxFailures ? 'Degraded' : 'Unknown',
+        summary: outboxFailures
+          ? `${outboxFailures} failed or dead-lettered jobs require review.`
+          : 'Job telemetry is not exposed in this environment.',
+      },
+      {
+        name: 'Notifications',
+        status: notificationFailures ? 'Degraded' : 'Unknown',
+        summary: notificationFailures
+          ? `${notificationFailures} failed deliveries require review.`
+          : 'Notification failure telemetry is not available.',
+      },
+      {
+        name: 'Market data',
+        status: marketSnapshots ? 'Operational' : 'Unknown',
+        summary: marketSnapshots
+          ? `${marketSnapshots} market snapshots are available.`
+          : 'Market snapshot telemetry is not available.',
+      },
+      {
+        name: 'Vault Integration',
+        status: 'Unknown',
+        summary: 'Provider health telemetry is not exposed.',
+      },
+      {
+        name: 'Payment Provider',
+        status: 'Unknown',
+        summary: 'Provider health telemetry is not exposed.',
+      },
+      {
+        name: 'Webhooks',
+        status: alerts ? 'Degraded' : 'Unknown',
+        summary: alerts
+          ? `${alerts} provider incidents are open.`
+          : 'Webhook health telemetry is not available.',
+      },
+    ];
+    const attentionGroups = [
+      {
+        id: 'missing-evidence',
+        label: 'Missing evidence',
+        count: missingEvidence,
+        description: 'Submissions missing required safe evidence.',
+        severity: missingEvidence ? 'HIGH' : 'NORMAL',
+        section: 'moderation',
+      },
+      {
+        id: 'delivery-exceptions',
+        label: 'Delivery exceptions',
+        count: deliveryExceptions,
+        description: 'Shipments with delivery or receipt issues.',
+        severity: deliveryExceptions ? 'HIGH' : 'NORMAL',
+        section: 'intake',
+      },
+      {
+        id: 'valuation-issues',
+        label: 'Valuation queue',
+        count: valuationQueue,
+        description: 'Assets waiting for supported valuation.',
+        severity: 'NORMAL',
+        section: 'valuations',
+      },
+      {
+        id: 'compliance-review',
+        label: 'Compliance review',
+        count: compliance,
+        description: 'Cases awaiting authorised compliance review.',
+        severity: compliance ? 'HIGH' : 'NORMAL',
+        section: 'compliance',
+      },
+      {
+        id: 'stuck-orders',
+        label: 'Stuck orders',
+        count: stuckOrders,
+        description: 'Orders awaiting abnormal processing recovery.',
+        severity: stuckOrders ? 'HIGH' : 'NORMAL',
+        section: 'payments',
+      },
+      {
+        id: 'payment-exceptions',
+        label: 'Payment exceptions',
+        count: payments,
+        description: 'Money movements failed or require manual review.',
+        severity: payments ? 'HIGH' : 'NORMAL',
+        section: 'payments',
+      },
+      {
+        id: 'provider-alerts',
+        label: 'Provider alerts',
+        count: alerts,
+        description: 'Open provider incidents require integration review.',
+        severity: alerts ? 'HIGH' : 'NORMAL',
+        section: 'integrations',
+      },
+      {
+        id: 'reconciliation',
+        label: 'Reconciliation exceptions',
+        count: reconciliationExceptions,
+        description: 'Financial reconciliation requires inspection.',
+        severity: reconciliationExceptions ? 'CRITICAL' : 'NORMAL',
+        section: 'payments',
+      },
+    ].filter((item) => item.count > 0);
     return {
+      kpis: {
+        totalUsers: activeUsers,
+        collectors: collectorUsers.length,
+        investors: investorUsers,
+        activeListings,
+        openOrders,
+        needsAttention: attentionGroups.reduce(
+          (total, item) => total + item.count,
+          0,
+        ),
+      },
+      pipeline: [
+        ['draft', 'Draft'],
+        ['submitted', 'Submitted'],
+        ['inReview', 'In Review'],
+        ['accepted', 'Accepted'],
+        ['shipping', 'Shipping'],
+        ['received', 'Received'],
+        ['verified', 'Verified'],
+        ['valued', 'Valued'],
+        ['vaultReady', 'Vault Ready'],
+        ['marketLive', 'Market Live'],
+      ].map(([id, label]) => ({
+        id,
+        label,
+        count: pipeline[id as keyof typeof pipeline],
+      })),
+      attentionGroups,
+      recentActivity: activityRows.map((row) => ({
+        id: row.id,
+        title: activityTitle(row.action),
+        context: `${row.resourceType}${row.resourceId ? ` · ${row.resourceId.slice(0, 8)}` : ''}`,
+        occurredAt: row.createdAt.toISOString(),
+      })),
+      systemHealth,
+      accountMix,
+      memberships: membershipSnapshot,
+      support: {
+        available: false,
+        message: 'Support case metrics are not connected to Slice Admin.',
+      },
       counts: {
         pendingReviews,
         collectorActionsWaiting:

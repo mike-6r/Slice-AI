@@ -1139,7 +1139,83 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       "admin operations overview",
     );
     const counts = objectField(value.counts, "admin operations counts");
+    const kpis = objectField(value.kpis, "admin operations kpis");
+    const accountMix = objectField(value.accountMix, "admin operations account mix");
+    const memberships = objectField(value.memberships, "admin operations memberships");
+    const support = objectField(value.support, "admin operations support");
     return {
+      kpis: {
+        totalUsers: Number(kpis.totalUsers ?? 0),
+        collectors: Number(kpis.collectors ?? 0),
+        investors: Number(kpis.investors ?? 0),
+        activeListings: Number(kpis.activeListings ?? 0),
+        openOrders: Number(kpis.openOrders ?? 0),
+        needsAttention: Number(kpis.needsAttention ?? 0),
+      },
+      pipeline: Array.isArray(value.pipeline)
+        ? value.pipeline.map((raw) => {
+            const item = objectField(raw, "admin pipeline");
+            return {
+              id: stringField(item.id, "admin pipeline.id"),
+              label: stringField(item.label, "admin pipeline.label"),
+              count: Number(item.count ?? 0),
+            };
+          })
+        : [],
+      attentionGroups: Array.isArray(value.attentionGroups)
+        ? value.attentionGroups.map((raw) => {
+            const item = objectField(raw, "admin attention group");
+            return {
+              id: stringField(item.id, "admin attention group.id"),
+              label: stringField(item.label, "admin attention group.label"),
+              count: Number(item.count ?? 0),
+              description: stringField(item.description, "admin attention group.description"),
+              severity: stringField(item.severity, "admin attention group.severity"),
+              section: stringField(item.section, "admin attention group.section"),
+            };
+          })
+        : [],
+      recentActivity: Array.isArray(value.recentActivity)
+        ? value.recentActivity.map((raw) => {
+            const item = objectField(raw, "admin recent activity");
+            return {
+              id: stringField(item.id, "admin recent activity.id"),
+              title: stringField(item.title, "admin recent activity.title"),
+              context: stringField(item.context, "admin recent activity.context"),
+              occurredAt: stringField(item.occurredAt, "admin recent activity.occurredAt"),
+            };
+          })
+        : [],
+      systemHealth: Array.isArray(value.systemHealth)
+        ? value.systemHealth.map((raw) => {
+            const item = objectField(raw, "admin system health");
+            return {
+              name: stringField(item.name, "admin system health.name"),
+              status: stringField(item.status, "admin system health.status"),
+              summary: stringField(item.summary, "admin system health.summary"),
+            };
+          })
+        : [],
+      accountMix: {
+        collectors: Number(accountMix.collectors ?? 0),
+        investors: Number(accountMix.investors ?? 0),
+        staff: Number(accountMix.staff ?? 0),
+        admins: Number(accountMix.admins ?? 0),
+        overlapping: Boolean(accountMix.overlapping),
+      },
+      memberships: {
+        starter: Number(memberships.starter ?? 0),
+        pro: Number(memberships.pro ?? 0),
+        elite: Number(memberships.elite ?? 0),
+        trialing: Number(memberships.trialing ?? 0),
+        pastDue: Number(memberships.pastDue ?? 0),
+        mrrMinor: stringField(memberships.mrrMinor, "admin operations memberships.mrrMinor"),
+      },
+      support: {
+        available: Boolean(support.available),
+        message: stringField(support.message, "admin operations support.message"),
+        ...(typeof support.open === "number" ? { open: support.open } : {}),
+      },
       counts: {
         pendingReviews: Number(counts.pendingReviews ?? 0),
         collectorActionsWaiting: Number(counts.collectorActionsWaiting ?? 0),

@@ -30,6 +30,7 @@ import {
   PackageCheck,
   Truck,
   Search,
+  Tag,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -109,6 +110,14 @@ const navItems: AdminNavItem[] = [
 
 function isAdminSection(value: unknown): value is AdminSection {
   return typeof value === "string" && navItems.some((item) => item.id === value);
+}
+
+function pipelineSection(stage: string): AdminSection {
+  if (["draft", "submitted", "inReview"].includes(stage)) return "moderation";
+  if (["accepted", "shipping", "received"].includes(stage)) return "intake";
+  if (stage === "verified" || stage === "valued") return "valuations";
+  if (stage === "vaultReady") return "custody";
+  return "marketplace";
 }
 
 function AdminPage() {
@@ -854,51 +863,60 @@ function ControlCenter({
           <CheckCircle2 aria-hidden="true" /> Read-only foundation
         </span>
       </section>
-      <div className="admin-kpi-grid">
+      <div className="admin-kpi-grid admin-kpi-grid--six">
+        <AdminKpi icon={Users} label="Total users" value={operational?.kpis.totalUsers ?? 0} />
         <AdminKpi
           icon={ClipboardCheck}
-          label="Pending Reviews"
-          value={operational?.counts.pendingReviews ?? counts.submissions}
+          label="Collectors"
+          value={operational?.kpis.collectors ?? 0}
         />
         <AdminKpi
-          icon={Users}
-          label="Collector Actions"
-          value={operational?.counts.collectorActionsWaiting ?? 0}
+          icon={BriefcaseBusiness}
+          label="Investors"
+          value={operational?.kpis.investors ?? 0}
         />
         <AdminKpi
-          icon={Inbox}
-          label="Awaiting Vault"
-          value={operational?.counts.acceptedAwaitingVault ?? 0}
+          icon={Tag}
+          label="Active listings"
+          value={operational?.kpis.activeListings ?? 0}
         />
         <AdminKpi
-          icon={Truck}
-          label="In Transit"
-          value={operational?.counts.shipmentsInTransit ?? 0}
+          icon={WalletCards}
+          label="Open orders"
+          value={operational?.kpis.openOrders ?? 0}
         />
         <AdminKpi
-          icon={PackageCheck}
-          label="Receipt Pending"
-          value={operational?.counts.deliveredAwaitingReceipt ?? 0}
-        />
-        <AdminKpi
-          icon={BadgeCheck}
-          label="Valuation Queue"
-          value={operational?.counts.valuationQueue ?? counts.valuation}
-        />
-        <AdminKpi icon={Landmark} label="Vault Ready" value={operational?.counts.vaultReady ?? 0} />
-        <AdminKpi
-          icon={ShieldCheck}
-          label="Compliance"
-          value={operational?.counts.compliance ?? overview?.complianceCases ?? 0}
+          icon={AlertTriangle}
+          label="Needs attention"
+          value={operational?.kpis.needsAttention ?? 0}
         />
       </div>
       <div className="admin-dashboard-grid">
         <section className="admin-panel">
           <AdminPanelHeading
-            title="Needs Attention"
+            title="Needs Immediate Attention"
             action="Review assets"
             onClick={() => select("moderation")}
           />
+          {operational?.attentionGroups.length ? (
+            <div className="admin-attention-groups">
+              {operational.attentionGroups.slice(0, 5).map((item) => (
+                <button
+                  type="button"
+                  className="admin-attention-group"
+                  key={item.id}
+                  onClick={() => select(isAdminSection(item.section) ? item.section : "control")}
+                >
+                  <span className="admin-attention-group__count">{item.count}</span>
+                  <span className="min-w-0">
+                    <strong>{item.label}</strong>
+                    <small>{item.description}</small>
+                  </span>
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          ) : null}
           {operational?.needsAttention.length || pendingReviews || attentionOperations.length ? (
             <div className="admin-attention-list">
               {operational?.needsAttention.slice(0, 8).map((item) => (
@@ -968,14 +986,14 @@ function ControlCenter({
         <section className="admin-panel">
           <AdminPanelHeading title="System Status" />
           <div className="admin-status-list">
-            {risk?.system.length ? (
-              risk.system.map((item) => (
+            {operational?.systemHealth.length ? (
+              operational.systemHealth.map((item) => (
                 <StatusRow
                   key={item.name}
                   label={item.name}
                   status={item.status}
                   icon={
-                    item.name === "PostgreSQL"
+                    item.name === "Database"
                       ? Database
                       : item.name === "Notifications"
                         ? Activity
@@ -992,27 +1010,47 @@ function ControlCenter({
         </section>
       </div>
       <section className="admin-panel">
-        <AdminPanelHeading
-          title="Operations Overview"
-          action="Asset moderation"
-          onClick={() => select("moderation")}
-        />
-        <div className="admin-pipeline">
-          <PipelineStage label="Submissions" value={counts.submissions} icon={ClipboardCheck} />
-          <PipelineStage label="Valuation" value={counts.valuation} icon={BadgeCheck} />
-          <PipelineStage label="Custody" value={counts.custody} icon={Archive} />
-          <PipelineStage
-            label="Vault Ready"
-            value={operations.filter((item) => item.custodyStatus === "SECURED").length}
-            icon={Landmark}
-          />
-          <PipelineStage label="Market Live" value={counts.market} icon={BarChart3} />
+        <AdminPanelHeading title="Platform Pipeline" />
+        <div className="admin-pipeline admin-pipeline--full">
+          {operational?.pipeline.map((stage) => (
+            <PipelineStage
+              key={stage.id}
+              label={stage.label}
+              value={stage.count}
+              icon={
+                stage.id === "marketLive"
+                  ? BarChart3
+                  : stage.id === "vaultReady"
+                    ? Landmark
+                    : ClipboardCheck
+              }
+              onClick={() => select(pipelineSection(stage.id))}
+            />
+          ))}
         </div>
       </section>
       <div className="admin-dashboard-grid">
         <section className="admin-panel">
           <AdminPanelHeading title="Recent Activity" />
-          <AdminEmpty detail="No admin-safe activity projection is connected yet." />
+          {operational?.recentActivity.length ? (
+            <div className="admin-record-list">
+              {operational.recentActivity.map((item) => (
+                <article className="admin-record" key={item.id}>
+                  <span className="admin-record-icon">
+                    <Activity aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <strong>{item.title}</strong>
+                    <small>
+                      {item.context} · {date(item.occurredAt)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No recent platform activity." />
+          )}
         </section>
         <section className="admin-panel">
           <AdminPanelHeading
@@ -1030,6 +1068,87 @@ function ControlCenter({
           ) : (
             <AdminEmpty detail="No open compliance cases." />
           )}
+        </section>
+      </div>
+      <div className="admin-dashboard-grid admin-dashboard-grid--four">
+        <section className="admin-panel">
+          <AdminPanelHeading title="Account Mix" />
+          <div className="admin-mix-list">
+            <StatusRow
+              label="Collectors"
+              status={String(operational?.accountMix.collectors ?? 0)}
+              icon={Users}
+            />
+            <StatusRow
+              label="Investors"
+              status={String(operational?.accountMix.investors ?? 0)}
+              icon={BriefcaseBusiness}
+            />
+            <StatusRow
+              label="Staff"
+              status={String(operational?.accountMix.staff ?? 0)}
+              icon={ShieldCheck}
+            />
+            <StatusRow
+              label="Admins"
+              status={String(operational?.accountMix.admins ?? 0)}
+              icon={Crown}
+            />
+          </div>
+          <small className="admin-muted">Counts may overlap by capability.</small>
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Membership & Billing"
+            action="Open memberships"
+            onClick={() => select("memberships")}
+          />
+          <div className="admin-mix-list">
+            <StatusRow
+              label="Starter"
+              status={String(operational?.memberships.starter ?? 0)}
+              icon={Crown}
+            />
+            <StatusRow
+              label="Pro"
+              status={String(operational?.memberships.pro ?? 0)}
+              icon={Crown}
+            />
+            <StatusRow
+              label="Elite"
+              status={String(operational?.memberships.elite ?? 0)}
+              icon={Crown}
+            />
+            <StatusRow
+              label="Past due"
+              status={String(operational?.memberships.pastDue ?? 0)}
+              icon={AlertTriangle}
+            />
+          </div>
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading title="Support & Cases" />
+          <AdminEmpty
+            detail={operational?.support.message ?? "Support case metrics are unavailable."}
+            icon={LifeBuoy}
+          />
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading title="Quick Actions" />
+          <div className="admin-settings-links admin-quick-actions">
+            <button type="button" onClick={() => select("moderation")}>
+              <ClipboardCheck aria-hidden="true" /> Review Queue
+            </button>
+            <button type="button" onClick={() => select("intake")}>
+              <Inbox aria-hidden="true" /> Intake Board
+            </button>
+            <button type="button" onClick={() => select("audit")}>
+              <FileClock aria-hidden="true" /> Audit Logs
+            </button>
+            <button type="button" onClick={() => select("users")}>
+              <Users aria-hidden="true" /> All Accounts
+            </button>
+          </div>
         </section>
       </div>
     </div>
@@ -2187,17 +2306,26 @@ function PipelineStage({
   label,
   value,
   icon: Icon,
+  onClick,
 }: {
   label: string;
   value: number;
   icon: typeof Archive;
+  onClick?: () => void;
 }) {
-  return (
-    <div>
+  const content = (
+    <>
       <Icon aria-hidden="true" />
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <div>{content}</div>
   );
 }
 function AdminEmpty({
