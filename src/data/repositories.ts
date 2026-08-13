@@ -115,8 +115,14 @@ export interface SubmissionReviewRepository {
   decide(
     id: string,
     decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED",
-    input: { reasonCode: string; note?: string },
+    input: {
+      reasonCode: string;
+      note?: string;
+      requestedItems?: string[];
+      customerMessage?: string;
+    },
   ): Promise<AssetSubmission>;
+  saveNote(id: string, note: string): Promise<{ submissionId: string; updatedAt: string }>;
 }
 export interface AssetLifecycleRepository {
   listOperations(): Promise<AssetOperationSummary[]>;

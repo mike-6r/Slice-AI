@@ -64,8 +64,15 @@ const decision = z
       .trim()
       .regex(/^[A-Z][A-Z0-9_]{1,63}$/),
     note: z.string().trim().min(1).max(2000).optional(),
+    requestedItems: z
+      .array(z.string().trim().min(1).max(120))
+      .min(1)
+      .max(10)
+      .optional(),
+    customerMessage: z.string().trim().min(1).max(2000).optional(),
   })
   .strict();
+const reviewNote = z.object({ note: z.string().trim().max(2000) }).strict();
 const queueQuery = z
   .object({
     cursor: z.string().min(1).max(512).optional(),
@@ -75,11 +82,25 @@ const queueQuery = z
     status: z.enum(['SUBMITTED', 'IN_REVIEW']).optional(),
     evidence: z.enum(['complete', 'missing', 'partial']).optional(),
     research: z
-      .enum(['completed', 'in_progress', 'pending', 'unavailable', 'not_requested'])
+      .enum([
+        'completed',
+        'in_progress',
+        'pending',
+        'unavailable',
+        'not_requested',
+      ])
       .optional(),
-    submittedFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    submittedTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    sort: z.enum(['submitted', 'priority', 'collector', 'research', 'evidence']).optional(),
+    submittedFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    submittedTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    sort: z
+      .enum(['submitted', 'priority', 'collector', 'research', 'evidence'])
+      .optional(),
     sortDirection: z.enum(['asc', 'desc']).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
@@ -367,6 +388,25 @@ export class SubmissionController {
         submissionId,
         'REJECTED',
         parse(decision, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/notes')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  notes(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.saveReviewNote(
+        req.actor!,
+        submissionId,
+        parse(reviewNote, body).note,
         req.requestId ?? 'unknown',
         key!,
       ),

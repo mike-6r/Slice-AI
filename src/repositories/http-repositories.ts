@@ -662,9 +662,27 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
     reviews: value.reviews.map((rawReview) => {
       const review = objectField(rawReview, "review history");
       return {
+        id: typeof review.id === "string" ? review.id : undefined,
         status: stringField(review.status, "review history.status"),
         decision: nullableString(review.decision, "review history.decision"),
         reasonCode: nullableString(review.reasonCode, "review history.reasonCode"),
+        note:
+          review.note === null || review.note === undefined
+            ? null
+            : stringField(review.note, "review history.note"),
+        actor:
+          review.actor && typeof review.actor === "object"
+            ? (() => {
+                const actor = objectField(review.actor, "review history.actor");
+                return {
+                  displayName: stringField(actor.displayName, "review history.actor.displayName"),
+                  username:
+                    actor.username === null || actor.username === undefined
+                      ? null
+                      : stringField(actor.username, "review history.actor.username"),
+                };
+              })()
+            : null,
         createdAt: stringField(review.createdAt, "review history.createdAt") as ISODateTime,
         completedAt: nullableString(
           review.completedAt,
@@ -673,6 +691,42 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       };
     }),
     marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
+    collectorSummary:
+      value.collectorSummary && typeof value.collectorSummary === "object"
+        ? (objectField(value.collectorSummary, "collector summary") as never)
+        : undefined,
+    submissionDetails:
+      value.submissionDetails && typeof value.submissionDetails === "object"
+        ? (objectField(value.submissionDetails, "submission details") as never)
+        : undefined,
+    collectible:
+      value.collectible && typeof value.collectible === "object"
+        ? (objectField(value.collectible, "collectible") as never)
+        : undefined,
+    evidenceSummary:
+      value.evidenceSummary && typeof value.evidenceSummary === "object"
+        ? (objectField(value.evidenceSummary, "evidence summary") as never)
+        : undefined,
+    condition:
+      value.condition && typeof value.condition === "object"
+        ? (objectField(value.condition, "condition") as never)
+        : undefined,
+    notableDetails: Array.isArray(value.notableDetails)
+      ? (value.notableDetails as never)
+      : undefined,
+    customerReference:
+      value.customerReference && typeof value.customerReference === "object"
+        ? (value.customerReference as Record<string, unknown>)
+        : null,
+    reviewChecklist: Array.isArray(value.reviewChecklist)
+      ? (value.reviewChecklist as never)
+      : undefined,
+    activity: Array.isArray(value.activity) ? (value.activity as never) : undefined,
+    notes:
+      value.notes && typeof value.notes === "object"
+        ? (objectField(value.notes, "review notes") as never)
+        : undefined,
+    relatedItems: Array.isArray(value.relatedItems) ? (value.relatedItems as never) : undefined,
   };
 };
 const mapOperation = (raw: unknown): AssetOperationSummary => {
@@ -1865,6 +1919,20 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
         );
+      },
+      async saveNote(id, note) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/notes`, {
+            method: "POST",
+            body: { note },
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review note",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "review note.submissionId"),
+          updatedAt: stringField(response.updatedAt, "review note.updatedAt"),
+        };
       },
     },
     lifecycle: {

@@ -181,40 +181,57 @@ export class SubmissionService {
     const entitlements = subscription.plan.entitlements;
     const maxActive = numberEntitlement(entitlements, 'maxActiveCollectibles');
     const maxDrafts = numberEntitlement(entitlements, 'maxOpenDrafts');
-    const maxOpenSubmissions = numberEntitlement(entitlements, 'maxOpenSubmissions');
-    const maxConcurrentIntake = numberEntitlement(entitlements, 'maxConcurrentIntake');
+    const maxOpenSubmissions = numberEntitlement(
+      entitlements,
+      'maxOpenSubmissions',
+    );
+    const maxConcurrentIntake = numberEntitlement(
+      entitlements,
+      'maxConcurrentIntake',
+    );
     const monthlyLimit = numberEntitlement(
       entitlements,
       'monthlySubmissionLimit',
     );
     const period = billingPeriod();
-    const [active, drafts, monthly, openSubmissions, concurrentIntake] = await Promise.all([
-      this.prisma.assetSubmission.count({
-        where: {
-          ownerUserId: actor.userId,
-          status: { in: [...activeCollectorSubmissionStatuses] },
-        },
-      }),
-      this.prisma.assetSubmission.count({
-        where: { ownerUserId: actor.userId, status: { in: [...openCollectorSubmissionStatuses] } },
-      }),
-      this.prisma.submissionIntake.count({
-        where: {
-          submission: { ownerUserId: actor.userId },
-          status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED'] },
-        },
-      }),
-      this.prisma.assetSubmission.count({
-        where: { ownerUserId: actor.userId, status: 'DRAFT' },
-      }),
-      this.prisma.assetSubmission.count({
-        where: {
-          ownerUserId: actor.userId,
-          createdAt: { gte: period.start, lt: period.end },
-          status: { not: 'CANCELLED' },
-        },
-      }),
-    ]);
+    const [active, drafts, monthly, openSubmissions, concurrentIntake] =
+      await Promise.all([
+        this.prisma.assetSubmission.count({
+          where: {
+            ownerUserId: actor.userId,
+            status: { in: [...activeCollectorSubmissionStatuses] },
+          },
+        }),
+        this.prisma.assetSubmission.count({
+          where: {
+            ownerUserId: actor.userId,
+            status: { in: [...openCollectorSubmissionStatuses] },
+          },
+        }),
+        this.prisma.submissionIntake.count({
+          where: {
+            submission: { ownerUserId: actor.userId },
+            status: {
+              in: [
+                'VAULT_SELECTED',
+                'SHIPPING_REQUIRED',
+                'IN_TRANSIT',
+                'DELIVERED',
+              ],
+            },
+          },
+        }),
+        this.prisma.assetSubmission.count({
+          where: { ownerUserId: actor.userId, status: 'DRAFT' },
+        }),
+        this.prisma.assetSubmission.count({
+          where: {
+            ownerUserId: actor.userId,
+            createdAt: { gte: period.start, lt: period.end },
+            status: { not: 'CANCELLED' },
+          },
+        }),
+      ]);
     if (maxActive !== null && active >= maxActive) {
       throw new ConflictException({
         code: 'PLAN_LIMIT_REACHED',
@@ -255,7 +272,10 @@ export class SubmissionService {
         message: `You've reached your ${subscription.plan.displayName} open submission limit.`,
       });
     }
-    if (maxConcurrentIntake !== null && concurrentIntake >= maxConcurrentIntake) {
+    if (
+      maxConcurrentIntake !== null &&
+      concurrentIntake >= maxConcurrentIntake
+    ) {
       throw new ConflictException({
         code: 'PLAN_LIMIT_REACHED',
         limitType: 'CONCURRENT_INTAKE',
@@ -977,7 +997,97 @@ export class SubmissionService {
     ) {
       this.notFound();
     }
-    return reviewDetailProjection(submission!);
+    const [context, reviewer, activity, related] = await Promise.all([
+      this.prisma.assetSubmission.findUnique({
+        where: { id },
+        select: {
+          owner: {
+            select: {
+              id: true,
+              createdAt: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+              collectorSubscriptions: {
+                where: { status: 'ACTIVE' },
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+                select: { plan: { select: { displayName: true } } },
+              },
+              _count: { select: { submissions: true } },
+              submissions: {
+                where: { status: 'APPROVED' },
+                select: { id: true },
+              },
+            },
+          },
+          category: { select: { name: true } },
+          collectibleSet: { select: { name: true, manufacturer: true } },
+          gradeScaleEntry: {
+            select: { label: true, company: { select: { code: true } } },
+          },
+          asset: {
+            select: {
+              title: true,
+              year: true,
+              manufacturer: true,
+              edition: true,
+              cardNumber: true,
+              certificationNumber: true,
+              collectibleSet: { select: { name: true, manufacturer: true } },
+              gradeScaleEntry: {
+                select: { label: true, company: { select: { code: true } } },
+              },
+            },
+          },
+        },
+      }),
+      submission!.reviewerId
+        ? this.prisma.user.findUnique({
+            where: { id: submission!.reviewerId },
+            select: {
+              id: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          })
+        : Promise.resolve(null),
+      this.prisma.auditEvent.findMany({
+        where: { resourceType: 'submission', resourceId: id },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 30,
+        select: {
+          id: true,
+          action: true,
+          actorType: true,
+          metadata: true,
+          createdAt: true,
+          actor: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.assetSubmission.findMany({
+        where: { ownerUserId: submission!.ownerUserId, id: { not: id } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          status: true,
+          submittedAt: true,
+          declaredMetadata: true,
+        },
+      }),
+    ]);
+    return {
+      ...reviewDetailProjection(submission!),
+      ...reviewDetailContextProjection(
+        submission!,
+        context,
+        reviewer,
+        activity,
+        related,
+      ),
+    };
   }
 
   claim(actor: Actor, id: string, requestId: string, key: string) {
@@ -1028,7 +1138,12 @@ export class SubmissionService {
     actor: Actor,
     id: string,
     decision: 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED',
-    input: { reasonCode: string; note?: string },
+    input: {
+      reasonCode: string;
+      note?: string;
+      requestedItems?: string[];
+      customerMessage?: string;
+    },
     requestId: string,
     key: string,
   ) {
@@ -1087,7 +1202,11 @@ export class SubmissionService {
             userId: submission!.ownerUserId,
             type: `SUBMISSION_${decision}`,
             title: 'Submission review update',
-            body: 'Your submission review status has changed.',
+            body:
+              decision === 'CHANGES_REQUESTED'
+                ? (input.customerMessage ??
+                  'Please provide the requested information so our team can continue the review.')
+                : 'Your submission review status has changed.',
             resourceType: 'submission',
             resourceId: id,
           },
@@ -1101,9 +1220,60 @@ export class SubmissionService {
         await audit(auditAction, 'submission', id, {
           reviewId: review.id,
           reasonCode: input.reasonCode,
+          requestedItems: input.requestedItems ?? [],
           version: updated.version,
         });
         return ownerProjection(updated);
+      },
+    );
+  }
+
+  saveReviewNote(
+    actor: Actor,
+    id: string,
+    note: string,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.note:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/notes`,
+      { note },
+      requestId,
+      key,
+      async (db, audit) => {
+        const submission = await db.assetSubmission.findUnique({
+          where: { id },
+        });
+        if (!submission) this.notFound();
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        if (
+          submission!.status !== 'IN_REVIEW' ||
+          (submission!.reviewerId !== actor.userId &&
+            !actor.roles.includes('ADMIN'))
+        )
+          this.stateConflict();
+        const latest = await db.verificationReview.findFirst({
+          where: { submissionId: id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+        if (!latest)
+          throw new ConflictException({
+            code: 'REVIEW_NOT_CLAIMED',
+            message: 'Claim the submission before saving review notes.',
+          });
+        const updatedAt = new Date();
+        await db.verificationReview.update({
+          where: { id: latest.id },
+          data: { note: redactNote(note) },
+        });
+        await audit('SUBMISSION_REVIEW_NOTE_UPDATED', 'submission', id, {
+          reviewId: latest.id,
+          note: redactNote(note),
+        });
+        return { submissionId: id, updatedAt: updatedAt.toISOString() };
       },
     );
   }
@@ -1369,6 +1539,7 @@ function ownerProjection(submission: {
     sizeBytes: number;
     status: string;
     scanResultCode: string | null;
+    deletedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -1576,13 +1747,17 @@ function matchesResearch(
 ) {
   if (value === 'pending')
     return ['PENDING', 'IN_PROGRESS'].includes(item.research.status);
-  return item.research.status ===
-    ({
-      completed: 'COMPLETED',
-      in_progress: 'IN_PROGRESS',
-      unavailable: 'UNAVAILABLE',
-      not_requested: 'NOT_REQUESTED',
-    } as const)[value];
+  return (
+    item.research.status ===
+    (
+      {
+        completed: 'COMPLETED',
+        in_progress: 'IN_PROGRESS',
+        unavailable: 'UNAVAILABLE',
+        not_requested: 'NOT_REQUESTED',
+      } as const
+    )[value]
+  );
 }
 
 function compareQueueItems(
@@ -1599,7 +1774,7 @@ function compareQueueItems(
 ) {
   const defaultSort = sort === undefined;
   const activeSort = sort ?? 'priority';
-  const multiplier = (defaultSort || direction === 'desc') ? -1 : 1;
+  const multiplier = defaultSort || direction === 'desc' ? -1 : 1;
   const priorityRank = { HIGH: 3, MEDIUM: 2, LOW: 1 };
   const leftValue =
     activeSort === 'priority'
@@ -1657,6 +1832,7 @@ type ReviewDetailRow = {
     sizeBytes: number;
     status: string;
     scanResultCode: string | null;
+    deletedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -1665,6 +1841,7 @@ type ReviewDetailRow = {
     status: string;
     decision: string | null;
     reasonCode: string | null;
+    note: string | null;
     createdAt: Date;
     completedAt: Date | null;
   }>;
@@ -1684,10 +1861,260 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       status: review.status,
       decision: review.decision,
       reasonCode: review.reasonCode,
+      note: review.note,
       createdAt: review.createdAt.toISOString(),
       completedAt: review.completedAt?.toISOString() ?? null,
     })),
   };
+}
+function reviewDetailContextProjection(
+  submission: ReviewDetailRow,
+  context: {
+    owner: {
+      id: string;
+      createdAt: Date;
+      profile: { displayName: string; publicUsername: string | null } | null;
+      collectorSubscriptions: Array<{ plan: { displayName: string } }>;
+      _count: { submissions: number };
+      submissions: Array<{ id: string }>;
+    };
+    category: { name: string };
+    collectibleSet: { name: string; manufacturer: string | null } | null;
+    gradeScaleEntry: { label: string; company: { code: string } } | null;
+    asset: {
+      title: string;
+      year: number | null;
+      manufacturer: string | null;
+      edition: string | null;
+      cardNumber: string | null;
+      certificationNumber: string | null;
+      collectibleSet: { name: string; manufacturer: string | null } | null;
+      gradeScaleEntry: { label: string; company: { code: string } } | null;
+    } | null;
+  } | null,
+  reviewer: {
+    id: string;
+    profile: { displayName: string; publicUsername: string | null } | null;
+  } | null,
+  activity: Array<{
+    id: string;
+    action: string;
+    actorType: string;
+    metadata: Prisma.JsonValue | null;
+    createdAt: Date;
+    actor: {
+      profile: { displayName: string; publicUsername: string | null } | null;
+    } | null;
+  }>,
+  related: Array<{
+    id: string;
+    status: string;
+    submittedAt: Date | null;
+    declaredMetadata: Prisma.JsonValue | null;
+  }>,
+) {
+  const metadata = isRecord(submission.declaredMetadata)
+    ? submission.declaredMetadata
+    : {};
+  const title =
+    stringMetadata(metadata.name) ??
+    context?.asset?.title ??
+    'Untitled submission';
+  const requiredSlots = new Set(['front', 'back']);
+  const safeMedia = submission.media.filter(
+    (item) => item.status === 'SAFE' && item.deletedAt === null,
+  );
+  const presentRequired = safeMedia.filter((item) =>
+    requiredSlots.has(item.slot),
+  ).length;
+  const optional = submission.media.filter(
+    (item) => !requiredSlots.has(item.slot) && item.deletedAt === null,
+  ).length;
+  const presentOptional = safeMedia.filter(
+    (item) => !requiredSlots.has(item.slot),
+  ).length;
+  const notableDetails = Object.entries(metadata)
+    .filter(
+      ([key, value]) =>
+        [
+          'firstEdition',
+          'holo',
+          'shadowless',
+          'errorMisprint',
+          'autograph',
+          'populationReport',
+        ].includes(key) &&
+        (typeof value === 'string' ||
+          typeof value === 'boolean' ||
+          typeof value === 'number'),
+    )
+    .map(([key, value]) => ({
+      label: key
+        .replace(/[A-Z]/g, (letter) => ` ${letter}`)
+        .replace(/^./, (letter) => letter.toUpperCase()),
+      value: String(value),
+    }));
+  const fields = isRecord(metadata.condition)
+    ? Object.fromEntries(
+        Object.entries(metadata.condition)
+          .filter(([, value]) => typeof value === 'string')
+          .map(([key, value]) => [key, String(value)]),
+      )
+    : {};
+  return {
+    collectorSummary: context
+      ? {
+          userId: context.owner.id,
+          displayName: context.owner.profile?.displayName ?? 'Collector',
+          username: context.owner.profile?.publicUsername ?? null,
+          membership:
+            context.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
+          memberSince: context.owner.createdAt.toISOString(),
+          submissionCount: context.owner._count.submissions,
+          acceptedCount: context.owner.submissions.length,
+        }
+      : undefined,
+    submissionDetails: {
+      source: 'Collector Portal',
+      itemCount: submission.media.filter((item) => item.deletedAt === null)
+        .length,
+      assignedTo: reviewer
+        ? {
+            id: reviewer.id,
+            displayName: reviewer.profile?.displayName ?? 'Reviewer',
+            username: reviewer.profile?.publicUsername ?? null,
+          }
+        : null,
+    },
+    collectible: {
+      title,
+      category: context?.category.name ?? 'Collectible',
+      set:
+        context?.asset?.collectibleSet?.name ??
+        context?.collectibleSet?.name ??
+        null,
+      variant: stringMetadata(metadata.variant),
+      cardNumber:
+        stringMetadata(metadata.cardNumber) ??
+        context?.asset?.cardNumber ??
+        null,
+      grader:
+        stringMetadata(metadata.grader) ??
+        (context?.asset?.gradeScaleEntry ?? context?.gradeScaleEntry)?.company
+          .code ??
+        null,
+      grade:
+        stringMetadata(metadata.grade) ??
+        (context?.asset?.gradeScaleEntry ?? context?.gradeScaleEntry)?.label ??
+        null,
+      certificationNumber:
+        stringMetadata(metadata.certificationNumber) ??
+        context?.asset?.certificationNumber ??
+        null,
+      year:
+        stringMetadata(metadata.year) ??
+        (context?.asset?.year ? String(context.asset.year) : null),
+      manufacturer:
+        stringMetadata(metadata.manufacturer) ??
+        context?.asset?.manufacturer ??
+        context?.collectibleSet?.manufacturer ??
+        null,
+      thumbnailUrl: null,
+    },
+    evidenceSummary: {
+      required: requiredSlots.size,
+      presentRequired,
+      optional,
+      presentOptional,
+      missingRequired: requiredSlots.size - presentRequired,
+      percent: Math.round((presentRequired / requiredSlots.size) * 100),
+      status:
+        presentRequired === requiredSlots.size
+          ? 'COMPLETE'
+          : presentRequired
+            ? 'PARTIAL'
+            : 'MISSING_REQUIRED',
+      items: submission.media
+        .filter((item) => item.deletedAt === null)
+        .map((item) => ({
+          id: item.id,
+          slot: item.slot,
+          status: item.status,
+          required: requiredSlots.has(item.slot),
+          mimeType: item.mimeType,
+          sizeBytes: item.sizeBytes,
+          uploadedAt: item.updatedAt.toISOString(),
+          thumbnailUrl: null,
+        })),
+    },
+    condition: { overallGrade: stringMetadata(metadata.grade), fields },
+    notableDetails,
+    customerReference: isRecord(metadata.customerReference)
+      ? metadata.customerReference
+      : null,
+    reviewChecklist: [
+      {
+        key: 'front',
+        label: 'Front image',
+        required: true,
+        satisfied: safeMedia.some((item) => item.slot === 'front'),
+      },
+      {
+        key: 'back',
+        label: 'Back image',
+        required: true,
+        satisfied: safeMedia.some((item) => item.slot === 'back'),
+      },
+      {
+        key: 'identity',
+        label: 'Collectible details',
+        required: true,
+        satisfied: Boolean(stringMetadata(metadata.name)),
+      },
+      {
+        key: 'research',
+        label: 'Market research',
+        required: false,
+        satisfied: submission.marketResearch.length > 0,
+      },
+    ],
+    activity: activity.map((item) => ({
+      id: item.id,
+      action: item.action,
+      actor:
+        item.actor?.profile?.displayName ??
+        (item.actorType === 'SYSTEM' ? 'System' : 'Staff'),
+      detail:
+        item.action === 'SUBMISSION_REVIEW_NOTE_UPDATED'
+          ? 'Private review note updated.'
+          : null,
+      occurredAt: item.createdAt.toISOString(),
+    })),
+    notes: {
+      current: submission.reviews.at(-1)?.note ?? null,
+      history: submission.reviews
+        .filter((review) => review.note)
+        .map((review) => ({
+          id: review.id,
+          author: 'Staff',
+          note: review.note ?? '',
+          createdAt: review.createdAt.toISOString(),
+        })),
+    },
+    relatedItems: related.map((item) => ({
+      id: item.id,
+      status: item.status,
+      title: isRecord(item.declaredMetadata)
+        ? (stringMetadata(item.declaredMetadata.name) ?? 'Untitled submission')
+        : 'Untitled submission',
+      submittedAt: item.submittedAt?.toISOString() ?? null,
+    })),
+  };
+}
+function isRecord(
+  value: Prisma.JsonValue | unknown,
+): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 type ResearchRow = {
   id: string;

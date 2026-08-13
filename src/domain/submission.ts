@@ -156,13 +156,78 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
   declaredMetadata: Record<string, unknown> | null;
   media: SubmissionMedia[];
   reviews: Array<{
+    id?: string;
     status: string;
     decision: string | null;
     reasonCode: string | null;
+    note?: string | null;
+    actor?: { displayName: string; username: string | null } | null;
     createdAt: ISODateTime;
     completedAt: ISODateTime | null;
   }>;
   marketResearch: MarketResearchSnapshot | null;
+  collectorSummary?: {
+    userId: string;
+    displayName: string;
+    username: string | null;
+    membership: string | null;
+    memberSince: ISODateTime;
+    submissionCount: number;
+    acceptedCount: number;
+  };
+  submissionDetails?: {
+    source: string;
+    itemCount: number;
+    assignedTo: { id: string; displayName: string; username: string | null } | null;
+  };
+  collectible?: {
+    title: string;
+    category: string;
+    set: string | null;
+    variant: string | null;
+    cardNumber: string | null;
+    grader: string | null;
+    grade: string | null;
+    certificationNumber: string | null;
+    year: string | null;
+    manufacturer: string | null;
+    thumbnailUrl: string | null;
+  };
+  evidenceSummary?: {
+    required: number;
+    presentRequired: number;
+    optional: number;
+    presentOptional: number;
+    missingRequired: number;
+    percent: number;
+    status: "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";
+    items: Array<{
+      id: string;
+      slot: string;
+      status: SubmissionMedia["status"];
+      required: boolean;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: ISODateTime;
+      thumbnailUrl: string | null;
+    }>;
+  };
+  condition?: { overallGrade: string | null; fields: Record<string, string> };
+  notableDetails?: Array<{ label: string; value: string }>;
+  customerReference?: Record<string, unknown> | null;
+  reviewChecklist?: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
+  activity?: Array<{
+    id: string;
+    action: string;
+    actor: string;
+    detail: string | null;
+    occurredAt: ISODateTime;
+  }>;
+  notes?: {
+    current: string | null;
+    history: Array<{ id: string; author: string; note: string; createdAt: ISODateTime }>;
+  };
+  relatedItems?: Array<{ id: string; status: string; title: string; submittedAt: ISODateTime | null }>;
 }
 
 export interface AssetOperationSummary {

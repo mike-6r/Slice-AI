@@ -320,6 +320,9 @@ export const mockRepositories: AppRepositories = {
     async decide() {
       throw new Error("Review requires the API service.");
     },
+    async saveNote() {
+      throw new Error("Review requires the API service.");
+    },
   },
   lifecycle: {
     async listOperations() {

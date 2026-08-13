@@ -1691,7 +1691,7 @@ function ReviewQueue({
                         <Link
                           className="admin-review-action"
                           to="/operations/submissions"
-                          search={{ submission: item.id }}
+                          search={{ submission: item.id, tab: undefined }}
                         >
                           Review <ArrowRight aria-hidden="true" />
                         </Link>
@@ -1917,7 +1917,7 @@ function ReviewQueue({
               <Link
                 className="admin-detail-action"
                 to="/operations/submissions"
-                search={{ submission: selected[0] }}
+                search={{ submission: selected[0], tab: undefined }}
               >
                 <ClipboardCheck aria-hidden="true" /> Open selected review
               </Link>
