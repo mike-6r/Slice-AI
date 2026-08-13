@@ -31,6 +31,13 @@ const boundedSearch = z
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict();
+const operationsQuery = z
+  .object({
+    status: z.string().trim().max(64).optional(),
+    q: z.string().trim().max(120).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -41,6 +48,32 @@ export class AdminController {
   @RequirePermission('admin.console.read')
   overview(@Req() request: AuthenticatedRequest) {
     return this.admin.overview(request.actor!);
+  }
+
+  @Get('operations/overview')
+  @RequirePermission('admin.console.read')
+  operationsOverview(@Req() request: AuthenticatedRequest) {
+    return this.admin.operationsOverview(request.actor!);
+  }
+
+  @Get('intake')
+  @RequirePermission('admin.console.read')
+  intake(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(operationsQuery, query);
+    return this.admin.listIntake(request.actor!, {
+      ...input,
+      limit: input.limit ?? 50,
+    });
+  }
+
+  @Get('memberships')
+  @RequirePermission('admin.console.read')
+  memberships(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(operationsQuery, query);
+    return this.admin.listMemberships(request.actor!, {
+      ...input,
+      limit: input.limit ?? 50,
+    });
   }
 
   @Get('users')

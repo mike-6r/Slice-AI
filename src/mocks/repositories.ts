@@ -94,6 +94,32 @@ export const mockRepositories: AppRepositories = {
         generatedAt: now(),
       };
     },
+    async getOperationsOverview() {
+      return {
+        counts: {
+          pendingReviews: 0,
+          collectorActionsWaiting: 0,
+          acceptedAwaitingVault: 0,
+          shipmentsInTransit: 0,
+          deliveredAwaitingReceipt: 0,
+          verificationQueue: 0,
+          valuationQueue: 0,
+          vaultReady: 0,
+          marketplaceReady: 0,
+          compliance: 0,
+          payments: 0,
+          alerts: 0,
+        },
+        needsAttention: [],
+        generatedAt: now(),
+      };
+    },
+    async listIntake() {
+      return { items: [] };
+    },
+    async listMemberships() {
+      return { items: [] };
+    },
     async listUsers() {
       return { items: [], nextCursor: null };
     },

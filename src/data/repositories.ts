@@ -179,6 +179,15 @@ export type AdminUserDetail = AdminUserSummary & {
     moneyMovements: number;
     auditEvents: number;
   };
+  collector: {
+    subscription: {
+      plan: string;
+      status: string;
+      currentPeriodEnd: string | null;
+      cancelAtPeriodEnd: boolean;
+    } | null;
+    activeIntakes: number;
+  } | null;
 };
 
 export type AdminComplianceCase = {
@@ -204,6 +213,67 @@ export type AdminIntegrationsSummary = {
   secrets: "redacted";
 };
 
+export type AdminOperationsOverview = {
+  counts: {
+    pendingReviews: number;
+    collectorActionsWaiting: number;
+    acceptedAwaitingVault: number;
+    shipmentsInTransit: number;
+    deliveredAwaitingReceipt: number;
+    verificationQueue: number;
+    valuationQueue: number;
+    vaultReady: number;
+    marketplaceReady: number;
+    compliance: number;
+    payments: number;
+    alerts: number;
+  };
+  needsAttention: Array<{
+    id: string;
+    type: string;
+    subject: string;
+    collector: string;
+    stage: string;
+    reason: string;
+    age: string;
+    severity: "LOW" | "MEDIUM" | "HIGH";
+    waitingOn: "COLLECTOR" | "SLICE";
+    target: "reviews" | "intake" | "valuations" | "custody";
+  }>;
+  generatedAt: string;
+};
+
+export type AdminIntakeRow = {
+  id: string;
+  submissionId: string;
+  title: string;
+  collector: { id: string; displayName: string; username: string | null };
+  submissionStatus: string;
+  stage: string;
+  vault: { id: string; displayName: string; region: string; countryCode: string } | null;
+  shipment: {
+    carrier: string;
+    trackingNumber: string;
+    status: string;
+    shippedAt: string;
+    deliveredAt: string | null;
+  } | null;
+  receipt: { confirmedAt: string; confirmedById: string } | null;
+  updatedAt: string;
+  nextAction: string;
+};
+
+export type AdminMembershipRow = {
+  id: string;
+  collector: { id: string; displayName: string; username: string | null; email: string };
+  plan: { code: string; displayName: string; monthlyPriceMinor: string; currency: string };
+  status: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  submissionCount: number;
+  updatedAt: string;
+};
+
 export type AdminSearchResult = {
   entityType: "USER" | "COLLECTIBLE" | "SUBMISSION" | "CASE";
   id: string;
@@ -214,6 +284,17 @@ export type AdminSearchResult = {
 
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
+  getOperationsOverview(): Promise<AdminOperationsOverview>;
+  listIntake(input?: {
+    status?: string;
+    q?: string;
+    limit?: number;
+  }): Promise<{ items: AdminIntakeRow[] }>;
+  listMemberships(input?: {
+    status?: string;
+    q?: string;
+    limit?: number;
+  }): Promise<{ items: AdminMembershipRow[] }>;
   listUsers(input?: {
     q?: string;
     role?: string;

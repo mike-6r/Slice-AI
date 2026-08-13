@@ -4,6 +4,93 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
 
+type AdminAttention = {
+  id: string;
+  type: string;
+  subject: string;
+  collector: string;
+  stage: string;
+  reason: string;
+  age: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  waitingOn: 'COLLECTOR' | 'SLICE';
+  target: 'reviews' | 'intake' | 'valuations' | 'custody';
+};
+
+function ageLabel(updatedAt: Date) {
+  const minutes = Math.max(
+    1,
+    Math.floor((Date.now() - updatedAt.getTime()) / 60_000),
+  );
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function attention(
+  id: string,
+  type: string,
+  subject: string,
+  collector: string,
+  stage: string,
+  reason: string,
+  age: string,
+  severity: AdminAttention['severity'],
+  waitingOn: AdminAttention['waitingOn'],
+  target: AdminAttention['target'],
+): AdminAttention {
+  return {
+    id,
+    type,
+    subject,
+    collector,
+    stage,
+    reason,
+    age,
+    severity,
+    waitingOn,
+    target,
+  };
+}
+
+function intakeStage(item: {
+  status: string;
+  intake: {
+    status: string;
+    shipment: { status: string } | null;
+    receipt: unknown;
+  } | null;
+}) {
+  if (!item.intake)
+    return item.status === 'APPROVED' ? 'ACCEPTED_AWAITING_VAULT' : item.status;
+  if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
+    return 'DELIVERED_AWAITING_RECEIPT';
+  if (
+    item.intake.shipment &&
+    ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(
+      item.intake.shipment.status,
+    )
+  )
+    return 'IN_TRANSIT';
+  if (item.intake.status === 'COMPLETE') return 'VAULT_READY';
+  return item.intake.status;
+}
+
+function nextIntakeAction(intake: {
+  status: string;
+  shipment: { status: string } | null;
+  receipt: unknown;
+}) {
+  if (!intake.shipment) return 'Await shipment details';
+  if (intake.shipment.status === 'DELIVERED' && !intake.receipt)
+    return 'Confirm receipt';
+  if (intake.status === 'VERIFICATION') return 'Verify collectible';
+  if (intake.status === 'RECEIVED') return 'Start verification';
+  if (intake.status === 'COMPLETE') return 'No action';
+  return 'Monitor shipment';
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -62,6 +149,338 @@ export class AdminService {
       paymentExceptions,
       providerAlerts,
       generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /** Staff-safe operational projection. This deliberately composes existing
+   * submission, intake, custody and publication authority; it does not create
+   * a second lifecycle state machine. */
+  async operationsOverview(actor: Actor) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const [submissions, compliance, payments, alerts] = await Promise.all([
+      this.db.assetSubmission.findMany({
+        where: { status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 200,
+        include: {
+          owner: {
+            select: {
+              id: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+          asset: {
+            include: {
+              valuationDecisions: { where: { status: 'ACTIVE' }, take: 1 },
+              custodyRecord: true,
+              publication: true,
+            },
+          },
+          intake: { include: { vault: true, shipment: true, receipt: true } },
+        },
+      }),
+      this.db.complianceCase.count({
+        where: {
+          status: { in: ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] },
+        },
+      }),
+      this.db.moneyMovement.count({
+        where: { status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] } },
+      }),
+      this.db.providerIncident.count({ where: { status: 'OPEN' } }),
+    ]);
+    const pendingReviews = submissions.filter((item) =>
+      ['SUBMITTED', 'IN_REVIEW'].includes(item.status),
+    ).length;
+    const changesRequested = submissions.filter(
+      (item) => item.status === 'CHANGES_REQUESTED',
+    ).length;
+    const acceptedAwaitingVault = submissions.filter(
+      (item) => item.status === 'APPROVED' && !item.intake,
+    ).length;
+    const shipmentsInTransit = submissions.filter((item) =>
+      ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(
+        item.intake?.shipment?.status ?? '',
+      ),
+    ).length;
+    const deliveredAwaitingReceipt = submissions.filter(
+      (item) =>
+        item.intake?.shipment?.status === 'DELIVERED' && !item.intake.receipt,
+    ).length;
+    const verificationQueue = submissions.filter(
+      (item) =>
+        item.intake?.status === 'VERIFICATION' ||
+        ['RECEIVED', 'INSPECTED'].includes(
+          item.asset?.custodyRecord?.status ?? '',
+        ),
+    ).length;
+    const valuationQueue = submissions.filter(
+      (item) =>
+        item.asset &&
+        item.asset.valuationDecisions.length === 0 &&
+        ['APPROVED', 'IN_REVIEW'].includes(item.status),
+    ).length;
+    const vaultReady = submissions.filter(
+      (item) => item.asset?.custodyRecord?.status === 'SECURED',
+    ).length;
+    const marketplaceReady = submissions.filter((item) =>
+      ['READY', 'PUBLISHED'].includes(item.asset?.publication?.status ?? ''),
+    ).length;
+    const needsAttention = submissions
+      .flatMap((item) => {
+        const subject =
+          item.asset?.title ?? `Submission ${item.id.slice(0, 8)}`;
+        const collector =
+          item.owner.profile?.displayName ??
+          item.owner.profile?.publicUsername ??
+          'Unnamed collector';
+        const age = ageLabel(item.updatedAt);
+        if (item.status === 'CHANGES_REQUESTED')
+          return [
+            attention(
+              item.id,
+              'Asset review',
+              subject,
+              collector,
+              'Changes requested',
+              'Collector action is required before review can continue.',
+              age,
+              'HIGH',
+              'COLLECTOR',
+              'reviews',
+            ),
+          ];
+        if (['SUBMITTED', 'IN_REVIEW'].includes(item.status))
+          return [
+            attention(
+              item.id,
+              'Asset review',
+              subject,
+              collector,
+              'Review queue',
+              'Submission is waiting for an authorised staff decision.',
+              age,
+              'MEDIUM',
+              'SLICE',
+              'reviews',
+            ),
+          ];
+        if (item.status === 'APPROVED' && !item.intake)
+          return [
+            attention(
+              item.id,
+              'Physical intake',
+              subject,
+              collector,
+              'Accepted · vault not selected',
+              'Collector must choose an intake destination.',
+              age,
+              'MEDIUM',
+              'COLLECTOR',
+              'intake',
+            ),
+          ];
+        if (
+          item.intake?.shipment?.status === 'DELIVERED' &&
+          !item.intake.receipt
+        )
+          return [
+            attention(
+              item.id,
+              'Physical intake',
+              subject,
+              collector,
+              'Delivered · receipt pending',
+              'Delivery is not custody: staff receipt confirmation is still required.',
+              age,
+              'HIGH',
+              'SLICE',
+              'intake',
+            ),
+          ];
+        if (
+          item.asset &&
+          item.asset.valuationDecisions.length === 0 &&
+          item.status === 'APPROVED'
+        )
+          return [
+            attention(
+              item.id,
+              'Valuation',
+              subject,
+              collector,
+              'Valuation required',
+              'Record the supported valuation before publication readiness.',
+              age,
+              'MEDIUM',
+              'SLICE',
+              'valuations',
+            ),
+          ];
+        return [];
+      })
+      .slice(0, 24);
+    return {
+      counts: {
+        pendingReviews,
+        collectorActionsWaiting:
+          changesRequested +
+          acceptedAwaitingVault +
+          submissions.filter(
+            (item) =>
+              item.intake?.status === 'SHIPPING_REQUIRED' &&
+              !item.intake.shipment,
+          ).length,
+        acceptedAwaitingVault,
+        shipmentsInTransit,
+        deliveredAwaitingReceipt,
+        verificationQueue,
+        valuationQueue,
+        vaultReady,
+        marketplaceReady,
+        compliance,
+        payments,
+        alerts,
+      },
+      needsAttention,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async listIntake(
+    actor: Actor,
+    input: { status?: string; q?: string; limit: number },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const rows = await this.db.assetSubmission.findMany({
+      where: { intake: { isNot: null } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: input.limit,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+          },
+        },
+        asset: { select: { title: true } },
+        intake: { include: { vault: true, shipment: true, receipt: true } },
+      },
+    });
+    return {
+      items: rows
+        .map((item) => {
+          const intake = item.intake!;
+          const stage = intakeStage(item);
+          return {
+            id: intake.id,
+            submissionId: item.id,
+            title: item.asset?.title ?? `Submission ${item.id.slice(0, 8)}`,
+            collector: {
+              id: item.owner.id,
+              displayName:
+                item.owner.profile?.displayName ?? 'Unnamed collector',
+              username: item.owner.profile?.publicUsername ?? null,
+            },
+            submissionStatus: item.status,
+            stage,
+            vault: intake.vault
+              ? {
+                  id: intake.vault.id,
+                  displayName: intake.vault.displayName,
+                  region: intake.vault.region,
+                  countryCode: intake.vault.countryCode,
+                }
+              : null,
+            shipment: intake.shipment
+              ? {
+                  carrier: intake.shipment.carrier,
+                  trackingNumber: intake.shipment.trackingNumber,
+                  status: intake.shipment.status,
+                  shippedAt: intake.shipment.shippedAt.toISOString(),
+                  deliveredAt:
+                    intake.shipment.deliveredAt?.toISOString() ?? null,
+                }
+              : null,
+            receipt: intake.receipt
+              ? {
+                  confirmedAt: intake.receipt.confirmedAt.toISOString(),
+                  confirmedById: intake.receipt.confirmedById,
+                }
+              : null,
+            updatedAt: item.updatedAt.toISOString(),
+            nextAction: nextIntakeAction(intake),
+          };
+        })
+        .filter((item) => !input.status || item.stage === input.status)
+        .filter(
+          (item) =>
+            !input.q ||
+            `${item.title} ${item.collector.displayName} ${item.collector.username ?? ''} ${item.shipment?.trackingNumber ?? ''}`
+              .toLowerCase()
+              .includes(input.q.toLowerCase()),
+        ),
+    };
+  }
+
+  async listMemberships(
+    actor: Actor,
+    input: { status?: string; q?: string; limit: number },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const rows = await this.db.collectorSubscription.findMany({
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: input.limit,
+      include: {
+        plan: {
+          select: {
+            code: true,
+            displayName: true,
+            monthlyPriceMinor: true,
+            currency: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+            _count: { select: { submissions: true } },
+          },
+        },
+      },
+    });
+    return {
+      items: rows
+        .map((item) => ({
+          id: item.id,
+          collector: {
+            id: item.user.id,
+            displayName: item.user.profile?.displayName ?? 'Unnamed collector',
+            username: item.user.profile?.publicUsername ?? null,
+            email: item.user.email,
+          },
+          plan: {
+            code: item.plan.code,
+            displayName: item.plan.displayName,
+            monthlyPriceMinor: item.plan.monthlyPriceMinor.toString(),
+            currency: item.plan.currency,
+          },
+          status: item.status,
+          currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
+          cancelAtPeriodEnd: item.cancelAtPeriodEnd,
+          submissionCount: item.user._count.submissions,
+          updatedAt: item.updatedAt.toISOString(),
+        }))
+        .filter((item) => !input.status || item.status === input.status)
+        .filter(
+          (item) =>
+            !input.q ||
+            `${item.collector.displayName} ${item.collector.username ?? ''} ${item.collector.email}`
+              .toLowerCase()
+              .includes(input.q.toLowerCase()),
+        ),
     };
   }
 
@@ -197,6 +616,16 @@ export class AdminService {
             auditEvents: true,
           },
         },
+        collectorSubscriptions: {
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: {
+            status: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true,
+            plan: { select: { displayName: true } },
+          },
+        },
       },
     });
     if (!user)
@@ -204,6 +633,15 @@ export class AdminService {
         code: 'NOT_FOUND',
         message: 'Resource not found.',
       });
+    const activeIntakes = await this.db.submissionIntake.count({
+      where: {
+        submission: {
+          ownerUserId: userId,
+          status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] },
+        },
+        status: { not: 'COMPLETE' },
+      },
+    });
     return {
       id: user.id,
       email: user.email,
@@ -220,6 +658,24 @@ export class AdminService {
         createdAt: entry.createdAt.toISOString(),
       })),
       counts: user._count,
+      collector:
+        user.collectorSubscriptions.length ||
+        user.roleAssignments.some((role) => role.role === 'COLLECTOR')
+          ? {
+              subscription: user.collectorSubscriptions[0]
+                ? {
+                    plan: user.collectorSubscriptions[0].plan.displayName,
+                    status: user.collectorSubscriptions[0].status,
+                    currentPeriodEnd:
+                      user.collectorSubscriptions[0].currentPeriodEnd?.toISOString() ??
+                      null,
+                    cancelAtPeriodEnd:
+                      user.collectorSubscriptions[0].cancelAtPeriodEnd,
+                  }
+                : null,
+              activeIntakes,
+            }
+          : null,
     };
   }
 

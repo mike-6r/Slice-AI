@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Clock3,
   ClipboardCheck,
+  Crown,
   Database,
   FileClock,
   Flag,
@@ -20,12 +21,14 @@ import {
   Globe2,
   HeartPulse,
   Landmark,
+  Inbox,
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
   LogOut,
   Menu,
   PackageCheck,
+  Truck,
   Search,
   RefreshCw,
   Settings,
@@ -51,6 +54,9 @@ import type {
   AdminFinanceSummary,
   AdminIntegrationsSummary,
   AdminOverview,
+  AdminIntakeRow,
+  AdminMembershipRow,
+  AdminOperationsOverview,
   AdminUserDetail,
   AdminUserSummary,
 } from "@/data/repositories";
@@ -68,6 +74,11 @@ type AdminSection =
   | "control"
   | "users"
   | "moderation"
+  | "intake"
+  | "valuations"
+  | "custody"
+  | "marketplace"
+  | "memberships"
   | "compliance"
   | "payments"
   | "support"
@@ -81,8 +92,13 @@ type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashbo
 
 const navItems: AdminNavItem[] = [
   { id: "control", label: "Control Center", icon: LayoutDashboard },
-  { id: "users", label: "Users & Roles", icon: Users },
-  { id: "moderation", label: "Asset Moderation", icon: ClipboardCheck },
+  { id: "users", label: "Users & Collectors", icon: Users },
+  { id: "moderation", label: "Asset Review", icon: ClipboardCheck },
+  { id: "intake", label: "Physical Intake", icon: Inbox },
+  { id: "valuations", label: "Valuations", icon: BadgeCheck },
+  { id: "custody", label: "Custody & Vaults", icon: Landmark },
+  { id: "marketplace", label: "Marketplace Ops", icon: BarChart3 },
+  { id: "memberships", label: "Collector Memberships", icon: Crown },
   { id: "compliance", label: "Compliance", icon: ShieldCheck },
   { id: "payments", label: "Payments & Wallets", icon: WalletCards },
   { id: "support", label: "Support & Cases", icon: LifeBuoy },
@@ -107,6 +123,7 @@ function AdminPage() {
 
 function AdminConsole() {
   const services = useAppServices();
+  const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
   const { section } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
@@ -130,13 +147,47 @@ function AdminConsole() {
   const reviews = useQuery({
     queryKey: ["admin", "reviews"],
     queryFn: () => services.repositories.reviews.listQueue({ limit: 100 }),
-    enabled: section === "control",
+    enabled: section === "control" || section === "moderation",
     staleTime: 30_000,
+  });
+  const reviewDecision = useMutation({
+    mutationFn: async ({
+      id,
+      decision,
+    }: {
+      id: string;
+      decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
+    }) => {
+      await services.repositories.reviews.claim(id).catch(() => undefined);
+      return services.repositories.reviews.decide(id, decision, { reasonCode: "STAFF_REVIEW" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "operations", "overview"] });
+    },
   });
   const operations = useQuery({
     queryKey: ["admin", "operations"],
     queryFn: () => services.repositories.lifecycle.listOperations(),
     enabled: section === "control" || section === "moderation",
+    staleTime: 30_000,
+  });
+  const operational = useQuery({
+    queryKey: ["admin", "operations", "overview"],
+    queryFn: () => services.repositories.admin.getOperationsOverview(),
+    enabled: ["control", "intake", "valuations", "custody", "marketplace"].includes(section),
+    staleTime: 30_000,
+  });
+  const intake = useQuery({
+    queryKey: ["admin", "intake"],
+    queryFn: () => services.repositories.admin.listIntake({ limit: 100 }),
+    enabled: section === "intake",
+    staleTime: 30_000,
+  });
+  const memberships = useQuery({
+    queryKey: ["admin", "memberships"],
+    queryFn: () => services.repositories.admin.listMemberships({ limit: 100 }),
+    enabled: section === "memberships",
     staleTime: 30_000,
   });
   const overview = useQuery({
@@ -316,22 +367,81 @@ function AdminConsole() {
             reviews={reviewItems}
             operations={operationItems}
             attentionOperations={attentionOperations}
-            loading={reviews.isLoading || operations.isLoading || overview.isLoading}
-            failed={reviews.isError || operations.isError || overview.isError}
+            loading={
+              reviews.isLoading ||
+              operations.isLoading ||
+              overview.isLoading ||
+              operational.isLoading
+            }
+            failed={
+              reviews.isError || operations.isError || overview.isError || operational.isError
+            }
             retry={() => {
               void reviews.refetch();
               void operations.refetch();
               void overview.refetch();
+              void operational.refetch();
             }}
             select={select}
             overview={overview.data}
+            operational={operational.data}
           />
         ) : section === "moderation" ? (
           <AssetModeration
+            reviews={reviewItems}
             operations={operationItems}
+            loading={operations.isLoading || reviews.isLoading}
+            failed={operations.isError || reviews.isError}
+            retry={() => {
+              void operations.refetch();
+              void reviews.refetch();
+            }}
+            deciding={reviewDecision.isPending}
+            decide={(id, decision) => reviewDecision.mutate({ id, decision })}
+          />
+        ) : section === "intake" ? (
+          <PhysicalIntakeWorkspace
+            rows={intake.data?.items ?? []}
+            loading={intake.isLoading}
+            failed={intake.isError}
+            retry={() => void intake.refetch()}
+          />
+        ) : section === "valuations" ? (
+          <OperationsQueueWorkspace
+            title="Valuations"
+            detail="Review assets that need a supported valuation decision before readiness."
+            icon={BadgeCheck}
+            rows={operationItems.filter((item) => item.valuationStatus === "MISSING")}
             loading={operations.isLoading}
             failed={operations.isError}
             retry={() => void operations.refetch()}
+          />
+        ) : section === "custody" ? (
+          <OperationsQueueWorkspace
+            title="Custody & Vaults"
+            detail="Track the authoritative custody and vault readiness projection."
+            icon={Landmark}
+            rows={operationItems.filter((item) => item.custodyStatus !== "SECURED")}
+            loading={operations.isLoading}
+            failed={operations.isError}
+            retry={() => void operations.refetch()}
+          />
+        ) : section === "marketplace" ? (
+          <OperationsQueueWorkspace
+            title="Marketplace Ops"
+            detail="Publication remains blocked until the existing lifecycle readiness authority says it is ready."
+            icon={BarChart3}
+            rows={operationItems.filter((item) => item.publicationStatus !== "PUBLISHED")}
+            loading={operations.isLoading}
+            failed={operations.isError}
+            retry={() => void operations.refetch()}
+          />
+        ) : section === "memberships" ? (
+          <MembershipsWorkspace
+            rows={memberships.data?.items ?? []}
+            loading={memberships.isLoading}
+            failed={memberships.isError}
+            retry={() => void memberships.refetch()}
           />
         ) : section === "users" ? (
           <UsersWorkspace
@@ -405,6 +515,243 @@ function AdminConsole() {
   );
 }
 
+function PhysicalIntakeWorkspace({
+  rows,
+  loading,
+  failed,
+  retry,
+}: {
+  rows: AdminIntakeRow[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  const [filter, setFilter] = useState("All");
+  const visible = rows.filter((row) => filter === "All" || row.stage === filter);
+  if (loading)
+    return (
+      <AdminState title="Loading physical intake" detail="Reading vault and shipment operations." />
+    );
+  if (failed)
+    return (
+      <AdminState
+        title="Physical intake unavailable"
+        detail="The intake projection could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <AdminPageSection
+      title="Physical Intake"
+      detail="Delivered is not received. Receipt confirmation remains a staff-authorised, audited action in the existing collector workflow."
+    >
+      <div className="admin-filter-row">
+        {[
+          "All",
+          "VAULT_SELECTED",
+          "SHIPPING_REQUIRED",
+          "IN_TRANSIT",
+          "DELIVERED_AWAITING_RECEIPT",
+          "RECEIVED",
+          "VERIFICATION",
+          "VAULT_READY",
+        ].map((value) => (
+          <button
+            type="button"
+            className={`admin-filter-chip ${filter === value ? "is-active" : ""}`}
+            key={value}
+            onClick={() => setFilter(value)}
+          >
+            {sentence(value)}
+          </button>
+        ))}
+      </div>
+      {visible.length ? (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Collectible</th>
+                <th>Collector</th>
+                <th>Stage</th>
+                <th>Vault</th>
+                <th>Shipment</th>
+                <th>Next action</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <strong>{row.title}</strong>
+                    <small>{shortId(row.submissionId)}</small>
+                  </td>
+                  <td>
+                    {row.collector.displayName}
+                    <small>{row.collector.username ? `@${row.collector.username}` : ""}</small>
+                  </td>
+                  <td>
+                    <span className="admin-status-pill">{sentence(row.stage)}</span>
+                  </td>
+                  <td>
+                    {row.vault
+                      ? `${row.vault.displayName} · ${row.vault.countryCode}`
+                      : "Not selected"}
+                  </td>
+                  <td>
+                    {row.shipment
+                      ? `${row.shipment.carrier} · ${row.shipment.status}`
+                      : "Not shipped"}
+                  </td>
+                  <td>{row.nextAction}</td>
+                  <td>{date(row.updatedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <AdminEmpty detail="No intake records match this stage." />
+      )}
+    </AdminPageSection>
+  );
+}
+
+function OperationsQueueWorkspace({
+  title,
+  detail,
+  icon: Icon,
+  rows,
+  loading,
+  failed,
+  retry,
+}: {
+  title: string;
+  detail: string;
+  icon: typeof BadgeCheck;
+  rows: AssetOperationSummary[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  if (loading)
+    return (
+      <AdminState
+        title={`Loading ${title.toLowerCase()}`}
+        detail="Reading the authoritative operations projection."
+      />
+    );
+  if (failed)
+    return (
+      <AdminState
+        title={`${title} unavailable`}
+        detail="The operations projection could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <AdminPageSection title={title} detail={detail}>
+      {rows.length ? (
+        <div className="admin-record-list">
+          {rows.map((row) => (
+            <article className="admin-record" key={row.id}>
+              <span className="admin-record-icon">
+                <Icon aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <strong>{row.title}</strong>
+                <small>
+                  {sentence(row.valuationStatus)} valuation · {sentence(row.custodyStatus)} custody
+                  · {sentence(row.publicationStatus)} publication · {date(row.updatedAt)}
+                </small>
+              </div>
+              <span className="admin-record-status">{moderationStage(row)}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <AdminEmpty detail="No records currently require work." />
+      )}
+    </AdminPageSection>
+  );
+}
+
+function MembershipsWorkspace({
+  rows,
+  loading,
+  failed,
+  retry,
+}: {
+  rows: AdminMembershipRow[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  if (loading)
+    return (
+      <AdminState
+        title="Loading collector memberships"
+        detail="Reading subscription and entitlement projections."
+      />
+    );
+  if (failed)
+    return (
+      <AdminState
+        title="Collector memberships unavailable"
+        detail="The membership projection could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <AdminPageSection
+      title="Collector Memberships"
+      detail="Plan, status and usage are shown from the backend subscription authority. Provider identifiers and payment secrets stay redacted."
+    >
+      {rows.length ? (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Collector</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Submissions</th>
+                <th>Period end</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <strong>{row.collector.displayName}</strong>
+                    <small>
+                      {row.collector.username ? `@${row.collector.username}` : row.collector.email}
+                    </small>
+                  </td>
+                  <td>{row.plan.displayName}</td>
+                  <td>
+                    <span className="admin-status-pill">{sentence(row.status)}</span>
+                  </td>
+                  <td>{row.submissionCount}</td>
+                  <td>
+                    {row.currentPeriodEnd ? date(row.currentPeriodEnd) : "—"}
+                    {row.cancelAtPeriodEnd ? " · Cancels" : ""}
+                  </td>
+                  <td>{date(row.updatedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <AdminEmpty detail="No collector memberships found." />
+      )}
+    </AdminPageSection>
+  );
+}
+
 function ControlCenter({
   reviews,
   operations,
@@ -414,6 +761,7 @@ function ControlCenter({
   retry,
   select,
   overview,
+  operational,
 }: {
   reviews: Array<{ id: string; status: string; submittedAt: string }>;
   operations: Array<{
@@ -430,6 +778,7 @@ function ControlCenter({
   retry: () => void;
   select: (section: AdminSection) => void;
   overview?: import("@/data/repositories").AdminOverview;
+  operational?: AdminOperationsOverview;
 }) {
   if (loading)
     return (
@@ -469,13 +818,41 @@ function ControlCenter({
         </span>
       </section>
       <div className="admin-kpi-grid">
-        <AdminKpi icon={ClipboardCheck} label="Pending Reviews" value={counts.submissions} />
-        <AdminKpi icon={BadgeCheck} label="Valuation Pending" value={counts.valuation} />
-        <AdminKpi icon={PackageCheck} label="Custody Work" value={counts.custody} />
+        <AdminKpi
+          icon={ClipboardCheck}
+          label="Pending Reviews"
+          value={operational?.counts.pendingReviews ?? counts.submissions}
+        />
+        <AdminKpi
+          icon={Users}
+          label="Collector Actions"
+          value={operational?.counts.collectorActionsWaiting ?? 0}
+        />
+        <AdminKpi
+          icon={Inbox}
+          label="Awaiting Vault"
+          value={operational?.counts.acceptedAwaitingVault ?? 0}
+        />
+        <AdminKpi
+          icon={Truck}
+          label="In Transit"
+          value={operational?.counts.shipmentsInTransit ?? 0}
+        />
+        <AdminKpi
+          icon={PackageCheck}
+          label="Receipt Pending"
+          value={operational?.counts.deliveredAwaitingReceipt ?? 0}
+        />
+        <AdminKpi
+          icon={BadgeCheck}
+          label="Valuation Queue"
+          value={operational?.counts.valuationQueue ?? counts.valuation}
+        />
+        <AdminKpi icon={Landmark} label="Vault Ready" value={operational?.counts.vaultReady ?? 0} />
         <AdminKpi
           icon={ShieldCheck}
-          label="Open Compliance"
-          value={overview?.complianceCases ?? 0}
+          label="Compliance"
+          value={operational?.counts.compliance ?? overview?.complianceCases ?? 0}
         />
       </div>
       <div className="admin-dashboard-grid">
@@ -485,8 +862,20 @@ function ControlCenter({
             action="Review assets"
             onClick={() => select("moderation")}
           />
-          {pendingReviews || attentionOperations.length ? (
+          {operational?.needsAttention.length || pendingReviews || attentionOperations.length ? (
             <div className="admin-attention-list">
+              {operational?.needsAttention.slice(0, 8).map((item) => (
+                <AdminAttention
+                  key={`${item.id}-${item.target}`}
+                  type={`${item.type} · waiting on ${item.waitingOn === "COLLECTOR" ? "collector" : "Slice"}`}
+                  subject={item.subject}
+                  detail={`${item.stage} · ${item.reason} · ${item.age} old`}
+                  tone={item.severity === "HIGH" ? "warning" : "neutral"}
+                />
+              ))}
+              {!operational?.needsAttention.length ? null : (
+                <div className="admin-attention-divider" />
+              )}
               {reviews.slice(0, 4).map((item) => (
                 <AdminAttention
                   key={item.id}
@@ -574,15 +963,21 @@ function ControlCenter({
 }
 
 function AssetModeration({
+  reviews,
   operations,
   loading,
   failed,
   retry,
+  deciding,
+  decide,
 }: {
+  reviews: Array<{ id: string; status: string; submittedAt: string }>;
   operations: AssetOperationSummary[];
   loading: boolean;
   failed: boolean;
   retry: () => void;
+  deciding: boolean;
+  decide: (id: string, decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED") => void;
 }) {
   if (loading)
     return (
@@ -601,9 +996,54 @@ function AssetModeration({
     );
   return (
     <AdminPageSection
-      title="Asset Moderation"
-      detail="Inspect D10/D11 lifecycle projections. Actions remain in the existing authorized operations workspace."
+      title="Asset Review"
+      detail="D10 review actions use the existing claim and decision authority. Approval only advances intake eligibility; it does not confirm custody, valuation, readiness or publication."
     >
+      <section className="admin-panel">
+        <AdminPanelHeading title="Review queue" />
+        {reviews.length ? (
+          <div className="admin-record-list">
+            {reviews.map((review) => (
+              <article className="admin-record" key={review.id}>
+                <span className="admin-record-icon">
+                  <ClipboardCheck aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <strong>Submission {shortId(review.id)}</strong>
+                  <small>
+                    {sentence(review.status)} · received {date(review.submittedAt)}
+                  </small>
+                </div>
+                <div className="admin-record-actions">
+                  <button
+                    className="admin-inline-action"
+                    disabled={deciding}
+                    onClick={() => decide(review.id, "CHANGES_REQUESTED")}
+                  >
+                    Request changes
+                  </button>
+                  <button
+                    className="admin-inline-action"
+                    disabled={deciding}
+                    onClick={() => decide(review.id, "APPROVED")}
+                  >
+                    Accept for intake
+                  </button>
+                  <button
+                    className="admin-inline-action"
+                    disabled={deciding}
+                    onClick={() => decide(review.id, "REJECTED")}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <AdminEmpty detail="No submissions are waiting for review." />
+        )}
+      </section>
       {operations.length ? (
         <div className="admin-record-list">
           {operations.map((item) => (
@@ -862,24 +1302,41 @@ function UserDetail({
         ))}
       </nav>
       {tab === "Overview" ? (
-        <div className="admin-kpi-grid admin-kpi-grid--compact">
-          <AdminKpi
-            icon={ShieldCheck}
-            label="Account status"
-            value={user.accountStatus === "ACTIVE" ? 1 : 0}
-          />
-          <AdminKpi icon={Users} label="Active roles" value={user.roles.length} />
-          <AdminKpi
-            icon={ClipboardCheck}
-            label="Open submissions"
-            value={user.counts.submissions}
-          />
-          <AdminKpi
-            icon={ShieldCheck}
-            label="Compliance cases"
-            value={user.counts.complianceCases}
-          />
-        </div>
+        <>
+          <div className="admin-kpi-grid admin-kpi-grid--compact">
+            <AdminKpi
+              icon={ShieldCheck}
+              label="Account status"
+              value={user.accountStatus === "ACTIVE" ? 1 : 0}
+            />
+            <AdminKpi icon={Users} label="Active roles" value={user.roles.length} />
+            <AdminKpi
+              icon={ClipboardCheck}
+              label="Open submissions"
+              value={user.counts.submissions}
+            />
+            <AdminKpi
+              icon={ShieldCheck}
+              label="Compliance cases"
+              value={user.counts.complianceCases}
+            />
+            <AdminKpi
+              icon={Crown}
+              label="Active intakes"
+              value={user.collector?.activeIntakes ?? 0}
+            />
+          </div>
+          {user.collector ? (
+            <section className="admin-panel">
+              <AdminPanelHeading title="Collector membership" />
+              <p className="admin-safe-note">
+                {user.collector.subscription
+                  ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}${user.collector.subscription.cancelAtPeriodEnd ? " · Cancels at period end" : ""}`
+                  : "No active membership subscription"}
+              </p>
+            </section>
+          ) : null}
+        </>
       ) : tab === "Roles & Access" ? (
         <section className="admin-panel">
           <AdminPanelHeading title="Current roles" />

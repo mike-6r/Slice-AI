@@ -4,6 +4,9 @@ import type {
   AdminFinanceSummary,
   AdminIntegrationsSummary,
   AdminOverview,
+  AdminOperationsOverview,
+  AdminIntakeRow,
+  AdminMembershipRow,
   AdminRepository,
   AdminSearchResult,
   AdminUserDetail,
@@ -766,6 +769,28 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
       moneyMovements: Number(counts.moneyMovements ?? 0),
       auditEvents: Number(counts.auditEvents ?? 0),
     },
+    collector: value.collector
+      ? (() => {
+          const collector = objectField(value.collector, "admin user collector");
+          const subscription = collector.subscription
+            ? objectField(collector.subscription, "admin user subscription")
+            : null;
+          return {
+            subscription: subscription
+              ? {
+                  plan: stringField(subscription.plan, "admin user subscription.plan"),
+                  status: stringField(subscription.status, "admin user subscription.status"),
+                  currentPeriodEnd: nullableString(
+                    subscription.currentPeriodEnd,
+                    "admin user subscription.currentPeriodEnd",
+                  ),
+                  cancelAtPeriodEnd: Boolean(subscription.cancelAtPeriodEnd),
+                }
+              : null,
+            activeIntakes: Number(collector.activeIntakes ?? 0),
+          };
+        })()
+      : null,
   };
 };
 
@@ -784,6 +809,85 @@ const mapAdminComplianceCase = (raw: unknown): AdminComplianceCase => {
       displayName: stringField(user.displayName, "complianceCase.user.displayName"),
       username: nullableString(user.username, "complianceCase.user.username"),
     },
+  };
+};
+
+const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
+  const value = objectField(raw, "admin intake row");
+  const collector = objectField(value.collector, "admin intake collector");
+  const vault = value.vault === null ? null : objectField(value.vault, "admin intake vault");
+  const shipment =
+    value.shipment === null ? null : objectField(value.shipment, "admin intake shipment");
+  const receipt =
+    value.receipt === null ? null : objectField(value.receipt, "admin intake receipt");
+  return {
+    id: stringField(value.id, "admin intake.id"),
+    submissionId: stringField(value.submissionId, "admin intake.submissionId"),
+    title: stringField(value.title, "admin intake.title"),
+    collector: {
+      id: stringField(collector.id, "admin intake.collector.id"),
+      displayName: stringField(collector.displayName, "admin intake.collector.displayName"),
+      username: nullableString(collector.username, "admin intake.collector.username"),
+    },
+    submissionStatus: stringField(value.submissionStatus, "admin intake.submissionStatus"),
+    stage: stringField(value.stage, "admin intake.stage"),
+    vault: vault
+      ? {
+          id: stringField(vault.id, "admin intake.vault.id"),
+          displayName: stringField(vault.displayName, "admin intake.vault.displayName"),
+          region: stringField(vault.region, "admin intake.vault.region"),
+          countryCode: stringField(vault.countryCode, "admin intake.vault.countryCode"),
+        }
+      : null,
+    shipment: shipment
+      ? {
+          carrier: stringField(shipment.carrier, "admin intake.shipment.carrier"),
+          trackingNumber: stringField(
+            shipment.trackingNumber,
+            "admin intake.shipment.trackingNumber",
+          ),
+          status: stringField(shipment.status, "admin intake.shipment.status"),
+          shippedAt: stringField(shipment.shippedAt, "admin intake.shipment.shippedAt"),
+          deliveredAt: nullableString(shipment.deliveredAt, "admin intake.shipment.deliveredAt"),
+        }
+      : null,
+    receipt: receipt
+      ? {
+          confirmedAt: stringField(receipt.confirmedAt, "admin intake.receipt.confirmedAt"),
+          confirmedById: stringField(receipt.confirmedById, "admin intake.receipt.confirmedById"),
+        }
+      : null,
+    updatedAt: stringField(value.updatedAt, "admin intake.updatedAt"),
+    nextAction: stringField(value.nextAction, "admin intake.nextAction"),
+  };
+};
+
+const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
+  const value = objectField(raw, "admin membership row");
+  const collector = objectField(value.collector, "admin membership collector");
+  const plan = objectField(value.plan, "admin membership plan");
+  return {
+    id: stringField(value.id, "admin membership.id"),
+    collector: {
+      id: stringField(collector.id, "admin membership.collector.id"),
+      displayName: stringField(collector.displayName, "admin membership.collector.displayName"),
+      username: nullableString(collector.username, "admin membership.collector.username"),
+      email: stringField(collector.email, "admin membership.collector.email"),
+    },
+    plan: {
+      code: stringField(plan.code, "admin membership.plan.code"),
+      displayName: stringField(plan.displayName, "admin membership.plan.displayName"),
+      monthlyPriceMinor: stringField(
+        plan.monthlyPriceMinor,
+        "admin membership.plan.monthlyPriceMinor",
+      ),
+      currency: stringField(plan.currency, "admin membership.plan.currency"),
+    },
+    status: stringField(value.status, "admin membership.status"),
+    currentPeriodEnd: nullableString(value.currentPeriodEnd, "admin membership.currentPeriodEnd"),
+    cancelAtPeriodEnd: Boolean(value.cancelAtPeriodEnd),
+    submissionCount: Number(value.submissionCount ?? 0),
+    updatedAt: stringField(value.updatedAt, "admin membership.updatedAt"),
   };
 };
 
@@ -809,6 +913,67 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       providerAlerts: Number(value.providerAlerts ?? 0),
       generatedAt: stringField(value.generatedAt, "admin overview.generatedAt"),
     } satisfies AdminOverview;
+  },
+  async getOperationsOverview() {
+    const value = objectField(
+      await client.get<unknown>("/admin/operations/overview"),
+      "admin operations overview",
+    );
+    const counts = objectField(value.counts, "admin operations counts");
+    return {
+      counts: {
+        pendingReviews: Number(counts.pendingReviews ?? 0),
+        collectorActionsWaiting: Number(counts.collectorActionsWaiting ?? 0),
+        acceptedAwaitingVault: Number(counts.acceptedAwaitingVault ?? 0),
+        shipmentsInTransit: Number(counts.shipmentsInTransit ?? 0),
+        deliveredAwaitingReceipt: Number(counts.deliveredAwaitingReceipt ?? 0),
+        verificationQueue: Number(counts.verificationQueue ?? 0),
+        valuationQueue: Number(counts.valuationQueue ?? 0),
+        vaultReady: Number(counts.vaultReady ?? 0),
+        marketplaceReady: Number(counts.marketplaceReady ?? 0),
+        compliance: Number(counts.compliance ?? 0),
+        payments: Number(counts.payments ?? 0),
+        alerts: Number(counts.alerts ?? 0),
+      },
+      needsAttention: Array.isArray(value.needsAttention)
+        ? value.needsAttention.map((raw) => {
+            const item = objectField(raw, "admin attention");
+            return {
+              id: stringField(item.id, "admin attention.id"),
+              type: stringField(item.type, "admin attention.type"),
+              subject: stringField(item.subject, "admin attention.subject"),
+              collector: stringField(item.collector, "admin attention.collector"),
+              stage: stringField(item.stage, "admin attention.stage"),
+              reason: stringField(item.reason, "admin attention.reason"),
+              age: stringField(item.age, "admin attention.age"),
+              severity: stringField(
+                item.severity,
+                "admin attention.severity",
+              ) as AdminOperationsOverview["needsAttention"][number]["severity"],
+              waitingOn: stringField(
+                item.waitingOn,
+                "admin attention.waitingOn",
+              ) as AdminOperationsOverview["needsAttention"][number]["waitingOn"],
+              target: stringField(
+                item.target,
+                "admin attention.target",
+              ) as AdminOperationsOverview["needsAttention"][number]["target"],
+            };
+          })
+        : [],
+      generatedAt: stringField(value.generatedAt, "admin operations generatedAt"),
+    } satisfies AdminOperationsOverview;
+  },
+  async listIntake(input) {
+    const value = objectField(await client.get<unknown>("/admin/intake", input), "admin intake");
+    return { items: Array.isArray(value.items) ? value.items.map(mapAdminIntake) : [] };
+  },
+  async listMemberships(input) {
+    const value = objectField(
+      await client.get<unknown>("/admin/memberships", input),
+      "admin memberships",
+    );
+    return { items: Array.isArray(value.items) ? value.items.map(mapAdminMembership) : [] };
   },
   async listUsers(input) {
     const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
