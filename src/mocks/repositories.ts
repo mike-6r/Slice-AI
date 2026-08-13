@@ -221,6 +221,38 @@ export const mockRepositories: AppRepositories = {
         reconciliationMismatches: 0,
       };
     },
+    async getFinanceDashboard() {
+      return {
+        currency: "GBP" as const,
+        kpis: {
+          totalCustomerCashMinor: "0",
+          reservedFundsMinor: "0",
+          pendingDepositsMinor: "0",
+          pendingWithdrawalsMinor: "0",
+          openOrders: 0,
+          executionsToday: 0,
+        },
+        overview: {
+          totalVolumeMinor: "0",
+          buyVolumeMinor: "0",
+          sellVolumeMinor: "0",
+          totalFeesMinor: "0",
+          netFeesMinor: "0",
+          history: [],
+        },
+        orderSummary: { total: 0, buy: 0, sell: 0, open: 0 },
+        executionSummary: { total: 0, buyInitiated: 0, sellInitiated: 0 },
+        reconciliationSummary: [],
+        recentActivity: [],
+      };
+    },
+    async listFinanceRecords() {
+      return {
+        tab: "wallets",
+        items: [],
+        pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
+      };
+    },
     async getIntegrations() {
       return { providerIncidents: 0, failedWebhooks: 0, secrets: "redacted" as const };
     },

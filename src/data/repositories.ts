@@ -399,6 +399,53 @@ export type AdminFinanceSummary = {
   reconciliationMismatches: number;
 };
 
+export type AdminFinanceDashboard = {
+  currency: "GBP";
+  kpis: {
+    totalCustomerCashMinor: string;
+    reservedFundsMinor: string;
+    pendingDepositsMinor: string;
+    pendingWithdrawalsMinor: string;
+    openOrders: number;
+    executionsToday: number;
+  };
+  overview: {
+    totalVolumeMinor: string;
+    buyVolumeMinor: string;
+    sellVolumeMinor: string;
+    totalFeesMinor: string;
+    netFeesMinor: string;
+    history: Array<{ date: string; volumeMinor: string }>;
+  };
+  orderSummary: { total: number; buy: number; sell: number; open: number };
+  executionSummary: { total: number; buyInitiated: number; sellInitiated: number };
+  reconciliationSummary: Array<{
+    status: string;
+    amountMinor: string;
+    count: number;
+  }>;
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    detail: string;
+    amountMinor: string | null;
+    occurredAt: string;
+  }>;
+};
+
+export type AdminFinanceRecord = {
+  id: string;
+  kind: "wallet" | "movement" | "order" | "execution" | "reconciliation" | "adjustment";
+  [key: string]: unknown;
+};
+
+export type AdminFinanceRecordsResponse = {
+  tab: string;
+  items: AdminFinanceRecord[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
 export type AdminIntegrationsSummary = {
   providerIncidents: number;
   failedWebhooks: number;
@@ -867,6 +914,14 @@ export interface AdminRepository {
   getUser(id: string): Promise<AdminUserDetail>;
   listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
   getFinanceSummary(): Promise<AdminFinanceSummary>;
+  getFinanceDashboard(): Promise<AdminFinanceDashboard>;
+  listFinanceRecords(input?: {
+    tab?: string;
+    q?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminFinanceRecordsResponse>;
   getIntegrations(): Promise<AdminIntegrationsSummary>;
   search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
   getCollectibleDetail(id: string, tab?: string): Promise<AdminCollectibleDetail>;

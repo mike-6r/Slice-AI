@@ -50,6 +50,7 @@ import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
+import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -232,6 +233,44 @@ function AdminConsole() {
   const membershipPlanFilter = ["STARTER", "PRO", "ELITE"].includes(membershipPlan ?? "")
     ? membershipPlan
     : undefined;
+  const financeTabs = [
+    "wallets",
+    "movements",
+    "orders",
+    "executions",
+    "reconciliation",
+    "adjustments",
+  ];
+  const financeTab = financeTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "wallets";
+  const financeStatuses: Record<string, string[]> = {
+    wallets: ["ACTIVE", "FROZEN", "CLOSED"],
+    movements: [
+      "CREATED",
+      "PENDING_PROVIDER",
+      "PROCESSING",
+      "SETTLED",
+      "FAILED",
+      "CANCELLED",
+      "REVERSED",
+      "MANUAL_REVIEW",
+      "HELD",
+    ],
+    orders: [
+      "PENDING_RESERVATION",
+      "OPEN",
+      "PARTIALLY_FILLED",
+      "FILLED",
+      "CANCELLED",
+      "EXPIRED",
+      "REJECTED",
+    ],
+    executions: ["SETTLED", "FAILED"],
+    reconciliation: ["RECONCILED", "MISMATCH"],
+    adjustments: [],
+  };
+  const financeStatus = financeStatuses[financeTab]?.includes(reviewStatus ?? "")
+    ? reviewStatus
+    : undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -409,12 +448,38 @@ function AdminConsole() {
     enabled: section === "memberships",
     staleTime: 30_000,
   });
+  const financeDashboard = useQuery({
+    queryKey: ["admin", "finance", "dashboard"],
+    queryFn: () => services.repositories.admin.getFinanceDashboard(),
+    enabled: section === "payments",
+    staleTime: 20_000,
+  });
+  const financeRecords = useQuery({
+    queryKey: [
+      "admin",
+      "finance",
+      "records",
+      financeTab,
+      reviewQuery,
+      financeStatus,
+      reviewPageParam,
+      reviewPageSizeParam,
+    ],
+    queryFn: () =>
+      services.repositories.admin.listFinanceRecords({
+        tab: financeTab,
+        q: reviewQuery,
+        status: financeStatus,
+        page: Math.max(1, Number(reviewPageParam ?? 1)),
+        pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
+      }),
+    enabled: section === "payments",
+    staleTime: 20_000,
+  });
   const riskOperations = useQuery({
     queryKey: ["admin", "risk-operations"],
     queryFn: () => services.repositories.admin.getRiskOperations(),
-    enabled: ["control", "compliance", "payments", "health", "audit", "integrations"].includes(
-      section,
-    ),
+    enabled: ["control", "compliance", "health", "audit", "integrations"].includes(section),
     staleTime: 30_000,
   });
   const complianceDetail = useQuery({
@@ -839,14 +904,26 @@ function AdminConsole() {
             closeDetail={() => setSelectedComplianceCase(undefined)}
           />
         ) : section === "payments" ? (
-          <PaymentsWorkspace
-            loading={riskOperations.isLoading}
-            failed={riskOperations.isError}
-            retry={() => void riskOperations.refetch()}
-            risk={riskOperations.data}
-            riskLoading={riskOperations.isLoading}
-            riskFailed={riskOperations.isError}
-            retryRisk={() => void riskOperations.refetch()}
+          <AdminFinanceTrading
+            dashboard={financeDashboard.data}
+            records={financeRecords.data}
+            dashboardLoading={financeDashboard.isLoading}
+            recordsLoading={financeRecords.isLoading}
+            failed={financeDashboard.isError || financeRecords.isError}
+            retry={() => {
+              void financeDashboard.refetch();
+              void financeRecords.refetch();
+            }}
+            tab={financeTab}
+            query={reviewQuery ?? ""}
+            status={financeStatus ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            update={(patch) =>
+              void navigate({
+                search: (current) => ({ ...current, ...patch }),
+                replace: true,
+              })
+            }
           />
         ) : section === "support" ? (
           <UnavailablePage

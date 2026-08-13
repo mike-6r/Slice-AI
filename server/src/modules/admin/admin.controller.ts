@@ -77,6 +77,15 @@ const membershipsQuery = z
     sortDirection: z.enum(['asc', 'desc']).default('desc'),
   })
   .strict();
+const financeRecordsQuery = z
+  .object({
+    tab: z.enum(['wallets', 'movements', 'orders', 'executions', 'reconciliation', 'adjustments']).default('wallets'),
+    q: z.string().trim().max(120).optional(),
+    status: z.string().trim().max(64).optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -176,6 +185,24 @@ export class AdminController {
   @RequirePermission('finance.read')
   finance(@Req() request: AuthenticatedRequest) {
     return this.admin.financeSummary(request.actor!);
+  }
+
+  @Get('finance/dashboard')
+  @RequirePermission('finance.read')
+  financeDashboard(@Req() request: AuthenticatedRequest) {
+    return this.admin.financeDashboard(request.actor!);
+  }
+
+  @Get('finance/records')
+  @RequirePermission('finance.read')
+  financeRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(financeRecordsQuery, query);
+    return this.admin.financeRecords(request.actor!, {
+      ...input,
+      tab: input.tab ?? 'wallets',
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 10,
+    });
   }
 
   @Get('integrations')

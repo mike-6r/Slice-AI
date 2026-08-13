@@ -1,6 +1,9 @@
 import { ApiClient, ApiError } from "@/api/http-client";
 import type {
   AdminComplianceCase,
+  AdminFinanceDashboard,
+  AdminFinanceRecord,
+  AdminFinanceRecordsResponse,
   AdminFinanceSummary,
   AdminIntegrationsSummary,
   AdminOverview,
@@ -1466,6 +1469,105 @@ const mapAdminRiskOperations = (raw: unknown): AdminRiskOperations => {
   };
 };
 
+const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
+  const value = objectField(raw, "admin finance dashboard");
+  const kpis = objectField(value.kpis, "admin finance dashboard.kpis");
+  const overview = objectField(value.overview, "admin finance dashboard.overview");
+  const orderSummary = objectField(value.orderSummary, "admin finance dashboard.orderSummary");
+  const executionSummary = objectField(
+    value.executionSummary,
+    "admin finance dashboard.executionSummary",
+  );
+  const mapMinor = (entry: unknown, field: string) => stringField(entry, field);
+  return {
+    currency: "GBP",
+    kpis: {
+      totalCustomerCashMinor: mapMinor(
+        kpis.totalCustomerCashMinor,
+        "finance.kpis.totalCustomerCashMinor",
+      ),
+      reservedFundsMinor: mapMinor(kpis.reservedFundsMinor, "finance.kpis.reservedFundsMinor"),
+      pendingDepositsMinor: mapMinor(
+        kpis.pendingDepositsMinor,
+        "finance.kpis.pendingDepositsMinor",
+      ),
+      pendingWithdrawalsMinor: mapMinor(
+        kpis.pendingWithdrawalsMinor,
+        "finance.kpis.pendingWithdrawalsMinor",
+      ),
+      openOrders: Number(kpis.openOrders ?? 0),
+      executionsToday: Number(kpis.executionsToday ?? 0),
+    },
+    overview: {
+      totalVolumeMinor: mapMinor(overview.totalVolumeMinor, "finance.overview.totalVolumeMinor"),
+      buyVolumeMinor: mapMinor(overview.buyVolumeMinor, "finance.overview.buyVolumeMinor"),
+      sellVolumeMinor: mapMinor(overview.sellVolumeMinor, "finance.overview.sellVolumeMinor"),
+      totalFeesMinor: mapMinor(overview.totalFeesMinor, "finance.overview.totalFeesMinor"),
+      netFeesMinor: mapMinor(overview.netFeesMinor, "finance.overview.netFeesMinor"),
+      history: Array.isArray(overview.history)
+        ? overview.history.map((entry) => {
+            const item = objectField(entry, "finance overview history");
+            return {
+              date: stringField(item.date, "finance history.date"),
+              volumeMinor: mapMinor(item.volumeMinor, "finance history.volumeMinor"),
+            };
+          })
+        : [],
+    },
+    orderSummary: {
+      total: Number(orderSummary.total ?? 0),
+      buy: Number(orderSummary.buy ?? 0),
+      sell: Number(orderSummary.sell ?? 0),
+      open: Number(orderSummary.open ?? 0),
+    },
+    executionSummary: {
+      total: Number(executionSummary.total ?? 0),
+      buyInitiated: Number(executionSummary.buyInitiated ?? 0),
+      sellInitiated: Number(executionSummary.sellInitiated ?? 0),
+    },
+    reconciliationSummary: Array.isArray(value.reconciliationSummary)
+      ? value.reconciliationSummary.map((entry) => {
+          const item = objectField(entry, "finance reconciliation summary");
+          return {
+            status: stringField(item.status, "finance reconciliation.status"),
+            amountMinor: mapMinor(item.amountMinor, "finance reconciliation.amountMinor"),
+            count: Number(item.count ?? 0),
+          };
+        })
+      : [],
+    recentActivity: Array.isArray(value.recentActivity)
+      ? value.recentActivity.map((entry) => {
+          const item = objectField(entry, "finance activity");
+          return {
+            id: stringField(item.id, "finance activity.id"),
+            type: stringField(item.type, "finance activity.type"),
+            title: stringField(item.title, "finance activity.title"),
+            detail: stringField(item.detail, "finance activity.detail"),
+            amountMinor: nullableString(item.amountMinor, "finance activity.amountMinor"),
+            occurredAt: stringField(item.occurredAt, "finance activity.occurredAt"),
+          };
+        })
+      : [],
+  };
+};
+
+const mapAdminFinanceRecords = (raw: unknown): AdminFinanceRecordsResponse => {
+  const value = objectField(raw, "admin finance records");
+  const pagination = objectField(value.pagination, "admin finance records.pagination");
+  return {
+    tab: stringField(value.tab, "admin finance records.tab"),
+    items: Array.isArray(value.items)
+      ? value.items.map((entry) => objectField(entry, "admin finance record") as AdminFinanceRecord)
+      : [],
+    pagination: {
+      page: Number(pagination.page ?? 1),
+      pageSize: Number(pagination.pageSize ?? 10),
+      total: Number(pagination.total ?? 0),
+      totalPages: Number(pagination.totalPages ?? 0),
+    },
+  };
+};
+
 const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
   const value = objectField(raw, "admin compliance detail");
   const user = objectField(value.user, "admin compliance detail.user");
@@ -1793,6 +1895,12 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       exceptions: Number(value.exceptions ?? 0),
       reconciliationMismatches: Number(value.reconciliationMismatches ?? 0),
     } satisfies AdminFinanceSummary;
+  },
+  async getFinanceDashboard() {
+    return mapAdminFinanceDashboard(await client.get<unknown>("/admin/finance/dashboard"));
+  },
+  async listFinanceRecords(input) {
+    return mapAdminFinanceRecords(await client.get<unknown>("/admin/finance/records", input));
   },
   async getIntegrations() {
     const value = objectField(

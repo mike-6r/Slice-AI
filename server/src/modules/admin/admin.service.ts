@@ -2279,6 +2279,252 @@ export class AdminService {
     };
   }
 
+  async financeDashboard(actor: Actor) {
+    await this.authorization.authorize(actor, 'finance.read');
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const historyStart = new Date(dayStart);
+    historyStart.setUTCDate(historyStart.getUTCDate() - 6);
+    const pendingStates = ['CREATED', 'PENDING_PROVIDER', 'PROCESSING'] as const;
+    const [accounts, pendingMovements, openOrders, executions, historyExecutions, reconRuns, activity] =
+      await Promise.all([
+        this.db.financialAccount.findMany({
+          where: { ownerType: 'USER', currency: 'GBP' },
+          select: { normalSide: true, balance: true },
+        }),
+        this.db.moneyMovement.findMany({
+          where: { status: { in: [...pendingStates] } },
+          select: { type: true, amountMinor: true },
+        }),
+        this.db.tradingOrder.count({
+          where: { status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] } },
+        }),
+        this.db.tradingExecution.findMany({
+          where: { executedAt: { gte: dayStart } },
+          select: {
+            grossMinor: true,
+            buyerFeeMinor: true,
+            sellerFeeMinor: true,
+            buyOrder: { select: { side: true } },
+            sellOrder: { select: { side: true } },
+            takerOrder: { select: { side: true } },
+          },
+        }),
+        this.db.tradingExecution.findMany({
+          where: { executedAt: { gte: historyStart } },
+          select: { grossMinor: true, executedAt: true },
+        }),
+        this.db.financialReconciliationRun.findMany({
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 100,
+          select: { status: true, debitMinor: true, creditMinor: true },
+        }),
+        this.db.auditEvent.findMany({
+          where: {
+            OR: [
+              { action: { contains: 'ORDER', mode: 'insensitive' } },
+              { action: { contains: 'EXECUTION', mode: 'insensitive' } },
+              { action: { contains: 'MOVEMENT', mode: 'insensitive' } },
+              { action: { contains: 'RECONCIL', mode: 'insensitive' } },
+              { action: { contains: 'ADJUSTMENT', mode: 'insensitive' } },
+            ],
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 8,
+          select: { id: true, action: true, resourceType: true, resourceId: true, createdAt: true },
+        }),
+      ]);
+    let customerCash = 0n;
+    let reservedFunds = 0n;
+    for (const account of accounts) {
+      const balance = account.balance;
+      if (!balance) continue;
+      const gross = account.normalSide === 'DEBIT'
+        ? balance.postedDebitMinor - balance.postedCreditMinor
+        : balance.postedCreditMinor - balance.postedDebitMinor;
+      customerCash += gross;
+      reservedFunds += balance.reservedMinor;
+    }
+    const pendingDeposits = pendingMovements
+      .filter((movement) => movement.type === 'DEPOSIT')
+      .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const pendingWithdrawals = pendingMovements
+      .filter((movement) => movement.type === 'WITHDRAWAL')
+      .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const totalVolume = executions.reduce((total, execution) => total + execution.grossMinor, 0n);
+    const totalFees = executions.reduce(
+      (total, execution) => total + execution.buyerFeeMinor + execution.sellerFeeMinor,
+      0n,
+    );
+    const history = new Map<string, bigint>();
+    for (let offset = 0; offset < 7; offset++) {
+      const date = new Date(historyStart);
+      date.setUTCDate(date.getUTCDate() + offset);
+      history.set(date.toISOString().slice(0, 10), 0n);
+    }
+    for (const execution of historyExecutions) {
+      const key = execution.executedAt.toISOString().slice(0, 10);
+      history.set(key, (history.get(key) ?? 0n) + execution.grossMinor);
+    }
+    const reconciliation = new Map<string, { amount: bigint; count: number }>();
+    for (const run of reconRuns) {
+      const amount = run.debitMinor >= run.creditMinor
+        ? run.debitMinor - run.creditMinor
+        : run.creditMinor - run.debitMinor;
+      const current = reconciliation.get(run.status) ?? { amount: 0n, count: 0 };
+      current.amount += amount;
+      current.count += 1;
+      reconciliation.set(run.status, current);
+    }
+    const title = (action: string) => {
+      if (action.includes('PAYMENT') || action.includes('DEPOSIT')) return 'Payment received';
+      if (action.includes('WITHDRAW')) return 'Withdrawal requested';
+      if (action.includes('EXECUTION')) return 'Order executed';
+      if (action.includes('RECONCIL')) return 'Reconciliation issue created';
+      if (action.includes('ADJUSTMENT')) return 'Adjustment activity';
+      return 'Financial activity';
+    };
+    const buyInitiated = executions.filter((execution) => execution.takerOrder?.side === 'BUY').length;
+    const sellInitiated = executions.filter((execution) => execution.takerOrder?.side === 'SELL').length;
+    return {
+      currency: 'GBP',
+      kpis: {
+        totalCustomerCashMinor: customerCash.toString(),
+        reservedFundsMinor: reservedFunds.toString(),
+        pendingDepositsMinor: pendingDeposits.toString(),
+        pendingWithdrawalsMinor: pendingWithdrawals.toString(),
+        openOrders,
+        executionsToday: executions.length,
+      },
+      overview: {
+        totalVolumeMinor: totalVolume.toString(),
+        buyVolumeMinor: executions
+          .filter((execution) => execution.takerOrder?.side === 'BUY')
+          .reduce((total, execution) => total + execution.grossMinor, 0n)
+          .toString(),
+        sellVolumeMinor: executions
+          .filter((execution) => execution.takerOrder?.side === 'SELL')
+          .reduce((total, execution) => total + execution.grossMinor, 0n)
+          .toString(),
+        totalFeesMinor: totalFees.toString(),
+        netFeesMinor: totalFees.toString(),
+        history: [...history].map(([date, volumeMinor]) => ({ date, volumeMinor: volumeMinor.toString() })),
+      },
+      orderSummary: {
+        total: await this.db.tradingOrder.count(),
+        buy: await this.db.tradingOrder.count({ where: { side: 'BUY' } }),
+        sell: await this.db.tradingOrder.count({ where: { side: 'SELL' } }),
+        open: openOrders,
+      },
+      executionSummary: {
+        total: executions.length,
+        buyInitiated,
+        sellInitiated,
+      },
+      reconciliationSummary: [...reconciliation].map(([status, value]) => ({
+        status,
+        amountMinor: value.amount.toString(),
+        count: value.count,
+      })),
+      recentActivity: activity.map((event) => ({
+        id: event.id,
+        type: event.resourceType,
+        title: title(event.action),
+        detail: event.resourceId ?? 'Financial event',
+        amountMinor: null,
+        occurredAt: event.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async financeRecords(
+    actor: Actor,
+    input: { tab: string; q?: string; status?: string; page: number; pageSize: number },
+  ) {
+    await this.authorization.authorize(actor, 'finance.read');
+    const skip = (input.page - 1) * input.pageSize;
+    const take = input.pageSize;
+    if (input.tab === 'adjustments') {
+      return { tab: input.tab, items: [], pagination: { page: input.page, pageSize: take, total: 0, totalPages: 0 } };
+    }
+    if (input.tab === 'wallets') {
+      const where: Prisma.FinancialAccountWhereInput = {
+        ownerType: 'USER',
+        currency: 'GBP',
+        ...(input.status ? { status: input.status as never } : {}),
+        ...(input.q ? { owner: { OR: [
+          { email: { contains: input.q, mode: 'insensitive' } },
+          { profile: { displayName: { contains: input.q, mode: 'insensitive' } } },
+          { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } },
+        ] } } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.financialAccount.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip, take, include: { balance: true, owner: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
+        this.db.financialAccount.count({ where }),
+      ]);
+      return this.financePage(input, total, rows.map((wallet) => {
+        const balance = wallet.balance;
+        const gross = balance ? wallet.normalSide === 'DEBIT' ? balance.postedDebitMinor - balance.postedCreditMinor : balance.postedCreditMinor - balance.postedDebitMinor : 0n;
+        const reserved = balance?.reservedMinor ?? 0n;
+        return { id: wallet.id, kind: 'wallet', collector: { id: wallet.owner?.id ?? null, displayName: wallet.owner?.profile?.displayName ?? 'Unnamed user', username: wallet.owner?.profile?.publicUsername ?? null, email: wallet.owner?.email ?? null }, walletBalanceMinor: gross.toString(), reservedMinor: reserved.toString(), availableMinor: (gross - reserved).toString(), currency: wallet.currency, lastActivityAt: (balance?.updatedAt ?? wallet.updatedAt).toISOString(), status: wallet.status };
+      }));
+    }
+    if (input.tab === 'movements') {
+      const where: Prisma.MoneyMovementWhereInput = {
+        ...(input.status ? { status: input.status as never } : {}),
+        ...(input.q ? { user: { OR: [
+          { email: { contains: input.q, mode: 'insensitive' } },
+          { profile: { displayName: { contains: input.q, mode: 'insensitive' } } },
+          { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } },
+        ] } } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.moneyMovement.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip, take, include: { user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
+        this.db.moneyMovement.count({ where }),
+      ]);
+      return this.financePage(input, total, rows.map((movement) => ({ id: movement.id, kind: 'movement', reference: movement.id, user: { id: movement.user.id, displayName: movement.user.profile?.displayName ?? 'Unnamed user', username: movement.user.profile?.publicUsername ?? null, email: movement.user.email }, type: movement.type, amountMinor: movement.amountMinor.toString(), currency: movement.currency, provider: movement.provider, providerState: movement.status, sliceState: movement.ledgerTransactionId ? 'SETTLED' : 'NOT_SETTLED', createdAt: movement.createdAt.toISOString(), updatedAt: movement.updatedAt.toISOString() })));
+    }
+    if (input.tab === 'orders') {
+      const where: Prisma.TradingOrderWhereInput = {
+        ...(input.status ? { status: input.status as never } : {}),
+        ...(input.q ? { OR: [
+          { id: { contains: input.q, mode: 'insensitive' } },
+          { asset: { title: { contains: input.q, mode: 'insensitive' } } },
+          { user: { profile: { displayName: { contains: input.q, mode: 'insensitive' } } } },
+        ] } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.tradingOrder.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip, take, include: { asset: { select: { title: true, slug: true } }, user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
+        this.db.tradingOrder.count({ where }),
+      ]);
+      return this.financePage(input, total, rows.map((order) => ({ id: order.id, kind: 'order', user: { id: order.user.id, displayName: order.user.profile?.displayName ?? 'Unnamed user', username: order.user.profile?.publicUsername ?? null, email: order.user.email }, asset: { title: order.asset.title, slug: order.asset.slug }, side: order.side, shares: order.originalUnits.toString(), limitPriceMinor: order.limitPriceMinor.toString(), filled: order.filledUnits.toString(), remaining: order.remainingUnits.toString(), status: order.status, createdAt: order.createdAt.toISOString() })));
+    }
+    if (input.tab === 'executions') {
+      const where: Prisma.TradingExecutionWhereInput = {
+        ...(input.status ? { settlementStatus: input.status as never } : {}),
+        ...(input.q ? { OR: [
+          { id: { contains: input.q, mode: 'insensitive' } },
+          { asset: { title: { contains: input.q, mode: 'insensitive' } } },
+        ] } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.tradingExecution.findMany({ where, orderBy: [{ executedAt: 'desc' }, { id: 'desc' }], skip, take, include: { asset: { select: { title: true, slug: true } }, buyOrder: { select: { user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }, sellOrder: { select: { user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } } } }),
+        this.db.tradingExecution.count({ where }),
+      ]);
+      return this.financePage(input, total, rows.map((execution) => ({ id: execution.id, kind: 'execution', asset: { title: execution.asset.title, slug: execution.asset.slug }, buyer: { id: execution.buyOrder.user.id, displayName: execution.buyOrder.user.profile?.displayName ?? 'Unnamed user', username: execution.buyOrder.user.profile?.publicUsername ?? null }, seller: { id: execution.sellOrder.user.id, displayName: execution.sellOrder.user.profile?.displayName ?? 'Unnamed user', username: execution.sellOrder.user.profile?.publicUsername ?? null }, shares: execution.units.toString(), priceMinor: execution.priceMinor.toString(), feeMinor: (execution.buyerFeeMinor + execution.sellerFeeMinor).toString(), executedAt: execution.executedAt.toISOString(), settlementStatus: execution.settlementStatus })));
+    }
+    const where: Prisma.FinancialReconciliationRunWhereInput = input.status ? { status: input.status as never } : {};
+    const [rows, total] = await Promise.all([
+      this.db.financialReconciliationRun.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip, take }),
+      this.db.financialReconciliationRun.count({ where }),
+    ]);
+    return this.financePage(input, total, rows.map((run) => ({ id: run.id, kind: 'reconciliation', reference: run.id, scope: run.scope, status: run.status, expectedMinor: run.debitMinor.toString(), observedMinor: run.creditMinor.toString(), differenceMinor: (run.debitMinor - run.creditMinor).toString(), currency: run.currency, createdAt: run.createdAt.toISOString(), actions: ['Inspect'] })));
+  }
+
+  private financePage(input: { tab: string; page: number; pageSize: number }, total: number, items: Array<Record<string, unknown>>) {
+    return { tab: input.tab, items, pagination: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+  }
+
   async integrations(actor: Actor) {
     await this.authorization.authorize(actor, 'integrations.read');
     const [incidents, failedWebhooks] = await Promise.all([
