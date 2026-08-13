@@ -86,7 +86,7 @@ export function AdminAssetOperations({
           <button type="button" className="admin-ops-button secondary" disabled>
             Export
           </button>
-          <a className="admin-ops-button primary" href="/admin/vaults">
+          <a className="admin-ops-button primary" href="/admin?section=assetOperations&tab=custody">
             Manage Vaults
           </a>
         </div>

@@ -138,13 +138,13 @@ type AdminSearch = {
 type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashboard };
 
 const navItems: AdminNavItem[] = [
-  { id: "control", label: "Control Center", icon: LayoutDashboard },
-  { id: "users", label: "Users & Collectors", icon: Users },
-  { id: "moderation", label: "Asset Review", icon: ClipboardCheck },
+  { id: "control", label: "Overview", icon: LayoutDashboard },
+  { id: "users", label: "Accounts", icon: Users },
+  { id: "moderation", label: "Review Queue", icon: ClipboardCheck },
   { id: "intake", label: "Physical Intake", icon: Inbox },
   { id: "collectibles", label: "Collectibles", icon: Tag },
   { id: "assetOperations", label: "Asset Operations", icon: Gauge },
-  { id: "memberships", label: "Collector Memberships", icon: Crown },
+  { id: "memberships", label: "Memberships", icon: Crown },
   { id: "payments", label: "Finance & Trading", icon: WalletCards },
   { id: "support", label: "Trust & Support", icon: LifeBuoy },
   { id: "health", label: "Platform Operations", icon: HeartPulse },
