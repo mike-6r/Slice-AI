@@ -94,6 +94,18 @@ export const mockRepositories: AppRepositories = {
         generatedAt: now(),
       };
     },
+    async getRiskOperations() {
+      return {
+        finance: { movements: [], wallets: [], reservations: [], reconciliation: [] },
+        system: [],
+        audit: [],
+        integrations: [],
+        webhooks: [],
+      };
+    },
+    async getComplianceCase() {
+      throw new Error("Admin compliance requires the API service.");
+    },
     async getOperationsOverview() {
       return {
         counts: {

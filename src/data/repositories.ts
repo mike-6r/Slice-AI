@@ -200,6 +200,102 @@ export type AdminComplianceCase = {
   user: { id: string; displayName: string; username: string | null };
 };
 
+export type AdminComplianceDetail = AdminComplianceCase & {
+  providerStatus: string;
+  decisions: Array<{
+    status: string;
+    reasonCode: string;
+    actorUserId: string | null;
+    createdAt: string;
+  }>;
+  restrictions: Array<{
+    scope: string;
+    reasonCode: string;
+    source: string;
+    status: string;
+    createdAt: string;
+    releasedAt: string | null;
+  }>;
+  audit: Array<{ action: string; result: string; createdAt: string }>;
+};
+
+export type AdminRiskOperations = {
+  finance: {
+    movements: Array<{
+      id: string;
+      user: { displayName: string; username: string | null };
+      type: string;
+      amountMinor: string;
+      currency: string;
+      provider: string;
+      status: string;
+      referenceAvailable: boolean;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+    wallets: Array<{
+      id: string;
+      owner: string;
+      availableMinor: string;
+      reservedMinor: string;
+      currency: string;
+      status: string;
+      updatedAt: string;
+    }>;
+    reservations: Array<{
+      id: string;
+      owner: string;
+      amountMinor: string;
+      currency: string;
+      purposeType: string;
+      status: string;
+      createdAt: string;
+    }>;
+    reconciliation: Array<{
+      id: string;
+      scope: string;
+      status: string;
+      currency: string;
+      debitMinor: string;
+      creditMinor: string;
+      mismatchCodes: string[];
+      createdAt: string;
+    }>;
+  };
+  system: Array<{
+    name: string;
+    status: "Operational" | "Degraded" | "Unavailable" | "Unknown";
+    summary: string;
+    lastCheckedAt: string;
+  }>;
+  audit: Array<{
+    id: string;
+    actor: string;
+    action: string;
+    resourceType: string;
+    resourceId: string | null;
+    result: string;
+    createdAt: string;
+  }>;
+  integrations: Array<{
+    name: string;
+    status: "Operational" | "Degraded" | "Unavailable" | "Unknown";
+    configured: boolean;
+    summary: string;
+    failedEvents: number;
+  }>;
+  webhooks: Array<{
+    id: string;
+    provider: string;
+    eventType: string;
+    status: string;
+    attempts: number;
+    receivedAt: string;
+    updatedAt: string;
+    error: string | null;
+  }>;
+};
+
 export type AdminFinanceSummary = {
   currency: "GBP";
   pendingMovements: number;
@@ -284,6 +380,8 @@ export type AdminSearchResult = {
 
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
+  getRiskOperations(): Promise<AdminRiskOperations>;
+  getComplianceCase(id: string): Promise<AdminComplianceDetail>;
   getOperationsOverview(): Promise<AdminOperationsOverview>;
   listIntake(input?: {
     status?: string;

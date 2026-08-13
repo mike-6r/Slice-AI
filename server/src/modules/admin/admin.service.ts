@@ -152,6 +152,352 @@ export class AdminService {
     };
   }
 
+  async riskOperations(actor: Actor) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const [
+      movements,
+      wallets,
+      reservations,
+      reconciliation,
+      audits,
+      webhooks,
+      incidents,
+      notificationFailures,
+      marketSnapshots,
+    ] = await Promise.all([
+      this.db.moneyMovement.findMany({
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+        include: {
+          user: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+        },
+      }),
+      this.db.financialAccount.findMany({
+        where: { ownerType: 'USER' },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+        include: {
+          owner: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+          balance: true,
+        },
+      }),
+      this.db.cashReservation.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        include: {
+          account: {
+            select: {
+              currency: true,
+              owner: {
+                select: {
+                  profile: {
+                    select: { displayName: true, publicUsername: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.db.financialReconciliationRun.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.db.auditEvent.findMany({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+        include: {
+          actor: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+        },
+      }),
+      this.db.webhookInbox.findMany({
+        where: { status: { in: ['FAILED', 'REJECTED'] } },
+        orderBy: { receivedAt: 'desc' },
+        take: 50,
+      }),
+      this.db.providerIncident.findMany({
+        where: { status: 'OPEN' },
+        select: { provider: true },
+      }),
+      this.db.notificationDelivery.count({
+        where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
+      }),
+      this.db.assetMarketSnapshot.count(),
+    ]);
+    const incidentCounts = new Map<string, number>();
+    for (const incident of incidents)
+      incidentCounts.set(
+        incident.provider,
+        (incidentCounts.get(incident.provider) ?? 0) + 1,
+      );
+    const dbCheckedAt = new Date().toISOString();
+    const integration = (
+      name: string,
+      provider: string,
+      configured: boolean,
+      summary: string,
+      failedEvents = 0,
+    ) => ({
+      name,
+      configured,
+      failedEvents,
+      summary,
+      status: failedEvents
+        ? ('Degraded' as const)
+        : configured
+          ? ('Unknown' as const)
+          : ('Unknown' as const),
+    });
+    return {
+      finance: {
+        movements: movements.map((movement) => ({
+          id: movement.id,
+          user: {
+            displayName: movement.user.profile?.displayName ?? 'Unnamed user',
+            username: movement.user.profile?.publicUsername ?? null,
+          },
+          type: movement.type,
+          amountMinor: movement.amountMinor.toString(),
+          currency: movement.currency,
+          provider: movement.provider,
+          status: movement.status,
+          referenceAvailable: Boolean(movement.providerReferenceHash),
+          createdAt: movement.createdAt.toISOString(),
+          updatedAt: movement.updatedAt.toISOString(),
+        })),
+        wallets: wallets.map((wallet) => {
+          const balance = wallet.balance;
+          const gross = balance
+            ? wallet.normalSide === 'DEBIT'
+              ? balance.postedDebitMinor - balance.postedCreditMinor
+              : balance.postedCreditMinor - balance.postedDebitMinor
+            : 0n;
+          const reserved = balance?.reservedMinor ?? 0n;
+          return {
+            id: wallet.id,
+            owner:
+              wallet.owner?.profile?.displayName ??
+              wallet.owner?.profile?.publicUsername ??
+              'Unnamed user',
+            availableMinor: (gross - reserved).toString(),
+            reservedMinor: reserved.toString(),
+            currency: wallet.currency,
+            status: wallet.status,
+            updatedAt: (balance?.updatedAt ?? wallet.updatedAt).toISOString(),
+          };
+        }),
+        reservations: reservations.map((reservation) => ({
+          id: reservation.id,
+          owner:
+            reservation.account.owner?.profile?.displayName ??
+            reservation.account.owner?.profile?.publicUsername ??
+            'Unnamed user',
+          amountMinor: reservation.amountMinor.toString(),
+          currency: reservation.account.currency,
+          purposeType: reservation.purposeType,
+          status: reservation.status,
+          createdAt: reservation.createdAt.toISOString(),
+        })),
+        reconciliation: reconciliation.map((run) => ({
+          id: run.id,
+          scope: run.scope,
+          status: run.status,
+          currency: run.currency,
+          debitMinor: run.debitMinor.toString(),
+          creditMinor: run.creditMinor.toString(),
+          mismatchCodes: mismatchCodes(run.mismatchCodes),
+          createdAt: run.createdAt.toISOString(),
+        })),
+      },
+      system: [
+        {
+          name: 'API',
+          status: 'Operational' as const,
+          summary: 'Admin API request completed.',
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
+          name: 'PostgreSQL',
+          status: 'Operational' as const,
+          summary: 'Database projection query completed.',
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
+          name: 'Notifications',
+          status: notificationFailures
+            ? ('Degraded' as const)
+            : ('Unknown' as const),
+          summary: notificationFailures
+            ? `${notificationFailures} failed deliveries require review.`
+            : 'No current failure telemetry.',
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
+          name: 'Market data',
+          status: marketSnapshots
+            ? ('Operational' as const)
+            : ('Unknown' as const),
+          summary: marketSnapshots
+            ? 'Market snapshot records are available.'
+            : 'No market snapshot telemetry is available.',
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
+          name: 'Webhooks',
+          status: webhooks.length
+            ? ('Degraded' as const)
+            : ('Unknown' as const),
+          summary: webhooks.length
+            ? `${webhooks.length} failed webhook events require review.`
+            : 'No failed webhook events currently need attention.',
+          lastCheckedAt: dbCheckedAt,
+        },
+      ],
+      audit: audits.map((entry) => ({
+        id: entry.id,
+        actor:
+          entry.actor?.profile?.displayName ??
+          entry.actor?.profile?.publicUsername ??
+          (entry.actorType === 'SYSTEM' ? 'System' : 'Unknown actor'),
+        action: entry.action,
+        resourceType: entry.resourceType,
+        resourceId: entry.resourceId,
+        result: entry.result,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+      integrations: [
+        integration(
+          'Plaid',
+          'PLAID',
+          Boolean(incidentCounts.get('PLAID')),
+          incidentCounts.get('PLAID')
+            ? 'Open provider incident.'
+            : 'Provider configuration is not exposed in Admin.',
+          incidentCounts.get('PLAID') ?? 0,
+        ),
+        integration(
+          'Bridge',
+          'BRIDGE',
+          Boolean(incidentCounts.get('BRIDGE')),
+          incidentCounts.get('BRIDGE')
+            ? 'Open provider incident.'
+            : 'Provider configuration is not exposed in Admin.',
+          incidentCounts.get('BRIDGE') ?? 0,
+        ),
+        integration(
+          'BlockchainAnalysis.io',
+          'BLOCKCHAIN_ANALYSIS',
+          Boolean(incidentCounts.get('BLOCKCHAIN_ANALYSIS')),
+          incidentCounts.get('BLOCKCHAIN_ANALYSIS')
+            ? 'Open provider incident.'
+            : 'Provider configuration is not exposed in Admin.',
+          incidentCounts.get('BLOCKCHAIN_ANALYSIS') ?? 0,
+        ),
+        integration(
+          'Market Data',
+          'MARKET_DATA',
+          marketSnapshots > 0,
+          marketSnapshots > 0
+            ? 'Snapshots available.'
+            : 'No configured market telemetry.',
+          0,
+        ),
+        integration(
+          'Notifications',
+          'NOTIFICATIONS',
+          true,
+          notificationFailures
+            ? 'Delivery failures require review.'
+            : 'No current failure telemetry.',
+          notificationFailures,
+        ),
+      ],
+      webhooks: webhooks.map((event) => ({
+        id: event.id,
+        provider: event.provider,
+        eventType: event.eventType,
+        status: event.status,
+        attempts: event.attempts,
+        receivedAt: event.receivedAt.toISOString(),
+        updatedAt: event.receivedAt.toISOString(),
+        error: event.errorCode,
+      })),
+    };
+  }
+
+  async complianceCaseDetail(actor: Actor, caseId: string) {
+    await this.authorization.authorize(actor, 'compliance.read');
+    const item = await this.db.complianceCase.findUnique({
+      where: { id: caseId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+            complianceHolds: { orderBy: { createdAt: 'desc' }, take: 20 },
+          },
+        },
+        decisions: { orderBy: { createdAt: 'desc' }, take: 20 },
+      },
+    });
+    if (!item)
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: 'Resource not found.',
+      });
+    const audit = await this.db.auditEvent.findMany({
+      where: { resourceType: 'compliance-case', resourceId: caseId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+    return {
+      id: item.id,
+      provider: item.provider,
+      type: item.type,
+      status: item.status,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+      user: {
+        id: item.user.id,
+        displayName: item.user.profile?.displayName ?? 'Unnamed user',
+        username: item.user.profile?.publicUsername ?? null,
+      },
+      providerStatus: item.status === 'NOT_STARTED' ? 'Unknown' : item.status,
+      decisions: item.decisions.map((decision) => ({
+        status: decision.status,
+        reasonCode: decision.reasonCode,
+        actorUserId: decision.actorUserId,
+        createdAt: decision.createdAt.toISOString(),
+      })),
+      restrictions: item.user.complianceHolds.map((hold) => ({
+        scope: hold.scope,
+        reasonCode: hold.reasonCode,
+        source: hold.source,
+        status: hold.status,
+        createdAt: hold.createdAt.toISOString(),
+        releasedAt: hold.releasedAt?.toISOString() ?? null,
+      })),
+      audit: audit.map((entry) => ({
+        action: entry.action,
+        result: entry.result,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+    };
+  }
+
   /** Staff-safe operational projection. This deliberately composes existing
    * submission, intake, custody and publication authority; it does not create
    * a second lifecycle state machine. */
@@ -797,4 +1143,14 @@ export class AdminService {
       ].slice(0, limit),
     };
   }
+}
+
+function mismatchCodes(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const codes = (value as { codes?: unknown }).codes;
+  return Array.isArray(codes)
+    ? codes
+        .filter((code): code is string => typeof code === 'string')
+        .slice(0, 20)
+    : [];
 }

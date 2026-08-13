@@ -50,6 +50,12 @@ export class AdminController {
     return this.admin.overview(request.actor!);
   }
 
+  @Get('risk-operations')
+  @RequirePermission('admin.console.read')
+  riskOperations(@Req() request: AuthenticatedRequest) {
+    return this.admin.riskOperations(request.actor!);
+  }
+
   @Get('operations/overview')
   @RequirePermission('admin.console.read')
   operationsOverview(@Req() request: AuthenticatedRequest) {
@@ -97,6 +103,15 @@ export class AdminController {
   compliance(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(page.pick({ limit: true }), query);
     return this.admin.complianceCases(request.actor!, input.limit ?? 25);
+  }
+
+  @Get('compliance/cases/:id')
+  @RequirePermission('compliance.read')
+  complianceDetail(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.complianceCaseDetail(request.actor!, id);
   }
 
   @Get('finance/summary')

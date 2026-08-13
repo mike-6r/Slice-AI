@@ -133,6 +133,7 @@ function AdminConsole() {
   const [userRole, setUserRole] = useState("");
   const [userStatus, setUserStatus] = useState("");
   const [complianceFilter, setComplianceFilter] = useState("All");
+  const [selectedComplianceCase, setSelectedComplianceCase] = useState<string | undefined>();
   const [usersCursor, setUsersCursor] = useState<string | undefined>();
   useEffect(() => setUsersCursor(undefined), [search]);
   useEffect(() => {
@@ -188,6 +189,20 @@ function AdminConsole() {
     queryKey: ["admin", "memberships"],
     queryFn: () => services.repositories.admin.listMemberships({ limit: 100 }),
     enabled: section === "memberships",
+    staleTime: 30_000,
+  });
+  const riskOperations = useQuery({
+    queryKey: ["admin", "risk-operations"],
+    queryFn: () => services.repositories.admin.getRiskOperations(),
+    enabled: ["control", "compliance", "payments", "health", "audit", "integrations"].includes(
+      section,
+    ),
+    staleTime: 30_000,
+  });
+  const complianceDetail = useQuery({
+    queryKey: ["admin", "compliance", selectedComplianceCase],
+    queryFn: () => services.repositories.admin.getComplianceCase(selectedComplianceCase!),
+    enabled: section === "compliance" && Boolean(selectedComplianceCase),
     staleTime: 30_000,
   });
   const overview = useQuery({
@@ -371,20 +386,27 @@ function AdminConsole() {
               reviews.isLoading ||
               operations.isLoading ||
               overview.isLoading ||
-              operational.isLoading
+              operational.isLoading ||
+              riskOperations.isLoading
             }
             failed={
-              reviews.isError || operations.isError || overview.isError || operational.isError
+              reviews.isError ||
+              operations.isError ||
+              overview.isError ||
+              operational.isError ||
+              riskOperations.isError
             }
             retry={() => {
               void reviews.refetch();
               void operations.refetch();
               void overview.refetch();
               void operational.refetch();
+              void riskOperations.refetch();
             }}
             select={select}
             overview={overview.data}
             operational={operational.data}
+            risk={riskOperations.data}
           />
         ) : section === "moderation" ? (
           <AssetModeration
@@ -473,6 +495,12 @@ function AdminConsole() {
             overview={overview.data}
             filter={complianceFilter}
             setFilter={setComplianceFilter}
+            risk={riskOperations.data}
+            detail={complianceDetail.data}
+            detailLoading={complianceDetail.isLoading}
+            detailFailed={complianceDetail.isError}
+            openDetail={setSelectedComplianceCase}
+            closeDetail={() => setSelectedComplianceCase(undefined)}
           />
         ) : section === "payments" ? (
           <PaymentsWorkspace
@@ -480,6 +508,10 @@ function AdminConsole() {
             loading={finance.isLoading}
             failed={finance.isError}
             retry={() => void finance.refetch()}
+            risk={riskOperations.data}
+            riskLoading={riskOperations.isLoading}
+            riskFailed={riskOperations.isError}
+            retryRisk={() => void riskOperations.refetch()}
           />
         ) : section === "support" ? (
           <UnavailablePage
@@ -488,16 +520,18 @@ function AdminConsole() {
             icon={LifeBuoy}
           />
         ) : section === "health" ? (
-          <UnavailablePage
-            title="System Health"
-            detail="System health information couldn't be loaded from an admin-safe projection."
-            icon={HeartPulse}
+          <SystemHealthWorkspace
+            risk={riskOperations.data}
+            loading={riskOperations.isLoading}
+            failed={riskOperations.isError}
+            retry={() => void riskOperations.refetch()}
           />
         ) : section === "audit" ? (
-          <UnavailablePage
-            title="Audit Logs"
-            detail="Audit records remain server-authoritative and are not exposed to this client foundation yet."
-            icon={FileClock}
+          <AuditWorkspace
+            risk={riskOperations.data}
+            loading={riskOperations.isLoading}
+            failed={riskOperations.isError}
+            retry={() => void riskOperations.refetch()}
           />
         ) : section === "flags" ? (
           <UnavailablePage
@@ -506,7 +540,13 @@ function AdminConsole() {
             icon={Flag}
           />
         ) : section === "integrations" ? (
-          <Integrations query={integrations} />
+          <Integrations
+            query={integrations}
+            risk={riskOperations.data}
+            riskLoading={riskOperations.isLoading}
+            riskFailed={riskOperations.isError}
+            retryRisk={() => void riskOperations.refetch()}
+          />
         ) : (
           <AdminSettings select={select} />
         )}
@@ -762,6 +802,7 @@ function ControlCenter({
   select,
   overview,
   operational,
+  risk,
 }: {
   reviews: Array<{ id: string; status: string; submittedAt: string }>;
   operations: Array<{
@@ -779,6 +820,7 @@ function ControlCenter({
   select: (section: AdminSection) => void;
   overview?: import("@/data/repositories").AdminOverview;
   operational?: AdminOperationsOverview;
+  risk?: import("@/data/repositories").AdminRiskOperations;
 }) {
   if (loading)
     return (
@@ -873,6 +915,27 @@ function ControlCenter({
                   tone={item.severity === "HIGH" ? "warning" : "neutral"}
                 />
               ))}
+              {risk?.webhooks.slice(0, 3).map((event) => (
+                <AdminAttention
+                  key={`webhook-${event.id}`}
+                  type="Webhook failure"
+                  subject={`${event.provider} · ${event.eventType}`}
+                  detail={`${event.attempts} attempts · ${event.error ?? "Safe failure summary unavailable"}`}
+                  tone="warning"
+                />
+              ))}
+              {risk?.finance.reconciliation
+                .filter((run) => run.status === "MISMATCH")
+                .slice(0, 3)
+                .map((run) => (
+                  <AdminAttention
+                    key={`reconciliation-${run.id}`}
+                    type="Reconciliation exception"
+                    subject={run.scope}
+                    detail={`${run.mismatchCodes.join(", ") || "Mismatch requires inspection"} · ${date(run.createdAt)}`}
+                    tone="warning"
+                  />
+                ))}
               {!operational?.needsAttention.length ? null : (
                 <div className="admin-attention-divider" />
               )}
@@ -1397,6 +1460,12 @@ function ComplianceWorkspace({
   overview,
   filter,
   setFilter,
+  risk,
+  detail,
+  detailLoading,
+  detailFailed,
+  openDetail,
+  closeDetail,
 }: {
   cases: AdminComplianceCase[];
   loading: boolean;
@@ -1405,6 +1474,12 @@ function ComplianceWorkspace({
   overview?: AdminOverview;
   filter: string;
   setFilter: (value: string) => void;
+  risk?: import("@/data/repositories").AdminRiskOperations;
+  detail?: import("@/data/repositories").AdminComplianceDetail;
+  detailLoading: boolean;
+  detailFailed: boolean;
+  openDetail: (id: string) => void;
+  closeDetail: () => void;
 }) {
   const visibleCases = cases.filter((item) => {
     const value = `${item.type} ${item.provider} ${item.status}`.toLowerCase();
@@ -1430,7 +1505,11 @@ function ComplianceWorkspace({
           label="Needs review"
           value={cases.filter((item) => item.status !== "APPROVED").length}
         />
-        <AdminKpi icon={Users} label="Restricted users" value={0} />
+        <AdminKpi
+          icon={Users}
+          label="Restricted users"
+          value={cases.filter((item) => item.status === "SUSPENDED").length}
+        />
         <AdminKpi icon={Globe2} label="Provider issues" value={overview?.providerAlerts ?? 0} />
       </div>
       <div className="admin-filter-row">
@@ -1471,7 +1550,9 @@ function ComplianceWorkspace({
                 </small>
               </div>
               <span className="admin-status-pill">{sentence(item.status)}</span>
-              <span className="admin-muted">Detail unavailable</span>
+              <button className="admin-inline-action" onClick={() => openDetail(item.id)}>
+                Open detail <ArrowRight aria-hidden="true" />
+              </button>
             </article>
           ))}
         </div>
@@ -1481,6 +1562,85 @@ function ComplianceWorkspace({
           icon={ShieldCheck}
         />
       )}
+      {detailLoading ? (
+        <AdminState
+          title="Loading case detail"
+          detail="Reading normalized provider and restriction history."
+        />
+      ) : detailFailed ? (
+        <AdminState
+          title="Case detail unavailable"
+          detail="The case detail could not be loaded safely."
+        />
+      ) : detail ? (
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title={detail.user.displayName}
+            action="Close detail"
+            onClick={closeDetail}
+          />
+          <div className="admin-kpi-grid admin-kpi-grid--compact">
+            <AdminKpi
+              icon={ShieldCheck}
+              label="Provider status"
+              value={detail.providerStatus === "APPROVED" ? 1 : 0}
+            />
+            <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
+            <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
+            <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
+          </div>
+          <div className="admin-record-list">
+            <article className="admin-record">
+              <div className="min-w-0">
+                <strong>Summary</strong>
+                <small>
+                  {sentence(detail.type)} · {sentence(detail.status)} · {detail.provider} · updated{" "}
+                  {date(detail.updatedAt)}
+                </small>
+              </div>
+            </article>
+            <article className="admin-record">
+              <div className="min-w-0">
+                <strong>Provider status</strong>
+                <small>
+                  {detail.providerStatus === "Unknown"
+                    ? "Provider information is temporarily unavailable."
+                    : `Normalized provider state: ${sentence(detail.providerStatus)}`}
+                </small>
+              </div>
+            </article>
+            {detail.restrictions.map((restriction) => (
+              <article
+                className="admin-record"
+                key={`${restriction.createdAt}-${restriction.scope}`}
+              >
+                <div className="min-w-0">
+                  <strong>Restriction · {sentence(restriction.scope)}</strong>
+                  <small>
+                    {sentence(restriction.status)} · {restriction.reasonCode} · source{" "}
+                    {restriction.source} · {date(restriction.createdAt)}
+                  </small>
+                </div>
+              </article>
+            ))}
+            {detail.decisions.map((decision) => (
+              <article
+                className="admin-record"
+                key={`${decision.createdAt}-${decision.reasonCode}`}
+              >
+                <div className="min-w-0">
+                  <strong>Decision · {sentence(decision.status)}</strong>
+                  <small>
+                    {decision.reasonCode} · actor{" "}
+                    {decision.actorUserId ? shortId(decision.actorUserId) : "System"} ·{" "}
+                    {date(decision.createdAt)}
+                  </small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </AdminPageSection>
   );
 }
@@ -1490,27 +1650,38 @@ function PaymentsWorkspace({
   loading,
   failed,
   retry,
+  risk,
+  riskLoading,
+  riskFailed,
+  retryRisk,
 }: {
   summary?: AdminFinanceSummary;
   loading: boolean;
   failed: boolean;
   retry: () => void;
+  risk?: import("@/data/repositories").AdminRiskOperations;
+  riskLoading: boolean;
+  riskFailed: boolean;
+  retryRisk: () => void;
 }) {
   return (
     <AdminPageSection
       title="Payments & Wallets"
       detail="GBP finance operations summary. Ledger authority remains in the existing finance workflows; balances are never edited here."
     >
-      {loading ? (
+      {loading || riskLoading ? (
         <AdminState
           title="Loading finance operations"
           detail="Reading authoritative movement counts."
         />
-      ) : failed ? (
+      ) : failed || riskFailed ? (
         <AdminState
           title="Finance unavailable"
           detail="The finance projection could not be loaded safely."
-          retry={retry}
+          retry={() => {
+            retry();
+            retryRisk();
+          }}
         />
       ) : (
         <>
@@ -1518,17 +1689,33 @@ function PaymentsWorkspace({
             <AdminKpi
               icon={WalletCards}
               label="Pending movements"
-              value={summary?.pendingMovements ?? 0}
+              value={
+                summary?.pendingMovements ??
+                risk?.finance.movements.filter((item) =>
+                  ["CREATED", "PENDING_PROVIDER", "PROCESSING"].includes(item.status),
+                ).length ??
+                0
+              }
             />
             <AdminKpi
               icon={AlertTriangle}
               label="Provider exceptions"
-              value={summary?.exceptions ?? 0}
+              value={
+                summary?.exceptions ??
+                risk?.finance.movements.filter((item) =>
+                  ["FAILED", "MANUAL_REVIEW", "HELD"].includes(item.status),
+                ).length ??
+                0
+              }
             />
             <AdminKpi
               icon={RefreshCw}
               label="Reconciliation mismatches"
-              value={summary?.reconciliationMismatches ?? 0}
+              value={
+                summary?.reconciliationMismatches ??
+                risk?.finance.reconciliation.filter((item) => item.status === "MISMATCH").length ??
+                0
+              }
             />
             <AdminKpi
               icon={Landmark}
@@ -1546,11 +1733,112 @@ function PaymentsWorkspace({
             )}
           </div>
           <section className="admin-panel">
-            <AdminPanelHeading title="Safe finance operations" />
-            <AdminEmpty
-              detail="Detailed movements, wallet views, and compensating entries stay in protected finance workflows. No direct balance editing is available."
-              icon={WalletCards}
-            />
+            <AdminPanelHeading title="Movements" />
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th>Reference</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {risk?.finance.movements.length
+                    ? risk.finance.movements.map((movement) => (
+                        <tr key={movement.id}>
+                          <td>
+                            {movement.user.displayName}
+                            <small>
+                              {movement.user.username ? `@${movement.user.username}` : ""}
+                            </small>
+                          </td>
+                          <td>{sentence(movement.type)}</td>
+                          <td>
+                            £{formatMinor(movement.amountMinor)} {movement.currency}
+                          </td>
+                          <td>{sentence(movement.provider)}</td>
+                          <td>
+                            <span className="admin-status-pill">{sentence(movement.status)}</span>
+                          </td>
+                          <td>{movement.referenceAvailable ? "Available" : "Unknown"}</td>
+                          <td>{date(movement.updatedAt)}</td>
+                        </tr>
+                      ))
+                    : null}
+                </tbody>
+              </table>
+            </div>
+            {risk?.finance.movements.length ? null : (
+              <AdminEmpty detail="No movements currently require attention." icon={WalletCards} />
+            )}
+          </section>
+          <section className="admin-panel">
+            <AdminPanelHeading title="Wallets & reservations" />
+            <div className="admin-record-list">
+              {risk?.finance.wallets.slice(0, 8).map((wallet) => (
+                <article className="admin-record" key={wallet.id}>
+                  <div className="min-w-0">
+                    <strong>{wallet.owner}</strong>
+                    <small>
+                      Available £{formatMinor(wallet.availableMinor)} · reserved £
+                      {formatMinor(wallet.reservedMinor)} · {wallet.currency} ·{" "}
+                      {sentence(wallet.status)}
+                    </small>
+                  </div>
+                  <span className="admin-muted">Read only</span>
+                </article>
+              ))}
+              {risk?.finance.reservations.slice(0, 8).map((reservation) => (
+                <article className="admin-record" key={reservation.id}>
+                  <div className="min-w-0">
+                    <strong>Reservation · {reservation.owner}</strong>
+                    <small>
+                      £{formatMinor(reservation.amountMinor)} {reservation.currency} ·{" "}
+                      {sentence(reservation.purposeType)} · {sentence(reservation.status)}
+                    </small>
+                  </div>
+                  <span className="admin-muted">Read only</span>
+                </article>
+              ))}
+            </div>
+            {!risk?.finance.wallets.length && !risk?.finance.reservations.length ? (
+              <AdminEmpty detail="No wallet or reservation records are available." />
+            ) : null}
+            <p className="admin-safe-note">
+              No balance editing is available. Any correction must use the audited D13
+              compensating-entry workflow.
+            </p>
+          </section>
+          <section className="admin-panel">
+            <AdminPanelHeading title="Reconciliation" />
+            <div className="admin-record-list">
+              {risk?.finance.reconciliation.map((run) => (
+                <article className="admin-record" key={run.id}>
+                  <div className="min-w-0">
+                    <strong>
+                      {run.scope} · {sentence(run.status)}
+                    </strong>
+                    <small>
+                      Debit £{formatMinor(run.debitMinor)} · credit £{formatMinor(run.creditMinor)}{" "}
+                      ·{" "}
+                      {run.mismatchCodes.length
+                        ? run.mismatchCodes.join(", ")
+                        : "No mismatch codes"}{" "}
+                      · {date(run.createdAt)}
+                    </small>
+                  </div>
+                  <span className="admin-muted">Inspect</span>
+                </article>
+              ))}
+            </div>
+            {!risk?.finance.reconciliation.length ? (
+              <AdminEmpty detail="No reconciliation exceptions." icon={RefreshCw} />
+            ) : null}
           </section>
         </>
       )}
@@ -1560,6 +1848,10 @@ function PaymentsWorkspace({
 
 function Integrations({
   query,
+  risk,
+  riskLoading,
+  riskFailed,
+  retryRisk,
 }: {
   query: {
     data?: AdminIntegrationsSummary;
@@ -1567,17 +1859,24 @@ function Integrations({
     isError: boolean;
     refetch: () => unknown;
   };
+  risk?: import("@/data/repositories").AdminRiskOperations;
+  riskLoading: boolean;
+  riskFailed: boolean;
+  retryRisk: () => void;
 }) {
-  if (query.isLoading)
+  if (query.isLoading || riskLoading)
     return (
       <AdminState title="Loading integrations" detail="Reading provider-safe status summaries." />
     );
-  if (query.isError)
+  if (query.isError || riskFailed)
     return (
       <AdminState
         title="Provider status unavailable"
         detail="Integration health could not be loaded safely."
-        retry={() => void query.refetch()}
+        retry={() => {
+          void query.refetch();
+          retryRisk();
+        }}
       />
     );
   return (
@@ -1601,6 +1900,141 @@ function Integrations({
           ),
         )}
       </div>
+      <section className="admin-panel">
+        <AdminPanelHeading title="Webhook failures" />
+        <div className="admin-record-list">
+          {risk?.webhooks.map((event) => (
+            <article className="admin-record" key={event.id}>
+              <div className="min-w-0">
+                <strong>
+                  {event.provider} / {event.eventType}
+                </strong>
+                <small>
+                  {sentence(event.status)} / {event.attempts} attempts /{" "}
+                  {event.error ?? "Safe failure summary unavailable"} / {date(event.receivedAt)}
+                </small>
+              </div>
+              <span className="admin-muted">Idempotent replay only</span>
+            </article>
+          ))}
+        </div>
+        {!risk?.webhooks.length ? (
+          <AdminEmpty detail="No webhook failures currently need attention." />
+        ) : null}
+      </section>
+    </AdminPageSection>
+  );
+}
+
+function SystemHealthWorkspace({
+  risk,
+  loading,
+  failed,
+  retry,
+}: {
+  risk?: import("@/data/repositories").AdminRiskOperations;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  if (loading)
+    return (
+      <AdminState
+        title="Loading system health"
+        detail="Checking configured operational telemetry."
+      />
+    );
+  if (failed)
+    return (
+      <AdminState
+        title="System health unavailable"
+        detail="Health projections could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <AdminPageSection
+      title="System Health"
+      detail="Only backend-observed checks are shown. Missing telemetry remains Unknown."
+    >
+      <div className="admin-record-list">
+        {risk?.system.map((item) => (
+          <article className="admin-record" key={item.name}>
+            <span className="admin-record-icon">
+              <HeartPulse aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <strong>{item.name}</strong>
+              <small>
+                {item.status} / {item.summary} / checked {date(item.lastCheckedAt)}
+              </small>
+            </div>
+            <span className="admin-record-status">{item.status}</span>
+          </article>
+        ))}
+      </div>
+    </AdminPageSection>
+  );
+}
+
+function AuditWorkspace({
+  risk,
+  loading,
+  failed,
+  retry,
+}: {
+  risk?: import("@/data/repositories").AdminRiskOperations;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+}) {
+  if (loading)
+    return <AdminState title="Loading audit logs" detail="Reading append-only audit events." />;
+  if (failed)
+    return (
+      <AdminState
+        title="Audit logs unavailable"
+        detail="Audit records could not be loaded safely."
+        retry={retry}
+      />
+    );
+  return (
+    <AdminPageSection
+      title="Audit Logs"
+      detail="Append-only operational history. Audit entries cannot be edited or deleted from Admin."
+    >
+      {risk?.audit.length ? (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {risk.audit.map((entry) => (
+                <tr key={entry.id}>
+                  <td>{date(entry.createdAt)}</td>
+                  <td>{entry.actor}</td>
+                  <td>{sentence(entry.action)}</td>
+                  <td>
+                    {entry.resourceType} {entry.resourceId ? shortId(entry.resourceId) : ""}
+                  </td>
+                  <td>
+                    <span className="admin-status-pill">{sentence(entry.result)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <AdminEmpty detail="No audit entries match these filters." icon={FileClock} />
+      )}
     </AdminPageSection>
   );
 }
@@ -1822,6 +2256,11 @@ function date(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(
     new Date(value),
   );
+}
+function formatMinor(value: string) {
+  const sign = value.startsWith("-") ? "-" : "";
+  const digits = value.replace(/^-/, "").padStart(3, "0");
+  return `${sign}${digits.slice(0, -2)}.${digits.slice(-2)}`;
 }
 function initials(value?: string) {
   return (value ?? "Admin")

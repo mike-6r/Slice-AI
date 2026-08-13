@@ -7,6 +7,8 @@ import type {
   AdminOperationsOverview,
   AdminIntakeRow,
   AdminMembershipRow,
+  AdminRiskOperations,
+  AdminComplianceDetail,
   AdminRepository,
   AdminSearchResult,
   AdminUserDetail,
@@ -891,6 +893,195 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
   };
 };
 
+const mapAdminRiskOperations = (raw: unknown): AdminRiskOperations => {
+  const value = objectField(raw, "admin risk operations");
+  const finance = objectField(value.finance, "admin finance operations");
+  const mapUser = (rawUser: unknown) => {
+    const user = objectField(rawUser, "admin finance user");
+    return {
+      displayName: stringField(user.displayName, "admin finance user.displayName"),
+      username: nullableString(user.username, "admin finance user.username"),
+    };
+  };
+  return {
+    finance: {
+      movements: Array.isArray(finance.movements)
+        ? finance.movements.map((rawMovement) => {
+            const item = objectField(rawMovement, "admin movement");
+            return {
+              id: stringField(item.id, "movement.id"),
+              user: mapUser(item.user),
+              type: stringField(item.type, "movement.type"),
+              amountMinor: stringField(item.amountMinor, "movement.amountMinor"),
+              currency: stringField(item.currency, "movement.currency"),
+              provider: stringField(item.provider, "movement.provider"),
+              status: stringField(item.status, "movement.status"),
+              referenceAvailable: Boolean(item.referenceAvailable),
+              createdAt: stringField(item.createdAt, "movement.createdAt"),
+              updatedAt: stringField(item.updatedAt, "movement.updatedAt"),
+            };
+          })
+        : [],
+      wallets: Array.isArray(finance.wallets)
+        ? finance.wallets.map((rawWallet) => {
+            const item = objectField(rawWallet, "admin wallet");
+            return {
+              id: stringField(item.id, "wallet.id"),
+              owner: stringField(item.owner, "wallet.owner"),
+              availableMinor: stringField(item.availableMinor, "wallet.availableMinor"),
+              reservedMinor: stringField(item.reservedMinor, "wallet.reservedMinor"),
+              currency: stringField(item.currency, "wallet.currency"),
+              status: stringField(item.status, "wallet.status"),
+              updatedAt: stringField(item.updatedAt, "wallet.updatedAt"),
+            };
+          })
+        : [],
+      reservations: Array.isArray(finance.reservations)
+        ? finance.reservations.map((rawReservation) => {
+            const item = objectField(rawReservation, "admin reservation");
+            return {
+              id: stringField(item.id, "reservation.id"),
+              owner: stringField(item.owner, "reservation.owner"),
+              amountMinor: stringField(item.amountMinor, "reservation.amountMinor"),
+              currency: stringField(item.currency, "reservation.currency"),
+              purposeType: stringField(item.purposeType, "reservation.purposeType"),
+              status: stringField(item.status, "reservation.status"),
+              createdAt: stringField(item.createdAt, "reservation.createdAt"),
+            };
+          })
+        : [],
+      reconciliation: Array.isArray(finance.reconciliation)
+        ? finance.reconciliation.map((rawRun) => {
+            const item = objectField(rawRun, "admin reconciliation");
+            return {
+              id: stringField(item.id, "reconciliation.id"),
+              scope: stringField(item.scope, "reconciliation.scope"),
+              status: stringField(item.status, "reconciliation.status"),
+              currency: stringField(item.currency, "reconciliation.currency"),
+              debitMinor: stringField(item.debitMinor, "reconciliation.debitMinor"),
+              creditMinor: stringField(item.creditMinor, "reconciliation.creditMinor"),
+              mismatchCodes: Array.isArray(item.mismatchCodes)
+                ? item.mismatchCodes.filter((code): code is string => typeof code === "string")
+                : [],
+              createdAt: stringField(item.createdAt, "reconciliation.createdAt"),
+            };
+          })
+        : [],
+    },
+    system: Array.isArray(value.system)
+      ? value.system.map((rawSystem) => {
+          const item = objectField(rawSystem, "admin system health");
+          return {
+            name: stringField(item.name, "system.name"),
+            status: stringField(
+              item.status,
+              "system.status",
+            ) as AdminRiskOperations["system"][number]["status"],
+            summary: stringField(item.summary, "system.summary"),
+            lastCheckedAt: stringField(item.lastCheckedAt, "system.lastCheckedAt"),
+          };
+        })
+      : [],
+    audit: Array.isArray(value.audit)
+      ? value.audit.map((rawAudit) => {
+          const item = objectField(rawAudit, "admin audit");
+          return {
+            id: stringField(item.id, "audit.id"),
+            actor: stringField(item.actor, "audit.actor"),
+            action: stringField(item.action, "audit.action"),
+            resourceType: stringField(item.resourceType, "audit.resourceType"),
+            resourceId: nullableString(item.resourceId, "audit.resourceId"),
+            result: stringField(item.result, "audit.result"),
+            createdAt: stringField(item.createdAt, "audit.createdAt"),
+          };
+        })
+      : [],
+    integrations: Array.isArray(value.integrations)
+      ? value.integrations.map((rawIntegration) => {
+          const item = objectField(rawIntegration, "admin integration");
+          return {
+            name: stringField(item.name, "integration.name"),
+            status: stringField(
+              item.status,
+              "integration.status",
+            ) as AdminRiskOperations["integrations"][number]["status"],
+            configured: Boolean(item.configured),
+            summary: stringField(item.summary, "integration.summary"),
+            failedEvents: Number(item.failedEvents ?? 0),
+          };
+        })
+      : [],
+    webhooks: Array.isArray(value.webhooks)
+      ? value.webhooks.map((rawWebhook) => {
+          const item = objectField(rawWebhook, "admin webhook");
+          return {
+            id: stringField(item.id, "webhook.id"),
+            provider: stringField(item.provider, "webhook.provider"),
+            eventType: stringField(item.eventType, "webhook.eventType"),
+            status: stringField(item.status, "webhook.status"),
+            attempts: Number(item.attempts ?? 0),
+            receivedAt: stringField(item.receivedAt, "webhook.receivedAt"),
+            updatedAt: stringField(item.updatedAt, "webhook.updatedAt"),
+            error: nullableString(item.error, "webhook.error"),
+          };
+        })
+      : [],
+  };
+};
+
+const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
+  const value = objectField(raw, "admin compliance detail");
+  const user = objectField(value.user, "admin compliance detail.user");
+  return {
+    id: stringField(value.id, "compliance.id"),
+    provider: stringField(value.provider, "compliance.provider"),
+    type: stringField(value.type, "compliance.type"),
+    status: stringField(value.status, "compliance.status"),
+    createdAt: stringField(value.createdAt, "compliance.createdAt"),
+    updatedAt: stringField(value.updatedAt, "compliance.updatedAt"),
+    user: {
+      id: stringField(user.id, "compliance.user.id"),
+      displayName: stringField(user.displayName, "compliance.user.displayName"),
+      username: nullableString(user.username, "compliance.user.username"),
+    },
+    providerStatus: stringField(value.providerStatus, "compliance.providerStatus"),
+    decisions: Array.isArray(value.decisions)
+      ? value.decisions.map((rawDecision) => {
+          const item = objectField(rawDecision, "compliance decision");
+          return {
+            status: stringField(item.status, "decision.status"),
+            reasonCode: stringField(item.reasonCode, "decision.reasonCode"),
+            actorUserId: nullableString(item.actorUserId, "decision.actorUserId"),
+            createdAt: stringField(item.createdAt, "decision.createdAt"),
+          };
+        })
+      : [],
+    restrictions: Array.isArray(value.restrictions)
+      ? value.restrictions.map((rawRestriction) => {
+          const item = objectField(rawRestriction, "compliance restriction");
+          return {
+            scope: stringField(item.scope, "restriction.scope"),
+            reasonCode: stringField(item.reasonCode, "restriction.reasonCode"),
+            source: stringField(item.source, "restriction.source"),
+            status: stringField(item.status, "restriction.status"),
+            createdAt: stringField(item.createdAt, "restriction.createdAt"),
+            releasedAt: nullableString(item.releasedAt, "restriction.releasedAt"),
+          };
+        })
+      : [],
+    audit: Array.isArray(value.audit)
+      ? value.audit.map((rawAudit) => {
+          const item = objectField(rawAudit, "compliance audit");
+          return {
+            action: stringField(item.action, "compliance audit.action"),
+            result: stringField(item.result, "compliance audit.result"),
+            createdAt: stringField(item.createdAt, "compliance audit.createdAt"),
+          };
+        })
+      : [],
+  };
+};
+
 const adminRepository = (client: ApiClient): AdminRepository => ({
   async getOverview() {
     const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
@@ -913,6 +1104,12 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       providerAlerts: Number(value.providerAlerts ?? 0),
       generatedAt: stringField(value.generatedAt, "admin overview.generatedAt"),
     } satisfies AdminOverview;
+  },
+  async getRiskOperations() {
+    return mapAdminRiskOperations(await client.get<unknown>("/admin/risk-operations"));
+  },
+  async getComplianceCase(id) {
+    return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));
   },
   async getOperationsOverview() {
     const value = objectField(
