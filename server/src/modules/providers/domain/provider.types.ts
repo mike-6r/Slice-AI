@@ -7,6 +7,7 @@ export type NormalizedMovementStatus = 'CREATED' | 'PENDING_PROVIDER' | 'PROCESS
 /** SDK DTOs remain inside adapters; this is the sole provider-neutral contract. */
 export interface IdentityVerificationProvider {
   createSession(input: { userId: string; requestId: string }): Promise<{ providerReference: string; sessionUrl: string | null; status: NormalizedComplianceStatus }>;
+  getIdentityVerification?(verificationId: string): Promise<{ status: NormalizedComplianceStatus; sessionUrl: string | null }>;
 }
 export interface TransactionScreeningProvider {
   screen(input: { address: string; currency: string; chain?: string; from?: string }): Promise<{ decision: RiskDecision; providerReference: string; reasonCode: string }>;

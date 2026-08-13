@@ -50,7 +50,8 @@ type OrderInput = {
 type OwnershipPreviewInput = {
   assetId: string;
   side: 'BUY' | 'SELL';
-  desiredOwnershipPercent: string;
+  desiredOwnershipPercent?: string;
+  desiredAmountMinor?: string;
   limitPriceMinor?: string;
   timeInForce: 'GTC' | 'IOC';
 };
@@ -146,12 +147,20 @@ export class TradingService {
     const fallbackPrice = snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null;
     const marketPrice = bestBookPrice ?? fallbackPrice;
     const limitPrice = input.limitPriceMinor ? BigInt(input.limitPriceMinor) : marketPrice;
-    const requestedBps = parseOwnershipBps(input.desiredOwnershipPercent);
-    const numerator = requestedBps * total;
+    const requestedSlicesFromAmount = input.desiredAmountMinor
+      ? unitsForBudget(levels, BigInt(input.desiredAmountMinor), limitPrice, marketPrice)
+      : null;
+    const requestedBps = input.desiredOwnershipPercent ? parseOwnershipBps(input.desiredOwnershipPercent) : null;
+    const numerator = requestedBps === null ? 0n : requestedBps * total;
     const lowerSlices = numerator / 10_000n;
     const exact = numerator % 10_000n === 0n;
     const upperSlices = exact ? lowerSlices : lowerSlices + 1n;
-    const requestedSlices = exact ? lowerSlices : null;
+    const requestedSlices = requestedSlicesFromAmount !== null
+      ? requestedSlicesFromAmount
+      : exact ? lowerSlices : null;
+    const requestedOwnershipPercent = requestedSlices !== null
+      ? formatOwnershipPercent(requestedSlices, total)
+      : input.desiredOwnershipPercent!;
     const maximumExceeded = requestedSlices !== null && available > 0n && requestedSlices > available;
     const executable = requestedSlices && limitPrice
       ? executableProjection(levels, input.side, requestedSlices, limitPrice)
@@ -172,7 +181,7 @@ export class TradingService {
     return {
       assetId: input.assetId,
       side: input.side,
-      requestedOwnershipPercent: input.desiredOwnershipPercent,
+      requestedOwnershipPercent,
       requestedSlices: requestedSlices?.toString() ?? null,
       ownershipIncrementPercent: formatOwnershipPercent(1n, total),
       totalSlices: total.toString(),
@@ -211,6 +220,10 @@ export class TradingService {
           ? (grossAtLimit + fee - cashTotal).toString()
           : null,
       maximumExceeded,
+      requestedAmountMinor: input.desiredAmountMinor ?? null,
+      projectedRemainingAvailableIfFullyFilled: input.side === 'BUY'
+        ? formatOwnershipPercent(available > (requestedSlices ?? 0n) ? available - (requestedSlices ?? 0n) : 0n, total)
+        : null,
     };
   }
 
@@ -636,13 +649,13 @@ export class TradingService {
         asset: { status: 'PUBLISHED' },
         ...(cursor ? { id: { lt: cursor } } : {}),
       },
-      include: { asset: { select: { slug: true } } },
+      include: { asset: { select: { slug: true, ownershipSupply: { select: { totalUnits: true } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
     const page = rows.slice(0, limit);
     return {
-      items: page.map((row) => this.publicOrder(row, row.asset.slug)),
+      items: page.map((row) => this.publicOrder(row, row.asset.slug, row.asset.ownershipSupply?.totalUnits)),
       nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
     };
   }
@@ -1497,7 +1510,7 @@ export class TradingService {
     }));
   }
 
-  private publicOrder(order: TradingOrder, assetSlug?: string) {
+  private publicOrder(order: TradingOrder, assetSlug?: string, totalUnits?: bigint) {
     return {
       id: order.id,
       assetId: order.assetId,
@@ -1513,6 +1526,9 @@ export class TradingService {
       averageFillPriceMinor: order.averageFillPriceMinor?.toString() ?? null,
       createdAt: order.createdAt.toISOString(),
       closedAt: order.closedAt?.toISOString() ?? null,
+      requestedOwnershipPercent: totalUnits ? formatOwnershipPercent(order.originalUnits, totalUnits) : null,
+      filledOwnershipPercent: totalUnits ? formatOwnershipPercent(order.filledUnits, totalUnits) : null,
+      remainingOwnershipPercent: totalUnits ? formatOwnershipPercent(order.remainingUnits, totalUnits) : null,
     };
   }
 
@@ -1708,6 +1724,29 @@ function parseOwnershipBps(value: string) {
   const bps = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
   if (bps < 0n || bps > 10_000n) throw conflict('INVALID_OWNERSHIP_PERCENT', 'Ownership percentage must be between 0% and 100%.');
   return bps;
+}
+
+/** Convert a customer budget into whole ownership units using the live book. */
+function unitsForBudget(
+  levels: Array<{ priceMinor: string; units: string }>,
+  budget: bigint,
+  limit: bigint | null,
+  fallbackPrice: bigint | null,
+) {
+  if (budget <= 0n) return 0n;
+  let remaining = budget;
+  let units = 0n;
+  for (const level of levels) {
+    const price = BigInt(level.priceMinor);
+    if (limit !== null && price > limit) break;
+    const affordable = remaining / price;
+    const fill = affordable < BigInt(level.units) ? affordable : BigInt(level.units);
+    if (fill <= 0n) break;
+    units += fill;
+    remaining -= fill * price;
+  }
+  if (units === 0n && levels.length === 0 && fallbackPrice && fallbackPrice > 0n) return budget / fallbackPrice;
+  return units;
 }
 
 function formatOwnershipPercent(units: bigint, total: bigint) {

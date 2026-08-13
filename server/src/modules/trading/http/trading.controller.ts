@@ -35,11 +35,13 @@ const ownershipPreviewInput = z
   .object({
     assetId: z.string().min(1).max(128),
     side: z.enum(['BUY', 'SELL']),
-    desiredOwnershipPercent: z.string().regex(/^\d{1,3}(?:\.\d{1,4})?$/),
+    desiredOwnershipPercent: z.string().regex(/^\d{1,3}(?:\.\d{1,4})?$/).optional(),
+    desiredAmountMinor: z.string().regex(/^[1-9]\d*$/).optional(),
     limitPriceMinor: z.string().regex(/^[1-9]\d*$/).optional(),
     timeInForce: z.enum(['GTC', 'IOC']).default('GTC'),
   })
-  .strict();
+  .strict()
+  .refine((value) => Boolean(value.desiredOwnershipPercent) !== Boolean(value.desiredAmountMinor));
 const page = z
   .object({
     cursor: z.string().min(1).max(128).optional(),

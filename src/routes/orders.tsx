@@ -383,7 +383,7 @@ function OrdersTable({
                 <tr>
                   <th>Asset</th>
                   <th>Side</th>
-                  <th>Shares</th>
+                  <th>Ownership / units</th>
                   <th>Filled</th>
                   <th>Remaining</th>
                   <th>Limit price</th>
@@ -451,11 +451,24 @@ function OrderRow({
       <td>
         <SidePill side={order.side} />
       </td>
-      <td>{order.originalUnits}</td>
+      <td>
+        <strong>
+          {order.requestedOwnershipPercent ? `${order.requestedOwnershipPercent}%` : "—"}
+        </strong>
+        <small>{order.originalUnits} ownership units</small>
+      </td>
       <td>
         <OrderFillProgress order={order} />
+        <small>
+          {order.filledOwnershipPercent ? `${order.filledOwnershipPercent}% filled` : ""}
+        </small>
       </td>
-      <td>{order.remainingUnits}</td>
+      <td>
+        <strong>
+          {order.remainingOwnershipPercent ? `${order.remainingOwnershipPercent}%` : "—"}
+        </strong>
+        <small>{order.remainingUnits} units</small>
+      </td>
       <td>{formatOrderMoney(order.limitPriceMinor)}</td>
       <td>{formatOrderMoney(orderNotionalMinor(order))}</td>
       <td>{order.timeInForce}</td>

@@ -79,7 +79,8 @@ export interface TradingOrderPreview {
 export type OwnershipPreviewInput = {
   assetId: string;
   side: TradingOrderSide;
-  desiredOwnershipPercent: string;
+  desiredOwnershipPercent?: string;
+  desiredAmountMinor?: string;
   limitPriceMinor?: string;
   timeInForce: "GTC" | "IOC";
 };
@@ -119,6 +120,8 @@ export type OwnershipOrderPreview = {
   hasImmediateLiquidity: boolean;
   marketStatus: "OPEN" | "CLOSED" | "HALTED";
   eligibility: "ELIGIBLE" | "INELIGIBLE";
+  requestedAmountMinor: string | null;
+  projectedRemainingAvailableIfFullyFilled: string | null;
 };
 
 export type OwnershipMarketSummary = {
@@ -152,6 +155,9 @@ export interface TradingOrderView {
   averageFillPriceMinor: string | null;
   createdAt: ISODateTime;
   closedAt: ISODateTime | null;
+  requestedOwnershipPercent?: string | null;
+  filledOwnershipPercent?: string | null;
+  remainingOwnershipPercent?: string | null;
 }
 export interface TradingOrderPage {
   items: TradingOrderView[];

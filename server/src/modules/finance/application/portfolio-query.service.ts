@@ -72,7 +72,7 @@ export class PortfolioQueryService {
             company: { select: { code: true } },
           },
         },
-        ownershipSupply: { select: { totalUnits: true } },
+        ownershipSupply: { select: { totalUnits: true, issuedUnits: true } },
         marketSnapshots: {
           where: { currency: 'GBP' },
           orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
@@ -115,6 +115,8 @@ export class PortfolioQueryService {
         grade: asset.gradeScaleEntry
           ? `${asset.gradeScaleEntry.company.code} ${asset.gradeScaleEntry.grade.toString()} · ${asset.gradeScaleEntry.label}`
           : null,
+        totalUnits: supply?.toString() ?? null,
+        issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
         ownedUnits: position.settledUnits.toString(),
         reservedUnits: position.reservedUnits.toString(),
         availableUnits: (

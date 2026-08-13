@@ -700,7 +700,7 @@ function HoldingsPanel({
             <thead>
               <tr>
                 <th>Asset</th>
-                <th>Qty / shares</th>
+                <th>Ownership / units</th>
                 <th>Avg. cost</th>
                 <th>Current value</th>
                 <th>Allocation</th>
@@ -771,7 +771,19 @@ function HoldingRow({
       </td>
       <td data-label="Qty / shares">
         <span className="portfolio-table__quantity">
+          <strong>
+            {holding.totalUnits
+              ? `${ownershipPercent(holding.ownedUnits, holding.totalUnits)}% owned`
+              : "Ownership unavailable"}
+          </strong>
           <strong>{holding.ownedUnits}</strong>
+          {holding.totalUnits ? (
+            <small>
+              {holding.issuedUnits
+                ? `${ownershipPercent(holding.issuedUnits, holding.totalUnits)}% sold · ${ownershipPercent((BigInt(holding.totalUnits) - BigInt(holding.issuedUnits)).toString(), holding.totalUnits)}% available`
+                : "Availability unavailable"}
+            </small>
+          ) : null}
           <small>
             {holding.availableUnits} available · {holding.reservedUnits} reserved
           </small>
@@ -1301,6 +1313,14 @@ function percentageOf(value: string, total: string) {
   if (denominator <= 0n) return null;
   const sign = numerator > 0n ? "+" : "";
   return `${sign}${(Number((numerator * 10_000n) / denominator) / 100).toFixed(2)}%`;
+}
+function ownershipPercent(units: string, total: string) {
+  const denominator = BigInt(total);
+  if (denominator <= 0n) return "0";
+  const scaled = (BigInt(units) * 10_000n) / denominator;
+  const whole = scaled / 100n;
+  const fraction = (scaled % 100n).toString().padStart(2, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 function formatBps(value: number) {
   return `${(value / 100).toFixed(2)}%`;

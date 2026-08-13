@@ -3,6 +3,7 @@ import type { IdentityVerificationProvider, TransactionScreeningProvider, Webhoo
 
 export class LocalIdentityVerificationAdapter implements IdentityVerificationProvider {
   async createSession(input: { userId: string; requestId: string }) { return { providerReference: `local-kyc:${input.userId}:${input.requestId}`, sessionUrl: null, status: 'PENDING' as const }; }
+  async getIdentityVerification() { return { status: 'PENDING' as const, sessionUrl: null }; }
 }
 export class LocalTransactionScreeningAdapter implements TransactionScreeningProvider {
   async screen(input: { address: string; currency: string }) {

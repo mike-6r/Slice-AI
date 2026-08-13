@@ -73,7 +73,7 @@ export class PlaidAdapter implements IdentityVerificationProvider, WebhookVerifi
     const response = await this.request('/identity_verification/get', { identity_verification_id: verificationId });
     const status = text(response.status);
     if (!status) throw new PlaidProviderError('TEMPORARY');
-    return { status: mapPlaidIdentityStatus(status), watchlistScreeningId: text(response.watchlist_screening_id) };
+    return { status: mapPlaidIdentityStatus(status), sessionUrl: text(response.shareable_url), watchlistScreeningId: text(response.watchlist_screening_id) };
   }
 
   async createIndividualScreening(input: { clientUserId: string; watchlistProgramId: string; legalName: string; dateOfBirth?: string; country?: string }) {

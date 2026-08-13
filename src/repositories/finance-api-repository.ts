@@ -68,6 +68,8 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     title: nullableString(value.title),
     category: nullableString(value.category),
     grade: nullableString(value.grade),
+    totalUnits: nullableString(value.totalUnits),
+    issuedUnits: nullableString(value.issuedUnits),
     ownedUnits: units(value.ownedUnits, "holding.ownedUnits"),
     reservedUnits: units(value.reservedUnits, "holding.reservedUnits"),
     availableUnits: units(value.availableUnits, "holding.availableUnits"),

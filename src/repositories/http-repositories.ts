@@ -327,6 +327,18 @@ const mapTradingOrder = (raw: unknown): TradingOrderView => {
     ),
     createdAt: stringField(value.createdAt, "order.createdAt") as ISODateTime,
     closedAt: nullableString(value.closedAt, "order.closedAt") as ISODateTime | null,
+    requestedOwnershipPercent: nullableString(
+      value.requestedOwnershipPercent,
+      "order.requestedOwnershipPercent",
+    ),
+    filledOwnershipPercent: nullableString(
+      value.filledOwnershipPercent,
+      "order.filledOwnershipPercent",
+    ),
+    remainingOwnershipPercent: nullableString(
+      value.remainingOwnershipPercent,
+      "order.remainingOwnershipPercent",
+    ),
   };
 };
 const mapTradingPreview = (raw: unknown): TradingOrderPreview => {
@@ -474,6 +486,14 @@ const mapOwnershipPreview = (raw: unknown): OwnershipOrderPreview => {
     hasImmediateLiquidity: Boolean(value.hasImmediateLiquidity),
     marketStatus: value.marketStatus as OwnershipOrderPreview["marketStatus"],
     eligibility: value.eligibility as OwnershipOrderPreview["eligibility"],
+    requestedAmountMinor: nullableString(
+      value.requestedAmountMinor,
+      "ownershipPreview.requestedAmountMinor",
+    ),
+    projectedRemainingAvailableIfFullyFilled: nullableString(
+      value.projectedRemainingAvailableIfFullyFilled,
+      "ownershipPreview.projectedRemainingAvailableIfFullyFilled",
+    ),
   };
 };
 const mapOwnershipMarketSummary = (raw: unknown): OwnershipMarketSummary => {

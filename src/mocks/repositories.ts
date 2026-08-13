@@ -736,7 +736,9 @@ export const mockRepositories: AppRepositories = {
     },
     async previewOwnershipOrder(input) {
       const total = 200n;
-      const parsed = Number(input.desiredOwnershipPercent);
+      const parsed = Number(
+        input.desiredOwnershipPercent ?? Number(input.desiredAmountMinor ?? "0") / 1000,
+      );
       const slices = Number.isFinite(parsed)
         ? Math.max(0, Math.round((parsed / 100) * Number(total)))
         : 0;
@@ -745,7 +747,8 @@ export const mockRepositories: AppRepositories = {
       return {
         assetId: input.assetId,
         side: input.side,
-        requestedOwnershipPercent: input.desiredOwnershipPercent,
+        requestedOwnershipPercent:
+          input.desiredOwnershipPercent ?? `${(slices / Number(total)) * 100}`,
         requestedSlices: requested,
         ownershipIncrementPercent: "0.5",
         totalSlices: total.toString(),
@@ -777,6 +780,9 @@ export const mockRepositories: AppRepositories = {
         hasImmediateLiquidity: true,
         marketStatus: "OPEN" as const,
         eligibility: "ELIGIBLE" as const,
+        requestedAmountMinor: input.desiredAmountMinor ?? null,
+        projectedRemainingAvailableIfFullyFilled:
+          input.side === "BUY" ? String(Math.max(0, 100 - slices)) : null,
       };
     },
     async previewOrder(input) {

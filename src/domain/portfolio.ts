@@ -18,6 +18,8 @@ export interface PortfolioHolding {
   category: string | null;
   grade: string | null;
   ownedUnits: string;
+  totalUnits?: string | null;
+  issuedUnits?: string | null;
   reservedUnits: string;
   availableUnits: string;
   estimatedValueMinor: GbpMinorUnits | null;

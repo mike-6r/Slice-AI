@@ -10,6 +10,8 @@ import {
   Phone,
   ShieldCheck,
   Smartphone,
+  Fingerprint,
+  ExternalLink,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useState } from "react";
@@ -58,6 +60,15 @@ function OnboardingPage() {
     queryKey: queryKeys.account.twoFactor,
     queryFn: repositories.account.getTwoFactor,
     enabled: isAuthenticated,
+  });
+  const compliance = useQuery({
+    queryKey: ["providers", "compliance"],
+    queryFn: repositories.providers.getCompliance,
+    enabled: isAuthenticated && returnTo === "/list",
+    refetchInterval: (query) =>
+      query.state.data?.status === "PENDING" || query.state.data?.status === "REVIEW"
+        ? 5_000
+        : false,
   });
   const [stage, setStage] = useState<Stage>("email");
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -147,6 +158,13 @@ function OnboardingPage() {
       setStage("recovery");
     },
   });
+  const startCompliance = useMutation({
+    mutationFn: repositories.providers.startCompliance,
+    onSuccess: (value) => {
+      void queryClient.invalidateQueries({ queryKey: ["providers", "compliance"] });
+      if (value.sessionUrl) window.open(value.sessionUrl, "_blank", "noopener,noreferrer");
+    },
+  });
 
   const loading =
     restoringSession ||
@@ -198,6 +216,7 @@ function OnboardingPage() {
     phoneConfirm.error,
     beginTotp.error,
     confirmTotp.error,
+    startCompliance.error,
   ].find(Boolean);
   const currentError = error ?? (mutationError ? friendlyError(mutationError) : null);
   const emailAddress = user.data!.email;
@@ -308,18 +327,114 @@ function OnboardingPage() {
           <RecoveryStep codes={recoveryCodes} onSaved={() => setStage("finish")} />
         ) : null}
         {stage === "finish" ? (
-          <FinishStep
-            emailVerified={email.data!.verified}
-            emailSkipped={emailSkipped}
-            phoneVerified={phone.data!.verified}
-            phoneSkipped={phoneSkipped}
-            twoFactorEnabled={twoFactor.data!.enabled}
-            twoFactorSkipped={twoFactorSkipped}
-            onContinue={() => void navigate({ to: returnTo as never })}
-          />
+          returnTo === "/list" ? (
+            <CollectorOnboardingStep
+              compliance={compliance.data?.status ?? "NOT_STARTED"}
+              loading={compliance.isLoading || startCompliance.isPending}
+              onVerify={() => startCompliance.mutate()}
+              onStartListing={() => void navigate({ to: "/list" })}
+            />
+          ) : (
+            <FinishStep
+              emailVerified={email.data!.verified}
+              emailSkipped={emailSkipped}
+              phoneVerified={phone.data!.verified}
+              phoneSkipped={phoneSkipped}
+              twoFactorEnabled={twoFactor.data!.enabled}
+              twoFactorSkipped={twoFactorSkipped}
+              onContinue={() => void navigate({ to: returnTo as never })}
+            />
+          )
         ) : null}
       </section>
     </main>
+  );
+}
+
+function CollectorOnboardingStep({
+  compliance,
+  loading,
+  onVerify,
+  onStartListing,
+}: {
+  compliance: "NOT_STARTED" | "PENDING" | "APPROVED" | "REVIEW" | "REJECTED";
+  loading: boolean;
+  onVerify: () => void;
+  onStartListing: () => void;
+}) {
+  const verified = compliance === "APPROVED";
+  const processing = compliance === "PENDING" || compliance === "REVIEW";
+  const label = verified
+    ? "Verification complete"
+    : processing
+      ? "Verification in progress"
+      : compliance === "REJECTED"
+        ? "Needs attention"
+        : "Not started";
+  return (
+    <Step
+      icon={<Fingerprint />}
+      title="Become a Collector"
+      eyebrow="Collector onboarding"
+      lead="Complete the checks below before listing a physical collectible."
+    >
+      <ol className="onboarding-checklist">
+        <li>
+          <CheckCircle2 aria-hidden="true" />
+          <span>
+            <strong>Account</strong>
+            <small>Complete</small>
+          </span>
+        </li>
+        <li data-state={verified ? "complete" : "active"}>
+          <Fingerprint aria-hidden="true" />
+          <span>
+            <strong>Identity Verification</strong>
+            <small>{label}</small>
+          </span>
+          {verified ? (
+            <span className="onboarding-status">✓</span>
+          ) : (
+            <button className="primary-action" type="button" disabled={loading} onClick={onVerify}>
+              {loading
+                ? "Opening…"
+                : processing
+                  ? "Continue Verification"
+                  : compliance === "REJECTED"
+                    ? "Try Verification Again"
+                    : "Verify Identity"}
+              <ExternalLink aria-hidden="true" />
+            </button>
+          )}
+        </li>
+        <li>
+          <CheckCircle2 aria-hidden="true" />
+          <span>
+            <strong>Collector Profile</strong>
+            <small>Complete your collectible-owner details next.</small>
+          </span>
+        </li>
+        <li>
+          <CheckCircle2 aria-hidden="true" />
+          <span>
+            <strong>Ready to List</strong>
+            <small>Start your first submission when verification is complete.</small>
+          </span>
+        </li>
+      </ol>
+      <button
+        className="primary-action onboarding-cta"
+        type="button"
+        disabled={!verified}
+        onClick={onStartListing}
+      >
+        Start Listing
+      </button>
+      <p className="onboarding-field-help">
+        Plaid status is confirmed by Slice&apos;s provider authority. Completing the Link flow alone
+        does not mark you verified.
+      </p>
+    </Step>
   );
 }
 

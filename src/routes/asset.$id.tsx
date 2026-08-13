@@ -349,7 +349,7 @@ function AssetPage() {
                     <strong>
                       {availableSlices === undefined
                         ? "Unavailable"
-                        : `${availableSlices.toLocaleString()} Slices`}
+                        : `${availableSlices.toLocaleString()} ownership units`}
                     </strong>
                   </li>
                   <li>
@@ -537,20 +537,20 @@ function AssetOwnershipGuide({
           </p>
           <strong>
             {isAuthenticated && ownSlices !== undefined
-              ? `${ownSlices.toLocaleString()} Slices`
-              : "Choose your Slices in the trade panel"}
+              ? `${ownSlices.toLocaleString()} ownership units`
+              : "Choose your ownership percentage or amount in the trade panel"}
           </strong>
           <span>
             {isAuthenticated && ownSlices !== undefined
               ? ownSlices > 0
                 ? `${ownership ?? "Ownership unavailable"} · current value ${marketValue}`
-                : `You don't currently own any Slices in this collectible.`
-              : "Your order may remain open until it matches. Once filled, your Slices appear in Portfolio."}
+                : `You don't currently own any ownership units in this collectible.`
+              : "Your order may remain open until it matches. Once filled, your ownership units appear in Portfolio."}
           </span>
         </div>
         <ol className="asset-ownership-guide__steps" aria-label="How buying works">
           <li>
-            <b>1</b> Choose how many Slices you want
+            <b>1</b> Choose the percentage or amount you want
           </li>
           <li>
             <b>2</b> Review the total and place your order
@@ -720,7 +720,7 @@ function TradingPanel({
       </header>
       <p className="asset-trade-helper">
         Choose what percentage of the whole collectible you want to own. Slice converts it into
-        whole Slices, checks live liquidity, and takes you to a protected review step.
+        whole ownership units, checks live liquidity, and takes you to a protected review step.
       </p>
       <div className="asset-trading-summary">
         <Stat
@@ -749,18 +749,19 @@ function TradingPanel({
       <p className="asset-position-copy">
         {isAuthenticated && ownShares !== undefined && issuedShares !== undefined
           ? `You currently own ${formatOwnershipPercent(ownShares, issuedShares)}. Choose another percentage to see the resulting Slice quantity.`
-          : "The collectible is divided into whole Slices. External reference values are shown separately from executable Slice pricing."}
+          : "The collectible is divided into whole ownership units. External reference values are shown separately from executable Slice pricing."}
       </p>
       <div className="asset-ownership-callout">
         <strong>Percentage-first buying</strong>
         <span>
           {ownershipSummary?.onePercentSlices
-            ? `1% equals ${ownershipSummary.onePercentSlices} Slices at the current issuance.`
+            ? `1% equals ${ownershipSummary.onePercentSlices} ownership units at the current issuance.`
             : "Slice will show the valid ownership increment for this issuance."}
         </span>
         {!ownershipSummary?.hasImmediateLiquidity && (
           <small>
-            No Slices are currently offered at the market price, but you can place a limit order.
+            No ownership units are currently offered at the market price, but you can place a limit
+            order.
           </small>
         )}
       </div>
