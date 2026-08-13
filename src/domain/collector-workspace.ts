@@ -10,8 +10,10 @@ export type CollectorWorkspaceAsset = {
   title: string;
   year: number | null;
   manufacturer: string | null;
+  edition: string | null;
   set: string | null;
   cardNumber: string | null;
+  certificationNumber: string | null;
   category: string | null;
   grader: string | null;
   grade: string | null;
@@ -62,6 +64,28 @@ export type CollectorWorkspaceAsset = {
     executionVolumeMinor: string;
     latestSharePriceMinor: string | null;
   };
+};
+
+export type CollectorLifecycleStep = {
+  id: string;
+  label: string;
+  status: "COMPLETED" | "CURRENT" | "ACTION_REQUIRED" | "UPCOMING" | "EXCEPTION";
+  occurredAt: string | null;
+};
+
+export type CollectorWorkspaceLifecycle = {
+  currentStage: CollectorWorkspaceStage;
+  currentStatus: CollectorLifecycleStep["status"];
+  currentLabel: string;
+  currentDetail: string;
+  nextMilestone: { label: string; detail: string };
+  action: {
+    type: string;
+    label: string;
+    detail: string;
+    targetRoute: string;
+  } | null;
+  steps: CollectorLifecycleStep[];
 };
 
 export type CollectorWorkspaceOverview = {

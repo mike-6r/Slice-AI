@@ -41,25 +41,31 @@ import { Wordmark } from "@/components/layout/MainNavigation";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type {
   CollectorWorkspaceAsset,
+  CollectorWorkspaceLifecycle,
   CollectorWorkspaceOverview,
   CollectorWorkspaceStage,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
-import type { CollectorWorkspaceRequest } from "@/data/repositories";
+import type {
+  CollectorSubscriptionProjection,
+  CollectorWorkspaceRequest,
+} from "@/data/repositories";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
 
 export const Route = createFileRoute("/collector-workspace")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    ...(typeof search.collectible === "string" && search.collectible.length > 0
-      ? { collectible: search.collectible.slice(0, 120) }
-      : {}),
-    ...(typeof search.tab === "string" && isAssetDetailSection(search.tab)
-      ? { tab: search.tab }
-      : {}),
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const tab =
+      typeof search.tab === "string" ? normalizeAssetDetailSection(search.tab) : undefined;
+    return {
+      ...(typeof search.collectible === "string" && search.collectible.length > 0
+        ? { collectible: search.collectible.slice(0, 120) }
+        : {}),
+      ...(tab ? { tab } : {}),
+    };
+  },
   head: () => ({ meta: [{ title: "Collector Workspace | Slice" }] }),
   component: CollectorWorkspacePage,
 });
@@ -82,6 +88,8 @@ type WorkspaceSection =
 
 type AssetDetailSection =
   | "overview"
+  | "details"
+  | "history"
   | "submission"
   | "market-data"
   | "media"
@@ -93,6 +101,7 @@ type AssetDetailSection =
 type CollectorAssetDetail = {
   asset: CollectorWorkspaceAsset;
   requests: CollectorWorkspaceRequest[];
+  lifecycle: CollectorWorkspaceLifecycle;
   activity: CollectorWorkspaceOverview["activity"];
 };
 
@@ -197,10 +206,11 @@ function CollectorWorkspace() {
   const open = (section: WorkspaceSection, assetId?: string, tab?: AssetDetailSection) => {
     setActive(section);
     if (assetId) setSelectedId(assetId);
-    if (section === "asset") setDetailSection(tab ?? "overview");
+    const nextTab = tab ? normalizeAssetDetailSection(tab) : "overview";
+    if (section === "asset") setDetailSection(nextTab);
     if (section === "asset" && assetId) {
       void navigate({
-        search: { collectible: assetId, ...(tab ? { tab } : {}) },
+        search: { collectible: assetId, ...(nextTab !== "overview" ? { tab: nextTab } : {}) },
         replace: true,
       });
     } else if (routeSearch.collectible) {
@@ -320,6 +330,7 @@ function CollectorWorkspace() {
           <AssetManagement
             asset={selected}
             detail={collectibleDetail.data}
+            membership={subscription.data}
             initialSection={detailSection}
             detailFailed={collectibleDetail.isError}
             deleting={deleteDraft.isPending}
@@ -2052,6 +2063,7 @@ function formatPlanPrice(value: string, currency: string) {
 function AssetManagement({
   asset,
   detail,
+  membership,
   initialSection,
   detailFailed,
   deleting,
@@ -2060,6 +2072,7 @@ function AssetManagement({
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
+  membership?: CollectorSubscriptionProjection;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
   deleting: boolean;
@@ -2070,6 +2083,7 @@ function AssetManagement({
     <AssetManagementView
       asset={asset}
       detail={detail}
+      membership={membership}
       initialSection={initialSection}
       detailFailed={detailFailed}
       deleting={deleting}
@@ -2229,6 +2243,7 @@ function SettingsCards({ open }: { open: Open }) {
 function AssetManagementView({
   asset,
   detail,
+  membership,
   initialSection,
   detailFailed,
   deleting,
@@ -2237,6 +2252,7 @@ function AssetManagementView({
 }: {
   asset: CollectorWorkspaceAsset;
   detail?: CollectorAssetDetail;
+  membership?: CollectorSubscriptionProjection;
   initialSection: AssetDetailSection;
   detailFailed: boolean;
   deleting: boolean;
@@ -2245,65 +2261,108 @@ function AssetManagementView({
 }) {
   const sections: Array<{ id: AssetDetailSection; label: string }> = [
     { id: "overview", label: "Overview" },
-    { id: "submission", label: "Submission" },
-    { id: "market-data", label: "Market Data" },
+    { id: "details", label: "Details" },
     { id: "media", label: "Media" },
-    { id: "valuation", label: "Valuation" },
-    { id: "custody", label: "Custody" },
     { id: "market", label: "Market" },
-    { id: "activity", label: "Activity" },
+    { id: "history", label: "History" },
   ];
   const [section, setSection] = useState<AssetDetailSection>(initialSection);
   useEffect(() => setSection(initialSection), [asset.id, initialSection]);
   const market = marketResearchSummary(asset);
+  const lifecycle = detail?.lifecycle ?? lifecycleFallback(asset, detail?.requests?.[0] ?? null);
   const content: Record<AssetDetailSection, ReactNode> = {
-    overview: <DetailOverview asset={asset} />,
-    submission: <SubmissionDetail asset={asset} />,
-    "market-data": <MarketResearchDetail asset={asset} market={market} />,
-    media: <MediaDetail asset={asset} />,
-    valuation: <ValuationDetail asset={asset} market={market} />,
-    custody: <CustodyDetail asset={asset} />,
-    market: <MarketDetail asset={asset} />,
-    activity: (
-      <ActivityDetail
+    overview: (
+      <DetailOverview
         asset={asset}
-        activity={detail?.activity ?? []}
-        requests={detail?.requests ?? []}
+        lifecycle={lifecycle}
+        onAction={() =>
+          onSectionChange(lifecycle.action?.targetRoute === "media" ? "media" : "details")
+        }
       />
     ),
+    details: <DetailsTab asset={asset} />,
+    submission: <DetailsTab asset={asset} />,
+    "market-data": <MarketTab asset={asset} market={market} />,
+    media: <MediaDetail asset={asset} />,
+    valuation: <DetailsTab asset={asset} />,
+    custody: <DetailsTab asset={asset} />,
+    market: <MarketTab asset={asset} market={market} />,
+    activity: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
+    history: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
   };
   return (
     <WorkspacePage
-      title={asset.title}
-      detail="A customer-safe view of your submission, physical custody and public market progress."
+      title="My Collectibles"
+      detail="A customer-safe view of your collectible and its Slice journey."
     >
-      <section className="collector-asset-detail collector-asset-detail--advanced">
-        <header className="collector-detail-hero">
-          <AssetThumbnail asset={asset} className="collector-detail-hero__image" />
-          <div className="collector-detail-hero__identity">
-            <span className="collector-advanced-card__eyebrow">
-              {asset.category ?? "Collectible"}
-            </span>
-            <h3>{asset.title}</h3>
-            <p>{assetMetadata(asset)}</p>
-            <div className="collector-detail-hero__status">
-              <StatusBadge stage={asset.stage} />
-              <span>Updated {date(asset.updatedAt)}</span>
-            </div>
-          </div>
-          <dl className="collector-detail-hero__summary">
+      <div className="collector-detail-layout">
+        <div className="collector-detail-main">
+          <Link to="/collector-workspace" className="collector-detail-back">
+            <ChevronLeft aria-hidden="true" /> My Collectibles
+          </Link>
+          <header className="collector-detail-heading">
             <div>
-              <dt>Supported value</dt>
-              <dd>{money(asset.valuation.supportedValue)}</dd>
+              <h1>{asset.title}</h1>
+              <p>
+                {[asset.category, asset.grader && normalizeGrade(asset.grader, asset.grade)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              <div className="collector-detail-heading__badges">
+                <StatusBadge stage={asset.stage} />
+                <span className="collector-detail-owned">Owned</span>
+              </div>
             </div>
-            <div>
-              <dt>External reference</dt>
-              <dd>{money(asset.valuation.externalReference)}</dd>
+            <div className="collector-detail-heading__actions">
+              {detailAction(asset)}
+              <button
+                className="collector-button collector-button--icon"
+                aria-label="More collectible actions"
+              >
+                ···
+              </button>
             </div>
-          </dl>
-          {detailAction(asset)}
-        </header>
-        <div className="collector-asset-detail__content">
+          </header>
+          <section className="collector-detail-summary-card">
+            <AssetThumbnail asset={asset} className="collector-detail-summary-card__image" />
+            <div className="collector-detail-summary-card__values">
+              <DetailValue
+                label="Slice-supported valuation"
+                value={money(asset.valuation.supportedValue)}
+              />
+              <small>
+                {asset.valuation.supportedValue
+                  ? `Updated ${date(asset.valuation.supportedValue.asOf)}`
+                  : "No supported valuation yet"}
+              </small>
+              <div className="collector-detail-summary-card__divider" />
+              <DetailValue
+                label="External reference"
+                value={money(asset.valuation.externalReference)}
+              />
+              <small>
+                {asset.valuation.externalReference
+                  ? `Updated ${date(asset.valuation.externalReference.asOf)}`
+                  : "No external reference available"}
+              </small>
+            </div>
+            <dl className="collector-detail-identity-grid">
+              {[
+                ["Brand", asset.manufacturer],
+                ["Year", asset.year?.toString()],
+                ["Set", asset.set],
+                ["Card number", asset.cardNumber ? `#${asset.cardNumber}` : null],
+                ["Variant", asset.edition],
+                ["Grader", asset.grader],
+                ["Grade", normalizeGrade(asset.grader, asset.grade)],
+                ["Certification", asset.certificationNumber],
+              ].map(([label, value]) =>
+                value ? (
+                  <Detail key={String(label)} label={String(label)} value={String(value)} />
+                ) : null,
+              )}
+            </dl>
+          </section>
           <div className="collector-detail-tabs" role="tablist" aria-label="Collectible details">
             {sections.map(({ id, label }) => (
               <button
@@ -2344,42 +2403,266 @@ function AssetManagementView({
             ) : null}
           </DetailPanel>
         </div>
-      </section>
+        <aside className="collector-detail-rail">
+          <DetailMarketRail asset={asset} />
+          <DetailMilestone lifecycle={lifecycle} />
+          <RelatedActions actions={detail?.requests ?? []} onSectionChange={onSectionChange} />
+          <MembershipRail membership={membership} />
+        </aside>
+      </div>
     </WorkspacePage>
   );
 }
 
-function DetailOverview({ asset }: { asset: CollectorWorkspaceAsset }) {
+function DetailValue({ label, value }: { label: string; value: string }) {
   return (
-    <div className="collector-detail-summary-grid">
-      <Detail label="Lifecycle status" value={stageCopy(asset.stage).label} />
-      <Detail label="Next action" value={submissionNextStep(asset)} />
-      <Detail label="Submission status" value={sentence(asset.submissionStatus)} />
-      <Detail
-        label="Valuation status"
-        value={
-          asset.valuation.supportedValue
-            ? "Slice-supported valuation available"
-            : "Slice valuation pending"
-        }
-      />
-      <Detail
-        label="Custody status"
-        value={asset.custody ? custodyLabel(asset.custody.status) : "Not currently in custody"}
-      />
-      <Detail
-        label="Market status"
-        value={asset.market.isLive ? "Market live" : "Not market live"}
-      />
-      <Detail
-        label="Media completeness"
-        value={
-          asset.media.length
-            ? `${asset.media.length} uploaded item${asset.media.length === 1 ? "" : "s"}`
-            : "No uploaded evidence"
-        }
-      />
+    <div className="collector-detail-value">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
+  );
+}
+
+function DetailOverview({
+  asset,
+  lifecycle,
+  onAction,
+}: {
+  asset: CollectorWorkspaceAsset;
+  lifecycle: CollectorWorkspaceLifecycle;
+  onAction: () => void;
+}) {
+  return (
+    <div className="collector-detail-overview">
+      <section className="collector-detail-journey">
+        <div className="collector-detail-section-heading">
+          <h3>Collectible journey</h3>
+          <span>{lifecycle.currentLabel}</span>
+        </div>
+        <ol>
+          {lifecycle.steps.map((step) => (
+            <li key={step.id} className={`is-${step.status.toLowerCase()}`}>
+              <span>
+                {step.status === "COMPLETED" ? "✓" : step.status === "ACTION_REQUIRED" ? "!" : "·"}
+              </span>
+              <strong>{step.label}</strong>
+              {step.occurredAt ? <small>{date(step.occurredAt)}</small> : null}
+            </li>
+          ))}
+        </ol>
+        <div
+          className={`collector-detail-current collector-detail-current--${lifecycle.currentStatus.toLowerCase()}`}
+        >
+          <span>
+            {lifecycle.currentStatus === "ACTION_REQUIRED"
+              ? "Action required"
+              : lifecycle.currentStatus === "CURRENT"
+                ? "Current status"
+                : "Status"}
+          </span>
+          <strong>{lifecycle.currentLabel}</strong>
+          <p>{lifecycle.currentDetail}</p>
+          {lifecycle.action ? (
+            <button className="collector-button collector-button--primary" onClick={onAction}>
+              {lifecycle.action.label} <ArrowRight aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      </section>
+      <section className="collector-detail-glance">
+        <div className="collector-detail-section-heading">
+          <h3>At a glance</h3>
+        </div>
+        <div className="collector-detail-glance__grid">
+          <DetailValue
+            label="Slice-supported valuation"
+            value={money(asset.valuation.supportedValue)}
+          />
+          <DetailValue
+            label="Custody status"
+            value={asset.custody ? custodyLabel(asset.custody.status) : "Not yet in custody"}
+          />
+          <DetailValue
+            label="Marketplace status"
+            value={asset.market.isLive ? "Market live" : "Not market live"}
+          />
+          <DetailValue label="Shares available" value={availability(asset)} />
+        </div>
+      </section>
+      <section className="collector-detail-next">
+        <div className="collector-detail-section-heading">
+          <h3>What happens next?</h3>
+        </div>
+        <strong>{lifecycle.nextMilestone.label}</strong>
+        <p>{lifecycle.nextMilestone.detail}</p>
+        {asset.market.isLive && asset.slug ? (
+          <Link className="collector-button" to="/asset/$id" params={{ id: asset.slug }}>
+            View market <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function DetailsTab({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return (
+    <div className="collector-detail-tab-stack">
+      <DetailPanel title="Collectible information">
+        <div className="collector-detail-summary-grid">
+          <Detail label="Category" value={asset.category ?? "Unavailable"} />
+          <Detail label="Brand" value={asset.manufacturer ?? "Unavailable"} />
+          <Detail label="Year" value={asset.year?.toString() ?? "Unavailable"} />
+          <Detail label="Set" value={asset.set ?? "Unavailable"} />
+          <Detail
+            label="Card number"
+            value={asset.cardNumber ? `#${asset.cardNumber}` : "Unavailable"}
+          />
+          <Detail label="Variant" value={asset.edition ?? "Unavailable"} />
+          <Detail label="Grader" value={asset.grader ?? "Unavailable"} />
+          <Detail label="Grade" value={normalizeGrade(asset.grader, asset.grade)} />
+          <Detail label="Certification" value={asset.certificationNumber ?? "Unavailable"} />
+        </div>
+      </DetailPanel>
+      <SubmissionDetail asset={asset} />
+      <ValuationDetail asset={asset} market={marketResearchSummary(asset)} />
+      <CustodyDetail asset={asset} />
+    </div>
+  );
+}
+
+function MarketTab({
+  asset,
+  market,
+}: {
+  asset: CollectorWorkspaceAsset;
+  market: ReturnType<typeof marketResearchSummary>;
+}) {
+  return (
+    <div className="collector-detail-tab-stack">
+      <ValuationDetail asset={asset} market={market} />
+      <MarketResearchDetail asset={asset} market={market} />
+      <MarketDetail asset={asset} />
+    </div>
+  );
+}
+
+function HistoryTab({
+  asset,
+  activity,
+}: {
+  asset: CollectorWorkspaceAsset;
+  activity: CollectorWorkspaceOverview["activity"];
+}) {
+  return (
+    <div className="collector-detail-activity">
+      {activity.length ? (
+        <ul>
+          {activity.map((item) => (
+            <ActivityRow key={item.id} item={item} />
+          ))}
+        </ul>
+      ) : (
+        <Empty detail={`No customer-safe history is available for ${asset.title} yet.`} />
+      )}
+    </div>
+  );
+}
+
+function DetailMarketRail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  return (
+    <section className="collector-panel collector-detail-rail-card">
+      <PanelHeader title="Current status" />
+      <DetailRailRow
+        label="Current status"
+        value={asset.market.isLive ? "Market live" : stageCopy(asset.stage).label}
+      />
+      <DetailRailRow label="Shares available" value={availability(asset)} />
+      <DetailRailRow
+        label="Owners"
+        value={asset.market.ownersCount === null ? "Unavailable" : String(asset.market.ownersCount)}
+      />
+      <DetailRailRow label="Executions" value={String(asset.market.executionCount)} />
+      <DetailRailRow label="Latest trade" value={sharePrice(asset)} />
+      {asset.slug && asset.market.isLive ? (
+        <Link
+          className="collector-button collector-button--primary"
+          to="/asset/$id"
+          params={{ id: asset.slug }}
+        >
+          View market <ArrowRight aria-hidden="true" />
+        </Link>
+      ) : null}
+    </section>
+  );
+}
+
+function DetailRailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="collector-detail-rail-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function DetailMilestone({ lifecycle }: { lifecycle: CollectorWorkspaceLifecycle }) {
+  return (
+    <section className="collector-panel collector-detail-rail-card">
+      <PanelHeader title="Next milestone" />
+      <strong className="collector-detail-milestone__label">{lifecycle.nextMilestone.label}</strong>
+      <p>{lifecycle.nextMilestone.detail}</p>
+    </section>
+  );
+}
+
+function RelatedActions({
+  actions,
+  onSectionChange,
+}: {
+  actions: CollectorWorkspaceRequest[];
+  onSectionChange: (section: AssetDetailSection) => void;
+}) {
+  return (
+    <section className="collector-panel collector-detail-rail-card">
+      <PanelHeader title="Related actions" />
+      {actions.length ? (
+        actions.map((action) => (
+          <div className="collector-detail-related-action" key={action.id}>
+            <strong>{action.actionLabel}</strong>
+            <p>{action.reason}</p>
+            <button
+              className="collector-button"
+              onClick={() => onSectionChange(action.targetRoute === "media" ? "media" : "details")}
+            >
+              {action.actionLabel} <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        ))
+      ) : (
+        <div className="collector-detail-no-action">
+          <strong>No actions required</strong>
+          <p>
+            You&apos;re all caught up. We&apos;ll notify you if anything requires your attention.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MembershipRail({ membership }: { membership?: CollectorSubscriptionProjection }) {
+  const current = membership?.current;
+  const remaining = membership?.usage.remainingCatalogueCapacity;
+  if (!current || (remaining !== null && remaining !== undefined && remaining > 3)) return null;
+  return (
+    <section className="collector-panel collector-detail-rail-card">
+      <PanelHeader title="Increase your limits" />
+      <p>Upgrade your Collector membership to list more collectibles and access advanced tools.</p>
+      <Link className="collector-button" to="/collector-workspace">
+        Manage subscription <ArrowRight aria-hidden="true" />
+      </Link>
+    </section>
   );
 }
 
@@ -2393,14 +2676,18 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
   });
   const selectVault = useMutation({
     mutationFn: (vaultId: string) => repositories.collectorWorkspace.selectVault(asset.id, vaultId),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.detail(asset.id) });
+    },
   });
   const addShipment = useMutation({
     mutationFn: (input: { carrier: string; trackingNumber: string; shippedAt: string }) =>
       repositories.collectorWorkspace.addShipment(asset.id, input),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
+      void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.detail(asset.id) });
+    },
   });
   return (
     <div className="collector-detail-summary-grid">
@@ -3103,6 +3390,8 @@ const stageCopy = (stage: CollectorWorkspaceStage) =>
 function isAssetDetailSection(value: string): value is AssetDetailSection {
   return [
     "overview",
+    "details",
+    "history",
     "submission",
     "market-data",
     "media",
@@ -3111,6 +3400,112 @@ function isAssetDetailSection(value: string): value is AssetDetailSection {
     "market",
     "activity",
   ].includes(value);
+}
+function normalizeAssetDetailSection(value: string): AssetDetailSection {
+  if (value === "submission" || value === "valuation" || value === "custody") return "details";
+  if (value === "market-data") return "market";
+  if (value === "activity") return "history";
+  return isAssetDetailSection(value) ? value : "overview";
+}
+function lifecycleFallback(
+  asset: CollectorWorkspaceAsset,
+  action: CollectorWorkspaceRequest | null,
+): CollectorWorkspaceLifecycle {
+  const marketLive = asset.market.isLive || asset.stage === "MARKET_LIVE";
+  const hasIntake = Boolean(asset.intake);
+  const hasShipment = Boolean(asset.intake?.shipment);
+  const hasReceived =
+    Boolean(asset.intake?.receivedAt) ||
+    ["RECEIVED", "INSPECTED", "SECURED"].includes(asset.custody?.status ?? "");
+  const hasVerified =
+    ["INSPECTED", "SECURED"].includes(asset.custody?.status ?? "") ||
+    ["VAULT_READY", "MARKET_LIVE"].includes(asset.stage);
+  const done = (value: boolean, id: string, label: string) => ({
+    id,
+    label,
+    status: value ? ("COMPLETED" as const) : ("UPCOMING" as const),
+    occurredAt: null,
+  });
+  const actionId =
+    action?.type === "CHOOSE_VAULT"
+      ? "vault"
+      : action?.type === "ADD_TRACKING"
+        ? "shipped"
+        : action
+          ? "submitted"
+          : null;
+  const steps = [
+    done(asset.submissionStatus !== "DRAFT" && actionId !== "submitted", "submitted", "Submitted"),
+    done(
+      ["APPROVED", "IN_REVIEW"].includes(asset.submissionStatus) || asset.stage !== "DRAFT",
+      "accepted",
+      "Accepted",
+    ),
+    done(hasIntake && actionId !== "vault", "vault", hasIntake ? "Vault selected" : "Choose vault"),
+    done(hasShipment && actionId !== "shipped", "shipped", "Shipped"),
+    done(hasReceived, "received", "Received"),
+    done(hasVerified, "verified", "Verified"),
+    done(Boolean(asset.valuation.supportedValue), "valued", "Valued"),
+    done(["VAULT_READY", "MARKET_LIVE"].includes(asset.stage), "vault-ready", "Vault ready"),
+    done(marketLive, "market-live", "Market live"),
+  ];
+  const currentIndex = actionId
+    ? Math.max(
+        0,
+        steps.findIndex((step) => step.id === actionId),
+      )
+    : asset.stage === "DRAFT"
+      ? 0
+      : asset.stage === "CUSTODY"
+        ? 5
+        : asset.stage === "VALUATION"
+          ? 6
+          : asset.stage === "VAULT_READY"
+            ? 7
+            : marketLive
+              ? 8
+              : 1;
+  const currentStatus: CollectorWorkspaceLifecycle["currentStatus"] = action
+    ? "ACTION_REQUIRED"
+    : "CURRENT";
+  const normalizedSteps = steps.map((step, index) => ({
+    ...step,
+    status: index === currentIndex ? currentStatus : step.status,
+  }));
+  const currentLabel =
+    action?.actionLabel ?? (marketLive ? "Market live" : stageCopy(asset.stage).label);
+  const currentDetail =
+    action?.reason ??
+    (marketLive
+      ? "Your collectible is verified, held in Slice custody, and currently available through the marketplace."
+      : "Slice is moving your collectible through the authenticated workflow. No action is required from you right now.");
+  return {
+    currentStage: asset.stage,
+    currentStatus,
+    currentLabel,
+    currentDetail,
+    nextMilestone: action
+      ? { label: action.actionLabel, detail: action.reason }
+      : marketLive
+        ? {
+            label: "Ongoing",
+            detail:
+              "Your collectible is live on the marketplace. We'll notify you of any major updates.",
+          }
+        : {
+            label: "Workflow update",
+            detail: "We will notify you when the next milestone is reached.",
+          },
+    action: action
+      ? {
+          type: action.type,
+          label: action.actionLabel,
+          detail: action.reason,
+          targetRoute: action.targetRoute,
+        }
+      : null,
+    steps: normalizedSteps,
+  };
 }
 function StageIcon({ stage }: { stage: CollectorWorkspaceStage }) {
   const Icon = stageCopy(stage).icon;
@@ -3202,10 +3597,16 @@ function sentence(value: string) {
 }
 function assetMetadata(asset: CollectorWorkspaceAsset) {
   return (
-    [asset.year, asset.set, [asset.grader, asset.grade].filter(Boolean).join(" ")]
+    [asset.year, asset.set, normalizeGrade(asset.grader, asset.grade)]
       .filter(Boolean)
       .join(" · ") || "Collectible details unavailable"
   );
+}
+function normalizeGrade(grader: string | null | undefined, grade: string | null | undefined) {
+  if (!grade) return grader ?? "Unavailable";
+  const numeric = Number(grade);
+  const formatted = Number.isFinite(numeric) ? numeric.toString() : grade;
+  return [grader, formatted].filter(Boolean).join(" ");
 }
 function availability(asset: CollectorWorkspaceAsset) {
   return asset.market.availabilityBps === null

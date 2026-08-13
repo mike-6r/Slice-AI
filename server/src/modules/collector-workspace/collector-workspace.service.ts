@@ -47,8 +47,10 @@ type WorkspaceItem = {
   title: string;
   year: number | null;
   manufacturer: string | null;
+  edition: string | null;
   set: string | null;
   cardNumber: string | null;
+  certificationNumber: string | null;
   category: string | null;
   grader: string | null;
   grade: string | null;
@@ -702,9 +704,11 @@ export class CollectorWorkspaceService {
       });
     }
     const asset = assetView(submission);
+    const requests = requestViews([asset]);
     return {
       asset,
-      requests: requestViews([asset]),
+      requests,
+      lifecycle: lifecycleFor(asset, requests[0] ?? null),
       activity: await this.activityFor(userId, [submission], []),
     };
   }
@@ -875,6 +879,24 @@ export class CollectorWorkspaceService {
         item.assetId ? [[item.assetId, assetView(item).title] as const] : [],
       ),
     );
+    const auditActivity = auditEvents
+      .map((item) => {
+        const title = activityTitle(item.action);
+        if (!title) return null;
+        return {
+          id: `activity:${item.id}`,
+          type: item.action,
+          title,
+          detail:
+            (item.resourceType === 'submission' && item.resourceId
+              ? titles.get(item.resourceId)
+              : item.resourceType === 'asset' && item.resourceId
+                ? assetTitles.get(item.resourceId)
+                : null) ?? '',
+          occurredAt: item.createdAt.toISOString(),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
     return [
       ...notifications.map((item) => ({
         id: `notification:${item.id}`,
@@ -883,18 +905,7 @@ export class CollectorWorkspaceService {
         detail: item.body,
         occurredAt: item.createdAt.toISOString(),
       })),
-      ...auditEvents.map((item) => ({
-        id: `activity:${item.id}`,
-        type: item.action,
-        title: activityTitle(item.action),
-        detail:
-          (item.resourceType === 'submission' && item.resourceId
-            ? titles.get(item.resourceId)
-            : item.resourceType === 'asset' && item.resourceId
-              ? assetTitles.get(item.resourceId)
-              : null) ?? 'Collector workflow updated',
-        occurredAt: item.createdAt.toISOString(),
-      })),
+      ...auditActivity,
     ]
       .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
       .slice(0, 12);
@@ -968,9 +979,11 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
     title: asset?.title ?? declaredName(submission.declaredMetadata),
     year: asset?.year ?? declaredYear(submission.declaredMetadata),
     manufacturer: asset?.manufacturer ?? null,
+    edition: asset?.edition ?? null,
     set: asset?.collectibleSet?.name ?? null,
     cardNumber:
       asset?.cardNumber ?? declaredCardNumber(submission.declaredMetadata),
+    certificationNumber: asset?.certificationNumber ?? null,
     category: asset?.category?.name ?? null,
     grader:
       asset?.gradeScaleEntry?.company.code ??
@@ -1156,6 +1169,153 @@ function requestFor(asset: WorkspaceItem): CollectorRequestView[] {
   return [];
 }
 
+function lifecycleFor(
+  asset: WorkspaceItem,
+  action: CollectorRequestView | null,
+) {
+  const hasIntake = Boolean(asset.intake);
+  const hasShipment = Boolean(asset.intake?.shipment);
+  const hasReceived =
+    Boolean(asset.intake?.receivedAt) ||
+    ['RECEIVED', 'INSPECTED', 'SECURED'].includes(asset.custody?.status ?? '');
+  const hasVerified =
+    ['INSPECTED', 'SECURED'].includes(asset.custody?.status ?? '') ||
+    ['VAULT_READY', 'MARKET_LIVE'].includes(asset.stage);
+  const hasValuation = Boolean(asset.valuation.supportedValue);
+  const hasVaultReady = ['VAULT_READY', 'MARKET_LIVE'].includes(asset.stage);
+  const hasMarket = asset.market.isLive || asset.stage === 'MARKET_LIVE';
+  const submitted = asset.submissionStatus !== 'DRAFT';
+  const accepted =
+    [
+      'APPROVED',
+      'REVIEW',
+      'VALUATION',
+      'CUSTODY',
+      'VAULT_READY',
+      'MARKET_LIVE',
+    ].includes(asset.submissionStatus) ||
+    ['VALUATION', 'CUSTODY', 'VAULT_READY', 'MARKET_LIVE'].includes(
+      asset.stage,
+    );
+  const actionStep =
+    action?.type === 'CHOOSE_VAULT'
+      ? 'vault'
+      : action?.type === 'ADD_TRACKING'
+        ? 'shipped'
+        : action?.type === 'ADD_REQUIRED_EVIDENCE' ||
+            action?.type === 'CHANGES_REQUESTED'
+          ? 'submitted'
+          : null;
+  const completed = (done: boolean, id: string) => ({
+    id,
+    status: done ? ('COMPLETED' as const) : ('UPCOMING' as const),
+    // updatedAt is not an event timestamp; only real event records should
+    // populate lifecycle dates.
+    occurredAt: null,
+  });
+  const steps = [
+    {
+      ...completed(submitted && actionStep !== 'submitted', 'submitted'),
+      label: 'Submitted',
+    },
+    {
+      ...completed(accepted && actionStep !== 'submitted', 'accepted'),
+      label: 'Accepted',
+    },
+    {
+      ...completed(hasIntake && actionStep !== 'vault', 'vault'),
+      label: hasIntake ? 'Vault selected' : 'Choose vault',
+    },
+    {
+      ...completed(hasShipment && actionStep !== 'shipped', 'shipped'),
+      label: 'Shipped',
+    },
+    { ...completed(hasReceived, 'received'), label: 'Received' },
+    { ...completed(hasVerified, 'verified'), label: 'Verified' },
+    { ...completed(hasValuation, 'valued'), label: 'Valued' },
+    { ...completed(hasVaultReady, 'vault-ready'), label: 'Vault ready' },
+    { ...completed(hasMarket, 'market-live'), label: 'Market live' },
+  ];
+  const currentIndex = actionStep
+    ? Math.max(
+        0,
+        steps.findIndex((step) => step.id === actionStep),
+      )
+    : asset.stage === 'DRAFT'
+      ? 0
+      : asset.stage === 'SUBMITTED' || asset.stage === 'REVIEW'
+        ? 1
+        : asset.stage === 'VALUATION'
+          ? 6
+          : asset.stage === 'CUSTODY'
+            ? hasReceived
+              ? 5
+              : 3
+            : asset.stage === 'VAULT_READY'
+              ? 7
+              : 8;
+  const current = steps[currentIndex];
+  const normalizedSteps = steps.map((step, index) => ({
+    ...step,
+    status:
+      action && index === currentIndex
+        ? ('ACTION_REQUIRED' as const)
+        : index === currentIndex
+          ? ('CURRENT' as const)
+          : step.status,
+  }));
+  const currentLabel =
+    action?.actionLabel ??
+    (asset.stage === 'MARKET_LIVE' ? 'Market Live' : stageLabel(asset.stage));
+  const currentDetail =
+    action?.reason ??
+    (hasMarket
+      ? 'Your collectible is verified, held in Slice custody, and currently available through the marketplace.'
+      : asset.stage === 'DRAFT'
+        ? 'Finish your collectible submission when you are ready.'
+        : 'Slice is moving your collectible through the authenticated workflow. No action is required from you right now.');
+  const nextMilestone = action
+    ? { label: action.actionLabel, detail: action.reason }
+    : hasMarket
+      ? {
+          label: 'Ongoing',
+          detail:
+            "Your collectible is live on the marketplace. We'll notify you of any major updates.",
+        }
+      : asset.stage === 'CUSTODY'
+        ? {
+            label: hasReceived ? 'Verification' : 'Slice receipt confirmation',
+            detail:
+              'Slice will update the next milestone as the physical workflow progresses.',
+          }
+        : asset.stage === 'VALUATION'
+          ? {
+              label: 'Valuation',
+              detail:
+                'Slice is preparing the supported valuation for your collectible.',
+            }
+          : {
+              label: current?.label ?? 'Workflow update',
+              detail: 'We will notify you when the next milestone is reached.',
+            };
+  return {
+    currentStage: asset.stage,
+    currentStatus: action ? ('ACTION_REQUIRED' as const) : ('CURRENT' as const),
+    currentLabel,
+    currentDetail,
+    nextMilestone,
+    action: action
+      ? {
+          type: action.type,
+          label: action.actionLabel,
+          detail: action.reason,
+          targetRoute: action.targetRoute,
+        }
+      : null,
+    steps: normalizedSteps,
+  };
+}
+
 function stageCounts(assets: WorkspaceItem[]) {
   const counts = Object.fromEntries(
     pipeline.map((stage) => [stage, 0]),
@@ -1295,7 +1455,7 @@ function stageLabel(stage: WorkspaceStage) {
     } as const
   )[stage];
 }
-function activityTitle(action: string) {
+function activityTitle(action: string): string | null {
   if (action.includes('ACCEPT')) return 'Submission accepted';
   if (action.includes('VAULT')) return 'Vault selected';
   if (action.includes('TRACK')) return 'Tracking added';
@@ -1308,7 +1468,7 @@ function activityTitle(action: string) {
   if (action.includes('CUSTODY')) return 'Custody updated';
   if (action.includes('PROFILE')) return 'Profile updated';
   if (action.includes('SUBMISSION')) return 'Submission updated';
-  return 'Workflow update';
+  return null;
 }
 
 function completedActivity(action: string) {

@@ -260,6 +260,7 @@ export interface CollectorWorkspaceRepository {
   getCollectibleDetail(id: string): Promise<{
     asset: import("@/domain").CollectorWorkspaceAsset;
     requests: Array<CollectorWorkspaceRequest>;
+    lifecycle: import("@/domain").CollectorWorkspaceLifecycle;
     activity: Array<{
       id: string;
       type: string;

@@ -1327,6 +1327,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return client.get<{
           asset: import("@/domain").CollectorWorkspaceAsset;
           requests: import("@/data/repositories").CollectorWorkspaceRequest[];
+          lifecycle: import("@/domain").CollectorWorkspaceLifecycle;
           activity: Array<{
             id: string;
             type: string;
