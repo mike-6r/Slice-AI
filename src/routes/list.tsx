@@ -115,6 +115,12 @@ export function SubmissionPage() {
     queryFn: () => services.repositories.submissions.listOwn({ limit: 20 }),
     enabled: session.isAuthenticated,
   });
+  const membership = useQuery({
+    queryKey: ["collector-workspace", "subscription", "list"],
+    queryFn: () => services.repositories.collectorWorkspace.getSubscription(),
+    enabled: session.isAuthenticated,
+    retry: false,
+  });
   const detail = useQuery({
     queryKey: ["submissions", draft?.id],
     queryFn: () => services.repositories.submissions.getOwn(draft!.id),
@@ -372,6 +378,19 @@ export function SubmissionPage() {
             <p>
               Slice reviews every submission before valuation, custody, or marketplace eligibility.
             </p>
+            {membership.data?.current ? (
+              <div className="list-membership-context">
+                <strong>{membership.data.current.displayName}</strong>
+                <span>
+                  {membership.data.usage.activeCollectibles} /{" "}
+                  {membership.data.usage.maxActiveCollectibles ?? "No limit"} active collectible
+                  slots used
+                </span>
+                <Link to="/collector-workspace" search={{}}>
+                  Manage plan <ChevronRight aria-hidden="true" />
+                </Link>
+              </div>
+            ) : null}
           </div>
           <Link
             to="/submissions/$id"
