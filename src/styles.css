@@ -23444,6 +23444,12 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   grid-template-columns: minmax(0, 1.68fr) minmax(17rem, 0.92fr);
   align-items: start;
 }
+.portfolio-workspace-grid__main {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+  align-content: start;
+}
 .portfolio-workspace-grid__side {
   display: grid;
   min-width: 0;
@@ -23561,23 +23567,23 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 }
 .portfolio-holding-filters button.is-active { border-color: rgba(35, 217, 180, 0.42); background: rgba(18, 180, 144, 0.15); color: #30deb4; }
 .portfolio-page--approved .portfolio-table-wrap { min-width: 0; overflow-x: auto; }
-.portfolio-page--approved .portfolio-table { min-width: 47rem; font-size: 0.64rem; table-layout: fixed; }
+.portfolio-page--approved .portfolio-table { min-width: 0; font-size: 0.64rem; table-layout: fixed; }
 .portfolio-page--approved .portfolio-table th { padding: 0.35rem 0.18rem 0.55rem; font-size: 0.51rem; }
 .portfolio-page--approved .portfolio-table td { padding: 0.6rem 0.18rem; vertical-align: middle; }
 .portfolio-page--approved .portfolio-table th:first-child,
-.portfolio-page--approved .portfolio-table td:first-child { width: 28%; min-width: 0; }
-.portfolio-page--approved .portfolio-table th:nth-child(2), .portfolio-page--approved .portfolio-table td:nth-child(2) { width: 12%; }
-.portfolio-page--approved .portfolio-table th:nth-child(3), .portfolio-page--approved .portfolio-table td:nth-child(3) { width: 11%; }
+.portfolio-page--approved .portfolio-table td:first-child { width: 38%; min-width: 0; }
+.portfolio-page--approved .portfolio-table th:nth-child(2), .portfolio-page--approved .portfolio-table td:nth-child(2) { width: 10%; }
+.portfolio-page--approved .portfolio-table th:nth-child(3), .portfolio-page--approved .portfolio-table td:nth-child(3) { width: 10%; }
 .portfolio-page--approved .portfolio-table th:nth-child(4), .portfolio-page--approved .portfolio-table td:nth-child(4) { width: 12%; }
-.portfolio-page--approved .portfolio-table th:nth-child(5), .portfolio-page--approved .portfolio-table td:nth-child(5) { width: 10%; }
-.portfolio-page--approved .portfolio-table th:nth-child(6), .portfolio-page--approved .portfolio-table td:nth-child(6) { width: 13%; }
-.portfolio-page--approved .portfolio-table th:nth-child(7), .portfolio-page--approved .portfolio-table td:nth-child(7) { width: 14%; }
+.portfolio-page--approved .portfolio-table th:nth-child(5), .portfolio-page--approved .portfolio-table td:nth-child(5) { width: 9%; }
+.portfolio-page--approved .portfolio-table th:nth-child(6), .portfolio-page--approved .portfolio-table td:nth-child(6) { width: 11%; }
+.portfolio-page--approved .portfolio-table th:nth-child(7), .portfolio-page--approved .portfolio-table td:nth-child(7) { width: 10%; }
 .portfolio-page--approved .portfolio-table--holdings td:nth-child(n + 2), .portfolio-page--approved .portfolio-table--holdings th:nth-child(n + 2) { text-align: right; }
 .portfolio-page--approved .portfolio-asset { min-width: 0; gap: 0.52rem; }
 .portfolio-page--approved .portfolio-asset__icon { flex: 0 0 2.35rem; width: 2.35rem; height: 2.7rem; border-radius: 0.36rem; }
 .portfolio-page--approved .portfolio-asset__icon img { object-fit: contain; }
 .portfolio-page--approved .portfolio-asset__copy { width: auto; flex: 1 1 auto; min-width: 0; }
-.portfolio-page--approved .portfolio-asset__copy strong { font-size: 0.62rem; }
+.portfolio-page--approved .portfolio-asset__copy strong { display: -webkit-box; overflow: hidden; font-size: 0.62rem; line-height: 1.25; text-overflow: ellipsis; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .portfolio-page--approved .portfolio-asset__copy small { font-size: 0.53rem; }
 .portfolio-page--approved .portfolio-table--holdings .portfolio-asset {
   display: flex;
@@ -23603,7 +23609,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .portfolio-table__action--disabled { color: #7f8c98; }
 .portfolio-panel--current-performance,
 .portfolio-panel--breakdown,
-.portfolio-panel--open-orders { min-height: 10.6rem; }
+.portfolio-panel--open-orders { min-height: 0; }
 .portfolio-performance-snapshot { grid-template-columns: 1fr; gap: 0; }
 .portfolio-performance-snapshot > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-width: 0 0 1px; border-radius: 0; padding: 0.54rem 0; background: transparent; }
 .portfolio-performance-snapshot > div:last-child { border-bottom: 0; }

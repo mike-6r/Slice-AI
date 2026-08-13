@@ -106,23 +106,20 @@ export function Portfolio() {
       <div className="page-shell portfolio-shell">
         <PortfolioHeading query={summary} />
         <PortfolioKpis query={summary} />
-        <section
-          className="portfolio-overview-grid"
-          aria-label="Portfolio performance and allocation"
-        >
-          <PortfolioPerformancePanel query={summary} />
-          <AllocationPanel query={summary} />
-        </section>
         <section className="portfolio-workspace-grid" aria-label="Portfolio holdings workspace">
-          <HoldingsPanel
-            summary={summary}
-            query={holdings}
-            categories={categories}
-            filter={holdingFilter}
-            onFilterChange={setHoldingFilter}
-            visibleHoldings={visibleHoldings}
-          />
+          <div className="portfolio-workspace-grid__main">
+            <PortfolioPerformancePanel query={summary} />
+            <HoldingsPanel
+              summary={summary}
+              query={holdings}
+              categories={categories}
+              filter={holdingFilter}
+              onFilterChange={setHoldingFilter}
+              visibleHoldings={visibleHoldings}
+            />
+          </div>
           <aside className="portfolio-workspace-grid__side" aria-label="Portfolio account summary">
+            <AllocationPanel query={summary} />
             <CurrentPerformancePanel query={summary} />
             <PortfolioBreakdownPanel query={summary} />
             <OpenOrdersPanel summary={summary} query={orders} />
@@ -631,7 +628,7 @@ function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
         {media ? <img src={media.src} alt="" /> : <Landmark />}
       </span>
       <span className="portfolio-asset__copy">
-        <strong>{holdingDisplayLabel(holding)}</strong>
+        <strong title={holdingDisplayLabel(holding)}>{holdingDisplayLabel(holding)}</strong>
         <small>
           {[holding.category, holding.grade].filter(Boolean).join(" · ") || "Collectible"}
         </small>
