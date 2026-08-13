@@ -4,9 +4,10 @@ import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { ConfigModule } from '../../config/config.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessControlModule],
+  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

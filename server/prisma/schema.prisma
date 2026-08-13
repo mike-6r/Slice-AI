@@ -403,6 +403,15 @@ enum SubmissionMediaStatus {
   DELETED
 }
 
+enum RawCardPreGradeStatus {
+  IN_PROGRESS
+  SUCCEEDED
+  FAILED
+  TEMPORARILY_UNAVAILABLE
+  NOT_CONFIGURED
+  STALE
+}
+
 enum VerificationReviewStatus {
   CLAIMED
   COMPLETED
@@ -1055,10 +1064,48 @@ model AssetSubmission {
   reviews           VerificationReview[]
   marketResearch    SubmissionMarketResearch[]
   intake            SubmissionIntake?
+  preGrades         RawCardPreGrade[]
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
+}
+
+/// Provider-backed AI evidence for a raw card. This is supporting evidence
+/// only: it never changes the submission's grade, valuation, or readiness.
+model RawCardPreGrade {
+  id                String                @id @default(cuid())
+  submissionId      String
+  requestedByUserId String
+  provider          String
+  providerRequestId String?
+  status            RawCardPreGradeStatus @default(IN_PROGRESS)
+  overallEstimate   Float?
+  overallMin        Float?
+  overallMax        Float?
+  frontDetected     Boolean?
+  backDetected      Boolean?
+  centeringScore    Float?
+  cornerScore       Float?
+  edgeScore         Float?
+  surfaceScore      Float?
+  conditionLabel    String?
+  autographDetected Boolean?
+  categoryDetected  String?
+  warnings          Json?
+  analysisFingerprint String
+  analyzedAt        DateTime?
+  providerVersion   String?
+  errorCode         String?
+  rawResponse       Json?
+  supersededAt      DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  submission        AssetSubmission       @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+
+  @@unique([submissionId, analysisFingerprint])
+  @@index([submissionId, createdAt])
+  @@index([status, updatedAt])
 }
 
 /// External collectible-market reference data captured for a D10 submission.

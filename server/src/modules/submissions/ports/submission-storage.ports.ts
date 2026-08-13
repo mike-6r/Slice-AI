@@ -27,6 +27,8 @@ export interface ObjectStoragePort {
     expiresAt: Date;
   }): Promise<UploadIntent>;
   head(objectKey: string): Promise<StoredObject | null>;
+  /** Reads an already-authorized private object for server-to-server analysis. */
+  read(objectKey: string): Promise<Buffer | null>;
   delete(objectKey: string): Promise<void>;
 }
 

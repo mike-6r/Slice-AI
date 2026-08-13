@@ -27,6 +27,7 @@ import { SubmissionService } from '../application/submission.service';
 import { CollectibleMarketResearchService } from '../../market-research/market-research.service';
 import { LocalSubmissionStorage } from '../infrastructure/local-submission-storage';
 import { MAX_MEDIA_BYTES } from '../domain/submission.policy';
+import { RawCardPreGradeService } from '../application/raw-card-pregrade.service';
 
 const id = z.string().min(1).max(128);
 const metadata = z.record(z.unknown()).nullable().optional();
@@ -127,6 +128,7 @@ export class SubmissionController {
     private readonly limiter: ControlRateLimitService,
     private readonly localStorage: LocalSubmissionStorage,
     private readonly research: CollectibleMarketResearchService,
+    private readonly preGrade: RawCardPreGradeService,
   ) {}
 
   /** Staging-only upload capability endpoint. The opaque one-use token is the
@@ -189,6 +191,23 @@ export class SubmissionController {
   @UseGuards(AccessTokenGuard)
   get(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
     return this.submissions.getOwned(req.actor!, submissionId);
+  }
+  @Get('submissions/:id/pre-grade')
+  @UseGuards(AccessTokenGuard)
+  preGradeResult(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+    return this.preGrade.getOwned(req.actor!, submissionId);
+  }
+  @Post('submissions/:id/pre-grade')
+  @UseGuards(AccessTokenGuard)
+  async runPreGrade(
+    @Param('id') submissionId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!key || !/^[\x21-\x7e]{1,128}$/.test(key))
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
+    await this.limiter.enforce('pregrade', req.ip ?? 'unknown', req.actor!.userId);
+    return this.preGrade.analyze(req.actor!, submissionId, req.requestId ?? 'unknown');
   }
   @Patch('submissions/:id')
   @UseGuards(AccessTokenGuard)

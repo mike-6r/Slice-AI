@@ -560,6 +560,38 @@ function Overview({
             {Object.entries(detail.condition?.fields ?? {}).map(([key, value]) => fact(key, value))}
           </dl>
         </section>
+        {detail.preGrade ? (
+          <section className="admin-panel-card">
+            <SectionTitle title="AI Pre-Grade · Ximilar" />
+            <p className="mt-3 text-2xl font-semibold">
+              {detail.preGrade.status === "SUCCEEDED"
+                ? (detail.preGrade.overallEstimate ?? "Not returned")
+                : detail.preGrade.status.replaceAll("_", " ")}
+            </p>
+            {detail.preGrade.conditionLabel ? (
+              <p className="mt-1 text-sm text-accent">{detail.preGrade.conditionLabel}</p>
+            ) : null}
+            <dl className="admin-review-mini-facts mt-3">
+              {[
+                ["Centering", detail.preGrade.centeringScore],
+                ["Corners", detail.preGrade.cornerScore],
+                ["Edges", detail.preGrade.edgeScore],
+                ["Surface", detail.preGrade.surfaceScore],
+              ].map(([label, value]) =>
+                fact(String(label), value == null ? "Not returned" : String(value)),
+              )}
+            </dl>
+            <p className="mt-3 text-xs text-subtle">
+              Preliminary AI evidence only. It is not an official grading certification, Slice
+              verification, or an automatic valuation/condition decision.
+            </p>
+            {detail.preGrade.analyzedAt ? (
+              <p className="mt-2 text-xs text-subtle">
+                Analyzed {formatDate(detail.preGrade.analyzedAt)}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
         <section className="admin-panel-card">
           <SectionTitle title="Notable details" />
           {detail.notableDetails?.length ? (

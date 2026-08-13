@@ -17,6 +17,7 @@ import type {
 @Injectable()
 export class LocalSubmissionStorage implements ObjectStoragePort {
   private readonly objects = new Map<string, StoredObject>();
+  private readonly bytes = new Map<string, Buffer>();
   private readonly uploadTokens = new Map<
     string,
     {
@@ -67,6 +68,7 @@ export class LocalSubmissionStorage implements ObjectStoragePort {
       width: inspection.width,
       height: inspection.height,
     });
+    this.bytes.set(intent.objectKey, Buffer.from(body));
   }
 
   async head(objectKey: string) {
@@ -74,9 +76,16 @@ export class LocalSubmissionStorage implements ObjectStoragePort {
     return this.objects.get(objectKey) ?? null;
   }
 
+  async read(objectKey: string) {
+    this.assertAvailable();
+    const bytes = this.bytes.get(objectKey);
+    return bytes ? Buffer.from(bytes) : null;
+  }
+
   async delete(objectKey: string) {
     this.assertAvailable();
     this.objects.delete(objectKey);
+    this.bytes.delete(objectKey);
   }
 
   /** Test-only seam: production code has no local object upload route. */

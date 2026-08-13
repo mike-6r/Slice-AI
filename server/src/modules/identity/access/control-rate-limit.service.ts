@@ -20,6 +20,9 @@ const policies = {
   // autosave and evidence steps.
   submissionMutation: { limit: 240, ttlSeconds: 3600 },
   marketResearch: { limit: 12, ttlSeconds: 3600 },
+  // Provider inference consumes paid credits; keep the explicit customer
+  // action bounded independently of normal submission autosaves.
+  pregrade: { limit: 5, ttlSeconds: 3600 },
   referenceImport: { limit: 30, ttlSeconds: 3600 },
   assetLifecycleMutation: { limit: 60, ttlSeconds: 3600 },
   tradingMutation: { limit: 120, ttlSeconds: 3600 },

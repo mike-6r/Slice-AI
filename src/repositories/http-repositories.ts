@@ -53,6 +53,8 @@ import type {
   SaleProposalPage,
   SubmissionCategory,
   SubmissionDetail,
+  RawCardPreGrade,
+  RawCardPreGradeResponse,
   SubmissionMedia,
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
@@ -672,6 +674,64 @@ const mapSubmissionDetail = (raw: unknown): SubmissionDetail => {
     ...mapSubmission(value),
     media: value.media.map(mapSubmissionMedia),
     marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
+    preGrade: value.preGrade ? mapRawCardPreGrade(value.preGrade) : null,
+  };
+};
+const mapRawCardPreGrade = (raw: unknown): RawCardPreGrade => {
+  const value = objectField(raw, "raw card pre-grade");
+  const status = stringField(value.status, "pre-grade.status");
+  if (
+    ![
+      "IN_PROGRESS",
+      "SUCCEEDED",
+      "FAILED",
+      "TEMPORARILY_UNAVAILABLE",
+      "NOT_CONFIGURED",
+      "STALE",
+    ].includes(status)
+  )
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid raw card pre-grade status from service.");
+  const number = (field: unknown) =>
+    typeof field === "number" && Number.isFinite(field) ? field : null;
+  return {
+    id: stringField(value.id, "pre-grade.id"),
+    submissionId: stringField(value.submissionId, "pre-grade.submissionId"),
+    provider: stringField(value.provider, "pre-grade.provider"),
+    status: status as RawCardPreGrade["status"],
+    providerRequestId: nullableString(value.providerRequestId, "pre-grade.providerRequestId"),
+    overallEstimate: number(value.overallEstimate),
+    overallMin: number(value.overallMin),
+    overallMax: number(value.overallMax),
+    frontDetected: typeof value.frontDetected === "boolean" ? value.frontDetected : null,
+    backDetected: typeof value.backDetected === "boolean" ? value.backDetected : null,
+    centeringScore: number(value.centeringScore),
+    cornerScore: number(value.cornerScore),
+    edgeScore: number(value.edgeScore),
+    surfaceScore: number(value.surfaceScore),
+    conditionLabel: nullableString(value.conditionLabel, "pre-grade.conditionLabel"),
+    autographDetected:
+      typeof value.autographDetected === "boolean" ? value.autographDetected : null,
+    categoryDetected: nullableString(value.categoryDetected, "pre-grade.categoryDetected"),
+    warnings: Array.isArray(value.warnings)
+      ? value.warnings.filter((item): item is string => typeof item === "string")
+      : [],
+    analysisFingerprint: stringField(value.analysisFingerprint, "pre-grade.analysisFingerprint"),
+    analyzedAt: nullableString(value.analyzedAt, "pre-grade.analyzedAt") as ISODateTime | null,
+    providerVersion: nullableString(value.providerVersion, "pre-grade.providerVersion"),
+    errorCode: nullableString(value.errorCode, "pre-grade.errorCode"),
+    supersededAt: nullableString(
+      value.supersededAt,
+      "pre-grade.supersededAt",
+    ) as ISODateTime | null,
+    createdAt: stringField(value.createdAt, "pre-grade.createdAt") as ISODateTime,
+    updatedAt: stringField(value.updatedAt, "pre-grade.updatedAt") as ISODateTime,
+  };
+};
+const mapRawCardPreGradeResponse = (raw: unknown): RawCardPreGradeResponse => {
+  const value = objectField(raw, "raw card pre-grade response");
+  return {
+    current: value.current ? mapRawCardPreGrade(value.current) : null,
+    history: Array.isArray(value.history) ? value.history.map(mapRawCardPreGrade) : [],
   };
 };
 const mapMarketResearch = (raw: unknown): MarketResearchSnapshot => {
@@ -882,6 +942,7 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       };
     }),
     marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
+    preGrade: value.preGrade ? mapRawCardPreGrade(value.preGrade) : null,
     collectorSummary:
       value.collectorSummary && typeof value.collectorSummary === "object"
         ? (objectField(value.collectorSummary, "collector summary") as never)
@@ -2552,6 +2613,18 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
         );
+      },
+      async getPreGrade(id) {
+        return mapRawCardPreGradeResponse(
+          await client.get<unknown>(`/submissions/${id}/pre-grade`),
+        );
+      },
+      async runPreGrade(id) {
+        const response = await client.request<unknown>(`/submissions/${id}/pre-grade`, {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey() },
+        });
+        return mapRawCardPreGrade(response);
       },
     },
     reviews: {

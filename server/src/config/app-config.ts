@@ -76,6 +76,11 @@ const configSchema = z.object({
     .min(100)
     .max(30_000)
     .default(10_000),
+  XIMILAR_API_TOKEN: z.string().min(1).optional(),
+  XIMILAR_ENABLED: z.enum(['true', 'false']).default('false'),
+  XIMILAR_CARD_GRADING_ENABLED: z.enum(['true', 'false']).default('false'),
+  XIMILAR_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(45_000),
+  XIMILAR_MAX_RETRIES: z.coerce.number().int().min(0).max(4).default(2),
   DISCORD_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   DISCORD_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
   DISCORD_OAUTH_REDIRECT_URI: z.string().url().optional(),
@@ -300,6 +305,11 @@ export type AppConfig = {
   plaidEnvironment: 'sandbox' | 'production';
   plaidIdentityVerificationTemplateId?: string;
   plaidRequestTimeoutMs: number;
+  ximilarApiToken?: string;
+  ximilarEnabled?: boolean;
+  ximilarCardGradingEnabled?: boolean;
+  ximilarTimeoutMs?: number;
+  ximilarMaxRetries?: number;
   discordOauthClientId?: string;
   discordOauthClientSecret?: string;
   discordOauthRedirectUri?: string;
@@ -688,6 +698,11 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     plaidEnvironment: parsed.PLAID_ENV,
     plaidIdentityVerificationTemplateId: parsed.PLAID_IDV_TEMPLATE_ID,
     plaidRequestTimeoutMs: parsed.PLAID_REQUEST_TIMEOUT_MS,
+    ximilarApiToken: parsed.XIMILAR_API_TOKEN,
+    ximilarEnabled: parsed.XIMILAR_ENABLED === 'true',
+    ximilarCardGradingEnabled: parsed.XIMILAR_CARD_GRADING_ENABLED === 'true',
+    ximilarTimeoutMs: parsed.XIMILAR_TIMEOUT_MS,
+    ximilarMaxRetries: parsed.XIMILAR_MAX_RETRIES,
     discordOauthClientId: parsed.DISCORD_OAUTH_CLIENT_ID,
     discordOauthClientSecret: parsed.DISCORD_OAUTH_CLIENT_SECRET,
     discordOauthRedirectUri: parsed.DISCORD_OAUTH_REDIRECT_URI,

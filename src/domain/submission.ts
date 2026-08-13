@@ -30,6 +30,43 @@ export interface SubmissionMedia {
 export interface SubmissionDetail extends AssetSubmission {
   media: SubmissionMedia[];
   marketResearch: MarketResearchSnapshot | null;
+  preGrade?: RawCardPreGrade | null;
+}
+
+export type RawCardPreGradeStatus =
+  "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "TEMPORARILY_UNAVAILABLE" | "NOT_CONFIGURED" | "STALE";
+
+export interface RawCardPreGrade {
+  id: string;
+  submissionId: string;
+  provider: string;
+  status: RawCardPreGradeStatus;
+  providerRequestId: string | null;
+  overallEstimate: number | null;
+  overallMin: number | null;
+  overallMax: number | null;
+  frontDetected: boolean | null;
+  backDetected: boolean | null;
+  centeringScore: number | null;
+  cornerScore: number | null;
+  edgeScore: number | null;
+  surfaceScore: number | null;
+  conditionLabel: string | null;
+  autographDetected: boolean | null;
+  categoryDetected: string | null;
+  warnings: string[];
+  analysisFingerprint: string;
+  analyzedAt: ISODateTime | null;
+  providerVersion: string | null;
+  errorCode: string | null;
+  supersededAt: ISODateTime | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface RawCardPreGradeResponse {
+  current: RawCardPreGrade | null;
+  history: RawCardPreGrade[];
 }
 
 export interface MarketResearchSnapshot {
@@ -166,6 +203,7 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     completedAt: ISODateTime | null;
   }>;
   marketResearch: MarketResearchSnapshot | null;
+  preGrade?: RawCardPreGrade | null;
   collectorSummary?: {
     userId: string;
     displayName: string;
@@ -227,7 +265,12 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     current: string | null;
     history: Array<{ id: string; author: string; note: string; createdAt: ISODateTime }>;
   };
-  relatedItems?: Array<{ id: string; status: string; title: string; submittedAt: ISODateTime | null }>;
+  relatedItems?: Array<{
+    id: string;
+    status: string;
+    title: string;
+    submittedAt: ISODateTime | null;
+  }>;
 }
 
 export interface AssetOperationSummary {

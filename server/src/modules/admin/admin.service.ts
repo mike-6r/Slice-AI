@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
@@ -11,6 +12,7 @@ import { AuthorizationService } from '../identity/access/authorization.service';
 import {
   collectorUsageForMany,
 } from '../collector-workspace/collector-entitlements';
+import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 
 type AdminAttention = {
   id: string;
@@ -139,6 +141,7 @@ export class AdminService {
   constructor(
     private readonly db: PrismaService,
     private readonly authorization: AuthorizationService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async overview(actor: Actor) {
@@ -207,6 +210,7 @@ export class AdminService {
       incidents,
       notificationFailures,
       marketSnapshots,
+      preGradeRuns,
     ] = await Promise.all([
       this.db.moneyMovement.findMany({
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -279,6 +283,7 @@ export class AdminService {
         where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
       }),
       this.db.assetMarketSnapshot.count(),
+      this.db.rawCardPreGrade.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { status: true, updatedAt: true } }),
     ]);
     const incidentCounts = new Map<string, number>();
     for (const incident of incidents)
@@ -419,6 +424,19 @@ export class AdminService {
         createdAt: entry.createdAt.toISOString(),
       })),
       integrations: [
+        {
+          name: 'Ximilar',
+          configured: Boolean(this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken),
+          failedEvents: preGradeRuns.filter((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status)).length,
+          summary: this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken
+            ? `Raw card AI Pre-Grade is configured${preGradeRuns[0] ? ` · last ${preGradeRuns[0].status.toLowerCase().replaceAll('_', ' ')}` : ''}.`
+            : 'Optional raw card AI Pre-Grade is not configured.',
+          status: preGradeRuns.some((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status))
+            ? ('Degraded' as const)
+            : this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken
+              ? ('Operational' as const)
+              : ('Unavailable' as const),
+        },
         integration(
           'Plaid',
           false,

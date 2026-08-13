@@ -7,7 +7,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, RawCardPreGradeStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
@@ -23,6 +23,7 @@ import {
 import { Inject } from '@nestjs/common';
 import { marketResearchIdentityHash } from '../../market-research/market-research.service';
 import { collectorUsageFor } from '../../collector-workspace/collector-entitlements';
+import { preGradeProjection } from './raw-card-pregrade.service';
 import {
   assertEditableStatus,
   assertExpectedVersion,
@@ -973,6 +974,7 @@ export class SubmissionService {
       where: { id },
       include: {
         media: { orderBy: { slot: 'asc' } },
+        preGrades: { orderBy: { createdAt: 'desc' }, take: 20 },
         reviews: { orderBy: { createdAt: 'asc' } },
         marketResearch: {
           orderBy: { collectedAt: 'desc' },
@@ -1837,6 +1839,35 @@ type ReviewDetailRow = {
     completedAt: Date | null;
   }>;
   marketResearch: ResearchRow[];
+  preGrades: Array<{
+    id: string;
+    submissionId: string;
+    requestedByUserId: string;
+    provider: string;
+    status: RawCardPreGradeStatus;
+    providerRequestId: string | null;
+    overallEstimate: number | null;
+    overallMin: number | null;
+    overallMax: number | null;
+    frontDetected: boolean | null;
+    backDetected: boolean | null;
+    centeringScore: number | null;
+    cornerScore: number | null;
+    edgeScore: number | null;
+    surfaceScore: number | null;
+    conditionLabel: string | null;
+    autographDetected: boolean | null;
+    categoryDetected: string | null;
+    warnings: Prisma.JsonValue | null;
+    analysisFingerprint: string;
+    analyzedAt: Date | null;
+    providerVersion: string | null;
+    errorCode: string | null;
+    rawResponse: Prisma.JsonValue | null;
+    supersededAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
 };
 function reviewDetailProjection(submission: ReviewDetailRow) {
   return {
@@ -1846,6 +1877,9 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
     media: submission.media.map(mediaProjection),
     marketResearch: submission.marketResearch[0]
       ? marketResearchProjection(submission.marketResearch[0])
+      : null,
+    preGrade: submission.preGrades.find((item) => !item.supersededAt)
+      ? preGradeProjection(submission.preGrades.find((item) => !item.supersededAt)!)
       : null,
     reviews: submission.reviews.map((review) => ({
       id: review.id,

@@ -26,6 +26,7 @@ import type {
   MarketResearchSnapshot,
   SubmissionDetail,
   SubmissionMedia,
+  RawCardPreGrade,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -132,6 +133,12 @@ export function SubmissionPage() {
     queryKey: ["submissions", draft?.id],
     queryFn: () => services.repositories.submissions.getOwn(draft!.id),
     enabled: Boolean(draft?.id),
+  });
+  const preGrade = useQuery({
+    queryKey: ["submissions", draft?.id, "pre-grade"],
+    queryFn: () => services.repositories.submissions.getPreGrade(draft!.id),
+    enabled: Boolean(draft?.id),
+    retry: false,
   });
 
   const validIdentity = Boolean(form.categoryId && form.name.trim());
@@ -261,7 +268,22 @@ export function SubmissionPage() {
     onSuccess: async () => {
       setNotice("Photo removed from this draft.");
       await detail.refetch();
+      await preGrade.refetch();
     },
+  });
+  const runPreGrade = useMutation({
+    mutationFn: () => {
+      if (!detail.data) throw new Error("Your draft is still loading.");
+      return services.repositories.submissions.runPreGrade(detail.data.id);
+    },
+    retry: false,
+    onSuccess: async (result) => {
+      setNotice(
+        result?.status === "SUCCEEDED" ? "Slice Pre-Grade ready." : "Condition analysis updated.",
+      );
+      await preGrade.refetch();
+    },
+    onError: (error) => setLocalError(friendlyError(error)),
   });
   const submit = useMutation({
     mutationFn: () => {
@@ -397,7 +419,8 @@ export function SubmissionPage() {
     checkMarket.error ??
     media.error ??
     removeMedia.error ??
-    submit.error;
+    submit.error ??
+    runPreGrade.error;
 
   if (submitted) {
     return <SubmissionReceived submission={submission} />;
@@ -480,6 +503,9 @@ export function SubmissionPage() {
           {step === 4 ? (
             <PhotosStep
               submission={submission}
+              preGrade={preGrade.data?.current ?? null}
+              preGradePending={runPreGrade.isPending}
+              onAnalyze={() => runPreGrade.mutate()}
               previews={previews}
               graded={Boolean(form.grader && form.grader !== "Ungraded")}
               uploadPending={media.isPending}
@@ -494,6 +520,7 @@ export function SubmissionPage() {
               category={selectedCategory?.name ?? "Not selected"}
               research={marketResearch ?? submission?.marketResearch ?? null}
               submission={submission}
+              preGrade={preGrade.data?.current ?? null}
               evidenceReady={evidenceReady}
               onEdit={setStep}
             />
@@ -761,7 +788,7 @@ function DetailsStep({
   form: ListingForm;
   onChange: <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => void;
 }) {
-  const isUngraded = form.grader === "Ungraded";
+  const isUngraded = !form.grader || form.grader === "Ungraded";
   return (
     <div className="list-step">
       <p className="page-kicker">Step 2</p>
@@ -972,6 +999,9 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
 
 function PhotosStep({
   submission,
+  preGrade,
+  preGradePending,
+  onAnalyze,
   previews,
   graded,
   uploadPending,
@@ -980,6 +1010,9 @@ function PhotosStep({
   onRemove,
 }: {
   submission?: SubmissionDetail;
+  preGrade: RawCardPreGrade | null;
+  preGradePending: boolean;
+  onAnalyze: () => void;
   previews: Record<string, string>;
   graded: boolean;
   uploadPending: boolean;
@@ -1027,6 +1060,14 @@ function PhotosStep({
           />
         ))}
       </div>
+      {!graded ? (
+        <RawPreGradePanel
+          submission={submission}
+          preGrade={preGrade}
+          pending={preGradePending}
+          onAnalyze={onAnalyze}
+        />
+      ) : null}
       {graded ? (
         <p className="list-step-hint">
           For graded cards, make sure the grading label and certification number are readable.
@@ -1159,11 +1200,123 @@ function PhotoCard({
   );
 }
 
+function RawPreGradePanel({
+  submission,
+  preGrade,
+  pending,
+  onAnalyze,
+}: {
+  submission?: SubmissionDetail;
+  preGrade: RawCardPreGrade | null;
+  pending: boolean;
+  onAnalyze: () => void;
+}) {
+  const ready = REQUIRED_SLOTS.every((slot) => activeMedia(submission, slot)?.status === "SAFE");
+  return (
+    <section className="list-pregrade" aria-labelledby="pregrade-title">
+      <div className="list-pregrade__header">
+        <div>
+          <p className="page-kicker">Optional · raw cards</p>
+          <h3 id="pregrade-title">AI condition check</h3>
+          <p>Want an estimate of your card&apos;s condition before submitting it?</p>
+        </div>
+        <span className="list-pregrade__badge">Recommended</span>
+      </div>
+      <p className="list-pregrade__guidance">
+        For best results, photograph the card outside a sleeve, with the whole card in bright even
+        light. Keep the camera straight above it and use the original high-resolution photo (a
+        shorter side of about 2,000 px or more is ideal).
+      </p>
+      {preGrade?.status === "SUCCEEDED" ? (
+        <div className="list-pregrade__result">
+          <div className="list-pregrade__estimate">
+            <span>Slice Pre-Grade</span>
+            <strong>{preGrade.overallEstimate ?? "—"}</strong>
+            {preGrade.conditionLabel ? <small>{preGrade.conditionLabel}</small> : null}
+          </div>
+          <dl>
+            {[
+              ["Centering", preGrade.centeringScore],
+              ["Corners", preGrade.cornerScore],
+              ["Edges", preGrade.edgeScore],
+              ["Surface", preGrade.surfaceScore],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <dt>{label}</dt>
+                <dd>{value ?? "Not returned"}</dd>
+              </div>
+            ))}
+          </dl>
+          <p>
+            Based on the photos you provided. This is an AI condition estimate, not an official
+            third-party grade.
+          </p>
+          <details>
+            <summary>What does this mean?</summary>
+            <p>
+              The estimate looks at visible characteristics such as centering, corners, edges and
+              surface condition. Physical inspection may produce a different result.
+            </p>
+          </details>
+          {preGrade.warnings.length ? (
+            <ul>
+              {preGrade.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : preGrade?.status === "TEMPORARILY_UNAVAILABLE" ? (
+        <p className="list-pregrade__message">
+          Condition analysis is temporarily unavailable. You can continue your submission or try
+          again later.
+        </p>
+      ) : preGrade?.status === "NOT_CONFIGURED" ? (
+        <p className="list-pregrade__message">
+          AI condition analysis is not currently configured. You can continue your submission
+          without it.
+        </p>
+      ) : preGrade?.status === "FAILED" ? (
+        <p className="list-pregrade__message">
+          We couldn&apos;t confidently analyze these photos. You can retake a photo or continue
+          without the optional Pre-Grade.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="button-secondary"
+        disabled={
+          !ready || pending || preGrade?.status === "SUCCEEDED" || preGrade?.status === "FAILED"
+        }
+        onClick={onAnalyze}
+      >
+        {pending
+          ? "Analyzing your card…"
+          : preGrade?.status === "SUCCEEDED"
+            ? "Condition analyzed"
+            : preGrade?.status === "FAILED"
+              ? "Replace a photo to try again"
+              : "Analyze condition"}
+      </button>
+      {!ready ? (
+        <small className="list-step-hint">
+          Add safe front and back photos to enable the optional analysis.
+        </small>
+      ) : null}
+      <p className="list-pregrade__disclosure">
+        Slice uses image analysis to provide a preliminary condition estimate. It is not an official
+        grading certification and does not set valuation or your card&apos;s RAW market identity.
+      </p>
+    </section>
+  );
+}
+
 function ReviewStep({
   form,
   category,
   research,
   submission,
+  preGrade,
   evidenceReady,
   onEdit,
 }: {
@@ -1171,6 +1324,7 @@ function ReviewStep({
   category: string;
   research: MarketResearchSnapshot | null;
   submission?: SubmissionDetail;
+  preGrade: RawCardPreGrade | null;
   evidenceReady: boolean;
   onEdit: (step: number) => void;
 }) {
@@ -1199,6 +1353,20 @@ function ReviewStep({
             ],
           ]}
         />
+        {(!form.grader && !form.grade) || form.grader === "Ungraded" ? (
+          <ReviewBlock
+            title="Slice Pre-Grade"
+            edit={() => onEdit(4)}
+            rows={[
+              [
+                "Status",
+                preGrade?.status === "SUCCEEDED"
+                  ? `Estimated ${preGrade.overallEstimate ?? "—"}`
+                  : "AI Pre-Grade not requested",
+              ],
+            ]}
+          />
+        ) : null}
         <ReviewBlock
           title="Market check"
           edit={() => onEdit(3)}

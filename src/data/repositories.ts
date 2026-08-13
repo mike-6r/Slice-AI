@@ -36,6 +36,7 @@ import type {
   CollectibleReferenceImport,
   SubmissionCategory,
   SubmissionDetail,
+  RawCardPreGradeResponse,
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
@@ -98,6 +99,8 @@ export interface SubmissionRepository {
   removeMedia(id: string, mediaId: string, version: number): Promise<SubmissionDetail>;
   submit(id: string, version: number): Promise<SubmissionDetail>;
   cancel(id: string, version: number): Promise<SubmissionDetail>;
+  getPreGrade(id: string): Promise<RawCardPreGradeResponse>;
+  runPreGrade(id: string): Promise<RawCardPreGradeResponse["current"]>;
 }
 export interface SubmissionReviewRepository {
   listQueue(input?: {

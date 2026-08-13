@@ -24004,6 +24004,24 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .list-photo-guidance svg { width: 0.78rem; color: #2adba7; }
 .list-photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.35rem; }
 .list-photo-grid--optional { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.list-pregrade { margin-top: 1.35rem; padding: 1rem; border: 1px solid rgba(38, 212, 162, 0.28); border-radius: 0.8rem; background: linear-gradient(135deg, rgba(38, 212, 162, 0.08), rgba(11, 17, 22, 0.72)); }
+.list-pregrade__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.list-pregrade__header h3 { margin: 0.2rem 0 0; font-size: 1.05rem; }
+.list-pregrade__header p:not(.page-kicker) { margin: 0.3rem 0 0; color: #b8c9d0; font-size: 0.78rem; }
+.list-pregrade__badge { padding: 0.25rem 0.5rem; border: 1px solid rgba(38, 212, 162, 0.35); border-radius: 999px; color: #9ef0d5; font-size: 0.65rem; white-space: nowrap; }
+.list-pregrade__guidance, .list-pregrade__disclosure, .list-pregrade__message { margin: 0.85rem 0; color: #9aadb7; font-size: 0.72rem; line-height: 1.55; }
+.list-pregrade__result { display: grid; grid-template-columns: minmax(8rem, 0.7fr) minmax(0, 1.3fr); gap: 1rem; margin: 1rem 0; padding: 0.8rem; border: 1px solid rgba(151, 177, 188, 0.18); border-radius: 0.65rem; background: rgba(4, 9, 13, 0.48); }
+.list-pregrade__estimate { display: grid; align-content: center; gap: 0.15rem; }
+.list-pregrade__estimate span { color: #9aadb7; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.list-pregrade__estimate strong { color: #e9fbf5; font-size: 2rem; line-height: 1; }
+.list-pregrade__estimate small { color: #9ef0d5; font-size: 0.75rem; }
+.list-pregrade__result dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; margin: 0; }
+.list-pregrade__result dl div { padding: 0.45rem; border-radius: 0.45rem; background: rgba(151, 177, 188, 0.08); }
+.list-pregrade__result dt { color: #8fa0aa; font-size: 0.65rem; }
+.list-pregrade__result dd { margin: 0.15rem 0 0; color: #e9fbf5; font-size: 0.9rem; }
+.list-pregrade__result > p, .list-pregrade__result > details, .list-pregrade__result > ul { grid-column: 1 / -1; margin: 0; color: #9aadb7; font-size: 0.7rem; line-height: 1.45; }
+.list-pregrade__result details summary { color: #b8c9d0; cursor: pointer; }
+.list-pregrade__result ul { padding-left: 1rem; color: #f0c58a; }
 .list-photo-card { min-width: 0; overflow: hidden; border: 1px solid rgba(145, 171, 181, 0.18); border-radius: 0.75rem; background: rgba(7, 13, 17, 0.56); }
 .list-photo-card__preview { display: grid; min-height: 13rem; place-items: center; gap: 0.35rem; border-bottom: 1px solid rgba(145, 171, 181, 0.13); background: linear-gradient(145deg, rgba(21, 35, 39, 0.62), rgba(6, 11, 14, 0.7)); color: #9eafb8; font-size: 0.72rem; text-align: center; }
 .list-photo-card__preview img { width: 100%; height: 13rem; object-fit: contain; }
@@ -24078,6 +24096,9 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .list-market-result__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .list-photo-card__preview,
   .list-photo-card__preview img { min-height: 11rem; height: 11rem; }
+  .list-pregrade__header { display: block; }
+  .list-pregrade__badge { display: inline-block; margin-top: 0.65rem; }
+  .list-pregrade__result { grid-template-columns: 1fr; }
   .list-guided-actions { bottom: 0; margin-inline: -0.05rem; border-radius: 0.75rem 0.75rem 0 0; }
   .list-guided-save-status { display: none; }
   .list-guided-actions .button-secondary,
@@ -24753,6 +24774,9 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .collector-custody-card {
     grid-template-columns: 4.35rem minmax(12rem, 0.85fr) minmax(22rem, 1.45fr);
   }
+  .list-pregrade__header { display: block; }
+  .list-pregrade__badge { display: inline-block; margin-top: 0.65rem; }
+  .list-pregrade__result { grid-template-columns: 1fr; }
   .collector-custody-card .collector-advanced-card__actions {
     grid-column: 2 / -1;
     grid-template-columns: minmax(0, 1fr) auto;

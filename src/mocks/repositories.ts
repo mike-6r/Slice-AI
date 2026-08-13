@@ -410,6 +410,12 @@ export const mockRepositories: AppRepositories = {
     async cancel() {
       throw new Error("Submission review requires the API service.");
     },
+    async getPreGrade() {
+      return { current: null, history: [] };
+    },
+    async runPreGrade() {
+      throw new Error("AI Pre-Grade requires the API service.");
+    },
   },
   reviews: {
     async listQueue() {
