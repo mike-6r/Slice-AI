@@ -103,6 +103,34 @@ export const mockRepositories: AppRepositories = {
         webhooks: [],
       };
     },
+    async getPlatformDashboard() {
+      return {
+        generatedAt: now(),
+        overallHealth: "Unknown" as const,
+        kpis: { failedJobs: 0, webhookFailures: 0, degradedProviders: 0, pendingChanges: null },
+        systemHealth: [],
+        providers: [],
+        resources: [],
+        alerts: [],
+        recentActivity: [],
+        featureFlags: { available: false, message: "Platform telemetry requires the API service." },
+        settings: { available: false, message: "Platform settings require the API service." },
+      };
+    },
+    async listPlatformRecords(input) {
+      return {
+        tab: input?.tab ?? "jobs",
+        supported: false,
+        message: "Platform operations records require the API service.",
+        items: [],
+        pagination: {
+          page: input?.page ?? 1,
+          pageSize: input?.pageSize ?? 10,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    },
     async getComplianceCase() {
       throw new Error("Admin compliance requires the API service.");
     },

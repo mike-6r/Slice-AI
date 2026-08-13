@@ -473,6 +473,281 @@ export class AdminService {
     };
   }
 
+  async platformDashboard(actor: Actor) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const [risk, failedJobs, webhookFailures, degradedProviders, pendingJobs] = await Promise.all([
+      this.riskOperations(actor),
+      this.db.outboxEvent.count({ where: { status: { in: ['FAILED', 'DEAD_LETTER'] } } }),
+      this.db.webhookInbox.count({ where: { status: { in: ['FAILED', 'REJECTED'] } } }),
+      this.db.providerIncident.findMany({
+        where: { status: 'OPEN' },
+        select: { provider: true },
+        distinct: ['provider'],
+      }),
+      this.db.outboxEvent.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+    ]);
+    const degraded = risk.system.filter((item) => item.status === 'Degraded');
+    const unknown = risk.system.some((item) => item.status === 'Unknown');
+    const overallHealth = degraded.length ? 'Degraded' : unknown ? 'Unknown' : 'Healthy';
+    const alerts = degraded.map((item) => ({
+      id: `health-${item.name}`,
+      title: `${item.name} requires attention`,
+      detail: item.summary,
+      severity: 'warning',
+      occurredAt: item.lastCheckedAt,
+    }));
+    if (webhookFailures) {
+      alerts.push({
+        id: 'webhooks-failed',
+        title: 'Webhook delivery failures',
+        detail: `${webhookFailures} failed or rejected webhook events require review.`,
+        severity: 'warning',
+        occurredAt: new Date().toISOString(),
+      });
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      overallHealth,
+      kpis: {
+        failedJobs,
+        webhookFailures,
+        degradedProviders: degradedProviders.length,
+        // There is no feature-flag/change-approval authority in this environment.
+        pendingChanges: null,
+      },
+      systemHealth: risk.system,
+      providers: risk.integrations,
+      resources: [
+        {
+          label: 'Outbox queue',
+          value: String(pendingJobs),
+          status: pendingJobs ? 'Attention' : 'Clear',
+        },
+        {
+          label: 'Webhook inbox',
+          value: String(webhookFailures),
+          status: webhookFailures ? 'Attention' : 'Clear',
+        },
+      ],
+      alerts,
+      recentActivity: risk.audit.slice(0, 12),
+      featureFlags: {
+        available: false,
+        message: 'No authoritative feature-flag read is configured for this environment.',
+      },
+      settings: {
+        available: false,
+        message: 'Platform settings are managed outside the Admin read model.',
+      },
+    };
+  }
+
+  async platformRecords(
+    actor: Actor,
+    input: { tab: string; q?: string; status?: string; page: number; pageSize: number },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const q = input.q?.trim();
+    const page = input.page;
+    const pageSize = input.pageSize;
+    if (input.tab === 'feature-flags' || input.tab === 'settings' || input.tab === 'health') {
+      return {
+        tab: input.tab,
+        supported: false,
+        message:
+          input.tab === 'health'
+            ? 'Health is available in the dashboard view.'
+            : input.tab === 'feature-flags'
+              ? 'No authoritative feature-flag read is configured for this environment.'
+              : 'Platform settings are managed outside the Admin read model.',
+        items: [],
+        pagination: { page, pageSize, total: 0, totalPages: 0 },
+      };
+    }
+    if (input.tab === 'integrations') {
+      const dashboard = await this.platformDashboard(actor);
+      const items = dashboard.providers.filter((item) =>
+        q ? `${item.name} ${item.summary}`.toLowerCase().includes(q.toLowerCase()) : true,
+      );
+      const total = items.length;
+      return {
+        tab: input.tab,
+        supported: true,
+        message: null,
+        items: items.slice((page - 1) * pageSize, page * pageSize).map((item) => ({
+          id: item.name,
+          kind: 'integration' as const,
+          name: item.name,
+          status: item.status,
+          configured: item.configured,
+          summary: item.summary,
+          failedEvents: item.failedEvents,
+        })),
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      };
+    }
+    if (input.tab === 'jobs') {
+      const statuses = ['PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'DEAD_LETTER'];
+      const status = statuses.includes(input.status ?? '') ? input.status : undefined;
+      const where: Prisma.OutboxEventWhereInput = {
+        ...(status ? { status: status as Prisma.OutboxEventWhereInput['status'] } : {}),
+        ...(q
+          ? {
+              OR: [
+                { eventId: { contains: q, mode: 'insensitive' } },
+                { eventType: { contains: q, mode: 'insensitive' } },
+                { aggregateType: { contains: q, mode: 'insensitive' } },
+                { aggregateId: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.outboxEvent.findMany({
+          where,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            eventId: true,
+            eventType: true,
+            aggregateType: true,
+            aggregateId: true,
+            status: true,
+            attempts: true,
+            availableAt: true,
+            lastAttemptAt: true,
+            lastErrorSafe: true,
+            updatedAt: true,
+          },
+        }),
+        this.db.outboxEvent.count({ where }),
+      ]);
+      return {
+        tab: input.tab,
+        supported: true,
+        message: null,
+        items: rows.map((row) => ({
+          id: row.id,
+          kind: 'job' as const,
+          eventId: row.eventId,
+          eventType: row.eventType,
+          aggregate: `${row.aggregateType}:${row.aggregateId}`,
+          status: row.status,
+          attempts: row.attempts,
+          availableAt: row.availableAt.toISOString(),
+          lastAttemptAt: row.lastAttemptAt?.toISOString() ?? null,
+          error: row.lastErrorSafe,
+          updatedAt: row.updatedAt.toISOString(),
+        })),
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      };
+    }
+    if (input.tab === 'webhooks') {
+      const statuses = ['ACCEPTED', 'PROCESSING', 'PROCESSED', 'FAILED', 'REJECTED'];
+      const status = statuses.includes(input.status ?? '') ? input.status : undefined;
+      const where: Prisma.WebhookInboxWhereInput = {
+        ...(status ? { status: status as Prisma.WebhookInboxWhereInput['status'] } : {}),
+        ...(q
+          ? {
+              OR: [
+                { eventType: { contains: q, mode: 'insensitive' } },
+                { providerEventIdHash: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.webhookInbox.findMany({
+          where,
+          orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            provider: true,
+            providerEventIdHash: true,
+            eventType: true,
+            status: true,
+            attempts: true,
+            receivedAt: true,
+            processedAt: true,
+            errorCode: true,
+          },
+        }),
+        this.db.webhookInbox.count({ where }),
+      ]);
+      return {
+        tab: input.tab,
+        supported: true,
+        message: null,
+        items: rows.map((row) => ({
+          id: row.id,
+          kind: 'webhook' as const,
+          provider: row.provider,
+          eventId: row.providerEventIdHash.slice(0, 12),
+          eventType: row.eventType,
+          status: row.status,
+          attempts: row.attempts,
+          receivedAt: row.receivedAt.toISOString(),
+          processedAt: row.processedAt?.toISOString() ?? null,
+          error: row.errorCode,
+        })),
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      };
+    }
+    const where: Prisma.AuditEventWhereInput = q
+      ? {
+          OR: [
+            { action: { contains: q, mode: 'insensitive' } },
+            { resourceType: { contains: q, mode: 'insensitive' } },
+            { resourceId: { contains: q, mode: 'insensitive' } },
+            { actor: { profile: { displayName: { contains: q, mode: 'insensitive' } } } },
+            { actor: { profile: { publicUsername: { contains: q, mode: 'insensitive' } } } },
+          ],
+        }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.db.auditEvent.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          actorType: true,
+          action: true,
+          resourceType: true,
+          resourceId: true,
+          result: true,
+          createdAt: true,
+          actor: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
+      this.db.auditEvent.count({ where }),
+    ]);
+    return {
+      tab: 'audit',
+      supported: true,
+      message: null,
+      items: rows.map((row) => ({
+        id: row.id,
+        kind: 'audit' as const,
+        actor:
+          row.actor?.profile?.displayName ??
+          row.actor?.profile?.publicUsername ??
+          (row.actorType === 'SYSTEM' ? 'System' : 'Unknown actor'),
+        action: row.action,
+        resourceType: row.resourceType,
+        resourceId: row.resourceId,
+        result: row.result,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    };
+  }
+
   async complianceCaseDetail(actor: Actor, caseId: string) {
     await this.authorization.authorize(actor, 'compliance.read');
     const item = await this.db.complianceCase.findUnique({

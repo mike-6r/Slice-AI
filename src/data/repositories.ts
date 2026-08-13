@@ -392,6 +392,44 @@ export type AdminRiskOperations = {
   }>;
 };
 
+export type AdminPlatformDashboard = {
+  generatedAt: string;
+  overallHealth: "Healthy" | "Degraded" | "Unavailable" | "Unknown";
+  kpis: {
+    failedJobs: number;
+    webhookFailures: number;
+    degradedProviders: number;
+    pendingChanges: number | null;
+  };
+  systemHealth: AdminRiskOperations["system"];
+  providers: AdminRiskOperations["integrations"];
+  resources: Array<{ label: string; value: string; status: string }>;
+  alerts: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    severity: string;
+    occurredAt: string;
+  }>;
+  recentActivity: AdminRiskOperations["audit"];
+  featureFlags: { available: boolean; message: string };
+  settings: { available: boolean; message: string };
+};
+
+export type AdminPlatformRecord = {
+  id: string;
+  kind: "job" | "webhook" | "integration" | "audit";
+  [key: string]: unknown;
+};
+
+export type AdminPlatformRecordsResponse = {
+  tab: string;
+  supported: boolean;
+  message: string | null;
+  items: AdminPlatformRecord[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
 export type AdminFinanceSummary = {
   currency: "GBP";
   pendingMovements: number;
@@ -898,6 +936,14 @@ export type AdminCollectibleDetail = {
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
   getRiskOperations(): Promise<AdminRiskOperations>;
+  getPlatformDashboard(): Promise<AdminPlatformDashboard>;
+  listPlatformRecords(input?: {
+    tab?: string;
+    q?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminPlatformRecordsResponse>;
   getComplianceCase(id: string): Promise<AdminComplianceDetail>;
   getOperationsOverview(): Promise<AdminOperationsOverview>;
   listIntake(input?: {

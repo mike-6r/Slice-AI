@@ -11,6 +11,9 @@ import type {
   AdminIntegrationsSummary,
   AdminOverview,
   AdminOperationsOverview,
+  AdminPlatformDashboard,
+  AdminPlatformRecordsResponse,
+  AdminPlatformRecord,
   AdminIntakeRow,
   AdminMembershipDirectoryResponse,
   AdminMembershipRow,
@@ -1472,6 +1475,121 @@ const mapAdminRiskOperations = (raw: unknown): AdminRiskOperations => {
   };
 };
 
+const mapAdminPlatformDashboard = (raw: unknown): AdminPlatformDashboard => {
+  const value = objectField(raw, "admin platform dashboard");
+  const kpis = objectField(value.kpis, "admin platform kpis");
+  const mapSystem = (entry: unknown) => {
+    const item = objectField(entry, "admin platform system health");
+    return {
+      name: stringField(item.name, "platform.system.name"),
+      status: stringField(
+        item.status,
+        "platform.system.status",
+      ) as AdminPlatformDashboard["systemHealth"][number]["status"],
+      summary: stringField(item.summary, "platform.system.summary"),
+      lastCheckedAt: stringField(item.lastCheckedAt, "platform.system.lastCheckedAt"),
+    };
+  };
+  const mapProvider = (entry: unknown) => {
+    const item = objectField(entry, "admin platform provider");
+    return {
+      name: stringField(item.name, "platform.provider.name"),
+      status: stringField(
+        item.status,
+        "platform.provider.status",
+      ) as AdminPlatformDashboard["providers"][number]["status"],
+      configured: Boolean(item.configured),
+      summary: stringField(item.summary, "platform.provider.summary"),
+      failedEvents: Number(item.failedEvents ?? 0),
+    };
+  };
+  const mapAudit = (entry: unknown) => {
+    const item = objectField(entry, "admin platform activity");
+    return {
+      id: stringField(item.id, "platform.activity.id"),
+      actor: stringField(item.actor, "platform.activity.actor"),
+      action: stringField(item.action, "platform.activity.action"),
+      resourceType: stringField(item.resourceType, "platform.activity.resourceType"),
+      resourceId: nullableString(item.resourceId, "platform.activity.resourceId"),
+      result: stringField(item.result, "platform.activity.result"),
+      createdAt: stringField(item.createdAt, "platform.activity.createdAt"),
+    };
+  };
+  return {
+    generatedAt: stringField(value.generatedAt, "platform.generatedAt"),
+    overallHealth: stringField(
+      value.overallHealth,
+      "platform.overallHealth",
+    ) as AdminPlatformDashboard["overallHealth"],
+    kpis: {
+      failedJobs: Number(kpis.failedJobs ?? 0),
+      webhookFailures: Number(kpis.webhookFailures ?? 0),
+      degradedProviders: Number(kpis.degradedProviders ?? 0),
+      pendingChanges: kpis.pendingChanges === null ? null : Number(kpis.pendingChanges ?? 0),
+    },
+    systemHealth: Array.isArray(value.systemHealth) ? value.systemHealth.map(mapSystem) : [],
+    providers: Array.isArray(value.providers) ? value.providers.map(mapProvider) : [],
+    resources: Array.isArray(value.resources)
+      ? value.resources.map((entry) => {
+          const item = objectField(entry, "admin platform resource");
+          return {
+            label: stringField(item.label, "resource.label"),
+            value: stringField(item.value, "resource.value"),
+            status: stringField(item.status, "resource.status"),
+          };
+        })
+      : [],
+    alerts: Array.isArray(value.alerts)
+      ? value.alerts.map((entry) => {
+          const item = objectField(entry, "admin platform alert");
+          return {
+            id: stringField(item.id, "alert.id"),
+            title: stringField(item.title, "alert.title"),
+            detail: stringField(item.detail, "alert.detail"),
+            severity: stringField(item.severity, "alert.severity"),
+            occurredAt: stringField(item.occurredAt, "alert.occurredAt"),
+          };
+        })
+      : [],
+    recentActivity: Array.isArray(value.recentActivity) ? value.recentActivity.map(mapAudit) : [],
+    featureFlags: {
+      available: Boolean(objectField(value.featureFlags, "platform.featureFlags").available),
+      message: stringField(
+        objectField(value.featureFlags, "platform.featureFlags").message,
+        "featureFlags.message",
+      ),
+    },
+    settings: {
+      available: Boolean(objectField(value.settings, "platform.settings").available),
+      message: stringField(
+        objectField(value.settings, "platform.settings").message,
+        "settings.message",
+      ),
+    },
+  };
+};
+
+const mapAdminPlatformRecords = (raw: unknown): AdminPlatformRecordsResponse => {
+  const value = objectField(raw, "admin platform records");
+  const pagination = objectField(value.pagination, "admin platform records.pagination");
+  return {
+    tab: stringField(value.tab, "platform records.tab"),
+    supported: Boolean(value.supported),
+    message: nullableString(value.message, "platform records.message"),
+    items: Array.isArray(value.items)
+      ? value.items.map(
+          (entry) => objectField(entry, "admin platform record") as AdminPlatformRecord,
+        )
+      : [],
+    pagination: {
+      page: Number(pagination.page ?? 1),
+      pageSize: Number(pagination.pageSize ?? 10),
+      total: Number(pagination.total ?? 0),
+      totalPages: Number(pagination.totalPages ?? 0),
+    },
+  };
+};
+
 const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
   const value = objectField(raw, "admin finance dashboard");
   const kpis = objectField(value.kpis, "admin finance dashboard.kpis");
@@ -1702,6 +1820,12 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async getRiskOperations() {
     return mapAdminRiskOperations(await client.get<unknown>("/admin/risk-operations"));
+  },
+  async getPlatformDashboard() {
+    return mapAdminPlatformDashboard(await client.get<unknown>("/admin/platform/dashboard"));
+  },
+  async listPlatformRecords(input) {
+    return mapAdminPlatformRecords(await client.get<unknown>("/admin/platform/records", input));
   },
   async getComplianceCase(id) {
     return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));

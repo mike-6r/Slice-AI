@@ -100,6 +100,15 @@ const trustSupportRecordsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
   .strict();
+const platformRecordsQuery = z
+  .object({
+    tab: z.enum(['jobs', 'webhooks', 'integrations', 'audit', 'health', 'feature-flags', 'settings']).default('jobs'),
+    q: z.string().trim().max(120).optional(),
+    status: z.string().trim().max(64).optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -116,6 +125,24 @@ export class AdminController {
   @RequirePermission('admin.console.read')
   riskOperations(@Req() request: AuthenticatedRequest) {
     return this.admin.riskOperations(request.actor!);
+  }
+
+  @Get('platform/dashboard')
+  @RequirePermission('admin.console.read')
+  platformDashboard(@Req() request: AuthenticatedRequest) {
+    return this.admin.platformDashboard(request.actor!);
+  }
+
+  @Get('platform/records')
+  @RequirePermission('admin.console.read')
+  platformRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(platformRecordsQuery, query);
+    return this.admin.platformRecords(request.actor!, {
+      ...input,
+      tab: input.tab ?? 'jobs',
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 10,
+    });
   }
 
   @Get('operations/overview')

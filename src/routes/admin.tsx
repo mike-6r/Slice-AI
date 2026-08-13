@@ -52,6 +52,7 @@ import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
+import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -76,7 +77,7 @@ export const Route = createFileRoute("/admin")({
     tab:
       typeof search.tab === "string" && search.tab.length > 0
         ? search.tab
-        : legacyTrustTab(search.section),
+        : (legacyTrustTab(search.section) ?? legacyPlatformTab(search.section)),
     q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
     plan: typeof search.plan === "string" ? search.plan : undefined,
     type: typeof search.type === "string" ? search.type : undefined,
@@ -166,7 +167,21 @@ function normalizeAdminSection(value: unknown): AdminSection {
   if (["valuations", "custody", "marketplace"].includes(String(value))) return "collectibles";
   if (["compliance", "restrictions", "support", "cases", "escalations"].includes(String(value)))
     return "support";
-  if (["audit", "flags", "integrations", "settings"].includes(String(value))) return "health";
+  if (
+    [
+      "audit",
+      "flags",
+      "integrations",
+      "settings",
+      "system-health",
+      "jobs",
+      "webhooks",
+      "feature-flags",
+      "maintenance",
+      "deployments",
+    ].includes(String(value))
+  )
+    return "health";
   return isAdminSection(value) ? value : "control";
 }
 
@@ -176,6 +191,23 @@ function legacyTrustTab(value: unknown) {
     restrictions: "restrictions",
     cases: "tickets",
     escalations: "escalations",
+  };
+  return typeof value === "string" ? mapping[value] : undefined;
+}
+
+function legacyPlatformTab(value: unknown) {
+  const mapping: Record<string, string> = {
+    "system-health": "health",
+    jobs: "jobs",
+    webhooks: "webhooks",
+    integrations: "integrations",
+    audit: "audit",
+    "audit-logs": "audit",
+    flags: "feature-flags",
+    "feature-flags": "feature-flags",
+    settings: "settings",
+    maintenance: "settings",
+    deployments: "jobs",
   };
   return typeof value === "string" ? mapping[value] : undefined;
 }
@@ -314,6 +346,24 @@ function AdminConsole() {
       : undefined;
   const trustPriority = ["LOW", "NORMAL", "HIGH", "URGENT"].includes(reviewPriority ?? "")
     ? reviewPriority
+    : undefined;
+  const platformTabs = [
+    "health",
+    "jobs",
+    "webhooks",
+    "integrations",
+    "audit",
+    "feature-flags",
+    "settings",
+  ];
+  const platformTab = platformTabs.includes(selectedUserTab ?? "") ? selectedUserTab! : "health";
+  const platformStatuses: Record<string, string[]> = {
+    jobs: ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD_LETTER"],
+    webhooks: ["ACCEPTED", "PROCESSING", "PROCESSED", "FAILED", "REJECTED"],
+    integrations: ["Operational", "Degraded", "Unavailable", "Unknown"],
+  };
+  const platformStatus = platformStatuses[platformTab]?.includes(reviewStatus ?? "")
+    ? reviewStatus
     : undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -555,8 +605,36 @@ function AdminConsole() {
   const riskOperations = useQuery({
     queryKey: ["admin", "risk-operations"],
     queryFn: () => services.repositories.admin.getRiskOperations(),
-    enabled: ["control", "compliance", "health", "audit", "integrations"].includes(section),
+    enabled: ["control", "compliance"].includes(section),
     staleTime: 30_000,
+  });
+  const platformDashboard = useQuery({
+    queryKey: ["admin", "platform", "dashboard"],
+    queryFn: () => services.repositories.admin.getPlatformDashboard(),
+    enabled: section === "health",
+    staleTime: 20_000,
+  });
+  const platformRecords = useQuery({
+    queryKey: [
+      "admin",
+      "platform",
+      "records",
+      platformTab,
+      reviewQuery,
+      platformStatus,
+      reviewPageParam,
+      reviewPageSizeParam,
+    ],
+    queryFn: () =>
+      services.repositories.admin.listPlatformRecords({
+        tab: platformTab,
+        q: reviewQuery,
+        status: platformStatus,
+        page: Math.max(1, Number(reviewPageParam ?? 1)),
+        pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
+      }),
+    enabled: section === "health" && platformTab !== "health",
+    staleTime: 20_000,
   });
   const complianceDetail = useQuery({
     queryKey: ["admin", "compliance", selectedComplianceCase],
@@ -1023,11 +1101,23 @@ function AdminConsole() {
             }
           />
         ) : section === "health" ? (
-          <SystemHealthWorkspace
-            risk={riskOperations.data}
-            loading={riskOperations.isLoading}
-            failed={riskOperations.isError}
-            retry={() => void riskOperations.refetch()}
+          <AdminPlatformOperations
+            dashboard={platformDashboard.data}
+            records={platformRecords.data}
+            dashboardLoading={platformDashboard.isLoading}
+            recordsLoading={platformRecords.isLoading}
+            failed={platformDashboard.isError || platformRecords.isError}
+            retry={() => {
+              void platformDashboard.refetch();
+              void platformRecords.refetch();
+            }}
+            tab={platformTab}
+            query={reviewQuery ?? ""}
+            status={platformStatus ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            update={(patch) =>
+              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
+            }
           />
         ) : section === "audit" ? (
           <AuditWorkspace
