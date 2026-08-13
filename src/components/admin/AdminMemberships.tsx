@@ -245,7 +245,7 @@ export function AdminMemberships({
           <PlanDistribution data={data} total={activePlanTotal} />
           <section className="admin-membership-side-card">
             <h3>Quick Actions</h3>
-            <button type="button" disabled>
+            <button type="button" onClick={() => update({ status: "CANCELLED", page: "1" })}>
               View Cancelled
             </button>
             <button type="button" disabled>
@@ -385,13 +385,23 @@ function Usage({
   limit: number | null;
   percent: number;
 }) {
+  const state =
+    limit === null
+      ? "Normal"
+      : value > limit
+        ? "Over limit"
+        : value === limit
+          ? "At limit"
+          : percent >= 80
+            ? "Near limit"
+            : "Normal";
   return (
     <div className="admin-membership-usage">
       <strong>{limit === null ? `${value}` : `${value} / ${limit}`}</strong>
       <span className="admin-membership-progress">
         <i style={{ width: `${percent}%` }} />
       </span>
-      <small>{limit === null ? "No limit" : `${percent}% used`}</small>
+      <small className={`usage-${state.toLowerCase().replace(" ", "-")}`}>{state}</small>
     </div>
   );
 }
