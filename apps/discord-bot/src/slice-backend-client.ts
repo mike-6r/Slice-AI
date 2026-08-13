@@ -18,6 +18,7 @@ export type DiscordLinkStatus =
       };
     };
 export type DiscordLinkChallenge = { challengeUrl: string; expiresAt: string };
+export type CollectorAction = { id: string; title: string; grade: string | null; type: string; message: string; actionUrl: string };
 
 /** The only HTTP boundary for Discord reads and account-linking operations. */
 export class SliceBackendClient {
@@ -33,7 +34,7 @@ export class SliceBackendClient {
   async createLinkChallenge(input: { discordUserId: string; discordUsername: string; discordDisplayName?: string | null; guildId?: string | null }): Promise<BackendResult<DiscordLinkChallenge>> { return this.serviceRequest('/discord/bot/link-challenges', 'POST', input, challenge); }
   async getLinkStatus(discordUserId: string): Promise<BackendResult<DiscordLinkStatus>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}`, 'GET', undefined, linkStatus); }
   async unlink(discordUserId: string): Promise<BackendResult<{ disconnected: boolean }>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}`, 'DELETE', undefined, disconnected); }
-  async getCollectorActions(): Promise<BackendResult<never[]>> { return { ok: false, code: 'BACKEND_SEAM_REQUIRED', message: 'Collector action delivery is not available to Discord yet.' }; }
+  async getCollectorActions(discordUserId: string): Promise<BackendResult<CollectorAction[]>> { return this.serviceRequest(`/discord/bot/links/${encodeURIComponent(discordUserId)}/collector-actions`, 'GET', undefined, collectorActions); }
   async getPortfolioSummary(): Promise<BackendResult<never>> { return { ok: false, code: 'BACKEND_SEAM_REQUIRED', message: 'Portfolio delivery is not available to Discord yet.' }; }
   async getOrdersSummary(): Promise<BackendResult<never>> { return { ok: false, code: 'BACKEND_SEAM_REQUIRED', message: 'Order delivery is not available to Discord yet.' }; }
 
@@ -85,3 +86,4 @@ function object(value: unknown): Record<string, unknown> { return value !== null
 function challenge(value: unknown): DiscordLinkChallenge | null { const item = object(value); return typeof item.challengeUrl === 'string' && typeof item.expiresAt === 'string' ? { challengeUrl: item.challengeUrl, expiresAt: item.expiresAt } : null; }
 function disconnected(value: unknown): { disconnected: boolean } | null { const item = object(value); return typeof item.disconnected === 'boolean' ? { disconnected: item.disconnected } : null; }
 function linkStatus(value: unknown): DiscordLinkStatus | null { const item = object(value); if (item.linked === false) return { linked: false }; if (item.linked === true && item.user && typeof item.user === 'object') return item as unknown as DiscordLinkStatus; return null; }
+function collectorActions(value: unknown): CollectorAction[] | null { const item = object(value); return Array.isArray(item.actions) ? item.actions.filter((action): action is CollectorAction => { const row = object(action); return typeof row.id === 'string' && typeof row.title === 'string' && typeof row.type === 'string' && typeof row.message === 'string' && typeof row.actionUrl === 'string' && (typeof row.grade === 'string' || row.grade === null); }) : null; }

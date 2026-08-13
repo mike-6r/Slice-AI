@@ -192,6 +192,38 @@ export class DiscordLinkService {
     return { disconnected: true };
   }
 
+  async botCollectorActions(discordUserId: string) {
+    const link = await this.db.discordAccountLink.findUnique({
+      where: { discordUserId: requiredText(discordUserId, 'Discord identity') },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            roleAssignments: {
+              where: { revokedAt: null, role: 'COLLECTOR' },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    if (!link || link.user.roleAssignments.length === 0) return { linked: false as const, actions: [] };
+    if (!this.collectorWorkspace) return { linked: true as const, actions: [] };
+    const actions = await this.collectorWorkspace.requests(link.userId);
+    return {
+      linked: true as const,
+      actions: actions.slice(0, 10).map((action) => ({
+        id: action.id,
+        title: action.asset.title,
+        grade: action.asset.grade,
+        type: action.type,
+        message: action.reason,
+        actionUrl: action.targetRoute,
+      })),
+    };
+  }
+
   async self(userId: string) {
     const link = await this.db.discordAccountLink.findUnique({
       where: { userId },

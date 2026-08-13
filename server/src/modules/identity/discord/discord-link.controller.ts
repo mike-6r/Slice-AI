@@ -93,6 +93,12 @@ export class DiscordLinkController {
     return this.links.botStatus(discordUserId);
   }
 
+  @Get('discord/bot/links/:discordUserId/collector-actions')
+  @UseGuards(DiscordBotServiceGuard)
+  botCollectorActions(@Param('discordUserId') discordUserId: string) {
+    return this.links.botCollectorActions(discordUserId);
+  }
+
   @Delete('discord/bot/links/:discordUserId')
   @UseGuards(DiscordBotServiceGuard)
   unlinkBotLink(

@@ -18,4 +18,11 @@ describe('SliceBackendClient account linking', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 409 })));
     await expect(client().unlink('discord-user')).resolves.toMatchObject({ ok: false, code: 'CONFLICT' });
   });
+
+  it('reads collector actions only from the linked-user service endpoint', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ linked: true, actions: [{ id: 'action', title: 'Card', grade: '10', type: 'ADD_TRACKING', message: 'Add tracking', actionUrl: '/collector-workspace?collectible=card' }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(client().getCollectorActions('discord-user')).resolves.toMatchObject({ ok: true, value: [expect.objectContaining({ type: 'ADD_TRACKING' })] });
+    expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/links/discord-user/collector-actions');
+  });
 });
