@@ -724,15 +724,46 @@ const mapAdminRole = (raw: unknown) => {
 
 const mapAdminUser = (raw: unknown): AdminUserSummary => {
   const value = objectField(raw, "admin user");
+  const roles = Array.isArray(value.roles) ? value.roles.map(mapAdminRole) : [];
+  const roleNames = roles.map((role) => role.role);
+  const primaryType = ["ADMIN", "STAFF", "COLLECTOR", "INVESTOR"].includes(
+    String(value.primaryType),
+  )
+    ? (String(value.primaryType) as AdminUserSummary["primaryType"])
+    : roleNames.includes("ADMIN")
+      ? "ADMIN"
+      : [
+            "SUPPORT",
+            "COMPLIANCE_ANALYST",
+            "ASSET_REVIEWER",
+            "VAULT_OPERATOR",
+            "FINANCE_OPERATOR",
+          ].some((role) => roleNames.includes(role))
+        ? "STAFF"
+        : roleNames.includes("COLLECTOR")
+          ? "COLLECTOR"
+          : "INVESTOR";
+  const membership = value.membership
+    ? objectField(value.membership, "admin user membership")
+    : null;
   return {
     id: stringField(value.id, "admin user.id"),
     displayName: stringField(value.displayName, "admin user.displayName"),
     username: nullableString(value.username, "admin user.username"),
     email: stringField(value.email, "admin user.email"),
+    primaryType,
     accountStatus: stringField(value.accountStatus, "admin user.accountStatus"),
-    roles: Array.isArray(value.roles) ? value.roles.map(mapAdminRole) : [],
+    roles,
     createdAt: stringField(value.createdAt, "admin user.createdAt"),
     lastActivityAt: nullableString(value.lastActivityAt, "admin user.lastActivityAt"),
+    membership: membership
+      ? {
+          plan: ["STARTER", "PRO", "ELITE"].includes(String(membership.plan))
+            ? (String(membership.plan) as "STARTER" | "PRO" | "ELITE")
+            : null,
+          status: nullableString(membership.status, "admin user membership.status"),
+        }
+      : { plan: null, status: null },
   };
 };
 
@@ -1272,9 +1303,26 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async listUsers(input) {
     const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
+    const summary =
+      value.summary && typeof value.summary === "object" && !Array.isArray(value.summary)
+        ? objectField(value.summary, "admin users summary")
+        : {};
     return {
       items: Array.isArray(value.items) ? value.items.map(mapAdminUser) : [],
       nextCursor: nullableString(value.nextCursor, "admin users.nextCursor"),
+      total: Number(value.total ?? 0),
+      summary: {
+        totalUsers: Number(summary.totalUsers ?? 0),
+        collectors: Number(summary.collectors ?? 0),
+        investors: Number(summary.investors ?? 0),
+        staff: Number(summary.staff ?? 0),
+        admins: Number(summary.admins ?? 0),
+        suspended: Number(summary.suspended ?? 0),
+        activeUsers: Number(summary.activeUsers ?? 0),
+        restricted: Number(summary.restricted ?? 0),
+        pastDueMemberships: Number(summary.pastDueMemberships ?? 0),
+        trialingMemberships: Number(summary.trialingMemberships ?? 0),
+      },
     };
   },
   async getUser(id) {

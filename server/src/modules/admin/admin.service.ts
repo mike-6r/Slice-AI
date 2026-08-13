@@ -1262,23 +1262,95 @@ export class AdminService {
       q?: string;
       role?: string;
       status?: string;
+      type?: string;
+      membershipPlan?: string;
+      membershipStatus?: string;
+      joinedFrom?: string;
+      joinedTo?: string;
+      lastActiveWindow?: string;
+      sort?: string;
+      sortDirection?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
       limit: number;
       cursor?: string;
     },
   ) {
     await this.authorization.authorize(actor, 'users.read');
+    const staffRoles = [
+      'SUPPORT',
+      'COMPLIANCE_ANALYST',
+      'ASSET_REVIEWER',
+      'VAULT_OPERATOR',
+      'FINANCE_OPERATOR',
+    ];
+    const investorCapability: Prisma.UserWhereInput = {
+      OR: [
+        { portfolioLots: { some: { status: 'OPEN' } } },
+        {
+          tradingOrders: {
+            some: { status: { in: ['OPEN', 'PARTIALLY_FILLED', 'FILLED'] } },
+          },
+        },
+      ],
+    };
+    const joinedFrom = input.joinedFrom
+      ? new Date(input.joinedFrom)
+      : undefined;
+    const joinedTo = input.joinedTo
+      ? new Date(
+          /^\d{4}-\d{2}-\d{2}$/.test(input.joinedTo)
+            ? `${input.joinedTo}T23:59:59.999Z`
+            : input.joinedTo,
+        )
+      : undefined;
+    const lastActiveCutoff =
+      input.lastActiveWindow && /^\d+$/.test(input.lastActiveWindow)
+        ? new Date(
+            Date.now() - Number(input.lastActiveWindow) * 24 * 60 * 60 * 1000,
+          )
+        : undefined;
     const where: Prisma.UserWhereInput = {
       ...(input.status ? { accountStatus: input.status as never } : {}),
-      ...(input.role
+      ...(joinedFrom || joinedTo
         ? {
-            roleAssignments: {
-              some: { role: input.role as never, revokedAt: null },
+            createdAt: {
+              ...(joinedFrom && !Number.isNaN(joinedFrom.getTime())
+                ? { gte: joinedFrom }
+                : {}),
+              ...(joinedTo && !Number.isNaN(joinedTo.getTime())
+                ? { lte: joinedTo }
+                : {}),
+            },
+          }
+        : {}),
+      ...(input.lastActiveWindow === 'inactive'
+        ? {
+            lastLoginAt: {
+              lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            },
+          }
+        : lastActiveCutoff
+          ? { lastLoginAt: { gte: lastActiveCutoff } }
+          : {}),
+      ...(input.membershipPlan || input.membershipStatus
+        ? {
+            collectorSubscriptions: {
+              some: {
+                ...(input.membershipPlan
+                  ? { plan: { code: input.membershipPlan as never } }
+                  : {}),
+                ...(input.membershipStatus
+                  ? { status: input.membershipStatus as never }
+                  : {}),
+              },
             },
           }
         : {}),
       ...(input.q
         ? {
             OR: [
+              { id: { contains: input.q, mode: 'insensitive' } },
               { email: { contains: input.q, mode: 'insensitive' } },
               {
                 profile: {
@@ -1294,47 +1366,159 @@ export class AdminService {
           }
         : {}),
     };
-    const users = await this.db.user.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: input.limit + 1,
-      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        email: true,
-        accountStatus: true,
-        createdAt: true,
-        lastLoginAt: true,
-        profile: { select: { displayName: true, publicUsername: true } },
+    const roleFilters: Prisma.UserWhereInput[] = [];
+    if (input.role)
+      roleFilters.push({
         roleAssignments: {
-          where: { revokedAt: null },
-          select: {
-            id: true,
-            role: true,
-            scopeType: true,
-            scopeId: true,
-            createdAt: true,
+          some: { role: input.role as never, revokedAt: null },
+        },
+      });
+    if (input.type === 'COLLECTOR')
+      roleFilters.push({
+        roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
+      });
+    else if (input.type === 'STAFF')
+      roleFilters.push({
+        roleAssignments: {
+          some: { role: { in: staffRoles as never[] }, revokedAt: null },
+        },
+      });
+    else if (input.type === 'ADMIN')
+      roleFilters.push({
+        roleAssignments: { some: { role: 'ADMIN', revokedAt: null } },
+      });
+    else if (input.type === 'INVESTOR') roleFilters.push(investorCapability);
+    if (roleFilters.length) where.AND = roleFilters;
+    const direction = input.sortDirection ?? 'desc';
+    const orderBy: Prisma.UserOrderByWithRelationInput[] =
+      input.sort === 'lastActive'
+        ? [{ lastLoginAt: direction }, { id: 'desc' }]
+        : input.sort === 'username'
+          ? [{ profile: { publicUsername: direction } }, { id: 'desc' }]
+          : [{ createdAt: direction }, { id: 'desc' }];
+    const pageSize = input.pageSize ?? input.limit;
+    const pageNumber = Math.max(1, input.page ?? 1);
+    const [
+      users,
+      total,
+      activeUsers,
+      restricted,
+      suspended,
+      pastDueMemberships,
+      trialingMemberships,
+      totalUsers,
+      collectorAssignments,
+      investorUsers,
+      staffAssignments,
+      adminAssignments,
+    ] = await Promise.all([
+      this.db.user.findMany({
+        where,
+        orderBy,
+        take: pageSize,
+        ...(input.cursor
+          ? { cursor: { id: input.cursor }, skip: 1 }
+          : { skip: (pageNumber - 1) * pageSize }),
+        select: {
+          id: true,
+          email: true,
+          accountStatus: true,
+          createdAt: true,
+          lastLoginAt: true,
+          profile: { select: { displayName: true, publicUsername: true } },
+          collectorSubscriptions: {
+            where: { status: { notIn: ['CANCELLED', 'EXPIRED'] } },
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { status: true, plan: { select: { code: true } } },
+          },
+          roleAssignments: {
+            where: { revokedAt: null },
+            select: {
+              id: true,
+              role: true,
+              scopeType: true,
+              scopeId: true,
+              createdAt: true,
+            },
           },
         },
-      },
+      }),
+      this.db.user.count({ where }),
+      this.db.user.count({ where: { accountStatus: 'ACTIVE' } }),
+      this.db.user.count({ where: { accountStatus: 'RESTRICTED' } }),
+      this.db.user.count({ where: { accountStatus: 'SUSPENDED' } }),
+      this.db.collectorSubscription.count({ where: { status: 'PAST_DUE' } }),
+      this.db.collectorSubscription.count({ where: { status: 'TRIALING' } }),
+      this.db.user.count(),
+      this.db.roleAssignment.findMany({
+        where: { role: 'COLLECTOR', revokedAt: null },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.db.user.count({ where: investorCapability }),
+      this.db.roleAssignment.findMany({
+        where: { role: { in: staffRoles as never[] }, revokedAt: null },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      this.db.roleAssignment.findMany({
+        where: { role: 'ADMIN', revokedAt: null },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+    ]);
+    const items = users.map((user) => {
+      const roleNames = user.roleAssignments.map(
+        (assignment) => assignment.role,
+      );
+      const primaryType = roleNames.includes('ADMIN')
+        ? 'ADMIN'
+        : staffRoles.some((role) => roleNames.includes(role as never))
+          ? 'STAFF'
+          : roleNames.includes('COLLECTOR')
+            ? 'COLLECTOR'
+            : 'INVESTOR';
+      return {
+        id: user.id,
+        displayName: user.profile?.displayName ?? 'Unnamed user',
+        username: user.profile?.publicUsername ?? null,
+        email: user.email,
+        primaryType,
+        accountStatus: user.accountStatus,
+        roles: user.roleAssignments.map((assignment) => ({
+          ...assignment,
+          createdAt: assignment.createdAt.toISOString(),
+        })),
+        createdAt: user.createdAt.toISOString(),
+        lastActivityAt: user.lastLoginAt?.toISOString() ?? null,
+        membership: user.collectorSubscriptions[0]
+          ? {
+              plan: user.collectorSubscriptions[0].plan.code,
+              status: user.collectorSubscriptions[0].status,
+            }
+          : { plan: null, status: null },
+      };
     });
-    const items = users.slice(0, input.limit).map((user) => ({
-      id: user.id,
-      displayName: user.profile?.displayName ?? 'Unnamed user',
-      username: user.profile?.publicUsername ?? null,
-      email: user.email,
-      accountStatus: user.accountStatus,
-      roles: user.roleAssignments.map((assignment) => ({
-        ...assignment,
-        createdAt: assignment.createdAt.toISOString(),
-      })),
-      createdAt: user.createdAt.toISOString(),
-      lastActivityAt: user.lastLoginAt?.toISOString() ?? null,
-    }));
     return {
       items,
       nextCursor:
-        users.length > input.limit ? (items.at(-1)?.id ?? null) : null,
+        items.length === pageSize && items.length
+          ? (items.at(-1)?.id ?? null)
+          : null,
+      total,
+      summary: {
+        totalUsers,
+        collectors: collectorAssignments.length,
+        investors: investorUsers,
+        staff: staffAssignments.length,
+        admins: adminAssignments.length,
+        activeUsers,
+        restricted,
+        suspended,
+        pastDueMemberships,
+        trialingMemberships,
+      },
     };
   }
 

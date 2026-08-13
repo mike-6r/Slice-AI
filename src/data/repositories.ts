@@ -145,6 +145,7 @@ export type AdminUserSummary = {
   displayName: string;
   username: string | null;
   email: string;
+  primaryType: "INVESTOR" | "COLLECTOR" | "STAFF" | "ADMIN";
   accountStatus: string;
   roles: Array<{
     id: string;
@@ -155,6 +156,23 @@ export type AdminUserSummary = {
   }>;
   createdAt: string;
   lastActivityAt: string | null;
+  membership: {
+    plan: "STARTER" | "PRO" | "ELITE" | null;
+    status: string | null;
+  };
+};
+
+export type AdminAccountsSummary = {
+  totalUsers: number;
+  collectors: number;
+  investors: number;
+  staff: number;
+  admins: number;
+  suspended: number;
+  activeUsers: number;
+  restricted: number;
+  pastDueMemberships: number;
+  trialingMemberships: number;
 };
 
 export type AdminUserDetail = AdminUserSummary & {
@@ -442,9 +460,24 @@ export interface AdminRepository {
     q?: string;
     role?: string;
     status?: string;
+    type?: string;
+    membershipPlan?: string;
+    membershipStatus?: string;
+    joinedFrom?: string;
+    joinedTo?: string;
+    lastActiveWindow?: string;
+    sort?: string;
+    sortDirection?: "asc" | "desc";
+    page?: number;
+    pageSize?: number;
     cursor?: string;
     limit?: number;
-  }): Promise<{ items: AdminUserSummary[]; nextCursor: string | null }>;
+  }): Promise<{
+    items: AdminUserSummary[];
+    nextCursor: string | null;
+    total: number;
+    summary: AdminAccountsSummary;
+  }>;
   getUser(id: string): Promise<AdminUserDetail>;
   listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
   getFinanceSummary(): Promise<AdminFinanceSummary>;

@@ -51,6 +51,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary } from "@/domain/submission";
 import type {
+  AdminAccountsSummary,
   AdminComplianceCase,
   AdminOverview,
   AdminIntakeRow,
@@ -137,12 +138,32 @@ function AdminConsole() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [userRole, setUserRole] = useState("");
-  const [userStatus, setUserStatus] = useState("");
+  const [accountSearchInput, setAccountSearchInput] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountPage, setAccountPage] = useState(1);
+  const [accountSort, setAccountSort] = useState("joined");
+  const [accountSortDirection, setAccountSortDirection] = useState<"asc" | "desc">("desc");
+  const [accountFilters, setAccountFilters] = useState({
+    type: "",
+    status: "",
+    membershipPlan: "",
+    membershipStatus: "",
+    role: "",
+    joinedFrom: "",
+    joinedTo: "",
+    lastActiveWindow: "",
+  });
+  const [accountDraft, setAccountDraft] = useState(accountFilters);
+  const [accountFiltersOpen, setAccountFiltersOpen] = useState(false);
   const [complianceFilter, setComplianceFilter] = useState("All");
   const [selectedComplianceCase, setSelectedComplianceCase] = useState<string | undefined>();
-  const [usersCursor, setUsersCursor] = useState<string | undefined>();
-  useEffect(() => setUsersCursor(undefined), [search]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAccountSearch(accountSearchInput.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [accountSearchInput]);
+  useEffect(() => {
+    setAccountPage(1);
+  }, [accountSearch, accountFilters, accountSort, accountSortDirection]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
     return () => window.clearTimeout(timer);
@@ -219,14 +240,23 @@ function AdminConsole() {
     staleTime: 30_000,
   });
   const users = useQuery({
-    queryKey: ["admin", "users", search, userRole, userStatus, usersCursor],
+    queryKey: [
+      "admin",
+      "users",
+      accountSearch,
+      accountFilters,
+      accountPage,
+      accountSort,
+      accountSortDirection,
+    ],
     queryFn: () =>
       services.repositories.admin.listUsers({
-        q: search || undefined,
-        role: userRole || undefined,
-        status: userStatus || undefined,
-        cursor: usersCursor,
-        limit: 20,
+        q: accountSearch || undefined,
+        ...accountFilters,
+        sort: accountSort,
+        sortDirection: accountSortDirection,
+        page: accountPage,
+        pageSize: 10,
       }),
     enabled: section === "users",
     staleTime: 30_000,
@@ -462,7 +492,7 @@ function AdminConsole() {
             retry={() => void memberships.refetch()}
           />
         ) : section === "users" ? (
-          <UsersWorkspace
+          <AccountsWorkspace
             users={users.data?.items ?? []}
             loading={users.isLoading}
             failed={users.isError}
@@ -472,12 +502,50 @@ function AdminConsole() {
             selectedFailed={userDetail.isError}
             openUser={openUser}
             clearUser={() => select("users")}
-            nextCursor={users.data?.nextCursor ?? null}
-            nextPage={(cursor) => setUsersCursor(cursor)}
-            role={userRole}
-            status={userStatus}
-            setRole={setUserRole}
-            setStatus={setUserStatus}
+            page={accountPage}
+            total={users.data?.total ?? 0}
+            summary={users.data?.summary}
+            search={accountSearchInput}
+            setSearch={setAccountSearchInput}
+            filters={accountFilters}
+            draftFilters={accountDraft}
+            setDraftFilters={(value) => setAccountDraft(value as typeof accountDraft)}
+            applyFilters={() => {
+              setAccountFilters(accountDraft);
+              setAccountPage(1);
+            }}
+            clearFilters={() => {
+              const cleared = {
+                type: "",
+                status: "",
+                membershipPlan: "",
+                membershipStatus: "",
+                role: "",
+                joinedFrom: "",
+                joinedTo: "",
+                lastActiveWindow: "",
+              };
+              setAccountDraft(cleared);
+              setAccountFilters(cleared);
+              setAccountSearchInput("");
+              setAccountPage(1);
+            }}
+            setType={(value) => {
+              const next =
+                value === "SUSPENDED"
+                  ? { ...accountFilters, type: "", status: "SUSPENDED" }
+                  : { ...accountFilters, type: value, status: "" };
+              setAccountFilters(next);
+              setAccountDraft(next);
+            }}
+            setPage={setAccountPage}
+            sort={accountSort}
+            setSort={(value) => {
+              setAccountSort(value);
+              setAccountSortDirection(value === "joined" ? "desc" : "desc");
+            }}
+            filtersOpen={accountFiltersOpen}
+            setFiltersOpen={setAccountFiltersOpen}
           />
         ) : section === "compliance" ? (
           <ComplianceWorkspace
@@ -1266,6 +1334,492 @@ function AssetModeration({
         <AdminEmpty detail="No assets currently require attention." />
       )}
     </AdminPageSection>
+  );
+}
+
+function AccountsWorkspace({
+  users,
+  loading,
+  failed,
+  retry,
+  selected,
+  selectedLoading,
+  selectedFailed,
+  openUser,
+  clearUser,
+  page,
+  total,
+  summary,
+  search,
+  setSearch,
+  filters,
+  draftFilters,
+  setDraftFilters,
+  applyFilters,
+  clearFilters,
+  setType,
+  setPage,
+  sort,
+  setSort,
+  filtersOpen,
+  setFiltersOpen,
+}: {
+  users: AdminUserSummary[];
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  selected?: AdminUserDetail;
+  selectedLoading: boolean;
+  selectedFailed: boolean;
+  openUser: (id: string) => void;
+  clearUser: () => void;
+  page: number;
+  total: number;
+  summary?: AdminAccountsSummary;
+  search: string;
+  setSearch: (value: string) => void;
+  filters: Record<string, string>;
+  draftFilters: Record<string, string>;
+  setDraftFilters: (value: Record<string, string>) => void;
+  applyFilters: () => void;
+  clearFilters: () => void;
+  setType: (value: string) => void;
+  setPage: (value: number) => void;
+  sort: string;
+  setSort: (value: string) => void;
+  filtersOpen: boolean;
+  setFiltersOpen: (value: boolean) => void;
+}) {
+  if (selected || selectedLoading || selectedFailed) {
+    return (
+      <UserDetail
+        user={selected}
+        loading={selectedLoading}
+        failed={selectedFailed}
+        retry={retry}
+        back={clearUser}
+      />
+    );
+  }
+  const updateDraft = (key: string, value: string) =>
+    setDraftFilters({ ...draftFilters, [key]: value });
+  const tabActive = (value: string) =>
+    value === "SUSPENDED"
+      ? filters.status === "SUSPENDED"
+      : filters.type === value && !filters.status;
+  return (
+    <div className="admin-console-content admin-accounts-content">
+      <section className="admin-console-heading">
+        <div>
+          <p className="admin-console-eyebrow">Admin Panel</p>
+          <h2>Users &amp; Accounts</h2>
+          <span>
+            View and manage all platform users across collectors, investors, staff and admins.
+          </span>
+        </div>
+      </section>
+      <div className="admin-kpi-grid admin-kpi-grid--six">
+        <AdminKpi icon={Users} label="Total users" value={summary ? summary.totalUsers : "—"} />
+        <AdminKpi icon={Users} label="Collectors" value={summary ? summary.collectors : "—"} />
+        <AdminKpi
+          icon={BriefcaseBusiness}
+          label="Investors"
+          value={summary ? summary.investors : "—"}
+        />
+        <AdminKpi icon={ShieldCheck} label="Staff" value={summary ? summary.staff : "—"} />
+        <AdminKpi icon={Crown} label="Admins" value={summary ? summary.admins : "—"} />
+        <AdminKpi
+          icon={AlertTriangle}
+          label="Suspended"
+          value={summary ? summary.suspended : "—"}
+        />
+      </div>
+      {loading ? (
+        <AdminState
+          title="Loading platform accounts"
+          detail="Reading the admin-safe account directory."
+        />
+      ) : failed ? (
+        <AdminState
+          title="We couldn't load platform accounts"
+          detail="The account directory could not be loaded safely."
+          retry={retry}
+        />
+      ) : (
+        <div className="admin-accounts-layout">
+          <section className="admin-panel admin-accounts-table-panel">
+            <div className="admin-account-tabs" role="tablist" aria-label="Account types">
+              {[
+                ["", "All Users"],
+                ["COLLECTOR", "Collectors"],
+                ["INVESTOR", "Investors"],
+                ["STAFF", "Staff"],
+                ["ADMIN", "Admins"],
+                ["SUSPENDED", "Suspended"],
+              ].map(([value, label]) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tabActive(value)}
+                  className={tabActive(value) ? "is-active" : ""}
+                  key={label}
+                  onClick={() => {
+                    if (value === "SUSPENDED") {
+                      setType("SUSPENDED");
+                      setDraftFilters({ ...draftFilters, type: "", status: "SUSPENDED" });
+                    } else {
+                      setType(value);
+                      setDraftFilters({ ...draftFilters, type: value, status: "" });
+                    }
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="admin-account-toolbar">
+              <label className="admin-account-search">
+                <Search aria-hidden="true" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by username, email, name or ID..."
+                />
+              </label>
+              <select
+                aria-label="Type"
+                value={draftFilters.type}
+                onChange={(event) => updateDraft("type", event.target.value)}
+              >
+                <option value="">Type: All</option>
+                <option value="COLLECTOR">Collector</option>
+                <option value="INVESTOR">Investor</option>
+                <option value="STAFF">Staff</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+              <select
+                aria-label="Status"
+                value={draftFilters.status}
+                onChange={(event) => updateDraft("status", event.target.value)}
+              >
+                <option value="">Status: All</option>
+                <option value="ACTIVE">Active</option>
+                <option value="RESTRICTED">Restricted</option>
+                <option value="SUSPENDED">Suspended</option>
+                <option value="DEACTIVATED">Deactivated</option>
+                <option value="PENDING_REVIEW">Pending review</option>
+              </select>
+              <select
+                aria-label="Membership"
+                value={draftFilters.membershipPlan}
+                onChange={(event) => updateDraft("membershipPlan", event.target.value)}
+              >
+                <option value="">Membership: All</option>
+                <option value="STARTER">Starter</option>
+                <option value="PRO">Pro</option>
+                <option value="ELITE">Elite</option>
+              </select>
+              <select
+                aria-label="Role"
+                value={draftFilters.role}
+                onChange={(event) => updateDraft("role", event.target.value)}
+              >
+                <option value="">Role: All</option>
+                <option value="COLLECTOR">Collector</option>
+                <option value="ADMIN">Admin</option>
+                <option value="SUPPORT">Support</option>
+                <option value="ASSET_REVIEWER">Asset reviewer</option>
+              </select>
+              <button
+                type="button"
+                className="admin-filter-more"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+              >
+                <ListChecks aria-hidden="true" /> More Filters
+              </button>
+            </div>
+            <div className="admin-account-table-heading">
+              <strong>Accounts</strong>
+              <label>
+                Sort{" "}
+                <select
+                  aria-label="Sort accounts"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                >
+                  <option value="joined">Joined</option>
+                  <option value="lastActive">Last active</option>
+                  <option value="username">Username</option>
+                </select>
+              </label>
+            </div>
+            {users.length ? (
+              <div className="admin-table-wrap">
+                <table className="admin-table admin-accounts-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Type</th>
+                      <th>Roles</th>
+                      <th>Membership</th>
+                      <th>Status</th>
+                      <th>Joined</th>
+                      <th>Last active</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      const activeRoles = user.roles.filter((role) => role.role !== "USER");
+                      return (
+                        <tr key={user.id}>
+                          <td>
+                            <div className="admin-user-cell">
+                              <span className="admin-user-avatar">
+                                {initials(user.displayName)}
+                              </span>
+                              <span>
+                                <strong>{user.displayName}</strong>
+                                <small>
+                                  {user.username ? `@${user.username}` : "Username unavailable"}
+                                </small>
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="admin-type-badge">{sentence(user.primaryType)}</span>
+                          </td>
+                          <td>
+                            <div className="admin-tag-list">
+                              {activeRoles.length ? (
+                                activeRoles.map((role) => (
+                                  <span className="admin-tag" key={role.id}>
+                                    {sentence(role.role)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="admin-muted">Investor</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            {user.membership.plan ? (
+                              <span>
+                                {sentence(user.membership.plan)}
+                                {user.membership.status && user.membership.status !== "ACTIVE" ? (
+                                  <small className="admin-membership-status">
+                                    {" "}
+                                    · {sentence(user.membership.status)}
+                                  </small>
+                                ) : null}
+                              </span>
+                            ) : (
+                              <span className="admin-muted">—</span>
+                            )}
+                          </td>
+                          <td>
+                            <span
+                              className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+                            >
+                              {sentence(user.accountStatus)}
+                            </span>
+                          </td>
+                          <td>{date(user.createdAt)}</td>
+                          <td>{user.lastActivityAt ? date(user.lastActivityAt) : "Unavailable"}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="admin-inline-action"
+                              aria-label={`View ${user.displayName}`}
+                              onClick={() => openUser(user.id)}
+                            >
+                              <ArrowRight aria-hidden="true" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <AdminEmpty detail="No accounts match these filters." icon={Users} />
+            )}
+            <div className="admin-pagination">
+              <span>
+                {total
+                  ? `Showing ${(page - 1) * 10 + 1} to ${Math.min(page * 10, total)} of ${total} users`
+                  : "No accounts match these filters."}
+              </span>
+              <span className="admin-pagination-controls">
+                <button
+                  type="button"
+                  aria-label="Previous page"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </button>
+                <strong>{page}</strong>
+                <button
+                  type="button"
+                  aria-label="Next page"
+                  disabled={page * 10 >= total}
+                  onClick={() => setPage(page + 1)}
+                >
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          </section>
+          <aside className={`admin-accounts-rail ${filtersOpen ? "is-open" : ""}`}>
+            <section className="admin-panel">
+              <div className="admin-panel-heading">
+                <h3>Filter by</h3>
+                <button type="button" onClick={clearFilters}>
+                  Clear all
+                </button>
+              </div>
+              <label className="admin-rail-field">
+                Search
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Username, email or ID..."
+                />
+              </label>
+              <label className="admin-rail-field">
+                Type
+                <select
+                  value={draftFilters.type}
+                  onChange={(event) => updateDraft("type", event.target.value)}
+                >
+                  <option value="">All types</option>
+                  <option value="COLLECTOR">Collector</option>
+                  <option value="INVESTOR">Investor</option>
+                  <option value="STAFF">Staff</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </label>
+              <label className="admin-rail-field">
+                Status
+                <select
+                  value={draftFilters.status}
+                  onChange={(event) => updateDraft("status", event.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="RESTRICTED">Restricted</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="DEACTIVATED">Deactivated</option>
+                  <option value="PENDING_REVIEW">Pending review</option>
+                </select>
+              </label>
+              <label className="admin-rail-field">
+                Membership
+                <select
+                  value={draftFilters.membershipPlan}
+                  onChange={(event) => updateDraft("membershipPlan", event.target.value)}
+                >
+                  <option value="">All memberships</option>
+                  <option value="STARTER">Starter</option>
+                  <option value="PRO">Pro</option>
+                  <option value="ELITE">Elite</option>
+                </select>
+              </label>
+              <label className="admin-rail-field">
+                Billing status
+                <select
+                  value={draftFilters.membershipStatus}
+                  onChange={(event) => updateDraft("membershipStatus", event.target.value)}
+                >
+                  <option value="">All billing states</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="TRIALING">Trialing</option>
+                  <option value="PAST_DUE">Past due</option>
+                  <option value="CANCEL_AT_PERIOD_END">Canceling</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+              </label>
+              <label className="admin-rail-field">
+                Role
+                <select
+                  value={draftFilters.role}
+                  onChange={(event) => updateDraft("role", event.target.value)}
+                >
+                  <option value="">All roles</option>
+                  <option value="COLLECTOR">Collector</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="SUPPORT">Support</option>
+                  <option value="ASSET_REVIEWER">Asset reviewer</option>
+                </select>
+              </label>
+              <div className="admin-rail-field">
+                <span>Joined</span>
+                <div className="admin-date-range">
+                  <input
+                    type="date"
+                    value={draftFilters.joinedFrom}
+                    onChange={(event) => updateDraft("joinedFrom", event.target.value)}
+                  />
+                  <input
+                    type="date"
+                    value={draftFilters.joinedTo}
+                    onChange={(event) => updateDraft("joinedTo", event.target.value)}
+                  />
+                </div>
+              </div>
+              <label className="admin-rail-field">
+                Last active
+                <select
+                  value={draftFilters.lastActiveWindow}
+                  onChange={(event) => updateDraft("lastActiveWindow", event.target.value)}
+                >
+                  <option value="">Any time</option>
+                  <option value="1">Last 24 hours</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                  <option value="inactive">Inactive 30+ days</option>
+                </select>
+              </label>
+              <button type="button" className="admin-apply-filters" onClick={applyFilters}>
+                Apply filters
+              </button>
+            </section>
+            <section className="admin-panel admin-account-summary">
+              <div className="admin-panel-heading">
+                <h3>Summary</h3>
+              </div>
+              <StatusRow
+                label="Active users"
+                status={String(summary?.activeUsers ?? 0)}
+                icon={CheckCircle2}
+              />
+              <StatusRow
+                label="Restricted"
+                status={String(summary?.restricted ?? 0)}
+                icon={AlertTriangle}
+              />
+              <StatusRow
+                label="Suspended"
+                status={String(summary?.suspended ?? 0)}
+                icon={ShieldCheck}
+              />
+              <StatusRow
+                label="Past due memberships"
+                status={String(summary?.pastDueMemberships ?? 0)}
+                icon={AlertTriangle}
+              />
+              <StatusRow
+                label="Trialing memberships"
+                status={String(summary?.trialingMemberships ?? 0)}
+                icon={Crown}
+              />
+            </section>
+          </aside>
+        </div>
+      )}
+    </div>
   );
 }
 

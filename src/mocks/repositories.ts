@@ -162,7 +162,23 @@ export const mockRepositories: AppRepositories = {
       return { items: [] };
     },
     async listUsers() {
-      return { items: [], nextCursor: null };
+      return {
+        items: [],
+        nextCursor: null,
+        total: 0,
+        summary: {
+          totalUsers: 0,
+          collectors: 0,
+          investors: 0,
+          staff: 0,
+          admins: 0,
+          suspended: 0,
+          activeUsers: 0,
+          restricted: 0,
+          pastDueMemberships: 0,
+          trialingMemberships: 0,
+        },
+      };
     },
     async getUser() {
       throw new Error("Admin user directory requires the API service.");
