@@ -144,6 +144,8 @@ async function handleTicketIntake(interaction: ModalSubmitInteraction): Promise<
   await interaction.deferReply({ ephemeral: true });
   const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'support');
   if (!support) throw new TicketCreationError('Slice support category is missing. Ask an administrator to run /setup repair.');
+  const existing = (await tickets.findActive(interaction.guildId, interaction.user.id)).find((ticket) => ticket.category === category);
+  if (existing?.channelId && !(await interaction.guild.channels.fetch(existing.channelId).catch(() => null))) await tickets.clearMissingChannel(existing.id, interaction.guildId, existing.channelId);
   const service = new TicketCreationService(tickets, createTicketDiscordBoundary(interaction.guild, support.discordId), { getRoleId: async (guildId, key) => (await repository.getResource(guildId, 'ROLE', key))?.discordId ?? null });
   const ticket = await service.create({ guildId: interaction.guildId, creatorDiscordId: interaction.user.id, category, subject: interaction.fields.getTextInputValue('subject'), description: interaction.fields.getTextInputValue('description'), referenceId: interaction.fields.getTextInputValue('reference') || undefined });
   await interaction.editReply({ embeds: [SliceEmbed.success('Ticket created', `Your private ticket is ready: <#${ticket.channelId}>`)] });
