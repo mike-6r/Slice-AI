@@ -65,6 +65,7 @@ export const Route = createFileRoute("/admin")({
   validateSearch: (search: Record<string, unknown>) => ({
     section: isAdminSection(search.section) ? search.section : "control",
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
+    tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
   }),
   head: () => ({ meta: [{ title: "Admin Console | Slice" }] }),
   component: AdminPage,
@@ -133,7 +134,7 @@ function AdminConsole() {
   const services = useAppServices();
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { section } = Route.useSearch();
+  const { section, tab: selectedUserTab } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -280,11 +281,11 @@ function AdminConsole() {
     staleTime: 15_000,
   });
   const select = (next: AdminSection) => {
-    void navigate({ search: { section: next, user: undefined }, replace: true });
+    void navigate({ search: { section: next, user: undefined, tab: undefined }, replace: true });
     setMobileOpen(false);
   };
   const openUser = (id: string) => {
-    void navigate({ search: { section: "users", user: id }, replace: true });
+    void navigate({ search: { section: "users", user: id, tab: undefined }, replace: true });
   };
   const reviewItems = reviews.data?.items ?? [];
   const operationItems = operations.data ?? [];
@@ -378,7 +379,7 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "users", user: result.id }}
+                    search={{ section: "users", user: result.id, tab: undefined }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -500,6 +501,13 @@ function AdminConsole() {
             selected={userDetail.data}
             selectedLoading={userDetail.isLoading}
             selectedFailed={userDetail.isError}
+            userTab={selectedUserTab}
+            setUserTab={(tab) => {
+              void navigate({
+                search: { section: "users", user: selectedUser, tab },
+                replace: true,
+              });
+            }}
             openUser={openUser}
             clearUser={() => select("users")}
             page={accountPage}
@@ -1345,6 +1353,8 @@ function AccountsWorkspace({
   selected,
   selectedLoading,
   selectedFailed,
+  userTab,
+  setUserTab,
   openUser,
   clearUser,
   page,
@@ -1371,6 +1381,8 @@ function AccountsWorkspace({
   selected?: AdminUserDetail;
   selectedLoading: boolean;
   selectedFailed: boolean;
+  userTab?: string;
+  setUserTab: (value: string) => void;
   openUser: (id: string) => void;
   clearUser: () => void;
   page: number;
@@ -1392,12 +1404,14 @@ function AccountsWorkspace({
 }) {
   if (selected || selectedLoading || selectedFailed) {
     return (
-      <UserDetail
+      <UserDetailExperience
         user={selected}
         loading={selectedLoading}
         failed={selectedFailed}
         retry={retry}
         back={clearUser}
+        tab={userTab}
+        setTab={setUserTab}
       />
     );
   }
@@ -1985,6 +1999,574 @@ function UsersWorkspace({
         </>
       )}
     </AdminPageSection>
+  );
+}
+
+function UserDetailExperience({
+  user,
+  loading,
+  failed,
+  retry,
+  back,
+  tab,
+  setTab,
+}: {
+  user?: AdminUserDetail;
+  loading: boolean;
+  failed: boolean;
+  retry: () => void;
+  back: () => void;
+  tab?: string;
+  setTab: (value: string) => void;
+}) {
+  if (loading)
+    return (
+      <AdminState title="Loading user" detail="Reading identity and safe account projections." />
+    );
+  if (failed || !user)
+    return (
+      <AdminState
+        title="We couldn't load this account"
+        detail="The account detail could not be loaded safely."
+        retry={retry}
+      />
+    );
+  const tabs = [
+    "Overview",
+    "Roles & Access",
+    ...(user.primaryType === "INVESTOR" ||
+    user.portfolioSummary.totalAssets ||
+    user.portfolioSummary.openOrders
+      ? ["Investor"]
+      : []),
+    ...(user.collectorOverview ? ["Collector"] : []),
+    "Wallet",
+    "Orders",
+    "Compliance",
+    "Support",
+    "Activity",
+    "Audit",
+  ];
+  const activeTab = tabs.includes(tab ?? "") ? tab! : "Overview";
+  const money = (value: string | null, currency = "GBP") =>
+    value === null
+      ? "Unavailable"
+      : `${currency === "GBP" ? "£" : currency + " "}${formatMinor(value)}`;
+  const renderOverview = () => (
+    <>
+      <div className="admin-detail-overview-grid">
+        <section className="admin-panel">
+          <AdminPanelHeading title="Account Summary" />
+          <DetailRow
+            label="Total Portfolio Value"
+            value={money(user.portfolioSummary.totalValueMinor, user.portfolioSummary.currency)}
+          />
+          <DetailRow label="Total Assets" value={String(user.portfolioSummary.totalAssets)} />
+          <DetailRow label="Active Listings" value={String(user.portfolioSummary.activeListings)} />
+          <DetailRow label="Open Orders" value={String(user.portfolioSummary.openOrders)} />
+          <DetailRow
+            label="Total Invested"
+            value={money(user.portfolioSummary.totalInvestedMinor, user.portfolioSummary.currency)}
+          />
+          <DetailRow
+            label="Total Withdrawn"
+            value={money(user.portfolioSummary.totalWithdrawnMinor, user.portfolioSummary.currency)}
+          />
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading title="Wallet Summary" />
+          <DetailRow
+            label="Available Cash"
+            value={
+              user.walletSummary
+                ? money(user.walletSummary.availableMinor, user.walletSummary.currency)
+                : "Unavailable"
+            }
+            tone="positive"
+          />
+          <DetailRow
+            label="Reserved"
+            value={
+              user.walletSummary
+                ? money(user.walletSummary.reservedMinor, user.walletSummary.currency)
+                : "Unavailable"
+            }
+            tone="warning"
+          />
+          <DetailRow
+            label="Pending"
+            value={
+              user.walletSummary
+                ? money(user.walletSummary.pendingMinor, user.walletSummary.currency)
+                : "Unavailable"
+            }
+            tone="info"
+          />
+          <DetailRow
+            label="Total Balance"
+            value={
+              user.walletSummary
+                ? money(user.walletSummary.totalMinor, user.walletSummary.currency)
+                : "Unavailable"
+            }
+          />
+          <p className="admin-safe-note">
+            Read-only D13 wallet projection. Balance editing is not available here.
+          </p>
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Recent Orders"
+            action="View all"
+            onClick={() => setTab("Orders")}
+          />
+          {user.recentOrders.length ? (
+            <div className="admin-record-list">
+              {user.recentOrders.map((order) => (
+                <article className="admin-record" key={order.id}>
+                  <span
+                    className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}
+                  >
+                    {sentence(order.side)}
+                  </span>
+                  <div className="min-w-0">
+                    <strong>{order.assetTitle}</strong>
+                    <small>
+                      {order.units} shares @ {money(order.limitPriceMinor, order.currency)}
+                    </small>
+                  </div>
+                  <span className="admin-record-status">{sentence(order.status)}</span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No open orders." icon={WalletCards} />
+          )}
+          <button type="button" className="admin-detail-link" onClick={() => setTab("Orders")}>
+            View all orders <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      </div>
+      <div className="admin-detail-lower-grid">
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Compliance Overview"
+            action="View compliance"
+            onClick={() => setTab("Compliance")}
+          />
+          <DetailRow
+            label="KYC Status"
+            value={sentence(user.complianceSummary.kycStatus)}
+            tone="positive"
+          />
+          <DetailRow
+            label="KYT Status"
+            value={sentence(user.complianceSummary.kytStatus)}
+            tone="positive"
+          />
+          <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
+          <DetailRow label="Provider" value={user.complianceSummary.provider ?? "Unavailable"} />
+          <DetailRow
+            label="Last Review"
+            value={
+              user.complianceSummary.lastReviewAt
+                ? date(user.complianceSummary.lastReviewAt)
+                : "Unavailable"
+            }
+          />
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Support Overview"
+            action="View support"
+            onClick={() => setTab("Support")}
+          />
+          <AdminEmpty
+            detail="Support ticket metrics are not connected to Admin User Detail."
+            icon={LifeBuoy}
+          />
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Collector Overview"
+            action={user.collectorOverview ? "View all" : undefined}
+            onClick={user.collectorOverview ? () => setTab("Collector") : undefined}
+          />
+          {user.collectorOverview ? (
+            <>
+              <div className="admin-detail-assets">
+                {user.collectorOverview.assets.map((asset) => (
+                  <div className="admin-detail-asset" key={asset.id}>
+                    <span>{initials(asset.title)}</span>
+                    <strong>{asset.title}</strong>
+                    <small>{asset.units} units</small>
+                  </div>
+                ))}
+                {user.collectorOverview.additionalAssets ? (
+                  <div className="admin-detail-asset admin-detail-asset--more">
+                    <strong>+{user.collectorOverview.additionalAssets}</strong>
+                    <small>More assets</small>
+                  </div>
+                ) : null}
+              </div>
+              <p className="admin-safe-note">
+                {user.collectorOverview.submissions} submissions ·{" "}
+                {user.collectorOverview.activeIntakes} active intakes
+              </p>
+            </>
+          ) : (
+            <AdminEmpty
+              detail="This user does not currently have Collector access."
+              icon={Archive}
+            />
+          )}
+        </section>
+      </div>
+    </>
+  );
+  const renderTab = () => {
+    if (activeTab === "Overview") return renderOverview();
+    if (activeTab === "Roles & Access")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Roles & Access" />
+          {user.roles.length ? (
+            <div className="admin-detail-role-list">
+              {user.roles.map((role) => (
+                <div key={role.id}>
+                  <span className="admin-tag">{sentence(role.role)}</span>
+                  <small>
+                    Granted {date(role.createdAt)} · {role.scopeType}
+                  </small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No active roles assigned." icon={ShieldCheck} />
+          )}
+          <p className="admin-safe-note">
+            Role grants and revocations use protected backend workflows. No inline mutation is
+            available in this read-only detail view.
+          </p>
+        </section>
+      );
+    if (activeTab === "Investor")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Investor Overview" />
+          <DetailRow label="Portfolio assets" value={String(user.portfolioSummary.totalAssets)} />
+          <DetailRow label="Open orders" value={String(user.portfolioSummary.openOrders)} />
+          <DetailRow
+            label="Invested"
+            value={money(user.portfolioSummary.totalInvestedMinor, user.portfolioSummary.currency)}
+          />
+          <p className="admin-safe-note">
+            Investor portfolio and trading history remain authoritative in their D13/D14 workspaces.
+          </p>
+        </section>
+      );
+    if (activeTab === "Collector")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Collector Workspace" />
+          {user.collectorOverview ? (
+            <>
+              <DetailRow
+                label="Membership"
+                value={
+                  user.collector?.subscription
+                    ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}`
+                    : "No Collector membership"
+                }
+              />
+              <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
+              <DetailRow
+                label="Active intake"
+                value={String(user.collectorOverview.activeIntakes)}
+              />
+              <div className="admin-detail-assets">
+                {user.collectorOverview.assets.map((asset) => (
+                  <div className="admin-detail-asset" key={asset.id}>
+                    <strong>{asset.title}</strong>
+                    <small>{asset.units} units</small>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <AdminEmpty
+              detail="This user does not currently have Collector access."
+              icon={Archive}
+            />
+          )}
+        </section>
+      );
+    if (activeTab === "Wallet")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Wallet & Finance" />
+          {user.walletSummary ? (
+            <>
+              <DetailRow
+                label="Available"
+                value={money(user.walletSummary.availableMinor, user.walletSummary.currency)}
+                tone="positive"
+              />
+              <DetailRow
+                label="Reserved"
+                value={money(user.walletSummary.reservedMinor, user.walletSummary.currency)}
+                tone="warning"
+              />
+              <DetailRow
+                label="Pending"
+                value={money(user.walletSummary.pendingMinor, user.walletSummary.currency)}
+                tone="info"
+              />
+              <p className="admin-safe-note">
+                Ledger history is immutable and financial corrections must use the
+                compensating-entry workflow.
+              </p>
+            </>
+          ) : (
+            <AdminEmpty
+              detail="Wallet information is temporarily unavailable."
+              icon={WalletCards}
+            />
+          )}
+        </section>
+      );
+    if (activeTab === "Orders")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Orders & Executions" />
+          {user.recentOrders.length ? (
+            <div className="admin-record-list">
+              {user.recentOrders.map((order) => (
+                <article className="admin-record" key={order.id}>
+                  <span
+                    className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}
+                  >
+                    {sentence(order.side)}
+                  </span>
+                  <div className="min-w-0">
+                    <strong>{order.assetTitle}</strong>
+                    <small>
+                      {order.units} shares @ {money(order.limitPriceMinor, order.currency)} ·{" "}
+                      {date(order.updatedAt)}
+                    </small>
+                  </div>
+                  <span className="admin-record-status">{sentence(order.status)}</span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No orders for this user." icon={WalletCards} />
+          )}
+        </section>
+      );
+    if (activeTab === "Compliance")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Compliance" />
+          <DetailRow
+            label="KYC"
+            value={sentence(user.complianceSummary.kycStatus)}
+            tone="positive"
+          />
+          <DetailRow
+            label="KYT"
+            value={sentence(user.complianceSummary.kytStatus)}
+            tone="positive"
+          />
+          <DetailRow label="Provider" value={user.complianceSummary.provider ?? "Unavailable"} />
+          <DetailRow label="Cases" value={String(user.complianceSummary.caseCount)} />
+          <p className="admin-safe-note">
+            Provider truth is preserved; sensitive evidence and secrets are not exposed.
+          </p>
+        </section>
+      );
+    if (activeTab === "Support")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title="Support" />
+          <AdminEmpty
+            detail="Support ticket metrics are not connected to Admin User Detail."
+            icon={LifeBuoy}
+          />
+        </section>
+      );
+    if (activeTab === "Activity" || activeTab === "Audit")
+      return (
+        <section className="admin-panel">
+          <AdminPanelHeading title={activeTab} />
+          {user.activitySnapshot.length ? (
+            <div className="admin-record-list">
+              {user.activitySnapshot.map((activity) => (
+                <article className="admin-record" key={activity.id}>
+                  <Activity aria-hidden="true" />
+                  <div className="min-w-0">
+                    <strong>{sentence(activity.action)}</strong>
+                    <small>
+                      {activity.resourceType} · {date(activity.occurredAt)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty
+              detail={`No ${activeTab.toLowerCase()} records are available for this user.`}
+              icon={FileClock}
+            />
+          )}
+        </section>
+      );
+    return null;
+  };
+  return (
+    <div className="admin-console-content admin-user-detail-content">
+      <button type="button" className="admin-back-link" onClick={back}>
+        <ChevronLeft aria-hidden="true" /> Users &amp; Accounts
+      </button>
+      <section className="admin-user-detail-heading">
+        <div>
+          <p className="admin-console-eyebrow">Users &amp; Accounts · User Detail</p>
+          <h2>{user.displayName}</h2>
+          <span>
+            {user.username ? `@${user.username}` : "Username unavailable"} ·{" "}
+            {sentence(user.primaryType)} · Member since {date(user.createdAt)}
+          </span>
+        </div>
+        <div className="admin-user-detail-actions">
+          <span
+            className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+          >
+            {sentence(user.accountStatus)}
+          </span>
+          <button type="button" className="admin-inline-action" onClick={() => setTab("Audit")}>
+            View audit log <ArrowRight aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+      <section className="admin-panel admin-user-identity-card">
+        <div className="admin-user-identity-avatar">{initials(user.displayName)}</div>
+        <div>
+          <h3>Contact</h3>
+          <p>{user.email}</p>
+          <p>{user.identity.phone ?? "Phone unavailable"}</p>
+          <p>{user.identity.country ?? "Country unavailable"}</p>
+        </div>
+        <div>
+          <h3>Account info</h3>
+          <p>User ID · {shortId(user.id)}</p>
+          <p>{user.username ? `@${user.username}` : "Username unavailable"}</p>
+          <p>
+            Discord ·{" "}
+            {user.identity.discord.connected
+              ? `Connected${user.identity.discord.username ? ` · ${user.identity.discord.username}` : ""}`
+              : "Not connected"}
+          </p>
+          <p>2FA · {user.identity.twoFactorEnabled ? "Enabled" : "Disabled"}</p>
+        </div>
+        <div>
+          <h3>KYC / Compliance</h3>
+          <p>KYC · {sentence(user.complianceSummary.kycStatus)}</p>
+          <p>KYT · {sentence(user.complianceSummary.kytStatus)}</p>
+          <p>
+            Last review ·{" "}
+            {user.complianceSummary.lastReviewAt
+              ? date(user.complianceSummary.lastReviewAt)
+              : "Unavailable"}
+          </p>
+        </div>
+        <div>
+          <h3>Membership</h3>
+          <p>
+            {user.collector?.subscription
+              ? user.collector.subscription.plan
+              : "No Collector membership"}
+          </p>
+          <p>{user.collector?.subscription ? sentence(user.collector.subscription.status) : "—"}</p>
+        </div>
+      </section>
+      <nav className="admin-tabs admin-user-detail-tabs" aria-label="User detail sections">
+        {tabs.map((item) => (
+          <button
+            type="button"
+            className={activeTab === item ? "is-active" : ""}
+            key={item}
+            onClick={() => setTab(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </nav>
+      <div className="admin-user-detail-main">
+        <main>{renderTab()}</main>
+        <aside className="admin-user-detail-rail">
+          <section className="admin-panel">
+            <AdminPanelHeading title="User Actions" />
+            <button
+              type="button"
+              className="admin-detail-action"
+              onClick={() => user.collectorOverview && setTab("Collector")}
+              disabled={!user.collectorOverview}
+            >
+              <Archive aria-hidden="true" /> View Collector Workspace
+            </button>
+            <button
+              type="button"
+              className="admin-detail-action"
+              onClick={() => setTab("Roles & Access")}
+            >
+              <ShieldCheck aria-hidden="true" /> View Roles &amp; Access
+            </button>
+            <button type="button" className="admin-detail-action" onClick={() => setTab("Audit")}>
+              <FileClock aria-hidden="true" /> View Audit Log
+            </button>
+            <p className="admin-safe-note">
+              High-risk actions require their protected backend workflow and are not performed
+              inline.
+            </p>
+          </section>
+          <section className="admin-panel">
+            <AdminPanelHeading
+              title="Activity Snapshot"
+              action="View all"
+              onClick={() => setTab("Activity")}
+            />
+            {user.activitySnapshot.length ? (
+              user.activitySnapshot.slice(0, 5).map((activity) => (
+                <div className="admin-activity-row" key={activity.id}>
+                  <Activity aria-hidden="true" />
+                  <span>{sentence(activity.action)}</span>
+                  <small>{date(activity.occurredAt)}</small>
+                </div>
+              ))
+            ) : (
+              <AdminEmpty detail="No recent activity." icon={Clock3} />
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "positive" | "warning" | "info";
+}) {
+  return (
+    <div className="admin-detail-row">
+      <span>{label}</span>
+      <strong className={tone ? `is-${tone}` : ""}>{value}</strong>
+    </div>
   );
 }
 

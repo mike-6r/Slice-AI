@@ -1529,6 +1529,7 @@ export class AdminService {
       select: {
         id: true,
         email: true,
+        phoneE164: true,
         accountStatus: true,
         createdAt: true,
         lastLoginAt: true,
@@ -1541,6 +1542,10 @@ export class AdminService {
             preferredCurrency: true,
           },
         },
+        discordAccountLink: {
+          select: { username: true, displayName: true, linkedAt: true },
+        },
+        twoFactor: { select: { enabledAt: true } },
         roleAssignments: {
           where: { revokedAt: null },
           select: {
@@ -1589,15 +1594,129 @@ export class AdminService {
         code: 'NOT_FOUND',
         message: 'Resource not found.',
       });
-    const activeIntakes = await this.db.submissionIntake.count({
-      where: {
-        submission: {
-          ownerUserId: userId,
-          status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] },
+    const [
+      activeIntakes,
+      collectorAssets,
+      totalAssets,
+      invested,
+      openOrders,
+      activeListings,
+      recentOrders,
+      financialAccounts,
+      pendingMovements,
+      withdrawn,
+      complianceCases,
+      activityRows,
+    ] = await Promise.all([
+      this.db.submissionIntake.count({
+        where: {
+          submission: {
+            ownerUserId: userId,
+            status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] },
+          },
+          status: { not: 'COMPLETE' },
         },
-        status: { not: 'COMPLETE' },
-      },
-    });
+      }),
+      this.db.portfolioLot.findMany({
+        where: { userId, status: 'OPEN' },
+        orderBy: [{ acquiredAt: 'desc' }, { id: 'desc' }],
+        take: 4,
+        include: { asset: { select: { id: true, title: true, slug: true } } },
+      }),
+      this.db.portfolioLot.count({ where: { userId, status: 'OPEN' } }),
+      this.db.portfolioLot.aggregate({
+        where: { userId, status: 'OPEN' },
+        _sum: { totalCostMinor: true },
+      }),
+      this.db.tradingOrder.count({
+        where: {
+          userId,
+          status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+        },
+      }),
+      this.db.tradingOrder.count({
+        where: {
+          userId,
+          side: 'SELL',
+          status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] },
+        },
+      }),
+      this.db.tradingOrder.findMany({
+        where: { userId },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 5,
+        select: {
+          id: true,
+          side: true,
+          originalUnits: true,
+          limitPriceMinor: true,
+          status: true,
+          updatedAt: true,
+          asset: { select: { title: true } },
+        },
+      }),
+      this.db.financialAccount.findMany({
+        where: { ownerType: 'USER', ownerUserId: userId, status: 'ACTIVE' },
+        select: {
+          currency: true,
+          normalSide: true,
+          balance: true,
+        },
+      }),
+      this.db.moneyMovement.aggregate({
+        where: {
+          userId,
+          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING'] },
+        },
+        _sum: { amountMinor: true },
+      }),
+      this.db.moneyMovement.aggregate({
+        where: { userId, type: 'WITHDRAWAL', status: 'SETTLED' },
+        _sum: { amountMinor: true },
+      }),
+      this.db.complianceCase.findMany({
+        where: { userId },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 12,
+        select: { type: true, status: true, provider: true, updatedAt: true },
+      }),
+      this.db.auditEvent.findMany({
+        where: { actorUserId: userId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 6,
+        select: {
+          id: true,
+          action: true,
+          resourceType: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+    const wallet = financialAccounts.length
+      ? financialAccounts.reduce(
+          (summary, account) => {
+            const balance = account.balance;
+            const gross = balance
+              ? account.normalSide === 'DEBIT'
+                ? balance.postedDebitMinor - balance.postedCreditMinor
+                : balance.postedCreditMinor - balance.postedDebitMinor
+              : 0n;
+            const reserved = balance?.reservedMinor ?? 0n;
+            summary.available += gross - reserved;
+            summary.reserved += reserved;
+            summary.currency = summary.currency ?? account.currency;
+            return summary;
+          },
+          { available: 0n, reserved: 0n, currency: null as string | null },
+        )
+      : null;
+    const latestCompliance = complianceCases[0];
+    const kycCase = complianceCases.find((item) => item.type.includes('KYC'));
+    const kytCase = complianceCases.find((item) => item.type.includes('KYT'));
+    const collectorEnabled = Boolean(
+      user.collectorSubscriptions.length ||
+        user.roleAssignments.some((role) => role.role === 'COLLECTOR'),
+    );
     return {
       id: user.id,
       email: user.email,
@@ -1615,8 +1734,7 @@ export class AdminService {
       })),
       counts: user._count,
       collector:
-        user.collectorSubscriptions.length ||
-        user.roleAssignments.some((role) => role.role === 'COLLECTOR')
+        collectorEnabled
           ? {
               subscription: user.collectorSubscriptions[0]
                 ? {
@@ -1632,6 +1750,71 @@ export class AdminService {
               activeIntakes,
             }
           : null,
+      identity: {
+        phone: user.phoneE164,
+        country: user.profile?.countryCode ?? null,
+        discord: {
+          connected: Boolean(user.discordAccountLink),
+          username: user.discordAccountLink?.username ?? null,
+          displayName: user.discordAccountLink?.displayName ?? null,
+          linkedAt: user.discordAccountLink?.linkedAt.toISOString() ?? null,
+        },
+        twoFactorEnabled: Boolean(user.twoFactor?.enabledAt),
+      },
+      complianceSummary: {
+        kycStatus: kycCase?.status ?? 'UNKNOWN',
+        kytStatus: kytCase?.status ?? 'UNKNOWN',
+        provider: latestCompliance?.provider ?? null,
+        lastReviewAt: latestCompliance?.updatedAt.toISOString() ?? null,
+        caseCount: user._count.complianceCases,
+      },
+      portfolioSummary: {
+        totalValueMinor: null,
+        totalInvestedMinor: (invested._sum.totalCostMinor ?? 0n).toString(),
+        totalWithdrawnMinor: (withdrawn._sum.amountMinor ?? 0n).toString(),
+        totalAssets,
+        activeListings,
+        openOrders,
+        currency: wallet?.currency ?? user.profile?.preferredCurrency ?? 'GBP',
+      },
+      walletSummary: wallet
+        ? {
+            availableMinor: wallet.available.toString(),
+            reservedMinor: wallet.reserved.toString(),
+            pendingMinor: (pendingMovements._sum.amountMinor ?? 0n).toString(),
+            totalMinor: (wallet.available + wallet.reserved).toString(),
+            currency: wallet.currency ?? 'GBP',
+          }
+        : null,
+      recentOrders: recentOrders.map((order) => ({
+        id: order.id,
+        side: order.side,
+        assetTitle: order.asset.title,
+        units: order.originalUnits.toString(),
+        limitPriceMinor: order.limitPriceMinor.toString(),
+        currency: user.profile?.preferredCurrency ?? 'GBP',
+        status: order.status,
+        updatedAt: order.updatedAt.toISOString(),
+      })),
+      collectorOverview: collectorEnabled
+        ? {
+            assets: collectorAssets.map((lot) => ({
+              id: lot.asset.id,
+              title: lot.asset.title,
+              slug: lot.asset.slug,
+              units: lot.remainingUnits.toString(),
+            })),
+            additionalAssets: Math.max(0, totalAssets - collectorAssets.length),
+            activeIntakes,
+            submissions: user._count.submissions,
+          }
+        : null,
+      activitySnapshot: activityRows.map((activity) => ({
+        id: activity.id,
+        action: activity.action,
+        resourceType: activity.resourceType,
+        occurredAt: activity.createdAt.toISOString(),
+      })),
     };
   }
 

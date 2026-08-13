@@ -772,6 +772,34 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
   const user = mapAdminUser(value);
   const profile = value.profile === null ? null : objectField(value.profile, "admin user profile");
   const counts = objectField(value.counts, "admin user counts");
+  const identity =
+    value.identity && typeof value.identity === "object"
+      ? objectField(value.identity, "admin user identity")
+      : {};
+  const discord =
+    identity.discord && typeof identity.discord === "object"
+      ? objectField(identity.discord, "admin user discord")
+      : {};
+  const complianceSummary =
+    value.complianceSummary && typeof value.complianceSummary === "object"
+      ? objectField(value.complianceSummary, "admin user compliance")
+      : {};
+  const portfolioSummary =
+    value.portfolioSummary && typeof value.portfolioSummary === "object"
+      ? objectField(value.portfolioSummary, "admin user portfolio")
+      : {};
+  const walletSummary =
+    value.walletSummary && typeof value.walletSummary === "object"
+      ? objectField(value.walletSummary, "admin user wallet")
+      : null;
+  const collectorOverview =
+    value.collectorOverview && typeof value.collectorOverview === "object"
+      ? objectField(value.collectorOverview, "admin user collector")
+      : null;
+  const mapMoney = (source: Record<string, unknown>, field: string) =>
+    stringField(source[field] ?? "0", `admin user ${field}`);
+  const mapNullableMoney = (source: Record<string, unknown>, field: string) =>
+    nullableString(source[field], `admin user ${field}`);
   return {
     ...user,
     profile: profile
@@ -824,6 +852,95 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
           };
         })()
       : null,
+    identity: {
+      phone: nullableString(identity.phone, "admin user identity.phone"),
+      country: nullableString(identity.country, "admin user identity.country"),
+      discord: {
+        connected: Boolean(discord.connected),
+        username: nullableString(discord.username, "admin user discord.username"),
+        displayName: nullableString(discord.displayName, "admin user discord.displayName"),
+        linkedAt: nullableString(discord.linkedAt, "admin user discord.linkedAt"),
+      },
+      twoFactorEnabled: Boolean(identity.twoFactorEnabled),
+    },
+    complianceSummary: {
+      kycStatus: stringField(
+        complianceSummary.kycStatus ?? "Unknown",
+        "admin user compliance.kycStatus",
+      ),
+      kytStatus: stringField(
+        complianceSummary.kytStatus ?? "Unknown",
+        "admin user compliance.kytStatus",
+      ),
+      provider: nullableString(complianceSummary.provider, "admin user compliance.provider"),
+      lastReviewAt: nullableString(
+        complianceSummary.lastReviewAt,
+        "admin user compliance.lastReviewAt",
+      ),
+      caseCount: Number(complianceSummary.caseCount ?? 0),
+    },
+    portfolioSummary: {
+      totalValueMinor: mapNullableMoney(portfolioSummary, "totalValueMinor"),
+      totalInvestedMinor: mapMoney(portfolioSummary, "totalInvestedMinor"),
+      totalWithdrawnMinor: mapMoney(portfolioSummary, "totalWithdrawnMinor"),
+      totalAssets: Number(portfolioSummary.totalAssets ?? 0),
+      activeListings: Number(portfolioSummary.activeListings ?? 0),
+      openOrders: Number(portfolioSummary.openOrders ?? 0),
+      currency: stringField(portfolioSummary.currency ?? "GBP", "admin user portfolio.currency"),
+    },
+    walletSummary: walletSummary
+      ? {
+          availableMinor: mapMoney(walletSummary, "availableMinor"),
+          reservedMinor: mapMoney(walletSummary, "reservedMinor"),
+          pendingMinor: mapMoney(walletSummary, "pendingMinor"),
+          totalMinor: mapMoney(walletSummary, "totalMinor"),
+          currency: stringField(walletSummary.currency ?? "GBP", "admin user wallet.currency"),
+        }
+      : null,
+    recentOrders: Array.isArray(value.recentOrders)
+      ? value.recentOrders.map((rawOrder) => {
+          const order = objectField(rawOrder, "admin user order");
+          return {
+            id: stringField(order.id, "admin user order.id"),
+            side: stringField(order.side, "admin user order.side"),
+            assetTitle: stringField(order.assetTitle, "admin user order.assetTitle"),
+            units: stringField(order.units, "admin user order.units"),
+            limitPriceMinor: stringField(order.limitPriceMinor, "admin user order.limitPriceMinor"),
+            currency: stringField(order.currency, "admin user order.currency"),
+            status: stringField(order.status, "admin user order.status"),
+            updatedAt: stringField(order.updatedAt, "admin user order.updatedAt"),
+          };
+        })
+      : [],
+    collectorOverview: collectorOverview
+      ? {
+          assets: Array.isArray(collectorOverview.assets)
+            ? collectorOverview.assets.map((rawAsset) => {
+                const asset = objectField(rawAsset, "admin user collector asset");
+                return {
+                  id: stringField(asset.id, "admin user collector asset.id"),
+                  title: stringField(asset.title, "admin user collector asset.title"),
+                  slug: stringField(asset.slug, "admin user collector asset.slug"),
+                  units: stringField(asset.units, "admin user collector asset.units"),
+                };
+              })
+            : [],
+          additionalAssets: Number(collectorOverview.additionalAssets ?? 0),
+          activeIntakes: Number(collectorOverview.activeIntakes ?? 0),
+          submissions: Number(collectorOverview.submissions ?? 0),
+        }
+      : null,
+    activitySnapshot: Array.isArray(value.activitySnapshot)
+      ? value.activitySnapshot.map((rawActivity) => {
+          const activity = objectField(rawActivity, "admin user activity");
+          return {
+            id: stringField(activity.id, "admin user activity.id"),
+            action: stringField(activity.action, "admin user activity.action"),
+            resourceType: stringField(activity.resourceType, "admin user activity.resourceType"),
+            occurredAt: stringField(activity.occurredAt, "admin user activity.occurredAt"),
+          };
+        })
+      : [],
   };
 };
 

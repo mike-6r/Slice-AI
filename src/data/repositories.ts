@@ -206,6 +206,57 @@ export type AdminUserDetail = AdminUserSummary & {
     } | null;
     activeIntakes: number;
   } | null;
+  identity: {
+    phone: string | null;
+    country: string | null;
+    discord: {
+      connected: boolean;
+      username: string | null;
+      displayName: string | null;
+      linkedAt: string | null;
+    };
+    twoFactorEnabled: boolean;
+  };
+  complianceSummary: {
+    kycStatus: string;
+    kytStatus: string;
+    provider: string | null;
+    lastReviewAt: string | null;
+    caseCount: number;
+  };
+  portfolioSummary: {
+    totalValueMinor: string | null;
+    totalInvestedMinor: string;
+    totalWithdrawnMinor: string;
+    totalAssets: number;
+    activeListings: number;
+    openOrders: number;
+    currency: string;
+  };
+  walletSummary: {
+    availableMinor: string;
+    reservedMinor: string;
+    pendingMinor: string;
+    totalMinor: string;
+    currency: string;
+  } | null;
+  recentOrders: Array<{
+    id: string;
+    side: string;
+    assetTitle: string;
+    units: string;
+    limitPriceMinor: string;
+    currency: string;
+    status: string;
+    updatedAt: string;
+  }>;
+  collectorOverview: {
+    assets: Array<{ id: string; title: string; slug: string; units: string }>;
+    additionalAssets: number;
+    activeIntakes: number;
+    submissions: number;
+  } | null;
+  activitySnapshot: Array<{ id: string; action: string; resourceType: string; occurredAt: string }>;
 };
 
 export type AdminComplianceCase = {
