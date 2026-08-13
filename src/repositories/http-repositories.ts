@@ -15,6 +15,7 @@ import type {
   AdminUserSummary,
   AppRepositories,
   AssetRepository,
+  AssetOperationsBoardResponse,
 } from "@/data/repositories";
 import type {
   Asset,
@@ -749,6 +750,10 @@ const mapOperation = (raw: unknown): AssetOperationSummary => {
     publicationStatus: stringField(value.publicationStatus, "operation.publicationStatus"),
     updatedAt: stringField(value.updatedAt, "operation.updatedAt") as ISODateTime,
   };
+};
+const mapOperationsBoard = (raw: unknown): AssetOperationsBoardResponse => {
+  const value = objectField(raw, "asset operations board");
+  return value as unknown as AssetOperationsBoardResponse;
 };
 async function sha256Hex(file: File) {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -2041,12 +2046,15 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
     lifecycle: {
       async listOperations() {
         const value = objectField(
-          await client.get<unknown>("/admin/assets/operations"),
+          await client.get<unknown>("/admin/assets/operations", { legacy: true }),
           "asset operations",
         );
         if (!Array.isArray(value.items))
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid asset operations from service.");
         return value.items.map(mapOperation);
+      },
+      async getOperationsBoard(input) {
+        return mapOperationsBoard(await client.get<unknown>("/admin/assets/operations", input));
       },
       async handoff(assetId) {
         return client.request(`/admin/assets/${assetId}/handoff`, {

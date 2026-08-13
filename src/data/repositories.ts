@@ -126,6 +126,15 @@ export interface SubmissionReviewRepository {
 }
 export interface AssetLifecycleRepository {
   listOperations(): Promise<AssetOperationSummary[]>;
+  getOperationsBoard(input?: {
+    tab?: string;
+    q?: string;
+    category?: string;
+    grader?: string;
+    priority?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AssetOperationsBoardResponse>;
   handoff(assetId: string): Promise<{ assetId: string; custodyStatus: string }>;
   transitionCustody(
     assetId: string,
@@ -553,6 +562,69 @@ export type AdminSearchResult = {
   title: string;
   subtitle: string;
   target: string;
+};
+
+export type AssetOperationsBoardItem = {
+  id: string;
+  publicId: string;
+  slug: string;
+  title: string;
+  thumbnailUrl: string | null;
+  collector: {
+    id: string;
+    displayName: string;
+    username: string | null;
+    membership: string | null;
+  } | null;
+  grading: {
+    company: string | null;
+    grade: string | null;
+    certNumber: string | null;
+    gradeDate: string | null;
+  };
+  category: { name: string; set: string | null; variant: string | null };
+  research: {
+    status: "COMPLETED" | "IN_PROGRESS" | "UNAVAILABLE" | "NOT_REQUESTED";
+    asOf: string | null;
+  };
+  currentStage:
+    | "AWAITING_VERIFICATION"
+    | "VERIFICATION_IN_PROGRESS"
+    | "AWAITING_VALUATION"
+    | "CUSTODY_PENDING"
+    | "VAULT_READY"
+    | "MARKET_READY"
+    | "MARKET_LIVE"
+    | "EXCEPTION";
+  stageSince: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  exception: {
+    type: string;
+    severity: "HIGH" | "MEDIUM" | "LOW";
+    openedAt: string;
+    summary: string;
+    detailTab: string;
+  } | null;
+  recommendedDetailTab: string;
+  submittedAt: string | null;
+};
+export type AssetOperationsBoardResponse = {
+  items: AssetOperationsBoardItem[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  counts: Record<AssetOperationsBoardItem["currentStage"], number>;
+  operationsOverview: Array<{
+    stage: AssetOperationsBoardItem["currentStage"];
+    label: string;
+    count: number;
+  }>;
+  stageFlowToday: Array<{ type: string; label: string; count: number }>;
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    reference: string;
+    occurredAt: string;
+  }>;
 };
 
 export type AdminCollectibleDetail = {

@@ -52,7 +52,17 @@ const custody = z
   })
   .strict();
 const operationsQuery = z
-  .object({ limit: z.coerce.number().int().min(1).max(100).default(50) })
+  .object({
+    limit: z.coerce.number().int().min(1).max(500).default(50),
+    tab: z.string().trim().max(40).optional(),
+    q: z.string().trim().max(160).optional(),
+    category: z.string().trim().max(80).optional(),
+    grader: z.string().trim().max(40).optional(),
+    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+    legacy: z.coerce.boolean().default(false),
+  })
   .strict();
 
 @Controller()
@@ -69,14 +79,15 @@ export class LifecycleController {
   }
 
   @Get('admin/assets/operations')
-  @UseGuards(AccessTokenGuard)
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('admin.console.read')
   operations(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     // Query parsing is deliberately kept bounded; this endpoint exposes only
     // staff-safe lifecycle state and is never a public catalogue projection.
-    return this.lifecycle.operationsQueue(
-      req.actor!,
-      parse(operationsQuery, query).limit ?? 50,
-    );
+    const input = parse(operationsQuery, query);
+    return input.legacy
+      ? this.lifecycle.operationsQueue(req.actor!, input.limit ?? 50)
+      : this.lifecycle.operationsQueue(req.actor!, input);
   }
 
   @Post('admin/assets/:id/handoff')

@@ -48,6 +48,7 @@ import { canAccessAdmin } from "@/auth/workspace-access";
 import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
+import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -65,7 +66,9 @@ import type {
 
 export const Route = createFileRoute("/admin")({
   validateSearch: (search: Record<string, unknown>): AdminSearch => ({
-    section: isAdminSection(search.section) ? search.section : "control",
+    section: normalizeAdminSection(search.section),
+    category: typeof search.category === "string" ? search.category : undefined,
+    grader: typeof search.grader === "string" ? search.grader : undefined,
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
     asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
     tab: typeof search.tab === "string" && search.tab.length > 0 ? search.tab : undefined,
@@ -94,9 +97,10 @@ type AdminSection =
   | "users"
   | "moderation"
   | "intake"
+  | "collectibles"
   | "valuations"
   | "custody"
-  | "marketplace"
+  | "assetOperations"
   | "memberships"
   | "compliance"
   | "payments"
@@ -127,6 +131,8 @@ type AdminSearch = {
   carrier?: string;
   dateFrom?: string;
   dateTo?: string;
+  category?: string;
+  grader?: string;
 };
 
 type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashboard };
@@ -136,30 +142,43 @@ const navItems: AdminNavItem[] = [
   { id: "users", label: "Users & Collectors", icon: Users },
   { id: "moderation", label: "Asset Review", icon: ClipboardCheck },
   { id: "intake", label: "Physical Intake", icon: Inbox },
-  { id: "valuations", label: "Valuations", icon: BadgeCheck },
-  { id: "custody", label: "Custody & Vaults", icon: Landmark },
-  { id: "marketplace", label: "Marketplace Ops", icon: BarChart3 },
+  { id: "collectibles", label: "Collectibles", icon: Tag },
+  { id: "assetOperations", label: "Asset Operations", icon: Gauge },
   { id: "memberships", label: "Collector Memberships", icon: Crown },
-  { id: "compliance", label: "Compliance", icon: ShieldCheck },
-  { id: "payments", label: "Payments & Wallets", icon: WalletCards },
-  { id: "support", label: "Support & Cases", icon: LifeBuoy },
-  { id: "health", label: "System Health", icon: HeartPulse },
-  { id: "audit", label: "Audit Logs", icon: FileClock },
-  { id: "flags", label: "Feature Flags", icon: Flag },
-  { id: "integrations", label: "Integrations", icon: SlidersHorizontal },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "payments", label: "Finance & Trading", icon: WalletCards },
+  { id: "support", label: "Trust & Support", icon: LifeBuoy },
+  { id: "health", label: "Platform Operations", icon: HeartPulse },
 ];
 
 function isAdminSection(value: unknown): value is AdminSection {
   return typeof value === "string" && navItems.some((item) => item.id === value);
 }
+function normalizeAdminSection(value: unknown): AdminSection {
+  if (["valuations", "custody", "marketplace"].includes(String(value))) return "collectibles";
+  if (["compliance"].includes(String(value))) return "support";
+  if (["audit", "flags", "integrations", "settings"].includes(String(value))) return "health";
+  return isAdminSection(value) ? value : "control";
+}
 
 function pipelineSection(stage: string): AdminSection {
   if (["draft", "submitted", "inReview"].includes(stage)) return "moderation";
   if (["accepted", "shipping", "received"].includes(stage)) return "intake";
-  if (stage === "verified" || stage === "valued") return "valuations";
-  if (stage === "vaultReady") return "custody";
-  return "marketplace";
+  if (stage === "verified" || stage === "valued") return "assetOperations";
+  if (stage === "vaultReady") return "assetOperations";
+  return "assetOperations";
+}
+function operationsTab(stage: string) {
+  return (
+    (
+      {
+        verified: "verification",
+        valued: "valuation",
+        vaultReady: "vault-ready",
+        marketReady: "market-ready",
+        marketLive: "market-live",
+      } as Record<string, string>
+    )[stage] ?? "verification"
+  );
 }
 
 function AdminPage() {
@@ -192,6 +211,9 @@ function AdminConsole() {
     carrier: intakeCarrier,
     dateFrom: intakeDateFrom,
     dateTo: intakeDateTo,
+    category: operationsCategory,
+    grader: operationsGrader,
+    priority: operationsPriority,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -413,9 +435,9 @@ function AdminConsole() {
     enabled: search.trim().length >= 2,
     staleTime: 15_000,
   });
-  const select = (next: AdminSection) => {
+  const select = (next: AdminSection, tab?: string) => {
     void navigate({
-      search: { section: next, user: undefined, asset: undefined, tab: undefined },
+      search: { section: next, user: undefined, asset: undefined, tab },
       replace: true,
     });
     setMobileOpen(false);
@@ -538,7 +560,7 @@ function AdminConsole() {
                   <Link
                     key={`${result.entityType}-${result.id}`}
                     to="/admin"
-                    search={{ section: "marketplace", asset: result.id, tab: "overview" }}
+                    search={{ section: "assetOperations", asset: result.id, tab: "overview" }}
                     onClick={() => {
                       setSearchInput("");
                       setSearch("");
@@ -655,7 +677,7 @@ function AdminConsole() {
             failed={operations.isError}
             retry={() => void operations.refetch()}
           />
-        ) : section === "marketplace" && selectedAsset ? (
+        ) : (section === "assetOperations" || section === "collectibles") && selectedAsset ? (
           <AdminCollectibleDetail
             assetId={selectedAsset}
             tab={selectedUserTab}
@@ -669,15 +691,17 @@ function AdminConsole() {
               })
             }
           />
-        ) : section === "marketplace" ? (
-          <OperationsQueueWorkspace
-            title="Marketplace Ops"
-            detail="Publication remains blocked until the existing lifecycle readiness authority says it is ready."
-            icon={BarChart3}
-            rows={operationItems.filter((item) => item.publicationStatus !== "PUBLISHED")}
-            loading={operations.isLoading}
-            failed={operations.isError}
-            retry={() => void operations.refetch()}
+        ) : section === "assetOperations" || section === "collectibles" ? (
+          <AdminAssetOperations
+            tab={selectedUserTab}
+            query={reviewQuery ?? ""}
+            category={operationsCategory ?? ""}
+            grader={operationsGrader ?? ""}
+            priority={operationsPriority ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            update={(patch) =>
+              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
+            }
           />
         ) : section === "memberships" ? (
           <MembershipsWorkspace
@@ -1568,7 +1592,7 @@ function ControlCenter({
   loading: boolean;
   failed: boolean;
   retry: () => void;
-  select: (section: AdminSection) => void;
+  select: (section: AdminSection, tab?: string) => void;
   overview?: import("@/data/repositories").AdminOverview;
   operational?: AdminOperationsOverview;
   risk?: import("@/data/repositories").AdminRiskOperations;
@@ -1771,7 +1795,7 @@ function ControlCenter({
                     ? Landmark
                     : ClipboardCheck
               }
-              onClick={() => select(pipelineSection(stage.id))}
+              onClick={() => select(pipelineSection(stage.id), operationsTab(stage.id))}
             />
           ))}
         </div>

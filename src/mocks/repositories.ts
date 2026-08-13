@@ -351,6 +351,9 @@ export const mockRepositories: AppRepositories = {
     async listOperations() {
       return [];
     },
+    async getOperationsBoard() {
+      throw new Error("Asset operations require the API service.");
+    },
     async handoff() {
       throw new Error("Lifecycle operations require the API service.");
     },

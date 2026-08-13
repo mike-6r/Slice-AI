@@ -343,10 +343,10 @@ function Overview({
           <LinkButton href={`/operations/assets?asset=${item.id}`}>
             Open Lifecycle Operations
           </LinkButton>
-          <LinkButton href={`/admin?section=valuations&asset=${item.id}`}>
+          <LinkButton href={`/admin?section=assetOperations&asset=${item.id}&tab=valuation`}>
             Update Valuation
           </LinkButton>
-          <LinkButton href={`/admin?section=marketplace&asset=${item.id}&tab=marketplace`}>
+          <LinkButton href={`/admin?section=assetOperations&asset=${item.id}&tab=marketplace`}>
             Marketplace Readiness
           </LinkButton>
         </InfoCard>

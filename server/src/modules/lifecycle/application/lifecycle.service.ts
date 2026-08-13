@@ -18,6 +18,80 @@ import {
 } from '../domain/publication.policy';
 
 type Db = Prisma.TransactionClient;
+type OperationsBoardInput = {
+  limit?: number;
+  tab?: string;
+  q?: string;
+  category?: string;
+  grader?: string;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  page?: number;
+  pageSize?: number;
+};
+type OperationsStage =
+  | 'AWAITING_VERIFICATION'
+  | 'VERIFICATION_IN_PROGRESS'
+  | 'AWAITING_VALUATION'
+  | 'CUSTODY_PENDING'
+  | 'VAULT_READY'
+  | 'MARKET_READY'
+  | 'MARKET_LIVE'
+  | 'EXCEPTION';
+type BoardAsset = {
+  id: string;
+  publicId: string;
+  slug: string;
+  title: string;
+  certificationNumber: string | null;
+  edition: string | null;
+  status: string;
+  updatedAt: Date;
+  createdAt: Date;
+  category: { name: string; slug: string };
+  collectibleSet: { name: string } | null;
+  gradeScaleEntry: {
+    grade: { toFixed: (digits: number) => string };
+    company: { code: string };
+  } | null;
+  submissions: Array<{
+    status: string;
+    submittedAt: Date | null;
+    reviewedAt: Date | null;
+    owner: {
+      id: string;
+      profile: { displayName: string; publicUsername: string | null } | null;
+    };
+    media: Array<{ slot: string; status: string }>;
+    marketResearch: Array<{ state: string; collectedAt: Date }>;
+    intake: {
+      status: string;
+      selectedAt: Date;
+      receivedAt: Date | null;
+      shipment: {
+        status: string;
+        shippedAt: Date;
+        deliveredAt: Date | null;
+      } | null;
+      receipt: { confirmedAt: Date } | null;
+      vault: { displayName: string };
+    } | null;
+    reviews: Array<{
+      status: string;
+      createdAt: Date;
+      completedAt: Date | null;
+    }>;
+  }>;
+  valuationDecisions: Array<{ status: string; decidedAt: Date }>;
+  valuationEvidence: Array<{
+    sourceType: string;
+    sourceRef: string | null;
+    observedAt: Date;
+  }>;
+  marketSnapshots: Array<{ asOf: Date }>;
+  custodyRecord: { status: string; updatedAt: Date } | null;
+  insuranceCoverage: Array<{ status: string; expiresAt: Date }>;
+  publication: { status: string; updatedAt: Date; readiness: unknown } | null;
+};
 
 @Injectable()
 export class LifecycleService {
@@ -47,7 +121,7 @@ export class LifecycleService {
   }
 
   /** Bounded staff-only discovery projection for the existing D11 authority. */
-  async operationsQueue(actor: Actor, limit: number) {
+  async operationsQueue(actor: Actor, input: number | OperationsBoardInput) {
     if (
       !actor.roles.some((role) =>
         ['ADMIN', 'COMPLIANCE_ANALYST', 'VAULT_OPERATOR'].includes(role),
@@ -58,14 +132,105 @@ export class LifecycleService {
         message: 'You do not have permission to view asset operations.',
       });
     }
+    if (typeof input === 'number') {
+      const assets = await this.db.asset.findMany({
+        where: { status: { not: 'ARCHIVED' } },
+        include: {
+          valuationDecisions: {
+            where: { status: 'ACTIVE' },
+            orderBy: { decidedAt: 'desc' },
+            take: 1,
+          },
+          custodyRecord: true,
+          insuranceCoverage: {
+            where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+            orderBy: { expiresAt: 'desc' },
+            take: 1,
+          },
+          publication: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: input,
+      });
+      return {
+        items: assets.map((asset) => ({
+          id: asset.id,
+          publicId: asset.publicId,
+          title: asset.title,
+          catalogueStatus: asset.status,
+          valuationStatus: asset.valuationDecisions.length
+            ? 'ACTIVE'
+            : 'MISSING',
+          custodyStatus: asset.custodyRecord?.status ?? 'MISSING',
+          coverageStatus: asset.insuranceCoverage.length ? 'ACTIVE' : 'MISSING',
+          publicationStatus: asset.publication?.status ?? 'BLOCKED',
+          updatedAt: asset.updatedAt.toISOString(),
+        })),
+      };
+    }
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 10;
     const assets = await this.db.asset.findMany({
-      where: { status: { not: 'ARCHIVED' } },
+      where: {
+        status: { not: 'ARCHIVED' },
+        ...(input.q
+          ? {
+              OR: [
+                { title: { contains: input.q, mode: 'insensitive' } },
+                { publicId: { contains: input.q, mode: 'insensitive' } },
+                { slug: { contains: input.q, mode: 'insensitive' } },
+                { cardNumber: { contains: input.q, mode: 'insensitive' } },
+                {
+                  certificationNumber: {
+                    contains: input.q,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
+            }
+          : {}),
+        ...(input.category ? { category: { slug: input.category } } : {}),
+        ...(input.grader
+          ? {
+              gradeScaleEntry: {
+                company: { code: input.grader.toUpperCase() },
+              },
+            }
+          : {}),
+      },
       include: {
+        category: true,
+        collectibleSet: true,
+        gradeScaleEntry: { include: { company: true } },
+        submissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            owner: {
+              select: {
+                id: true,
+                profile: {
+                  select: { displayName: true, publicUsername: true },
+                },
+              },
+            },
+            media: { where: { status: 'SAFE', deletedAt: null }, take: 2 },
+            intake: { include: { vault: true, shipment: true, receipt: true } },
+            reviews: { orderBy: { createdAt: 'desc' }, take: 1 },
+            marketResearch: {
+              orderBy: { collectedAt: 'desc' },
+              take: 1,
+              select: { state: true, collectedAt: true },
+            },
+          },
+        },
         valuationDecisions: {
           where: { status: 'ACTIVE' },
           orderBy: { decidedAt: 'desc' },
           take: 1,
         },
+        valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 10 },
+        marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
         custodyRecord: true,
         insuranceCoverage: {
           where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
@@ -74,20 +239,72 @@ export class LifecycleService {
         },
         publication: true,
       },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
+      orderBy: { updatedAt: 'asc' },
+      take: 500,
     });
+    const projected = assets
+      .map((asset) => operationsItem(asset))
+      .filter((item): item is NonNullable<ReturnType<typeof operationsItem>> =>
+        Boolean(item),
+      )
+      .filter(
+        (item) =>
+          !input.tab ||
+          input.tab === 'all' ||
+          tabMatches(item.currentStage, input.tab),
+      )
+      .filter((item) => !input.priority || item.priority === input.priority)
+      .sort(
+        (left, right) =>
+          priorityRank(left.priority) - priorityRank(right.priority) ||
+          new Date(left.stageSince).getTime() -
+            new Date(right.stageSince).getTime() ||
+          left.id.localeCompare(right.id),
+      );
+    const counts = stageCounts(
+      assets
+        .map(operationsItem)
+        .filter(
+          (item): item is NonNullable<ReturnType<typeof operationsItem>> =>
+            Boolean(item),
+        ),
+    );
+    const start = (page - 1) * pageSize;
+    const items = projected.slice(start, start + pageSize);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activity = await this.db.auditEvent.findMany({
+      where: { resourceType: 'asset', createdAt: { gte: today } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    const flow = activity.reduce<Record<string, number>>((result, event) => {
+      result[event.action] = (result[event.action] ?? 0) + 1;
+      return result;
+    }, {});
     return {
-      items: assets.map((asset) => ({
-        id: asset.id,
-        publicId: asset.publicId,
-        title: asset.title,
-        catalogueStatus: asset.status,
-        valuationStatus: asset.valuationDecisions.length ? 'ACTIVE' : 'MISSING',
-        custodyStatus: asset.custodyRecord?.status ?? 'MISSING',
-        coverageStatus: asset.insuranceCoverage.length ? 'ACTIVE' : 'MISSING',
-        publicationStatus: asset.publication?.status ?? 'BLOCKED',
-        updatedAt: asset.updatedAt.toISOString(),
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total: projected.length,
+        totalPages: Math.max(1, Math.ceil(projected.length / pageSize)),
+      },
+      counts,
+      operationsOverview: Object.entries(counts).map(([stage, count]) => ({
+        stage,
+        label: stageLabel(stage),
+        count,
+      })),
+      stageFlowToday: Object.entries(flow)
+        .slice(0, 8)
+        .map(([type, count]) => ({ type, label: stageLabel(type), count })),
+      recentActivity: activity.slice(0, 10).map((event) => ({
+        id: event.id,
+        type: event.action,
+        title: stageLabel(event.action),
+        reference: event.resourceId ?? '',
+        occurredAt: event.createdAt.toISOString(),
       })),
     };
   }
@@ -596,6 +813,208 @@ export class LifecycleService {
       return result;
     });
   }
+}
+
+function operationsItem(asset: BoardAsset) {
+  const submission = asset.submissions[0];
+  const intake = submission?.intake;
+  if (!submission || submission.status !== 'APPROVED' || !intake?.receipt)
+    return null;
+  const review = submission.reviews[0];
+  const decision = asset.valuationDecisions[0];
+  const custodyException = asset.custodyRecord?.status === 'EXCEPTION';
+  const shipmentException = intake.shipment?.status === 'EXCEPTION';
+  const publicationException = asset.publication?.status === 'UNPUBLISHED';
+  const exception =
+    shipmentException || custodyException || publicationException;
+  const verified =
+    review?.status === 'COMPLETED' ||
+    ['VERIFIED', 'PUBLISHED'].includes(asset.status);
+  const secured = asset.custodyRecord?.status === 'SECURED';
+  const covered = asset.insuranceCoverage.some(
+    (item) => item.status === 'ACTIVE' && item.expiresAt > new Date(),
+  );
+  const readiness = evaluateReadiness({
+    cataloguePublished: asset.status !== 'ARCHIVED',
+    verificationApproved: verified,
+    activeDecision: Boolean(decision),
+    custodySecured: secured,
+    activeCoverage: covered,
+    hasException: exception,
+  });
+  let currentStage: OperationsStage;
+  let stageSince: Date;
+  let detailTab = 'verification';
+  if (exception) {
+    currentStage = 'EXCEPTION';
+    stageSince =
+      intake.shipment?.deliveredAt ??
+      asset.custodyRecord?.updatedAt ??
+      asset.updatedAt;
+    detailTab = custodyException
+      ? 'custody'
+      : publicationException
+        ? 'marketplace'
+        : 'shipping';
+  } else if (!verified) {
+    currentStage =
+      review?.status === 'CLAIMED'
+        ? 'VERIFICATION_IN_PROGRESS'
+        : 'AWAITING_VERIFICATION';
+    stageSince =
+      review?.createdAt ?? intake.receivedAt ?? intake.receipt.confirmedAt;
+  } else if (!decision) {
+    currentStage = 'AWAITING_VALUATION';
+    stageSince = review?.completedAt ?? asset.updatedAt;
+    detailTab = 'valuation';
+  } else if (!secured) {
+    currentStage = 'CUSTODY_PENDING';
+    stageSince = asset.custodyRecord?.updatedAt ?? decision.decidedAt;
+    detailTab = 'custody';
+  } else if (asset.publication?.status === 'PUBLISHED') {
+    currentStage = 'MARKET_LIVE';
+    stageSince = asset.publication.updatedAt;
+    detailTab = 'marketplace';
+  } else if (readiness.status === 'READY') {
+    currentStage = 'MARKET_READY';
+    stageSince =
+      asset.publication?.updatedAt ??
+      asset.custodyRecord?.updatedAt ??
+      decision.decidedAt;
+    detailTab = 'marketplace';
+  } else {
+    currentStage = 'VAULT_READY';
+    stageSince = asset.custodyRecord?.updatedAt ?? decision.decidedAt;
+    detailTab = 'custody';
+  }
+  const research = submission.marketResearch[0];
+  const source = asset.valuationEvidence.find(
+    (item) => item.sourceType === 'STAGING_CURRENT_LISTING',
+  );
+  const thumbnailUrl = source ? sourceImage(source.sourceRef) : null;
+  const ageDays = Math.max(
+    0,
+    Math.floor((Date.now() - stageSince.getTime()) / 86_400_000),
+  );
+  return {
+    id: asset.id,
+    publicId: asset.publicId,
+    slug: asset.slug,
+    title: asset.title,
+    thumbnailUrl,
+    collector: submission.owner
+      ? {
+          id: submission.owner.id,
+          displayName:
+            submission.owner.profile?.displayName ?? 'Unnamed collector',
+          username: submission.owner.profile?.publicUsername ?? null,
+          membership: null,
+        }
+      : null,
+    grading: {
+      company: asset.gradeScaleEntry?.company.code ?? null,
+      grade:
+        asset.gradeScaleEntry?.grade.toFixed(2).replace(/\.00$/, '') ?? null,
+      certNumber: asset.certificationNumber,
+      gradeDate: null,
+    },
+    category: {
+      name: asset.category.name,
+      set: asset.collectibleSet?.name ?? null,
+      variant: asset.edition,
+    },
+    research: {
+      status: research ? normalizeResearch(research.state) : 'NOT_REQUESTED',
+      asOf: research?.collectedAt.toISOString() ?? null,
+    },
+    currentStage,
+    stageSince: stageSince.toISOString(),
+    priority:
+      exception || ageDays >= 7 ? 'HIGH' : ageDays >= 3 ? 'MEDIUM' : 'LOW',
+    exception: exception
+      ? {
+          type: shipmentException
+            ? 'INTAKE_EXCEPTION'
+            : custodyException
+              ? 'CUSTODY_EXCEPTION'
+              : 'PUBLICATION_EXCEPTION',
+          severity: 'HIGH',
+          openedAt: stageSince.toISOString(),
+          summary: shipmentException
+            ? 'Shipment exception requires intake review.'
+            : custodyException
+              ? 'Custody requires operator attention.'
+              : 'Publication is not currently live.',
+          detailTab,
+        }
+      : null,
+    recommendedDetailTab: detailTab,
+    submittedAt: submission.submittedAt?.toISOString() ?? null,
+  };
+}
+
+function sourceImage(sourceRef: string | null) {
+  if (!sourceRef) return null;
+  try {
+    const value = JSON.parse(sourceRef) as { imageUrl?: unknown };
+    return typeof value.imageUrl === 'string' ? value.imageUrl : null;
+  } catch {
+    return null;
+  }
+}
+function normalizeResearch(
+  state: string,
+): 'COMPLETED' | 'IN_PROGRESS' | 'UNAVAILABLE' | 'NOT_REQUESTED' {
+  if (state === 'COMPLETED') return 'COMPLETED';
+  if (['IN_PROGRESS', 'PENDING'].includes(state)) return 'IN_PROGRESS';
+  if (['UNAVAILABLE', 'FAILED'].includes(state)) return 'UNAVAILABLE';
+  return 'NOT_REQUESTED';
+}
+function tabStage(value: string): OperationsStage | null {
+  const map: Record<string, OperationsStage> = {
+    verification: 'AWAITING_VERIFICATION',
+    valuation: 'AWAITING_VALUATION',
+    custody: 'CUSTODY_PENDING',
+    'vault-ready': 'VAULT_READY',
+    'market-ready': 'MARKET_READY',
+    'market-live': 'MARKET_LIVE',
+    exceptions: 'EXCEPTION',
+  };
+  return map[value] ?? null;
+}
+function tabMatches(stage: OperationsStage, tab: string) {
+  if (tab === 'verification')
+    return (
+      stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS'
+    );
+  return stage === tabStage(tab);
+}
+function priorityRank(value: string) {
+  return value === 'HIGH' ? 0 : value === 'MEDIUM' ? 1 : 2;
+}
+function stageCounts(items: Array<{ currentStage: OperationsStage }>) {
+  const stages: OperationsStage[] = [
+    'AWAITING_VERIFICATION',
+    'VERIFICATION_IN_PROGRESS',
+    'AWAITING_VALUATION',
+    'CUSTODY_PENDING',
+    'VAULT_READY',
+    'MARKET_READY',
+    'MARKET_LIVE',
+    'EXCEPTION',
+  ];
+  return Object.fromEntries(
+    stages.map((stage) => [
+      stage,
+      items.filter((item) => item.currentStage === stage).length,
+    ]),
+  ) as Record<OperationsStage, number>;
+}
+function stageLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */
