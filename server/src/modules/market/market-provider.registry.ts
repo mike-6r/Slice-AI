@@ -6,15 +6,14 @@ import type { MarketDataProvider } from './market-provider.ports';
 export class MarketProviderRegistry {
   private readonly providers: MarketDataProvider[];
 
-  constructor(
-    @Inject(APP_CONFIG) config: AppConfig,
-    priceCharting: PriceChartingProvider = new PriceChartingProvider(config),
-  ) {
-    this.providers = [priceCharting];
+  constructor(@Inject(APP_CONFIG) config: AppConfig) {
+    this.providers = [new PriceChartingProvider(config)];
   }
 
   get(providerId: string) {
-    return this.providers.find((provider) => provider.providerId === providerId);
+    return this.providers.find(
+      (provider) => provider.providerId === providerId,
+    );
   }
 
   all() {
@@ -34,9 +33,14 @@ export class PriceChartingProvider implements MarketDataProvider {
   constructor(private readonly config: AppConfig) {}
 
   supports(category: string) {
-    return ['pokemon', 'pokemon-tcg', 'sports-cards', 'football', 'basketball', 'hockey'].includes(
-      category.toLowerCase(),
-    );
+    return [
+      'pokemon',
+      'pokemon-tcg',
+      'sports-cards',
+      'football',
+      'basketball',
+      'hockey',
+    ].includes(category.toLowerCase());
   }
 
   async health() {
@@ -52,8 +56,14 @@ export class PriceChartingProvider implements MarketDataProvider {
     };
   }
 
-  async fetchObservations(identity: import('./market-provider.ports').MarketIdentity, providerExternalId: string) {
-    if (!this.config.priceChartingApiBaseUrl || !this.config.priceChartingApiKey) {
+  async fetchObservations(
+    identity: import('./market-provider.ports').MarketIdentity,
+    providerExternalId: string,
+  ) {
+    if (
+      !this.config.priceChartingApiBaseUrl ||
+      !this.config.priceChartingApiKey
+    ) {
       throw new Error('PRICECHARTING_NOT_CONFIGURED');
     }
     const controller = new AbortController();
@@ -72,8 +82,10 @@ export class PriceChartingProvider implements MarketDataProvider {
           signal: controller.signal,
         },
       );
-      if (response.status === 429) throw new Error('PRICECHARTING_RATE_LIMITED');
-      if (!response.ok) throw new Error(`PRICECHARTING_HTTP_${response.status}`);
+      if (response.status === 429)
+        throw new Error('PRICECHARTING_RATE_LIMITED');
+      if (!response.ok)
+        throw new Error(`PRICECHARTING_HTTP_${response.status}`);
       const payload = (await response.json()) as unknown;
       return parseProviderObservations(payload, identity, providerExternalId);
     } catch (error) {
@@ -93,39 +105,83 @@ function parseProviderObservations(
   providerExternalId: string,
 ) {
   const rows =
-    typeof payload === 'object' && payload !== null && 'observations' in payload && Array.isArray(payload.observations)
+    typeof payload === 'object' &&
+    payload !== null &&
+    'observations' in payload &&
+    Array.isArray(payload.observations)
       ? payload.observations
       : [];
-  return rows.flatMap((raw): import('./market-provider.ports').ProviderObservation[] => {
-    if (typeof raw !== 'object' || raw === null) return [];
-    const row = raw as Record<string, unknown>;
-    const price = typeof row.priceMinor === 'string' && /^\d+$/.test(row.priceMinor) ? BigInt(row.priceMinor) : null;
-    const type = row.observationType;
-    if (!price || !['COMPLETED_SALE', 'ACTIVE_LISTING', 'PRICE_GUIDE', 'OTHER_APPROVED_REFERENCE'].includes(String(type))) return [];
-    const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : identity.title;
-    return [{
-      providerExternalId: typeof row.externalId === 'string' && row.externalId ? row.externalId : providerExternalId,
-      observationType: type as import('./market-provider.ports').ProviderObservation['observationType'],
-      priceMinor: price,
-      currency: typeof row.currency === 'string' ? row.currency.toUpperCase() : 'GBP',
-      title,
-      externalUrl: typeof row.url === 'string' ? row.url : undefined,
-      grader: typeof row.grader === 'string' ? row.grader : undefined,
-      grade: typeof row.grade === 'string' ? row.grade : undefined,
-      occurredAt: typeof row.occurredAt === 'string' ? new Date(row.occurredAt) : undefined,
-      observedAt: typeof row.observedAt === 'string' ? new Date(row.observedAt) : new Date(),
-      matchQuality: matchQuality(identity, row),
-      exclusionReason: typeof row.exclusionReason === 'string' ? row.exclusionReason : undefined,
-      provenance: { provider: 'PRICECHARTING', externalId: providerExternalId },
-    }];
-  });
+  return rows.flatMap(
+    (raw): import('./market-provider.ports').ProviderObservation[] => {
+      if (typeof raw !== 'object' || raw === null) return [];
+      const row = raw as Record<string, unknown>;
+      const price =
+        typeof row.priceMinor === 'string' && /^\d+$/.test(row.priceMinor)
+          ? BigInt(row.priceMinor)
+          : null;
+      const type = row.observationType;
+      if (
+        !price ||
+        ![
+          'COMPLETED_SALE',
+          'ACTIVE_LISTING',
+          'PRICE_GUIDE',
+          'OTHER_APPROVED_REFERENCE',
+        ].includes(String(type))
+      )
+        return [];
+      const title =
+        typeof row.title === 'string' && row.title.trim()
+          ? row.title.trim()
+          : identity.title;
+      return [
+        {
+          providerExternalId:
+            typeof row.externalId === 'string' && row.externalId
+              ? row.externalId
+              : providerExternalId,
+          observationType:
+            type as import('./market-provider.ports').ProviderObservation['observationType'],
+          priceMinor: price,
+          currency:
+            typeof row.currency === 'string'
+              ? row.currency.toUpperCase()
+              : 'GBP',
+          title,
+          externalUrl: typeof row.url === 'string' ? row.url : undefined,
+          grader: typeof row.grader === 'string' ? row.grader : undefined,
+          grade: typeof row.grade === 'string' ? row.grade : undefined,
+          occurredAt:
+            typeof row.occurredAt === 'string'
+              ? new Date(row.occurredAt)
+              : undefined,
+          observedAt:
+            typeof row.observedAt === 'string'
+              ? new Date(row.observedAt)
+              : new Date(),
+          matchQuality: matchQuality(identity, row),
+          exclusionReason:
+            typeof row.exclusionReason === 'string'
+              ? row.exclusionReason
+              : undefined,
+          provenance: {
+            provider: 'PRICECHARTING',
+            externalId: providerExternalId,
+          },
+        },
+      ];
+    },
+  );
 }
 
 function normalize(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function matchQuality(identity: import('./market-provider.ports').MarketIdentity, row: Record<string, unknown>) {
+function matchQuality(
+  identity: import('./market-provider.ports').MarketIdentity,
+  row: Record<string, unknown>,
+) {
   const title = normalize(typeof row.title === 'string' ? row.title : '');
   const cardNumber = normalize(identity.cardNumber);
   const grader = normalize(typeof row.grader === 'string' ? row.grader : '');
