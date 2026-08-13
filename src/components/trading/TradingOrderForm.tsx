@@ -677,6 +677,18 @@ export function TradingOrderForm({
                     label={side === "BUY" ? "Ownership requested" : "Ownership to sell"}
                     value={`${ownershipPercent}%`}
                   />
+                  <Cell
+                    label={side === "BUY" ? "Resulting ownership" : "Remaining ownership"}
+                    value={
+                      side === "BUY"
+                        ? ownershipPreview.data?.resultingOwnershipPercent
+                          ? `${ownershipPreview.data.resultingOwnershipPercent}%`
+                          : "Unavailable"
+                        : ownershipPreview.data?.remainingOwnershipPercent
+                          ? `${ownershipPreview.data.remainingOwnershipPercent}%`
+                          : "Unavailable"
+                    }
+                  />
                   <Cell label={customerTerms.many} value={review.units} />
                   <Cell label="Limit price" value={formatGbpMinor(review.limitPriceMinor)} />
                   <Cell label="Order value" value={formatGbpMinor(review.grossMinor)} />
@@ -831,7 +843,6 @@ function Estimate({
   side: TradingOrderSide;
   loading: boolean;
 }) {
-  const net = preview ? BigInt(preview.grossMinor) - BigInt(preview.feeMinor) : null;
   return (
     <section className="trading-estimate" aria-live="polite">
       <div className="trading-estimate-heading">
@@ -873,14 +884,16 @@ function Estimate({
           }
         />
         <ContextRow
-          label={side === "BUY" ? "Maximum cash reserved" : "Estimated proceeds"}
+          label={side === "BUY" ? "Resulting ownership" : "Remaining ownership"}
           value={
-            preview
+            ownershipPreview
               ? side === "BUY"
-                ? preview.reservationMinor
-                  ? formatGbpMinor(preview.reservationMinor)
+                ? ownershipPreview.resultingOwnershipPercent
+                  ? `${ownershipPreview.resultingOwnershipPercent}%`
                   : "Unavailable"
-                : formatGbpMinor(net ?? 0n)
+                : ownershipPreview.remainingOwnershipPercent
+                  ? `${ownershipPreview.remainingOwnershipPercent}%`
+                  : "Unavailable"
               : "—"
           }
         />

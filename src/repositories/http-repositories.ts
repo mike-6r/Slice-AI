@@ -414,6 +414,14 @@ const mapOwnershipPreview = (raw: unknown): OwnershipOrderPreview => {
       value.ownedOwnershipPercent,
       "ownershipPreview.ownedOwnershipPercent",
     ),
+    resultingOwnershipPercent: nullableString(
+      value.resultingOwnershipPercent,
+      "ownershipPreview.resultingOwnershipPercent",
+    ),
+    remainingOwnershipPercent: nullableString(
+      value.remainingOwnershipPercent,
+      "ownershipPreview.remainingOwnershipPercent",
+    ),
     slicePriceMinor: nullableString(value.slicePriceMinor, "ownershipPreview.slicePriceMinor"),
     impliedWholeValueMinor: nullableString(
       value.impliedWholeValueMinor,

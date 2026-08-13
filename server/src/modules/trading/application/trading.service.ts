@@ -164,6 +164,11 @@ export class TradingService {
       : null;
     const onePercentSlices = total % 100n === 0n ? total / 100n : null;
     const onePercentValue = onePercentSlices !== null && marketPrice !== null ? onePercentSlices * marketPrice : null;
+    const resultingUnits = requestedSlices === null
+      ? null
+      : input.side === 'BUY'
+        ? owned + requestedSlices
+        : (owned > requestedSlices ? owned - requestedSlices : 0n);
     return {
       assetId: input.assetId,
       side: input.side,
@@ -175,6 +180,8 @@ export class TradingService {
       availableOwnershipPercent: formatOwnershipPercent(available, total),
       ownedSlices: owned.toString(),
       ownedOwnershipPercent: formatOwnershipPercent(owned, total),
+      resultingOwnershipPercent: resultingUnits === null ? null : formatOwnershipPercent(resultingUnits, total),
+      remainingOwnershipPercent: input.side === 'SELL' && resultingUnits !== null ? formatOwnershipPercent(resultingUnits, total) : null,
       slicePriceMinor: marketPrice?.toString() ?? null,
       impliedWholeValueMinor: marketPrice === null ? null : (marketPrice * total).toString(),
       externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,

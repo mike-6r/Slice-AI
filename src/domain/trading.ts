@@ -95,6 +95,8 @@ export type OwnershipOrderPreview = {
   availableOwnershipPercent: string;
   ownedSlices: string;
   ownedOwnershipPercent: string;
+  resultingOwnershipPercent: string | null;
+  remainingOwnershipPercent: string | null;
   slicePriceMinor: string | null;
   impliedWholeValueMinor: string | null;
   externalReferenceMinor: string | null;

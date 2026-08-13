@@ -753,6 +753,8 @@ export const mockRepositories: AppRepositories = {
         availableOwnershipPercent: "50",
         ownedSlices: "0",
         ownedOwnershipPercent: "0",
+        resultingOwnershipPercent: input.side === "BUY" ? `${(slices / Number(total)) * 100}` : "0",
+        remainingOwnershipPercent: input.side === "SELL" ? "0" : null,
         slicePriceMinor: priceMinor.toString(),
         impliedWholeValueMinor: (priceMinor * total).toString(),
         externalReferenceMinor: (priceMinor * total).toString(),
