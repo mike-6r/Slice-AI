@@ -1,12 +1,14 @@
 import {
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import {
   collectorPlanRegistry,
   collectorUsageFor,
@@ -125,7 +127,10 @@ type CollectorRequestView = {
 
 @Injectable()
 export class CollectorWorkspaceService {
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    @Inject(APP_CONFIG) private readonly config?: AppConfig,
+  ) {}
 
   async overview(userId: string) {
     const [user, submissions, notifications] = await Promise.all([
@@ -738,14 +743,22 @@ export class CollectorWorkspaceService {
     };
   }
 
-  private submissionsFor(userId: string) {
-    return this.db.assetSubmission.findMany({
+  private async submissionsFor(userId: string) {
+    const submissions = await this.db.assetSubmission.findMany({
       // Cancelled submissions are retained for audit/replay safety, but are
       // no longer part of the collector's active workspace projection.
       where: { ownerUserId: userId, status: { not: 'CANCELLED' } },
       include: workspaceSubmissionInclude,
       orderBy: { updatedAt: 'desc' },
     });
+    return submissions.filter(
+      (submission) =>
+        !isBetaFixtureSubmission(
+          submission.declaredMetadata,
+          submission.asset?.slug,
+          this.config?.isBeta === true,
+        ),
+    );
   }
 
   private async activityFor(
@@ -823,6 +836,21 @@ export class CollectorWorkspaceService {
       .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
       .slice(0, 12);
   }
+}
+
+function isBetaFixtureSubmission(
+  metadata: Prisma.JsonValue | null,
+  assetSlug: string | null | undefined,
+  isBeta: boolean,
+) {
+  if (!isBeta) return false;
+  if (assetSlug?.startsWith('slice-demo-')) return true;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  const value = metadata as Record<string, unknown>;
+  return (
+    value.betaFixtureRetired === true ||
+    (typeof value.certificationNumber === 'string' && value.certificationNumber.startsWith('STG-'))
+  );
 }
 
 const workspaceSubmissionInclude = {
