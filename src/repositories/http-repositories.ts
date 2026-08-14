@@ -3440,6 +3440,25 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           }),
         };
       },
+      async grantCollectorBeta() {
+        const value = objectField(
+          await client.request<unknown>("/me/collector-beta-access", {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "collector beta access",
+        );
+        if (value.status !== "APPROVED" || value.role !== "COLLECTOR") {
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid collector beta access response.");
+        }
+        return {
+          status: "APPROVED" as const,
+          role: "COLLECTOR" as const,
+          granted: booleanField(value.granted, "collectorBeta.granted"),
+          assignmentId:
+            nullableString(value.assignmentId, "collectorBeta.assignmentId") ?? undefined,
+        };
+      },
       async getEmailVerification() {
         const value = objectField(
           await client.get<unknown>("/me/email-verification/status"),

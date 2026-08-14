@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MarketAssetGrid } from "@/components/marketplace/MarketAssetGrid";
@@ -23,6 +23,8 @@ import {
 } from "@/components/marketplace/marketplace-helpers";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import { isBetaEnvironment } from "@/config/environment";
+import { useSession } from "@/auth/use-session";
 
 export const Route = createFileRoute("/marketplace")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/marketplace")({
 
 function Marketplace() {
   const services = useAppServices();
+  const { isAuthenticated } = useSession();
   const routeSearch = Route.useSearch();
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>("trending");
   const [filters, setFilters] = useState<MarketFilters>({
@@ -122,6 +125,12 @@ function Marketplace() {
     () => sortMarketAssets(filterMarketAssets(assets, filters, query, quickFilter), sort),
     [assets, filters, query, quickFilter, sort],
   );
+  const hasActiveFilters = Boolean(
+    query.trim() ||
+    Object.entries(filters).some(
+      ([key, value]) => value !== EMPTY_MARKET_FILTERS[key as keyof MarketFilters],
+    ),
+  );
   const clearFilters = () => setFilters(EMPTY_MARKET_FILTERS);
 
   return (
@@ -178,19 +187,38 @@ function Marketplace() {
           ) : (
             <div className="markets-empty-state">
               <SearchX aria-hidden="true" />
-              <h2>No assets match these filters</h2>
-              <p>Try another search or clear the filters to see the catalogue.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  clearFilters();
-                  setQuery("");
-                  setQuickFilter("trending");
-                  setSort("trending");
-                }}
-              >
-                Clear filters
-              </button>
+              {isBetaEnvironment && !hasActiveFilters ? (
+                <>
+                  <h2>No collectibles available yet</h2>
+                  <p>
+                    New collectibles will appear here after completing Slice verification and market
+                    readiness. This controlled Beta is not showing retired showcase data.
+                  </p>
+                  <Link
+                    to={isAuthenticated ? "/onboarding" : "/signup"}
+                    search={isAuthenticated ? { returnTo: "/list" } : undefined}
+                    className="primary-action"
+                  >
+                    {isAuthenticated ? "Become a Collector" : "Create an account"}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <h2>No assets match these filters</h2>
+                  <p>Try another search or clear the filters to see the catalogue.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearFilters();
+                      setQuery("");
+                      setQuickFilter("trending");
+                      setSort("trending");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -21,6 +21,7 @@ import { deriveOnboardingStage } from "@/auth/onboarding-state";
 import { safeReturnIntent } from "@/auth/return-intent";
 import { session } from "@/auth/session";
 import { useSession } from "@/auth/use-session";
+import { isBetaEnvironment } from "@/config/environment";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 
@@ -40,6 +41,7 @@ function OnboardingPage() {
   const { repositories } = useAppServices();
   const { isAuthenticated } = useSession();
   const returnTo = safeReturnIntent(Route.useSearch().returnTo);
+  const collectorBetaFlow = isBetaEnvironment && returnTo === "/list";
   const [restoringSession, setRestoringSession] = useState(() => session.token() === null);
   const user = useQuery({
     queryKey: queryKeys.user.current,
@@ -49,22 +51,22 @@ function OnboardingPage() {
   const email = useQuery({
     queryKey: queryKeys.account.email,
     queryFn: repositories.account.getEmailVerification,
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !collectorBetaFlow,
   });
   const phone = useQuery({
     queryKey: queryKeys.account.phone,
     queryFn: repositories.account.getPhoneVerification,
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !collectorBetaFlow,
   });
   const twoFactor = useQuery({
     queryKey: queryKeys.account.twoFactor,
     queryFn: repositories.account.getTwoFactor,
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !collectorBetaFlow,
   });
   const compliance = useQuery({
     queryKey: ["providers", "compliance"],
     queryFn: repositories.providers.getCompliance,
-    enabled: isAuthenticated && returnTo === "/list",
+    enabled: isAuthenticated && !collectorBetaFlow && returnTo === "/list",
     refetchInterval: (query) =>
       query.state.data?.status === "PENDING" || query.state.data?.status === "REVIEW"
         ? 5_000
@@ -109,12 +111,20 @@ function OnboardingPage() {
   }, [phoneResendAt, sentEmailAt]);
 
   useEffect(() => {
-    if (bootstrapped || !user.data || !email.data || !phone.data || !twoFactor.data) return;
+    if (
+      collectorBetaFlow ||
+      bootstrapped ||
+      !user.data ||
+      !email.data ||
+      !phone.data ||
+      !twoFactor.data
+    )
+      return;
     setBootstrapped(true);
     setStage(
       deriveOnboardingStage(email.data.verified, phone.data.verified, twoFactor.data.enabled),
     );
-  }, [bootstrapped, email.data, phone.data, twoFactor.data, user.data]);
+  }, [bootstrapped, collectorBetaFlow, email.data, phone.data, twoFactor.data, user.data]);
 
   const refresh = async () => {
     await Promise.all([
@@ -165,10 +175,21 @@ function OnboardingPage() {
       if (value.sessionUrl) window.open(value.sessionUrl, "_blank", "noopener,noreferrer");
     },
   });
+  const collectorBetaAccess = useMutation({
+    mutationFn: repositories.account.grantCollectorBeta,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.user.current }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities }),
+      ]);
+      await navigate({ to: "/list" });
+    },
+  });
 
   const loading =
     restoringSession ||
-    (isAuthenticated && (!user.data || !email.data || !phone.data || !twoFactor.data));
+    (isAuthenticated &&
+      (!user.data || (!collectorBetaFlow && (!email.data || !phone.data || !twoFactor.data))));
   const resendRemaining = useMemo(() => secondsUntil(sentEmailAt, now), [now, sentEmailAt]);
   const phoneResendRemaining = useMemo(
     () => secondsUntil(phoneResendAt, now),
@@ -196,6 +217,19 @@ function OnboardingPage() {
         </section>
       </main>
     );
+
+  if (collectorBetaFlow) {
+    return (
+      <main className="onboarding-page">
+        <CollectorBetaOnboarding
+          displayName={user.data!.profile.displayName}
+          granting={collectorBetaAccess.isPending}
+          error={collectorBetaAccess.error}
+          onContinue={() => collectorBetaAccess.mutate()}
+        />
+      </main>
+    );
+  }
 
   const completed = {
     account: true,
@@ -444,6 +478,93 @@ function CollectorOnboardingStep({
           : "Plaid status is confirmed by Slice&apos;s provider authority. Completing the Link flow alone does not mark you verified."}
       </p>
     </Step>
+  );
+}
+
+function CollectorBetaOnboarding({
+  displayName,
+  granting,
+  error,
+  onContinue,
+}: {
+  displayName: string;
+  granting: boolean;
+  error: unknown;
+  onContinue: () => void;
+}) {
+  return (
+    <section className="onboarding-card premium-surface" aria-labelledby="collector-beta-title">
+      <div className="onboarding-brand">
+        <span className="onboarding-brand__mark">
+          <img src="/favicon.png" alt="" />
+        </span>
+        <strong>Slice</strong>
+        <span>Collector Beta</span>
+      </div>
+      <div className="onboarding-step">
+        <span className="onboarding-step__icon">
+          <Fingerprint />
+        </span>
+        <p className="page-kicker">Become a Collector</p>
+        <h1 id="collector-beta-title">Turn your account into a Collector workspace.</h1>
+        <p className="onboarding-step__lead">
+          Hi {displayName || "there"}. This controlled Beta uses a clear access status instead of
+          requiring deferred Plaid, SMS, email, or 2FA providers.
+        </p>
+        {error ? (
+          <p className="form-error onboarding-error" role="alert">
+            {friendlyError(error)}
+          </p>
+        ) : null}
+        <ol className="onboarding-checklist" aria-label="Collector Beta requirements">
+          <li data-complete="true">
+            <CheckCircle2 />{" "}
+            <span>
+              <strong>Collector profile</strong>
+              <small>Use your existing Slice profile.</small>
+            </span>
+          </li>
+          <li data-complete="true">
+            <CheckCircle2 />{" "}
+            <span>
+              <strong>Beta verification status</strong>
+              <small>
+                Deferred during the current controlled Beta; this is not Plaid verification.
+              </small>
+            </span>
+          </li>
+          <li data-complete="false">
+            <span aria-hidden="true">3</span>
+            <span>
+              <strong>Beta access</strong>
+              <small>Grant the Collector role through the audited Beta access command.</small>
+            </span>
+          </li>
+          <li data-complete="false">
+            <span aria-hidden="true">4</span>
+            <span>
+              <strong>Ready to list</strong>
+              <small>Start your first submission after access is granted.</small>
+            </span>
+          </li>
+        </ol>
+        <aside className="onboarding-callout">
+          <ShieldCheck aria-hidden="true" />
+          <span>
+            <strong>Provider status</strong> Plaid IDV, SMS, email verification, and 2FA are
+            deferred in this Beta.
+          </span>
+        </aside>
+        <button
+          type="button"
+          className="primary-action onboarding-cta"
+          onClick={onContinue}
+          disabled={granting}
+        >
+          {granting ? "Enabling Collector access…" : "Enable Collector Beta access"}
+        </button>
+      </div>
+    </section>
   );
 }
 

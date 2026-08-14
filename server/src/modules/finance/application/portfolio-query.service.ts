@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { FinancialLedgerService } from './financial-ledger.service';
 import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { publicBetaAssetWhere } from '../../../config/beta-policy';
 
 @Injectable()
 export class PortfolioQueryService {
   constructor(
     private readonly db: PrismaService,
     private readonly ledger: FinancialLedgerService,
+    @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
 
   async portfolioForUser(userId: string) {
@@ -76,6 +79,7 @@ export class PortfolioQueryService {
       where: {
         id: { in: positions.map((position) => position.assetId) },
         status: 'PUBLISHED',
+        ...publicBetaAssetWhere(this.config?.isBeta === true),
       },
       select: {
         id: true,
@@ -189,7 +193,10 @@ export class PortfolioQueryService {
 
   async lotsForUser(userId: string) {
     const lots = await this.db.portfolioLot.findMany({
-      where: { userId, asset: { status: 'PUBLISHED' } },
+      where: {
+        userId,
+        asset: { status: 'PUBLISHED', ...publicBetaAssetWhere(this.config?.isBeta === true) },
+      },
       include: { asset: { select: { slug: true, title: true } } },
       orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
     });

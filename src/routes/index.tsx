@@ -51,15 +51,15 @@ const howSliceWorks = [
   {
     number: "02",
     icon: <CircleDollarSign />,
-    title: "Buy shares",
-    detail: "Choose the number of shares you want without buying the entire collectible.",
+    title: "Own a Slice",
+    detail: "Choose an ownership position without buying the entire collectible.",
     to: "/marketplace" as const,
   },
   {
     number: "03",
     icon: <ChartNoAxesCombined />,
     title: "Track",
-    detail: "Track your shares, percentage ownership, cost basis and portfolio activity.",
+    detail: "Track your ownership, cost basis and portfolio activity.",
     to: "/portfolio" as const,
   },
   {
@@ -87,7 +87,7 @@ function HomePage() {
             <span>Grow.</span>
           </h1>
           <p className="approved-home__lead">
-            Own shares in authenticated collectible cards without buying the entire asset. Build a
+            Own a Slice of authenticated collectible cards without buying the entire asset. Build a
             portfolio, track your percentage ownership and participate in the Slice marketplace.
           </p>
           <div className="approved-home__actions">
@@ -105,15 +105,15 @@ function HomePage() {
               ))}
             </div>
             <div>
-              <strong>Own shares, not the whole card</strong>
-              <small>Start from a single share and build your position over time.</small>
+              <strong>Own a Slice, not the whole card</strong>
+              <small>Start with an ownership position and build it over time.</small>
             </div>
           </div>
         </div>
 
         <div className="approved-home__featured-stack">
           <FeaturedMarketHero />
-          <TradingEducation compact />
+          {!isBetaEnvironment ? <TradingEducation compact /> : null}
         </div>
       </section>
 
@@ -131,7 +131,7 @@ function HomePage() {
           <FeatureCard
             icon={<Boxes />}
             title="Fractional ownership"
-            detail="Buy shares in high-value collectible assets instead of purchasing the entire card."
+            detail="Own a position in high-value collectible assets instead of purchasing the entire card."
             to="/marketplace"
           />
           <FeatureCard
@@ -143,7 +143,7 @@ function HomePage() {
           <FeatureCard
             icon={<ChartNoAxesCombined />}
             title="Portfolio"
-            detail="Track shares, percentage ownership, cost basis and activity in one place."
+            detail="Track ownership, cost basis and activity in one place."
             to="/portfolio"
           />
           <FeatureCard
@@ -225,7 +225,7 @@ function HomePage() {
             <br />
             <span>the entire collectible.</span>
           </h2>
-          <p>Buy shares, build your portfolio and follow the market through Slice.</p>
+          <p>Own a Slice, build your portfolio and follow the market through Slice.</p>
         </div>
         <div className="approved-home__actions">
           <Link to="/marketplace" className="primary-action approved-home__primary-cta">

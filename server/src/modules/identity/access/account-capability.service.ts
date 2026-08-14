@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../auth/auth.service';
@@ -244,6 +245,55 @@ export class AccountCapabilityService {
       capability,
       requirements: decision.requirements,
     });
+  }
+
+  async grantCollectorBeta(actor: Actor, requestId?: string) {
+    if (!this.config.isBeta) {
+      throw new ForbiddenException({
+        code: 'FEATURE_DISABLED',
+        message: 'Collector Beta access is not available in this environment.',
+      });
+    }
+    const existing = await this.db.roleAssignment.findFirst({
+      where: { userId: actor.userId, role: 'COLLECTOR', revokedAt: null },
+      select: { id: true },
+    });
+    if (existing) {
+      return { status: 'APPROVED' as const, role: 'COLLECTOR' as const, granted: false };
+    }
+    const assignment = await this.db.$transaction(async (db) => {
+      const created = await db.roleAssignment.create({
+        data: {
+          userId: actor.userId,
+          role: 'COLLECTOR',
+          scopeType: 'GLOBAL',
+          scopeId: '*',
+          assignedByUserId: actor.userId,
+        },
+        select: { id: true },
+      });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'COLLECTOR_BETA_ACCESS_GRANTED',
+          resourceType: 'role-assignment',
+          resourceId: created.id,
+          requestId: requestId ?? null,
+          sessionId: actor.sessionId,
+          result: 'SUCCESS',
+          metadata: { role: 'COLLECTOR', scope: 'BETA' },
+        },
+      });
+      return created;
+    });
+    return {
+      status: 'APPROVED' as const,
+      role: 'COLLECTOR' as const,
+      granted: true,
+      assignmentId: assignment.id,
+    };
   }
 
   private allowed(

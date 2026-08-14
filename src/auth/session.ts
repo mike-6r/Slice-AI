@@ -2,11 +2,15 @@ type Listener = () => void;
 import { recordQaRefresh } from "@/auth/qa-harness";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+type SessionState = "initializing" | "authenticated" | "anonymous";
+let state: SessionState = "initializing";
 const listeners = new Set<Listener>();
 export const session = {
   token: () => accessToken,
+  state: () => state,
   set(token: string | null) {
     accessToken = token;
+    state = token ? "authenticated" : "anonymous";
     listeners.forEach((listener) => listener());
   },
   clear() {
@@ -30,13 +34,11 @@ export const session = {
         response.ok ? (response.json() as Promise<{ accessToken: string }>) : null,
       )
       .then((body) => {
-        accessToken = body?.accessToken ?? null;
-        listeners.forEach((listener) => listener());
+        this.set(body?.accessToken ?? null);
         return accessToken;
       })
       .catch(() => {
-        accessToken = null;
-        listeners.forEach((listener) => listener());
+        this.set(null);
         return null;
       })
       .finally(() => {

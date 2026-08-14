@@ -33,6 +33,9 @@ import {
 import { tradingTestFailurePoint } from './trading-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
+import { Inject } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { isBetaFixtureSlug } from '../../../config/beta-policy';
 
 export { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import {
@@ -66,6 +69,7 @@ export class TradingService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(APP_CONFIG) private readonly config?: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly capabilities?: AccountCapabilityService,
   ) {}
@@ -658,7 +662,7 @@ export class TradingService {
     });
     const page = rows.slice(0, limit);
     return {
-      items: page.map((row) => this.publicOrder(row, row.asset.slug, row.asset.ownershipSupply?.totalUnits)),
+      items: page.map((row) => this.publicOrder(row, this.publicAssetSlug(row.asset.slug), row.asset.ownershipSupply?.totalUnits)),
       nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
     };
   }
@@ -688,7 +692,7 @@ export class TradingService {
       openCount,
       recent: rows.map((row) => ({
         assetTitle: row.asset.title,
-        assetSlug: row.asset.slug,
+        assetSlug: this.publicAssetSlug(row.asset.slug),
         side: row.side,
         status: row.status,
         remainingUnits: row.remainingUnits.toString(),
@@ -731,7 +735,7 @@ export class TradingService {
     return {
       items: page.map((row) => ({
         executionId: row.id,
-        assetSlug: row.asset.slug,
+        assetSlug: this.publicAssetSlug(row.asset.slug),
         side: row.buyOrder.userId === userId ? 'BUY' : 'SELL',
         units: row.units.toString(),
         priceMinor: row.priceMinor.toString(),
@@ -760,7 +764,7 @@ export class TradingService {
         code: 'ORDER_NOT_FOUND',
         message: 'Order not found.',
       });
-    return this.publicOrder(order, order.asset.slug);
+    return this.publicOrder(order, this.publicAssetSlug(order.asset.slug));
   }
 
   async publicBook(slug: string, depth: number) {
@@ -1533,6 +1537,10 @@ export class TradingService {
       filledOwnershipPercent: totalUnits ? formatOwnershipPercent(order.filledUnits, totalUnits) : null,
       remainingOwnershipPercent: totalUnits ? formatOwnershipPercent(order.remainingUnits, totalUnits) : null,
     };
+  }
+
+  private publicAssetSlug(slug: string) {
+    return this.config?.isBeta === true && isBetaFixtureSlug(slug) ? undefined : slug;
   }
 
   private async marketForInput(assetId: string) {

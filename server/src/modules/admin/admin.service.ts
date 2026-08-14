@@ -280,7 +280,10 @@ export class AdminService {
         select: { provider: true },
       }),
       this.db.notificationDelivery.count({
-        where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
+        where: {
+          status: { in: ['FAILED', 'DEAD_LETTER'] },
+          ...(this.config.isBeta ? { channel: { not: 'DISCORD' as const } } : {}),
+        },
       }),
       this.db.assetMarketSnapshot.count(),
       this.db.rawCardPreGrade.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { status: true, updatedAt: true } }),
@@ -306,7 +309,7 @@ export class AdminService {
         ? ('Degraded' as const)
         : configured
           ? ('Unknown' as const)
-          : ('Unknown' as const),
+          : (this.config.isBeta ? ('BETA_DISABLED' as const) : ('NOT_CONFIGURED' as const)),
     });
     return {
       finance: {
@@ -386,7 +389,9 @@ export class AdminService {
           name: 'Notifications',
           status: notificationFailures
             ? ('Degraded' as const)
-            : ('Unknown' as const),
+            : this.config.isBeta
+              ? ('BETA_DISABLED' as const)
+              : ('UNKNOWN' as const),
           summary: notificationFailures
             ? `${notificationFailures} failed deliveries require review.`
             : 'No current failure telemetry.',
@@ -394,7 +399,7 @@ export class AdminService {
         },
         {
           name: 'Market data',
-          status: 'Unknown' as const,
+          status: this.config.isBeta ? ('BETA_DISABLED' as const) : ('UNKNOWN' as const),
           summary: marketSnapshots
             ? 'Snapshot records are available; provider health telemetry is not exposed.'
             : 'No market snapshot telemetry is available.',
@@ -994,7 +999,10 @@ export class AdminService {
         },
       }),
       this.db.notificationDelivery.count({
-        where: { status: { in: ['FAILED', 'DEAD_LETTER'] } },
+        where: {
+          status: { in: ['FAILED', 'DEAD_LETTER'] },
+          ...(this.config.isBeta ? { channel: { not: 'DISCORD' as const } } : {}),
+        },
       }),
       this.db.assetMarketSnapshot.count(),
       this.db.outboxEvent.count({
@@ -1231,26 +1239,30 @@ export class AdminService {
       },
       {
         name: 'Notifications',
-        status: notificationFailures ? 'Degraded' : 'Unknown',
+        status: notificationFailures
+          ? 'Degraded'
+          : this.config.isBeta
+            ? 'BETA_DISABLED'
+            : 'UNKNOWN',
         summary: notificationFailures
           ? `${notificationFailures} failed deliveries require review.`
           : 'Notification failure telemetry is not available.',
       },
       {
         name: 'Market data',
-        status: marketSnapshots ? 'Operational' : 'Unknown',
+        status: marketSnapshots ? 'Operational' : this.config.isBeta ? 'BETA_DISABLED' : 'UNKNOWN',
         summary: marketSnapshots
           ? `${marketSnapshots} market snapshots are available.`
           : 'Market snapshot telemetry is not available.',
       },
       {
         name: 'Vault Integration',
-        status: 'Unknown',
+        status: this.config.isBeta ? 'BETA_DISABLED' : 'UNKNOWN',
         summary: 'Provider health telemetry is not exposed.',
       },
       {
         name: 'Payment Provider',
-        status: 'Unknown',
+        status: this.config.isBeta ? 'BETA_DISABLED' : 'UNKNOWN',
         summary: 'Provider health telemetry is not exposed.',
       },
       {

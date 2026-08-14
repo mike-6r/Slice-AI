@@ -20,6 +20,7 @@ import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
+import { isRetiredBetaAssetSlug } from "@/lib/beta";
 import type { Asset, PortfolioSummary, TradingExecution, TradingOrderView } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -791,7 +792,7 @@ function AssetLabel({ asset, assetSlug }: { asset?: Asset; assetSlug?: string | 
     </>
   );
 
-  if (asset?.slug) {
+  if (asset?.slug && !isRetiredBetaAssetSlug(asset.slug)) {
     return (
       <Link to="/asset/$id" params={{ id: asset.slug }} className="orders-asset">
         {content}

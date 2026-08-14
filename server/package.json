@@ -32,6 +32,7 @@
     "staging:demo:verify-auth": "ts-node src/scripts/verify-staging-demo-auth.ts",
     "staging:beta:prepare": "ts-node src/scripts/prepare-live-beta.ts",
     "staging:beta:admin": "ts-node src/scripts/provision-beta-admin.ts",
+    "beta:retire-fixtures": "ts-node src/scripts/retire-beta-fixtures.ts",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:status": "prisma migrate status"

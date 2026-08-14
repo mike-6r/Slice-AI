@@ -1429,6 +1429,12 @@ export interface AuthRepository {
  * internal identifiers, audit metadata, or provider credentials. */
 export interface AccountRepository {
   getCapabilities(): Promise<{ capabilities: AccountCapability[] }>;
+  grantCollectorBeta(): Promise<{
+    status: "APPROVED";
+    role: "COLLECTOR";
+    granted: boolean;
+    assignmentId?: string;
+  }>;
   getEmailVerification(): Promise<{ verified: boolean; verifiedAt: string | null }>;
   sendEmailVerification(): Promise<{ alreadyVerified: boolean; resendAvailableAt: string | null }>;
   confirmEmailVerification(token: string): Promise<{ verified: boolean; verifiedAt: string }>;

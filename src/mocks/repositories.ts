@@ -1096,6 +1096,9 @@ export const mockRepositories: AppRepositories = {
         ? T
         : never;
     },
+    async grantCollectorBeta() {
+      return { status: "APPROVED" as const, role: "COLLECTOR" as const, granted: true };
+    },
     async getEmailVerification() {
       return { verified: false, verifiedAt: null };
     },

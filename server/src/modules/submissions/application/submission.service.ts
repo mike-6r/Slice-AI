@@ -24,6 +24,7 @@ import { Inject } from '@nestjs/common';
 import { marketResearchIdentityHash } from '../../market-research/market-research.service';
 import { collectorUsageFor } from '../../collector-workspace/collector-entitlements';
 import { preGradeProjection } from './raw-card-pregrade.service';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import {
   assertEditableStatus,
   assertExpectedVersion,
@@ -73,6 +74,7 @@ export class SubmissionService {
     private readonly prisma: PrismaService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     @Inject(MALWARE_SCANNER) private readonly scanner: MalwareScannerPort,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() private readonly capabilities?: AccountCapabilityService,
   ) {}
 
@@ -371,13 +373,16 @@ export class SubmissionService {
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
+      // Beta fixture submissions are filtered below using their explicit
+      // STG-* certification provenance; they are retained for audit history.
+      take: Math.max(limit + 1, 100),
     });
-    const final = rows[limit - 1];
+    const visible = rows.filter((row) => !isBetaFixtureSubmission(row.declaredMetadata, this.config.isBeta === true));
+    const final = visible[limit - 1];
     return {
-      items: rows.slice(0, limit).map(ownerProjection),
+      items: visible.slice(0, limit).map(ownerProjection),
       nextCursor:
-        rows.length > limit && final
+        visible.length > limit && final
           ? encodeCursor('submission-owner', final.createdAt, final.id)
           : null,
     };
@@ -1556,6 +1561,17 @@ function ownerProjection(submission: {
       ? marketResearchProjection(submission.marketResearch[0])
       : null,
   };
+}
+
+/** Explicit staging fixture provenance used only for the live-Beta customer
+ * projection. Real submissions are never inferred from titles or status. */
+function isBetaFixtureSubmission(metadata: Prisma.JsonValue | null, isBeta: boolean) {
+  if (!isBeta || !metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  const value = metadata as Record<string, unknown>;
+  return (
+    value.betaFixtureRetired === true ||
+    (typeof value.certificationNumber === 'string' && value.certificationNumber.startsWith('STG-'))
+  );
 }
 function reviewProjection(submission: {
   id: string;
