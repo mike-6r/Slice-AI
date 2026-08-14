@@ -1148,7 +1148,9 @@ export class SubmissionService {
     const action =
       decision === 'CHANGES_REQUESTED'
         ? 'request-changes'
-        : decision.toLowerCase();
+        : decision === 'APPROVED'
+          ? 'approve'
+          : 'reject';
     return this.mutate(
       actor,
       `review.${action}:${id}`,
