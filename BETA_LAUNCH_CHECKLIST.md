@@ -6,7 +6,7 @@ Scope: controlled demo accounts only; no direct database publish or fixture rese
 
 ## Deployment
 
-- Git main / VPS: `a2d0989` (`fix frontend review approval endpoint`)
+- Git main / VPS: `bbf879e` (checklist commit; production code was built from `a2d0989` immediately before this doc-only sync)
 - API `/health` and `/ready`: PASS
 - API runtime version: `staging`
 - Frontend build/version endpoint: NOT EXPOSED
