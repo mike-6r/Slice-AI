@@ -210,6 +210,7 @@ export class AdminService {
       incidents,
       notificationFailures,
       marketSnapshots,
+      activeMarketSnapshots,
       preGradeRuns,
       priceChartingMappings,
       priceChartingNeedsMapping,
@@ -288,6 +289,16 @@ export class AdminService {
         },
       }),
       this.db.assetMarketSnapshot.count(),
+      this.db.assetMarketSnapshot.count({
+        where: this.config.isBeta
+          ? {
+              asset: {
+                status: 'PUBLISHED',
+                slug: { not: { startsWith: 'slice-demo-' } },
+              },
+            }
+          : undefined,
+      }),
       this.db.rawCardPreGrade.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { status: true, updatedAt: true } }),
       this.db.marketProviderMapping.findMany({
         where: { providerCode: 'PRICECHARTING' },
@@ -298,6 +309,8 @@ export class AdminService {
           lastFailureCode: true,
           asset: {
             select: {
+              slug: true,
+              status: true,
               marketSnapshots: {
                 orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
                 take: 1,
@@ -326,27 +339,37 @@ export class AdminService {
         (incidentCounts.get(incident.provider) ?? 0) + 1,
       );
     const dbCheckedAt = new Date().toISOString();
+    const activePriceChartingMappings = this.config.isBeta
+      ? priceChartingMappings.filter(
+          (mapping) =>
+            mapping.asset.status === 'PUBLISHED' &&
+            !mapping.asset.slug.startsWith('slice-demo-'),
+        )
+      : priceChartingMappings;
+    const retiredDemoPriceChartingMappings = priceChartingMappings.filter(
+      (mapping) => !activePriceChartingMappings.includes(mapping),
+    );
     const priceChartingConfigured = Boolean(
       this.config.priceChartingEnabled && this.config.priceChartingApiToken,
     );
-    const priceChartingFresh = priceChartingMappings.filter(
+    const priceChartingFresh = activePriceChartingMappings.filter(
       (mapping) => mapping.asset.marketSnapshots[0]?.freshness === 'FRESH',
     ).length;
-    const priceChartingStale = priceChartingMappings.filter((mapping) =>
+    const priceChartingStale = activePriceChartingMappings.filter((mapping) =>
       ['AGING', 'STALE', 'UNAVAILABLE'].includes(
         mapping.asset.marketSnapshots[0]?.freshness ?? '',
       ),
     ).length;
-    const priceChartingFailures = priceChartingMappings.filter(
+    const priceChartingFailures = activePriceChartingMappings.filter(
       (mapping) =>
         mapping.lastFailureAt &&
         (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt),
     );
-    const latestPriceSuccess = priceChartingMappings
+    const latestPriceSuccess = activePriceChartingMappings
       .map((mapping) => mapping.lastSuccessAt)
       .filter((value): value is Date => Boolean(value))
       .sort((left, right) => right.getTime() - left.getTime())[0];
-    const latestPriceFailure = priceChartingMappings
+    const latestPriceFailure = activePriceChartingMappings
       .map((mapping) => mapping.lastFailureAt)
       .filter((value): value is Date => Boolean(value))
       .sort((left, right) => right.getTime() - left.getTime())[0];
@@ -359,7 +382,8 @@ export class AdminService {
       priceChartingConfigured ? 'Configured' : 'Not configured',
       `last success ${latestPriceSuccess?.toISOString() ?? 'never'}`,
       `last failure ${latestPriceFailure?.toISOString() ?? 'never'}`,
-      `mapped ${priceChartingMappings.length}`,
+      `mapped ${activePriceChartingMappings.length}`,
+      `retired/demo ${retiredDemoPriceChartingMappings.length}`,
       `fresh ${priceChartingFresh}`,
       `stale ${priceChartingStale}`,
       `needs mapping ${priceChartingNeedsMapping}`,
@@ -470,7 +494,7 @@ export class AdminService {
           name: 'Market data',
           status: priceChartingStatus,
           summary: marketSnapshots
-            ? `${marketSnapshots} persisted snapshots. ${priceChartingSummary}`
+            ? `${activeMarketSnapshots} active Beta snapshots (${marketSnapshots} persisted total). ${priceChartingSummary}`
             : `No market snapshots. ${priceChartingSummary}`,
           lastCheckedAt: dbCheckedAt,
         },
