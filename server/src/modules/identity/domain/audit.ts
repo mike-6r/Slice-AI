@@ -49,7 +49,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   SUBMISSION_SUBMITTED: ['version'],
   SUBMISSION_CANCELLED: ['version'],
   SUBMISSION_REVIEW_CLAIMED: ['reviewId'],
-  SUBMISSION_CHANGES_REQUESTED: ['reviewId', 'reasonCode', 'version'],
+  SUBMISSION_CHANGES_REQUESTED: ['reviewId', 'reasonCode', 'requestedItems', 'version'],
   SUBMISSION_APPROVED: ['reviewId', 'reasonCode', 'version'],
   SUBMISSION_APPROVED_ASSET_LINKED: ['assetId', 'ownerUserId'],
   SUBMISSION_REJECTED: ['reviewId', 'reasonCode', 'version'],
