@@ -2687,7 +2687,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async decide(id, decision, input) {
         const action =
-          decision === "CHANGES_REQUESTED" ? "request-changes" : decision.toLowerCase();
+          decision === "CHANGES_REQUESTED"
+            ? "request-changes"
+            : decision === "APPROVED"
+              ? "approve"
+              : "reject";
         return mapSubmission(
           await client.request<unknown>(`/reviews/submissions/${id}/${action}`, {
             method: "POST",
