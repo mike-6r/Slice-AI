@@ -24523,6 +24523,10 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .list-pregrade__segmented button { border: 0; border-radius: 0.3rem; padding: 0.4rem 0.65rem; background: transparent; color: #9aadb7; font-size: 0.68rem; cursor: pointer; }
 .list-pregrade__segmented button.is-active { background: #1b806b; color: #effff9; }
 .list-pregrade__visual-unavailable { grid-column: 1 / -1; padding: 0.7rem; border: 1px dashed rgba(151, 177, 188, 0.25); border-radius: 0.45rem; color: #9aadb7; font-size: 0.72rem; }
+.list-pregrade__ratios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; margin: 0; }
+.list-pregrade__ratios div { padding: 0.4rem; border-radius: 0.35rem; background: rgba(151, 177, 188, 0.08); }
+.list-pregrade__ratios dt { color: #8fa0aa; font-size: 0.62rem; text-transform: capitalize; }
+.list-pregrade__ratios dd { margin: 0.15rem 0 0; color: #e9fbf5; font-size: 0.75rem; }
 .list-pregrade__score-report { display: grid; grid-template-columns: minmax(8rem, 0.7fr) minmax(0, 1.3fr); gap: 1rem; grid-column: 1 / -1; }
 @media (max-width: 640px) { .list-pregrade__visual-report, .list-pregrade__score-report { grid-template-columns: 1fr; }.list-pregrade__visual-panel { min-height: 14rem; }.list-pregrade__visual-panel img { max-height: 20rem; } }
 .list-photo-card { min-width: 0; overflow: hidden; border: 1px solid rgba(145, 171, 181, 0.18); border-radius: 0.75rem; background: rgba(7, 13, 17, 0.56); }

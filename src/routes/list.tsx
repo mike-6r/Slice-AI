@@ -1390,6 +1390,17 @@ function RawPreGradePanel({
                     ? "Centering view shows detected card alignment and border proportions."
                     : "Ximilar's analysis visualization highlights the card areas used to estimate condition."}
                 </p>
+                {activeVisualization.centering &&
+                Object.keys(activeVisualization.centering).length ? (
+                  <dl className="list-pregrade__ratios">
+                    {Object.entries(activeVisualization.centering).map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label.replaceAll("_", " ")}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
               </div>
             </div>
           ) : visualizations.length ? (
