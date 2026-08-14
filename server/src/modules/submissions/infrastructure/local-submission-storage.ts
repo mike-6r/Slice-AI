@@ -6,6 +6,8 @@ import {
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { Inject } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
 import type {
   MalwareScannerPort,
   ObjectStoragePort,
@@ -69,29 +71,82 @@ export class LocalSubmissionStorage implements ObjectStoragePort {
       height: inspection.height,
     });
     this.bytes.set(intent.objectKey, Buffer.from(body));
+    this.persist(intent.objectKey, body);
   }
 
   async head(objectKey: string) {
     this.assertAvailable();
-    return this.objects.get(objectKey) ?? null;
+    const existing = this.objects.get(objectKey);
+    if (existing) return existing;
+    const bytes = this.load(objectKey);
+    if (!bytes) return null;
+    const inspection = inspectImage(bytes);
+    const stored: StoredObject = {
+      key: objectKey,
+      mimeType: inspection.mimeType ?? 'application/octet-stream',
+      sizeBytes: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      magicMimeType: inspection.mimeType,
+      width: inspection.width,
+      height: inspection.height,
+    };
+    this.objects.set(objectKey, stored);
+    this.bytes.set(objectKey, Buffer.from(bytes));
+    return stored;
   }
 
   async read(objectKey: string) {
     this.assertAvailable();
     const bytes = this.bytes.get(objectKey);
-    return bytes ? Buffer.from(bytes) : null;
+    return bytes ? Buffer.from(bytes) : this.load(objectKey);
   }
 
   async delete(objectKey: string) {
     this.assertAvailable();
     this.objects.delete(objectKey);
     this.bytes.delete(objectKey);
+    const path = this.pathFor(objectKey);
+    if (existsSync(path)) unlinkSync(path);
+  }
+
+  async createPrivateDownloadUrl(objectKey: string, expiresAt: Date) {
+    this.assertAvailable();
+    if (!(await this.head(objectKey))) throw new ServiceUnavailableException({ code: 'STORAGE_UNAVAILABLE', message: 'Private media is unavailable.' });
+    return `/api/v1/submissions/local-objects/${encodeURIComponent(objectKey)}?expiresAt=${encodeURIComponent(expiresAt.toISOString())}`;
+  }
+
+  status() {
+    return {
+      provider: 'LOCAL' as const,
+      configured: this.config.localSubmissionStorageEnabled,
+      operational: this.config.localSubmissionStorageEnabled,
+      signedUpload: this.config.localSubmissionStorageEnabled,
+      signedDownload: this.config.localSubmissionStorageEnabled,
+    };
   }
 
   /** Test-only seam: production code has no local object upload route. */
   putForTest(object: StoredObject) {
     this.assertAvailable();
     this.objects.set(object.key, object);
+  }
+
+  private persist(objectKey: string, bytes: Buffer) {
+    const path = this.pathFor(objectKey);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, bytes);
+  }
+
+  private load(objectKey: string) {
+    const path = this.pathFor(objectKey);
+    return existsSync(path) ? readFileSync(path) : null;
+  }
+
+  private pathFor(objectKey: string) {
+    const root = resolve(this.config.localSubmissionStorageRoot ?? '.local-submission-storage');
+    const path = resolve(root, objectKey);
+    if (!path.startsWith(`${root}${sep}`)) throw new BadRequestException({ code: 'MEDIA_OBJECT_KEY_INVALID', message: 'Media object key is invalid.' });
+    return path;
   }
 
   private assertAvailable() {

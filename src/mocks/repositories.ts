@@ -206,6 +206,9 @@ export const mockRepositories: AppRepositories = {
     async confirmIntakeReceipt() {
       throw new Error("Physical intake requires the API service.");
     },
+    async setIntakeDestinationApproval() {
+      throw new Error("Intake destination approval requires the API service.");
+    },
     async listMemberships() {
       return {
         items: [],

@@ -2280,10 +2280,27 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
         : [],
       filters: {
         vaults: Array.isArray(filters.vaults)
-          ? (filters.vaults as Array<{ id: string; displayName: string; code: string | null }>)
+          ? (filters.vaults as Array<{ id: string; displayName: string; code: string | null; operationallyApproved?: boolean; acceptingShipments?: boolean; environment?: string; region?: string; countryCode?: string }>)
           : [],
         carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
       },
+    };
+  },
+  async setIntakeDestinationApproval(id, input) {
+    const value = objectField(
+      await client.request<unknown>(`/admin/intake/destinations/${id}/approval`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+      "intake destination approval",
+    );
+    return {
+      id: stringField(value.id, "intake destination.id"),
+      displayName: stringField(value.displayName, "intake destination.displayName"),
+      operationallyApproved: Boolean(value.operationallyApproved),
+      acceptingShipments: Boolean(value.acceptingShipments),
+      audited: Boolean(value.audited),
     };
   },
   async confirmIntakeReceipt(id) {

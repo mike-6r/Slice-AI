@@ -345,6 +345,15 @@ export class AdminService {
         select: { submission: { select: { assetId: true } } },
       }),
     ]);
+    const approvedIntakeDestinations = await this.db.vaultIntakeLocation.count({
+      where: {
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+        acceptingShipments: true,
+        environment: this.config.appEnvironment ?? 'development',
+      },
+    });
     const incidentCounts = new Map<string, number>();
     for (const incident of incidents)
       incidentCounts.set(
@@ -407,6 +416,12 @@ export class AdminService {
       `confirmed submissions ${confirmedSubmissionReferenceCount}`,
       `awaiting asset promotion ${awaitingAssetPromotionCount}`,
     ].join(' · ');
+    const durableStorageConfigured =
+      this.config.objectStorageProvider === 'S3_COMPATIBLE' &&
+      Boolean(this.config.objectStorageBucket);
+    const storageSummary = durableStorageConfigured
+      ? 'S3-compatible durable storage configured · health probe not exercised'
+      : 'LOCAL_ONLY · Configure durable object storage before inviting external Beta collectors.';
     const integration = (
       name: string,
       configured: boolean,
@@ -518,6 +533,20 @@ export class AdminService {
           lastCheckedAt: dbCheckedAt,
         },
         {
+          name: 'Storage',
+          status: durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
+          summary: storageSummary,
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
+          name: 'Intake Operations',
+          status: approvedIntakeDestinations ? ('Operational' as const) : ('NO_APPROVED_DESTINATION' as const),
+          summary: approvedIntakeDestinations
+            ? `${approvedIntakeDestinations} approved receiving destination(s) available.`
+            : 'Approve a real intake destination before collectors can ship items.',
+          lastCheckedAt: dbCheckedAt,
+        },
+        {
           name: 'Webhooks',
           status: webhooks.length
             ? ('Degraded' as const)
@@ -553,6 +582,25 @@ export class AdminService {
             : this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken
               ? ('Operational' as const)
               : ('Unavailable' as const),
+        },
+        {
+          name: 'Storage',
+          configured: durableStorageConfigured,
+          failedEvents: 0,
+          summary: storageSummary,
+          status: durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
+          provider: this.config.objectStorageProvider,
+          signedUpload: durableStorageConfigured,
+          signedDownload: durableStorageConfigured,
+        },
+        {
+          name: 'Intake Operations',
+          configured: false,
+          failedEvents: 0,
+          summary: approvedIntakeDestinations
+            ? `${approvedIntakeDestinations} approved receiving destination(s) available.`
+            : 'Approve a real intake destination before collectors can ship items.',
+          status: approvedIntakeDestinations ? ('Operational' as const) : ('NO_APPROVED_DESTINATION' as const),
         },
         integration(
           'Plaid',
@@ -728,6 +776,11 @@ export class AdminService {
           configured: item.configured,
           summary: item.summary,
           failedEvents: item.failedEvents,
+          ...(() => { const optional = item as { provider?: unknown; signedUpload?: unknown; signedDownload?: unknown }; return {
+            ...(typeof optional.provider === 'string' ? { provider: optional.provider } : {}),
+            ...(typeof optional.signedUpload === 'boolean' ? { signedUpload: optional.signedUpload } : {}),
+            ...(typeof optional.signedDownload === 'boolean' ? { signedDownload: optional.signedDownload } : {}),
+          }; })(),
         })),
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
       };
@@ -1768,7 +1821,7 @@ export class AdminService {
     }));
     const vaults = await this.db.vaultIntakeLocation.findMany({
       where: { active: true, intakeAvailable: true },
-      select: { id: true, displayName: true, operationallyApproved: true },
+      select: { id: true, displayName: true, operationallyApproved: true, acceptingShipments: true, environment: true, region: true, countryCode: true },
     });
     return {
       items,
@@ -1787,6 +1840,10 @@ export class AdminService {
           displayName: vault.displayName,
           code: vault.id.slice(0, 6).toUpperCase(),
           operationallyApproved: vault.operationallyApproved,
+          acceptingShipments: vault.acceptingShipments,
+          environment: vault.environment,
+          region: vault.region,
+          countryCode: vault.countryCode,
         })),
         carriers: [
           ...new Set(
@@ -1797,6 +1854,49 @@ export class AdminService {
         ].sort(),
       },
     };
+  }
+
+  async setIntakeDestinationApproval(
+    actor: Actor,
+    destinationId: string,
+    input: { operationallyApproved: boolean; acceptingShipments: boolean; reason: string },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    return this.db.$transaction(async (db) => {
+      const destination = await db.vaultIntakeLocation.findUnique({ where: { id: destinationId } });
+      if (!destination) throw new NotFoundException({ code: 'INTAKE_DESTINATION_NOT_FOUND', message: 'Intake destination not found.' });
+      if (input.acceptingShipments && !input.operationallyApproved) {
+        throw new ConflictException({ code: 'INTAKE_APPROVAL_REQUIRED', message: 'A destination must be operationally approved before accepting shipments.' });
+      }
+      const updated = await db.vaultIntakeLocation.update({
+        where: { id: destinationId },
+        data: { operationallyApproved: input.operationallyApproved, acceptingShipments: input.acceptingShipments },
+      });
+      await db.auditEvent.create({
+        data: {
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'INTAKE_DESTINATION_APPROVAL_CHANGED',
+          resourceType: 'vault-intake-location',
+          resourceId: destinationId,
+          requestId,
+          result: 'SUCCESS',
+          metadata: {
+            reason: input.reason,
+            previous: { operationallyApproved: destination.operationallyApproved, acceptingShipments: destination.acceptingShipments },
+            next: { operationallyApproved: updated.operationallyApproved, acceptingShipments: updated.acceptingShipments },
+          },
+        },
+      });
+      return {
+        id: updated.id,
+        displayName: updated.displayName,
+        operationallyApproved: updated.operationallyApproved,
+        acceptingShipments: updated.acceptingShipments,
+        audited: true,
+      };
+    });
   }
 
   async confirmIntakeReceipt(

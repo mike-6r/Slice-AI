@@ -7,6 +7,8 @@ import {
   LocalMalwareScanner,
   LocalSubmissionStorage,
 } from './infrastructure/local-submission-storage';
+import { S3CompatibleSubmissionStorage } from './infrastructure/s3-compatible-submission-storage';
+import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { SubmissionController } from './http/submission.controller';
 import {
   MALWARE_SCANNER,
@@ -27,8 +29,14 @@ import {
     XimilarRawCardPreGradeProvider,
     { provide: RAW_CARD_PREGRADE_PROVIDER, useExisting: XimilarRawCardPreGradeProvider },
     LocalSubmissionStorage,
+    S3CompatibleSubmissionStorage,
     LocalMalwareScanner,
-    { provide: OBJECT_STORAGE, useExisting: LocalSubmissionStorage },
+    {
+      provide: OBJECT_STORAGE,
+      inject: [APP_CONFIG, LocalSubmissionStorage, S3CompatibleSubmissionStorage],
+      useFactory: (config: AppConfig, local: LocalSubmissionStorage, durable: S3CompatibleSubmissionStorage) =>
+        config.objectStorageProvider === 'S3_COMPATIBLE' ? durable : local,
+    },
     { provide: MALWARE_SCANNER, useExisting: LocalMalwareScanner },
   ],
   exports: [RawCardPreGradeService],

@@ -531,7 +531,8 @@ export class SubmissionService {
           });
         }
         const mediaId = existing?.id ?? randomUUID();
-        const objectKey = `submissions/${actor.userId}/${id}/${randomUUID()}`;
+        // Opaque deterministic key: no email, username, filename, or card metadata.
+        const objectKey = `submissions/${id}/media/${mediaId}/original`;
         const expiresAt = new Date(Date.now() + 5 * 60_000);
         const intent = await this.storage.createUploadIntent({
           objectKey,

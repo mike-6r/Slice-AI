@@ -1362,6 +1362,8 @@ model VaultIntakeLocation {
   active               Boolean            @default(true)
   intakeAvailable      Boolean            @default(true)
   operationallyApproved Boolean           @default(false)
+  environment           String             @default("beta")
+  acceptingShipments    Boolean            @default(false)
   acceptedCategories   Json?
   shippingInstructions String
   customerSafeAddress  String

@@ -661,7 +661,16 @@ export type AdminIntakeResponse = {
     occurredAt: string;
   }>;
   filters: {
-    vaults: Array<{ id: string; displayName: string; code: string | null }>;
+    vaults: Array<{
+      id: string;
+      displayName: string;
+      code: string | null;
+      operationallyApproved?: boolean;
+      acceptingShipments?: boolean;
+      environment?: string;
+      region?: string;
+      countryCode?: string;
+    }>;
     carriers: string[];
   };
 };
@@ -969,6 +978,10 @@ export interface AdminRepository {
     sortDirection?: "asc" | "desc";
     limit?: number;
   }): Promise<AdminIntakeResponse>;
+  setIntakeDestinationApproval(
+    id: string,
+    input: { operationallyApproved: boolean; acceptingShipments: boolean; reason: string },
+  ): Promise<{ id: string; displayName: string; operationallyApproved: boolean; acceptingShipments: boolean; audited: boolean }>;
   confirmIntakeReceipt(
     id: string,
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;

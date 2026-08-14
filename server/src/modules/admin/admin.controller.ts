@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Headers,
@@ -109,6 +110,13 @@ const platformRecordsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
   .strict();
+const intakeApproval = z
+  .object({
+    operationallyApproved: z.boolean(),
+    acceptingShipments: z.boolean(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -159,6 +167,20 @@ export class AdminController {
       ...input,
       limit: input.limit ?? 50,
     });
+  }
+  @Post('intake/destinations/:id/approval')
+  @RequirePermission('custody.manage')
+  approveIntakeDestination(
+    @Param('id') destinationId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.setIntakeDestinationApproval(
+      request.actor!,
+      destinationId,
+      this.parse(intakeApproval, body),
+      request.requestId ?? 'unknown',
+    );
   }
   @Post('intake/:id/receipt')
   @RequirePermission('admin.console.read')

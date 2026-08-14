@@ -2729,6 +2729,15 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
               <ArrowRight aria-hidden="true" />
             </button>
           ))}
+          {vaults.isFetched && !vaults.data?.length ? (
+            <div className="collector-intake-empty" role="status">
+              <strong>Shipping isn&apos;t available yet for this collectible.</strong>
+              <small>
+                Slice is preparing the receiving location for this Beta submission. We&apos;ll let
+                you know when shipping is available.
+              </small>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {asset.intake?.status === "SHIPPING_REQUIRED" && !asset.intake.shipment ? (

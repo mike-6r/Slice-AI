@@ -827,7 +827,7 @@ async function ensureCollectorEntitlementsAndVaults(db: PrismaService, userId: s
     ['Slice US East Intake', 'US East', 'US', 'Use protective packaging and a tracked service. Include the intake reference with your shipment.', 'Slice Collectable\nUS East Intake\nUnited States'],
   ] as const;
   for (const [displayName, region, countryCode, shippingInstructions, customerSafeAddress] of destinations) {
-    await db.vaultIntakeLocation.upsert({ where: { id: `staging-${countryCode.toLowerCase()}-intake` }, create: { id: `staging-${countryCode.toLowerCase()}-intake`, displayName, region, countryCode, shippingInstructions, customerSafeAddress, acceptedCategories: [], operationallyApproved: false }, update: { displayName, region, countryCode, shippingInstructions, customerSafeAddress, active: true, intakeAvailable: true, operationallyApproved: false } });
+    await db.vaultIntakeLocation.upsert({ where: { id: `staging-${countryCode.toLowerCase()}-intake` }, create: { id: `staging-${countryCode.toLowerCase()}-intake`, displayName, region, countryCode, shippingInstructions, customerSafeAddress, acceptedCategories: [], operationallyApproved: false, acceptingShipments: false, environment: 'beta' }, update: { displayName, region, countryCode, shippingInstructions, customerSafeAddress, active: true, intakeAvailable: true, operationallyApproved: false, acceptingShipments: false, environment: 'beta' } });
   }
 }
 

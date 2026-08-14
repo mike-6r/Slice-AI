@@ -36,8 +36,11 @@
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:status": "prisma migrate status"
+    ,"storage:migrate-local": "ts-node src/scripts/storage-migrate-local.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/jwt": "^11.0.2",

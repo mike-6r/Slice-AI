@@ -30,6 +30,16 @@ export interface ObjectStoragePort {
   /** Reads an already-authorized private object for server-to-server analysis. */
   read(objectKey: string): Promise<Buffer | null>;
   delete(objectKey: string): Promise<void>;
+  /** Creates a short-lived private download URL; never exposes bucket credentials. */
+  createPrivateDownloadUrl(objectKey: string, expiresAt: Date): Promise<string>;
+  /** Provider capability/status is safe to expose to internal operations telemetry. */
+  status(): {
+    provider: 'LOCAL' | 'S3_COMPATIBLE';
+    configured: boolean;
+    operational: boolean;
+    signedUpload: boolean;
+    signedDownload: boolean;
+  };
 }
 
 export interface MalwareScannerPort {

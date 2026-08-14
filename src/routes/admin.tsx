@@ -1243,6 +1243,7 @@ function PhysicalIntakeBoard({
   const services = useAppServices();
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
+  const [approvalReason, setApprovalReason] = useState("");
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1254,6 +1255,18 @@ function PhysicalIntakeBoard({
     mutationFn: (id: string) => services.repositories.admin.confirmIntakeReceipt(id),
     onSuccess: () => {
       setReceiptRow(null);
+      updateSearch({ page: "1" });
+    },
+  });
+  const destinationApproval = useMutation({
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) =>
+      services.repositories.admin.setIntakeDestinationApproval(id, {
+        operationallyApproved: approved,
+        acceptingShipments: approved,
+        reason: approvalReason.trim(),
+      }),
+    onSuccess: () => {
+      setApprovalReason("");
       updateSearch({ page: "1" });
     },
   });
@@ -1514,6 +1527,42 @@ function PhysicalIntakeBoard({
             <p className="admin-safe-note">
               Use the shared filters above to keep the board and counts in sync.
             </p>
+          </section>
+          <section className="admin-panel">
+            <div className="physical-intake-rail-heading">
+              <h3>Receiving destinations</h3>
+            </div>
+            <p className="admin-safe-note">
+              Approve only a real operator-controlled address. Staging fixtures must remain disabled.
+            </p>
+            <input
+              className="admin-text-input"
+              value={approvalReason}
+              onChange={(event) => setApprovalReason(event.target.value)}
+              placeholder="Approval reason / operations note"
+              aria-label="Destination approval reason"
+            />
+            {data?.filters.vaults.map((item) => (
+              <div className="physical-intake-destination" key={item.id}>
+                <div>
+                  <strong>{item.displayName}</strong>
+                  <small>
+                    {item.region}, {item.countryCode} · {item.environment ?? "unknown"}
+                  </small>
+                </div>
+                <span className={item.operationallyApproved && item.acceptingShipments ? "admin-status-pill is-green" : "admin-status-pill is-amber"}>
+                  {item.operationallyApproved && item.acceptingShipments ? "Approved" : "Not approved"}
+                </span>
+                <button
+                  type="button"
+                  className="admin-inline-action"
+                  disabled={approvalReason.trim().length < 3 || destinationApproval.isPending}
+                  onClick={() => destinationApproval.mutate({ id: item.id, approved: !(item.operationallyApproved && item.acceptingShipments) })}
+                >
+                  {item.operationallyApproved && item.acceptingShipments ? "Disable" : "Approve"}
+                </button>
+              </div>
+            ))}
           </section>
           <section className="admin-panel">
             <h3>Quick Actions</h3>

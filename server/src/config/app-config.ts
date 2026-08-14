@@ -312,6 +312,17 @@ const configSchema = z.object({
   // Explicitly opt-in local diskless upload transport for staging only. Real
   // production remains fail-closed until object storage is approved.
   LOCAL_SUBMISSION_STORAGE_ENABLED: z.enum(['true', 'false']).optional(),
+  LOCAL_SUBMISSION_STORAGE_ROOT: z.string().trim().min(1).default('.local-submission-storage'),
+  OBJECT_STORAGE_PROVIDER: z.enum(['LOCAL', 'S3_COMPATIBLE']).default('LOCAL'),
+  OBJECT_STORAGE_BUCKET: z.string().trim().min(1).optional(),
+  OBJECT_STORAGE_REGION: z.string().trim().min(1).default('auto'),
+  OBJECT_STORAGE_ENDPOINT: z.string().url().optional(),
+  OBJECT_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  OBJECT_STORAGE_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
+  OBJECT_STORAGE_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false'),
+  OBJECT_STORAGE_PRIVATE_PREFIX: z.string().trim().min(1).default('private'),
+  OBJECT_STORAGE_PUBLIC_PREFIX: z.string().trim().min(1).default('public'),
+  OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
 });
 
 export type AppConfig = {
@@ -432,6 +443,17 @@ export type AppConfig = {
     listing: boolean;
   };
   localSubmissionStorageEnabled: boolean;
+  localSubmissionStorageRoot?: string;
+  objectStorageProvider?: 'LOCAL' | 'S3_COMPATIBLE';
+  objectStorageBucket?: string;
+  objectStorageRegion?: string;
+  objectStorageEndpoint?: string;
+  objectStorageAccessKeyId?: string;
+  objectStorageSecretAccessKey?: string;
+  objectStorageForcePathStyle?: boolean;
+  objectStoragePrivatePrefix?: string;
+  objectStoragePublicPrefix?: string;
+  objectStorageSignedUrlTtlSeconds?: number;
 };
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -648,6 +670,16 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === 'true' ||
     (parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === undefined &&
       parsed.NODE_ENV !== 'production');
+  if (
+    parsed.OBJECT_STORAGE_PROVIDER === 'S3_COMPATIBLE' &&
+    (!parsed.OBJECT_STORAGE_BUCKET ||
+      !parsed.OBJECT_STORAGE_REGION ||
+      (!parsed.OBJECT_STORAGE_ENDPOINT && !parsed.OBJECT_STORAGE_REGION))
+  ) {
+    throw new Error(
+      'S3_COMPATIBLE object storage requires OBJECT_STORAGE_BUCKET and OBJECT_STORAGE_REGION.',
+    );
+  }
   if (providersProductionEnabled && parsed.PROVIDER_MODE !== 'production') {
     throw new Error(
       'PROVIDERS_PRODUCTION_ENABLED requires PROVIDER_MODE=production.',
@@ -880,6 +912,17 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       ),
     },
     localSubmissionStorageEnabled,
+    localSubmissionStorageRoot: parsed.LOCAL_SUBMISSION_STORAGE_ROOT,
+    objectStorageProvider: parsed.OBJECT_STORAGE_PROVIDER,
+    objectStorageBucket: parsed.OBJECT_STORAGE_BUCKET,
+    objectStorageRegion: parsed.OBJECT_STORAGE_REGION,
+    objectStorageEndpoint: parsed.OBJECT_STORAGE_ENDPOINT?.replace(/\/$/, ''),
+    objectStorageAccessKeyId: parsed.OBJECT_STORAGE_ACCESS_KEY_ID,
+    objectStorageSecretAccessKey: parsed.OBJECT_STORAGE_SECRET_ACCESS_KEY,
+    objectStorageForcePathStyle: parsed.OBJECT_STORAGE_FORCE_PATH_STYLE === 'true',
+    objectStoragePrivatePrefix: parsed.OBJECT_STORAGE_PRIVATE_PREFIX.replace(/\/$/, ''),
+    objectStoragePublicPrefix: parsed.OBJECT_STORAGE_PUBLIC_PREFIX.replace(/\/$/, ''),
+    objectStorageSignedUrlTtlSeconds: parsed.OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS,
   };
 }
 

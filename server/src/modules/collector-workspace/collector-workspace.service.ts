@@ -335,6 +335,8 @@ export class CollectorWorkspaceService {
         active: true,
         intakeAvailable: true,
         operationallyApproved: true,
+        acceptingShipments: true,
+        environment: this.config?.appEnvironment ?? 'development',
       },
       orderBy: [{ countryCode: 'asc' }, { displayName: 'asc' }],
       select: {
@@ -381,6 +383,8 @@ export class CollectorWorkspaceService {
         active: true,
         intakeAvailable: true,
         operationallyApproved: true,
+        acceptingShipments: true,
+        environment: this.config?.appEnvironment ?? 'development',
       },
     });
     if (!vault)

@@ -257,3 +257,60 @@ Implementation commit: `5a650ae`; final deployed/checklist commit: `d684aec`
 - Next authorized actions: Operations approves a real intake destination and durable storage; Staff creates/links the canonical Asset; Staff invokes the no-provider-call promotion handoff; only then continue verification, valuation, custody, publication, and issuance gates.
 
 Phase 6 status: **NO-GO — CANONICAL ASSET, REAL INTAKE DESTINATION, AND DURABLE STORAGE REQUIRED BEFORE EXTERNAL BETA**.
+
+## Phase 7 durable storage and real intake readiness — 2026-08-14
+
+Implementation lineage: `fef4b3d` → Phase 7 implementation pending deployment.
+
+### Storage implementation
+
+- One `ObjectStoragePort` remains the D10 authority for upload intent, head/verification, read, delete, and private signed download capability.
+- `LOCAL` remains available for development/tests and controlled internal Beta. `S3_COMPATIBLE` uses one AWS SDK adapter for AWS S3, Cloudflare R2, and compatible providers through endpoint/region/path-style configuration; no provider credentials are returned to clients, Admin, logs, or audit metadata.
+- New uploads use opaque deterministic keys: `submissions/{submissionId}/media/{mediaId}/original`.
+- D10 media states, server-side image inspection, SHA-256 verification, duplicate protection, and safe completion retry semantics remain unchanged.
+- `npm run storage:migrate-local -- --dry-run` is the default safe migration report. `--execute` is required for copying local files to the configured durable provider; it never deletes local files and skips checksum conflicts.
+
+Exact storage environment names:
+
+```text
+OBJECT_STORAGE_PROVIDER=LOCAL|S3_COMPATIBLE
+OBJECT_STORAGE_BUCKET
+OBJECT_STORAGE_REGION
+OBJECT_STORAGE_ENDPOINT              # optional for AWS; required for R2/custom endpoints
+OBJECT_STORAGE_ACCESS_KEY_ID         # optional when using the SDK credential chain/role
+OBJECT_STORAGE_SECRET_ACCESS_KEY     # optional when using the SDK credential chain/role
+OBJECT_STORAGE_FORCE_PATH_STYLE=true|false
+OBJECT_STORAGE_PRIVATE_PREFIX
+OBJECT_STORAGE_PUBLIC_PREFIX
+OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS
+LOCAL_SUBMISSION_STORAGE_ROOT        # migration source directory, default /var/lib/slice/submissions
+```
+
+- Staging currently remains `OBJECT_STORAGE_PROVIDER=LOCAL` with local storage enabled; no S3/R2 bucket or credentials are configured. Durable storage is implemented but **CONFIGURATION_REQUIRED**.
+- Signed upload/private download and provider health are `NOT_CONFIGURED` until an operator supplies a durable bucket and credentials/role. No destructive probe or real provider write is performed automatically.
+- Existing local media is retained by policy. Migration reports files, matched media rows, missing files, checksum mismatches, already-present objects, and upload candidates before any copy.
+
+### Intake destination operations
+
+- `VaultIntakeLocation` now distinguishes `active`, `intakeAvailable`, `operationallyApproved`, `acceptingShipments`, and `environment`.
+- Customer vault selection requires all of: active, intake available, operational approval, accepting shipments, environment compatibility, and accepted category.
+- Admin/Vault Operations can approve or disable a destination through the audited approval action. Approval requires a reason and cannot enable receiving without operational approval; staging fixtures remain unapproved.
+- Approval audit records include destination, actor, previous state, next state, reason, request ID, and timestamp.
+- Current customer empty state: “Shipping isn't available yet for this collectible. Slice is preparing the receiving location for this Beta submission. We'll let you know when shipping is available.”
+
+### Phase 7 verification gates
+
+- Current Charizard remains `SHIPPING_REQUIRED`, destination unselected, shipment `NO`, receipt `NO`, canonical Asset `NO`.
+- PriceCharting Product `5605741` remains confirmed with one `$109.69 USD` submission observation; no live lookup is made in this phase.
+- Ximilar remains configured/enabled/card-grading enabled with no live call; its service receives bytes through `ObjectStoragePort`, not a local filesystem path.
+- Canonical Asset creation remains an explicit Staff/Admin catalogue `DRAFT` creation followed by an approved-submission link. No Asset is created in Phase 7. The provider-handoff test remains fixture/domain-only and must produce one mapping, one timestamp-preserving snapshot, and zero provider calls when an Asset exists.
+- Controlled internal Beta: **GO** with local storage and no physical progression.
+- External invited Beta: **NO-GO** until durable storage is configured and a real receiving destination is operationally approved.
+
+### Operator actions required
+
+1. Select `S3_COMPATIBLE` and configure the exact storage variables above for AWS S3, Cloudflare R2, or another compatible private bucket.
+2. Run the migration dry-run, review checksum/missing-file output, then explicitly run `--execute`; retain local originals and verify the report.
+3. Enter a real receiving address through the controlled Admin/Vault Operations flow, approve it with a reason, and enable accepting shipments. Do not approve `staging-gb-intake` or `staging-us-intake` as real facilities.
+
+Phase 7 status: **NO-GO — CONFIGURATION_REQUIRED FOR DURABLE STORAGE AND OPERATOR_ACTION_REQUIRED FOR REAL INTAKE**.
