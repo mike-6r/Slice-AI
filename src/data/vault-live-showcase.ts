@@ -1,5 +1,6 @@
 import type { MarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import type { VaultLiveAsset, VaultLiveProjection } from "@/data/repositories";
+import { HOMEPAGE_FEATURED_ASSET } from "@/data/homepage-showcase";
 
 /**
  * ILLUSTRATIVE PUBLIC VAULT LIVE SHOWCASE DATA.
@@ -41,6 +42,16 @@ const showcaseAsset = (
   },
   source: "showcase",
   showcaseKey,
+});
+
+const umbreon = showcaseAsset("umbreon-vmax-moonbreon", {
+  slug: HOMEPAGE_FEATURED_ASSET.realAssetId,
+  title: HOMEPAGE_FEATURED_ASSET.title,
+  category: "Pokémon TCG",
+  setName: "Evolving Skies · Alternate Art",
+  grade: HOMEPAGE_FEATURED_ASSET.grade,
+  estimatedMarketValueMinor: 195_000,
+  availabilityBps: 3_200,
 });
 
 const charizard = showcaseAsset("charizard-1999", {
@@ -92,7 +103,7 @@ const blastoise = showcaseAsset("blastoise", {
 
 export const vaultLiveShowcase = {
   statusLabel: "Illustrative Vault Live",
-  featuredAsset: charizard,
+  featuredAsset: umbreon,
   metrics: {
     publicVaultEvents: "8 examples",
     newlyPublished: "6 examples",
@@ -100,7 +111,7 @@ export const vaultLiveShowcase = {
     marketActivity: "12 examples",
   },
   recentlyReviewed: [charizard, jordan, pikachu, darkMagician, blastoise],
-  readiness: [charizard, jordan, pikachu],
+  readiness: [umbreon, jordan, pikachu],
   publishedAssets: [charizard, jordan, darkMagician, blastoise],
   recentEvents: [
     {

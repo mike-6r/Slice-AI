@@ -335,16 +335,22 @@ function OwnershipWorks() {
         </p>
         <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
           <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
-            <span className="approved-home__ownership-icon">
-              <Vault aria-hidden="true" />
-            </span>
+            {featured ? (
+              <span className="approved-home__ownership-icon">
+                <Vault aria-hidden="true" />
+              </span>
+            ) : (
+              <div className="approved-home__ownership-image">
+                <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
+              </div>
+            )}
             <div>
               <small>1. Underlying collectible</small>
-              <strong>{featured?.details.title ?? "Waiting for the first published asset"}</strong>
+              <strong>{featured?.details.title ?? HOMEPAGE_FEATURED_ASSET.title}</strong>
               <p>
                 {featured
                   ? "A real authenticated collectible sits underneath the Slice market."
-                  : "A real collectible will be shown here once the Beta catalogue has a published asset."}
+                  : "Static example image only. A real published collectible will appear here once the Beta catalogue has one."}
               </p>
             </div>
           </article>

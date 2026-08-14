@@ -21879,6 +21879,109 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   margin: 0;
   color: var(--text-subtle);
 }
+.vault-live-unavailable--example {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.vault-live-beta-example {
+  position: relative;
+  display: grid;
+  width: 7.5rem;
+  height: 10rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 0.8rem;
+  background: #071614;
+}
+.vault-live-beta-example img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.vault-live-beta-example span {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  left: 0.4rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+  background: rgb(5 13 13 / 0.82);
+  color: var(--accent);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.featured-market-hero--static-example {
+  display: grid;
+  grid-template-columns: minmax(7rem, 8rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem;
+}
+.approved-home .featured-market-hero--static-example {
+  grid-template-columns: minmax(7rem, 8rem) minmax(0, 1fr);
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+}
+.featured-market-hero__static-media {
+  position: relative;
+  display: grid;
+  min-height: 11rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 0.75rem;
+  background: #071614;
+}
+.featured-market-hero__static-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.featured-market-hero__static-media span {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  left: 0.35rem;
+  padding: 0.24rem 0.3rem;
+  border-radius: 0.3rem;
+  background: rgb(5 13 13 / 0.82);
+  color: var(--accent);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.featured-market-hero--static-example h2 {
+  margin: 0.25rem 0;
+}
+.featured-market-hero--static-example p:not(.page-kicker) {
+  margin: 0 0 0.8rem;
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 639px) {
+  .vault-live-unavailable--example {
+    grid-template-columns: 1fr;
+  }
+  .vault-live-beta-example {
+    width: min(8rem, 100%);
+  }
+  .approved-home .featured-market-hero--static-example {
+    grid-template-columns: 1fr;
+  }
+  .approved-home .featured-market-hero--static-example .featured-market-hero__static-media {
+    width: min(8rem, 100%);
+    justify-self: center;
+  }
+}
 
 @media (max-width: 1080px) {
   .vault-live-hero {

@@ -38,15 +38,25 @@ export function FeaturedMarketHero() {
     if (!asset) {
       return (
         <section
-          className="featured-market-hero featured-market-hero--empty"
+          className="featured-market-hero featured-market-hero--empty featured-market-hero--static-example"
           aria-label="Featured asset"
+          data-static-showcase="true"
         >
-          <p className="page-kicker">Live Beta</p>
-          <h2>No featured collectible yet.</h2>
-          <p>Real collectibles will appear here after the Slice lifecycle is complete.</p>
-          <Link to="/marketplace" className="text-link">
-            View the empty marketplace
-          </Link>
+          <div className="featured-market-hero__static-media">
+            <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
+            <span>Illustrative example</span>
+          </div>
+          <div>
+            <p className="page-kicker">Static showcase example</p>
+            <h2>{HOMEPAGE_FEATURED_ASSET.title}</h2>
+            <p>
+              This Umbreon image is a static educational example, not a live published Slice asset
+              or market quote.
+            </p>
+            <Link to="/marketplace" className="text-link">
+              View the marketplace
+            </Link>
+          </div>
         </section>
       );
     }
