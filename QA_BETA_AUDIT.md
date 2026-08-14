@@ -2,7 +2,7 @@
 
 **Environment:** https://staging.slicecollectable.com  
 **Audit date:** 2026-08-14  
-**Deployed commit:** `7c9efbf`
+**Deployed commit:** `68f83e4`
 **Decision:** **GO — CONTROLLED BETA**
 
 ## Executive result

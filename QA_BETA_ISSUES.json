@@ -2,7 +2,7 @@
   "audit": "SLICE FULL LIVE BETA QA — REMEDIATION PASS 1",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-14",
-  "deployedCommit": "7c9efbf",
+  "deployedCommit": "68f83e4",
   "status": "GO_CONTROLLED_BETA",
   "issues": [
     {
