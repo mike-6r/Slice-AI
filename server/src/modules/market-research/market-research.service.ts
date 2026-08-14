@@ -344,12 +344,6 @@ export class CollectibleMarketResearchService {
         message: 'Only an approved, unlinked submission can receive market research.',
       });
     }
-    if (submission.ownerUserId !== record.ownerUserId) {
-      throw new ForbiddenException({
-        code: 'MARKET_RESEARCH_OWNER_MISMATCH',
-        message: 'Market research belongs to a different account.',
-      });
-    }
     const expectedHash = marketResearchIdentityHash({
       categoryId: submission.categoryId,
       declaredMetadata:
@@ -365,7 +359,7 @@ export class CollectibleMarketResearchService {
     }
     const updated = await this.db.submissionMarketResearch.update({
       where: { id: researchId },
-      data: { submissionId },
+      data: { submissionId, ownerUserId: submission.ownerUserId },
       include: { observations: { orderBy: { observedAt: 'desc' } } },
     });
     await this.db.auditEvent.create({
@@ -379,7 +373,12 @@ export class CollectibleMarketResearchService {
         requestId,
         sessionId: actor.sessionId,
         result: 'SUCCESS',
-        metadata: { researchId },
+        metadata: {
+          researchId,
+          ...(record.ownerUserId !== submission.ownerUserId
+            ? { transferredFromOwnerUserId: record.ownerUserId }
+            : {}),
+        },
         createdAt: new Date(),
       },
     });
