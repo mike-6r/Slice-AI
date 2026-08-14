@@ -138,7 +138,8 @@ No direct wallet balance mutation, fake receipt, fixture reseed, database reset,
 ## Phase 4 PriceCharting and first physical Beta asset readiness
 
 Audit date: 2026-08-14  
-Deployment commit: `067f2e5`
+Code commit: `067f2e5`  
+Final VPS/checklist commit: `bc43f10`
 
 ### Deployment and provider gate
 
