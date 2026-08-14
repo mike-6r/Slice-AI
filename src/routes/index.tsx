@@ -18,7 +18,6 @@ import { useCurrency } from "@/currency/CurrencyProvider";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
-  HOMEPAGE_MARKET_METRICS,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
   HOMEPAGE_TRENDING_ASSETS,
   showcaseDestination,
@@ -38,8 +37,6 @@ export const Route = createFileRoute("/")({
   }),
   component: HomePage,
 });
-
-const metricIcons = [CircleDollarSign, ChartNoAxesCombined, Boxes, BadgeCheck, UsersRound] as const;
 
 const howSliceWorks = [
   {
@@ -153,25 +150,6 @@ function HomePage() {
             to="/collectors"
           />
         </div>
-      </section>
-
-      <section
-        className="page-shell approved-home__metrics"
-        aria-label="Illustrative product example"
-      >
-        {HOMEPAGE_MARKET_METRICS.map((metric, index) => {
-          const Icon = metricIcons[index];
-          return (
-            <article key={metric.label} className="approved-home__metric">
-              <div className="approved-home__metric-label">
-                {Icon ? <Icon aria-hidden="true" /> : null}
-                <span>{metric.label}</span>
-              </div>
-              <strong>{metric.value}</strong>
-              <small className={`is-${metric.tone}`}>{metric.detail}</small>
-            </article>
-          );
-        })}
       </section>
 
       <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
