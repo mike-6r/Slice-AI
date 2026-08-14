@@ -18975,6 +18975,103 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   font-variant-numeric: tabular-nums;
 }
 
+/* Dedicated Activity tab */
+.portfolio-panel--activity-dedicated { min-height: 0; margin-top: 0.85rem; }
+.portfolio-panel--activity-dedicated > .portfolio-panel__head { min-height: 5.25rem; align-items: flex-end; gap: 1rem; padding: 1rem 1.2rem 0.75rem; }
+.portfolio-panel--activity-dedicated > .portfolio-panel__body { padding: 0; }
+.portfolio-activity-header { display: flex; min-width: 0; flex: 1; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.portfolio-activity-filters { display: flex; min-width: 0; flex-wrap: wrap; gap: 0.25rem; border: 1px solid rgba(130, 158, 170, 0.16); border-radius: 0.55rem; padding: 0.25rem; background: rgba(4, 9, 12, 0.52); }
+.portfolio-activity-filters button { min-height: 2.15rem; border-radius: 0.4rem; padding: 0.4rem 0.72rem; color: #aeb8c4; font-size: 0.75rem; font-weight: 650; white-space: nowrap; }
+.portfolio-activity-filters button:hover, .portfolio-activity-filters button.is-active { background: rgba(22, 197, 149, 0.12); color: #35e0ae; }
+.portfolio-activity-date-filter { display: inline-flex; min-height: 2.75rem; flex: 0 0 auto; align-items: center; gap: 0.55rem; border: 1px solid rgba(130, 158, 170, 0.2); border-radius: 0.55rem; padding: 0 0.7rem; background: rgba(4, 9, 12, 0.52); color: #dce4e9; }
+.portfolio-activity-date-filter svg { width: 1rem; height: 1rem; color: #9ca9b4; }
+.portfolio-activity-date-filter svg:last-child { width: 0.9rem; color: #aeb8c4; }
+.portfolio-activity-date-filter select { min-width: 7.8rem; appearance: none; border: 0; outline: 0; background: transparent; color: inherit; font-size: 0.78rem; font-weight: 650; }
+.portfolio-activity-table { width: 100%; }
+.portfolio-activity-table__head, .portfolio-activity-event { display: grid; grid-template-columns: minmax(12rem, 1.18fr) minmax(17rem, 1.55fr) minmax(5.3rem, 0.55fr) minmax(9.5rem, 0.82fr) minmax(8.3rem, 0.68fr) 1.2rem; gap: 1rem; align-items: center; width: 100%; min-width: 0; padding-inline: 1.5rem; }
+.portfolio-activity-table__head { min-height: 3.15rem; border-bottom: 1px solid rgba(137, 164, 176, 0.12); color: #9eabb7; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.portfolio-activity-event { position: relative; min-height: 6rem; border: 0; border-bottom: 1px solid rgba(137, 164, 176, 0.11); background: transparent; color: inherit; text-align: left; transition: background 140ms ease; }
+.portfolio-activity-event:hover, .portfolio-activity-event:focus-visible { background: rgba(29, 47, 53, 0.32); outline: none; }
+.portfolio-activity-event__icon { display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border-radius: 0.48rem; }
+.portfolio-activity-event__icon svg { width: 1.15rem; height: 1.15rem; }
+.portfolio-activity-event__icon.is-credit { background: rgba(25, 209, 158, 0.12); color: #31e0ad; }
+.portfolio-activity-event__icon.is-debit { background: rgba(239, 93, 93, 0.11); color: #f08181; }
+.portfolio-activity-event__icon.is-neutral { background: rgba(134, 150, 165, 0.11); color: #b3c0ca; }
+.portfolio-activity-event__icon.is-ownership { background: rgba(145, 111, 234, 0.14); color: #c2a6ff; }
+.portfolio-activity-event__activity, .portfolio-activity-event__summary, .portfolio-activity-event__asset, .portfolio-activity-event__amount, .portfolio-activity-event__date { min-width: 0; }
+.portfolio-activity-event__activity { display: flex; min-width: 0; align-items: center; gap: 0.75rem; }
+.portfolio-activity-event__summary { display: grid; gap: 0.26rem; }
+.portfolio-activity-event__summary strong, .portfolio-activity-event__asset strong, .portfolio-activity-event__cash-detail strong { overflow: hidden; color: #f0f4f6; font-size: 0.84rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.portfolio-activity-event__summary small, .portfolio-activity-event__asset small, .portfolio-activity-event__cash-detail small { overflow: hidden; color: #99a7b2; font-size: 0.72rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.portfolio-activity-event__asset { display: flex; min-width: 0; align-items: center; gap: 0.75rem; }
+.portfolio-activity-event__asset > span:last-child { display: grid; min-width: 0; gap: 0.24rem; }
+.portfolio-activity-event__thumb { display: grid; width: 3.55rem; height: 4.55rem; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid rgba(145, 166, 177, 0.2); border-radius: 0.35rem; background: #111a20; }
+.portfolio-activity-event__thumb img { width: 100%; height: 100%; object-fit: contain; }
+.portfolio-activity-event__thumb svg { width: 1.2rem; color: #7e8b95; }
+.portfolio-activity-event__cash-detail { display: grid; gap: 0.24rem; }
+.portfolio-activity-event__badge { justify-self: start; border-radius: 0.32rem; padding: 0.34rem 0.5rem; font-size: 0.68rem; font-weight: 700; }
+.portfolio-activity-event__badge.is-trading, .portfolio-activity-event__badge.is-cash { background: rgba(24, 196, 147, 0.12); color: #43dfb2; }
+.portfolio-activity-event__badge.is-ownership { background: rgba(145, 111, 234, 0.14); color: #c2a6ff; }
+.portfolio-activity-event__badge.is-distributions { background: rgba(70, 172, 225, 0.14); color: #8cd7ff; }
+.portfolio-activity-event__badge.is-account { background: rgba(134, 150, 165, 0.11); color: #b3c0ca; }
+.portfolio-activity-event__amount { display: grid; gap: 0.25rem; }
+.portfolio-activity-event__amount strong { font-size: 0.9rem; font-weight: 750; white-space: nowrap; }
+.portfolio-activity-event__amount small { color: #aab5bf; font-size: 0.71rem; line-height: 1.3; }
+.portfolio-activity-event__amount.is-credit strong { color: #2edca8; }
+.portfolio-activity-event__amount.is-debit strong { color: #f07979; }
+.portfolio-activity-event__amount.is-neutral strong { color: #d5dee3; font-size: 0.77rem; }
+.portfolio-activity-event__date { display: grid; gap: 0.25rem; color: #c2cdd4; }
+.portfolio-activity-event__date strong { font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.portfolio-activity-event__date small { color: #91a0ac; font-size: 0.71rem; }
+.portfolio-activity-event__chevron { width: 1rem; height: 1rem; color: #a6b3bd; }
+.portfolio-activity-pagination { display: flex; min-height: 3.35rem; align-items: center; justify-content: flex-end; gap: 1.2rem; padding: 0.65rem 1.5rem; color: #a8b5bf; font-size: 0.75rem; }
+.portfolio-activity-pagination label { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+.portfolio-activity-pagination select { border: 1px solid rgba(130, 158, 170, 0.2); border-radius: 0.4rem; padding: 0.4rem 0.55rem; background: #0b1217; color: #dbe4e8; }
+.portfolio-activity-pagination > div { display: inline-flex; align-items: center; gap: 0.35rem; }
+.portfolio-activity-pagination button { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 0.35rem; color: #bac7ce; }
+.portfolio-activity-pagination button:hover:not(:disabled) { background: rgba(128, 152, 163, 0.13); }
+.portfolio-activity-pagination button:disabled { opacity: 0.35; }
+.portfolio-activity-pagination button svg { width: 0.95rem; height: 0.95rem; }
+.portfolio-activity-pagination strong { display: grid; min-width: 2rem; height: 2rem; place-items: center; border: 1px solid rgba(32, 213, 161, 0.55); border-radius: 0.35rem; color: #34dbaa; }
+.portfolio-activity-loading { padding: 0.75rem 1.2rem; }
+.portfolio-activity-dialog-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem; background: rgba(0, 0, 0, 0.68); }
+.portfolio-activity-dialog { width: min(100%, 34rem); max-height: min(90vh, 42rem); overflow: auto; border: 1px solid rgba(130, 158, 170, 0.25); border-radius: 0.8rem; padding: 1.35rem; background: #0c1419; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45); }
+.portfolio-activity-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.portfolio-activity-dialog header h2 { margin-top: 0.3rem; font-size: 1.35rem; }
+.portfolio-activity-dialog header button { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 0.35rem; color: #aab8c1; }
+.portfolio-activity-dialog header button:hover { background: rgba(128, 152, 163, 0.14); color: #fff; }
+.portfolio-activity-dialog header svg { width: 1.05rem; }
+.portfolio-activity-dialog__description { margin-top: 1rem; color: #aab7c0; font-size: 0.82rem; line-height: 1.5; }
+.portfolio-activity-dialog dl { display: grid; gap: 0; margin-top: 1.2rem; }
+.portfolio-activity-dialog dl > div { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid rgba(137, 164, 176, 0.12); padding: 0.72rem 0; }
+.portfolio-activity-dialog dt { color: #8f9da8; font-size: 0.75rem; }
+.portfolio-activity-dialog dd { max-width: 60%; color: #eef3f5; font-size: 0.78rem; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
+.portfolio-activity-dialog footer { display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1rem; }
+.portfolio-activity-dialog footer a, .portfolio-activity-dialog footer button { display: inline-flex; min-height: 2.3rem; align-items: center; gap: 0.35rem; border-radius: 0.4rem; padding: 0.55rem 0.75rem; font-size: 0.76rem; font-weight: 700; }
+.portfolio-activity-dialog footer a { background: rgba(25, 209, 158, 0.12); color: #39dfae; }
+.portfolio-activity-dialog footer button { border: 1px solid rgba(130, 158, 170, 0.2); color: #d4dfe5; }
+.portfolio-activity-dialog footer svg { width: 0.85rem; }
+
+@media (max-width: 860px) {
+  .portfolio-panel--activity-dedicated > .portfolio-panel__head { align-items: stretch; }
+  .portfolio-activity-header { flex-direction: column; align-items: stretch; }
+  .portfolio-activity-date-filter { align-self: flex-start; }
+  .portfolio-activity-table__head { display: none; }
+  .portfolio-activity-event { grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.7rem; align-items: start; padding: 1rem; }
+  .portfolio-activity-event__activity { grid-column: 1 / 3; }
+  .portfolio-activity-event__date { grid-column: 3; grid-row: 1; text-align: right; }
+  .portfolio-activity-event__asset { grid-column: 2 / 4; }
+  .portfolio-activity-event__badge, .portfolio-activity-event__amount { grid-column: 2; }
+  .portfolio-activity-event__chevron { grid-column: 3; grid-row: 4; justify-self: end; }
+  .portfolio-activity-pagination { flex-wrap: wrap; justify-content: space-between; padding-inline: 1rem; }
+}
+@media (max-width: 520px) {
+  .portfolio-activity-filters { overflow-x: auto; flex-wrap: nowrap; }
+  .portfolio-activity-filters button { flex: 0 0 auto; }
+  .portfolio-activity-event__asset strong { white-space: normal; }
+  .portfolio-activity-pagination > span { flex-basis: 100%; }
+}
+
 .portfolio-compact-empty {
   display: flex;
   min-height: 12rem;

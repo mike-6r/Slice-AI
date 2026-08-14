@@ -92,6 +92,8 @@ export class WalletService {
 export class AccountService {
   constructor(private readonly repositories: AppRepositories) {}
   capabilities = () => this.repositories.account.getCapabilities();
+  activity = (input?: { cursor?: string; limit?: number }) =>
+    this.repositories.account.getActivity(input);
 }
 
 export class ProviderService {

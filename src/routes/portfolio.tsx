@@ -1,16 +1,26 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  CalendarDays,
   ChartNoAxesCombined,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleGauge,
   Clock3,
   Landmark,
   Layers3,
+  PieChart,
   RefreshCw,
+  ShoppingCart,
+  Wallet,
   WalletCards,
+  X,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -27,6 +37,7 @@ import type {
   PortfolioPerformanceRange,
   PortfolioTransaction,
   TradingExecution,
+  TradingExecutionPage,
   TradingOrderPage,
   TradingOrderView,
 } from "@/domain";
@@ -59,16 +70,37 @@ import {
 
 export const Route = createFileRoute("/portfolio")({
   head: () => ({ meta: [{ title: "Portfolio | Slice" }] }),
-  validateSearch: (search: Record<string, unknown>): { tab?: PortfolioTab } => ({
+  validateSearch: (search: Record<string, unknown>): PortfolioSearch => ({
     tab: ["overview", "holdings", "orders", "activity"].includes(String(search.tab))
       ? (String(search.tab) as PortfolioTab)
       : "overview",
+    activityType: ["all", "trading", "cash", "ownership", "distributions"].includes(
+      String(search.activityType),
+    )
+      ? (String(search.activityType) as ActivityFilter)
+      : "all",
+    activityRange: ["7d", "30d", "90d", "all"].includes(String(search.activityRange))
+      ? (String(search.activityRange) as ActivityRange)
+      : "30d",
+    activityPage: Math.max(1, Number(search.activityPage ?? 1)),
+    activityPageSize: [10, 25, 50].includes(Number(search.activityPageSize))
+      ? Number(search.activityPageSize)
+      : 10,
   }),
   component: Portfolio,
 });
 
 type HoldingFilter = "ALL" | string;
 type PortfolioTab = "overview" | "holdings" | "orders" | "activity";
+type ActivityFilter = "all" | "trading" | "cash" | "ownership" | "distributions";
+type ActivityRange = "7d" | "30d" | "90d" | "all";
+type PortfolioSearch = {
+  tab?: PortfolioTab;
+  activityType?: ActivityFilter;
+  activityRange?: ActivityRange;
+  activityPage?: number;
+  activityPageSize?: number;
+};
 
 export function Portfolio() {
   useCurrency();
@@ -97,6 +129,18 @@ export function Portfolio() {
     queryFn: () => services.portfolio.transactions({ limit: 6 }),
     enabled: isAuthenticated,
   });
+  const activityTransactions = useQuery({
+    queryKey: queryKeys.portfolio.transactions("activity"),
+    queryFn: () => services.portfolio.transactions({ limit: 100 }),
+    enabled: isAuthenticated && tab === "activity",
+    staleTime: 15_000,
+  });
+  const accountActivity = useQuery({
+    queryKey: queryKeys.account.activity("activity"),
+    queryFn: () => services.account.activity({ limit: 100 }),
+    enabled: isAuthenticated && tab === "activity",
+    staleTime: 15_000,
+  });
   const orders = useQuery({
     queryKey: queryKeys.trading.orders,
     queryFn: () => services.trading.orders({ limit: 100 }),
@@ -105,12 +149,12 @@ export function Portfolio() {
   const executions = useQuery({
     queryKey: queryKeys.trading.executions(),
     queryFn: () => services.trading.executions({ limit: 100 }),
-    enabled: isAuthenticated && tab === "orders",
+    enabled: isAuthenticated && (tab === "orders" || tab === "activity"),
   });
   const assets = useQuery({
     queryKey: [...queryKeys.assets.all, "portfolio-orders"],
     queryFn: () => services.assets.list({ limit: 48, sort: "title" }),
-    enabled: isAuthenticated && tab === "orders",
+    enabled: isAuthenticated && (tab === "orders" || tab === "activity"),
     staleTime: 30_000,
   });
   const performance = useQuery({
@@ -237,7 +281,14 @@ export function Portfolio() {
             }}
           />
         ) : (
-          <ActivityPanel query={transactions} />
+          <PortfolioActivityExperience
+            accountActivity={accountActivity}
+            transactions={activityTransactions}
+            orders={orders}
+            executions={executions}
+            assets={assets.data?.items ?? []}
+            holdings={holdingsForOrders}
+          />
         )}
       </div>
     </main>
@@ -1137,6 +1188,7 @@ function PortfolioHeading({
   const holdingsCount = query.data?.holdings.length ?? 0;
   const isHoldings = tab === "holdings";
   const isOrders = tab === "orders";
+  const isActivity = tab === "activity";
   return (
     <header className="portfolio-heading">
       <div>
@@ -1150,7 +1202,9 @@ function PortfolioHeading({
                 : `Holdings (${holdingsCount})`
               : isOrders
                 ? "Orders"
-                : "Portfolio"}
+                : isActivity
+                  ? "Activity"
+                  : "Portfolio"}
           </span>
         </h1>
         <p>
@@ -1158,7 +1212,9 @@ function PortfolioHeading({
             ? "A detailed view of the collectibles you own."
             : isOrders
               ? "Track and manage your active, filled and cancelled orders."
-              : "Track your collectible investments, ownership positions and performance across all asset classes."}
+              : isActivity
+                ? "A timeline of all activity in your account."
+                : "Track your collectible investments, ownership positions and performance across all asset classes."}
         </p>
       </div>
       {isHoldings ? (
@@ -1187,7 +1243,7 @@ function PortfolioHeading({
             </select>
           </label>
         </div>
-      ) : isOrders ? (
+      ) : isOrders || isActivity ? (
         <span className="portfolio-heading__orders-spacer" aria-hidden="true" />
       ) : (
         <div className="portfolio-heading__freshness" aria-live="polite">
@@ -2043,6 +2099,610 @@ function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
       </span>
     </>
   );
+}
+
+type ActivityEventCategory = "TRADING" | "CASH" | "OWNERSHIP" | "DISTRIBUTIONS" | "ACCOUNT";
+type ActivityEvent = {
+  id: string;
+  category: ActivityEventCategory;
+  title: string;
+  description: string;
+  occurredAt: string;
+  typeLabel: string;
+  tone: "credit" | "debit" | "neutral" | "ownership";
+  primary: string;
+  secondary: string[];
+  moneyMinor?: string;
+  asset?: {
+    slug: string | null;
+    title: string;
+    category: string;
+    grade: string | null;
+    mediaUrl: string | null;
+  };
+  details: Array<{ label: string; value: string }>;
+  reference?: string | null;
+  target: "orders" | "asset" | "none";
+};
+
+type ActivityAccountItem = {
+  reference: string;
+  type: string;
+  title: string;
+  description: string;
+  createdAt: string;
+};
+
+function PortfolioActivityExperience({
+  accountActivity,
+  transactions,
+  orders,
+  executions,
+  assets,
+  holdings,
+}: {
+  accountActivity: UseQueryResult<{ items: ActivityAccountItem[]; nextCursor: string | null }>;
+  transactions: UseQueryResult<{ items: PortfolioTransaction[]; nextCursor?: string | null }>;
+  orders: UseQueryResult<TradingOrderPage>;
+  executions: UseQueryResult<TradingExecutionPage>;
+  assets: Asset[];
+  holdings: PortfolioHolding[];
+}) {
+  const navigate = useNavigate({ from: Route.fullPath });
+  const search = Route.useSearch();
+  const filter = search.activityType ?? "all";
+  const range = search.activityRange ?? "30d";
+  const page = Math.max(1, search.activityPage ?? 1);
+  const pageSize = search.activityPageSize ?? 10;
+  const [selected, setSelected] = useState<ActivityEvent | null>(null);
+  const allEvents = useMemo(
+    () =>
+      buildPortfolioActivityEvents(
+        accountActivity.data?.items ?? [],
+        transactions.data?.items ?? [],
+        orders.data?.items ?? [],
+        executions.data?.items ?? [],
+        assets,
+        holdings,
+      ),
+    [
+      accountActivity.data?.items,
+      assets,
+      executions.data?.items,
+      holdings,
+      orders.data?.items,
+      transactions.data?.items,
+    ],
+  );
+  const filteredEvents = useMemo(() => {
+    const cutoff = range === "all" ? null : Date.now() - Number(range.slice(0, -1)) * 86_400_000;
+    return allEvents.filter((event) => {
+      const inCategory =
+        filter === "all" ||
+        (filter === "trading" && event.category === "TRADING") ||
+        (filter === "cash" && event.category === "CASH") ||
+        (filter === "ownership" && event.category === "OWNERSHIP") ||
+        (filter === "distributions" && event.category === "DISTRIBUTIONS");
+      return inCategory && (cutoff === null || new Date(event.occurredAt).getTime() >= cutoff);
+    });
+  }, [allEvents, filter, range]);
+  const pageCount = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+  const visibleEvents = filteredEvents.slice((page - 1) * pageSize, page * pageSize);
+  const hasDistributionEvents = allEvents.some((event) => event.category === "DISTRIBUTIONS");
+  const loading = accountActivity.isLoading || transactions.isLoading || executions.isLoading;
+  const failed = accountActivity.isError && transactions.isError && executions.isError;
+  const updateSearch = (patch: Partial<PortfolioSearch>) => {
+    void navigate({
+      search: (current) => ({ ...current, tab: "activity", ...patch }),
+      replace: true,
+    });
+  };
+  const emptyMessage =
+    filter === "trading"
+      ? "You don't have any trading activity yet."
+      : filter === "cash"
+        ? "You don't have any cash activity in this period."
+        : filter === "ownership"
+          ? "You don't have any ownership changes in this period."
+          : filter === "distributions"
+            ? "You don't have any distributions in this period."
+            : "Your account activity will appear here.";
+
+  return (
+    <PortfolioPanel
+      title="Account activity"
+      className="portfolio-panel--activity-dedicated"
+      header={
+        <div className="portfolio-activity-header">
+          <div className="portfolio-activity-filters" role="tablist" aria-label="Activity type">
+            {(
+              [
+                ["all", "All Activity"],
+                ["trading", "Trading"],
+                ["cash", "Cash"],
+                ["ownership", "Ownership"],
+                ...(hasDistributionEvents ? [["distributions", "Distributions"]] : []),
+              ] as Array<[ActivityFilter, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={filter === value}
+                className={filter === value ? "is-active" : ""}
+                onClick={() => updateSearch({ activityType: value, activityPage: 1 })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="portfolio-activity-date-filter">
+            <CalendarDays aria-hidden="true" />
+            <span className="sr-only">Activity date range</span>
+            <select
+              value={range}
+              onChange={(event) =>
+                updateSearch({
+                  activityRange: event.target.value as ActivityRange,
+                  activityPage: 1,
+                })
+              }
+            >
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="all">All time</option>
+            </select>
+            <ChevronDown aria-hidden="true" />
+          </label>
+        </div>
+      }
+    >
+      {loading ? (
+        <div className="portfolio-activity-loading">
+          <RowsSkeleton rows={5} />
+        </div>
+      ) : failed ? (
+        <PanelError
+          message="Your activity is temporarily unavailable."
+          retry={() => void accountActivity.refetch()}
+        />
+      ) : !visibleEvents.length ? (
+        <PortfolioEmptyState
+          className="portfolio-empty-state--activity-page"
+          icon={<Clock3 aria-hidden="true" />}
+          message={emptyMessage}
+          detail={
+            filter === "trading"
+              ? "Explore Markets to find a collectible to own."
+              : "Try another date range or activity filter."
+          }
+        />
+      ) : (
+        <>
+          <div className="portfolio-activity-table" role="table" aria-label="Account activity">
+            <div className="portfolio-activity-table__head" role="row">
+              <span>Activity</span>
+              <span>Asset / details</span>
+              <span>Type</span>
+              <span>Amount</span>
+              <span>Date &amp; time</span>
+              <span aria-hidden="true" />
+            </div>
+            {visibleEvents.map((event) => (
+              <ActivityEventRow key={event.id} event={event} onOpen={() => setSelected(event)} />
+            ))}
+          </div>
+          <PortfolioActivityPagination
+            page={page}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            total={filteredEvents.length}
+            onPageChange={(next) => updateSearch({ activityPage: next })}
+            onPageSizeChange={(next) => updateSearch({ activityPageSize: next, activityPage: 1 })}
+          />
+        </>
+      )}
+      {selected ? (
+        <ActivityDetailDialog event={selected} onClose={() => setSelected(null)} />
+      ) : null}
+    </PortfolioPanel>
+  );
+}
+
+function ActivityEventRow({ event, onOpen }: { event: ActivityEvent; onOpen: () => void }) {
+  const Icon = activityIcon(event);
+  return (
+    <button type="button" className="portfolio-activity-event" role="row" onClick={onOpen}>
+      <span className="portfolio-activity-event__activity">
+        <span className={`portfolio-activity-event__icon is-${event.tone}`} aria-hidden="true">
+          <Icon />
+        </span>
+        <span className="portfolio-activity-event__summary">
+          <strong>{event.title}</strong>
+          <small>{event.description}</small>
+        </span>
+      </span>
+      <span className="portfolio-activity-event__asset">
+        {event.asset ? (
+          <>
+            <span className="portfolio-activity-event__thumb">
+              {event.asset.mediaUrl ? (
+                <img src={event.asset.mediaUrl} alt="" />
+              ) : (
+                <Landmark aria-hidden="true" />
+              )}
+            </span>
+            <span>
+              <strong>{event.asset.title}</strong>
+              <small>
+                {[event.asset.category, event.asset.grade].filter(Boolean).join(" · ") ||
+                  "Collectible"}
+              </small>
+            </span>
+          </>
+        ) : (
+          <span className="portfolio-activity-event__cash-detail">
+            <strong>{event.secondary[0] ?? "Account activity"}</strong>
+            <small>
+              {event.reference ? `Reference: ${event.reference}` : "Customer account event"}
+            </small>
+          </span>
+        )}
+      </span>
+      <span className={`portfolio-activity-event__badge is-${event.category.toLowerCase()}`}>
+        {event.typeLabel}
+      </span>
+      <span className={`portfolio-activity-event__amount is-${event.tone}`}>
+        <strong>{event.primary}</strong>
+        <small>{event.secondary.slice(event.asset ? 0 : 1).join(" · ")}</small>
+      </span>
+      <span className="portfolio-activity-event__date">
+        <strong>{formatActivityDate(event.occurredAt)}</strong>
+        <small>{formatActivityTime(event.occurredAt)}</small>
+      </span>
+      <ChevronRight className="portfolio-activity-event__chevron" aria-hidden="true" />
+    </button>
+  );
+}
+
+function PortfolioActivityPagination({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  const start = total ? (page - 1) * pageSize + 1 : 0;
+  return (
+    <footer className="portfolio-activity-pagination">
+      <span>
+        Showing {start} to {Math.min(page * pageSize, total)} of {total} activity items
+      </span>
+      <label>
+        Show{" "}
+        <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+          <option value={10}>10</option>
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+        </select>{" "}
+        per page
+      </label>
+      <div>
+        <button
+          type="button"
+          aria-label="Previous activity page"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <ChevronLeft />
+        </button>
+        <strong>{page}</strong>
+        <button
+          type="button"
+          aria-label="Next activity page"
+          disabled={page >= pageCount}
+          onClick={() => onPageChange(page + 1)}
+        >
+          <ChevronRight />
+        </button>
+      </div>
+    </footer>
+  );
+}
+
+function ActivityDetailDialog({ event, onClose }: { event: ActivityEvent; onClose: () => void }) {
+  return (
+    <div
+      className="portfolio-activity-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="portfolio-activity-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="activity-detail-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Activity detail</p>
+            <h2 id="activity-detail-title">{event.title}</h2>
+          </div>
+          <button type="button" aria-label="Close activity detail" onClick={onClose}>
+            <X />
+          </button>
+        </header>
+        <p className="portfolio-activity-dialog__description">{event.description}</p>
+        <dl>
+          {event.details.map((detail) => (
+            <div key={detail.label}>
+              <dt>{detail.label}</dt>
+              <dd>{detail.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <footer>
+          {event.target === "orders" ? (
+            <Link to="/portfolio" search={{ tab: "orders" }} onClick={onClose}>
+              View orders <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : event.target === "asset" && event.asset?.slug ? (
+            <Link to="/asset/$id" params={{ id: event.asset.slug }} onClick={onClose}>
+              View collectible <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : (
+            <span />
+          )}
+          <button type="button" onClick={onClose}>
+            Done
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function buildPortfolioActivityEvents(
+  accountItems: ActivityAccountItem[],
+  transactions: PortfolioTransaction[],
+  orders: TradingOrderView[],
+  executions: TradingExecution[],
+  assets: Asset[],
+  holdings: PortfolioHolding[],
+): ActivityEvent[] {
+  const assetBySlug = new Map(
+    assets.filter((asset) => asset.slug).map((asset) => [asset.slug!, asset]),
+  );
+  const holdingBySlug = new Map(
+    holdings.filter((holding) => holding.slug).map((holding) => [holding.slug!, holding]),
+  );
+  const events: ActivityEvent[] = [];
+  for (const execution of executions) {
+    const order =
+      orders.find(
+        (candidate) =>
+          candidate.assetSlug === execution.assetSlug &&
+          candidate.side === execution.side &&
+          new Date(candidate.createdAt).getTime() <= new Date(execution.executedAt).getTime() &&
+          (!candidate.closedAt ||
+            new Date(candidate.closedAt).getTime() >= new Date(execution.executedAt).getTime()),
+      ) ?? null;
+    const asset = activityAsset(
+      assetBySlug.get(execution.assetSlug),
+      holdingBySlug.get(execution.assetSlug),
+    );
+    const totalUnits = holdingBySlug.get(execution.assetSlug)?.totalUnits ?? null;
+    const ownership = totalUnits ? ownershipPercent(execution.units, totalUnits) : null;
+    const gross = (
+      BigInt(execution.priceMinor) * BigInt(execution.units) +
+      BigInt(execution.feeMinor)
+    ).toString();
+    const isBuy = execution.side === "BUY";
+    const partial = order?.status === "PARTIALLY_FILLED";
+    const title = `${isBuy ? "Buy" : "Sell"} order ${partial ? "partially filled" : "filled"}`;
+    events.push({
+      id: `execution:${execution.executionId}`,
+      category: "TRADING",
+      title,
+      description: partial
+        ? `Part of your ${isBuy ? "buy" : "sell"} order has been executed.`
+        : `Your ${isBuy ? "buy" : "sell"} order was fully executed.`,
+      occurredAt: execution.executedAt,
+      typeLabel: "Trading",
+      tone: isBuy ? "credit" : "debit",
+      primary: ownership ? `${isBuy ? "+" : "-"}${ownership}%` : `${execution.units} units`,
+      secondary: [
+        `${execution.units} ownership units ${isBuy ? "acquired" : "sold"}`,
+        formatPortfolioMoney(gross),
+      ],
+      moneyMinor: gross,
+      asset,
+      details: [
+        ...(asset ? [{ label: "Asset", value: asset.title }] : []),
+        { label: "Side", value: isBuy ? "Buy" : "Sell" },
+        {
+          label: "Ownership change",
+          value: ownership ? `${isBuy ? "+" : "-"}${ownership}%` : "Unavailable",
+        },
+        { label: "Units", value: execution.units },
+        { label: "Execution value", value: formatPortfolioMoney(gross) },
+        { label: "Execution date", value: formatActivityDateTime(execution.executedAt) },
+        { label: "Execution reference", value: execution.executionId.slice(0, 12) },
+      ],
+      target: asset?.slug ? "asset" : "orders",
+    });
+  }
+  for (const order of orders.filter((item) => item.status === "CANCELLED")) {
+    const asset = activityAsset(
+      assetBySlug.get(order.assetSlug ?? ""),
+      holdingBySlug.get(order.assetSlug ?? ""),
+    );
+    const totalUnits = holdingBySlug.get(order.assetSlug ?? "")?.totalUnits ?? null;
+    const ownership = totalUnits ? ownershipPercent(order.originalUnits, totalUnits) : null;
+    events.push({
+      id: `order:${order.id}:cancelled`,
+      category: "TRADING",
+      title: `${order.side === "BUY" ? "Buy" : "Sell"} order cancelled`,
+      description: "Your order was cancelled before execution.",
+      occurredAt: order.closedAt ?? order.createdAt,
+      typeLabel: "Trading",
+      tone: "neutral",
+      primary: ownership ? `${ownership}% order cancelled` : "Order cancelled",
+      secondary: [
+        `${order.originalUnits} ownership units`,
+        `${formatPortfolioMoney(order.limitPriceMinor)} limit per Slice`,
+      ],
+      asset,
+      details: [
+        ...(asset ? [{ label: "Asset", value: asset.title }] : []),
+        { label: "Side", value: order.side === "BUY" ? "Buy" : "Sell" },
+        { label: "Requested ownership", value: ownership ? `${ownership}%` : "Unavailable" },
+        { label: "Units cancelled", value: order.originalUnits },
+        { label: "Limit price", value: formatPortfolioMoney(order.limitPriceMinor) },
+        { label: "Date", value: formatActivityDateTime(order.closedAt ?? order.createdAt) },
+      ],
+      target: "orders",
+    });
+  }
+  for (const item of transactions) {
+    const type = item.type.toUpperCase();
+    const isDeposit = type === "EXTERNAL_DEPOSIT" || type === "DEMO_FUNDING";
+    const isWithdrawal = type === "EXTERNAL_WITHDRAWAL";
+    const isDistribution = type === "DISTRIBUTION";
+    if (!isDeposit && !isWithdrawal && !isDistribution) continue;
+    const title = isDistribution
+      ? "Distribution received"
+      : isDeposit
+        ? "Funds added"
+        : "Cash withdrawal";
+    const direction = isWithdrawal ? "-" : "+";
+    events.push({
+      id: `cash:${item.reference ?? item.effectiveAt}:${item.type}:${item.amountMinor}`,
+      category: isDistribution ? "DISTRIBUTIONS" : "CASH",
+      title,
+      description: isDistribution
+        ? "A distribution was credited to your account."
+        : isDeposit
+          ? "Money was added to your Slice wallet."
+          : "Money was withdrawn from your Slice wallet.",
+      occurredAt: item.effectiveAt,
+      typeLabel: isDistribution ? "Distribution" : "Cash",
+      tone: isWithdrawal ? "debit" : "credit",
+      primary: `${direction}${formatPortfolioMoney(item.amountMinor).replace(/^-/, "")}`,
+      secondary: [
+        isDistribution
+          ? "Distribution credited"
+          : isDeposit
+            ? "Added to wallet"
+            : "Withdrawn from wallet",
+        ...(item.reference ? [`Reference: ${item.reference}`] : []),
+      ],
+      moneyMinor: item.amountMinor,
+      reference: item.reference,
+      details: [
+        {
+          label: "Amount",
+          value: `${direction}${formatPortfolioMoney(item.amountMinor).replace(/^-/, "")}`,
+        },
+        { label: "Status", value: item.status ?? "Posted" },
+        { label: "Date", value: formatActivityDateTime(item.effectiveAt) },
+        ...(item.reference ? [{ label: "Reference", value: item.reference }] : []),
+      ],
+      target: "none",
+    });
+  }
+  for (const item of accountItems) {
+    events.push({
+      id: `account:${item.reference}`,
+      category: "ACCOUNT",
+      title: item.title,
+      description: item.description,
+      occurredAt: item.createdAt,
+      typeLabel: "Account",
+      tone: "neutral",
+      primary: "—",
+      secondary: ["Account event"],
+      reference: item.reference,
+      details: [
+        { label: "Event", value: item.title },
+        { label: "Date", value: formatActivityDateTime(item.createdAt) },
+        { label: "Reference", value: item.reference },
+      ],
+      target: "none",
+    });
+  }
+  return events.sort((a, b) => {
+    const time = new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
+    return time || b.id.localeCompare(a.id);
+  });
+}
+
+function activityAsset(
+  asset: Asset | undefined,
+  holding: PortfolioHolding | undefined,
+): ActivityEvent["asset"] {
+  if (!asset && !holding) return undefined;
+  const slug = asset?.slug ?? holding?.slug ?? null;
+  const media =
+    asset?.media.find((item) => item.kind === "image")?.url ??
+    (slug ? assetShowcaseMedia(slug)?.src : undefined) ??
+    null;
+  return {
+    slug,
+    title: asset?.details.title ?? holding?.title ?? "Collectible",
+    category: friendlyActivityCategory(asset?.details.category ?? holding?.category),
+    grade: asset?.grade ? `${asset.grade.company} ${asset.grade.label}` : (holding?.grade ?? null),
+    mediaUrl: media,
+  };
+}
+
+function friendlyActivityCategory(category: string | undefined | null) {
+  if (!category) return "Collectible";
+  const labels: Record<string, string> = {
+    pokemon: "Pokémon",
+    football: "Football cards",
+    basketball: "Basketball cards",
+    baseball: "Baseball cards",
+    "formula-1": "Formula 1 cards",
+    magic: "Magic: The Gathering",
+    yugioh: "Yu-Gi-Oh!",
+  };
+  return labels[category.toLowerCase()] ?? category;
+}
+
+function activityIcon(event: ActivityEvent): LucideIcon {
+  if (event.category === "CASH") return event.tone === "debit" ? ArrowDownRight : Wallet;
+  if (event.category === "OWNERSHIP") return PieChart;
+  if (event.category === "TRADING") return event.tone === "neutral" ? XCircle : ShoppingCart;
+  if (event.category === "DISTRIBUTIONS") return CheckCircle2;
+  return CheckCircle2;
+}
+
+function formatActivityDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+function formatActivityTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(
+    new Date(value),
+  );
+}
+function formatActivityDateTime(value: string) {
+  return `${formatActivityDate(value)} ${formatActivityTime(value)}`;
 }
 
 function ActivityPanel({
