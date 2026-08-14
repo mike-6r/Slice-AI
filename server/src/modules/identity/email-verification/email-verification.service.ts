@@ -75,6 +75,12 @@ export class EmailVerificationService {
   }
 
   async send(actor: Actor, ip: string, requestId: string) {
+    if (this.config.isBeta)
+      throw new ServiceUnavailableException({
+        code: 'BETA_DISABLED',
+        message:
+          'Email verification delivery is not enabled during the current Beta.',
+      });
     await this.abuse.enforce('email-send', ip, actor.userId);
     this.requireDelivery();
     const now = new Date();

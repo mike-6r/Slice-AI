@@ -330,6 +330,7 @@ function OnboardingPage() {
           returnTo === "/list" ? (
             <CollectorOnboardingStep
               compliance={compliance.data?.status ?? "NOT_STARTED"}
+              capability={compliance.data?.capability}
               loading={compliance.isLoading || startCompliance.isPending}
               onVerify={() => startCompliance.mutate()}
               onStartListing={() => void navigate({ to: "/list" })}
@@ -353,24 +354,29 @@ function OnboardingPage() {
 
 function CollectorOnboardingStep({
   compliance,
+  capability,
   loading,
   onVerify,
   onStartListing,
 }: {
   compliance: "NOT_STARTED" | "PENDING" | "APPROVED" | "REVIEW" | "REJECTED";
+  capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
   loading: boolean;
   onVerify: () => void;
   onStartListing: () => void;
 }) {
   const verified = compliance === "APPROVED";
+  const betaDeferred = capability === "NOT_REQUIRED_IN_CURRENT_BETA";
   const processing = compliance === "PENDING" || compliance === "REVIEW";
-  const label = verified
-    ? "Verification complete"
-    : processing
-      ? "Verification in progress"
-      : compliance === "REJECTED"
-        ? "Needs attention"
-        : "Not started";
+  const label = betaDeferred
+    ? "Not required during the current Beta"
+    : verified
+      ? "Verification complete"
+      : processing
+        ? "Verification in progress"
+        : compliance === "REJECTED"
+          ? "Needs attention"
+          : "Not started";
   return (
     <Step
       icon={<Fingerprint />}
@@ -392,7 +398,9 @@ function CollectorOnboardingStep({
             <strong>Identity Verification</strong>
             <small>{label}</small>
           </span>
-          {verified ? (
+          {betaDeferred ? (
+            <span className="onboarding-status">Beta policy</span>
+          ) : verified ? (
             <span className="onboarding-status">✓</span>
           ) : (
             <button className="primary-action" type="button" disabled={loading} onClick={onVerify}>
@@ -425,14 +433,15 @@ function CollectorOnboardingStep({
       <button
         className="primary-action onboarding-cta"
         type="button"
-        disabled={!verified}
+        disabled={!verified && !betaDeferred}
         onClick={onStartListing}
       >
         Start Listing
       </button>
       <p className="onboarding-field-help">
-        Plaid status is confirmed by Slice&apos;s provider authority. Completing the Link flow alone
-        does not mark you verified.
+        {betaDeferred
+          ? "Identity verification is intentionally deferred for this controlled Beta; this account can continue with Beta listing tests."
+          : "Plaid status is confirmed by Slice&apos;s provider authority. Completing the Link flow alone does not mark you verified."}
       </p>
     </Step>
   );

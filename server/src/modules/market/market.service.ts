@@ -10,6 +10,11 @@ import {
   type CacheStore,
 } from '../../infrastructure/redis/redis.store';
 import { MarketProviderRegistry } from './market-provider.registry';
+import { APP_CONFIG, type AppConfig } from '../../config/app-config';
+import {
+  isBetaFixtureSource,
+  publicBetaAssetWhere,
+} from '../../config/beta-policy';
 
 const ranges = {
   '1D': 1,
@@ -33,6 +38,7 @@ export class MarketService {
     private readonly db: PrismaService,
     @Inject(CACHE_STORE) private readonly cache: CacheStore,
     private readonly providers: MarketProviderRegistry,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async list(query: {
@@ -53,6 +59,7 @@ export class MarketService {
     const rows = await this.db.asset.findMany({
       where: {
         status: 'PUBLISHED',
+        ...publicBetaAssetWhere(this.config.isBeta),
         ...(query.category ? { category: { slug: query.category } } : {}),
         ...(query.set ? { collectibleSet: { slug: query.set } } : {}),
         ...(query.gradingCompany
@@ -84,14 +91,18 @@ export class MarketService {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
-        marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+        marketSnapshots: {
+          ...this.publicMarketSnapshotFilter(),
+          orderBy: { asOf: 'desc' },
+          take: 1,
+        },
         valuationEvidence: {
-          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+          where: this.publicValuationEvidenceFilter(),
           orderBy: { observedAt: 'desc' },
           take: 2,
         },
         marketObservations: {
-          where: { included: true },
+          where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
           take: 50,
         },
@@ -155,7 +166,19 @@ export class MarketService {
     const asset = await this.asset(slug);
     const from = new Date(Date.now() - ranges[range] * 86_400_000);
     const points = await this.db.assetValuationPoint.findMany({
-      where: { assetId: asset.id, observedAt: { gte: from } },
+      where: {
+        assetId: asset.id,
+        observedAt: { gte: from },
+        ...(this.config.isBeta
+          ? {
+              NOT: [
+                { source: { startsWith: 'STAGING_' } },
+                { source: { startsWith: 'DEMO_' } },
+                { source: { startsWith: 'TEST_' } },
+              ],
+            }
+          : {}),
+      },
       orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
       take: 366,
     });
@@ -178,6 +201,7 @@ export class MarketService {
     const rows = await this.db.asset.findMany({
       where: {
         status: 'PUBLISHED',
+        ...publicBetaAssetWhere(this.config.isBeta),
         id: { not: asset.id },
         categoryId: asset.categoryId,
         ...(asset.setId ? { setId: asset.setId } : {}),
@@ -186,14 +210,18 @@ export class MarketService {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
-        marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+        marketSnapshots: {
+          ...this.publicMarketSnapshotFilter(),
+          orderBy: { asOf: 'desc' },
+          take: 1,
+        },
         valuationEvidence: {
-          where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+          where: this.publicValuationEvidenceFilter(),
           orderBy: { observedAt: 'desc' },
           take: 2,
         },
         marketObservations: {
-          where: { included: true },
+          where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
           take: 50,
         },
@@ -211,11 +239,20 @@ export class MarketService {
   }
   async summary() {
     const value = await this.db.marketSnapshot.findFirst({
+      where: this.config.isBeta
+        ? {
+            NOT: [
+              { source: { startsWith: 'STAGING_' } },
+              { source: { startsWith: 'DEMO_' } },
+              { source: { startsWith: 'TEST_' } },
+            ],
+          }
+        : undefined,
       orderBy: { asOf: 'desc' },
     });
     if (!value)
       return {
-        dataStatus: 'DEMO',
+        dataStatus: 'UNAVAILABLE',
         source: 'NO_MARKET_DATA',
         asOf: null,
         totalEstimatedMarketValue: null,
@@ -244,14 +281,18 @@ export class MarketService {
             category: true,
             collectibleSet: true,
             gradeScaleEntry: { include: { company: true } },
-            marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
+            marketSnapshots: {
+              ...this.publicMarketSnapshotFilter(),
+              orderBy: { asOf: 'desc' },
+              take: 1,
+            },
             valuationEvidence: {
-              where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
+              where: this.publicValuationEvidenceFilter(),
               orderBy: { observedAt: 'desc' },
               take: 2,
             },
             marketObservations: {
-              where: { included: true },
+              where: this.publicMarketObservationFilter(),
               orderBy: { observedAt: 'desc' },
               take: 50,
             },
@@ -270,6 +311,9 @@ export class MarketService {
       kind,
       items: rows
         .filter((row) => row.asset.status === 'PUBLISHED')
+        .filter(
+          (row) => !this.config.isBeta || !isBetaFixtureSource(row.source),
+        )
         .map((row) => assetView({ ...row.asset, marketSnapshots: [row] })),
     };
   }
@@ -288,22 +332,31 @@ export class MarketService {
   }
   private async asset(slug: string) {
     const asset = await this.db.asset.findFirst({
-      where: { slug, status: 'PUBLISHED' },
+      where: {
+        status: 'PUBLISHED',
+        slug: this.config.isBeta
+          ? { equals: slug, not: { startsWith: 'slice-demo-' } }
+          : slug,
+      },
       include: {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
-        marketSnapshots: { orderBy: { asOf: 'desc' }, take: 1 },
-      valuationEvidence: {
-        where: { sourceType: { in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'] } },
-        orderBy: { observedAt: 'desc' },
-        take: 2,
-      },
-      marketObservations: {
-        where: { included: true },
-        orderBy: { observedAt: 'desc' },
-        take: 50,
-      },
+        marketSnapshots: {
+          ...this.publicMarketSnapshotFilter(),
+          orderBy: { asOf: 'desc' },
+          take: 1,
+        },
+        valuationEvidence: {
+          where: this.publicValuationEvidenceFilter(),
+          orderBy: { observedAt: 'desc' },
+          take: 2,
+        },
+        marketObservations: {
+          where: this.publicMarketObservationFilter(),
+          orderBy: { observedAt: 'desc' },
+          take: 50,
+        },
       },
     });
     if (!asset)
@@ -312,6 +365,49 @@ export class MarketService {
         message: 'Resource not found.',
       });
     return asset;
+  }
+
+  private publicMarketSnapshotFilter() {
+    return this.config.isBeta
+      ? {
+          where: {
+            NOT: [
+              { source: { startsWith: 'STAGING_' } },
+              { source: { startsWith: 'DEMO_' } },
+              { source: { startsWith: 'TEST_' } },
+            ],
+          },
+        }
+      : {};
+  }
+
+  private publicValuationEvidenceFilter() {
+    return this.config.isBeta
+      ? {
+          NOT: [
+            { sourceType: { startsWith: 'STAGING_' } },
+            { sourceType: { startsWith: 'DEMO_' } },
+            { sourceType: { startsWith: 'TEST_' } },
+          ],
+        }
+      : {
+          sourceType: {
+            in: ['STAGING_CURRENT_LISTING', 'STAGING_RECENT_COMPLETED_SALE'],
+          },
+        };
+  }
+
+  private publicMarketObservationFilter() {
+    return this.config.isBeta
+      ? {
+          included: true,
+          NOT: [
+            { providerCode: { startsWith: 'STAGING_' } },
+            { providerCode: { startsWith: 'DEMO_' } },
+            { providerCode: { startsWith: 'TEST_' } },
+          ],
+        }
+      : { included: true };
   }
 }
 
@@ -401,10 +497,11 @@ function assetView(asset: PublicAssetRow) {
     source: market?.source ?? 'NO_MARKET_DATA',
     markSource: market?.markSource ?? null,
     freshness: market?.freshness ?? 'UNAVAILABLE',
-    lastSuccessfulRefreshAt: market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
+    lastSuccessfulRefreshAt:
+      market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference: externalMarketReference(asset.valuationEvidence ?? []),
-    dataStatus: market ? status(market.status) : 'DEMO',
+    dataStatus: market ? status(market.status) : 'UNAVAILABLE',
     asOf: market ? asOf(market.asOf) : null,
     publication:
       asset.publication?.status === 'PUBLISHED'
@@ -435,14 +532,17 @@ function summarizeObservations(
   const summarize = (rows: typeof observations) => {
     if (!rows.length) return null;
     const currencies = new Set(rows.map((row) => row.currency));
-    if (currencies.size !== 1) return { count: rows.length, mixedCurrency: true };
+    if (currencies.size !== 1)
+      return { count: rows.length, mixedCurrency: true };
     const sorted = [...rows].sort((a, b) =>
       a.priceMinor < b.priceMinor ? -1 : a.priceMinor > b.priceMinor ? 1 : 0,
     );
     const midpoint = Math.floor(sorted.length / 2);
-    const median = sorted.length % 2
-      ? sorted[midpoint]!.priceMinor
-      : (sorted[midpoint - 1]!.priceMinor + sorted[midpoint]!.priceMinor) / 2n;
+    const median =
+      sorted.length % 2
+        ? sorted[midpoint]!.priceMinor
+        : (sorted[midpoint - 1]!.priceMinor + sorted[midpoint]!.priceMinor) /
+          2n;
     return {
       count: rows.length,
       currency: sorted[0]!.currency,
@@ -450,12 +550,18 @@ function summarizeObservations(
       highMinor: sorted.at(-1)!.priceMinor.toString(),
       medianMinor: median.toString(),
       latestMinor: sorted.at(-1)!.priceMinor.toString(),
-      latestAt: (sorted.at(-1)!.occurredAt ?? sorted.at(-1)!.observedAt).toISOString(),
+      latestAt: (
+        sorted.at(-1)!.occurredAt ?? sorted.at(-1)!.observedAt
+      ).toISOString(),
     };
   };
   return {
-    completedSales: summarize(observations.filter((item) => item.observationType === 'COMPLETED_SALE')),
-    activeListings: summarize(observations.filter((item) => item.observationType === 'ACTIVE_LISTING')),
+    completedSales: summarize(
+      observations.filter((item) => item.observationType === 'COMPLETED_SALE'),
+    ),
+    activeListings: summarize(
+      observations.filter((item) => item.observationType === 'ACTIVE_LISTING'),
+    ),
     providerCount: new Set(observations.map((item) => item.providerCode)).size,
   };
 }
@@ -480,11 +586,16 @@ function externalMarketReference(
       )
         return null;
       return {
-        amount: { minor: record.valueMinor.toString(), currency: record.currency },
+        amount: {
+          minor: record.valueMinor.toString(),
+          currency: record.currency,
+        },
         source: detail.source,
         externalReference: detail.externalReference,
         listingUrl: detail.listingUrl,
-        ...(typeof detail.imageUrl === 'string' ? { imageUrl: detail.imageUrl } : {}),
+        ...(typeof detail.imageUrl === 'string'
+          ? { imageUrl: detail.imageUrl }
+          : {}),
         observedAt: record.observedAt.toISOString(),
       };
     } catch {
@@ -494,7 +605,10 @@ function externalMarketReference(
   const currentListing = read('STAGING_CURRENT_LISTING');
   const recentCompletedSale = read('STAGING_RECENT_COMPLETED_SALE');
   return currentListing || recentCompletedSale
-    ? { ...(currentListing ? { currentListing } : {}), ...(recentCompletedSale ? { recentCompletedSale } : {}) }
+    ? {
+        ...(currentListing ? { currentListing } : {}),
+        ...(recentCompletedSale ? { recentCompletedSale } : {}),
+      }
     : null;
 }
 function encodeCursor(id: string) {

@@ -24,6 +24,14 @@ export class ComplianceService {
         : new PlaidAdapter(config);
   }
   async start(actor: Actor, requestId: string) {
+    if (this.config.isBeta) {
+      return {
+        status: 'NOT_STARTED' as const,
+        provider: 'PLAID' as const,
+        sessionUrl: null,
+        capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
+      };
+    }
     const existing = await this.db.complianceCase.findUnique({
       where: {
         userId_provider_type: {
@@ -134,6 +142,14 @@ export class ComplianceService {
     });
   }
   async self(userId: string) {
+    if (this.config.isBeta) {
+      return {
+        status: 'NOT_STARTED' as const,
+        expiresAt: null,
+        updatedAt: null,
+        capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
+      };
+    }
     const item = await this.db.complianceCase.findUnique({
       where: {
         userId_provider_type: {

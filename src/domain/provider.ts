@@ -7,12 +7,14 @@ export interface ComplianceSummary {
   status: ComplianceState;
   expiresAt: ISODateTime | null;
   updatedAt: ISODateTime | null;
+  capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
 }
 
 export interface ComplianceSession {
   status: ComplianceState;
   provider: "LOCAL_TEST" | "PLAID";
   sessionUrl: string | null;
+  capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
 }
 
 /** Safe persisted Plaid Link account projection. No Item/access token is a UI value. */

@@ -11,6 +11,20 @@ describe('loadAppConfig', () => {
     });
   });
 
+  it('exposes an explicit beta deployment mode without treating it as production', () => {
+    const beta = loadAppConfig({
+      NODE_ENV: 'test',
+      APP_ENV: 'beta',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/slice',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_ACCESS_SECRET: 'beta-test-secret-that-is-long-enough',
+      APP_PUBLIC_URL: 'https://beta.slice.test',
+      CORS_ORIGINS: 'https://beta.slice.test',
+      COOKIE_SECURE: 'true',
+    });
+    expect(beta).toMatchObject({ appEnvironment: 'beta', isBeta: true });
+  });
+
   it('rejects invalid ports', () => {
     expect(() =>
       loadAppConfig({ ...unitTestEnvironment, PORT: '0' }),

@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { isBetaEnvironment } from "@/config/environment";
+import { useFeaturedAssets } from "@/queries/hooks";
+import { useCurrency } from "@/currency/CurrencyProvider";
 
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -13,6 +16,66 @@ import {
  * intentionally does not consume or imply a live public-market quote.
  */
 export function FeaturedMarketHero() {
+  const featuredQuery = useFeaturedAssets();
+  const { formatMoney } = useCurrency();
+  if (isBetaEnvironment) {
+    const asset = featuredQuery.data?.[0];
+    if (featuredQuery.isPending) {
+      return (
+        <section
+          className="featured-market-hero featured-market-hero--empty"
+          aria-label="Featured asset"
+        >
+          <p className="page-kicker">Live Beta</p>
+          <h2>Published collectibles will appear here.</h2>
+          <p>
+            Slice is waiting for the first real asset to complete the verification and
+            market-readiness process.
+          </p>
+        </section>
+      );
+    }
+    if (!asset) {
+      return (
+        <section
+          className="featured-market-hero featured-market-hero--empty"
+          aria-label="Featured asset"
+        >
+          <p className="page-kicker">Live Beta</p>
+          <h2>No featured collectible yet.</h2>
+          <p>Real collectibles will appear here after the Slice lifecycle is complete.</p>
+          <Link to="/marketplace" className="text-link">
+            View the empty marketplace
+          </Link>
+        </section>
+      );
+    }
+    const marketValue = asset.market?.estimatedMarketValue;
+    return (
+      <section
+        className="featured-market-hero featured-market-hero--beta"
+        aria-label="Featured asset"
+      >
+        <div className="featured-static-panel">
+          <p className="page-kicker">Published asset</p>
+          <h2 id="home-featured-heading">{asset.details.title}</h2>
+          <p className="featured-static-panel__subtitle">
+            {asset.grade?.label ?? asset.details.category}
+          </p>
+          <div className="featured-static-panel__price">
+            <strong>{marketValue ? formatMoney(marketValue.amount) : "Unavailable"}</strong>
+            <span>{marketValue ? "Authoritative market data" : "No reliable market data yet"}</span>
+          </div>
+          <p className="featured-static-panel__disclaimer">
+            Values and availability are shown only when backed by published Slice data.
+          </p>
+          <Link to="/asset/$id" params={{ id: asset.slug ?? asset.id }} className="text-link">
+            View asset <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      </section>
+    );
+  }
   const featured = HOMEPAGE_FEATURED_ASSET;
   return (
     <section

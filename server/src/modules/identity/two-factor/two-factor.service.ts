@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -46,6 +47,12 @@ export class TwoFactorService {
   }
 
   async beginEnrollment(actor: Actor, ip: string, requestId: string) {
+    if (this.config.isBeta)
+      throw new ServiceUnavailableException({
+        code: 'BETA_DISABLED',
+        message:
+          'Two-factor authentication will be enabled before public launch.',
+      });
     this.recentAuth.require(actor);
     await this.abuse.enforce('two-factor-enroll', ip, actor.userId);
     const user = await this.db.user.findUniqueOrThrow({
@@ -112,6 +119,12 @@ export class TwoFactorService {
     ip: string,
     requestId: string,
   ) {
+    if (this.config.isBeta)
+      throw new ServiceUnavailableException({
+        code: 'BETA_DISABLED',
+        message:
+          'Two-factor authentication will be enabled before public launch.',
+      });
     this.recentAuth.require(actor);
     await this.abuse.enforce('two-factor-confirm', ip, actor.userId);
     const now = new Date();

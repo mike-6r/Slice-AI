@@ -21,7 +21,7 @@ export interface CollectorPublishedListing {
   category: string;
   estimatedMarketValue?: Money;
   asOf?: string;
-  dataStatus?: "DEMO" | "DELAYED" | "LIVE";
+  dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
 }
 export interface CollectorProfile {
   userId: UserId;

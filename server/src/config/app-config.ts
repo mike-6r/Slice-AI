@@ -4,6 +4,16 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  // Deployment intent is explicit so a beta instance cannot be inferred from
+  // a hostname or accidentally inherit the public-production policy.
+  APP_ENV: z.enum(['development', 'test', 'beta', 'production']).optional(),
+  // Provisioning-only inputs; never returned to application consumers.
+  BETA_ADMIN_EMAIL: z.string().email().optional(),
+  BETA_ADMIN_USERNAME: z
+    .string()
+    .regex(/^[a-z0-9_]{3,32}$/)
+    .optional(),
+  BETA_ADMIN_PASSWORD: z.string().min(12).optional(),
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   CORS_ORIGINS: z
@@ -79,7 +89,12 @@ const configSchema = z.object({
   XIMILAR_API_TOKEN: z.string().min(1).optional(),
   XIMILAR_ENABLED: z.enum(['true', 'false']).default('false'),
   XIMILAR_CARD_GRADING_ENABLED: z.enum(['true', 'false']).default('false'),
-  XIMILAR_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(45_000),
+  XIMILAR_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(120_000)
+    .default(45_000),
   XIMILAR_MAX_RETRIES: z.coerce.number().int().min(0).max(4).default(2),
   DISCORD_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   DISCORD_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
@@ -231,14 +246,24 @@ const configSchema = z.object({
     .min(5_000)
     .max(3_600_000)
     .default(300_000),
-  MARKET_REFRESH_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  MARKET_REFRESH_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(10),
   MARKET_REFRESH_LEASE_MS: z.coerce
     .number()
     .int()
     .min(10_000)
     .max(3_600_000)
     .default(120_000),
-  MARKET_REFRESH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  MARKET_REFRESH_MAX_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(5),
   MARKET_REFRESH_RETRY_BASE_MS: z.coerce
     .number()
     .int()
@@ -273,6 +298,8 @@ const configSchema = z.object({
 
 export type AppConfig = {
   environment: 'development' | 'test' | 'production';
+  appEnvironment?: 'development' | 'test' | 'beta' | 'production';
+  isBeta?: boolean;
   host: string;
   port: number;
   corsOrigins: string[];
@@ -404,6 +431,14 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     );
   }
   const parsed = configSchema.parse(environment);
+  const appEnvironment =
+    parsed.APP_ENV ??
+    (parsed.NODE_ENV === 'production'
+      ? 'production'
+      : parsed.NODE_ENV === 'test'
+        ? 'test'
+        : 'development');
+  const isBeta = appEnvironment === 'beta';
   const origins = [
     ...new Set(
       parsed.CORS_ORIGINS.split(',')
@@ -457,6 +492,9 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   }
   if (parsed.NODE_ENV !== 'test' && !parsed.JWT_ACCESS_SECRET) {
     throw new Error('JWT_ACCESS_SECRET is required outside NODE_ENV=test.');
+  }
+  if (isBeta && parsed.COOKIE_SECURE === 'false') {
+    throw new Error('COOKIE_SECURE must be true in beta.');
   }
   if (parsed.NODE_ENV === 'production' && parsed.COOKIE_SECURE === 'false') {
     throw new Error('COOKIE_SECURE must be true in production.');
@@ -517,10 +555,10 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   if (!appPublicUrl)
     throw new Error('APP_PUBLIC_URL is required in production.');
   if (
-    parsed.NODE_ENV === 'production' &&
+    (parsed.NODE_ENV === 'production' || isBeta) &&
     new URL(appPublicUrl).protocol !== 'https:'
   )
-    throw new Error('APP_PUBLIC_URL must use HTTPS in production.');
+    throw new Error('APP_PUBLIC_URL must use HTTPS in beta/production.');
   if (
     parsed.NODE_ENV === 'production' &&
     emailDeliveryMode === 'resend' &&
@@ -559,19 +597,26 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   if (parsed.NODE_ENV === 'production' && !signupConsentRequired) {
     throw new Error('SIGNUP_CONSENT_REQUIRED must be true in production.');
   }
-  if (parsed.NODE_ENV === 'production') {
+  if (parsed.NODE_ENV === 'production' || isBeta) {
     if (!environment.CORS_ORIGINS) {
       throw new Error(
         'CORS_ORIGINS must be explicitly configured in production.',
       );
     }
     if (origins.some((origin) => new URL(origin).protocol !== 'https:')) {
-      throw new Error('CORS_ORIGINS must use HTTPS origins in production.');
+      throw new Error(
+        'CORS_ORIGINS must use HTTPS origins in beta/production.',
+      );
     }
-    if (['127.0.0.1', 'localhost', '::1'].includes(parsed.HOST)) {
+    if (
+      ['127.0.0.1', 'localhost', '::1'].includes(parsed.HOST) &&
+      parsed.NODE_ENV === 'production'
+    ) {
       throw new Error('HOST must not be a loopback address in production.');
     }
-    assertNoPlaceholderSecret(parsed.JWT_ACCESS_SECRET, 'JWT_ACCESS_SECRET');
+    if (parsed.NODE_ENV === 'production') {
+      assertNoPlaceholderSecret(parsed.JWT_ACCESS_SECRET, 'JWT_ACCESS_SECRET');
+    }
   }
   const providersProductionEnabled =
     parsed.PROVIDERS_PRODUCTION_ENABLED === 'true';
@@ -662,6 +707,8 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
 
   return {
     environment: parsed.NODE_ENV,
+    appEnvironment,
+    isBeta,
     host: parsed.HOST,
     port: parsed.PORT,
     corsOrigins: origins,
@@ -684,7 +731,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     refreshCookieName: parsed.REFRESH_COOKIE_NAME,
     cookieSecure: parsed.COOKIE_SECURE
       ? parsed.COOKIE_SECURE === 'true'
-      : parsed.NODE_ENV === 'production',
+      : parsed.NODE_ENV === 'production' || isBeta,
     cookieDomain: parsed.COOKIE_DOMAIN,
     providerMode: parsed.PROVIDER_MODE,
     providersProductionEnabled,
@@ -774,7 +821,10 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     marketRefreshMaxAttempts: parsed.MARKET_REFRESH_MAX_ATTEMPTS,
     marketRefreshRetryBaseMs: parsed.MARKET_REFRESH_RETRY_BASE_MS,
     marketRefreshRetryMaxMs: parsed.MARKET_REFRESH_RETRY_MAX_MS,
-    priceChartingApiBaseUrl: parsed.PRICECHARTING_API_BASE_URL?.replace(/\/$/, ''),
+    priceChartingApiBaseUrl: parsed.PRICECHARTING_API_BASE_URL?.replace(
+      /\/$/,
+      '',
+    ),
     priceChartingApiKey: parsed.PRICECHARTING_API_KEY,
     priceChartingRequestTimeoutMs: parsed.PRICECHARTING_REQUEST_TIMEOUT_MS,
     operationalFeatures: {

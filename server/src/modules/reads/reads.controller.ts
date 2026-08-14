@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Headers,
+  Inject,
   Param,
   Put,
   Query,
@@ -18,11 +19,14 @@ import {
   type AuthenticatedRequest,
 } from '../identity/auth/access-token.guard';
 import { IdempotencyCoordinator } from '../identity/auth/idempotency-coordinator';
+import { APP_CONFIG, type AppConfig } from '../../config/app-config';
+import { publicBetaAssetWhere } from '../../config/beta-policy';
 @Controller()
 export class ReadsController {
   constructor(
     private readonly db: PrismaService,
     private readonly idempotency: IdempotencyCoordinator,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
   @Get('collectors') async collectors(
     @Query('cursor') cursor?: string,
@@ -33,6 +37,9 @@ export class ReadsController {
     const rows = await this.db.publicCollectorProfile.findMany({
       where: {
         isPublic: true,
+        ...(this.config.isBeta
+          ? { slug: { not: { startsWith: 'slice-demo-' } } }
+          : {}),
         ...(before
           ? {
               OR: [
@@ -47,7 +54,9 @@ export class ReadsController {
       take: pageSize + 1,
     });
     return {
-      items: rows.slice(0, pageSize).map(publicCollectorView),
+      items: rows
+        .slice(0, pageSize)
+        .map((row) => publicCollectorView(row, this.config.isBeta === true)),
       nextCursor:
         rows.length > pageSize
           ? makeCursor(
@@ -60,10 +69,17 @@ export class ReadsController {
   }
   @Get('collectors/:slug') async collector(@Param('slug') slug: string) {
     const x = await this.db.publicCollectorProfile.findFirst({
-      where: { slug, isPublic: true },
+      where: {
+        slug: this.config.isBeta
+          ? { equals: slug, not: { startsWith: 'slice-demo-' } }
+          : slug,
+        isPublic: true,
+      },
       include: publicCollectorInclude,
     });
-    return x ? publicCollectorView(x) : { error: 'COLLECTOR_NOT_FOUND' };
+    return x
+      ? publicCollectorView(x, this.config.isBeta === true)
+      : { error: 'COLLECTOR_NOT_FOUND' };
   }
   @Get('vault/events') async vault(
     @Query('cursor') cursor?: string,
@@ -74,6 +90,7 @@ export class ReadsController {
     const rows = await this.db.vaultPublicEvent.findMany({
       where: {
         status: 'PUBLISHED',
+        ...(this.config.isBeta ? { asset: publicBetaAssetWhere(true) } : {}),
         ...(before
           ? {
               OR: [
@@ -109,7 +126,10 @@ export class ReadsController {
     return {
       authority: 'UNAVAILABLE_UNTIL_CUSTODY',
       eventCount: await this.db.vaultPublicEvent.count({
-        where: { status: 'PUBLISHED' },
+        where: {
+          status: 'PUBLISHED',
+          ...(this.config.isBeta ? { asset: publicBetaAssetWhere(true) } : {}),
+        },
       }),
     };
   }
@@ -124,23 +144,49 @@ export class ReadsController {
       category: { select: { slug: true, name: true } },
       collectibleSet: { select: { slug: true, name: true } },
       gradeScaleEntry: { include: { company: true } },
-      marketSnapshots: { orderBy: { asOf: 'desc' as const }, take: 1 },
+      marketSnapshots: {
+        ...(this.config.isBeta
+          ? {
+              where: {
+                NOT: [
+                  { source: { startsWith: 'STAGING_' } },
+                  { source: { startsWith: 'DEMO_' } },
+                  { source: { startsWith: 'TEST_' } },
+                ],
+              },
+            }
+          : {}),
+        orderBy: { asOf: 'desc' as const },
+        take: 1,
+      },
     };
     const [events, published, executions] = await Promise.all([
       this.db.vaultPublicEvent.findMany({
-        where: { status: 'PUBLISHED' },
+        where: {
+          status: 'PUBLISHED',
+          ...(this.config.isBeta ? { asset: publicBetaAssetWhere(true) } : {}),
+        },
         include: { asset: { include: publicAssetInclude } },
         orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
         take: 24,
       }),
       this.db.asset.findMany({
-        where: { status: 'PUBLISHED' },
+        where: {
+          status: 'PUBLISHED',
+          ...publicBetaAssetWhere(this.config.isBeta),
+        },
         include: publicAssetInclude,
         orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
         take: 12,
       }),
       this.db.tradingExecution.findMany({
-        where: { executedAt: { gte: since }, asset: { status: 'PUBLISHED' } },
+        where: {
+          executedAt: { gte: since },
+          asset: {
+            status: 'PUBLISHED',
+            ...publicBetaAssetWhere(this.config.isBeta),
+          },
+        },
         include: { asset: { include: publicAssetInclude } },
         orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
         take: 100,
@@ -163,9 +209,18 @@ export class ReadsController {
       .filter((event) => isPublicReadinessEvent(event.type))
       .map((event) => publicVaultAssetView(event.asset))
       .filter((asset): asset is NonNullable<typeof asset> => asset !== null);
-    const distinct = <T extends { publicId: string }>(items: T[]) =>
-      [...new Map(items.map((item) => [item.publicId, item])).values()];
-    const activityByAsset = new Map<string, { asset: NonNullable<ReturnType<typeof publicVaultAssetView>>; units: bigint; latestPriceMinor: bigint; occurredAt: Date }>();
+    const distinct = <T extends { publicId: string }>(items: T[]) => [
+      ...new Map(items.map((item) => [item.publicId, item])).values(),
+    ];
+    const activityByAsset = new Map<
+      string,
+      {
+        asset: NonNullable<ReturnType<typeof publicVaultAssetView>>;
+        units: bigint;
+        latestPriceMinor: bigint;
+        occurredAt: Date;
+      }
+    >();
     for (const execution of executions) {
       const current = activityByAsset.get(execution.assetId);
       if (current) {
@@ -180,16 +235,30 @@ export class ReadsController {
       }
     }
     const metrics = {
-      publicVaultEvents: events.filter((event) => event.occurredAt >= since).length,
-      newlyPublished: published.filter((asset) => asset.publishedAt && asset.publishedAt >= since).length,
-      valuationsUpdated: events.filter((event) => isPublicValuationEvent(event.type) && event.occurredAt >= since).length,
-      marketActivity: [...activityByAsset.values()].reduce((total, item) => total + item.units, 0n).toString(),
+      publicVaultEvents: events.filter((event) => event.occurredAt >= since)
+        .length,
+      newlyPublished: published.filter(
+        (asset) => asset.publishedAt && asset.publishedAt >= since,
+      ).length,
+      valuationsUpdated: events.filter(
+        (event) =>
+          isPublicValuationEvent(event.type) && event.occurredAt >= since,
+      ).length,
+      marketActivity: [...activityByAsset.values()]
+        .reduce((total, item) => total + item.units, 0n)
+        .toString(),
     };
     return {
       dataStatus: 'LIVE_PUBLIC_PROJECTION',
       windowStartedAt: since.toISOString(),
       metrics,
-      featuredAsset: publicVaultAssetView(published.find((asset) => asset.slug === 'slice-demo-umbreon-vmax-moonbreon') ?? published[0] ?? null),
+      featuredAsset: publicVaultAssetView(
+        published.find(
+          (asset) => asset.slug === 'slice-demo-umbreon-vmax-moonbreon',
+        ) ??
+          published[0] ??
+          null,
+      ),
       recentEvents: eventView,
       recentlyReviewed: distinct(reviewed),
       readiness: distinct(readiness),
@@ -200,7 +269,14 @@ export class ReadsController {
         latestPriceMinor: item.latestPriceMinor.toString(),
         occurredAt: item.occurredAt.toISOString(),
       })),
-      categories: [...new Map(published.map((asset) => [asset.category.slug, { slug: asset.category.slug, name: asset.category.name }])).values()],
+      categories: [
+        ...new Map(
+          published.map((asset) => [
+            asset.category.slug,
+            { slug: asset.category.slug, name: asset.category.name },
+          ]),
+        ).values(),
+      ],
       eventAssetCount: viewedAssetIds.size,
     };
   }
@@ -350,11 +426,25 @@ const publicCollectorInclude = {
       profile: true,
       _count: {
         select: {
-          submissions: { where: { asset: { is: { status: 'PUBLISHED' } } } },
+          submissions: {
+            where: {
+              asset: {
+                is: {
+                  status: 'PUBLISHED',
+                },
+              },
+            },
+          },
         },
       },
       submissions: {
-        where: { asset: { is: { status: 'PUBLISHED' } } },
+        where: {
+          asset: {
+            is: {
+              status: 'PUBLISHED',
+            },
+          },
+        },
         include: {
           asset: {
             include: {
@@ -379,32 +469,35 @@ const publicCollectorInclude = {
   },
 } satisfies Prisma.PublicCollectorProfileInclude;
 
-function publicCollectorView(x: {
-  slug: string;
-  headline: string | null;
-  specialism: string | null;
-  user: {
-    profile: { displayName: string } | null;
-    _count: { submissions: number };
-    submissions: Array<{
-      asset: {
-        publicId: string;
-        slug: string;
-        title: string;
-        category: { name: string };
-        marketSnapshots: Array<{
-          estimatedMarketValueMinor: bigint;
-          currency: string;
-          asOf: Date;
-          status: string;
-        }>;
-      } | null;
-    }>;
-  };
-}) {
+function publicCollectorView(
+  x: {
+    slug: string;
+    headline: string | null;
+    specialism: string | null;
+    user: {
+      profile: { displayName: string } | null;
+      _count: { submissions: number };
+      submissions: Array<{
+        asset: {
+          publicId: string;
+          slug: string;
+          title: string;
+          category: { name: string };
+          marketSnapshots: Array<{
+            estimatedMarketValueMinor: bigint;
+            currency: string;
+            asOf: Date;
+            status: string;
+          }>;
+        } | null;
+      }>;
+    };
+  },
+  isBeta = false,
+) {
   const listings = x.user.submissions.flatMap((submission) => {
     const asset = submission.asset;
-    if (!asset) return [];
+    if (!asset || (isBeta && asset.slug.startsWith('slice-demo-'))) return [];
     const market = asset.marketSnapshots[0] ?? null;
     return [
       {
@@ -428,7 +521,7 @@ function publicCollectorView(x: {
     headline: x.headline,
     specialism: x.specialism,
     displayName: x.user.profile?.displayName ?? null,
-    publishedListingCount: x.user._count.submissions,
+    publishedListingCount: isBeta ? listings.length : x.user._count.submissions,
     publishedListings: listings,
   };
 }
@@ -494,9 +587,16 @@ function publicVaultAssetView(asset: VaultLiveAsset | null) {
 function publicVaultEventLabel(type: string) {
   const normalized = type.trim().toUpperCase();
   if (normalized.includes('VALU')) return 'Valuation updated';
-  if (normalized.includes('REVIEW') || normalized.includes('VERIF')) return 'Review complete';
-  if (normalized.includes('READY') || normalized.includes('STORED') || normalized.includes('RECEIVED')) return 'Vault readiness updated';
-  if (normalized.includes('MARKET') || normalized.includes('PUBLISH')) return 'Market live';
+  if (normalized.includes('REVIEW') || normalized.includes('VERIF'))
+    return 'Review complete';
+  if (
+    normalized.includes('READY') ||
+    normalized.includes('STORED') ||
+    normalized.includes('RECEIVED')
+  )
+    return 'Vault readiness updated';
+  if (normalized.includes('MARKET') || normalized.includes('PUBLISH'))
+    return 'Market live';
   return 'Public vault update';
 }
 function isPublicReviewEvent(type: string) {
@@ -508,7 +608,11 @@ function isPublicValuationEvent(type: string) {
 }
 function isPublicReadinessEvent(type: string) {
   const normalized = type.toUpperCase();
-  return normalized.includes('READY') || normalized.includes('STORED') || normalized.includes('RECEIVED');
+  return (
+    normalized.includes('READY') ||
+    normalized.includes('STORED') ||
+    normalized.includes('RECEIVED')
+  );
 }
 function makeCursor(scope: string, createdAt: Date, id: string) {
   return Buffer.from(

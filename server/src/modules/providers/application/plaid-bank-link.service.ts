@@ -40,7 +40,9 @@ export class PlaidBankLinkService {
     @Optional() private readonly capabilities?: AccountCapabilityService,
   ) {
     this.plaid =
-      config.providerMode === 'local' ? null : new PlaidAdapter(config);
+      config.providerMode === 'local' || config.isBeta
+        ? null
+        : new PlaidAdapter(config);
   }
 
   async createLinkToken(actor: Actor) {

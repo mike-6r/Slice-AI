@@ -14,7 +14,9 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
+import { isBetaEnvironment } from "@/config/environment";
 import { useCurrency } from "@/currency/CurrencyProvider";
+import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -72,6 +74,7 @@ const howSliceWorks = [
 function HomePage() {
   useCurrency();
   const { isAuthenticated } = useSession();
+  const trending = useTrendingAssets();
 
   return (
     <div className="approved-home">
@@ -161,39 +164,56 @@ function HomePage() {
           headingId="trending-heading"
         />
         <div className="approved-home__trending" data-testid="homepage-trending-assets">
-          {HOMEPAGE_TRENDING_ASSETS.map((asset) => (
-            <ShowcaseAssetLink
-              key={asset.showcaseKey}
-              asset={asset}
-              className="approved-home__asset-card"
-            >
-              <div className="approved-home__asset-media">
-                <img src={asset.image} alt="" loading="lazy" />
-                <span className="approved-home__asset-category">{asset.category}</span>
-                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
-                <Bookmark aria-hidden="true" />
-              </div>
-              <div className="approved-home__asset-body">
-                <strong>{asset.title}</strong>
-                <small>{asset.grade}</small>
-                <div className="approved-home__asset-price">
-                  <div>
-                    <small>Asset value</small>
-                    <b>{asset.displayPrice}</b>
+          {isBetaEnvironment ? (
+            <div className="approved-home__empty-state">
+              <strong>
+                {trending.isLoading
+                  ? "Loading published collectibles…"
+                  : "No published collectibles yet."}
+              </strong>
+              <p>
+                Real assets will appear after they complete Slice&apos;s review, custody and
+                market-readiness process.
+              </p>
+              <Link to="/marketplace" className="text-link">
+                View the marketplace
+              </Link>
+            </div>
+          ) : (
+            HOMEPAGE_TRENDING_ASSETS.map((asset) => (
+              <ShowcaseAssetLink
+                key={asset.showcaseKey}
+                asset={asset}
+                className="approved-home__asset-card"
+              >
+                <div className="approved-home__asset-media">
+                  <img src={asset.image} alt="" loading="lazy" />
+                  <span className="approved-home__asset-category">{asset.category}</span>
+                  <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
+                  <Bookmark aria-hidden="true" />
+                </div>
+                <div className="approved-home__asset-body">
+                  <strong>{asset.title}</strong>
+                  <small>{asset.grade}</small>
+                  <div className="approved-home__asset-price">
+                    <div>
+                      <small>Asset value</small>
+                      <b>{asset.displayPrice}</b>
+                    </div>
+                    <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
                   </div>
-                  <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
+                  <div className="approved-home__availability">
+                    <span>
+                      <i style={{ width: asset.displayAvailability }} />
+                    </span>
+                    <small>
+                      {asset.displaySharePrice} · {asset.displayAvailability} available
+                    </small>
+                  </div>
                 </div>
-                <div className="approved-home__availability">
-                  <span>
-                    <i style={{ width: asset.displayAvailability }} />
-                  </span>
-                  <small>
-                    {asset.displaySharePrice} · {asset.displayAvailability} available
-                  </small>
-                </div>
-              </div>
-            </ShowcaseAssetLink>
-          ))}
+              </ShowcaseAssetLink>
+            ))
+          )}
         </div>
       </section>
 
@@ -298,6 +318,68 @@ function LegacyOwnershipWorks() {
 }
 
 function OwnershipWorks() {
+  const featuredQuery = useFeaturedAssets();
+  if (isBetaEnvironment) {
+    const featured = featuredQuery.data?.[0];
+    return (
+      <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
+        <SectionHeading
+          eyebrow="The collectible is real"
+          title="Own part of a physical collectible."
+          headingId="ownership-heading"
+        />
+        <p className="approved-home__ownership-lead">
+          Slice lets investors buy ownership units in authenticated collectibles. The physical item
+          remains the underlying asset; any ownership structure and portfolio position is created
+          and tracked by Slice.
+        </p>
+        <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
+          <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
+            <span className="approved-home__ownership-icon">
+              <Vault aria-hidden="true" />
+            </span>
+            <div>
+              <small>1. Underlying collectible</small>
+              <strong>{featured?.details.title ?? "Waiting for the first published asset"}</strong>
+              <p>
+                {featured
+                  ? "A real authenticated collectible sits underneath the Slice market."
+                  : "A real collectible will be shown here once the Beta catalogue has a published asset."}
+              </p>
+            </div>
+          </article>
+          <OwnershipFlowArrow label="Slice creates the ownership structure" />
+          <article className="approved-home__ownership-node approved-home__ownership-node--structure is-slice">
+            <span className="approved-home__ownership-icon">
+              <Boxes aria-hidden="true" />
+            </span>
+            <div>
+              <small>2. Slice ownership structure</small>
+              <strong>Published terms only</strong>
+              <p>
+                Slice publishes the total issuance and pricing only when they are backed by the
+                asset&apos;s authoritative lifecycle and market state.
+              </p>
+            </div>
+          </article>
+          <OwnershipFlowArrow label="Your position is tracked" />
+          <article className="approved-home__ownership-node approved-home__ownership-node--portfolio">
+            <span className="approved-home__ownership-icon">
+              <ChartNoAxesCombined aria-hidden="true" />
+            </span>
+            <div>
+              <small>3. Your position</small>
+              <strong>Portfolio ownership</strong>
+              <p>
+                Your settled units, cost basis and ownership percentage appear after a real order is
+                executed.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+    );
+  }
   const featured = HOMEPAGE_FEATURED_ASSET;
 
   return (

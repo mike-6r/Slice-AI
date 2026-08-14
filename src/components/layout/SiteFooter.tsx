@@ -4,6 +4,7 @@ import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { useSession } from "@/auth/use-session";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { CurrencySelector } from "@/currency/CurrencySelector";
+import { isBetaEnvironment } from "@/config/environment";
 
 type FooterRoute =
   | "/marketplace"
@@ -75,6 +76,11 @@ export function SiteFooter() {
                 Discover published assets, explore the collector community, and manage your Slice
                 account in one place.
               </p>
+              {isBetaEnvironment ? (
+                <p className="slice-footer__brand-note">
+                  Live Beta — test funds only. No illustrative market data is shown.
+                </p>
+              ) : null}
               <CurrencySelector className="slice-footer__currency" />
             </section>
 

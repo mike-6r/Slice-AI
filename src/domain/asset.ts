@@ -87,7 +87,7 @@ export interface Asset {
     source?: string;
     asOf?: ISODateTime;
     confidence?: Percentage;
-    dataStatus?: "DEMO" | "DELAYED" | "LIVE";
+    dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
     markSource?: string;
     freshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
     lastSuccessfulRefreshAt?: ISODateTime;

@@ -28,6 +28,7 @@ import {
   canAccessStaffWorkspace,
 } from "@/auth/workspace-access";
 import { MORE_NAV, primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
+import { isBetaEnvironment } from "@/config/environment";
 
 export function Wordmark({ className }: { className?: string }) {
   return (
@@ -140,6 +141,11 @@ export function MainNavigation() {
           )}
         </button>
         <Wordmark />
+        {isBetaEnvironment ? (
+          <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
+            Beta
+          </span>
+        ) : null}
 
         <nav aria-label="Primary" className="hidden min-w-0 items-center gap-0.5 xl:flex">
           {primaryNavigation.map((item) => (

@@ -28,6 +28,7 @@ import {
 import { formatDate } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
+import { isBetaEnvironment } from "@/config/environment";
 
 export const Route = createFileRoute("/vault-live")({
   head: () => ({
@@ -136,8 +137,32 @@ function VaultLive() {
 
   if (live.isPending) return <VaultLiveLoading />;
   if (live.isError || !live.data) return <VaultLiveUnavailable />;
+  if (
+    isBetaEnvironment &&
+    !live.data.featuredAsset &&
+    live.data.recentEvents.length === 0 &&
+    live.data.publishedAssets.length === 0
+  ) {
+    return <VaultLiveBetaEmpty />;
+  }
 
-  const content = resolveVaultLiveContent(live.data);
+  const resolvedContent = resolveVaultLiveContent(live.data);
+  if (isBetaEnvironment && resolvedContent.featuredAsset.source !== "real") {
+    return <VaultLiveBetaEmpty />;
+  }
+  const content = isBetaEnvironment
+    ? {
+        ...resolvedContent,
+        mode: "public" as const,
+        recentEvents: resolvedContent.recentEvents.filter((event) => event.source === "real"),
+        recentlyReviewed: resolvedContent.recentlyReviewed.filter(
+          (asset) => asset.source === "real",
+        ),
+        readiness: resolvedContent.readiness.filter((asset) => asset.source === "real"),
+        publishedAssets: resolvedContent.publishedAssets.filter((asset) => asset.source === "real"),
+        marketActivity: resolvedContent.marketActivity.filter((item) => item.source === "real"),
+      }
+    : resolvedContent;
   const isShowcase = content.mode === "showcase";
   const featuredAsset = content.featuredAsset;
 
@@ -499,6 +524,26 @@ function VaultLive() {
             List an asset
           </Link>
         </div>
+      </section>
+    </main>
+  );
+}
+
+function VaultLiveBetaEmpty() {
+  return (
+    <main className="vault-live-page">
+      <section className="page-shell vault-live-shell vault-live-unavailable" role="status">
+        <div>
+          <p className="section-kicker">Live Beta</p>
+          <h1>No public Vault Live activity yet.</h1>
+          <p>
+            Vault Live only shows events that have completed Slice&apos;s real review, custody and
+            publication lifecycle. No illustrative activity is shown in the Beta environment.
+          </p>
+        </div>
+        <Link className="vault-live-button vault-live-button--secondary" to="/collectors">
+          Explore collector workflows
+        </Link>
       </section>
     </main>
   );

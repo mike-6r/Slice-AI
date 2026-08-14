@@ -92,7 +92,7 @@ type MarketAssetDto = {
   markSource?: string | null;
   freshness?: string | null;
   lastSuccessfulRefreshAt?: string | null;
-  dataStatus: "DEMO" | "DELAYED" | "LIVE" | null;
+  dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE" | null;
   asOf: string | null;
   marketReference: {
     currentListing?: ExternalMarketObservationDto;
@@ -124,7 +124,7 @@ type CollectorDto = {
       estimatedValueMinor: string;
       currency: "GBP";
       asOf: string;
-      dataStatus: "DEMO" | "DELAYED" | "LIVE";
+      dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
     } | null;
   }>;
 };
@@ -571,6 +571,10 @@ const mapCompliance = (raw: unknown): ComplianceSummary => {
     status: value.status as ComplianceSummary["status"],
     expiresAt: nullableString(value.expiresAt, "compliance.expiresAt") as ISODateTime | null,
     updatedAt: nullableString(value.updatedAt, "compliance.updatedAt") as ISODateTime | null,
+    capability:
+      value.capability === "NOT_REQUIRED_IN_CURRENT_BETA" || value.capability === "NOT_CONFIGURED"
+        ? value.capability
+        : undefined,
   };
 };
 const mapMovement = (raw: unknown): WalletMovementView => {
@@ -3089,6 +3093,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           status: value.status as ComplianceSession["status"],
           provider: value.provider,
           sessionUrl: nullableString(value.sessionUrl, "compliance.sessionUrl"),
+          capability:
+            value.capability === "NOT_REQUIRED_IN_CURRENT_BETA" ||
+            value.capability === "NOT_CONFIGURED"
+              ? value.capability
+              : undefined,
         };
       },
       async createBankLinkToken() {

@@ -18,7 +18,7 @@ export type MarketplaceAsset = {
   confidence?: number;
   availabilityBps?: number;
   ownersCount?: number;
-  dataStatus?: "DEMO" | "DELAYED" | "LIVE";
+  dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   change24hBps?: number;
 };
 

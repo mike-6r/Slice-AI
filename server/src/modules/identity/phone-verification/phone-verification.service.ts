@@ -84,6 +84,11 @@ export class PhoneVerificationService {
   }
 
   async send(actor: Actor, rawPhone: string, ip: string, requestId: string) {
+    if (this.config.isBeta)
+      throw new ServiceUnavailableException({
+        code: 'BETA_DISABLED',
+        message: 'Phone verification is not enabled during the current Beta.',
+      });
     const phoneE164 = normalizePhone(rawPhone);
     await this.abuse.enforce('phone-send', ip, `${actor.userId}:${phoneE164}`);
     this.requireDelivery();

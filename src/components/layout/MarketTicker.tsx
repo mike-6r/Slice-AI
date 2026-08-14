@@ -3,12 +3,13 @@ import { HOMEPAGE_MARKET_TICKER } from "@/data/homepage-showcase";
 import { useTrendingAssets } from "@/queries/hooks";
 import { formatPercent } from "@/lib/format";
 import { useCurrency } from "@/currency/CurrencyProvider";
+import { isBetaEnvironment } from "@/config/environment";
 
 /** Published market snapshots; it never substitutes the legacy sample tape in API mode. */
 export function MarketTicker() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
-  if (pathname === "/") {
+  if (pathname === "/" && !isBetaEnvironment) {
     return <HomepageShowcaseTicker />;
   }
 
@@ -47,6 +48,7 @@ function AuthoritativeMarketTicker() {
   const market = useTrendingAssets();
   const { formatMoney } = useCurrency();
   const assets = market.data ?? [];
+  if (!market.isLoading && !market.isError && assets.length === 0) return null;
   return (
     <div className="hidden border-b border-border bg-surface/60 lg:block">
       <div className="site-shell flex h-6 items-center gap-5 text-[8px] font-medium tabular">
