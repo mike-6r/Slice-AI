@@ -413,7 +413,7 @@ export function TradingOrderForm({
                   }
                 />
                 <ContextRow
-                  label="Current Slice price"
+                  label="Price per Slice"
                   value={
                     ownershipPreview.data?.slicePriceMinor
                       ? formatGbpMinor(ownershipPreview.data.slicePriceMinor)
@@ -551,6 +551,11 @@ export function TradingOrderForm({
                   {ownershipPreview.data?.bestMarketPriceMinor
                     ? `Suggested from the live ${side === "BUY" ? "ask" : "bid"}: ${formatGbpMinor(ownershipPreview.data.bestMarketPriceMinor)}. Your limit remains in control.`
                     : "Set a limit price to control the maximum you pay or minimum you accept."}
+                </p>
+                <p className="trading-field-help">
+                  A limit price is the highest price per Slice you will pay on a buy order, or the
+                  lowest price you will accept on a sell order. It is separate from your total
+                  amount to invest.
                 </p>
                 <fieldset className="trading-tif">
                   <legend>Time in force</legend>

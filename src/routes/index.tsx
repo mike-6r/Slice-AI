@@ -109,7 +109,6 @@ function HomePage() {
               <small>Start from a single share and build your position over time.</small>
             </div>
           </div>
-          <HeroOwnershipLine />
         </div>
 
         <div className="approved-home__featured-stack">
@@ -242,32 +241,6 @@ function HomePage() {
           </Link>
         </div>
       </section>
-    </div>
-  );
-}
-
-function HeroOwnershipLine() {
-  const items = [
-    ["Whole collectible reference", HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue],
-    ["Share price", HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice],
-    [
-      "Example purchase",
-      `${HOMEPAGE_OWNERSHIP_EXAMPLE.exampleShares} / ${HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}`,
-    ],
-    ["Ownership", HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership],
-  ] as const;
-
-  return (
-    <div className="approved-home__ownership-line" aria-label="Illustrative ownership example">
-      <p>Example ownership</p>
-      <dl>
-        {items.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
     </div>
   );
 }

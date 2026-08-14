@@ -167,13 +167,13 @@ function AssetPage() {
                   value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
                 />
                 <Stat
-                  label="Share price"
+                  label="Price per Slice"
                   value={
                     slicePriceMinor === undefined ? "Unavailable" : formatCurrency(slicePriceMinor)
                   }
                 />
                 <Stat
-                  label="Available"
+                  label="Available ownership"
                   value={
                     !ownershipSummaryQuery.data
                       ? "Unavailable"
@@ -230,7 +230,7 @@ function AssetPage() {
                 value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
               />
               <Stat
-                label="Share price"
+                label="Price per Slice"
                 value={
                   slicePriceMinor === undefined ? "Unavailable" : formatCurrency(slicePriceMinor)
                 }
@@ -245,7 +245,7 @@ function AssetPage() {
                 accent
               />
               <Stat
-                label="Availability"
+                label="Available ownership"
                 value={
                   !ownershipSummaryQuery.data
                     ? "Unavailable"
@@ -253,7 +253,7 @@ function AssetPage() {
                 }
               />
               <Stat
-                label="Shares issued"
+                label="Total issuance"
                 value={issuedSlices === undefined ? "Unavailable" : issuedSlices.toLocaleString()}
               />
               <Stat
@@ -279,7 +279,9 @@ function AssetPage() {
                 ))}
               </div>
             </header>
-            <div className="asset-chart-stage">
+            <div
+              className={`asset-chart-stage${history.length < 2 && !historyQuery.isLoading && !historyQuery.isError ? " is-empty" : ""}`}
+            >
               {historyQuery.isLoading ? (
                 <p>Loading historical valuations…</p>
               ) : historyQuery.isError ? (
@@ -295,7 +297,7 @@ function AssetPage() {
                   label={`Estimated value history for ${asset.title}`}
                 />
               ) : (
-                <p>No valuation history is available.</p>
+                <p>Price history will appear as real market snapshots are collected.</p>
               )}
               <div className="asset-chart-dates" aria-hidden="true">
                 <span>{period === "ALL" ? "All time" : period}</span>
@@ -330,7 +332,7 @@ function AssetPage() {
 
           <section className="asset-insight-grid">
             <section className="asset-ownership-panel">
-              <h2>Ownership availability</h2>
+              <h2>Ownership</h2>
               <div className="asset-ownership-content">
                 <div className="asset-donut">
                   <span>
@@ -339,13 +341,13 @@ function AssetPage() {
                         ? `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
                         : "—"}
                     </strong>
-                    available
+                    available to buy
                   </span>
                 </div>
                 <ul>
                   <li>
                     <i className="is-emerald" />
-                    <span>Shares available</span>
+                    <span>Available to buy</span>
                     <strong>
                       {availableSlices === undefined
                         ? "Unavailable"
@@ -354,14 +356,14 @@ function AssetPage() {
                   </li>
                   <li>
                     <i className="is-violet" />
-                    <span>Owners</span>
+                    <span>Current owners</span>
                     <strong>
                       {asset.ownersCount === undefined ? "Unavailable" : asset.ownersCount}
                     </strong>
                   </li>
                   <li>
                     <i className="is-amber" />
-                    <span>Shares issued</span>
+                    <span>Total issuance</span>
                     <strong>
                       {issuedSlices === undefined ? "Unavailable" : issuedSlices.toLocaleString()}
                     </strong>
@@ -370,7 +372,7 @@ function AssetPage() {
               </div>
             </section>
             <section className="asset-details-panel">
-              <h2>Collectible record</h2>
+              <h2>Collectible details</h2>
               <div>
                 <span>Category</span>
                 <strong>{category.label}</strong>
@@ -410,12 +412,16 @@ function AssetPage() {
             </section>
             <section className="asset-details-panel">
               <h2>External market data</h2>
+              <p className="asset-panel-helper">
+                Third-party sales and listings are reference data only; they do not set your
+                executable Slice order price.
+              </p>
               <div>
                 <span>Publication</span>
                 <strong>Published</strong>
               </div>
               <div>
-                <span>"External whole-collectible reference"</span>
+                <span>Whole collectible reference</span>
                 <strong>
                   {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
                 </strong>
@@ -441,7 +447,7 @@ function AssetPage() {
                 <strong>{asset.ownersCount ?? "Unavailable"}</strong>
               </div>
               <div>
-                <span>Recorded</span>
+                <span>Updated</span>
                 <strong>{asset.asOf ? formatDate(asset.asOf) : "Unavailable"}</strong>
               </div>
             </section>
@@ -512,11 +518,11 @@ function AssetOwnershipGuide({
       </div>
       <div className="asset-ownership-guide__facts">
         <div>
-          <span>Total Slices</span>
+          <span>Total issuance</span>
           <strong>{issuedSlices?.toLocaleString() ?? "Unavailable"}</strong>
         </div>
         <div>
-          <span>Slices available</span>
+          <span>Available ownership</span>
           <strong>{availableSlices?.toLocaleString() ?? "Unavailable"}</strong>
         </div>
         <div>
@@ -724,7 +730,7 @@ function TradingPanel({
       </p>
       <div className="asset-trading-summary">
         <Stat
-          label="Slice market value"
+          label="Whole collectible market value"
           value={
             ownershipSummary?.impliedWholeValueMinor
               ? formatCurrency(Number(ownershipSummary.impliedWholeValueMinor))
@@ -746,6 +752,10 @@ function TradingPanel({
           }
         />
       </div>
+      <p className="asset-panel-helper">
+        Available ownership is the percentage currently offered through the Slice market. Value of
+        1% is an approximate Slice-market calculation, not a third-party listing.
+      </p>
       <p className="asset-position-copy">
         {isAuthenticated && ownShares !== undefined && issuedShares !== undefined
           ? `You currently own ${formatOwnershipPercent(ownShares, issuedShares)}. Choose another percentage to see the resulting Slice quantity.`
@@ -760,8 +770,7 @@ function TradingPanel({
         </span>
         {!ownershipSummary?.hasImmediateLiquidity && (
           <small>
-            No ownership units are currently offered at the market price, but you can place a limit
-            order.
+            No ownership is currently offered at the market price, but you can place a limit order.
           </small>
         )}
       </div>
@@ -777,7 +786,7 @@ function TradingPanel({
             <summary>View order book</summary>
             <div className="asset-order-head">
               <span>Side</span>
-              <span>{customerTerms.many}</span>
+              <span>Ownership units</span>
               <span>Price</span>
               <span>Orders</span>
             </div>
@@ -828,7 +837,11 @@ function OrderRows({
         ))
       ) : (
         <li>
-          <span>No open {kind === "ask" ? "asks" : "bids"}</span>
+          <span>
+            {kind === "ask"
+              ? "No ownership is currently offered at the market price."
+              : "No open bids"}
+          </span>
           <strong>—</strong>
           <em>—</em>
           <small>—</small>
@@ -867,7 +880,7 @@ function RecentTrades({
             trades.slice(0, 7).map((trade) => (
               <li key={trade.id}>
                 <span>{formatDate(trade.executedAt)}</span>
-                <strong>{trade.units} shares</strong>
+                <strong>{trade.units} ownership units</strong>
                 <em className="is-up">{formatCurrency(trade.pricePerUnit.amount)}</em>
               </li>
             ))
@@ -1012,7 +1025,7 @@ function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
   const percentageBasisPoints = (BigInt(ownedShares) * 10_000n) / BigInt(issuedShares);
   const wholePercent = percentageBasisPoints / 100n;
   const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
-  return `${wholePercent}.${fractionalPercent}% of issued shares`;
+  return `${wholePercent}.${fractionalPercent}% ownership`;
 }
 
 function formatPublicGrade(score?: number, label?: string) {

@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  CircleHelp,
   FileImage,
   ImagePlus,
   Link2,
@@ -216,6 +217,7 @@ export function SubmissionPage() {
       setReferenceResult(result);
       setLocalError(null);
     },
+    onError: (error) => setLocalError(friendlyError(error)),
   });
   const saveDraft = update.mutate;
   const checkMarket = useMutation({
@@ -344,8 +346,12 @@ export function SubmissionPage() {
   };
   const saveAndContinue = () => {
     setLocalError(null);
-    if (!validIdentity) {
+    if (step === 1 && !validIdentity) {
       setLocalError("Choose a category and add the card or collectible name to continue.");
+      return;
+    }
+    if (step === 2 && (!form.year.trim() || !form.set.trim() || !form.cardNumber.trim())) {
+      setLocalError("Add the year, set, and card number before continuing.");
       return;
     }
     if (form.grade.trim()) {
@@ -356,8 +362,12 @@ export function SubmissionPage() {
         return;
       }
     }
-    if (draft) update.mutate({ nextStep: Math.min(step + 1, 5) });
-    else create.mutate({ nextStep: Math.min(step + 1, 5) });
+    if (step === 4 && !evidenceReady) {
+      setLocalError("Add a front and back photo before continuing.");
+      return;
+    }
+    if (draft) update.mutate({ nextStep: Math.min(step + 1, 6) });
+    else create.mutate({ nextStep: Math.min(step + 1, 6) });
   };
   const selectPhoto = (slot: string, file: File, existing?: SubmissionMedia) => {
     const error = fileError(file);
@@ -503,9 +513,6 @@ export function SubmissionPage() {
           {step === 4 ? (
             <PhotosStep
               submission={submission}
-              preGrade={preGrade.data?.current ?? null}
-              preGradePending={runPreGrade.isPending}
-              onAnalyze={() => runPreGrade.mutate()}
               previews={previews}
               graded={Boolean(form.grader && form.grader !== "Ungraded")}
               uploadPending={media.isPending}
@@ -515,6 +522,15 @@ export function SubmissionPage() {
             />
           ) : null}
           {step === 5 ? (
+            <AIReviewStep
+              submission={submission}
+              preGrade={preGrade.data?.current ?? null}
+              pending={runPreGrade.isPending}
+              graded={Boolean(form.grader && form.grader !== "Ungraded")}
+              onAnalyze={() => runPreGrade.mutate()}
+            />
+          ) : null}
+          {step === 6 ? (
             <ReviewStep
               form={form}
               category={selectedCategory?.name ?? "Not selected"}
@@ -544,16 +560,11 @@ export function SubmissionPage() {
                 ? "Saved privately"
                 : "Your first save creates a private draft"}
           </span>
-          {step < 5 ? (
+          {step < 6 ? (
             <button
               type="button"
               className="button-primary"
-              disabled={
-                !validIdentity ||
-                create.isPending ||
-                update.isPending ||
-                (step === 4 && !evidenceReady)
-              }
+              disabled={create.isPending || update.isPending}
               onClick={saveAndContinue}
             >
               {step === 1 && !draft
@@ -561,8 +572,10 @@ export function SubmissionPage() {
                 : step === 3
                   ? "Save market check"
                   : step === 4
-                    ? "Review submission"
-                    : "Continue"}{" "}
+                    ? "Continue to AI review"
+                    : step === 5
+                      ? "Review submission"
+                      : "Continue"}{" "}
               <ChevronRight aria-hidden="true" />
             </button>
           ) : (
@@ -621,10 +634,11 @@ function StepProgress({
   evidenceReady: boolean;
 }) {
   const steps = [
-    "What are you listing?",
-    "Tell us about the card",
+    "Identify your card",
+    "Card details",
     "Check the market",
     "Add photos",
+    "AI Card Review",
     "Review & submit",
   ];
   return (
@@ -633,7 +647,10 @@ function StepProgress({
         {steps.map((label, index) => {
           const number = index + 1;
           const unlocked =
-            number === 1 || (available && number <= 4) || (number === 5 && evidenceReady);
+            number === 1 ||
+            (available && number <= 4) ||
+            (number === 5 && evidenceReady) ||
+            (number === 6 && evidenceReady);
           return (
             <li
               key={label}
@@ -677,17 +694,14 @@ function IdentityStep({
       <p className="page-kicker">Step 1</p>
       <h2>What are you listing?</h2>
       <p>Start with the category and the name printed on the card or slab.</p>
-      <section
-        className="rounded-xl border border-emerald-400/20 bg-emerald-950/20 p-4"
-        aria-label="Paste a marketplace or pricing link"
-      >
+      <section className="list-start-faster" aria-label="Paste a marketplace or pricing link">
         <div>
           <p className="page-kicker">Start faster</p>
-          <h3 className="mt-1 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Link2 className="h-4 w-4 text-accent" aria-hidden="true" /> Paste marketplace / pricing
-            link
+          <h3 className="mt-1 flex items-center gap-2 text-base font-semibold text-foreground">
+            <Link2 className="h-5 w-5 text-accent" aria-hidden="true" /> Already have a link to this
+            card?
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-subtle">
+          <p className="mt-1 text-sm leading-relaxed text-subtle">
             PriceCharting links can prefill supported card details. eBay import is available when
             Slice’s approved provider integration is configured.
           </p>
@@ -703,7 +717,7 @@ function IdentityStep({
           />
           <button
             type="button"
-            className="button-secondary shrink-0 max-sm:w-full"
+            className="button-primary shrink-0 max-sm:w-full"
             disabled={!referenceUrl.trim() || identifying}
             onClick={onIdentify}
           >
@@ -711,7 +725,7 @@ function IdentityStep({
           </button>
         </div>
         {referenceResult ? (
-          <div className="mt-3 grid gap-2 rounded-lg border border-border bg-background/50 p-3 text-xs">
+          <div className="list-import-result mt-3 grid gap-2 rounded-lg border border-border bg-background/50 p-3 text-sm">
             <strong className="text-accent">{referenceResult.status.replaceAll("_", " ")}</strong>
             <p className="text-subtle">{referenceResult.message}</p>
             {referenceResult.customerReference ? (
@@ -801,44 +815,56 @@ function DetailsStep({
           onChange={(value) => onChange("year", value)}
           placeholder="e.g. 2021"
           inputMode="numeric"
+          help="The year the card was released."
         />
         <Input
           label="Set"
           value={form.set}
           onChange={(value) => onChange("set", value)}
           placeholder="e.g. Evolving Skies"
-          help="Use the official set name when you know it."
+          help="The collection or product the card came from, such as Evolving Skies or Prizm."
         />
         <Input
           label="Card number"
           value={form.cardNumber}
           onChange={(value) => onChange("cardNumber", value)}
           placeholder="e.g. 215/203"
-          help="Enter the printed number, including the total when shown."
+          help="The number printed on the card, such as 215/203 or #339."
         />
         <Input
           label="Player or character"
           value={form.playerOrCharacter}
           onChange={(value) => onChange("playerOrCharacter", value)}
           placeholder="Optional"
+          help="The athlete, Pokémon, or character shown on the card."
         />
         <Input
           label="Variant or parallel"
           value={form.variant}
           onChange={(value) => onChange("variant", value)}
           placeholder="e.g. Alternate Art"
-          help="Add a parallel, insert, or special artwork variant."
+          help="A special version such as Holo, Refractor, Purple Pulsar, or Alternate Art."
         />
         <Input
           label="Language"
           value={form.language}
           onChange={(value) => onChange("language", value)}
           placeholder="e.g. English"
+          help="The language printed on the card."
         />
         <label>
-          Grading company
+          <span className="list-field-label">
+            Grading company
+            <span
+              className="list-field-tooltip"
+              title="The company that professionally graded the card, such as PSA or BGS."
+              aria-label="The company that professionally graded the card, such as PSA or BGS."
+            >
+              <CircleHelp aria-hidden="true" />
+            </span>
+          </span>
           <select value={form.grader} onChange={(event) => onChange("grader", event.target.value)}>
-            <option value="">Select if applicable</option>
+            <option value="">Raw / Ungraded</option>
             <option>PSA</option>
             <option>BGS</option>
             <option>CGC</option>
@@ -857,13 +883,14 @@ function DetailsStep({
               min={1}
               max={10}
               step={0.5}
+              help="The grade assigned by the grading company. Supported grades are 1 to 10."
             />
             <Input
               label="Certification number"
               value={form.certificationNumber}
               onChange={(value) => onChange("certificationNumber", value)}
               placeholder="Optional"
-              help="You can verify a PSA certificate after entering it."
+              help="The unique number assigned to this specific graded slab."
             />
             <a
               href="https://www.psacard.com/cert"
@@ -880,6 +907,7 @@ function DetailsStep({
             value={form.condition}
             onChange={(value) => onChange("condition", value)}
             placeholder="e.g. Near Mint"
+            help="For raw cards, describe the visible condition before inspection."
           />
         )}
       </div>
@@ -934,8 +962,8 @@ function MarketStep({
       <p className="page-kicker">Step 3</p>
       <h2>Check the market.</h2>
       <p>
-        Slice separates recent completed sales from current asking prices. This is reference data
-        only; staff valuation remains authoritative.
+        Slice looks for recent completed sales and current listings for this exact card. This is
+        reference data only; staff valuation remains authoritative.
       </p>
       <button
         type="button"
@@ -999,9 +1027,6 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
 
 function PhotosStep({
   submission,
-  preGrade,
-  preGradePending,
-  onAnalyze,
   previews,
   graded,
   uploadPending,
@@ -1010,9 +1035,6 @@ function PhotosStep({
   onRemove,
 }: {
   submission?: SubmissionDetail;
-  preGrade: RawCardPreGrade | null;
-  preGradePending: boolean;
-  onAnalyze: () => void;
   previews: Record<string, string>;
   graded: boolean;
   uploadPending: boolean;
@@ -1060,14 +1082,6 @@ function PhotosStep({
           />
         ))}
       </div>
-      {!graded ? (
-        <RawPreGradePanel
-          submission={submission}
-          preGrade={preGrade}
-          pending={preGradePending}
-          onAnalyze={onAnalyze}
-        />
-      ) : null}
       {graded ? (
         <p className="list-step-hint">
           For graded cards, make sure the grading label and certification number are readable.
@@ -1200,6 +1214,49 @@ function PhotoCard({
   );
 }
 
+function AIReviewStep({
+  submission,
+  preGrade,
+  pending,
+  graded,
+  onAnalyze,
+}: {
+  submission?: SubmissionDetail;
+  preGrade: RawCardPreGrade | null;
+  pending: boolean;
+  graded: boolean;
+  onAnalyze: () => void;
+}) {
+  return (
+    <div className="list-step">
+      <p className="page-kicker">Step 5 · Optional</p>
+      <h2>AI Card Review</h2>
+      <p>
+        Slice can analyze your front and back photos to estimate visible condition before you
+        submit. This is optional and primarily intended for raw cards.
+      </p>
+      {graded ? (
+        <section className="list-ai-skip" aria-live="polite">
+          <strong>AI Card Review is intended for raw cards.</strong>
+          <p>
+            Professionally graded slabs already have a grading result, so no AI credits are used.
+          </p>
+        </section>
+      ) : (
+        <RawPreGradePanel
+          submission={submission}
+          preGrade={preGrade}
+          pending={pending}
+          onAnalyze={onAnalyze}
+        />
+      )}
+      <p className="list-step-hint">
+        You can skip this optional review and continue to submission.
+      </p>
+    </div>
+  );
+}
+
 function RawPreGradePanel({
   submission,
   preGrade,
@@ -1284,7 +1341,7 @@ function RawPreGradePanel({
       ) : null}
       <button
         type="button"
-        className="button-secondary"
+        className="button-primary list-ai-action"
         disabled={
           !ready || pending || preGrade?.status === "SUCCEEDED" || preGrade?.status === "FAILED"
         }
@@ -1296,7 +1353,7 @@ function RawPreGradePanel({
             ? "Condition analyzed"
             : preGrade?.status === "FAILED"
               ? "Replace a photo to try again"
-              : "Analyze condition"}
+              : "Analyze My Card"}
       </button>
       {!ready ? (
         <small className="list-step-hint">
@@ -1330,7 +1387,7 @@ function ReviewStep({
 }) {
   return (
     <div className="list-step">
-      <p className="page-kicker">Step 5</p>
+      <p className="page-kicker">Step 6</p>
       <h2>Review your submission.</h2>
       <p>
         Everything stays private until Slice has reviewed the collectible, evidence, and market
@@ -1356,7 +1413,7 @@ function ReviewStep({
         {(!form.grader && !form.grade) || form.grader === "Ungraded" ? (
           <ReviewBlock
             title="Slice Pre-Grade"
-            edit={() => onEdit(4)}
+            edit={() => onEdit(5)}
             rows={[
               [
                 "Status",
@@ -1535,7 +1592,14 @@ function Input({
 }) {
   return (
     <label>
-      {label}
+      <span className="list-field-label">
+        {label}
+        {help ? (
+          <span className="list-field-tooltip" title={help} aria-label={help}>
+            <CircleHelp aria-hidden="true" />
+          </span>
+        ) : null}
+      </span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1547,7 +1611,7 @@ function Input({
         step={step}
         maxLength={160}
       />
-      {help ? <small className="mt-1 block text-xs text-muted">{help}</small> : null}
+      {help ? <small className="list-field-help">{help}</small> : null}
     </label>
   );
 }
