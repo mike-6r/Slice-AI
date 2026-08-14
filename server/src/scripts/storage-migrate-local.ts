@@ -1,19 +1,16 @@
-import { NestFactory } from '@nestjs/core';
 import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
-import { AppModule } from '../app.module';
-import { PrismaService } from '../database/prisma.service';
-import { APP_CONFIG, type AppConfig } from '../config/app-config';
+import { loadAppConfig } from '../config/app-config';
 
 /** Safe, operator-controlled local-to-S3 migration. Dry-run is the default. */
 async function main() {
   const execute = process.argv.includes('--execute');
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+  const config = loadAppConfig(process.env);
+  const db = new PrismaClient({ datasources: { db: { url: config.databaseUrl! } } });
   try {
-    const db = app.get(PrismaService);
-    const config = app.get<AppConfig>(APP_CONFIG);
     const root = resolve(process.env.LOCAL_SUBMISSION_STORAGE_ROOT ?? config.localSubmissionStorageRoot ?? '.local-submission-storage');
     const media = await db.submissionMedia.findMany({ where: { deletedAt: null }, select: { id: true, objectKey: true, sha256: true, sizeBytes: true } });
     const report = { mode: execute ? 'EXECUTE' : 'DRY_RUN', root, filesFound: 0, mediaRowsMatched: 0, missingLocalFiles: 0, checksumMismatches: 0, objectsAlreadyPresent: 0, objectsToUpload: 0, uploaded: 0, errors: [] as string[] };
@@ -46,7 +43,7 @@ async function main() {
     }
     if (execute && !client) report.errors.push('OBJECT_STORAGE_PROVIDER is not S3_COMPATIBLE with a configured bucket; no remote copy was executed.');
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
-  } finally { await app.close(); }
+  } finally { await db.$disconnect(); }
 }
 
 function inferMime(path: string) { return path.toLowerCase().endsWith('.png') ? 'image/png' : path.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg'; }
