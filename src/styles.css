@@ -2346,6 +2346,94 @@ body:has(.collectors-page) .site-shell {
 .portfolio-orders-table td:nth-child(4) { width: 12%; }
 .portfolio-orders-table td:nth-child(5) { width: 14%; }
 .portfolio-orders-table td:nth-child(6) { width: 14%; }
+.portfolio-heading__controls { display: flex; min-width: 0; gap: 0.85rem; align-items: center; }
+.portfolio-holdings-search,.portfolio-holdings-filter { display: block; }
+.portfolio-holdings-search input,.portfolio-holdings-filter select {
+  height: 3.35rem;
+  border: 1px solid rgba(158,174,194,0.22);
+  border-radius: 0.65rem;
+  background: rgba(11,17,24,0.78);
+  color: #e8efed;
+  font-size: 0.95rem;
+  outline: 0;
+}
+.portfolio-holdings-search input { width: min(24rem, 36vw); padding: 0 1rem; }
+.portfolio-holdings-filter select { min-width: 12.5rem; padding: 0 2.5rem 0 1rem; }
+.portfolio-holdings-search input:focus,.portfolio-holdings-filter select:focus { border-color: rgba(35,217,180,0.7); box-shadow: 0 0 0 3px rgba(35,217,180,0.12); }
+.portfolio-panel--holdings-dedicated { margin-top: 1rem; }
+.portfolio-panel--holdings-dedicated .portfolio-panel__head { min-height: 4.7rem; padding: 1rem 1.35rem 0.65rem; }
+.portfolio-panel--holdings-dedicated .portfolio-panel__head h2 { font-size: 1.2rem; }
+.portfolio-panel--holdings-dedicated .portfolio-panel__body { padding: 0 0 0.8rem; }
+.portfolio-view-toggle { display: inline-flex; border: 1px solid rgba(158,174,194,0.22); border-radius: 0.55rem; padding: 0.15rem; }
+.portfolio-view-toggle button { min-width: 7rem; border-radius: 0.4rem; padding: 0.62rem 0.85rem; color: #9caab5; font-size: 0.8rem; font-weight: 650; }
+.portfolio-view-toggle button.is-active { background: rgba(21,177,143,0.13); color: #32dfb5; box-shadow: inset 0 0 0 1px rgba(35,217,180,0.58); }
+.portfolio-table--holdings-dedicated { width: 100%; table-layout: fixed; font-size: 0.92rem; }
+.portfolio-table--holdings-dedicated th { padding: 0.95rem 1.35rem; color: #9daab6; font-size: 0.72rem; letter-spacing: 0.04em; }
+.portfolio-table--holdings-dedicated td { border-top: 1px solid rgba(158,174,194,0.13); padding: 1rem 1.35rem; vertical-align: middle; }
+.portfolio-table--holdings-dedicated th:first-child,.portfolio-table--holdings-dedicated td:first-child { width: 35%; }
+.portfolio-table--holdings-dedicated th:nth-child(2),.portfolio-table--holdings-dedicated td:nth-child(2) { width: 12%; }
+.portfolio-table--holdings-dedicated th:nth-child(3),.portfolio-table--holdings-dedicated td:nth-child(3) { width: 12%; }
+.portfolio-table--holdings-dedicated th:nth-child(4),.portfolio-table--holdings-dedicated td:nth-child(4) { width: 13%; }
+.portfolio-table--holdings-dedicated th:nth-child(5),.portfolio-table--holdings-dedicated td:nth-child(5) { width: 13%; }
+.portfolio-table--holdings-dedicated th:nth-child(6),.portfolio-table--holdings-dedicated td:nth-child(6) { width: 12%; }
+.portfolio-table--holdings-dedicated th:nth-child(7),.portfolio-table--holdings-dedicated td:nth-child(7) { width: 10%; }
+.portfolio-table--holdings-dedicated td:nth-child(n+2),.portfolio-table--holdings-dedicated th:nth-child(n+2) { text-align: right; }
+.portfolio-table--holdings-dedicated .portfolio-asset__icon { flex-basis: 5.1rem; width: 5.1rem; height: 7rem; border-radius: 0.42rem; }
+.portfolio-table--holdings-dedicated .portfolio-asset__copy strong { font-size: 1rem; line-height: 1.25; }
+.portfolio-table--holdings-dedicated .portfolio-asset__copy small { margin-top: 0.35rem; font-size: 0.8rem; }
+.portfolio-table--holdings-dedicated .portfolio-table__quantity strong { font-size: 1.1rem; }
+.portfolio-table--holdings-dedicated .portfolio-table__quantity small { font-size: 0.72rem; }
+.portfolio-table--holdings-dedicated td:nth-child(4),.portfolio-table--holdings-dedicated td:nth-child(5) { font-size: 1.08rem; font-weight: 700; }
+.portfolio-table--holdings-dedicated .portfolio-table__pnl strong { font-size: 1rem; }
+.portfolio-table--holdings-dedicated .portfolio-table__pnl small { font-size: 0.8rem; }
+.portfolio-holdings-pagination { display: flex; min-height: 4rem; align-items: center; justify-content: flex-end; gap: 2.5rem; padding: 0.75rem 1.35rem 0; color: #a0acb7; font-size: 0.82rem; }
+.portfolio-holdings-pagination select { margin-inline: 0.35rem; border: 1px solid rgba(158,174,194,0.25); border-radius: 0.4rem; padding: 0.55rem 1.8rem 0.55rem 0.7rem; background: #0d141c; color: #ebf2f0; }
+.portfolio-holdings-pagination > div { display: inline-flex; align-items: center; gap: 0.6rem; }
+.portfolio-holdings-pagination button,.portfolio-holdings-pagination strong { display: grid; width: 2.2rem; height: 2.2rem; place-items: center; border: 1px solid rgba(158,174,194,0.2); border-radius: 0.4rem; color: #a8b5bf; }
+.portfolio-holdings-pagination strong { border-color: rgba(35,217,180,0.55); color: #32dfb5; }
+.portfolio-holdings-pagination button:disabled { opacity: 0.35; }
+.portfolio-holdings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding: 1.2rem 1.35rem; }
+.portfolio-holding-card { min-width: 0; overflow: hidden; border: 1px solid rgba(158,174,194,0.16); border-radius: 0.7rem; background: rgba(8,14,20,0.74); }
+.portfolio-holding-card__media { display: grid; min-height: 15rem; place-items: center; border-bottom: 1px solid rgba(158,174,194,0.12); background: radial-gradient(circle at 50% 30%, rgba(35,217,180,0.08), transparent 65%); }
+.portfolio-holding-card__media > span { display: grid; width: 9rem; height: 12rem; place-items: center; }
+.portfolio-holding-card__media img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.portfolio-holding-card__media svg { width: 2rem; color: #32dfb5; }
+.portfolio-holding-card__body { padding: 1rem; }
+.portfolio-holding-card__body h3 { overflow: hidden; color: #edf4f2; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
+.portfolio-holding-card__body > p { min-height: 2.5rem; margin-top: 0.35rem; color: #94a2ae; font-size: 0.78rem; line-height: 1.45; }
+.portfolio-holding-card__body dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; margin: 1rem 0; }
+.portfolio-holding-card__body dl div { min-width: 0; }
+.portfolio-holding-card__body dt { color: #82909d; font-size: 0.64rem; text-transform: uppercase; }
+.portfolio-holding-card__body dd { margin-top: 0.2rem; color: #e6efec; font-size: 0.88rem; font-weight: 700; }
+.portfolio-holding-card__body .portfolio-table__action { font-size: 0.8rem; }
+@media (max-width: 1050px) {
+  .portfolio-holdings-search input { width: min(20rem, 32vw); }
+  .portfolio-holdings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .portfolio-heading__controls { width: 100%; flex-direction: column; align-items: stretch; }
+  .portfolio-holdings-search input,.portfolio-holdings-filter select { width: 100%; min-width: 0; }
+  .portfolio-holdings-search input,.portfolio-holdings-filter select { height: 2.9rem; }
+  .portfolio-panel--holdings-dedicated .portfolio-panel__head { gap: 0.7rem; flex-direction: column; align-items: flex-start; }
+  .portfolio-view-toggle { width: 100%; }
+  .portfolio-view-toggle button { flex: 1; }
+  .portfolio-table-wrap--holdings-dedicated { overflow: visible; }
+  .portfolio-table--holdings-dedicated,.portfolio-table--holdings-dedicated tbody,.portfolio-table--holdings-dedicated tr,.portfolio-table--holdings-dedicated td { display: block; width: 100%; min-width: 0; }
+  .portfolio-table--holdings-dedicated { table-layout: auto; }
+  .portfolio-table--holdings-dedicated thead { display: none; }
+  .portfolio-table--holdings-dedicated tbody { display: grid; gap: 0.7rem; padding: 0 0.75rem; }
+  .portfolio-table--holdings-dedicated tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 0.9rem; border: 1px solid rgba(158,174,194,0.15); border-radius: 0.65rem; padding: 0.75rem; background: rgba(8,14,20,0.72); }
+  .portfolio-table--holdings-dedicated td { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 0.55rem; border-top: 1px solid rgba(158,174,194,0.1); padding: 0.65rem 0; text-align: right !important; }
+  .portfolio-table--holdings-dedicated td::before { content: attr(data-label); color: #82909d; font-size: 0.62rem; font-weight: 700; text-align: left; text-transform: uppercase; }
+  .portfolio-table--holdings-dedicated td:first-child { display: block; grid-column: 1 / -1; border-top: 0; text-align: left !important; }
+  .portfolio-table--holdings-dedicated td:first-child::before,.portfolio-table--holdings-dedicated td:last-child::before { display: none; }
+  .portfolio-table--holdings-dedicated td:last-child { grid-column: 1 / -1; display: block; text-align: left !important; }
+  .portfolio-table--holdings-dedicated .portfolio-asset__icon { flex-basis: 4.8rem; width: 4.8rem; height: 6.5rem; }
+  .portfolio-table--holdings-dedicated .portfolio-asset__copy strong { font-size: 0.95rem; }
+  .portfolio-table--holdings-dedicated td:nth-child(4),.portfolio-table--holdings-dedicated td:nth-child(5) { font-size: 0.9rem; }
+  .portfolio-holdings-grid { grid-template-columns: 1fr; padding: 0.8rem 0.75rem; }
+  .portfolio-holdings-pagination { justify-content: space-between; gap: 0.7rem; padding-inline: 0.75rem; font-size: 0.72rem; }
+}
 @media (max-width: 1100px) {
   .portfolio-overview-content { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
   .portfolio-overview-content > .portfolio-panel--holdings { grid-column: 1 / -1; }
