@@ -1902,6 +1902,104 @@ export class AdminService {
     });
   }
 
+  async createOrUpdateIntakeDestination(
+    actor: Actor,
+    input: {
+      id: string;
+      displayName: string;
+      receiverName: string;
+      addressLine1: string;
+      addressLine2?: string;
+      city: string;
+      region: string;
+      postalCode: string;
+      countryCode: string;
+      acceptedCategories: string[];
+      shippingInstructions: string;
+      environment: 'beta';
+      active: boolean;
+      acceptingShipments: boolean;
+      operationallyApproved: boolean;
+      reason: string;
+    },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    if (input.acceptingShipments && !input.operationallyApproved) {
+      throw new ConflictException({ code: 'INTAKE_APPROVAL_REQUIRED', message: 'A destination must be operationally approved before accepting shipments.' });
+    }
+    const categories = await this.db.category.findMany({
+      where: { name: { in: input.acceptedCategories }, status: 'ACTIVE' },
+      select: { id: true, name: true },
+    });
+    const categoryNames = new Set(categories.map((category) => category.name.toLowerCase()));
+    const missingCategories = input.acceptedCategories.filter((name) => !categoryNames.has(name.toLowerCase()));
+    if (missingCategories.length) {
+      throw new NotFoundException({ code: 'INTAKE_CATEGORY_NOT_FOUND', message: `Accepted category not found: ${missingCategories.join(', ')}` });
+    }
+    const address = [input.receiverName, input.addressLine1, input.addressLine2, input.city, input.region, input.postalCode, input.countryCode.toUpperCase()]
+      .filter(Boolean)
+      .join(', ');
+    return this.db.$transaction(async (db) => {
+      const previous = await db.vaultIntakeLocation.findUnique({ where: { id: input.id } });
+      const updated = await db.vaultIntakeLocation.upsert({
+        where: { id: input.id },
+        create: {
+          id: input.id,
+          displayName: input.displayName,
+          region: input.region,
+          countryCode: input.countryCode.toUpperCase(),
+          active: input.active,
+          intakeAvailable: input.active,
+          operationallyApproved: input.operationallyApproved,
+          acceptingShipments: input.acceptingShipments,
+          environment: input.environment,
+          acceptedCategories: categories.map((category) => category.id),
+          shippingInstructions: input.shippingInstructions,
+          customerSafeAddress: address,
+        },
+        update: {
+          displayName: input.displayName,
+          region: input.region,
+          countryCode: input.countryCode.toUpperCase(),
+          active: input.active,
+          intakeAvailable: input.active,
+          operationallyApproved: input.operationallyApproved,
+          acceptingShipments: input.acceptingShipments,
+          environment: input.environment,
+          acceptedCategories: categories.map((category) => category.id),
+          shippingInstructions: input.shippingInstructions,
+          customerSafeAddress: address,
+        },
+      });
+      await db.auditEvent.create({
+        data: {
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: previous ? 'INTAKE_DESTINATION_UPDATED' : 'INTAKE_DESTINATION_CREATED',
+          resourceType: 'vault-intake-location',
+          resourceId: updated.id,
+          requestId,
+          result: 'SUCCESS',
+          metadata: {
+            reason: input.reason,
+            previous: previous ? { active: previous.active, intakeAvailable: previous.intakeAvailable, operationallyApproved: previous.operationallyApproved, acceptingShipments: previous.acceptingShipments, environment: previous.environment } : null,
+            next: { active: updated.active, intakeAvailable: updated.intakeAvailable, operationallyApproved: updated.operationallyApproved, acceptingShipments: updated.acceptingShipments, environment: updated.environment },
+          },
+        },
+      });
+      return {
+        id: updated.id,
+        displayName: updated.displayName,
+        active: updated.active,
+        intakeAvailable: updated.intakeAvailable,
+        operationallyApproved: updated.operationallyApproved,
+        acceptingShipments: updated.acceptingShipments,
+        audited: true,
+      };
+    });
+  }
+
   async confirmIntakeReceipt(
     actor: Actor,
     intakeId: string,

@@ -117,6 +117,26 @@ const intakeApproval = z
     reason: z.string().trim().min(3).max(500),
   })
   .strict();
+const intakeDestination = z
+  .object({
+    id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,79}$/),
+    displayName: z.string().trim().min(3).max(160),
+    receiverName: z.string().trim().min(2).max(160),
+    addressLine1: z.string().trim().min(3).max(200),
+    addressLine2: z.string().trim().max(200).optional(),
+    city: z.string().trim().min(2).max(120),
+    region: z.string().trim().min(2).max(120),
+    postalCode: z.string().trim().min(2).max(32),
+    countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/),
+    acceptedCategories: z.array(z.string().trim().min(2).max(120)).max(20),
+    shippingInstructions: z.string().trim().min(10).max(2000),
+    environment: z.literal('beta'),
+    active: z.boolean(),
+    acceptingShipments: z.boolean(),
+    operationallyApproved: z.boolean(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -179,6 +199,18 @@ export class AdminController {
       request.actor!,
       destinationId,
       this.parse(intakeApproval, body),
+      request.requestId ?? 'unknown',
+    );
+  }
+  @Post('intake/destinations')
+  @RequirePermission('custody.manage')
+  createOrUpdateIntakeDestination(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.createOrUpdateIntakeDestination(
+      request.actor!,
+      this.parse(intakeDestination, body),
       request.requestId ?? 'unknown',
     );
   }
