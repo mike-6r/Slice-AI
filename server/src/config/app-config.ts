@@ -323,6 +323,7 @@ const configSchema = z.object({
   OBJECT_STORAGE_PRIVATE_PREFIX: z.string().trim().min(1).default('private'),
   OBJECT_STORAGE_PUBLIC_PREFIX: z.string().trim().min(1).default('public'),
   OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  OBJECT_STORAGE_LAST_PROBE_AT: z.string().datetime().optional(),
 });
 
 export type AppConfig = {
@@ -454,6 +455,7 @@ export type AppConfig = {
   objectStoragePrivatePrefix?: string;
   objectStoragePublicPrefix?: string;
   objectStorageSignedUrlTtlSeconds?: number;
+  objectStorageLastProbeAt?: Date;
 };
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -923,6 +925,9 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     objectStoragePrivatePrefix: parsed.OBJECT_STORAGE_PRIVATE_PREFIX.replace(/\/$/, ''),
     objectStoragePublicPrefix: parsed.OBJECT_STORAGE_PUBLIC_PREFIX.replace(/\/$/, ''),
     objectStorageSignedUrlTtlSeconds: parsed.OBJECT_STORAGE_SIGNED_URL_TTL_SECONDS,
+    objectStorageLastProbeAt: parsed.OBJECT_STORAGE_LAST_PROBE_AT
+      ? new Date(parsed.OBJECT_STORAGE_LAST_PROBE_AT)
+      : undefined,
   };
 }
 

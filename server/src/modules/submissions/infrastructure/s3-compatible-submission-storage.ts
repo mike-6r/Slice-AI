@@ -107,7 +107,7 @@ export class S3CompatibleSubmissionStorage implements ObjectStoragePort {
 
   status() {
     const configured = Boolean(this.client);
-    return { provider: 'S3_COMPATIBLE' as const, configured, operational: false, signedUpload: configured, signedDownload: configured };
+    return { provider: 'S3_COMPATIBLE' as const, configured, operational: configured && Boolean(this.config.objectStorageLastProbeAt), signedUpload: configured, signedDownload: configured };
   }
 
   private requireClient() {

@@ -419,8 +419,11 @@ export class AdminService {
     const durableStorageConfigured =
       this.config.objectStorageProvider === 'S3_COMPATIBLE' &&
       Boolean(this.config.objectStorageBucket);
-    const storageSummary = durableStorageConfigured
-      ? 'S3-compatible durable storage configured · health probe not exercised'
+    const durableStorageOperational = durableStorageConfigured && Boolean(this.config.objectStorageLastProbeAt);
+    const storageSummary = durableStorageOperational
+      ? `S3-compatible durable storage operational · last successful probe ${this.config.objectStorageLastProbeAt!.toISOString()}`
+      : durableStorageConfigured
+        ? 'S3-compatible durable storage configured · health probe not exercised'
       : 'LOCAL_ONLY · Configure durable object storage before inviting external Beta collectors.';
     const integration = (
       name: string,
@@ -534,7 +537,7 @@ export class AdminService {
         },
         {
           name: 'Storage',
-          status: durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
+          status: durableStorageOperational ? ('Operational' as const) : durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
           summary: storageSummary,
           lastCheckedAt: dbCheckedAt,
         },
@@ -588,7 +591,7 @@ export class AdminService {
           configured: durableStorageConfigured,
           failedEvents: 0,
           summary: storageSummary,
-          status: durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
+          status: durableStorageOperational ? ('Operational' as const) : durableStorageConfigured ? ('CONFIGURED_NOT_EXERCISED' as const) : ('LOCAL_ONLY' as const),
           provider: this.config.objectStorageProvider,
           signedUpload: durableStorageConfigured,
           signedDownload: durableStorageConfigured,
