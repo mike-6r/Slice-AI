@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowDownRight,
@@ -20,11 +20,13 @@ import { useSession } from "@/auth/use-session";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type {
+  Asset,
   PortfolioHolding,
   PortfolioSummary,
   PortfolioPerformance,
   PortfolioPerformanceRange,
   PortfolioTransaction,
+  TradingExecution,
   TradingOrderPage,
   TradingOrderView,
 } from "@/domain";
@@ -44,6 +46,16 @@ import {
   portfolioValueLabel,
   valuationDescription,
 } from "./-portfolio-presentation";
+import {
+  formatOrderStatus,
+  isCancellable,
+  isOpenOrder,
+  orderNotionalMinor,
+  type OrderSideFilter,
+  type OrderTab,
+  ordersForSide,
+  ordersForTab,
+} from "./-orders-presentation";
 
 export const Route = createFileRoute("/portfolio")({
   head: () => ({ meta: [{ title: "Portfolio | Slice" }] }),
@@ -62,6 +74,7 @@ export function Portfolio() {
   useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
+  const queryClient = useQueryClient();
   const tab = usePortfolioTab();
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>("ALL");
   const [holdingSearch, setHoldingSearch] = useState("");
@@ -88,6 +101,17 @@ export function Portfolio() {
     queryKey: queryKeys.trading.orders,
     queryFn: () => services.trading.orders({ limit: 100 }),
     enabled: isAuthenticated,
+  });
+  const executions = useQuery({
+    queryKey: queryKeys.trading.executions(),
+    queryFn: () => services.trading.executions({ limit: 100 }),
+    enabled: isAuthenticated && tab === "orders",
+  });
+  const assets = useQuery({
+    queryKey: [...queryKeys.assets.all, "portfolio-orders"],
+    queryFn: () => services.assets.list({ limit: 48, sort: "title" }),
+    enabled: isAuthenticated && tab === "orders",
+    staleTime: 30_000,
   });
   const performance = useQuery({
     queryKey: ["portfolio", "performance", performanceRange],
@@ -154,7 +178,11 @@ export function Portfolio() {
           }}
         />
         <PortfolioTabs active={tab} />
-        {tab === "holdings" ? <HoldingsKpis query={summary} /> : <PortfolioKpis query={summary} />}
+        {tab === "holdings" ? (
+          <HoldingsKpis query={summary} />
+        ) : tab === "overview" ? (
+          <PortfolioKpis query={summary} />
+        ) : null}
         {tab === "overview" ? (
           <>
             <section className="portfolio-overview-content" aria-label="Portfolio overview">
@@ -198,7 +226,16 @@ export function Portfolio() {
             }}
           />
         ) : tab === "orders" ? (
-          <PortfolioOrdersSection query={orders} holdings={holdingsForOrders} />
+          <PortfolioOrdersExperience
+            query={orders}
+            executions={executions}
+            holdings={holdingsForOrders}
+            assets={assets.data?.items ?? []}
+            onRefresh={() => {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.trading.orders });
+              void queryClient.invalidateQueries({ queryKey: queryKeys.trading.executions() });
+            }}
+          />
         ) : (
           <ActivityPanel query={transactions} />
         )}
@@ -239,97 +276,731 @@ function PortfolioTabs({ active }: { active: PortfolioTab }) {
   );
 }
 
-function PortfolioOrdersSection({
+function PortfolioOrdersExperience({
   query,
+  executions,
   holdings,
+  assets,
+  onRefresh,
 }: {
   query: UseQueryResult<TradingOrderPage>;
+  executions: UseQueryResult<{ items: TradingExecution[] }>;
   holdings: PortfolioHolding[];
+  assets: Asset[];
+  onRefresh: () => void;
 }) {
-  const items = query.data?.items ?? [];
-  const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
+  const services = useAppServices();
+  const [tab, setTab] = useState<OrderTab>("ALL");
+  const [side, setSide] = useState<OrderSideFilter>("ALL");
+  const [status, setStatus] = useState("ALL");
+  const [assetClass, setAssetClass] = useState("ALL");
+  const [dateRange, setDateRange] = useState<"7" | "30" | "90" | "all">("30");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [selectedOrder, setSelectedOrder] = useState<TradingOrderView | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancellation = useMutation({
+    mutationFn: services.trading.cancelOrder,
+    onSuccess: () => {
+      setConfirmCancel(false);
+      setSelectedOrder(null);
+      onRefresh();
+    },
+  });
+  const allOrders = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  const holdingByAsset = useMemo(
+    () => new Map(holdings.map((holding) => [holding.assetId, holding])),
+    [holdings],
+  );
+  const assetById = useMemo(
+    () => new Map(assets.map((asset) => [String(asset.id), asset])),
+    [assets],
+  );
+  const assetBySlug = useMemo(
+    () => new Map(assets.flatMap((asset) => (asset.slug ? [[asset.slug, asset] as const] : []))),
+    [assets],
+  );
+  const filteredOrders = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    const cutoff = dateRange === "all" ? null : Date.now() - Number(dateRange) * 86_400_000;
+    return ordersForSide(ordersForTab(allOrders, tab), side).filter((order) => {
+      const asset = resolveOrderAsset(order, assetById, assetBySlug);
+      const holding = holdingByAsset.get(order.assetId);
+      const haystack = [
+        asset?.details.title,
+        asset?.details.card?.playerOrCharacter,
+        asset?.details.card?.set,
+        asset?.details.card?.cardNumber,
+        holding?.title,
+        holding?.category,
+        holding?.grade,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return (
+        (!normalized || haystack.includes(normalized)) &&
+        (status === "ALL" || (status === "OPEN" ? isOpenOrder(order) : order.status === status)) &&
+        (assetClass === "ALL" ||
+          resolveOrderCategory(order, holdingByAsset, assetById, assetBySlug) === assetClass) &&
+        (!cutoff || new Date(order.createdAt).getTime() >= cutoff)
+      );
+    });
+  }, [
+    allOrders,
+    assetClass,
+    assetById,
+    assetBySlug,
+    dateRange,
+    holdingByAsset,
+    search,
+    side,
+    status,
+    tab,
+  ]);
+  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const visibleOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize);
+  const categories = Array.from(
+    new Set(
+      allOrders
+        .map((order) => resolveOrderCategory(order, holdingByAsset, assetById, assetBySlug))
+        .filter(Boolean),
+    ),
+  ) as string[];
+  const counts = {
+    all: allOrders.length,
+    open: allOrders.filter(isOpenOrder).length,
+    filled: allOrders.filter((order) => order.status === "FILLED").length,
+    cancelled: allOrders.filter((order) => order.status === "CANCELLED").length,
+  };
+  const openOrders = allOrders.filter(isOpenOrder);
+  const filledOrders = allOrders.filter((order) => order.status === "FILLED");
+  const cancelledOrders = allOrders.filter((order) => order.status === "CANCELLED");
+  const filledUnits = allOrders.reduce((total, order) => total + BigInt(order.filledUnits), 0n);
+  const requestedUnits = allOrders
+    .filter((order) => order.filledUnits !== "0")
+    .reduce((total, order) => total + BigInt(order.originalUnits), 0n);
+  const fillRate =
+    requestedUnits > 0n
+      ? `${(Number((filledUnits * 10_000n) / requestedUnits) / 100).toFixed(1)}%`
+      : "Unavailable";
+  const resetFilters = () => {
+    setSearch("");
+    setSide("ALL");
+    setStatus("ALL");
+    setAssetClass("ALL");
+    setDateRange("30");
+    setPage(1);
+  };
+  const emptyMessage =
+    search || status !== "ALL" || side !== "ALL" || assetClass !== "ALL"
+      ? "No orders match these filters."
+      : tab === "OPEN"
+        ? "You don't have any open orders."
+        : tab === "FILLED"
+          ? "You don't have any filled orders yet."
+          : tab === "CANCELLED"
+            ? "You don't have any cancelled orders."
+            : "You haven't placed any orders yet.";
   return (
-    <PortfolioPanel
-      title="Orders"
-      className="portfolio-orders-page"
-      header={<span className="portfolio-panel__status">Your trading activity</span>}
-    >
-      {query.isLoading ? (
-        <RowsSkeleton rows={4} />
-      ) : query.isError ? (
-        <PanelError message="Unable to load orders." retry={() => void query.refetch()} />
-      ) : items.length === 0 ? (
-        <p className="py-6 text-sm text-subtle">
-          No orders yet. Orders you place will appear here.
-        </p>
-      ) : (
-        <div className="portfolio-orders-table-wrap">
-          <table className="portfolio-orders-table">
-            <thead className="text-xs uppercase tracking-[0.12em] text-muted">
-              <tr>
-                <th>Asset</th>
-                <th>Side</th>
-                <th>Ownership</th>
-                <th>Quantity</th>
-                <th>Price per Slice</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <OrderAssetIdentity order={order} holding={holdingByAsset.get(order.assetId)} />
-                  </td>
-                  <td className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</td>
-                  <td>
-                    {order.requestedOwnershipPercent
-                      ? `${order.requestedOwnershipPercent}% requested`
-                      : "Ownership unavailable"}
-                    {order.filledOwnershipPercent ? (
-                      <small>{order.filledOwnershipPercent}% filled</small>
-                    ) : null}
-                  </td>
-                  <td>
-                    <strong>{order.filledUnits}</strong>
-                    <small>of {order.originalUnits} units</small>
-                  </td>
-                  <td>{formatPortfolioMoney(order.limitPriceMinor)}</td>
-                  <td>
-                    <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
-                      {formatPortfolioOrderStatus(order)}
-                    </span>
-                  </td>
-                  <td>{formatDateTime(order.createdAt)}</td>
-                </tr>
+    <>
+      <OrdersKpis
+        open={openOrders}
+        filled={filledOrders}
+        cancelled={cancelledOrders}
+        fillRate={fillRate}
+        executions={executions.data?.items ?? []}
+      />
+      <nav className="portfolio-order-tabs" aria-label="Order status">
+        {(
+          [
+            ["ALL", "All Orders", counts.all],
+            ["OPEN", "Open", counts.open],
+            ["FILLED", "Filled", counts.filled],
+            ["CANCELLED", "Cancelled", counts.cancelled],
+          ] as const
+        ).map(([value, label, count]) => (
+          <button
+            key={value}
+            type="button"
+            className={tab === value ? "is-active" : ""}
+            onClick={() => {
+              setTab(value);
+              setStatus("ALL");
+              setPage(1);
+            }}
+          >
+            {label}
+            <strong>{count}</strong>
+          </button>
+        ))}
+      </nav>
+      <PortfolioPanel
+        title="Orders"
+        className="portfolio-orders-page"
+        header={<span className="portfolio-panel__status">Newest first</span>}
+      >
+        <div className="portfolio-orders-filters">
+          <label>
+            <span className="sr-only">Search orders</span>
+            <input
+              type="search"
+              placeholder="Search orders..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <label>
+            <span className="sr-only">Order side</span>
+            <select
+              value={side}
+              onChange={(event) => {
+                setSide(event.target.value as OrderSideFilter);
+                setPage(1);
+              }}
+            >
+              <option value="ALL">All Sides</option>
+              <option value="BUY">Buy</option>
+              <option value="SELL">Sell</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Order status</span>
+            <select
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="OPEN">Open</option>
+              <option value="PARTIALLY_FILLED">Partially Filled</option>
+              <option value="FILLED">Filled</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Asset class</span>
+            <select
+              value={assetClass}
+              onChange={(event) => {
+                setAssetClass(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="ALL">All Asset Classes</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Date range</span>
+            <select
+              value={dateRange}
+              onChange={(event) => {
+                setDateRange(event.target.value as typeof dateRange);
+                setPage(1);
+              }}
+            >
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
         </div>
-      )}
-    </PortfolioPanel>
+        {query.isLoading ? (
+          <RowsSkeleton rows={5} />
+        ) : query.isError ? (
+          <PanelError
+            message="Your orders are temporarily unavailable."
+            retry={() => void query.refetch()}
+          />
+        ) : !visibleOrders.length ? (
+          <div className="portfolio-orders-empty">
+            <PanelEmpty message={emptyMessage} />
+            {emptyMessage === "No orders match these filters." ? (
+              <button type="button" onClick={resetFilters}>
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="portfolio-orders-table-wrap">
+              <table className="portfolio-orders-table portfolio-orders-table--approved">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Side</th>
+                    <th>Type</th>
+                    <th>Ownership</th>
+                    <th>Units</th>
+                    <th>Price per Slice</th>
+                    <th>Limit Price</th>
+                    <th>Filled</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleOrders.map((order) => (
+                    <OrderTableRow
+                      key={order.id}
+                      order={order}
+                      holding={holdingByAsset.get(order.assetId)}
+                      asset={resolveOrderAsset(order, assetById, assetBySlug)}
+                      onSelect={setSelectedOrder}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="portfolio-orders-mobile">
+              {visibleOrders.map((order) => (
+                <OrderMobileCard
+                  key={order.id}
+                  order={order}
+                  holding={holdingByAsset.get(order.assetId)}
+                  asset={resolveOrderAsset(order, assetById, assetBySlug)}
+                  onSelect={setSelectedOrder}
+                />
+              ))}
+            </div>
+            <OrdersPagination
+              page={page}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              total={filteredOrders.length}
+              onPageChange={setPage}
+              onPageSizeChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+          </>
+        )}
+      </PortfolioPanel>
+      {selectedOrder ? (
+        <OrderDetailDialog
+          order={selectedOrder}
+          holding={holdingByAsset.get(selectedOrder.assetId)}
+          asset={resolveOrderAsset(selectedOrder, assetById, assetBySlug)}
+          executions={executions.data?.items ?? []}
+          confirming={confirmCancel}
+          cancellation={cancellation}
+          onClose={() => {
+            setSelectedOrder(null);
+            setConfirmCancel(false);
+          }}
+          onConfirm={() => cancellation.mutate(selectedOrder.id)}
+          onConfirmCancel={() => setConfirmCancel(true)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function OrdersKpis({
+  open,
+  filled,
+  cancelled,
+  fillRate,
+  executions,
+}: {
+  open: TradingOrderView[];
+  filled: TradingOrderView[];
+  cancelled: TradingOrderView[];
+  fillRate: string;
+  executions: TradingExecution[];
+}) {
+  const openValue = open
+    .reduce((total, order) => total + BigInt(orderNotionalMinor(order, order.remainingUnits)), 0n)
+    .toString();
+  const filledValue = executions
+    .reduce(
+      (total, execution) => total + BigInt(execution.priceMinor) * BigInt(execution.units),
+      0n,
+    )
+    .toString();
+  const cancelledValue = cancelled
+    .reduce((total, order) => total + BigInt(orderNotionalMinor(order, order.remainingUnits)), 0n)
+    .toString();
+  return (
+    <section className="portfolio-order-kpis" aria-label="Orders summary">
+      <PortfolioKpi
+        label="Open orders"
+        value={String(open.length)}
+        detail={`${formatPortfolioMoney(openValue)} order value`}
+        icon={Clock3}
+      />
+      <PortfolioKpi
+        label="Filled orders"
+        value={String(filled.length)}
+        detail={`${formatPortfolioMoney(filledValue)} executed value`}
+        icon={ChartNoAxesCombined}
+      />
+      <PortfolioKpi
+        label="Cancelled orders"
+        value={String(cancelled.length)}
+        detail={`${formatPortfolioMoney(cancelledValue)} remaining value`}
+        icon={CircleGauge}
+      />
+      <PortfolioKpi
+        label="Avg. fill rate"
+        value={fillRate}
+        detail="Across filled and partially filled orders"
+        icon={ArrowUpRight}
+      />
+    </section>
+  );
+}
+
+function OrderTableRow({
+  order,
+  holding,
+  asset,
+  onSelect,
+}: {
+  order: TradingOrderView;
+  holding?: PortfolioHolding;
+  asset?: Asset;
+  onSelect: (order: TradingOrderView) => void;
+}) {
+  return (
+    <tr>
+      <td>
+        <OrderAssetIdentity order={order} holding={holding} asset={asset} />
+      </td>
+      <td>
+        <span className={`portfolio-order-side is-${order.side.toLowerCase()}`}>{order.side}</span>
+      </td>
+      <td>{order.type}</td>
+      <td>
+        {order.requestedOwnershipPercent ? (
+          <>
+            <strong>{order.requestedOwnershipPercent}%</strong>
+            <small>of total</small>
+          </>
+        ) : (
+          "Unavailable"
+        )}
+      </td>
+      <td>
+        <strong>{order.originalUnits}</strong>
+        <small>units</small>
+      </td>
+      <td>
+        <strong>
+          {holdingSlicePrice(holding)
+            ? formatPortfolioMoney(holdingSlicePrice(holding) as string)
+            : "Market unavailable"}
+        </strong>
+      </td>
+      <td>
+        <strong>{formatPortfolioMoney(order.limitPriceMinor)}</strong>
+        <small>per Slice</small>
+      </td>
+      <td>
+        <strong>
+          {order.filledUnits} / {order.originalUnits}
+        </strong>
+        <small>{fillPercent(order)}%</small>
+      </td>
+      <td>
+        <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+          {formatOrderStatus(order.status)}
+        </span>
+      </td>
+      <td>{formatDateTime(order.createdAt)}</td>
+      <td>
+        <button
+          type="button"
+          className="portfolio-order-view"
+          aria-label={`View order for ${holdingDisplayLabel(holding ?? ({ title: asset?.details.title } as PortfolioHolding))}`}
+          onClick={() => onSelect(order)}
+        >
+          <ArrowRight aria-hidden="true" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function OrderMobileCard({
+  order,
+  holding,
+  asset,
+  onSelect,
+}: {
+  order: TradingOrderView;
+  holding?: PortfolioHolding;
+  asset?: Asset;
+  onSelect: (order: TradingOrderView) => void;
+}) {
+  return (
+    <article className="portfolio-order-mobile-card">
+      <OrderAssetIdentity order={order} holding={holding} asset={asset} />
+      <div className="portfolio-order-mobile-card__badges">
+        <span className={`portfolio-order-side is-${order.side.toLowerCase()}`}>{order.side}</span>
+        <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+          {formatOrderStatus(order.status)}
+        </span>
+      </div>
+      <dl>
+        <div>
+          <dt>Ownership</dt>
+          <dd>
+            {order.requestedOwnershipPercent
+              ? `${order.requestedOwnershipPercent}%`
+              : "Unavailable"}
+          </dd>
+        </div>
+        <div>
+          <dt>Units</dt>
+          <dd>{order.originalUnits}</dd>
+        </div>
+        <div>
+          <dt>Market price</dt>
+          <dd>
+            {holdingSlicePrice(holding)
+              ? formatPortfolioMoney(holdingSlicePrice(holding) as string)
+              : "Unavailable"}
+          </dd>
+        </div>
+        <div>
+          <dt>Limit price</dt>
+          <dd>{formatPortfolioMoney(order.limitPriceMinor)}</dd>
+        </div>
+        <div>
+          <dt>Filled</dt>
+          <dd>{fillPercent(order)}%</dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{formatDateTime(order.createdAt)}</dd>
+        </div>
+      </dl>
+      <button type="button" onClick={() => onSelect(order)}>
+        View order <ArrowRight aria-hidden="true" />
+      </button>
+    </article>
+  );
+}
+
+function OrdersPagination({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (value: number) => void;
+}) {
+  const start = total ? (page - 1) * pageSize + 1 : 0;
+  return (
+    <footer className="portfolio-orders-pagination">
+      <span>
+        Showing {start} to {Math.min(page * pageSize, total)} of {total} orders
+      </span>
+      <label>
+        Show{" "}
+        <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+          <option value={5}>5</option>
+          <option value={10}>10</option>
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+        </select>{" "}
+        per page
+      </label>
+      <div>
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          ‹
+        </button>
+        <strong>{page}</strong>
+        <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>
+          ›
+        </button>
+      </div>
+    </footer>
+  );
+}
+
+function OrderDetailDialog({
+  order,
+  holding,
+  asset,
+  executions,
+  confirming,
+  cancellation,
+  onClose,
+  onConfirm,
+  onConfirmCancel,
+}: {
+  order: TradingOrderView;
+  holding?: PortfolioHolding;
+  asset?: Asset;
+  executions: TradingExecution[];
+  confirming: boolean;
+  cancellation: ReturnType<typeof useMutation<TradingOrderView, Error, string>>;
+  onClose: () => void;
+  onConfirm: () => void;
+  onConfirmCancel: () => void;
+}) {
+  const matchingExecutions = executions.filter(
+    (execution) =>
+      execution.assetSlug && execution.assetSlug === (holding?.slug ?? order.assetSlug),
+  );
+  return (
+    <div
+      className="portfolio-order-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose();
+      }}
+    >
+      <section
+        className="portfolio-order-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="portfolio-order-dialog-title"
+      >
+        <button
+          type="button"
+          className="portfolio-order-dialog__close"
+          onClick={onClose}
+          aria-label="Close order details"
+        >
+          ×
+        </button>
+        <p className="page-kicker">Order details</p>
+        <h2 id="portfolio-order-dialog-title">
+          {holdingDisplayLabel(holding ?? ({ title: asset?.details.title } as PortfolioHolding))}
+        </h2>
+        <OrderAssetIdentity order={order} holding={holding} asset={asset} />
+        <dl className="portfolio-order-detail-grid">
+          <div>
+            <dt>Side / type</dt>
+            <dd>
+              {order.side} · {order.type}
+            </dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{formatOrderStatus(order.status)}</dd>
+          </div>
+          <div>
+            <dt>Requested ownership</dt>
+            <dd>
+              {order.requestedOwnershipPercent
+                ? `${order.requestedOwnershipPercent}%`
+                : "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Filled ownership</dt>
+            <dd>{order.filledOwnershipPercent ? `${order.filledOwnershipPercent}%` : "0%"}</dd>
+          </div>
+          <div>
+            <dt>Remaining ownership</dt>
+            <dd>
+              {order.remainingOwnershipPercent ? `${order.remainingOwnershipPercent}%` : "0%"}
+            </dd>
+          </div>
+          <div>
+            <dt>Units</dt>
+            <dd>
+              {order.filledUnits} filled · {order.remainingUnits} remaining of {order.originalUnits}
+            </dd>
+          </div>
+          <div>
+            <dt>Limit price</dt>
+            <dd>{formatPortfolioMoney(order.limitPriceMinor)} per Slice</dd>
+          </div>
+          <div>
+            <dt>Average fill</dt>
+            <dd>
+              {order.averageFillPriceMinor
+                ? formatPortfolioMoney(order.averageFillPriceMinor)
+                : "Not filled"}
+            </dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>{formatDateTime(order.createdAt)}</dd>
+          </div>
+        </dl>
+        {matchingExecutions.length ? (
+          <div className="portfolio-order-executions">
+            <h3>Executions</h3>
+            {matchingExecutions.map((execution) => (
+              <p key={execution.executionId}>
+                {formatDateTime(execution.executedAt)} · {execution.units} units ·{" "}
+                {formatPortfolioMoney(execution.priceMinor)} per Slice
+              </p>
+            ))}
+          </div>
+        ) : null}
+        {isCancellable(order) ? (
+          confirming ? (
+            <div className="portfolio-order-confirm">
+              <strong>Cancel this order?</strong>
+              <p>
+                Filled portions remain completed. Only the remaining open quantity will be
+                cancelled.
+              </p>
+              <button type="button" onClick={onConfirm} disabled={cancellation.isPending}>
+                {cancellation.isPending ? "Cancelling…" : "Confirm cancellation"}
+              </button>
+              <button type="button" onClick={() => onConfirmCancel()}>
+                Keep order
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="portfolio-order-cancel" onClick={onConfirmCancel}>
+              Cancel order
+            </button>
+          )
+        ) : null}
+      </section>
+    </div>
   );
 }
 
 function OrderAssetIdentity({
   order,
   holding,
+  asset,
 }: {
   order: TradingOrderView;
   holding?: PortfolioHolding;
+  asset?: Asset;
 }) {
   const slug = holding?.slug ?? order.assetSlug;
   const media = slug ? assetShowcaseMedia(slug) : undefined;
+  const title = asset?.details.title ?? holding?.title ?? "Collectible";
   const content = (
     <>
       <span className="portfolio-order-asset__icon" aria-hidden="true">
         {media ? <img src={media.src} alt="" /> : <Landmark />}
       </span>
       <span className="portfolio-order-asset__copy">
-        <strong>
-          {holdingDisplayLabel(holding ?? ({ title: order.assetSlug, slug } as PortfolioHolding))}
-        </strong>
+        <strong>{title}</strong>
         <small>
           {[holding?.category, holding?.grade].filter(Boolean).join(" · ") || "Collectible"}
         </small>
@@ -342,6 +1013,48 @@ function OrderAssetIdentity({
     </Link>
   ) : (
     <div className="portfolio-order-asset">{content}</div>
+  );
+}
+
+function fillPercent(order: TradingOrderView) {
+  if (BigInt(order.originalUnits) <= 0n) return "0.00";
+  return (
+    Number((BigInt(order.filledUnits) * 10_000n) / BigInt(order.originalUnits)) / 100
+  ).toFixed(2);
+}
+
+function holdingSlicePrice(holding?: PortfolioHolding) {
+  if (!holding?.estimatedValueMinor || BigInt(holding.ownedUnits) <= 0n) return null;
+  return (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString();
+}
+
+function friendlyAssetCategory(category?: string) {
+  if (!category) return undefined;
+  return category
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function resolveOrderAsset(
+  order: TradingOrderView,
+  assetById: Map<string, Asset>,
+  assetBySlug: Map<string, Asset>,
+) {
+  return (
+    assetById.get(order.assetId) ?? (order.assetSlug ? assetBySlug.get(order.assetSlug) : undefined)
+  );
+}
+
+function resolveOrderCategory(
+  order: TradingOrderView,
+  holdingByAsset: Map<string, PortfolioHolding>,
+  assetById: Map<string, Asset>,
+  assetBySlug: Map<string, Asset>,
+) {
+  return (
+    holdingByAsset.get(order.assetId)?.category ??
+    friendlyAssetCategory(resolveOrderAsset(order, assetById, assetBySlug)?.details.category)
   );
 }
 
@@ -423,6 +1136,7 @@ function PortfolioHeading({
   const markedAt = query.data ? latestPortfolioMarkAt(query.data) : null;
   const holdingsCount = query.data?.holdings.length ?? 0;
   const isHoldings = tab === "holdings";
+  const isOrders = tab === "orders";
   return (
     <header className="portfolio-heading">
       <div>
@@ -434,13 +1148,17 @@ function PortfolioHeading({
               ? query.isLoading
                 ? "Holdings"
                 : `Holdings (${holdingsCount})`
-              : "Portfolio"}
+              : isOrders
+                ? "Orders"
+                : "Portfolio"}
           </span>
         </h1>
         <p>
           {isHoldings
             ? "A detailed view of the collectibles you own."
-            : "Track your collectible investments, ownership positions and performance across all asset classes."}
+            : isOrders
+              ? "Track and manage your active, filled and cancelled orders."
+              : "Track your collectible investments, ownership positions and performance across all asset classes."}
         </p>
       </div>
       {isHoldings ? (
@@ -469,6 +1187,8 @@ function PortfolioHeading({
             </select>
           </label>
         </div>
+      ) : isOrders ? (
+        <span className="portfolio-heading__orders-spacer" aria-hidden="true" />
       ) : (
         <div className="portfolio-heading__freshness" aria-live="polite">
           <span>Portfolio last updated</span>

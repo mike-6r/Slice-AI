@@ -24019,6 +24019,94 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .portfolio-insights > div:first-child { border-top: 0; padding-top: 0; }
 }
 
+/* Dedicated Portfolio Orders workspace. */
+.portfolio-page--approved .portfolio-order-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.portfolio-page--approved .portfolio-order-kpis .portfolio-summary-kpi { min-height: 7rem; }
+.portfolio-order-tabs { display: flex; gap: 0.6rem; margin-top: 1rem; overflow-x: auto; }
+.portfolio-order-tabs button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.55rem; border: 1px solid rgba(158,174,194,0.18); border-radius: 0.55rem; background: rgba(12,18,25,0.82); color: #c0cbd2; padding: 0.72rem 1rem; font-size: 0.85rem; font-weight: 650; }
+.portfolio-order-tabs button.is-active { border-color: rgba(35,217,180,0.6); background: rgba(15,138,112,0.16); color: #e9f8f4; }
+.portfolio-order-tabs button strong { border-radius: 0.3rem; padding: 0.15rem 0.42rem; background: rgba(158,174,194,0.16); color: #dce7e5; font-size: 0.7rem; }
+.portfolio-order-tabs button.is-active strong { background: #e4eeeb; color: #13221f; }
+.portfolio-orders-filters { display: grid; grid-template-columns: minmax(15rem,1.4fr) repeat(4,minmax(8.5rem,0.7fr)); gap: 0.7rem; padding: 1rem 1.2rem; border-bottom: 1px solid rgba(158,174,194,0.12); }
+.portfolio-orders-filters label { min-width: 0; }
+.portfolio-orders-filters input,.portfolio-orders-filters select { width: 100%; height: 2.65rem; border: 1px solid rgba(158,174,194,0.2); border-radius: 0.45rem; background: #0b1219; color: #e8efed; padding: 0 0.75rem; font-size: 0.78rem; outline: 0; }
+.portfolio-orders-filters input:focus,.portfolio-orders-filters select:focus { border-color: rgba(35,217,180,0.65); box-shadow: 0 0 0 3px rgba(35,217,180,0.11); }
+.portfolio-page--approved .portfolio-orders-page { margin-top: 0.75rem; }
+.portfolio-page--approved .portfolio-orders-page .portfolio-panel__head { min-height: 3.8rem; padding: 0.95rem 1.2rem 0.7rem; }
+.portfolio-page--approved .portfolio-orders-page .portfolio-panel__head h2 { font-size: 1rem; }
+.portfolio-orders-table--approved { width: 100%; min-width: 74rem; table-layout: fixed; border-collapse: collapse; font-size: 0.78rem; }
+.portfolio-orders-table--approved th { padding: 0.72rem 0.55rem; background: rgba(21,31,41,0.78); color: #9aa9b5; font-size: 0.61rem; font-weight: 700; letter-spacing: 0.04em; text-align: left; text-transform: uppercase; }
+.portfolio-orders-table--approved td { min-width: 0; border-top: 1px solid rgba(158,174,194,0.11); padding: 0.75rem 0.55rem; color: #c1ccd3; vertical-align: middle; }
+.portfolio-orders-table--approved tbody tr:hover { background: rgba(35,217,180,0.025); }
+.portfolio-orders-table--approved td small { display: block; margin-top: 0.18rem; color: #82909d; font-size: 0.65rem; }
+.portfolio-orders-table--approved td:first-child { width: 25%; }
+.portfolio-orders-table--approved td:nth-child(2) { width: 7%; }
+.portfolio-orders-table--approved td:nth-child(3) { width: 6%; }
+.portfolio-orders-table--approved td:nth-child(4) { width: 10%; }
+.portfolio-orders-table--approved td:nth-child(5) { width: 8%; }
+.portfolio-orders-table--approved td:nth-child(6) { width: 12%; }
+.portfolio-orders-table--approved td:nth-child(7) { width: 10%; }
+.portfolio-orders-table--approved td:nth-child(8) { width: 10%; }
+.portfolio-orders-table--approved td:nth-child(9) { width: 10%; }
+.portfolio-orders-table--approved td:nth-child(10) { width: 10%; }
+.portfolio-order-side { display: inline-flex; border-radius: 0.3rem; padding: 0.3rem 0.45rem; font-size: 0.68rem; font-weight: 800; }
+.portfolio-order-side.is-buy { background: rgba(22,190,151,0.15); color: #27ddb1; }
+.portfolio-order-side.is-sell { background: rgba(229,82,71,0.15); color: #ff827f; }
+.portfolio-orders-table--approved td strong { color: #eef5f2; font-size: 0.88rem; }
+.portfolio-order-view { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid rgba(158,174,194,0.2); border-radius: 0.35rem; color: #9eabb6; }
+.portfolio-order-view:hover { border-color: rgba(35,217,180,0.55); color: #2addad; }
+.portfolio-order-view svg { width: 0.85rem; }
+.portfolio-orders-empty { display: grid; place-items: center; min-height: 15rem; padding: 2rem; }
+.portfolio-orders-empty button { margin-top: 1rem; border: 1px solid rgba(35,217,180,0.45); border-radius: 0.4rem; padding: 0.55rem 0.8rem; color: #2addad; font-size: 0.78rem; }
+.portfolio-orders-mobile { display: none; }
+.portfolio-orders-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem 1.2rem; color: #9ba8b3; font-size: 0.76rem; }
+.portfolio-orders-pagination label { margin-left: auto; }
+.portfolio-orders-pagination select { margin-inline: 0.3rem; border: 1px solid rgba(158,174,194,0.24); border-radius: 0.35rem; background: #0b1219; color: #e6efec; padding: 0.38rem 0.5rem; }
+.portfolio-orders-pagination > div { display: inline-flex; align-items: center; gap: 0.45rem; }
+.portfolio-orders-pagination button,.portfolio-orders-pagination strong { display: grid; width: 1.9rem; height: 1.9rem; place-items: center; border: 1px solid rgba(158,174,194,0.2); border-radius: 0.32rem; color: #cbd7d4; }
+.portfolio-orders-pagination strong { border-color: rgba(35,217,180,0.55); color: #2addad; }
+.portfolio-orders-pagination button:disabled { opacity: 0.35; }
+.portfolio-order-dialog-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 1.2rem; background: rgba(0,5,9,0.78); }
+.portfolio-order-dialog { position: relative; width: min(38rem,100%); max-height: min(90vh,48rem); overflow: auto; border: 1px solid rgba(158,174,194,0.2); border-radius: 0.75rem; background: #111a23; padding: 1.4rem; box-shadow: 0 2rem 5rem rgba(0,0,0,0.45); }
+.portfolio-order-dialog__close { position: absolute; top: 0.7rem; right: 0.8rem; color: #a7b4bd; font-size: 1.6rem; }
+.portfolio-order-dialog h2 { max-width: calc(100% - 2rem); margin: 0.2rem 0 1rem; color: #f1f7f5; font-size: 1.3rem; }
+.portfolio-order-dialog .portfolio-order-asset { margin-bottom: 1rem; }
+.portfolio-order-dialog .portfolio-order-asset__icon { flex-basis: 4rem; width: 4rem; height: 5.3rem; }
+.portfolio-order-detail-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.65rem; }
+.portfolio-order-detail-grid div { border: 1px solid rgba(158,174,194,0.12); border-radius: 0.4rem; padding: 0.65rem; background: rgba(8,14,20,0.45); }
+.portfolio-order-detail-grid dt { color: #84939e; font-size: 0.64rem; text-transform: uppercase; }
+.portfolio-order-detail-grid dd { margin-top: 0.24rem; color: #e8efed; font-size: 0.82rem; font-weight: 700; }
+.portfolio-order-executions { margin-top: 1rem; border-top: 1px solid rgba(158,174,194,0.12); padding-top: 0.85rem; }
+.portfolio-order-executions h3 { color: #e9f1ef; font-size: 0.9rem; }
+.portfolio-order-executions p { margin-top: 0.4rem; color: #a5b2ba; font-size: 0.76rem; }
+.portfolio-order-cancel,.portfolio-order-confirm button { margin-top: 1rem; border: 1px solid rgba(255,128,137,0.5); border-radius: 0.4rem; padding: 0.6rem 0.8rem; color: #ff8d91; font-size: 0.8rem; font-weight: 700; }
+.portfolio-order-confirm { margin-top: 1rem; border: 1px solid rgba(255,179,74,0.4); border-radius: 0.45rem; padding: 0.85rem; background: rgba(117,77,15,0.12); }
+.portfolio-order-confirm strong { color: #ffd28a; font-size: 0.86rem; }
+.portfolio-order-confirm p { margin-top: 0.3rem; color: #c1b49e; font-size: 0.75rem; line-height: 1.45; }
+.portfolio-order-confirm button { margin-right: 0.45rem; border-color: rgba(255,179,74,0.45); color: #ffd28a; }
+.portfolio-order-confirm button:last-child { border-color: rgba(158,174,194,0.25); color: #b3c0c7; }
+@media (max-width: 1100px) {
+  .portfolio-page--approved .portfolio-order-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .portfolio-orders-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .portfolio-orders-filters label:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .portfolio-page--approved .portfolio-order-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .portfolio-orders-filters { grid-template-columns: 1fr; }
+  .portfolio-orders-filters label:first-child { grid-column: auto; }
+  .portfolio-orders-table-wrap { display: none; }
+  .portfolio-orders-mobile { display: grid; gap: 0.75rem; padding: 0.75rem; }
+  .portfolio-order-mobile-card { min-width: 0; border: 1px solid rgba(158,174,194,0.15); border-radius: 0.6rem; padding: 0.85rem; background: rgba(8,14,20,0.7); }
+  .portfolio-order-mobile-card__badges { display: flex; gap: 0.4rem; margin-top: 0.75rem; }
+  .portfolio-order-mobile-card dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.65rem; margin-top: 0.8rem; }
+  .portfolio-order-mobile-card dt { color: #81909c; font-size: 0.62rem; text-transform: uppercase; }
+  .portfolio-order-mobile-card dd { margin-top: 0.18rem; color: #e4eeeb; font-size: 0.8rem; font-weight: 700; }
+  .portfolio-order-mobile-card > button { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.9rem; color: #2addad; font-size: 0.78rem; font-weight: 700; }
+  .portfolio-orders-pagination { flex-wrap: wrap; padding-inline: 0.75rem; }
+  .portfolio-orders-pagination label { margin-left: 0; }
+  .portfolio-order-detail-grid { grid-template-columns: 1fr; }
+}
+
 /* Guided customer listing flow: compact on a phone, calm and focused on desktop. */
 .list-page--guided {
   padding: clamp(1rem, 3vw, 2.5rem) 0 3rem;
