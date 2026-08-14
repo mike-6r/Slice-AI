@@ -202,8 +202,11 @@ function isRawMetadata(value: Prisma.JsonValue | null) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
   const metadata = value as Record<string, unknown>;
   const grader = String(metadata.grader ?? '').trim().toLowerCase();
-  const grade = String(metadata.grade ?? '').trim();
-  return (!grader || ['raw', 'ungraded', 'none'].includes(grader)) && !grade;
+  // The customer-facing form uses an empty grading-company value for the
+  // Raw / Ungraded option. Treat that as raw even if an older draft carries a
+  // stale grade field from a previous selection; a numeric grade without a
+  // grader is not enough to make the collectible a professionally graded slab.
+  return !grader || ['raw', 'ungraded', 'none'].includes(grader);
 }
 function numberOrNull(value: unknown) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
 function booleanOrNull(value: unknown) { return typeof value === 'boolean' ? value : null; }
