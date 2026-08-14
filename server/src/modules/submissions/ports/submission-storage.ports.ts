@@ -20,6 +20,7 @@ export type UploadIntent = {
 };
 
 export interface ObjectStoragePort {
+  put(input: { objectKey: string; body: Buffer; mimeType: string; metadata?: Record<string, string> }): Promise<void>;
   createUploadIntent(input: {
     objectKey: string;
     mimeType: string;

@@ -761,6 +761,34 @@ const mapRawCardPreGrade = (raw: unknown): RawCardPreGrade => {
     ) as ISODateTime | null,
     createdAt: stringField(value.createdAt, "pre-grade.createdAt") as ISODateTime,
     updatedAt: stringField(value.updatedAt, "pre-grade.updatedAt") as ISODateTime,
+    visualizations: Array.isArray(value.visualizations)
+      ? value.visualizations.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const visualization = item as Record<string, unknown>;
+          if (
+            (visualization.side !== "FRONT" && visualization.side !== "BACK") ||
+            (visualization.type !== "overview" && visualization.type !== "centering")
+          )
+            return [];
+          return [
+            {
+              side: visualization.side,
+              type: visualization.type,
+              url: nullableString(visualization.url, "pre-grade.visualizations.url"),
+              centering:
+                visualization.centering &&
+                typeof visualization.centering === "object" &&
+                !Array.isArray(visualization.centering)
+                  ? (Object.fromEntries(
+                      Object.entries(visualization.centering).filter(
+                        ([, value]) => typeof value === "number",
+                      ),
+                    ) as Record<string, number>)
+                  : null,
+            },
+          ];
+        })
+      : [],
   };
 };
 const mapRawCardPreGradeResponse = (raw: unknown): RawCardPreGradeResponse => {
@@ -2280,7 +2308,16 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
         : [],
       filters: {
         vaults: Array.isArray(filters.vaults)
-          ? (filters.vaults as Array<{ id: string; displayName: string; code: string | null; operationallyApproved?: boolean; acceptingShipments?: boolean; environment?: string; region?: string; countryCode?: string }>)
+          ? (filters.vaults as Array<{
+              id: string;
+              displayName: string;
+              code: string | null;
+              operationallyApproved?: boolean;
+              acceptingShipments?: boolean;
+              environment?: string;
+              region?: string;
+              countryCode?: string;
+            }>)
           : [],
         carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
       },

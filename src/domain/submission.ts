@@ -36,6 +36,13 @@ export interface SubmissionDetail extends AssetSubmission {
 export type RawCardPreGradeStatus =
   "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "TEMPORARILY_UNAVAILABLE" | "NOT_CONFIGURED" | "STALE";
 
+export interface RawCardVisualization {
+  side: "FRONT" | "BACK";
+  type: "overview" | "centering";
+  url: string | null;
+  centering: Record<string, number> | null;
+}
+
 export interface RawCardPreGrade {
   id: string;
   submissionId: string;
@@ -62,6 +69,7 @@ export interface RawCardPreGrade {
   supersededAt: ISODateTime | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  visualizations: RawCardVisualization[];
 }
 
 export interface RawCardPreGradeResponse {

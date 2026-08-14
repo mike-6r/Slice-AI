@@ -31,11 +31,14 @@ describe('XimilarRawCardPreGradeProvider', () => {
                   _status: { code: 200, text: 'OK' },
                   card: [
                     {
+                      _id: 'front',
                       _tags: {
                         Side: [{ name: 'Front' }],
                         Category: [{ name: 'Card/Trading Card Game' }],
                         Autograph: [{ name: 'No' }],
                       },
+                      _full_url_card: 'https://s3-eu-west-1.amazonaws.com/x/front.webp',
+                      _exact_url_card: 'https://s3-eu-west-1.amazonaws.com/x/front-centering.webp',
                     },
                   ],
                   grades: {
@@ -47,6 +50,12 @@ describe('XimilarRawCardPreGradeProvider', () => {
                     condition: 'Near Mint',
                   },
                   versions: { final: 'model-v1' },
+                },
+                {
+                  _status: { code: 200, text: 'OK' },
+                  card: [{ _id: 'back', _tags: { Side: [{ name: 'Back' }] } }],
+                  grades: { final: 8, corners: 8, edges: 8, surface: 8, centering: 8, condition: 'Near Mint' },
+                  _full_url_card: 'https://s3-eu-west-1.amazonaws.com/x/back.webp',
                 },
               ],
             },
@@ -65,6 +74,10 @@ describe('XimilarRawCardPreGradeProvider', () => {
     expect(result.overallEstimate).toBe(8.5);
     expect(result.conditionLabel).toBe('Near Mint');
     expect(result.centeringScore).toBe(9);
+    expect(result.visualizations).toEqual([
+      expect.objectContaining({ side: 'FRONT', overviewUrl: 'https://s3-eu-west-1.amazonaws.com/x/front.webp', centeringUrl: 'https://s3-eu-west-1.amazonaws.com/x/front-centering.webp' }),
+      expect.objectContaining({ side: 'BACK', overviewUrl: 'https://s3-eu-west-1.amazonaws.com/x/back.webp' }),
+    ]);
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.ximilar.com/account/v2/request/',
       expect.objectContaining({

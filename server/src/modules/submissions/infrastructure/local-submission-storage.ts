@@ -32,6 +32,23 @@ export class LocalSubmissionStorage implements ObjectStoragePort {
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
+  async put(input: { objectKey: string; body: Buffer; mimeType: string; metadata?: Record<string, string> }) {
+    this.assertAvailable();
+    const inspection = inspectImage(input.body);
+    const stored: StoredObject = {
+      key: input.objectKey,
+      mimeType: input.mimeType,
+      sizeBytes: input.body.length,
+      sha256: createHash('sha256').update(input.body).digest('hex'),
+      magicMimeType: inspection.mimeType,
+      width: inspection.width,
+      height: inspection.height,
+    };
+    this.objects.set(input.objectKey, stored);
+    this.bytes.set(input.objectKey, Buffer.from(input.body));
+    this.persist(input.objectKey, input.body);
+  }
+
   async createUploadIntent(input: {
     objectKey: string;
     mimeType: string;

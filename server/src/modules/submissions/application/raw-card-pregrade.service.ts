@@ -12,7 +12,7 @@ import {
   assertEditableStatus,
   REQUIRED_MEDIA_SLOTS,
 } from '../domain/submission.policy';
-import { RAW_CARD_PREGRADE_PROVIDER, type RawCardPreGradeProvider } from './raw-card-pregrade.provider';
+import { RAW_CARD_PREGRADE_PROVIDER, type RawCardPreGradeProvider, type RawCardVisualization } from './raw-card-pregrade.provider';
 import { Inject } from '@nestjs/common';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../ports/submission-storage.ports';
 
@@ -31,10 +31,8 @@ export class RawCardPreGradeService {
       include: { preGrades: { orderBy: { createdAt: 'desc' }, take: 20 } },
     });
     if (!submission) throw this.notFound();
-    return {
-      current: submission.preGrades.find((item) => !item.supersededAt) ?? null,
-      history: submission.preGrades.map(preGradeProjection),
-    };
+    const current = submission.preGrades.find((item) => !item.supersededAt) ?? null;
+    return { current: current ? await this.decorateProjection(current) : null, history: await Promise.all(submission.preGrades.map((item) => this.decorateProjection(item))) };
   }
 
   async analyze(actor: Actor, submissionId: string, requestId: string) {
@@ -80,12 +78,12 @@ export class RawCardPreGradeService {
       cached?.status === 'NOT_CONFIGURED' ||
       cached?.status === 'FAILED'
     )
-      return preGradeProjection(cached);
+      return this.decorateProjection(cached);
     if (cached?.status === 'IN_PROGRESS') {
       if (cached.providerRequestId)
-        return this.resume(actor, submission.id, cached.id, fingerprint, cached.providerRequestId, front.objectKey, back.objectKey, requestId);
+        return this.resume(actor, submission.id, cached.id, fingerprint, cached.providerRequestId, front.id, back.id, front.objectKey, back.objectKey, requestId);
       if (Date.now() - cached.updatedAt.getTime() < 120_000)
-        return preGradeProjection(cached);
+        return this.decorateProjection(cached);
     }
     if (!this.provider.configured()) {
       const unavailable = await this.persist(
@@ -99,7 +97,7 @@ export class RawCardPreGradeService {
         },
         requestId,
       );
-      return preGradeProjection(unavailable);
+      return this.decorateProjection(unavailable);
     }
     let analysis = cached;
     if (!analysis) {
@@ -119,7 +117,7 @@ export class RawCardPreGradeService {
         analysis = await this.db.rawCardPreGrade.findUniqueOrThrow({
           where: { submissionId_analysisFingerprint: { submissionId: submission.id, analysisFingerprint: fingerprint } },
         });
-        if (analysis.status === 'IN_PROGRESS') return preGradeProjection(analysis);
+        if (analysis.status === 'IN_PROGRESS') return this.decorateProjection(analysis);
       }
     } else if (analysis.status !== 'IN_PROGRESS') {
       analysis = await this.db.rawCardPreGrade.update({
@@ -128,26 +126,28 @@ export class RawCardPreGradeService {
       });
     }
     await this.audit(actor.userId, 'RAW_CARD_PREGRADE_REQUESTED', submission.id, requestId, { analysisId: analysis.id, provider: this.provider.providerName });
-    return this.runProvider(actor, submission.id, analysis.id, fingerprint, front.objectKey, back.objectKey, requestId, analysis.providerRequestId);
+    return this.runProvider(actor, submission.id, analysis.id, fingerprint, front.id, back.id, front.objectKey, back.objectKey, requestId, analysis.providerRequestId);
   }
 
-  private resume(actor: Actor, submissionId: string, analysisId: string, fingerprint: string, providerRequestId: string, frontKey: string, backKey: string, requestId: string) {
-    return this.runProvider(actor, submissionId, analysisId, fingerprint, frontKey, backKey, requestId, providerRequestId);
+  private resume(actor: Actor, submissionId: string, analysisId: string, fingerprint: string, providerRequestId: string, frontMediaId: string, backMediaId: string, frontKey: string, backKey: string, requestId: string) {
+    return this.runProvider(actor, submissionId, analysisId, fingerprint, frontMediaId, backMediaId, frontKey, backKey, requestId, providerRequestId);
   }
 
-  private async runProvider(actor: Actor, submissionId: string, analysisId: string, fingerprint: string, frontKey: string, backKey: string, requestId: string, providerRequestId: string | null) {
+  private async runProvider(actor: Actor, submissionId: string, analysisId: string, fingerprint: string, frontMediaId: string | null, backMediaId: string | null, frontKey: string, backKey: string, requestId: string, providerRequestId: string | null) {
     const [front, back] = await Promise.all([this.storage.read(frontKey), this.storage.read(backKey)]);
     if (!front || !back)
       throw new ServiceUnavailableException({ code: 'STORAGE_UNAVAILABLE', message: 'The card photos could not be read for analysis.' });
     const result = await this.provider.analyze({ front, back, providerRequestId });
+    const persistedVisualizations = result.status === 'SUCCEEDED' ? await this.copyVisualizations(submissionId, analysisId, frontMediaId, backMediaId, result.visualizations) : [];
     const updated = await this.persist(submissionId, actor.userId, fingerprint, {
       ...result,
       status: result.status,
       provider: this.provider.providerName,
       providerRequestId: result.providerRequestId,
+      visualizations: persistedVisualizations,
     }, requestId, analysisId);
     await this.audit(actor.userId, result.status === 'SUCCEEDED' ? 'RAW_CARD_PREGRADE_COMPLETED' : 'RAW_CARD_PREGRADE_FAILED', submissionId, requestId, { analysisId, provider: this.provider.providerName, status: result.status, errorCode: result.errorCode });
-    return preGradeProjection(updated);
+    return this.decorateProjection(updated);
   }
 
   private async persist(submissionId: string, requestedByUserId: string, fingerprint: string, result: Record<string, unknown>, requestId: string, id?: string) {
@@ -174,6 +174,7 @@ export class RawCardPreGradeService {
       providerVersion: stringOrNull(result.providerVersion),
       errorCode: stringOrNull(result.errorCode),
       rawResponse: result.rawResponse ? (result.rawResponse as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+      visualizations: Array.isArray(result.visualizations) ? (result.visualizations as Prisma.InputJsonValue) : Prisma.JsonNull,
     };
     const updated = id
       ? await this.db.rawCardPreGrade.update({ where: { id }, data })
@@ -189,6 +190,44 @@ export class RawCardPreGradeService {
       });
     }
     return updated;
+  }
+
+  private async copyVisualizations(submissionId: string, analysisId: string, frontMediaId: string | null, backMediaId: string | null, visualizations: RawCardVisualization[]) {
+    const copied: Array<Record<string, unknown>> = [];
+    for (const visualization of visualizations ?? []) {
+      const sourceMediaId = visualization.side === 'FRONT' ? frontMediaId : backMediaId;
+      if (!sourceMediaId) continue;
+      for (const [type, url] of [['overview', visualization.overviewUrl], ['centering', visualization.centeringUrl]] as const) {
+        if (!url || !isTrustedVisualizationUrl(url)) continue;
+        const objectKey = `submissions/${submissionId}/ai-review/${analysisId}/${visualization.side.toLowerCase()}-${type}`;
+        try {
+          const existing = await this.storage.head(objectKey);
+          if (existing?.sha256) { copied.push({ side: visualization.side, type, sourceMediaId, objectKey, sha256: existing.sha256, mimeType: existing.mimeType, centering: visualization.centering }); continue; }
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15_000);
+          let response: Response;
+          try { response = await fetch(url, { signal: controller.signal }); } finally { clearTimeout(timeout); }
+          if (!response.ok) continue;
+          const mimeType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+          if (!mimeType.startsWith('image/')) continue;
+          const body = Buffer.from(await response.arrayBuffer());
+          if (!body.length || body.length > 8 * 1024 * 1024) continue;
+          const sha256 = createHash('sha256').update(body).digest('hex');
+          await this.storage.put({ objectKey, body, mimeType, metadata: { sha256, provider: 'XIMILAR', 'source-media-id': sourceMediaId } });
+          const stored = await this.storage.head(objectKey);
+          if (!stored?.magicMimeType?.startsWith('image/')) { await this.storage.delete(objectKey).catch(() => undefined); continue; }
+          copied.push({ side: visualization.side, type, sourceMediaId, objectKey, sha256, mimeType, centering: visualization.centering });
+        } catch { /* Visualization is optional evidence; preserve the grade. */ }
+      }
+    }
+    return copied;
+  }
+
+  private async decorateProjection(item: Prisma.RawCardPreGradeGetPayload<Prisma.RawCardPreGradeDefaultArgs>) {
+    const projection = preGradeProjection(item);
+    const visualizations = Array.isArray(item.visualizations) ? item.visualizations : [];
+    projection.visualizations = await Promise.all(visualizations.filter(isPersistedVisualization).map(async (visualization) => ({ side: visualization.side, type: visualization.type, url: await this.storage.createPrivateDownloadUrl(visualization.objectKey, new Date(Date.now() + 5 * 60_000)).catch(() => null), centering: visualization.centering ?? null })));
+    return projection;
   }
 
   private audit(actorUserId: string, action: string, submissionId: string, requestId: string, metadata: Record<string, unknown>) {
@@ -238,5 +277,9 @@ export function preGradeProjection(item: Prisma.RawCardPreGradeGetPayload<Prisma
     supersededAt: item.supersededAt?.toISOString() ?? null,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
+    visualizations: [] as Array<{ side: 'FRONT' | 'BACK'; type: 'overview' | 'centering'; url: string | null; centering: Record<string, number> | null }>,
   };
 }
+
+function isTrustedVisualizationUrl(value: string) { try { const url = new URL(value); return url.protocol === 'https:' && ['s3-eu-west-1.amazonaws.com', 's3-eu-central-1.amazonaws.com'].includes(url.hostname); } catch { return false; } }
+function isPersistedVisualization(value: unknown): value is { side: 'FRONT' | 'BACK'; type: 'overview' | 'centering'; objectKey: string; centering?: Record<string, number> | null } { if (!value || typeof value !== 'object') return false; const item = value as Record<string, unknown>; return (item.side === 'FRONT' || item.side === 'BACK') && (item.type === 'overview' || item.type === 'centering') && typeof item.objectKey === 'string'; }

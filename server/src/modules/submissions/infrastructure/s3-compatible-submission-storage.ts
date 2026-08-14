@@ -29,6 +29,11 @@ export class S3CompatibleSubmissionStorage implements ObjectStoragePort {
       : null;
   }
 
+  async put(input: { objectKey: string; body: Buffer; mimeType: string; metadata?: Record<string, string> }) {
+    const client = this.requireClient();
+    await client.send(new PutObjectCommand({ Bucket: this.bucket(), Key: this.key(input.objectKey), Body: input.body, ContentType: input.mimeType, ContentLength: input.body.length, Metadata: input.metadata }));
+  }
+
   async createUploadIntent(input: { objectKey: string; mimeType: string; sizeBytes: number; expiresAt: Date }): Promise<UploadIntent> {
     const client = this.requireClient();
     const command = new PutObjectCommand({

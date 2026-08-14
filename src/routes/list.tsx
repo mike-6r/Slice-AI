@@ -28,6 +28,7 @@ import type {
   SubmissionDetail,
   SubmissionMedia,
   RawCardPreGrade,
+  RawCardVisualization,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -1282,6 +1283,25 @@ function RawPreGradePanel({
   onAnalyze: () => void;
 }) {
   const ready = REQUIRED_SLOTS.every((slot) => activeMedia(submission, slot)?.status === "SAFE");
+  const visualizations = preGrade?.visualizations ?? [];
+  const availableSides = Array.from(new Set(visualizations.map((item) => item.side)));
+  const availableSideKey = availableSides.join(",");
+  const [side, setSide] = useState<"FRONT" | "BACK">(
+    availableSides.includes("FRONT") ? "FRONT" : "BACK",
+  );
+  const [view, setView] = useState<"overview" | "centering">("overview");
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    const nextSides = availableSideKey ? availableSideKey.split(",") : [];
+    if (nextSides.length && !nextSides.includes(side)) setSide(nextSides[0] as "FRONT" | "BACK");
+    setImageFailed(false);
+  }, [preGrade?.id, availableSideKey, side]);
+  const sideVisualizations = visualizations.filter((item) => item.side === side);
+  const activeVisualization: RawCardVisualization | undefined =
+    sideVisualizations.find((item) => item.type === view && item.url) ??
+    sideVisualizations.find((item) => item.url);
+  const hasOverview = sideVisualizations.some((item) => item.type === "overview" && item.url);
+  const hasCentering = sideVisualizations.some((item) => item.type === "centering" && item.url);
   return (
     <section className="list-pregrade" aria-labelledby="pregrade-title">
       <div className="list-pregrade__header">
@@ -1299,33 +1319,113 @@ function RawPreGradePanel({
       </p>
       {preGrade?.status === "SUCCEEDED" ? (
         <div className="list-pregrade__result">
-          <div className="list-pregrade__estimate">
-            <span>Slice Pre-Grade</span>
-            <strong>{preGrade.overallEstimate ?? "—"}</strong>
-            {preGrade.conditionLabel ? <small>{preGrade.conditionLabel}</small> : null}
-          </div>
-          <dl>
-            {[
-              ["Centering", preGrade.centeringScore],
-              ["Corners", preGrade.cornerScore],
-              ["Edges", preGrade.edgeScore],
-              ["Surface", preGrade.surfaceScore],
-            ].map(([label, value]) => (
-              <div key={String(label)}>
-                <dt>{label}</dt>
-                <dd>{value ?? "Not returned"}</dd>
+          {activeVisualization?.url && !imageFailed ? (
+            <div className="list-pregrade__visual-report">
+              <div className="list-pregrade__visual-panel">
+                <span className="list-pregrade__visual-label">
+                  Analyzed {side.toLowerCase()} card
+                </span>
+                <img
+                  src={activeVisualization.url}
+                  alt={`${side === "FRONT" ? "Front" : "Back"} card AI ${activeVisualization.type === "centering" ? "centering" : "analysis"}`}
+                  loading="lazy"
+                  onError={() => setImageFailed(true)}
+                />
               </div>
-            ))}
-          </dl>
+              <div className="list-pregrade__visual-controls">
+                {availableSides.length > 1 ? (
+                  <div
+                    className="list-pregrade__segmented"
+                    role="group"
+                    aria-label="Analyzed card side"
+                  >
+                    {availableSides.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        className={side === item ? "is-active" : ""}
+                        aria-pressed={side === item}
+                        onClick={() => {
+                          setSide(item);
+                          setImageFailed(false);
+                        }}
+                      >
+                        {item === "FRONT" ? "Front" : "Back"}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {hasOverview && hasCentering ? (
+                  <div
+                    className="list-pregrade__segmented"
+                    role="group"
+                    aria-label="Analysis visualization"
+                  >
+                    <button
+                      type="button"
+                      className={view === "overview" ? "is-active" : ""}
+                      aria-pressed={view === "overview"}
+                      onClick={() => {
+                        setView("overview");
+                        setImageFailed(false);
+                      }}
+                    >
+                      Analysis
+                    </button>
+                    <button
+                      type="button"
+                      className={view === "centering" ? "is-active" : ""}
+                      aria-pressed={view === "centering"}
+                      onClick={() => {
+                        setView("centering");
+                        setImageFailed(false);
+                      }}
+                    >
+                      Centering
+                    </button>
+                  </div>
+                ) : null}
+                <p>
+                  {activeVisualization.type === "centering"
+                    ? "Centering view shows detected card alignment and border proportions."
+                    : "Ximilar's analysis visualization highlights the card areas used to estimate condition."}
+                </p>
+              </div>
+            </div>
+          ) : visualizations.length ? (
+            <div className="list-pregrade__visual-unavailable">
+              Analysis image unavailable. Scores remain available below.
+            </div>
+          ) : null}
+          <div className="list-pregrade__score-report">
+            <div className="list-pregrade__estimate">
+              <span>Slice Pre-Grade</span>
+              <strong>{preGrade.overallEstimate ?? "—"}</strong>
+              {preGrade.conditionLabel ? <small>{preGrade.conditionLabel}</small> : null}
+            </div>
+            <dl>
+              {[
+                ["Centering", preGrade.centeringScore],
+                ["Corners", preGrade.cornerScore],
+                ["Edges", preGrade.edgeScore],
+                ["Surface", preGrade.surfaceScore],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <dt>{label}</dt>
+                  <dd>{value ?? "Not returned"}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
           <p>
-            Based on the photos you provided. This is an AI condition estimate, not an official
-            third-party grade.
+            Slice Pre-Grade is an AI estimate based on your photos. It is not an official grading
+            certification, and physical inspection may produce a different result.
           </p>
-          <details>
-            <summary>What does this mean?</summary>
+          <details className="list-pregrade__details">
+            <summary>View analysis details</summary>
             <p>
-              The estimate looks at visible characteristics such as centering, corners, edges and
-              surface condition. Physical inspection may produce a different result.
+              Slice analyzed centering, corners, edges, and surface condition from the submitted
+              front and back photos.
             </p>
           </details>
           {preGrade.warnings.length ? (

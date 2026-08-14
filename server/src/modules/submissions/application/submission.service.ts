@@ -1083,7 +1083,7 @@ export class SubmissionService {
         },
       }),
     ]);
-    return {
+    const response = {
       ...reviewDetailProjection(submission!),
       ...reviewDetailContextProjection(
         submission!,
@@ -1093,6 +1093,16 @@ export class SubmissionService {
         related,
       ),
     };
+    const currentPreGrade = submission!.preGrades.find((item) => !item.supersededAt);
+    if (response.preGrade && currentPreGrade) {
+      response.preGrade.visualizations = await Promise.all((Array.isArray(currentPreGrade.visualizations) ? currentPreGrade.visualizations : []).filter(isPersistedPreGradeVisualization).map(async (visualization) => ({
+        side: visualization.side,
+        type: visualization.type,
+        url: await this.storage.createPrivateDownloadUrl(visualization.objectKey, new Date(Date.now() + 5 * 60_000)).catch(() => null),
+        centering: visualization.centering ?? null,
+      })));
+    }
+    return response;
   }
 
   claim(actor: Actor, id: string, requestId: string, key: string) {
@@ -1981,6 +1991,7 @@ type ReviewDetailRow = {
     providerVersion: string | null;
     errorCode: string | null;
     rawResponse: Prisma.JsonValue | null;
+    visualizations: Prisma.JsonValue | null;
     supersededAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
@@ -2008,6 +2019,11 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       completedAt: review.completedAt?.toISOString() ?? null,
     })),
   };
+}
+function isPersistedPreGradeVisualization(value: unknown): value is { side: 'FRONT' | 'BACK'; type: 'overview' | 'centering'; objectKey: string; centering?: Record<string, number> | null } {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return (item.side === 'FRONT' || item.side === 'BACK') && (item.type === 'overview' || item.type === 'centering') && typeof item.objectKey === 'string';
 }
 function reviewDetailContextProjection(
   submission: ReviewDetailRow,

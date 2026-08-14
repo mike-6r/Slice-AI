@@ -1098,6 +1098,7 @@ model RawCardPreGrade {
   providerVersion   String?
   errorCode         String?
   rawResponse       Json?
+  visualizations    Json?
   supersededAt      DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt

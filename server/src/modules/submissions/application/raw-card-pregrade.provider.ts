@@ -20,7 +20,9 @@ export type RawCardPreGradeProviderResult = {
   providerVersion: string | null;
   errorCode: string | null;
   rawResponse: unknown | null;
+  visualizations: RawCardVisualization[];
 };
+export type RawCardVisualization = { side: 'FRONT' | 'BACK'; overviewUrl: string | null; centeringUrl: string | null; centering: Record<string, number> | null };
 
 export type RawCardPreGradeProviderInput = {
   front: Buffer;
@@ -200,10 +202,11 @@ function normalizeResponse(
     providerVersion: stringValue(record(primary.raw.versions).final),
     errorCode: null,
     rawResponse: envelope,
+    visualizations: parsed.flatMap((item) => item.visualizations),
   };
 }
 
-function parseRecord(raw: Record<string, unknown>) {
+function parseRecord(raw: Record<string, unknown>, index = 0) {
   const grades = record(raw.grades);
   const card = Array.isArray(raw.card) && isRecord(raw.card[0]) ? raw.card[0] : {};
   const tags = record(card._tags);
@@ -216,7 +219,7 @@ function parseRecord(raw: Record<string, unknown>) {
     : null;
   return {
     raw,
-    side: side?.toUpperCase() ?? null,
+    side: normalizeSide(side ?? stringValue(raw._id) ?? stringValue(card._id), index),
     category,
     autograph: autographTag ? autographTag.toLowerCase() === 'yes' : null,
     final: numberValue(grades.final),
@@ -226,6 +229,12 @@ function parseRecord(raw: Record<string, unknown>) {
     centering: numberValue(grades.centering),
     condition: stringValue(grades.condition),
     warnings: warning ? [warning] : [],
+    visualizations: [{
+      side: normalizeSide(side ?? stringValue(raw._id) ?? stringValue(card._id), index),
+      overviewUrl: stringValue(raw._full_url_card) ?? stringValue(card._full_url_card),
+      centeringUrl: stringValue(raw._exact_url_card) ?? stringValue(card._exact_url_card),
+      centering: numericRecord(card.centering),
+    }].filter((item) => item.overviewUrl || item.centeringUrl),
   };
 }
 
@@ -258,8 +267,11 @@ function emptyResult(
     providerVersion: null,
     errorCode,
     rawResponse,
+    visualizations: [],
   };
 }
+function normalizeSide(value: string | null, index: number): 'FRONT' | 'BACK' { return value?.toUpperCase().includes('BACK') || value?.toLowerCase() === 'b' ? 'BACK' : value?.toUpperCase().includes('FRONT') || value?.toLowerCase() === 'f' ? 'FRONT' : index === 1 ? 'BACK' : 'FRONT'; }
+function numericRecord(value: unknown): Record<string, number> | null { if (!isRecord(value)) return null; const entries = Object.entries(value).filter(([, item]) => typeof item === 'number' && Number.isFinite(item)); return entries.length ? Object.fromEntries(entries) as Record<string, number> : null; }
 
 function record(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
