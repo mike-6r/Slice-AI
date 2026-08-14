@@ -156,7 +156,7 @@ export class AdminService {
       complianceCases,
       paymentExceptions,
       providerAlerts,
-    ] = await Promise.all([
+    ] = await this.db.$transaction([
       this.db.user.count({ where: { accountStatus: 'ACTIVE' } }),
       this.db.assetSubmission.count({
         where: { status: { in: ['SUBMITTED', 'IN_REVIEW'] } },
@@ -211,7 +211,7 @@ export class AdminService {
       notificationFailures,
       marketSnapshots,
       preGradeRuns,
-    ] = await Promise.all([
+    ] = await this.db.$transaction([
       this.db.moneyMovement.findMany({
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: 100,
@@ -852,7 +852,7 @@ export class AdminService {
       marketSnapshots,
       outboxFailures,
       reconciliationExceptions,
-    ] = await Promise.all([
+    ] = await this.db.$transaction([
       this.db.assetSubmission.findMany({
         where: { status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
