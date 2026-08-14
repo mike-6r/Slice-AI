@@ -546,7 +546,7 @@ export class AdminService {
           configured: Boolean(this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken),
           failedEvents: preGradeRuns.filter((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status)).length,
           summary: this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken
-            ? `Raw card AI Pre-Grade is configured${preGradeRuns[0] ? ` · last ${preGradeRuns[0].status.toLowerCase().replaceAll('_', ' ')}` : ' · not yet exercised'}.`
+            ? `Raw card AI Pre-Grade is configured${preGradeRuns[0] && preGradeRuns[0].status !== 'NOT_CONFIGURED' ? ` · last ${preGradeRuns[0].status.toLowerCase().replaceAll('_', ' ')}` : ' · not yet exercised'}.`
             : 'Optional raw card AI Pre-Grade is not configured.',
           status: preGradeRuns.some((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status))
             ? ('Degraded' as const)
