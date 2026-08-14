@@ -42,7 +42,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   'NOTIFICATION.READ': ['notificationId'],
   'NOTIFICATION.READ-ALL': ['affectedCount'],
   SUBMISSION_DRAFT_CREATED: ['version'],
-  SUBMISSION_DRAFT_UPDATED: ['version'],
+  SUBMISSION_DRAFT_UPDATED: ['version', 'marketResearchId'],
   SUBMISSION_MEDIA_INTENT_CREATED: ['submissionId', 'slot'],
   SUBMISSION_MEDIA_COMPLETED: ['submissionId', 'slot', 'status'],
   SUBMISSION_MEDIA_DELETED: ['submissionId', 'slot'],
