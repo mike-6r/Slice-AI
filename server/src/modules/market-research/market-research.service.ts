@@ -344,14 +344,26 @@ export class CollectibleMarketResearchService {
         message: 'Only an approved, unlinked submission can receive market research.',
       });
     }
-    const expectedHash = marketResearchIdentityHash({
-      categoryId: submission.categoryId,
-      declaredMetadata:
-        submission.declaredMetadata && typeof submission.declaredMetadata === 'object'
-          ? (submission.declaredMetadata as Record<string, unknown>)
-          : {},
+    const metadata =
+      submission.declaredMetadata && typeof submission.declaredMetadata === 'object'
+        ? (submission.declaredMetadata as Record<string, unknown>)
+        : {};
+    const storedIdentity = record.identity as unknown as Identity;
+    const identityFields: Array<keyof Identity> = [
+      'name',
+      'year',
+      'set',
+      'cardNumber',
+      'variant',
+    ];
+    const identityMatches = identityFields.every((field) => {
+      const stored = storedIdentity[field];
+      if (!stored) return true;
+      const submissionKey = field === 'name' ? 'name' : field;
+      const current = metadata[submissionKey];
+      return typeof current === 'string' && normalize(current) === normalize(stored);
     });
-    if (record.identityHash !== expectedHash) {
+    if (!identityMatches || storedIdentity.categoryId !== submission.categoryId) {
       throw new ConflictException({
         code: 'MARKET_RESEARCH_IDENTITY_MISMATCH',
         message: 'Refresh market research after correcting the submission identity.',
