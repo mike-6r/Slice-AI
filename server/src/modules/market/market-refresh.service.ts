@@ -25,6 +25,9 @@ export class MarketRefreshService {
     const mappings = await this.db.marketProviderMapping.findMany({
       where: {
         status: { in: ['AUTO_MATCHED', 'STRONG', 'VERIFIED', 'STAFF_CONFIRMED'] },
+        asset: this.config.isBeta
+          ? { slug: { not: { startsWith: 'slice-demo-' } } }
+          : undefined,
         OR: [{ nextRefreshAt: null }, { nextRefreshAt: { lte: now } }],
         AND: [{ OR: [{ cooldownUntil: null }, { cooldownUntil: { lte: now } }] }],
       },
@@ -107,6 +110,10 @@ export class MarketRefreshService {
       if (!provider) throw new Error('MARKET_PROVIDER_NOT_REGISTERED');
       const asset = await this.db.asset.findUnique({ where: { id: job.assetId }, include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } } } });
       if (!asset) throw new Error('MARKET_ASSET_NOT_FOUND');
+      if (this.config.isBeta && asset.slug.startsWith('slice-demo-')) {
+        await this.db.marketRefreshJob.update({ where: { id: job.id }, data: { status: 'FAILED', completedAt: now, lastErrorCode: 'BETA_FIXTURE_EXCLUDED', lastErrorAt: now, lockedAt: null, lockedBy: null, leaseExpiresAt: null } });
+        return;
+      }
       const identity: MarketIdentity = {
         category: asset.category.slug,
         year: asset.year,
@@ -155,8 +162,10 @@ export class MarketRefreshService {
   private async rebuildSummary(assetId: string, current: ProviderObservation[], now: Date) {
     const history = await this.db.marketObservation.findMany({ where: { assetId, included: true }, orderBy: [{ observedAt: 'desc' }, { id: 'desc' }], take: 500 });
     const sales = history.filter((item) => item.observationType === 'COMPLETED_SALE');
-    if (!sales.length) return;
-    const byCurrency = sales.reduce((groups, item) => { const list = groups.get(item.currency) ?? []; list.push(item); groups.set(item.currency, list); return groups; }, new Map<string, typeof sales>());
+    const priceGuides = history.filter((item) => item.observationType === 'PRICE_GUIDE');
+    const sourceRows = sales.length ? sales : priceGuides;
+    if (!sourceRows.length) return;
+    const byCurrency = sourceRows.reduce((groups, item) => { const list = groups.get(item.currency) ?? []; list.push(item); groups.set(item.currency, list); return groups; }, new Map<string, typeof sourceRows>());
     const [currency, currencySales] = [...byCurrency.entries()].sort((a, b) => b[1].length - a[1].length)[0]!;
     const sorted = [...currencySales].sort((a, b) => (a.priceMinor < b.priceMinor ? -1 : a.priceMinor > b.priceMinor ? 1 : 0));
     const midpoint = Math.floor(sorted.length / 2);
@@ -167,11 +176,10 @@ export class MarketRefreshService {
       : 0;
     const freshness = freshnessState(now, history[0]?.observedAt ?? now);
     await this.db.assetMarketSnapshot.create({ data: { id: randomUUID(), assetId, asOf: now, estimatedMarketValueMinor: median, currency, change24hBps, availableBps: null, ownersCount: null, watchersCount: null, confidence: null, source: 'EXTERNAL_MARKET_REFERENCE', status: 'LIVE', markSource: 'EXTERNAL_REFERENCE_FALLBACK', freshness, lastSuccessfulRefreshAt: now } });
-    await this.db.assetValuationPoint.create({ data: { id: randomUUID(), assetId, observedAt: now, estimatedMarketValueMinor: median, currency, source: 'MARKET_DATA:PRICECHARTING', status: 'LIVE' } }).catch((error) => { if (!isUniqueViolation(error)) throw error; });
   }
 
   private async ensureMappings(now: Date, assetId?: string) {
-    const assets = await this.db.asset.findMany({ where: { status: 'PUBLISHED', ...(assetId ? { id: assetId } : {}) }, include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } }, valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 10 } }, take: assetId ? undefined : 200 });
+    const assets = await this.db.asset.findMany({ where: { status: 'PUBLISHED', ...(assetId ? { id: assetId } : {}), ...(this.config.isBeta ? { slug: { not: { startsWith: 'slice-demo-' } } } : {}) }, include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } }, valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 10 } }, take: assetId ? undefined : 200 });
     for (const asset of assets) {
       const evidence = asset.valuationEvidence.find((item) => {
         if (!item.sourceRef) return false;

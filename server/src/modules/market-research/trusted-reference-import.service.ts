@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { MarketProviderRegistry } from '../market/market-provider.registry';
 
 export type ReferenceImportStatus =
   | 'MATCH_FOUND'
@@ -97,6 +98,8 @@ const priceChartingCards: Record<string, ImportedIdentity> = {
  */
 @Injectable()
 export class TrustedReferenceImportService {
+  constructor(@Optional() private readonly providers?: MarketProviderRegistry) {}
+
   identify(rawUrl: string): ReferenceImport {
     const parsed = parseTrustedUrl(rawUrl);
     if (!parsed) {
@@ -123,6 +126,10 @@ export class TrustedReferenceImportService {
     const key = decodeURIComponent(
       parsed.pathname.slice('/game/'.length).replace(/\/+$/, ''),
     ).toLowerCase();
+    const providerProductId =
+      parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ?? key;
+    parsed.searchParams.delete('t');
+    parsed.searchParams.delete('token');
     const identity = priceChartingCards[key];
     if (!identity) {
       const partial = partialIdentity(key);
@@ -136,7 +143,7 @@ export class TrustedReferenceImportService {
         customerReference: partial
           ? {
               provider: 'PriceCharting',
-              externalReferenceId: key,
+              externalReferenceId: providerProductId,
               normalizedUrl: parsed.toString(),
               originalTitle: null,
               importedAt: new Date().toISOString(),
@@ -155,7 +162,7 @@ export class TrustedReferenceImportService {
       identity,
       customerReference: {
         provider: 'PriceCharting',
-        externalReferenceId: key,
+        externalReferenceId: providerProductId,
         normalizedUrl,
         originalTitle,
         importedAt: new Date().toISOString(),
@@ -163,6 +170,48 @@ export class TrustedReferenceImportService {
         extractedIdentity: identity,
       },
     };
+  }
+
+  async identifyLive(rawUrl: string): Promise<ReferenceImport> {
+    const imported = this.identify(rawUrl);
+    if (
+      imported.provider !== 'PriceCharting' ||
+      !imported.customerReference ||
+      !/^\d+$/.test(imported.customerReference.externalReferenceId ?? '')
+    )
+      return imported;
+    const provider = this.providers?.get('PRICECHARTING');
+    if (!provider?.getProduct || !(await provider.health()).configured)
+      return imported;
+    try {
+      const product = await provider.getProduct(
+        imported.customerReference.externalReferenceId!,
+      );
+      const identity = {
+        ...imported.identity,
+        ...(product.title ? { name: product.title } : {}),
+        ...(product.set ? { set: product.set } : {}),
+        ...(product.year ? { year: String(product.year) } : {}),
+        ...(product.upc ? { upc: product.upc } : {}),
+      };
+      return {
+        ...imported,
+        status: 'MATCH_FOUND',
+        message: 'PriceCharting confirmed this product.',
+        identity,
+        customerReference: {
+          ...imported.customerReference,
+          originalTitle: product.title || imported.customerReference.originalTitle,
+          extractedIdentity: identity,
+        },
+      };
+    } catch {
+      return {
+        ...imported,
+        status: 'PROVIDER_UNAVAILABLE',
+        message: 'PriceCharting is temporarily unavailable. You can enter the card manually.',
+      };
+    }
   }
 }
 

@@ -98,6 +98,22 @@ type MarketAssetDto = {
     currentListing?: ExternalMarketObservationDto;
     recentCompletedSale?: ExternalMarketObservationDto;
   } | null;
+  marketSummary?: {
+    completedSales: MarketObservationSummaryDto | null;
+    activeListings: MarketObservationSummaryDto | null;
+    priceGuides: MarketObservationSummaryDto | null;
+    providerCount: number;
+  };
+};
+type MarketObservationSummaryDto = {
+  count: number;
+  mixedCurrency?: boolean;
+  currency?: string;
+  lowMinor?: string;
+  highMinor?: string;
+  medianMinor?: string;
+  latestMinor?: string;
+  latestAt?: string;
 };
 type ExternalMarketObservationDto = {
   amount: { minor: string; currency: "GBP" | "USD" | "EUR" | "CAD" };
@@ -230,7 +246,23 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         }
       : undefined,
   },
+  marketSummary: value.marketSummary
+    ? {
+        completedSales: mapMarketObservationSummary(value.marketSummary.completedSales),
+        activeListings: mapMarketObservationSummary(value.marketSummary.activeListings),
+        priceGuides: mapMarketObservationSummary(value.marketSummary.priceGuides),
+        providerCount: value.marketSummary.providerCount,
+      }
+    : undefined,
 });
+
+const mapMarketObservationSummary = (value: MarketObservationSummaryDto | null | undefined) =>
+  value
+    ? {
+        ...value,
+        latestAt: value.latestAt as import("@/domain/common").ISODateTime | undefined,
+      }
+    : null;
 
 const mapExternalMarketObservation = (value: ExternalMarketObservationDto) => ({
   amount: { amount: safeMinor(value.amount.minor), currency: value.amount.currency },
@@ -747,9 +779,10 @@ const mapMarketResearch = (raw: unknown): MarketResearchSnapshot => {
     );
   const snapshot = objectField(value.snapshot, "market research snapshot");
   const range = (item: unknown) =>
-    item === null ? null : objectField(item, "market research range");
+    item === null || item === undefined ? null : objectField(item, "market research range");
   const sales = range(snapshot.sales);
   const listings = range(snapshot.listings);
+  const priceGuides = range(snapshot.priceGuides);
   return {
     id: stringField(value.id, "marketResearch.id"),
     state: stringField(value.state, "marketResearch.state") as MarketResearchSnapshot["state"],
@@ -768,6 +801,7 @@ const mapMarketResearch = (raw: unknown): MarketResearchSnapshot => {
     snapshot: {
       sales: sales as MarketResearchSnapshot["snapshot"]["sales"],
       listings: listings as MarketResearchSnapshot["snapshot"]["listings"],
+      priceGuides: priceGuides as MarketResearchSnapshot["snapshot"]["priceGuides"],
       exactCompCount: Number(snapshot.exactCompCount),
       strongCompCount: Number(snapshot.strongCompCount),
       rejectedCompCount: Number(snapshot.rejectedCompCount),

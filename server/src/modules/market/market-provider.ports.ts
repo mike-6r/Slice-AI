@@ -26,6 +26,31 @@ export type ProviderObservation = {
   provenance?: Record<string, unknown>;
 };
 
+export type PriceChartingConditionReference = {
+  conditionKey: string;
+  label: string;
+  amountMinor: bigint;
+  grader?: string;
+  grade?: string;
+  exactGrader: boolean;
+};
+
+export type PriceChartingProduct = {
+  providerProductId: string;
+  title: string;
+  set: string | null;
+  releaseDate: string | null;
+  year: number | null;
+  upc: string | null;
+  currency: string;
+  references: PriceChartingConditionReference[];
+};
+
+export type MarketProductCandidate = Pick<
+  PriceChartingProduct,
+  'providerProductId' | 'title' | 'set' | 'releaseDate' | 'year' | 'upc'
+> & { matchQuality: 'EXACT' | 'STRONG' | 'NEEDS_CONFIRMATION' };
+
 export interface MarketDataProvider {
   readonly providerId: string;
   supports(category: string): boolean;
@@ -34,4 +59,6 @@ export interface MarketDataProvider {
     identity: MarketIdentity,
     providerExternalId: string,
   ): Promise<ProviderObservation[]>;
+  searchProducts?(identity: MarketIdentity): Promise<MarketProductCandidate[]>;
+  getProduct?(providerExternalId: string): Promise<PriceChartingProduct>;
 }

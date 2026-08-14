@@ -34,6 +34,6 @@ export class TrustedReferenceImportController {
       req.ip ?? 'unknown',
       req.actor!.userId,
     );
-    return this.imports.identify(parsed.data.url);
+    return this.imports.identifyLive(parsed.data.url);
   }
 }

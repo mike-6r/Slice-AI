@@ -562,6 +562,9 @@ function summarizeObservations(
     activeListings: summarize(
       observations.filter((item) => item.observationType === 'ACTIVE_LISTING'),
     ),
+    priceGuides: summarize(
+      observations.filter((item) => item.observationType === 'PRICE_GUIDE'),
+    ),
     providerCount: new Set(observations.map((item) => item.providerCode)).size,
   };
 }

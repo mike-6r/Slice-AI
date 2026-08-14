@@ -82,6 +82,12 @@ export interface Asset {
   /** Legacy mock-only valuation. New API reads use `market.estimatedMarketValue`. */
   marketValue?: Money;
   confidence?: Percentage;
+  marketSummary?: {
+    completedSales: MarketObservationSummary | null;
+    activeListings: MarketObservationSummary | null;
+    priceGuides: MarketObservationSummary | null;
+    providerCount: number;
+  };
   market?: {
     estimatedMarketValue?: Money;
     source?: string;
@@ -102,6 +108,17 @@ export interface Asset {
       recentCompletedSale?: ExternalMarketObservation;
     };
   };
+}
+
+export interface MarketObservationSummary {
+  count: number;
+  mixedCurrency?: boolean;
+  currency?: string;
+  lowMinor?: string;
+  highMinor?: string;
+  medianMinor?: string;
+  latestMinor?: string;
+  latestAt?: ISODateTime;
 }
 
 export interface ExternalMarketObservation {

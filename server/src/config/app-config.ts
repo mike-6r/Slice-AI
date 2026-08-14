@@ -278,6 +278,24 @@ const configSchema = z.object({
     .default(3_600_000),
   PRICECHARTING_API_BASE_URL: z.string().url().optional(),
   PRICECHARTING_API_KEY: z.string().min(1).optional(),
+  PRICECHARTING_API_TOKEN: z.string().min(1).optional(),
+  PRICECHARTING_ENABLED: z.enum(['true', 'false']).default('false'),
+  PRICECHARTING_BASE_URL: z
+    .string()
+    .url()
+    .default('https://www.pricecharting.com'),
+  PRICECHARTING_MIN_REQUEST_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(60_000)
+    .default(1_000),
+  PRICECHARTING_CACHE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(21_600),
   PRICECHARTING_REQUEST_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -400,6 +418,11 @@ export type AppConfig = {
   marketRefreshRetryMaxMs: number;
   priceChartingApiBaseUrl?: string;
   priceChartingApiKey?: string;
+  priceChartingApiToken?: string;
+  priceChartingEnabled?: boolean;
+  priceChartingBaseUrl?: string;
+  priceChartingMinRequestIntervalMs?: number;
+  priceChartingCacheTtlSeconds?: number;
   priceChartingRequestTimeoutMs: number;
   operationalFeatures: {
     trading: boolean;
@@ -826,6 +849,13 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       '',
     ),
     priceChartingApiKey: parsed.PRICECHARTING_API_KEY,
+    priceChartingApiToken:
+      parsed.PRICECHARTING_API_TOKEN ?? parsed.PRICECHARTING_API_KEY,
+    priceChartingEnabled: parsed.PRICECHARTING_ENABLED === 'true',
+    priceChartingBaseUrl: parsed.PRICECHARTING_BASE_URL.replace(/\/$/, ''),
+    priceChartingMinRequestIntervalMs:
+      parsed.PRICECHARTING_MIN_REQUEST_INTERVAL_MS,
+    priceChartingCacheTtlSeconds: parsed.PRICECHARTING_CACHE_TTL_SECONDS,
     priceChartingRequestTimeoutMs: parsed.PRICECHARTING_REQUEST_TIMEOUT_MS,
     operationalFeatures: {
       trading: parseOperationalFeature(

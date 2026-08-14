@@ -4,9 +4,10 @@ import { AccessControlModule } from '../identity/access/access-control.module';
 import { CollectibleMarketResearchService } from './market-research.service';
 import { TrustedReferenceImportController } from './trusted-reference-import.controller';
 import { TrustedReferenceImportService } from './trusted-reference-import.service';
+import { MarketModule } from '../market/market.module';
 
 @Module({
-  imports: [AuthModule, AccessControlModule],
+  imports: [AuthModule, AccessControlModule, MarketModule],
   controllers: [TrustedReferenceImportController],
   providers: [CollectibleMarketResearchService, TrustedReferenceImportService],
   exports: [CollectibleMarketResearchService],

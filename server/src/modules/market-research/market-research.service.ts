@@ -5,6 +5,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
+import { MarketProviderRegistry } from '../market/market-provider.registry';
+import type { MarketIdentity, ProviderObservation } from '../market/market-provider.ports';
 
 export type MarketResearchInput = {
   categoryId: string;
@@ -57,6 +59,7 @@ export class CollectibleMarketResearchService {
   constructor(
     private readonly db: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly providers: MarketProviderRegistry,
   ) {}
 
   async research(actor: Actor, input: MarketResearchInput, requestId: string) {
@@ -76,19 +79,40 @@ export class CollectibleMarketResearchService {
       if (cached) return researchProjection(cached);
     }
 
-    // Production fails closed until a permitted provider adapter and its
-    // credentials have been explicitly configured. No staging references leak.
-    if (this.config.environment === 'production') {
-      return this.unavailable(
-        actor.userId,
+    const raw = await this.collectProviderObservations(identity, input);
+    if (raw === null) {
+      if (this.config.isBeta || this.config.environment === 'production') {
+        return this.unavailable(
+          actor.userId,
+          identity,
+          identityHash,
+          requestId,
+          'No approved external market provider is configured.',
+        );
+      }
+      // Development/test-only references remain available for deterministic
+      // local UI work. They are never used when APP_ENV=beta.
+      return this.persistResearch(
+        actor,
         identity,
         identityHash,
         requestId,
-        'No approved external market provider is configured.',
+        stagingReferenceObservations(identity).map((item) =>
+          classifyObservation(identity, item),
+        ),
       );
     }
-    const raw = stagingReferenceObservations(identity);
     const observations = raw.map((item) => classifyObservation(identity, item));
+    return this.persistResearch(actor, identity, identityHash, requestId, observations);
+  }
+
+  private async persistResearch(
+    actor: Actor,
+    identity: Identity,
+    identityHash: string,
+    requestId: string,
+    observations: MatchedObservation[],
+  ) {
     const now = new Date();
     const aggregate = aggregateSnapshot(observations, now);
     const created = await this.db.submissionMarketResearch.create({
@@ -139,6 +163,49 @@ export class CollectibleMarketResearchService {
       },
     );
     return researchProjection(created);
+  }
+
+  private async collectProviderObservations(
+    identity: Identity,
+    input: MarketResearchInput,
+  ): Promise<Observation[] | null> {
+    const provider = this.providers.get('PRICECHARTING');
+    if (!provider?.searchProducts || !provider.fetchObservations) return null;
+    const health = await provider.health();
+    if (!health.configured) return null;
+    const category = await this.db.category.findUnique({
+      where: { id: identity.categoryId },
+      select: { slug: true },
+    });
+    if (!category || !provider.supports(category.slug)) return null;
+    const marketIdentity: MarketIdentity = {
+      category: category.slug,
+      year: identity.year ? Number(identity.year) || null : null,
+      manufacturer: identity.manufacturer,
+      set: identity.set,
+      cardNumber: identity.cardNumber,
+      title: identity.name,
+      variant: identity.variant,
+      grader: identity.grader,
+      grade: identity.grade,
+    };
+    const reference = customerReference(input.declaredMetadata);
+    const providerId = reference?.provider === 'PriceCharting'
+      ? reference.externalReferenceId
+      : null;
+    try {
+      let selectedId = providerId && /^\d+$/.test(providerId) ? providerId : null;
+      if (!selectedId) {
+        const candidates = await provider.searchProducts(marketIdentity);
+        const exact = candidates.filter((candidate) => candidate.matchQuality === 'EXACT');
+        if (exact.length !== 1) return [];
+        selectedId = exact[0]!.providerProductId;
+      }
+      const providerRows = await provider.fetchObservations(marketIdentity, selectedId);
+      return providerRows.map(providerObservationToResearch);
+    } catch {
+      return null;
+    }
   }
 
   async attachToSubmission(
@@ -277,6 +344,38 @@ function canonicalIdentity(input: MarketResearchInput): Identity {
     variant: read('variant'),
   };
 }
+
+function customerReference(metadata: Record<string, unknown>) {
+  const value = metadata.customerReference;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const reference = value as Record<string, unknown>;
+  return {
+    provider:
+      typeof reference.provider === 'string' ? reference.provider : null,
+    externalReferenceId:
+      typeof reference.externalReferenceId === 'string'
+        ? reference.externalReferenceId
+        : null,
+  };
+}
+
+function providerObservationToResearch(
+  observation: ProviderObservation,
+): Observation {
+  return {
+    providerCode: 'PRICECHARTING',
+    externalReferenceId: `${observation.providerExternalId}:${String(observation.provenance?.conditionKey ?? 'reference')}`,
+    externalUrl: observation.externalUrl ?? '',
+    observationType: 'PRICE_GUIDE',
+    originalTitle: observation.title,
+    amountMinor: observation.priceMinor,
+    currency: observation.currency,
+    observedAt: observation.observedAt,
+    grader: observation.grader,
+    grade: observation.grade,
+    variant: undefined,
+  };
+}
 function hashIdentity(identity: Identity) {
   return createHash('sha256')
     .update(
@@ -347,6 +446,9 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
   const listings = observations.filter(
     (o) => o.observationType === 'LISTING' && o.included,
   );
+  const priceGuides = observations.filter(
+    (o) => o.observationType === 'PRICE_GUIDE' && o.included,
+  );
   const summary = (items: MatchedObservation[]) => {
     if (!items.length) return null;
     const sorted = [...items].sort((a, b) =>
@@ -379,15 +481,15 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
       .map((o) => o.providerCode.replace(/^STAGING_REFERENCE_DATA:/, '')),
   ).size;
   const dataQuality =
-    exactSales.length >= 5 && sourceCount >= 2
+    (exactSales.length >= 5 && sourceCount >= 2) || priceGuides.length >= 2
       ? 'HIGH'
-      : exactSales.length >= 2
+      : exactSales.length >= 2 || priceGuides.length
         ? 'MEDIUM'
         : exactSales.length
           ? 'LOW'
           : null;
-  const state = sales.length
-    ? sales.length === 1
+  const state = sales.length || priceGuides.length
+    ? (sales.length || priceGuides.length) === 1
       ? 'LIMITED'
       : 'FOUND'
     : 'NO_MATCHES';
@@ -398,6 +500,7 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
     snapshot: {
       sales: summary(sales),
       listings: summary(listings),
+      priceGuides: summary(priceGuides),
       exactCompCount: exactSales.length,
       strongCompCount: strongSales.length,
       rejectedCompCount: observations.filter(

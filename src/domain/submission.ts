@@ -79,6 +79,7 @@ export interface MarketResearchSnapshot {
   snapshot: {
     sales: MarketResearchRange | null;
     listings: MarketResearchRange | null;
+    priceGuides?: MarketResearchRange | null;
     exactCompCount: number;
     strongCompCount: number;
     rejectedCompCount: number;

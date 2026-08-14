@@ -962,8 +962,8 @@ function MarketStep({
       <p className="page-kicker">Step 3</p>
       <h2>Check the market.</h2>
       <p>
-        Slice looks for recent completed sales and current listings for this exact card. This is
-        reference data only; staff valuation remains authoritative.
+        Slice checks approved market sources for this exact card. PriceCharting values are current
+        market-guide references, not completed sales; staff valuation remains authoritative.
       </p>
       <button
         type="button"
@@ -987,6 +987,7 @@ function MarketStep({
 function MarketResults({ research }: { research: MarketResearchSnapshot }) {
   const sales = research.snapshot.sales;
   const listings = research.snapshot.listings;
+  const priceGuides = research.snapshot.priceGuides;
   return (
     <section className="list-market-result">
       <div className="list-market-result__top">
@@ -996,7 +997,7 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
             ? "Comparable data found"
             : research.state === "LIMITED"
               ? "Limited market data"
-              : "No reliable comparable sales found"}
+              : "No reliable market data found"}
         </strong>
       </div>
       <div className="list-market-result__metrics">
@@ -1006,6 +1007,14 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
           value={sales?.medianMinor ? money(sales.medianMinor, sales.currency) : "Unavailable"}
         />
         <Metric label="Current listings" value={listings ? range(listings) : "Unavailable"} />
+        <Metric
+          label="PriceCharting reference"
+          value={
+            priceGuides?.medianMinor
+              ? money(priceGuides.medianMinor, priceGuides.currency)
+              : "Unavailable"
+          }
+        />
         <Metric label="Exact comparable sales" value={String(research.snapshot.exactCompCount)} />
         <Metric label="Sources" value={String(research.sourceCoverage.available)} />
         <Metric label="Updated" value={formatDate(research.collectedAt)} />
@@ -1019,6 +1028,10 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
         <MarketObservations
           title="Current listings"
           items={research.observations.filter((item) => item.observationType === "LISTING")}
+        />
+        <MarketObservations
+          title="PriceCharting market-guide references"
+          items={research.observations.filter((item) => item.observationType === "PRICE_GUIDE")}
         />
       </details>
     </section>
