@@ -128,6 +128,9 @@ const marketResearch = z
     refresh: z.boolean().optional(),
   })
   .strict();
+const marketResearchAttach = z
+  .object({ submissionId: id })
+  .strict();
 
 @Controller()
 export class SubmissionController {
@@ -200,6 +203,25 @@ export class SubmissionController {
         req.requestId ?? 'unknown',
       ),
     );
+  }
+  @Post('reviews/market-research/:id/attach')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  attachMarketResearch(
+    @Param('id') researchId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () => {
+      const input = parse(marketResearchAttach, body);
+      return this.research.attachToApprovedSubmission(
+        req.actor!,
+        researchId,
+        input.submissionId,
+        req.requestId ?? 'unknown',
+      );
+    });
   }
   @Get('submissions')
   @UseGuards(AccessTokenGuard)

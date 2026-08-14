@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -223,7 +224,7 @@ export class CollectibleMarketResearchService {
       where: { id: researchId, ownerUserId, submissionId: null },
     });
     if (!record)
-      throw new ServiceUnavailableException({
+      throw new ConflictException({
         code: 'MARKET_RESEARCH_UNAVAILABLE',
         message: 'The saved market research could not be attached.',
       });
@@ -310,6 +311,76 @@ export class CollectibleMarketResearchService {
         result: 'SUCCESS',
         metadata: { state: aggregate.state, exactCompCount: aggregate.snapshot.exactCompCount },
         createdAt: now,
+      },
+    });
+    return researchProjection(updated);
+  }
+
+  async attachToApprovedSubmission(
+    actor: Actor,
+    researchId: string,
+    submissionId: string,
+    requestId: string,
+  ) {
+    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to attach market research.',
+      });
+    }
+    const record = await this.db.submissionMarketResearch.findFirst({
+      where: { id: researchId, submissionId: null },
+      include: { observations: { orderBy: { observedAt: 'desc' } } },
+    });
+    if (!record) throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
+    const submission = await this.db.assetSubmission.findUnique({
+      where: { id: submissionId },
+      select: { id: true, ownerUserId: true, status: true, assetId: true, categoryId: true, declaredMetadata: true },
+    });
+    if (!submission) throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
+    if (submission.status !== 'APPROVED' || submission.assetId) {
+      throw new ConflictException({
+        code: 'SUBMISSION_STATE_CONFLICT',
+        message: 'Only an approved, unlinked submission can receive market research.',
+      });
+    }
+    if (submission.ownerUserId !== record.ownerUserId) {
+      throw new ForbiddenException({
+        code: 'MARKET_RESEARCH_OWNER_MISMATCH',
+        message: 'Market research belongs to a different account.',
+      });
+    }
+    const expectedHash = marketResearchIdentityHash({
+      categoryId: submission.categoryId,
+      declaredMetadata:
+        submission.declaredMetadata && typeof submission.declaredMetadata === 'object'
+          ? (submission.declaredMetadata as Record<string, unknown>)
+          : {},
+    });
+    if (record.identityHash !== expectedHash) {
+      throw new ConflictException({
+        code: 'MARKET_RESEARCH_IDENTITY_MISMATCH',
+        message: 'Refresh market research after correcting the submission identity.',
+      });
+    }
+    const updated = await this.db.submissionMarketResearch.update({
+      where: { id: researchId },
+      data: { submissionId },
+      include: { observations: { orderBy: { observedAt: 'desc' } } },
+    });
+    await this.db.auditEvent.create({
+      data: {
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'MARKET_RESEARCH_ATTACHED',
+        resourceType: 'submission',
+        resourceId: submissionId,
+        requestId,
+        sessionId: actor.sessionId,
+        result: 'SUCCESS',
+        metadata: { researchId },
+        createdAt: new Date(),
       },
     });
     return researchProjection(updated);
