@@ -1294,6 +1294,10 @@ export class SubmissionService {
         };
         assertSubmissionDetails(declaredMetadata);
         assertSubmissionTerms(declaredMetadata);
+        const detachedResearch = await db.submissionMarketResearch.updateMany({
+          where: { submissionId: id },
+          data: { submissionId: null },
+        });
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -1314,6 +1318,7 @@ export class SubmissionService {
           name: input.name,
           year: input.year,
           reason: redactNote(input.note),
+          detachedResearchCount: detachedResearch.count,
           version: updated.version,
         });
         return ownerProjection(updated);

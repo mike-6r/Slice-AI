@@ -117,6 +117,7 @@ const metadataKeys: Record<string, readonly string[]> = {
     'name',
     'year',
     'reason',
+    'detachedResearchCount',
     'version',
   ],
 };
