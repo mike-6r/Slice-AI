@@ -189,3 +189,17 @@ Final VPS/checklist commit: `bc43f10`
 - Plaid, Bridge, SMS, email verification, and 2FA: deferred
 
 Phase 4 status: **WAITING FOR PRICECHARTING CONFIG**. No fake provider response, shipment, receipt, publication, issuance, or trading was created.
+
+### Operator configuration update
+
+- `PRICECHARTING_API_TOKEN`: **CONFIGURED** on VPS; token value is never stored in Git or exposed here.
+- `PRICECHARTING_ENABLED`: **true**
+- `XIMILAR_API_TOKEN`: **CONFIGURED** on VPS
+- `XIMILAR_ENABLED` / `XIMILAR_CARD_GRADING_ENABLED`: **true**
+- API restart and `/health`/`/ready`: PASS
+- Admin Platform Operations: PriceCharting **OPERATIONAL**; Ximilar **OPERATIONAL**
+- Controlled real Charizard research request: executed once, research `8750e5de-39fa-4107-8982-420ff707a7b2`, result `NO_MATCHES`
+- Exact provider candidate/mapping: **NOT CONFIRMED**; no global mapping, observation, or snapshot was persisted
+- No additional provider lookup was made after the no-match result
+
+Phase 4 status after configuration: **PROVIDER CONFIGURED — WAITING FOR EXACT STAFF-CONFIRMED MAPPING**.
