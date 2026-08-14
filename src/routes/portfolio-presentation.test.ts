@@ -5,6 +5,7 @@ import {
   PORTFOLIO_EMPTY_STATES,
   PORTFOLIO_ERROR_STATES,
   deriveHoldingAllocation,
+  derivePortfolioValuationSnapshot,
   portfolioValueLabel,
   valuationDescription,
 } from "./-portfolio-presentation";
@@ -78,5 +79,23 @@ describe("portfolio presentation authority", () => {
     expect(Object.values(PORTFOLIO_ERROR_STATES)).toEqual(
       expect.arrayContaining(["Unable to load holdings.", "Unable to load transactions."]),
     );
+  });
+
+  it("uses server-projected cost and unrealised P/L when available", () => {
+    const projected = {
+      ...summary,
+      investedCostMinor: "9000",
+      unrealisedPnlMinor: "1000",
+      unrealisedPnlPercent: "11.11",
+      holdings: summary.holdings.map((holding) => ({
+        ...holding,
+        unrealisedPnlMinor: holding.assetId === "one" ? "1000" : "0",
+      })),
+    };
+    expect(derivePortfolioValuationSnapshot(projected)).toEqual({
+      holdingsValueMinor: "10000",
+      investedCostMinor: "9000",
+      unrealisedValueMinor: "1000",
+    });
   });
 });

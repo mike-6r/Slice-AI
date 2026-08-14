@@ -70,6 +70,11 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     grade: nullableString(value.grade),
     totalUnits: nullableString(value.totalUnits),
     issuedUnits: nullableString(value.issuedUnits),
+    totalIssuedQuantity: nullableString(value.totalIssuedQuantity),
+    userOwnershipPercent: nullableString(value.userOwnershipPercent),
+    availableToSellPercent: nullableString(value.availableToSellPercent),
+    availableToBuyQuantity: nullableString(value.availableToBuyQuantity),
+    availableToBuyPercent: nullableString(value.availableToBuyPercent),
     ownedUnits: units(value.ownedUnits, "holding.ownedUnits"),
     reservedUnits: units(value.reservedUnits, "holding.reservedUnits"),
     availableToSellUnits:
@@ -85,6 +90,13 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     valuationStatus: valuation(value.valuationStatus),
     costBasisMinor:
       value.costBasisMinor === null ? null : minor(value.costBasisMinor, "holding.costBasisMinor"),
+    unrealisedPnlMinor:
+      value.unrealisedPnlMinor === null || value.unrealisedPnlMinor === undefined
+        ? value.unrealisedPnlMinor === undefined
+          ? undefined
+          : null
+        : minor(value.unrealisedPnlMinor, "holding.unrealisedPnlMinor"),
+    unrealisedPnlPercent: nullableString(value.unrealisedPnlPercent),
     valuationSource: nullableString(value.valuationSource),
     valuationFreshness: nullableString(value.valuationFreshness) ?? "UNAVAILABLE",
     lastSuccessfulRefreshAt: nullableString(
@@ -139,6 +151,19 @@ export const mapPortfolio = (raw: unknown): PortfolioSummary => {
         ? minor(body.estimatedPortfolioValueMinor, "portfolio.estimatedPortfolioValueMinor")
         : null,
     valuationStatus: status,
+    investedCostMinor:
+      body.investedCostMinor === null || body.investedCostMinor === undefined
+        ? body.investedCostMinor === undefined
+          ? undefined
+          : null
+        : minor(body.investedCostMinor, "portfolio.investedCostMinor"),
+    unrealisedPnlMinor:
+      body.unrealisedPnlMinor === null || body.unrealisedPnlMinor === undefined
+        ? body.unrealisedPnlMinor === undefined
+          ? undefined
+          : null
+        : minor(body.unrealisedPnlMinor, "portfolio.unrealisedPnlMinor"),
+    unrealisedPnlPercent: nullableString(body.unrealisedPnlPercent),
   };
 };
 export const mapPerformance = (raw: unknown): PortfolioPerformance => {

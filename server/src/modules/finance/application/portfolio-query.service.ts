@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { FinancialLedgerService } from './financial-ledger.service';
+import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 
 @Injectable()
 export class PortfolioQueryService {
@@ -24,8 +25,18 @@ export class PortfolioQueryService {
         (holding.estimatedValueMinor
           ? BigInt(holding.estimatedValueMinor)
           : 0n),
-      0n,
+        0n,
     );
+    const investedCostMinor = holdings.every((holding) => holding.costBasisMinor !== null)
+      ? holdings.reduce(
+          (sum, holding) => sum + BigInt(holding.costBasisMinor as string),
+          0n,
+        )
+      : null;
+    const unrealisedPnlMinor =
+      investedCostMinor !== null && holdings.every((holding) => holding.estimatedValueMinor !== null)
+        ? holdingsMinor - investedCostMinor
+        : null;
     return {
       currency: 'GBP',
       cash: wallet,
@@ -37,6 +48,12 @@ export class PortfolioQueryService {
       )
         ? 'PARTIAL'
         : 'AVAILABLE',
+      investedCostMinor: investedCostMinor?.toString() ?? null,
+      unrealisedPnlMinor: unrealisedPnlMinor?.toString() ?? null,
+      unrealisedPnlPercent:
+        investedCostMinor !== null && unrealisedPnlMinor !== null && investedCostMinor > 0n
+          ? formatMoneyPercent(unrealisedPnlMinor, investedCostMinor)
+          : null,
     };
   }
 
@@ -79,6 +96,14 @@ export class PortfolioQueryService {
           take: 1,
           select: { estimatedMarketValueMinor: true, asOf: true, status: true, markSource: true, freshness: true, lastSuccessfulRefreshAt: true },
         },
+        tradingOrders: {
+          where: {
+            side: 'SELL',
+            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+            remainingUnits: { gt: 0n },
+          },
+          select: { remainingUnits: true },
+        },
       },
     });
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
@@ -107,6 +132,13 @@ export class PortfolioQueryService {
           ),
         0n,
       );
+      const availableToBuyUnits = asset.tradingOrders.reduce(
+        (sum, order) => sum + order.remainingUnits,
+        0n,
+      );
+      const availableToSellUnits = position.settledUnits - position.reservedUnits;
+      const unrealisedPnlMinor =
+        estimated !== null && relevantLots.length ? estimated - costBasis : null;
       return {
         assetId: position.assetId,
         slug: asset.slug,
@@ -126,8 +158,19 @@ export class PortfolioQueryService {
           position.settledUnits - position.reservedUnits
         ).toString(),
         availableUnits: (
-          position.settledUnits - position.reservedUnits
+          availableToSellUnits
         ).toString(),
+        totalIssuedQuantity: supply?.toString() ?? null,
+        userOwnershipPercent: supply
+          ? formatOwnershipPercent(position.settledUnits, supply)
+          : null,
+        availableToSellPercent: supply
+          ? formatOwnershipPercent(availableToSellUnits, supply)
+          : null,
+        availableToBuyQuantity: availableToBuyUnits.toString(),
+        availableToBuyPercent: supply
+          ? formatOwnershipPercent(availableToBuyUnits, supply)
+          : null,
         estimatedValueMinor: estimated?.toString() ?? null,
         valuationAsOf: mark?.asOf.toISOString() ?? null,
         valuationStatus: mark ? 'FULL' : 'UNAVAILABLE',
@@ -135,6 +178,11 @@ export class PortfolioQueryService {
         valuationFreshness: mark?.freshness ?? 'UNAVAILABLE',
         lastSuccessfulRefreshAt: mark?.lastSuccessfulRefreshAt?.toISOString() ?? null,
         costBasisMinor: relevantLots.length ? costBasis.toString() : null,
+        unrealisedPnlMinor: unrealisedPnlMinor?.toString() ?? null,
+        unrealisedPnlPercent:
+          unrealisedPnlMinor !== null && costBasis > 0n
+            ? formatMoneyPercent(unrealisedPnlMinor, costBasis)
+            : null,
       };
     });
   }
@@ -155,4 +203,13 @@ export class PortfolioQueryService {
       status: lot.status,
     }));
   }
+}
+
+function formatMoneyPercent(value: bigint, basis: bigint) {
+  const scaled = (value * 10_000n) / basis;
+  const sign = scaled < 0n ? '-' : '';
+  const absolute = scaled < 0n ? -scaled : scaled;
+  const whole = absolute / 100n;
+  const fraction = (absolute % 100n).toString().padStart(2, '0').replace(/0+$/, '');
+  return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
 }

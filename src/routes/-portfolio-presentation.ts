@@ -49,6 +49,14 @@ export function derivePortfolioValuationSnapshot(
   summary: PortfolioSummary,
 ): PortfolioValuationSnapshot | null {
   if (summary.holdings.length === 0 || summary.estimatedHoldingsValueMinor === null) return null;
+  if (summary.investedCostMinor !== undefined && summary.unrealisedPnlMinor !== undefined) {
+    if (summary.investedCostMinor === null || summary.unrealisedPnlMinor === null) return null;
+    return {
+      holdingsValueMinor: summary.estimatedHoldingsValueMinor,
+      investedCostMinor: summary.investedCostMinor,
+      unrealisedValueMinor: summary.unrealisedPnlMinor,
+    };
+  }
   if (summary.holdings.some((holding) => holding.costBasisMinor === null)) return null;
 
   const holdingsValue = BigInt(summary.estimatedHoldingsValueMinor);
@@ -69,6 +77,11 @@ export function derivePortfolioValuationSnapshot(
 export function deriveHoldingValuation(
   holding: PortfolioHolding,
 ): PortfolioHoldingValuation | null {
+  if (holding.unrealisedPnlMinor !== undefined) {
+    return holding.unrealisedPnlMinor === null
+      ? null
+      : { unrealisedValueMinor: holding.unrealisedPnlMinor };
+  }
   if (holding.estimatedValueMinor === null || holding.costBasisMinor === null) return null;
   return {
     unrealisedValueMinor: (

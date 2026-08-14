@@ -44,6 +44,34 @@ describe("Document 013 finance API adapter", () => {
     expect("profitLoss" in holding).toBe(false);
     expect("allocation" in holding).toBe(false);
   });
+  it("keeps sellable ownership separate from market buy liquidity", () => {
+    const holding = mapHolding({
+      assetId: "asset",
+      slug: "asset",
+      title: "Asset",
+      category: "Sports Cards",
+      grade: "PSA 10",
+      totalUnits: "1000",
+      totalIssuedQuantity: "1000",
+      ownedUnits: "300",
+      userOwnershipPercent: "30",
+      reservedUnits: "20",
+      availableToSellUnits: "280",
+      availableToSellPercent: "28",
+      availableToBuyQuantity: "50",
+      availableToBuyPercent: "5",
+      availableUnits: "280",
+      estimatedValueMinor: "30000",
+      valuationAsOf: null,
+      valuationStatus: "FULL",
+      costBasisMinor: "24000",
+      unrealisedPnlMinor: "6000",
+      unrealisedPnlPercent: "25",
+    });
+    expect(holding.availableToSellPercent).toBe("28");
+    expect(holding.availableToBuyPercent).toBe("5");
+    expect(holding.unrealisedPnlMinor).toBe("6000");
+  });
   it("maps safe history and honest partial/full valuation states", () => {
     const partial = mapPortfolio({
       currency: "GBP",

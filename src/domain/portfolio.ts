@@ -20,6 +20,11 @@ export interface PortfolioHolding {
   ownedUnits: string;
   totalUnits?: string | null;
   issuedUnits?: string | null;
+  totalIssuedQuantity?: string | null;
+  userOwnershipPercent?: string | null;
+  availableToSellPercent?: string | null;
+  availableToBuyQuantity?: string | null;
+  availableToBuyPercent?: string | null;
   reservedUnits: string;
   /** Settled ownership that is not reserved by an open sell order. */
   availableToSellUnits?: string;
@@ -28,6 +33,8 @@ export interface PortfolioHolding {
   valuationAsOf: ISODateTime | null;
   valuationStatus: PortfolioValuationStatus;
   costBasisMinor: GbpMinorUnits | null;
+  unrealisedPnlMinor?: GbpMinorUnits | null;
+  unrealisedPnlPercent?: string | null;
   valuationSource?: string | null;
   valuationFreshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
   lastSuccessfulRefreshAt?: ISODateTime | null;
@@ -64,6 +71,9 @@ export interface PortfolioSummary {
   estimatedHoldingsValueMinor: GbpMinorUnits | null;
   estimatedPortfolioValueMinor: GbpMinorUnits | null;
   valuationStatus: PortfolioValuationStatus;
+  investedCostMinor?: GbpMinorUnits | null;
+  unrealisedPnlMinor?: GbpMinorUnits | null;
+  unrealisedPnlPercent?: string | null;
 }
 
 export type PortfolioPerformanceRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";

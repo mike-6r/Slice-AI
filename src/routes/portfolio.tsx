@@ -1298,9 +1298,9 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 
   const summary = query.data;
   const valuation = derivePortfolioValuationSnapshot(summary);
-  const unrealisedPercent = valuation
-    ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor)
-    : null;
+  const unrealisedPercent =
+    summary.unrealisedPnlPercent ??
+    (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
@@ -1381,9 +1381,9 @@ function HoldingsKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
     );
   }
   const valuation = derivePortfolioValuationSnapshot(query.data);
-  const unrealisedPercent = valuation
-    ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor)
-    : null;
+  const unrealisedPercent =
+    query.data.unrealisedPnlPercent ??
+    (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
   return (
     <section className="portfolio-kpis portfolio-kpis--holdings" aria-label="Holdings summary">
       <PortfolioKpi
@@ -1493,7 +1493,9 @@ function PortfolioPerformancePanel({
             <div>
               <dt>Current marked value</dt>
               <dd>
-                {valuation ? formatPortfolioMoney(valuation.holdingsValueMinor) : "Unavailable"}
+                {query.data.estimatedHoldingsValueMinor
+                  ? formatPortfolioMoney(query.data.estimatedHoldingsValueMinor)
+                  : "Unavailable"}
               </dd>
             </div>
             <div>
@@ -1564,18 +1566,28 @@ function PerformancePeriods({
 function PerformanceChart({ query }: { query: UseQueryResult<PortfolioPerformance> }) {
   const points = query.data?.points ?? [];
   if (query.isLoading) return <ChartSkeleton />;
+  if (query.isError) {
+    return (
+      <PanelError
+        message="We couldn't load performance history right now."
+        retry={() => void query.refetch()}
+      />
+    );
+  }
   if (points.length < 2) {
     return (
       <div className="portfolio-performance-limited">
         <ChartNoAxesCombined aria-hidden="true" />
         <div>
           <strong>
-            Portfolio performance will appear here as market and trading history is recorded.
+            {points.length
+              ? "More history is needed to draw your performance chart."
+              : "No portfolio performance history is available for this period."}
           </strong>
           <p>
             {points.length
-              ? "One snapshot is recorded; a second legitimate point is needed to draw the chart."
-              : "Historical performance data is not yet available. No historical snapshots are available for this range yet."}
+              ? "A second legitimate snapshot is needed."
+              : "History will appear after the snapshot engine records a portfolio point."}
           </p>
         </div>
       </div>
@@ -1825,7 +1837,7 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
             <dt>Ownership</dt>
             <dd>
               {holding.totalUnits
-                ? `${ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
+                ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
                 : "Unavailable"}
             </dd>
           </div>
@@ -1833,8 +1845,12 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
             <dt>Available to sell</dt>
             <dd>
               {holding.totalUnits
-                ? `${ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
+                ? `${holding.availableToSellPercent ?? ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
                 : "Unavailable"}
+              {holding.availableToBuyPercent !== null &&
+              holding.availableToBuyPercent !== undefined ? (
+                <small>Market: {holding.availableToBuyPercent}% available to buy</small>
+              ) : null}
             </dd>
           </div>
           <div>
@@ -2056,7 +2072,7 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
         <span className="portfolio-table__quantity">
           <strong>
             {holding.totalUnits
-              ? `${ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
+              ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
               : "Ownership unavailable"}
           </strong>
           <small>{holding.ownedUnits} units owned</small>
@@ -2066,10 +2082,15 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
         <span className="portfolio-table__quantity">
           <strong>
             {holding.totalUnits
-              ? `${ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
+              ? `${holding.availableToSellPercent ?? ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
               : "Unavailable"}
           </strong>
-          <small>{holding.availableToSellUnits ?? holding.availableUnits} units sellable</small>
+          <small>
+            {holding.availableToSellUnits ?? holding.availableUnits} units sellable
+            {holding.availableToBuyPercent !== null && holding.availableToBuyPercent !== undefined
+              ? ` · ${holding.availableToBuyPercent}% available to buy`
+              : ""}
+          </small>
         </span>
       </td>
       <td data-label="Price per Slice">
@@ -2090,8 +2111,10 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
           <span className="portfolio-table__pnl">
             <strong>{formatSignedPortfolioMoney(valuation.unrealisedValueMinor)}</strong>
             <small>
-              {percentageOf(valuation.unrealisedValueMinor, holding.costBasisMinor as string) ??
-                "—"}
+              {holding.unrealisedPnlPercent
+                ? `${holding.unrealisedPnlPercent}%`
+                : (percentageOf(valuation.unrealisedValueMinor, holding.costBasisMinor as string) ??
+                  "—")}
             </small>
           </span>
         ) : (

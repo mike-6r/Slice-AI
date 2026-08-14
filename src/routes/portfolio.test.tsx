@@ -122,7 +122,7 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("Current marked value");
     expect(html).toContain("Open position cost");
     expect(html).toContain("Unrealised P/L");
-    expect(html).toContain("Historical performance data is not yet available.");
+    expect(html).toContain("No portfolio performance history is available for this period.");
     expect(html).toContain("Recent orders");
     expect(html).toContain("View all holdings");
     expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(4);

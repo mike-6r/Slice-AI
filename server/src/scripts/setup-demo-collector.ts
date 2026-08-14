@@ -1723,6 +1723,7 @@ async function ensureTradingDemonstration(input: {
       spec,
     );
   }
+  await ensureDemoInvestorLots(input, published, input.investor.userId);
   for (const asset of published.slice(0, 3)) {
     const spec = assets.find(
       (item) => `slice-demo-${item.key}` === asset.slug,
@@ -1766,6 +1767,45 @@ async function ensureTradingDemonstration(input: {
     executions,
     notifications,
   };
+}
+
+async function ensureDemoInvestorLots(
+  input: Parameters<typeof ensureTradingDemonstration>[0],
+  published: Array<{ id: string }>,
+  investorUserId: string,
+) {
+  const executions = await input.db.tradingExecution.findMany({
+    where: {
+      assetId: { in: published.map((asset) => asset.id) },
+      buyOrder: { userId: investorUserId },
+    },
+    select: {
+      assetId: true,
+      units: true,
+      grossMinor: true,
+      buyerFeeMinor: true,
+      correlationId: true,
+    },
+  });
+  for (const execution of executions) {
+    const existing = await input.db.portfolioLot.findUnique({
+      where: { sourceReference: execution.correlationId },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await input.lots.recordAcquisition(
+      input.admin,
+      {
+        userId: investorUserId,
+        assetId: execution.assetId,
+        units: execution.units.toString(),
+        totalCostMinor: (execution.grossMinor + execution.buyerFeeMinor).toString(),
+        sourceReference: execution.correlationId,
+      },
+      `staging-demo-investor-lot:${execution.correlationId}`,
+      `staging-demo-investor-lot:${execution.correlationId}`,
+    );
+  }
 }
 
 async function ensureLocalDemoCompliance(
