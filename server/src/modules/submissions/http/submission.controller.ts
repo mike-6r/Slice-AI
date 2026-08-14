@@ -131,6 +131,9 @@ const marketResearch = z
 const marketResearchAttach = z
   .object({ submissionId: id })
   .strict();
+const marketResearchPromotion = z
+  .object({ assetId: id })
+  .strict();
 
 @Controller()
 export class SubmissionController {
@@ -219,6 +222,25 @@ export class SubmissionController {
         req.actor!,
         researchId,
         input.submissionId,
+        req.requestId ?? 'unknown',
+      );
+    });
+  }
+  @Post('reviews/submissions/:id/promote-market-research')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  promoteMarketResearch(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () => {
+      const input = parse(marketResearchPromotion, body);
+      return this.research.promoteToAsset(
+        req.actor!,
+        submissionId,
+        input.assetId,
         req.requestId ?? 'unknown',
       );
     });

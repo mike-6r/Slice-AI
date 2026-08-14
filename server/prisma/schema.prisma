@@ -1361,6 +1361,7 @@ model VaultIntakeLocation {
   countryCode          String
   active               Boolean            @default(true)
   intakeAvailable      Boolean            @default(true)
+  operationallyApproved Boolean           @default(false)
   acceptedCategories   Json?
   shippingInstructions String
   customerSafeAddress  String

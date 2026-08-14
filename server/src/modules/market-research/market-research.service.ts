@@ -12,6 +12,7 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
 import { MarketProviderRegistry } from '../market/market-provider.registry';
+import { freshnessState } from '../market/market-refresh.service';
 import type { MarketIdentity, ProviderObservation } from '../market/market-provider.ports';
 
 export type MarketResearchInput = {
@@ -397,6 +398,223 @@ export class CollectibleMarketResearchService {
     return researchProjection(updated);
   }
 
+  /**
+   * Hands persisted submission research to an already-created canonical Asset.
+   * This is deliberately staff-controlled and never calls a provider. The
+   * submission remains the source of identity/provenance until this handoff.
+   */
+  async promoteToAsset(
+    actor: Actor,
+    submissionId: string,
+    assetId: string,
+    requestId: string,
+  ) {
+    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to promote market research.',
+      });
+    }
+    const submission = await this.db.assetSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        marketResearch: { include: { observations: true } },
+        asset: { include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } } } },
+      },
+    });
+    if (!submission) throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
+    if (submission.status !== 'APPROVED' || submission.assetId !== assetId || !submission.asset) {
+      throw new ConflictException({
+        code: 'ASSET_PROMOTION_PRECONDITION_FAILED',
+        message: 'The approved submission must already be linked to the requested canonical Asset.',
+      });
+    }
+    const asset = submission.asset;
+    const research = submission.marketResearch
+      .filter((item) => item.submissionId === submissionId)
+      .sort((left, right) => right.collectedAt.getTime() - left.collectedAt.getTime())[0];
+    if (!research) {
+      throw new ConflictException({
+        code: 'ASSET_PROMOTION_RESEARCH_MISSING',
+        message: 'Confirmed submission market research is required before promotion.',
+      });
+    }
+    const identity = research.identity as unknown as Identity;
+    if (!identityCompatibleWithAsset(identity, asset)) {
+      throw new ConflictException({
+        code: 'ASSET_PROMOTION_IDENTITY_CONFLICT',
+        message: 'The confirmed provider identity does not match the canonical Asset.',
+      });
+    }
+    const observation = research.observations.find(
+      (item) =>
+        item.providerCode === 'PRICECHARTING' &&
+        item.observationType === 'PRICE_GUIDE' &&
+        item.matchQuality === 'EXACT' &&
+        item.includedInSnapshot &&
+        !item.grader &&
+        !item.grade,
+    );
+    if (!observation) {
+      throw new ConflictException({
+        code: 'ASSET_PROMOTION_RAW_REFERENCE_MISSING',
+        message: 'An exact raw PriceCharting reference is required before promotion.',
+      });
+    }
+    const providerProductId = observation.externalReferenceId.split(':', 1)[0]!;
+    const now = new Date();
+    const sourceFingerprint = marketSourceFingerprint(
+      providerProductId,
+      observation.observationType,
+      observation.amountMinor,
+      observation.currency,
+      observation.observedAt,
+    );
+    const result = await this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${assetId} FOR UPDATE`;
+      const existingMapping = await db.marketProviderMapping.findUnique({
+        where: { assetId_providerCode: { assetId, providerCode: 'PRICECHARTING' } },
+      });
+      if (existingMapping && existingMapping.providerExternalId !== providerProductId) {
+        throw new ConflictException({
+          code: 'MAPPING_CONFLICT',
+          message: 'The canonical Asset already has a different PriceCharting product mapping.',
+        });
+      }
+      const mappingForProvider = await db.marketProviderMapping.findUnique({
+        where: { providerCode_providerExternalId: { providerCode: 'PRICECHARTING', providerExternalId: providerProductId } },
+      });
+      if (mappingForProvider && mappingForProvider.assetId !== assetId) {
+        throw new ConflictException({
+          code: 'MAPPING_CONFLICT',
+          message: 'That PriceCharting product is already mapped to another canonical Asset.',
+        });
+      }
+      const mapping = existingMapping
+        ? await db.marketProviderMapping.update({
+            where: { id: existingMapping.id },
+            data: {
+              providerUrl: observation.externalUrl,
+              identityHash: research.identityHash,
+              status: 'STAFF_CONFIRMED',
+              matchQuality: 'EXACT',
+              lastVerifiedAt: now,
+            },
+          })
+        : await db.marketProviderMapping.create({
+            data: {
+              id: randomUUID(),
+              assetId,
+              providerCode: 'PRICECHARTING',
+              providerExternalId: providerProductId,
+              providerUrl: observation.externalUrl,
+              identityHash: research.identityHash,
+              status: 'STAFF_CONFIRMED',
+              matchQuality: 'EXACT',
+              lastVerifiedAt: now,
+              nextRefreshAt: null,
+            },
+          });
+      const existingObservation = await db.marketObservation.findUnique({
+        where: { providerCode_sourceFingerprint: { providerCode: 'PRICECHARTING', sourceFingerprint } },
+      });
+      if (existingObservation && existingObservation.assetId !== assetId) {
+        throw new ConflictException({
+          code: 'MARKET_OBSERVATION_CONFLICT',
+          message: 'The confirmed observation is already attached to another canonical Asset.',
+        });
+      }
+      const promotedObservation = existingObservation ?? await db.marketObservation.create({
+        data: {
+          id: randomUUID(),
+          assetId,
+          mappingId: mapping.id,
+          providerCode: 'PRICECHARTING',
+          providerExternalId: providerProductId,
+          observationType: 'PRICE_GUIDE',
+          priceMinor: observation.amountMinor,
+          currency: observation.currency,
+          grader: null,
+          grade: null,
+          title: observation.originalTitle,
+          externalUrl: observation.externalUrl,
+          occurredAt: observation.observedAt,
+          observedAt: observation.observedAt,
+          matchQuality: 'EXACT',
+          included: true,
+          exclusionReason: null,
+          sourceFingerprint,
+          provenance: {
+            provider: 'PRICECHARTING',
+            providerProductId,
+            conditionKey: 'loose-price',
+            observationType: 'PRICE_GUIDE',
+            sourceCurrency: observation.currency,
+            submissionId,
+            submissionResearchId: research.id,
+            submissionObservationId: observation.id,
+            identityHash: research.identityHash,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      const snapshot = await db.assetMarketSnapshot.upsert({
+        where: { assetId_source_asOf: { assetId, source: 'EXTERNAL_MARKET_REFERENCE', asOf: observation.observedAt } },
+        create: {
+          id: randomUUID(),
+          assetId,
+          asOf: observation.observedAt,
+          estimatedMarketValueMinor: observation.amountMinor,
+          currency: observation.currency,
+          change24hBps: 0,
+          availableBps: null,
+          ownersCount: null,
+          watchersCount: null,
+          confidence: null,
+          source: 'EXTERNAL_MARKET_REFERENCE',
+          status: 'LIVE',
+          markSource: 'EXTERNAL_REFERENCE_FALLBACK',
+          freshness: freshnessState(now, observation.observedAt),
+          lastSuccessfulRefreshAt: observation.observedAt,
+        },
+        update: {},
+      });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: 'SUBMISSION_MARKET_RESEARCH_PROMOTED',
+          resourceType: 'asset',
+          resourceId: assetId,
+          requestId,
+          sessionId: actor.sessionId,
+          result: 'SUCCESS',
+          metadata: {
+            submissionId,
+            researchId: research.id,
+            provider: 'PRICECHARTING',
+            providerProductId,
+            observationId: promotedObservation.id,
+            snapshotId: snapshot.id,
+            observedAt: observation.observedAt.toISOString(),
+          },
+          createdAt: now,
+        },
+      });
+      return {
+        submissionId,
+        assetId,
+        mappingId: mapping.id,
+        observationId: promotedObservation.id,
+        snapshotId: snapshot.id,
+        providerProductId,
+        providerCalls: 0,
+        idempotent: Boolean(existingMapping && existingObservation),
+      };
+    });
+    return result;
+  }
+
   private async unavailable(
     ownerUserId: string,
     identity: Identity,
@@ -558,6 +776,46 @@ function hashIdentity(identity: Identity) {
 }
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function identityCompatibleWithAsset(identity: Identity, asset: {
+  category: { id: string };
+  year: number | null;
+  title: string;
+  collectibleSet: { name: string } | null;
+  cardNumber: string | null;
+  edition: string | null;
+}) {
+  const same = (left: string | number | null | undefined, right: string | number | null | undefined) =>
+    left == null || right == null || normalize(String(left)) === normalize(String(right));
+  return (
+    identity.categoryId === asset.category.id &&
+    same(identity.year, asset.year) &&
+    same(identity.name, asset.title) &&
+    same(identity.set, asset.collectibleSet?.name) &&
+    same(identity.cardNumber, asset.cardNumber) &&
+    same(identity.variant, asset.edition)
+  );
+}
+
+function marketSourceFingerprint(
+  providerExternalId: string,
+  observationType: string,
+  amountMinor: bigint,
+  currency: string,
+  observedAt: Date,
+) {
+  return createHash('sha256')
+    .update(
+      [
+        providerExternalId,
+        observationType,
+        amountMinor.toString(),
+        currency,
+        observedAt.toISOString(),
+      ].join('|'),
+    )
+    .digest('hex');
 }
 function classifyObservation(
   identity: Identity,

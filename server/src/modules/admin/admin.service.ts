@@ -214,6 +214,7 @@ export class AdminService {
       preGradeRuns,
       priceChartingMappings,
       priceChartingNeedsMapping,
+      confirmedSubmissionResearch,
     ] = await this.db.$transaction([
       this.db.moneyMovement.findMany({
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -331,6 +332,18 @@ export class AdminService {
           },
         },
       }),
+      this.db.submissionMarketResearch.findMany({
+        where: {
+          observations: {
+            some: {
+              providerCode: 'PRICECHARTING',
+              matchQuality: 'EXACT',
+              includedInSnapshot: true,
+            },
+          },
+        },
+        select: { submission: { select: { assetId: true } } },
+      }),
     ]);
     const incidentCounts = new Map<string, number>();
     for (const incident of incidents)
@@ -349,6 +362,10 @@ export class AdminService {
     const retiredDemoPriceChartingMappings = priceChartingMappings.filter(
       (mapping) => !activePriceChartingMappings.includes(mapping),
     );
+    const confirmedSubmissionReferenceCount = confirmedSubmissionResearch.length;
+    const awaitingAssetPromotionCount = confirmedSubmissionResearch.filter(
+      (research) => research.submission?.assetId == null,
+    ).length;
     const priceChartingConfigured = Boolean(
       this.config.priceChartingEnabled && this.config.priceChartingApiToken,
     );
@@ -387,6 +404,8 @@ export class AdminService {
       `fresh ${priceChartingFresh}`,
       `stale ${priceChartingStale}`,
       `needs mapping ${priceChartingNeedsMapping}`,
+      `confirmed submissions ${confirmedSubmissionReferenceCount}`,
+      `awaiting asset promotion ${awaitingAssetPromotionCount}`,
     ].join(' · ');
     const integration = (
       name: string,
@@ -527,7 +546,7 @@ export class AdminService {
           configured: Boolean(this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken),
           failedEvents: preGradeRuns.filter((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status)).length,
           summary: this.config.ximilarEnabled && this.config.ximilarCardGradingEnabled && this.config.ximilarApiToken
-            ? `Raw card AI Pre-Grade is configured${preGradeRuns[0] ? ` · last ${preGradeRuns[0].status.toLowerCase().replaceAll('_', ' ')}` : ''}.`
+            ? `Raw card AI Pre-Grade is configured${preGradeRuns[0] ? ` · last ${preGradeRuns[0].status.toLowerCase().replaceAll('_', ' ')}` : ' · not yet exercised'}.`
             : 'Optional raw card AI Pre-Grade is not configured.',
           status: preGradeRuns.some((run) => ['FAILED', 'TEMPORARILY_UNAVAILABLE'].includes(run.status))
             ? ('Degraded' as const)
@@ -565,6 +584,10 @@ export class AdminService {
           failedEvents: priceChartingFailures.length,
           summary: priceChartingSummary,
           status: priceChartingStatus,
+          activeAssetMappings: activePriceChartingMappings.length,
+          confirmedSubmissionReferences: confirmedSubmissionReferenceCount,
+          awaitingAssetPromotion: awaitingAssetPromotionCount,
+          retiredDemoMappings: retiredDemoPriceChartingMappings.length,
         },
         integration(
           'Market Data',
@@ -1745,7 +1768,7 @@ export class AdminService {
     }));
     const vaults = await this.db.vaultIntakeLocation.findMany({
       where: { active: true, intakeAvailable: true },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, operationallyApproved: true },
     });
     return {
       items,
@@ -1763,6 +1786,7 @@ export class AdminService {
           id: vault.id,
           displayName: vault.displayName,
           code: vault.id.slice(0, 6).toUpperCase(),
+          operationallyApproved: vault.operationallyApproved,
         })),
         carriers: [
           ...new Set(

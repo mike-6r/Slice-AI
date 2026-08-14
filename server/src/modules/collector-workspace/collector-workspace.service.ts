@@ -328,7 +328,14 @@ export class CollectorWorkspaceService {
 
   async vaults() {
     return this.db.vaultIntakeLocation.findMany({
-      where: { active: true, intakeAvailable: true },
+      // External collectors may only choose an operator-approved destination.
+      // Existing internal test records remain available in the database but
+      // are deliberately not exposed by this customer-facing projection.
+      where: {
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+      },
       orderBy: [{ countryCode: 'asc' }, { displayName: 'asc' }],
       select: {
         id: true,
@@ -369,7 +376,12 @@ export class CollectorWorkspaceService {
         message: 'The destination cannot be changed after shipment starts.',
       });
     const vault = await this.db.vaultIntakeLocation.findFirst({
-      where: { id: vaultId, active: true, intakeAvailable: true },
+      where: {
+        id: vaultId,
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+      },
     });
     if (!vault)
       throw new NotFoundException({
