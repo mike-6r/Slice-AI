@@ -213,3 +213,47 @@ Phase 4 status after configuration: **PROVIDER CONFIGURED — WAITING FOR EXACT 
 - The same persisted research record is visible from the collector owner submission projection and the staff/admin review projection. Ordinary market/collector page requests completed with no new PriceCharting refresh jobs or provider observations.
 - Global `MarketProviderMapping` / `AssetMarketSnapshot` persistence remains blocked by the existing workflow: the approved submission has no canonical `Asset`, and no authorized asset-create/link/mapping operation was available without beginning the lifecycle. The three existing PriceCharting mappings remain retired/demo records.
 - No D11 valuation, publication, issuance, D14 order, funding, shipment, delivery, or receipt state changed. Ordinary page loads were not used to trigger provider calls.
+
+## Phase 6 canonical Asset promotion, market handoff, and intake readiness — 2026-08-14
+
+Code/VPS commit: `5a650ae`
+
+### Canonical Asset authority and handoff
+
+- Canonical Asset creation authority is the explicit Staff/Admin Catalogue flow (`POST /v1/admin/catalogue/assets`), which creates a `DRAFT`; an approved submission is then explicitly linked through the submission lifecycle handoff. Receipt, verification, custody, valuation, publication, or page rendering does not create an Asset automatically.
+- Submission `054e7773-87ad-4b5e-9701-916a3aa5144d` remains `APPROVED`, version `12`, `assetId = null`; no premature Asset was created.
+- The promotion endpoint is staff/admin-only and requires an approved submission already linked to the requested Asset. It performs identity compatibility checks, mapping conflict checks, provider-ID persistence, original observation timestamp preservation, observation/snapshot deduplication, and an audited idempotent handoff with zero provider calls. It was not invoked because there is no authorized canonical Asset yet.
+- Provider promotion test calls: `0` (intentionally not exercised without an Asset). The exact external lookup remains the single prior Product ID lookup; no new provider lookup or refresh was made in Phase 6.
+
+### Confirmed external research handoff
+
+- Research `e284b7a3-4ce2-4b26-ad53-879b4ceecf89` remains attached to the submission in `LIMITED` state.
+- Exact PriceCharting Product ID: `5605741`; raw/ungraded `PRICE_GUIDE` observation: `10969` USD minor units (`$109.69`), observed `2026-08-14T18:13:26.367Z`, match `EXACT`.
+- Submission research, identity hash, provider provenance, source currency, integer amount, and original observed timestamp are preserved. No global Asset mapping or legitimate Asset snapshot exists yet; existing provider mappings are the three retired/demo records.
+- Admin telemetry now distinguishes `confirmed submissions 1`, `awaiting asset promotion 1`, `active Asset mappings 0`, and `retired/demo 3`. Collector and Staff/Admin projections read the same persisted submission research.
+
+### Provider and page-load safety
+
+- PriceCharting: configured and operational; the confirmed submission reference is visible in Admin Platform Operations. New Phase 6 provider calls: `0`; new PriceCharting refresh jobs after deployment: `0`.
+- Ximilar: configured with card-grading enabled, but live analysis has not been exercised; Admin reports `Raw card AI Pre-Grade is configured · not yet exercised.` No Ximilar call was made.
+- Ordinary market/collector page reads use persisted data and did not trigger provider calls.
+
+### Physical intake gate
+
+- Current submission intake remains `SHIPPING_REQUIRED`; no shipment, carrier delivery, Slice receipt, or physical-intake state was changed.
+- The two staging vault records remain active/intake-available database fixtures, but both are `operationallyApproved = false` and are therefore excluded from customer-facing vault selection. They are not real operator-approved receiving destinations.
+- Real operator-approved destination: **NO**. Do not select a staging fixture, ship a physical card, or record receipt until Operations approves and configures a real receiving address.
+
+### Storage and external Beta gate
+
+- VPS currently has `APP_ENV=beta`, `NODE_ENV=development`, and `LOCAL_SUBMISSION_STORAGE_ENABLED=true`. The only implemented submission-media adapter is local storage; no S3/R2/object-storage adapter or corresponding configured environment contract exists in this repository.
+- Durable object storage: **NOT READY**. External invited Beta is therefore **NOT SAFE** until durable storage and retention/backup operations are implemented and configured.
+
+### Remaining D10/D11 gates
+
+- Canonical Asset: pending explicit Staff/Admin creation and approved-submission link.
+- Market handoff: ready to run after Asset link; mapping/snapshot creation must use the persisted submission research and must remain idempotent.
+- Verification, D11 valuation, custody readiness, market readiness, publication, issuance, and D14 trading: blocked pending the correct lifecycle gates.
+- Next authorized actions: Operations approves a real intake destination and durable storage; Staff creates/links the canonical Asset; Staff invokes the no-provider-call promotion handoff; only then continue verification, valuation, custody, publication, and issuance gates.
+
+Phase 6 status: **NO-GO — CANONICAL ASSET, REAL INTAKE DESTINATION, AND DURABLE STORAGE REQUIRED BEFORE EXTERNAL BETA**.
