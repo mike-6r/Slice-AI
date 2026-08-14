@@ -216,7 +216,7 @@ Phase 4 status after configuration: **PROVIDER CONFIGURED — WAITING FOR EXACT 
 
 ## Phase 6 canonical Asset promotion, market handoff, and intake readiness — 2026-08-14
 
-Code/VPS commit: `5a650ae`
+Implementation commit: `5a650ae`; final deployed/checklist commit: `d684aec`
 
 ### Canonical Asset authority and handoff
 
