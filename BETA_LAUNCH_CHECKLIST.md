@@ -260,7 +260,7 @@ Phase 6 status: **NO-GO — CANONICAL ASSET, REAL INTAKE DESTINATION, AND DURABL
 
 ## Phase 7 durable storage and real intake readiness — 2026-08-14
 
-Implementation commit: `0a3e627`; final deployed commit: `cd62441`.
+Implementation commit: `0a3e627`; final deployed/checklist commit: `4b140a4`.
 
 ### Storage implementation
 
