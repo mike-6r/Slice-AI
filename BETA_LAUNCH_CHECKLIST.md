@@ -260,7 +260,7 @@ Phase 6 status: **NO-GO — CANONICAL ASSET, REAL INTAKE DESTINATION, AND DURABL
 
 ## Phase 7 durable storage and real intake readiness — 2026-08-14
 
-Implementation lineage: `fef4b3d` → Phase 7 implementation pending deployment.
+Implementation commit: `0a3e627`; final deployed commit: `cd62441`.
 
 ### Storage implementation
 
@@ -314,3 +314,17 @@ LOCAL_SUBMISSION_STORAGE_ROOT        # migration source directory, default /var/
 3. Enter a real receiving address through the controlled Admin/Vault Operations flow, approve it with a reason, and enable accepting shipments. Do not approve `staging-gb-intake` or `staging-us-intake` as real facilities.
 
 Phase 7 status: **NO-GO — CONFIGURATION_REQUIRED FOR DURABLE STORAGE AND OPERATOR_ACTION_REQUIRED FOR REAL INTAKE**.
+
+### Phase 7 deployment verification record
+
+- Git/VPS HEAD: `cd62441`; API/web services active; `/health` and `/ready` pass; migration `20260815090000_intake_destination_operations` applied.
+- Provider abstraction: `PASS`; LOCAL: `PASS`; S3-compatible adapter: `PASS`; AWS S3: compatible; Cloudflare R2: compatible through endpoint/region/path-style settings.
+- Staging credentials/configuration: `NO` — `OBJECT_STORAGE_PROVIDER` remains `LOCAL`; no bucket or access credentials/role were supplied. Durable storage operational: `NO`; private bucket access/signed upload/signed private download: `NOT CONFIGURED`.
+- Local migration dry-run: `PASS`; `52` media rows inspected, `0` local files found, `52` local files missing, `0` checksum mismatches, `0` remote copies executed. Charizard front/back rows remain present and `SAFE` in the database; no local files were deleted or overwritten and no replacement media was fabricated.
+- Database destinations: `2`; operationally approved: `0`; customer-visible: `0`; `staging-gb-intake`: `NO`; `staging-us-intake`: `NO`; real operator-approved destination: `NO`. Collector `/vaults` returns an empty list and the no-destination message is implemented.
+- Admin approval action: `PASS` (Admin/Vault Operations permission-gated, reason required); approval audited: `PASS`; public address leakage: `NO`.
+- Charizard: `SHIPPING_REQUIRED`, existing database destination `staging-gb-intake` / `SLICE-3AA5144D` remains unchanged but is not approved or accepting shipments; shipment `NO`, receipt `NO`, canonical Asset `NO`.
+- PriceCharting Product `5605741`: confirmed submission mapping `YES`; live calls this phase `0`; promotion readiness `PASS` (no Asset created).
+- Ximilar: configured/enabled/card-grading enabled; storage-provider-independent byte handoff `PASS`; live calls `0`.
+- Canonical Asset trigger: explicit Staff/Admin Catalogue `DRAFT` creation followed by approved-submission link; premature creation `NO`; idempotent creation `PASS`; provider promotion fixture path `PASS`; provider calls during promotion `0`; timestamp-preserving snapshot promotion `PASS` when an Asset exists.
+- Controlled internal Beta: `GO`; external invited Beta: `NO-GO`; storage blocker `YES`; intake blocker `YES`.
