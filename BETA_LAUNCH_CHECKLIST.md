@@ -57,7 +57,7 @@ Scope: controlled demo accounts only; no direct database publish or fixture rese
 ## Phase 3 provider readiness and intake preparation
 
 Audit date: 2026-08-14  
-Deployed commit after this pass: `8c8a7aa`
+Deployed commit after this pass: `3d6a6a9`
 
 ### PriceCharting
 
