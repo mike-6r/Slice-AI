@@ -211,6 +211,8 @@ export class AdminService {
       notificationFailures,
       marketSnapshots,
       preGradeRuns,
+      priceChartingMappings,
+      priceChartingNeedsMapping,
     ] = await this.db.$transaction([
       this.db.moneyMovement.findMany({
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -287,6 +289,35 @@ export class AdminService {
       }),
       this.db.assetMarketSnapshot.count(),
       this.db.rawCardPreGrade.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { status: true, updatedAt: true } }),
+      this.db.marketProviderMapping.findMany({
+        where: { providerCode: 'PRICECHARTING' },
+        select: {
+          status: true,
+          lastSuccessAt: true,
+          lastFailureAt: true,
+          lastFailureCode: true,
+          asset: {
+            select: {
+              marketSnapshots: {
+                orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
+                take: 1,
+                select: { freshness: true, asOf: true },
+              },
+            },
+          },
+        },
+      }),
+      this.db.asset.count({
+        where: {
+          status: 'PUBLISHED',
+          ...(this.config.isBeta
+            ? { slug: { not: { startsWith: 'slice-demo-' } } }
+            : {}),
+          marketProviderMappings: {
+            none: { providerCode: 'PRICECHARTING' },
+          },
+        },
+      }),
     ]);
     const incidentCounts = new Map<string, number>();
     for (const incident of incidents)
@@ -295,6 +326,44 @@ export class AdminService {
         (incidentCounts.get(incident.provider) ?? 0) + 1,
       );
     const dbCheckedAt = new Date().toISOString();
+    const priceChartingConfigured = Boolean(
+      this.config.priceChartingEnabled && this.config.priceChartingApiToken,
+    );
+    const priceChartingFresh = priceChartingMappings.filter(
+      (mapping) => mapping.asset.marketSnapshots[0]?.freshness === 'FRESH',
+    ).length;
+    const priceChartingStale = priceChartingMappings.filter((mapping) =>
+      ['AGING', 'STALE', 'UNAVAILABLE'].includes(
+        mapping.asset.marketSnapshots[0]?.freshness ?? '',
+      ),
+    ).length;
+    const priceChartingFailures = priceChartingMappings.filter(
+      (mapping) =>
+        mapping.lastFailureAt &&
+        (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt),
+    );
+    const latestPriceSuccess = priceChartingMappings
+      .map((mapping) => mapping.lastSuccessAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+    const latestPriceFailure = priceChartingMappings
+      .map((mapping) => mapping.lastFailureAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+    const priceChartingStatus = priceChartingConfigured
+      ? priceChartingFailures.length
+        ? ('Degraded' as const)
+        : ('Operational' as const)
+      : ('NOT_CONFIGURED' as const);
+    const priceChartingSummary = [
+      priceChartingConfigured ? 'Configured' : 'Not configured',
+      `last success ${latestPriceSuccess?.toISOString() ?? 'never'}`,
+      `last failure ${latestPriceFailure?.toISOString() ?? 'never'}`,
+      `mapped ${priceChartingMappings.length}`,
+      `fresh ${priceChartingFresh}`,
+      `stale ${priceChartingStale}`,
+      `needs mapping ${priceChartingNeedsMapping}`,
+    ].join(' · ');
     const integration = (
       name: string,
       configured: boolean,
@@ -399,10 +468,10 @@ export class AdminService {
         },
         {
           name: 'Market data',
-          status: this.config.isBeta ? ('BETA_DISABLED' as const) : ('UNKNOWN' as const),
+          status: priceChartingStatus,
           summary: marketSnapshots
-            ? 'Snapshot records are available; provider health telemetry is not exposed.'
-            : 'No market snapshot telemetry is available.',
+            ? `${marketSnapshots} persisted snapshots. ${priceChartingSummary}`
+            : `No market snapshots. ${priceChartingSummary}`,
           lastCheckedAt: dbCheckedAt,
         },
         {
@@ -466,6 +535,13 @@ export class AdminService {
             : 'Provider configuration is not exposed in Admin.',
           incidentCounts.get('BLOCKCHAIN_ANALYSIS') ?? 0,
         ),
+        {
+          name: 'PriceCharting',
+          configured: priceChartingConfigured,
+          failedEvents: priceChartingFailures.length,
+          summary: priceChartingSummary,
+          status: priceChartingStatus,
+        },
         integration(
           'Market Data',
           false,

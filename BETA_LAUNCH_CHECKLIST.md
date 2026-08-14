@@ -53,3 +53,79 @@ Scope: controlled demo accounts only; no direct database publish or fixture rese
 - `2157ec3` allow decision audit item metadata
 - `af60a05` map review decisions to backend routes
 - `a2d0989` map frontend approval to `/approve`
+
+## Phase 3 provider readiness and intake preparation
+
+Audit date: 2026-08-14  
+Pre-change deployed commit: `57c8b78`
+
+### PriceCharting
+
+- Implementation: REAL server-side adapter (`/api/products`, `/api/product`)
+- Token variables: `PRICECHARTING_API_TOKEN` (preferred) or legacy `PRICECHARTING_API_KEY`
+- Enable flag: `PRICECHARTING_ENABLED=true`
+- Optional base URL: `PRICECHARTING_BASE_URL` (default `https://www.pricecharting.com`)
+- Legacy API base variable: `PRICECHARTING_API_BASE_URL` (parsed for compatibility)
+- Request spacing: `PRICECHARTING_MIN_REQUEST_INTERVAL_MS` (default 1000 ms)
+- Cache setting: `PRICECHARTING_CACHE_TTL_SECONDS` (default 21600 seconds)
+- Timeout: `PRICECHARTING_REQUEST_TIMEOUT_MS` (default 10000 ms)
+- Refresh worker: `MARKET_REFRESH_WORKER_ENABLED`, `MARKET_REFRESH_POLL_INTERVAL_MS`, `MARKET_REFRESH_BATCH_SIZE`, `MARKET_REFRESH_LEASE_MS`, `MARKET_REFRESH_MAX_ATTEMPTS`, `MARKET_REFRESH_RETRY_BASE_MS`, `MARKET_REFRESH_RETRY_MAX_MS`
+- Persistent mapping, observation history, refresh jobs, and market snapshots: IMPLEMENTED
+- Distributed one-request-per-second guard: IMPLEMENTED through Redis plus in-process serialization
+- Staging token/config: MISSING; no paid provider call was made
+- Approved Charizard mapping: NONE (the approved submission has no Asset/provider mapping yet)
+- Current reference/snapshot/history: NOT CONFIGURED / 0 / INSUFFICIENT
+
+Operator action required: obtain an approved PriceCharting API token from the PriceCharting account/API area, place it only in `/etc/slice/slice.env` as `PRICECHARTING_API_TOKEN`, set `PRICECHARTING_ENABLED=true`, and restart `slice-api.service`. Never put the token in Vite env, browser code, logs, or customer-visible payloads.
+
+### Ximilar
+
+- Implementation: REAL optional raw-card pre-grade adapter
+- Variables: `XIMILAR_API_TOKEN`, `XIMILAR_ENABLED`, `XIMILAR_CARD_GRADING_ENABLED`, `XIMILAR_TIMEOUT_MS`, `XIMILAR_MAX_RETRIES`
+- Token/config: MISSING
+- Raw Pre-Grade: DEFERRED / NOT CONFIGURED
+- The approved Charizard is not blocked by the optional AI step.
+
+### Physical intake
+
+- Active controlled destinations: 2 (`staging-gb-intake`, `staging-us-intake`)
+- Customer-safe instructions/address projection: PASS
+- Initial vault selection attempt exposed a bug where an empty `acceptedCategories` list rejected every category; the code now treats an empty list as “all categories.”
+- Shipment states and staff-only receipt command are implemented.
+- Carrier `DELIVERED` remains separate from Slice receipt confirmation.
+- Current Charizard receipt: NOT EXECUTED.
+
+### Provider/admin observability
+
+- Admin now exposes a dedicated PriceCharting status summary with configured state, last success/failure, mapped count, fresh count, stale count, and needs-mapping count.
+- Missing PriceCharting is reported as `NOT_CONFIGURED`; Ximilar remains unavailable/optional. No provider is reported operational without configuration.
+- Marketplace, Asset Detail, Portfolio, and Collector Workspace continue to read persisted market data; provider calls remain explicit research/refresh operations.
+
+### First real market asset
+
+- [ ] PriceCharting configured
+- [ ] PriceCharting mapping confirmed
+- [ ] First real market snapshot
+- [ ] Intake destination chosen
+- [ ] Physical shipment created
+- [ ] Carrier delivered
+- [ ] Slice receipt confirmed
+- [ ] Verification complete
+- [ ] D11 valuation complete
+- [ ] Custody ready
+- [ ] Market ready
+- [ ] Published
+- [ ] Issuance configured
+- [ ] Beta test liquidity available
+- [ ] Investor test funded through audited D13 mechanism
+- [ ] First Buy execution
+- [ ] Portfolio cost basis
+- [ ] First Sell execution
+
+### Configure next
+
+Required next: PriceCharting API token and enable flag; any production object storage/FX values only if the operator’s final environment requires them.  
+Optional next: Ximilar token plus both enable flags.  
+Deferred: Plaid, Bridge, SMS, email verification, and 2FA provider work.
+
+No direct wallet balance mutation, fake receipt, fixture reseed, database reset, or publication was performed.

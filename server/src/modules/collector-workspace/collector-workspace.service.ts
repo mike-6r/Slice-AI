@@ -376,9 +376,13 @@ export class CollectorWorkspaceService {
         code: 'VAULT_NOT_AVAILABLE',
         message: 'That intake destination is no longer available.',
       });
-    const accepted = Array.isArray(vault.acceptedCategories)
-      ? vault.acceptedCategories
-      : null;
+    // An empty accepted-category list is the configured "all categories"
+    // default for a general intake destination. Only a non-empty list should
+    // restrict the destination to specific catalogue categories.
+    const accepted =
+      Array.isArray(vault.acceptedCategories) && vault.acceptedCategories.length
+        ? vault.acceptedCategories
+        : null;
     if (accepted && !accepted.includes(submission.categoryId))
       throw new ConflictException({
         code: 'VAULT_CATEGORY_UNSUPPORTED',

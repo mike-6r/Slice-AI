@@ -368,7 +368,8 @@ export type AdminRiskOperations = {
   };
   system: Array<{
     name: string;
-    status: "Operational" | "Degraded" | "Unavailable" | "Unknown";
+    status:
+      "Operational" | "Degraded" | "Unavailable" | "Unknown" | "BETA_DISABLED" | "NOT_CONFIGURED";
     summary: string;
     lastCheckedAt: string;
   }>;
@@ -383,7 +384,8 @@ export type AdminRiskOperations = {
   }>;
   integrations: Array<{
     name: string;
-    status: "Operational" | "Degraded" | "Unavailable" | "Unknown";
+    status:
+      "Operational" | "Degraded" | "Unavailable" | "Unknown" | "BETA_DISABLED" | "NOT_CONFIGURED";
     configured: boolean;
     summary: string;
     failedEvents: number;

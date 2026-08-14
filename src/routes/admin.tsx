@@ -360,7 +360,14 @@ function AdminConsole() {
   const platformStatuses: Record<string, string[]> = {
     jobs: ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD_LETTER"],
     webhooks: ["ACCEPTED", "PROCESSING", "PROCESSED", "FAILED", "REJECTED"],
-    integrations: ["Operational", "Degraded", "Unavailable", "Unknown"],
+    integrations: [
+      "Operational",
+      "Degraded",
+      "Unavailable",
+      "Unknown",
+      "BETA_DISABLED",
+      "NOT_CONFIGURED",
+    ],
   };
   const platformStatus = platformStatuses[platformTab]?.includes(reviewStatus ?? "")
     ? reviewStatus
