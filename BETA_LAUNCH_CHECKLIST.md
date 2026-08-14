@@ -57,7 +57,7 @@ Scope: controlled demo accounts only; no direct database publish or fixture rese
 ## Phase 3 provider readiness and intake preparation
 
 Audit date: 2026-08-14  
-Pre-change deployed commit: `57c8b78`
+Deployed commit after this pass: `8c8a7aa`
 
 ### PriceCharting
 
@@ -74,7 +74,8 @@ Pre-change deployed commit: `57c8b78`
 - Distributed one-request-per-second guard: IMPLEMENTED through Redis plus in-process serialization
 - Staging token/config: MISSING; no paid provider call was made
 - Approved Charizard mapping: NONE (the approved submission has no Asset/provider mapping yet)
-- Current reference/snapshot/history: NOT CONFIGURED / 0 / INSUFFICIENT
+- Current Charizard reference/snapshot/history: NOT CONFIGURED / 0 / INSUFFICIENT
+- Admin-wide provider telemetry at verification: 3 mapped assets, 0 fresh, 3 stale, 0 needing mapping; 24 persisted snapshots overall
 
 Operator action required: obtain an approved PriceCharting API token from the PriceCharting account/API area, place it only in `/etc/slice/slice.env` as `PRICECHARTING_API_TOKEN`, set `PRICECHARTING_ENABLED=true`, and restart `slice-api.service`. Never put the token in Vite env, browser code, logs, or customer-visible payloads.
 
@@ -91,6 +92,9 @@ Operator action required: obtain an approved PriceCharting API token from the Pr
 - Active controlled destinations: 2 (`staging-gb-intake`, `staging-us-intake`)
 - Customer-safe instructions/address projection: PASS
 - Initial vault selection attempt exposed a bug where an empty `acceptedCategories` list rejected every category; the code now treats an empty list as “all categories.”
+- Charizard vault selection: PASS — `staging-gb-intake`, persisted as `SHIPPING_REQUIRED`, intake reference `SLICE-3AA5144D`
+- Invalid destination guard: PASS — returns `VAULT_NOT_AVAILABLE`
+- Current shipment/receipt state: no shipment, no delivery, no Slice receipt
 - Shipment states and staff-only receipt command are implemented.
 - Carrier `DELIVERED` remains separate from Slice receipt confirmation.
 - Current Charizard receipt: NOT EXECUTED.
@@ -99,6 +103,7 @@ Operator action required: obtain an approved PriceCharting API token from the Pr
 
 - Admin now exposes a dedicated PriceCharting status summary with configured state, last success/failure, mapped count, fresh count, stale count, and needs-mapping count.
 - Missing PriceCharting is reported as `NOT_CONFIGURED`; Ximilar remains unavailable/optional. No provider is reported operational without configuration.
+- Admin Platform Operations exposes `NOT_CONFIGURED` and `BETA_DISABLED` filters for these states.
 - Marketplace, Asset Detail, Portfolio, and Collector Workspace continue to read persisted market data; provider calls remain explicit research/refresh operations.
 
 ### First real market asset

@@ -52,7 +52,14 @@ const statuses: Record<PlatformTab, string[]> = {
   health: [],
   jobs: ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD_LETTER"],
   webhooks: ["ACCEPTED", "PROCESSING", "PROCESSED", "FAILED", "REJECTED"],
-  integrations: ["Operational", "Degraded", "Unavailable", "Unknown"],
+  integrations: [
+    "Operational",
+    "Degraded",
+    "Unavailable",
+    "Unknown",
+    "BETA_DISABLED",
+    "NOT_CONFIGURED",
+  ],
   audit: [],
   "feature-flags": [],
   settings: [],
@@ -83,7 +90,7 @@ function Status({ value }: { value: unknown }) {
   const normalized = String(value ?? "unknown").toLowerCase();
   return (
     <span
-      className={`admin-platform-status ${normalized.includes("fail") || normalized.includes("reject") || normalized.includes("unavailable") ? "danger" : normalized.includes("degrad") || normalized.includes("attention") ? "warning" : normalized.includes("unknown") ? "muted" : "ok"}`}
+      className={`admin-platform-status ${normalized.includes("fail") || normalized.includes("reject") || normalized.includes("unavailable") ? "danger" : normalized.includes("degrad") || normalized.includes("attention") || normalized.includes("not_configured") ? "warning" : normalized.includes("unknown") || normalized.includes("beta_disabled") ? "muted" : "ok"}`}
     >
       {label(value)}
     </span>
