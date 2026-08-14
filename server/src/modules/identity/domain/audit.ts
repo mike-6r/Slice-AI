@@ -111,6 +111,14 @@ const metadataKeys: Record<string, readonly string[]> = {
     'previousStatus',
     'resultingStatus',
   ],
+  SUBMISSION_IDENTITY_CORRECTED: [
+    'previousName',
+    'previousYear',
+    'name',
+    'year',
+    'reason',
+    'version',
+  ],
 };
 
 /** Enforces action-specific metadata before it reaches durable audit storage. */

@@ -1309,12 +1309,11 @@ export class SubmissionService {
           },
         });
         await audit('SUBMISSION_IDENTITY_CORRECTED', 'submission', id, {
-          before: {
-            name: stringMetadata(before.name),
-            year: stringMetadata(before.year),
-          },
-          after: { name: input.name, year: input.year },
-          note: redactNote(input.note),
+          previousName: stringMetadata(before.name),
+          previousYear: stringMetadata(before.year),
+          name: input.name,
+          year: input.year,
+          reason: redactNote(input.note),
           version: updated.version,
         });
         return ownerProjection(updated);
