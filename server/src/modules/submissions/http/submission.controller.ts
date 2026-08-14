@@ -73,6 +73,14 @@ const decision = z
     customerMessage: z.string().trim().min(1).max(2000).optional(),
   })
   .strict();
+const identityCorrection = z
+  .object({
+    version: z.number().int().min(1),
+    name: z.string().trim().min(1).max(255),
+    year: z.string().trim().regex(/^\d{4}$/),
+    note: z.string().trim().min(1).max(2000),
+  })
+  .strict();
 const reviewNote = z.object({ note: z.string().trim().max(2000) }).strict();
 const queueQuery = z
   .object({
@@ -407,6 +415,25 @@ export class SubmissionController {
         submissionId,
         'REJECTED',
         parse(decision, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/correct-identity')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  correctIdentity(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.correctApprovedIdentity(
+        req.actor!,
+        submissionId,
+        parse(identityCorrection, body),
         req.requestId ?? 'unknown',
         key!,
       ),

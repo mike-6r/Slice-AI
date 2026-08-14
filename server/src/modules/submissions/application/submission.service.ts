@@ -46,6 +46,12 @@ type DraftInput = {
   marketResearchId?: string;
 };
 type UpdateInput = DraftInput & { version: number };
+type IdentityCorrectionInput = {
+  version: number;
+  name: string;
+  year: string;
+  note: string;
+};
 
 const metadataAllowedKeys = new Set([
   'name',
@@ -1221,6 +1227,94 @@ export class SubmissionService {
           reviewId: review.id,
           reasonCode: input.reasonCode,
           requestedItems: input.requestedItems ?? [],
+          version: updated.version,
+        });
+        return ownerProjection(updated);
+      },
+    );
+  }
+
+  correctApprovedIdentity(
+    actor: Actor,
+    id: string,
+    input: IdentityCorrectionInput,
+    requestId: string,
+    key: string,
+  ) {
+    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to correct submission identity.',
+      });
+    }
+    return this.mutate(
+      actor,
+      `submission.identity-correction:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/correct-identity`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+        `;
+        const current = await db.assetSubmission.findUnique({
+          where: { id },
+          include: {
+            media: { orderBy: { slot: 'asc' } },
+            marketResearch: {
+              orderBy: { collectedAt: 'desc' },
+              include: { observations: { orderBy: { observedAt: 'desc' } } },
+            },
+          },
+        });
+        if (!current) this.notFound();
+        assertReviewerIsNotOwner(current!.ownerUserId, actor.userId);
+        if (current!.status !== 'APPROVED') {
+          throw new ConflictException({
+            code: 'SUBMISSION_STATE_CONFLICT',
+            message: 'Only an approved submission can receive an identity correction.',
+          });
+        }
+        if (current!.assetId) {
+          throw new ConflictException({
+            code: 'SUBMISSION_IDENTITY_CORRECTION_REQUIRES_ASSET_WORKFLOW',
+            message: 'This submission is already linked to a catalogue asset.',
+          });
+        }
+        assertExpectedVersion(current!.version, input.version);
+        const before = isRecord(current!.declaredMetadata)
+          ? current!.declaredMetadata
+          : {};
+        const declaredMetadata = {
+          ...before,
+          name: input.name,
+          year: input.year,
+        };
+        assertSubmissionDetails(declaredMetadata);
+        assertSubmissionTerms(declaredMetadata);
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            declaredMetadata: jsonMetadata(declaredMetadata),
+            version: { increment: 1 },
+          },
+          include: {
+            media: { orderBy: { slot: 'asc' } },
+            marketResearch: {
+              orderBy: { collectedAt: 'desc' },
+              include: { observations: { orderBy: { observedAt: 'desc' } } },
+            },
+          },
+        });
+        await audit('SUBMISSION_IDENTITY_CORRECTED', 'submission', id, {
+          before: {
+            name: stringMetadata(before.name),
+            year: stringMetadata(before.year),
+          },
+          after: { name: input.name, year: input.year },
+          note: redactNote(input.note),
           version: updated.version,
         });
         return ownerProjection(updated);
