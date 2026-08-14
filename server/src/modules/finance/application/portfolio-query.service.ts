@@ -119,6 +119,12 @@ export class PortfolioQueryService {
         issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
         ownedUnits: position.settledUnits.toString(),
         reservedUnits: position.reservedUnits.toString(),
+        // This is the user's sellable settled position, not unowned market
+        // liquidity. Keep the legacy field below for API compatibility while
+        // exposing the explicit customer-facing meaning.
+        availableToSellUnits: (
+          position.settledUnits - position.reservedUnits
+        ).toString(),
         availableUnits: (
           position.settledUnits - position.reservedUnits
         ).toString(),

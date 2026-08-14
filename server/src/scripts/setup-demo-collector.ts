@@ -701,6 +701,7 @@ export async function runCollectorDemoSetup() {
           lifecycle,
           ownership,
           ownershipOps,
+          lots,
           admin,
           owner.userId,
           asset.id,
@@ -1325,6 +1326,7 @@ async function ensureAssetLifecycle(
   lifecycle: LifecycleService,
   ownership: OwnershipService,
   operations: OwnershipOperationsService,
+  lots: PortfolioLotService,
   admin: Actor,
   collectorUserId: string,
   assetId: string,
@@ -1443,6 +1445,31 @@ async function ensureAssetLifecycle(
       `collector-ownership-${randomUUID()}`,
       `collector-ownership:${spec.key}:${owned}`,
     );
+
+  // The initial staging allocation is a real portfolio acquisition from the
+  // demo fixture's perspective. Record its cost basis through the finance lot
+  // service so collector holdings and portfolio snapshots can calculate P/L;
+  // do not manufacture a value in the frontend.
+  const lotSourceReference = `collector-ownership-lot:${spec.key}`;
+  const existingLot = await db.portfolioLot.findUnique({
+    where: { sourceReference: lotSourceReference },
+    select: { id: true },
+  });
+  if (!existingLot) {
+    const unitPrice = spec.illustrativeValueMinor / 1_000n;
+    await lots.recordAcquisition(
+      admin,
+      {
+        userId: collectorUserId,
+        assetId,
+        units: '300',
+        totalCostMinor: (unitPrice * 300n).toString(),
+        sourceReference: lotSourceReference,
+      },
+      `collector-ownership-lot:${spec.key}`,
+      `collector-ownership-lot:${spec.key}`,
+    );
+  }
 }
 
 async function ensureMarketReference(

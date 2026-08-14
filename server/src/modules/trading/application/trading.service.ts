@@ -1749,11 +1749,13 @@ function unitsForBudget(
   return units;
 }
 
-function formatOwnershipPercent(units: bigint, total: bigint) {
+export function formatOwnershipPercent(units: bigint, total: bigint) {
   if (total < 1n) return '0';
-  const scaled = (units * 10_000n * 10_000n) / total;
-  const whole = scaled / 10_000n;
-  const fraction = (scaled % 10_000n).toString().padStart(4, '0').replace(/0+$/, '');
+  // Keep the customer value in percent (not a fraction) and scale only once:
+  // 50 / 1,000 => 5%, 300 / 1,000 => 30%, 5 / 1,000 => 0.5%.
+  const scaled = (units * 10_000n) / total;
+  const whole = scaled / 100n;
+  const fraction = (scaled % 100n).toString().padStart(2, '0').replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 

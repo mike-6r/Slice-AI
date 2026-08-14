@@ -72,6 +72,10 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     issuedUnits: nullableString(value.issuedUnits),
     ownedUnits: units(value.ownedUnits, "holding.ownedUnits"),
     reservedUnits: units(value.reservedUnits, "holding.reservedUnits"),
+    availableToSellUnits:
+      value.availableToSellUnits === undefined
+        ? undefined
+        : units(value.availableToSellUnits, "holding.availableToSellUnits"),
     availableUnits: units(value.availableUnits, "holding.availableUnits"),
     estimatedValueMinor:
       value.estimatedValueMinor === null

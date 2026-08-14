@@ -21,6 +21,8 @@ export interface PortfolioHolding {
   totalUnits?: string | null;
   issuedUnits?: string | null;
   reservedUnits: string;
+  /** Settled ownership that is not reserved by an open sell order. */
+  availableToSellUnits?: string;
   availableUnits: string;
   estimatedValueMinor: GbpMinorUnits | null;
   valuationAsOf: ISODateTime | null;

@@ -23,7 +23,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -102,6 +102,17 @@ type PortfolioSearch = {
   activityPageSize?: number;
 };
 
+function activityQueryRetry(failureCount: number, error: unknown) {
+  if (
+    error instanceof ApiError &&
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 500
+  )
+    return false;
+  return failureCount < 2;
+}
+
 export function Portfolio() {
   useCurrency();
   const services = useAppServices();
@@ -131,15 +142,17 @@ export function Portfolio() {
   });
   const activityTransactions = useQuery({
     queryKey: queryKeys.portfolio.transactions("activity"),
-    queryFn: () => services.portfolio.transactions({ limit: 100 }),
+    queryFn: () => services.portfolio.transactions({ limit: 50 }),
     enabled: isAuthenticated && tab === "activity",
     staleTime: 15_000,
+    retry: activityQueryRetry,
   });
   const accountActivity = useQuery({
     queryKey: queryKeys.account.activity("activity"),
-    queryFn: () => services.account.activity({ limit: 100 }),
+    queryFn: () => services.account.activity({ limit: 50 }),
     enabled: isAuthenticated && tab === "activity",
     staleTime: 15_000,
+    retry: activityQueryRetry,
   });
   const orders = useQuery({
     queryKey: queryKeys.trading.orders,
@@ -162,6 +175,12 @@ export function Portfolio() {
     queryFn: () => services.portfolio.performance(performanceRange),
     enabled: isAuthenticated,
   });
+  const previousTab = useRef(tab);
+  useEffect(() => {
+    if (previousTab.current === tab) return;
+    previousTab.current = tab;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [tab]);
   const categories = useMemo(
     () =>
       Array.from(
@@ -313,7 +332,17 @@ function PortfolioTabs({ active }: { active: PortfolioTab }) {
         <Link
           key={tab}
           to="/portfolio"
-          search={{ tab }}
+          search={
+            tab === "activity"
+              ? { tab }
+              : {
+                  tab,
+                  activityType: undefined,
+                  activityRange: undefined,
+                  activityPage: undefined,
+                  activityPageSize: undefined,
+                }
+          }
           className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
             active === tab
               ? "border-accent/40 bg-accent/10 text-foreground"
@@ -1748,7 +1777,7 @@ function HoldingsExperience({
               <tr>
                 <th>Asset</th>
                 <th>Ownership</th>
-                <th>Available</th>
+                <th>Available to sell</th>
                 <th>Price per Slice</th>
                 <th>Current value</th>
                 <th>P/L (unrealised)</th>
@@ -1801,10 +1830,10 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
             </dd>
           </div>
           <div>
-            <dt>Available</dt>
+            <dt>Available to sell</dt>
             <dd>
               {holding.totalUnits
-                ? `${ownershipPercent(holding.availableUnits, holding.totalUnits)}%`
+                ? `${ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
                 : "Unavailable"}
             </dd>
           </div>
@@ -1964,7 +1993,7 @@ function HoldingsPanel({
               <tr>
                 <th>Asset</th>
                 <th>Ownership</th>
-                <th>Available</th>
+                <th>Available to sell</th>
                 <th>Price per Slice</th>
                 <th>Current value</th>
                 <th>P/L (unrealised)</th>
@@ -2033,14 +2062,14 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
           <small>{holding.ownedUnits} units owned</small>
         </span>
       </td>
-      <td data-label="Available">
+      <td data-label="Available to sell">
         <span className="portfolio-table__quantity">
           <strong>
             {holding.totalUnits
-              ? `${ownershipPercent(holding.availableUnits, holding.totalUnits)}%`
+              ? `${ownershipPercent(holding.availableToSellUnits ?? holding.availableUnits, holding.totalUnits)}%`
               : "Unavailable"}
           </strong>
-          <small>{holding.availableUnits} units available</small>
+          <small>{holding.availableToSellUnits ?? holding.availableUnits} units sellable</small>
         </span>
       </td>
       <td data-label="Price per Slice">
@@ -2141,10 +2170,16 @@ function PortfolioActivityExperience({
   assets,
   holdings,
 }: {
-  accountActivity: UseQueryResult<{ items: ActivityAccountItem[]; nextCursor: string | null }>;
-  transactions: UseQueryResult<{ items: PortfolioTransaction[]; nextCursor?: string | null }>;
-  orders: UseQueryResult<TradingOrderPage>;
-  executions: UseQueryResult<TradingExecutionPage>;
+  accountActivity: UseQueryResult<
+    { items: ActivityAccountItem[]; nextCursor: string | null },
+    unknown
+  >;
+  transactions: UseQueryResult<
+    { items: PortfolioTransaction[]; nextCursor?: string | null },
+    unknown
+  >;
+  orders: UseQueryResult<TradingOrderPage, unknown>;
+  executions: UseQueryResult<TradingExecutionPage, unknown>;
   assets: Asset[];
   holdings: PortfolioHolding[];
 }) {
@@ -2189,8 +2224,11 @@ function PortfolioActivityExperience({
   const pageCount = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
   const visibleEvents = filteredEvents.slice((page - 1) * pageSize, page * pageSize);
   const hasDistributionEvents = allEvents.some((event) => event.category === "DISTRIBUTIONS");
-  const loading = accountActivity.isLoading || transactions.isLoading || executions.isLoading;
-  const failed = accountActivity.isError && transactions.isError && executions.isError;
+  const failed = accountActivity.isError || transactions.isError || executions.isError;
+  // Disabled queries have an idle fetch status even though TanStack Query may
+  // report them as pending. Only an active request should keep the skeleton up.
+  const loading =
+    !failed && (accountActivity.isFetching || transactions.isFetching || executions.isFetching);
   const updateSearch = (patch: Partial<PortfolioSearch>) => {
     void navigate({
       search: (current) => ({ ...current, tab: "activity", ...patch }),
@@ -2230,6 +2268,7 @@ function PortfolioActivityExperience({
                 role="tab"
                 aria-selected={filter === value}
                 className={filter === value ? "is-active" : ""}
+                aria-pressed={filter === value}
                 onClick={() => updateSearch({ activityType: value, activityPage: 1 })}
               >
                 {label}
@@ -2264,8 +2303,12 @@ function PortfolioActivityExperience({
         </div>
       ) : failed ? (
         <PanelError
-          message="Your activity is temporarily unavailable."
-          retry={() => void accountActivity.refetch()}
+          message="We couldn't load your activity right now."
+          retry={() => {
+            void accountActivity.refetch();
+            void transactions.refetch();
+            void executions.refetch();
+          }}
         />
       ) : !visibleEvents.length ? (
         <PortfolioEmptyState
