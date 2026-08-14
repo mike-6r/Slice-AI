@@ -134,3 +134,57 @@ Optional next: Ximilar token plus both enable flags.
 Deferred: Plaid, Bridge, SMS, email verification, and 2FA provider work.
 
 No direct wallet balance mutation, fake receipt, fixture reseed, database reset, or publication was performed.
+
+## Phase 4 PriceCharting and first physical Beta asset readiness
+
+Audit date: 2026-08-14  
+Deployment commit: `067f2e5`
+
+### Deployment and provider gate
+
+- Main/VPS before this pass: `0c5e890`
+- API and web services: active; `/health` and `/ready` pass
+- `PRICECHARTING_API_TOKEN` / legacy key: **MISSING** (not printed or exposed)
+- `PRICECHARTING_ENABLED`: **FALSE/unset**
+- Real lookup: **NOT RUN** — the server correctly refuses provider execution without a token
+- Adapter, provider queue, Redis/in-process rate limit, cache, mapping, observation, snapshot, and D17 refresh implementations: READY by source and targeted tests
+- Current PriceCharting observations: `0`
+- Current persisted snapshots: demo/staging records only; no legitimate PriceCharting snapshot exists for the approved Charizard
+- PriceCharting refresh jobs: existing jobs are safely failed as `PRICECHARTING_NOT_CONFIGURED`; no retry storm was triggered
+- Redaction and no-N+1 behavior remain server-side; ordinary page rendering uses persisted data and does not call PriceCharting
+
+### Beta telemetry correction
+
+- Admin Platform Operations now excludes `slice-demo-*` and non-published assets from active Beta PriceCharting coverage.
+- Current audit: `0` active Beta mappings, `3` retired/demo mappings, `0` active fresh, `0` active stale, and `0` active assets needing mapping.
+- Retired/demo mappings remain visible as a separate count and no longer inflate live Beta provider health.
+
+### Current Charizard and intake state
+
+- Submission `054e7773-87ad-4b5e-9701-916a3aa5144d`: `APPROVED`
+- Intake: `SHIPPING_REQUIRED`, destination `staging-gb-intake`, reference `SLICE-3AA5144D`
+- Physical shipment: not recorded
+- Receipt: not recorded
+- Marketplace, market-ready, issuance, orders, and D14 execution: not permitted
+- Controlled intake UI and destination selection remain available; shipment form must not be submitted until a real operator-approved receiving address and physical package exist.
+
+### Phase 4 remaining checklist
+
+- [ ] Operator configures `PRICECHARTING_API_TOKEN` and `PRICECHARTING_ENABLED=true`
+- [ ] One exact Charizard lookup and Staff-confirmed provider mapping
+- [ ] First legitimate PriceCharting observation and snapshot
+- [ ] Scheduled refresh/cache/last-known-good verified with real provider data
+- [ ] Real Beta intake destination approved by operator
+- [ ] Physical package sent and tracking recorded
+- [ ] Carrier delivered
+- [ ] Slice receipt confirmed by Staff
+- [ ] Verification, D11 valuation, custody, market readiness, publication, issuance, and D14 gates completed
+
+### Storage and deferred providers
+
+- Current Beta storage: local submission storage
+- Production durable object storage: **NOT READY**
+- Ximilar: not configured; optional and not a Phase 4 blocker
+- Plaid, Bridge, SMS, email verification, and 2FA: deferred
+
+Phase 4 status: **WAITING FOR PRICECHARTING CONFIG**. No fake provider response, shipment, receipt, publication, issuance, or trading was created.
