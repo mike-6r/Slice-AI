@@ -203,3 +203,12 @@ Phase 4 status: **WAITING FOR PRICECHARTING CONFIG**. No fake provider response,
 - No additional provider lookup was made after the no-match result
 
 Phase 4 status after configuration: **PROVIDER CONFIGURED — WAITING FOR EXACT STAFF-CONFIRMED MAPPING**.
+
+### Exact PriceCharting confirmation — 2026-08-14
+
+- Submission `054e7773-87ad-4b5e-9701-916a3aa5144d` was audited before lookup. The stored year was already `2023`; the pre-correction title carried the stale `2024 Pokémon` wording.
+- Staff/admin correction path: `POST /v1/reviews/submissions/:id/correct-identity`; audit events `SUBMISSION_IDENTITY_CORRECTED` are preserved. Final submission version: `12`; status remains `APPROVED`; intake remains `SHIPPING_REQUIRED`.
+- Exactly one provider product request was made with the explicit PriceCharting Product ID `5605741`; no fuzzy search was used. The provider response returned `Charizard ex #223` and the raw/ungraded `loose-price` guide (`10969` USD minor units), observed `2026-08-14T18:13:26.367Z`, as `PRICE_GUIDE` provenance.
+- The stored research observation is preserved with provider ID `5605741:loose-price`, source URL, currency, integer amount, and timestamp. The current matcher rejected it because it compares `223/197` as `223197` against the provider title token `#223`; this is a domain matching defect, not a provider identity mismatch.
+- Global `MarketProviderMapping` / `AssetMarketSnapshot` persistence remains blocked by the existing workflow: the approved submission has no canonical `Asset`, and no authorized asset-create/link/mapping operation was available without beginning the lifecycle. The three existing PriceCharting mappings remain retired/demo records.
+- No D11 valuation, publication, issuance, D14 order, funding, shipment, delivery, or receipt state changed. Ordinary page loads were not used to trigger provider calls.

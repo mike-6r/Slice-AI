@@ -185,6 +185,22 @@ export class SubmissionController {
       req.requestId ?? 'unknown',
     );
   }
+  @Post('reviews/market-research/:id/reclassify')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  reclassifyMarketResearch(
+    @Param('id') researchId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.research.reclassifyStored(
+        req.actor!,
+        researchId,
+        req.requestId ?? 'unknown',
+      ),
+    );
+  }
   @Get('submissions')
   @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) {

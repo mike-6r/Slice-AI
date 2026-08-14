@@ -1,4 +1,9 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service';
@@ -228,6 +233,88 @@ export class CollectibleMarketResearchService {
     });
   }
 
+  /**
+   * Re-evaluates provider observations already persisted by an explicit
+   * research request. This is a staff-only domain operation: it never calls
+   * an external provider and exists so matching-rule corrections do not
+   * require a second paid lookup.
+   */
+  async reclassifyStored(actor: Actor, researchId: string, requestId: string) {
+    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to reclassify market research.',
+      });
+    }
+    const record = await this.db.submissionMarketResearch.findUnique({
+      where: { id: researchId },
+      include: { observations: { orderBy: { observedAt: 'desc' } } },
+    });
+    if (!record) throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
+    const identity = record.identity as unknown as Identity;
+    const observations: Observation[] = record.observations.map((item) => ({
+      providerCode: item.providerCode,
+      externalReferenceId: item.externalReferenceId,
+      externalUrl: item.externalUrl ?? '',
+      observationType: item.observationType as Observation['observationType'],
+      originalTitle: item.originalTitle,
+      amountMinor: item.amountMinor,
+      currency: item.currency,
+      observedAt: item.observedAt,
+      soldAt: item.soldAt ?? undefined,
+      grader: item.grader ?? undefined,
+      grade: item.grade ?? undefined,
+      variant: item.variant ?? undefined,
+    }));
+    const classified = observations.map((item) => classifyObservation(identity, item));
+    const now = new Date();
+    const aggregate = aggregateSnapshot(classified, now);
+    const updated = await this.db.$transaction(async (db) => {
+      await db.submissionMarketResearch.update({
+        where: { id: researchId },
+        data: {
+          state: aggregate.state,
+          dataQuality: aggregate.dataQuality,
+          sourceCoverage: aggregate.sourceCoverage as Prisma.InputJsonValue,
+          snapshot: aggregate.snapshot as Prisma.InputJsonValue,
+        },
+      });
+      await Promise.all(
+        record.observations.map((row, index) => {
+          const item = classified[index]!;
+          return db.submissionMarketObservation.update({
+            where: { id: row.id },
+            data: {
+              matchQuality: item.matchQuality,
+              exclusionReason: item.exclusionReason ?? null,
+              includedInSnapshot: item.included,
+            },
+          });
+        }),
+      );
+      return db.submissionMarketResearch.findUniqueOrThrow({
+        where: { id: researchId },
+        include: { observations: { orderBy: { observedAt: 'desc' } } },
+      });
+    });
+    await this.db.auditEvent.create({
+      data: {
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'MARKET_RESEARCH_RECLASSIFIED',
+        resourceType: 'market-research',
+        resourceId: researchId,
+        requestId,
+        sessionId: actor.sessionId,
+        result: 'SUCCESS',
+        metadata: { state: aggregate.state, exactCompCount: aggregate.snapshot.exactCompCount },
+        createdAt: now,
+      },
+    });
+    return researchProjection(updated);
+  }
+
   private async unavailable(
     ownerUserId: string,
     identity: Identity,
@@ -395,14 +482,16 @@ function classifyObservation(
   item: Observation,
 ): MatchedObservation {
   const haystack = normalize(`${item.originalTitle} ${item.variant ?? ''}`);
-  const required = [identity.name, identity.cardNumber]
+  const required = [identity.name]
     .filter(Boolean)
     .map((part) => normalize(part!));
   const wrong =
     /\b(proxy|replica|reprint|custom|empty slab|lot|bundle|damaged)\b/i.test(
       item.originalTitle,
     );
-  const identityMatch = required.every((part) => haystack.includes(part));
+  const identityMatch =
+    required.every((part) => haystack.includes(part)) &&
+    (!identity.cardNumber || cardNumberMatches(identity.cardNumber, haystack));
   const expectedGraded = Boolean(identity.grader || identity.grade);
   const graderMatch =
     !expectedGraded ||
@@ -432,6 +521,13 @@ function classifyObservation(
           : undefined,
     included: quality === 'EXACT',
   };
+}
+
+function cardNumberMatches(cardNumber: string, haystack: string) {
+  const normalizedCardNumber = normalize(cardNumber);
+  if (haystack.includes(normalizedCardNumber)) return true;
+  const numerator = normalize(cardNumber.split('/')[0] ?? '');
+  return numerator.length >= 2 && haystack.includes(numerator);
 }
 function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
   const exactSales = observations.filter(
