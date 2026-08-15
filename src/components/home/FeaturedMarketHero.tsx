@@ -20,21 +20,6 @@ export function FeaturedMarketHero() {
   const { formatMoney } = useCurrency();
   if (isBetaEnvironment) {
     const asset = featuredQuery.data?.[0];
-    if (featuredQuery.isPending) {
-      return (
-        <section
-          className="featured-market-hero featured-market-hero--empty"
-          aria-label="Featured asset"
-        >
-          <p className="page-kicker">Live Beta</p>
-          <h2>Published collectibles will appear here.</h2>
-          <p>
-            Slice is waiting for the first real asset to complete the verification and
-            market-readiness process.
-          </p>
-        </section>
-      );
-    }
     if (!asset) {
       return (
         <section

@@ -16,7 +16,7 @@ import { useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { isBetaEnvironment } from "@/config/environment";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
+import { useFeaturedAssets } from "@/queries/hooks";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -74,7 +74,6 @@ const howSliceWorks = [
 function HomePage() {
   useCurrency();
   const { isAuthenticated } = useSession();
-  const trending = useTrendingAssets();
 
   return (
     <div className="approved-home">
@@ -113,7 +112,7 @@ function HomePage() {
 
         <div className="approved-home__featured-stack">
           <FeaturedMarketHero />
-          {!isBetaEnvironment ? <TradingEducation compact /> : null}
+          <TradingEducation compact />
         </div>
       </section>
 
@@ -157,63 +156,53 @@ function HomePage() {
 
       <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
         <SectionHeading
-          eyebrow="Illustrative market examples"
-          title="Trending opportunities."
+          eyebrow={isBetaEnvironment ? "Static showcase examples" : "Illustrative market examples"}
+          title={isBetaEnvironment ? "Collectibles to explore." : "Trending opportunities."}
           action="View all markets"
           to="/marketplace"
           headingId="trending-heading"
         />
+        {isBetaEnvironment ? (
+          <p className="approved-home__showcase-note">
+            These card references are static educational examples. They are not published Slice
+            assets, live market quotes or available ownership.
+          </p>
+        ) : null}
         <div className="approved-home__trending" data-testid="homepage-trending-assets">
-          {isBetaEnvironment ? (
-            <div className="approved-home__empty-state">
-              <strong>
-                {trending.isLoading
-                  ? "Loading published collectibles…"
-                  : "No published collectibles yet."}
-              </strong>
-              <p>
-                Real assets will appear after they complete Slice&apos;s review, custody and
-                market-readiness process.
-              </p>
-              <Link to="/marketplace" className="text-link">
-                View the marketplace
-              </Link>
-            </div>
-          ) : (
-            HOMEPAGE_TRENDING_ASSETS.map((asset) => (
-              <ShowcaseAssetLink
-                key={asset.showcaseKey}
-                asset={asset}
-                className="approved-home__asset-card"
-              >
-                <div className="approved-home__asset-media">
-                  <img src={asset.image} alt="" loading="lazy" />
-                  <span className="approved-home__asset-category">{asset.category}</span>
-                  <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
-                  <Bookmark aria-hidden="true" />
-                </div>
-                <div className="approved-home__asset-body">
-                  <strong>{asset.title}</strong>
-                  <small>{asset.grade}</small>
-                  <div className="approved-home__asset-price">
-                    <div>
-                      <small>Asset value</small>
-                      <b>{asset.displayPrice}</b>
-                    </div>
-                    <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
+          {HOMEPAGE_TRENDING_ASSETS.map((asset) => (
+            <ShowcaseAssetLink
+              key={asset.showcaseKey}
+              asset={asset}
+              staticOnly={isBetaEnvironment}
+              className="approved-home__asset-card"
+            >
+              <div className="approved-home__asset-media">
+                <img src={asset.image} alt="" loading="lazy" />
+                <span className="approved-home__asset-category">{asset.category}</span>
+                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
+                <Bookmark aria-hidden="true" />
+              </div>
+              <div className="approved-home__asset-body">
+                <strong>{asset.title}</strong>
+                <small>{asset.grade}</small>
+                <div className="approved-home__asset-price">
+                  <div>
+                    <small>Reference value</small>
+                    <b>{asset.displayPrice}</b>
                   </div>
-                  <div className="approved-home__availability">
-                    <span>
-                      <i style={{ width: asset.displayAvailability }} />
-                    </span>
-                    <small>
-                      {asset.displaySharePrice} · {asset.displayAvailability} available
-                    </small>
-                  </div>
+                  <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
                 </div>
-              </ShowcaseAssetLink>
-            ))
-          )}
+                <div className="approved-home__availability">
+                  <span>
+                    <i style={{ width: asset.displayAvailability }} />
+                  </span>
+                  <small>
+                    {asset.displaySharePrice} · {asset.displayAvailability} illustrative
+                  </small>
+                </div>
+              </div>
+            </ShowcaseAssetLink>
+          ))}
         </div>
       </section>
 
@@ -620,12 +609,21 @@ function HowSliceWorks() {
 function ShowcaseAssetLink({
   asset,
   className,
+  staticOnly = false,
   children,
 }: {
   asset: HomepageShowcaseAsset;
   className: string;
+  staticOnly?: boolean;
   children: ReactNode;
 }) {
+  if (staticOnly) {
+    return (
+      <Link to="/marketplace" className={className}>
+        {children}
+      </Link>
+    );
+  }
   const destination = showcaseDestination(asset);
   return destination.kind === "asset" ? (
     <Link to="/asset/$id" params={{ id: destination.id }} className={className}>
