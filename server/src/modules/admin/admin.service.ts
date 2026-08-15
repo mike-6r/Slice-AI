@@ -1681,16 +1681,35 @@ export class AdminService {
               submittedAt: true,
               updatedAt: true,
               owner: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
-              media: { select: { status: true } },
+              media: {
+                where: { deletedAt: null },
+                select: { status: true, slot: true, objectKey: true },
+              },
+            },
+          },
+          ownershipSupply: {
+            select: {
+              totalUnits: true,
+              issuedUnits: true,
+              positions: {
+                where: { settledUnits: { gt: 0n } },
+                select: { settledUnits: true },
+              },
             },
           },
         },
       }),
     ]);
     return {
-      items: assets.map((asset) => {
+      items: await Promise.all(assets.map(async (asset) => {
         const submission = asset.submissions[0] ?? null;
         const mediaStatuses = submission?.media.map((media) => media.status) ?? [];
+        const frontMedia = submission?.media.find((media) => media.slot === 'front') ?? submission?.media[0];
+        const thumbnailUrl = frontMedia && frontMedia.status === 'SAFE'
+          ? await this.storage
+              .createPrivateDownloadUrl(frontMedia.objectKey, new Date(Date.now() + 5 * 60_000))
+              .catch(() => null)
+          : null;
         const mediaState = !mediaStatuses.length
           ? 'NOT_AVAILABLE'
           : mediaStatuses.every((status) => status === 'SAFE')
@@ -1708,6 +1727,7 @@ export class AdminService {
           publicId: asset.publicId,
           slug: asset.slug,
           title: asset.title,
+          thumbnailUrl,
           status: asset.status,
           identity: {
             category: asset.category.name,
@@ -1740,9 +1760,14 @@ export class AdminService {
           custodyState: asset.custodyRecord?.status ?? 'NOT_STARTED',
           marketReadiness: asset.publication?.status === 'PUBLISHED' ? 'PUBLISHED' : 'NOT_READY',
           publicationState: asset.publication?.status ?? 'NOT_PUBLISHED',
+          ownership: {
+            ownerCount: asset.ownershipSupply?.positions.length ?? 0,
+            totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,
+            issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
+          },
           updatedAt: asset.updatedAt.toISOString(),
         };
-      }),
+      })),
       pagination: {
         page,
         pageSize,
@@ -3610,6 +3635,16 @@ export class AdminService {
                 settledUnits: true,
                 reservedUnits: true,
                 accountId: true,
+                account: {
+                  select: {
+                    user: {
+                      select: {
+                        id: true,
+                        profile: { select: { displayName: true, publicUsername: true } },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -3659,6 +3694,26 @@ export class AdminService {
     };
     const listing = external('STAGING_CURRENT_LISTING');
     const sale = external('STAGING_RECENT_COMPLETED_SALE');
+    const safeMedia = asset.submissions.flatMap((submission) =>
+      submission.media
+        .filter((item) => item.status === 'SAFE')
+        .map((item) => ({
+          slot: item.slot,
+          filename: item.originalFilename,
+          status: item.status,
+          objectKey: item.objectKey,
+        })),
+    );
+    const signedMedia = await Promise.all(
+      safeMedia.map(async (item) => ({
+        slot: item.slot,
+        filename: item.filename,
+        status: item.status,
+        url: await this.storage
+          .createPrivateDownloadUrl(item.objectKey, new Date(Date.now() + 5 * 60_000))
+          .catch(() => null),
+      })),
+    );
     const stages = detailStages(
       asset,
       approved,
@@ -3701,16 +3756,7 @@ export class AdminService {
       status: asset.status,
       createdAt: asset.createdAt.toISOString(),
       updatedAt: asset.updatedAt.toISOString(),
-      media: asset.submissions.flatMap((submission) =>
-        submission.media
-          .filter((item) => item.status === 'SAFE')
-          .map((item) => ({
-            slot: item.slot,
-            filename: item.originalFilename,
-            status: item.status,
-            url: null,
-          })),
-      ),
+      media: signedMedia,
       identity: {
         category: asset.category.name,
         categorySlug: asset.category.slug,
@@ -3767,8 +3813,23 @@ export class AdminService {
                 ).length,
               )
             : null),
+        holders:
+          asset.ownershipSupply?.positions
+            .filter((position) => position.settledUnits > 0n)
+            .map((position) => ({
+              accountId: position.accountId,
+              userId: position.account.user?.id ?? null,
+              displayName:
+                position.account.user?.profile?.displayName ?? 'System treasury',
+              username: position.account.user?.profile?.publicUsername ?? null,
+              units: position.settledUnits.toString(),
+              percentage:
+                asset.ownershipSupply && asset.ownershipSupply.totalUnits > 0n
+                  ? Number((position.settledUnits * 10000n) / asset.ownershipSupply.totalUnits) / 100
+                  : null,
+            })) ?? [],
       },
-      lifecycle: { current, stages },
+      lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
       collector: owner
         ? {
             id: owner.id,
@@ -3896,16 +3957,7 @@ export class AdminService {
         decision: submission.decisionCode,
         note: submission.decisionNote,
       })),
-      evidence: asset.submissions.flatMap((submission) =>
-        submission.media
-          .filter((item) => item.status === 'SAFE')
-          .map((item) => ({
-            slot: item.slot,
-            filename: item.originalFilename,
-            status: item.status,
-            url: null,
-          })),
-      ),
+      evidence: signedMedia,
     };
   }
 }
@@ -3958,6 +4010,47 @@ function detailStages(
   review: { status: string; completedAt: Date | null } | null,
   valuation: { decidedAt: Date } | null,
 ) {
+  // Seeded/demo catalogue records may be published without a physical intake
+  // record. They are useful for beta catalogue coverage, but must never imply
+  // that Slice shipped, received, or secured a physical item when no event is
+  // persisted. Keep that distinction explicit in the lifecycle projection.
+  if (asset.publishedAt && !intake) {
+    const legacyStages = [
+      ...(submission?.submittedAt
+        ? [
+            {
+              key: 'SUBMITTED',
+              label: 'Submitted',
+              at: submission.submittedAt,
+              state: 'complete' as const,
+            },
+          ]
+        : []),
+      ...(submission?.status === 'APPROVED' && submission.reviewedAt
+        ? [
+            {
+              key: 'ACCEPTED',
+              label: 'Accepted',
+              at: submission.reviewedAt,
+              state: 'complete' as const,
+            },
+          ]
+        : []),
+      {
+        key: 'LEGACY_BETA',
+        label: 'Legacy / seeded Beta fixture',
+        at: null,
+        state: 'current' as const,
+      },
+      {
+        key: 'MARKET_LIVE',
+        label: 'Published catalogue record',
+        at: asset.publishedAt,
+        state: 'complete' as const,
+      },
+    ];
+    return legacyStages;
+  }
   const done = (at: Date | null | undefined) =>
     at ? ('complete' as const) : ('upcoming' as const);
   const stages = [
@@ -4027,14 +4120,7 @@ function detailStages(
   const firstUpcoming = stages.findIndex((stage) => stage.state === 'upcoming');
   return stages.map((stage, index) => ({
     ...stage,
-    state:
-      stage.state === 'complete'
-        ? index === firstUpcoming - 1
-          ? 'complete'
-          : 'complete'
-        : index === firstUpcoming
-          ? 'current'
-          : stage.state,
+    state: stage.state === 'complete' ? 'complete' : index === firstUpcoming ? 'current' : stage.state,
   }));
 }
 

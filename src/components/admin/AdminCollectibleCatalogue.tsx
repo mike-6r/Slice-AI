@@ -79,18 +79,29 @@ function CatalogueContent({
   update: (patch: Record<string, string | undefined>) => void;
   onOpen: (assetId: string) => void;
 }) {
+  const [category, setCategory] = useState("");
+  const [physical, setPhysical] = useState("");
+  const [market, setMarket] = useState("");
+  const [sort, setSort] = useState("updated");
+  const visibleItems = data.items
+    .filter((item) => !category || item.identity.category === category)
+    .filter((item) => !physical || physicalState(item) === physical)
+    .filter((item) => !market || marketState(item) === market)
+    .sort((a, b) => {
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "owners") return b.ownership.ownerCount - a.ownership.ownerCount;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  const categories = [...new Set(data.items.map((item) => item.identity.category))].sort();
   return (
     <main className="admin-catalogue-page">
       <header className="admin-catalogue-header">
         <div>
           <p className="admin-catalogue-breadcrumb">
-            Admin Console <span>›</span> Canonical Catalogue
+            Admin Console <span>›</span> Collectible Catalogue
           </p>
           <h2>Collectibles</h2>
-          <p>
-            Canonical collectible records that have been explicitly created by the authorised
-            catalogue workflow.
-          </p>
+          <p>Manage Slice&apos;s verified collectible catalogue, custody and market lifecycle.</p>
         </div>
       </header>
       <div className="admin-catalogue-toolbar">
@@ -99,10 +110,42 @@ function CatalogueContent({
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search canonical collectibles"
-            aria-label="Search canonical collectibles"
+            placeholder="Search title, set, card number, cert or collector"
+            aria-label="Search collectibles"
           />
         </label>
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+          aria-label="Category"
+        >
+          <option value="">Category</option>
+          {categories.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <select
+          value={physical}
+          onChange={(event) => setPhysical(event.target.value)}
+          aria-label="Physical state"
+        >
+          <option value="">Physical state</option>
+          <option value="Secured">Secured</option>
+          <option value="In intake">In intake</option>
+          <option value="Not recorded">Not recorded</option>
+        </select>
+        <select
+          value={market}
+          onChange={(event) => setMarket(event.target.value)}
+          aria-label="Market state"
+        >
+          <option value="">Market state</option>
+          <option value="Published">Published</option>
+          <option value="Ready">Ready</option>
+          <option value="Not ready">Not ready</option>
+        </select>
         <select
           value={status}
           onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
@@ -115,19 +158,38 @@ function CatalogueContent({
           <option value="PUBLISHED">Published</option>
           <option value="ARCHIVED">Archived</option>
         </select>
+        <select
+          value={sort}
+          onChange={(event) => setSort(event.target.value)}
+          aria-label="Sort collectibles"
+        >
+          <option value="updated">Recently updated</option>
+          <option value="title">Title A–Z</option>
+          <option value="owners">Most owners</option>
+        </select>
       </div>
-      {data.items.length ? (
-        <section className="admin-catalogue-grid" aria-label="Canonical collectibles">
-          {data.items.map((item) => (
+      <div className="admin-catalogue-summary" aria-live="polite">
+        <strong>{data.pagination.total}</strong> collectible records
+        <span>·</span>
+        <strong>
+          {data.items.filter((item) => item.marketReadiness === "PUBLISHED").length}
+        </strong>{" "}
+        market published
+        <span>·</span>
+        <strong>{data.items.reduce((sum, item) => sum + item.ownership.ownerCount, 0)}</strong>{" "}
+        owner positions
+      </div>
+      {visibleItems.length ? (
+        <section className="admin-catalogue-grid" aria-label="Collectibles">
+          {visibleItems.map((item) => (
             <CatalogueCard key={item.id} item={item} onOpen={onOpen} />
           ))}
         </section>
       ) : (
         <section className="admin-catalogue-empty">
-          <strong>No canonical collectibles yet.</strong>
+          <strong>No collectibles match these filters.</strong>
           <p>
-            Approved submissions do not appear here until an authorised canonical Asset has been
-            created.
+            Try clearing a filter or searching by a shorter title, set, card number, or collector.
           </p>
         </section>
       )}
@@ -168,6 +230,16 @@ function CatalogueCard({
 }) {
   return (
     <article className="admin-catalogue-card">
+      <div className="admin-catalogue-card__media">
+        {item.thumbnailUrl ? (
+          <img src={item.thumbnailUrl} alt="" loading="lazy" />
+        ) : (
+          <ImageFallback />
+        )}
+        {needsAttention(item) ? (
+          <span className="admin-catalogue-card__attention">Needs attention</span>
+        ) : null}
+      </div>
       <div className="admin-catalogue-card__heading">
         <div>
           <small>{item.identity.category}</small>
@@ -182,33 +254,64 @@ function CatalogueCard({
             </small>
           ) : null}
         </div>
-        <span className="admin-catalogue-status">{sentence(item.status)}</span>
+        <div className="admin-catalogue-card__badges">
+          <span className="admin-catalogue-status">{sentence(item.status)}</span>
+          {item.provenance?.submissionStatus === "APPROVED" && item.status === "PUBLISHED" ? (
+            <span className="admin-catalogue-beta">Beta test</span>
+          ) : null}
+        </div>
       </div>
       <dl className="admin-catalogue-fields">
         <Field
-          label="Submission provenance"
+          label="Grading"
           value={
-            item.provenance
-              ? `${item.provenance.submissionStatus} · ${item.provenance.collector}`
-              : "No linked submission"
+            item.identity.grading
+              ? `${item.identity.grading.company} ${item.identity.grading.grade}`
+              : "Raw / ungraded"
           }
         />
-        <Field label="Media" value={sentence(item.mediaState)} />
-        <Field label="Verification" value={sentence(item.verificationState)} />
-        <Field label="Valuation" value={sentence(item.valuationState)} />
-        <Field label="Custody" value={sentence(item.custodyState)} />
-        <Field label="Market readiness" value={sentence(item.marketReadiness)} />
-        <Field label="Publication" value={sentence(item.publicationState)} />
+        <Field
+          label="Owners"
+          value={`${item.ownership.ownerCount} ${item.ownership.ownerCount === 1 ? "owner" : "owners"}`}
+        />
+        <Field label="Physical" value={physicalState(item)} />
+        <Field label="Market" value={marketState(item)} />
+        <Field label="Submitted by" value={item.provenance?.collector ?? "No linked submission"} />
       </dl>
       <button
         type="button"
         className="admin-catalogue-card__action"
         onClick={() => onOpen(item.id)}
       >
-        Open canonical detail <ArrowRight aria-hidden="true" />
+        Open collectible <ArrowRight aria-hidden="true" />
       </button>
     </article>
   );
+}
+
+function ImageFallback() {
+  return (
+    <div className="admin-catalogue-card__image-fallback" aria-label="No approved image">
+      No approved image
+    </div>
+  );
+}
+
+function physicalState(item: AdminCatalogueAsset) {
+  if (item.custodyState === "SECURED" || item.custodyState === "VAULT_READY") return "Secured";
+  if (item.provenance) return "In intake";
+  return "Not recorded";
+}
+
+function marketState(item: AdminCatalogueAsset) {
+  if (item.publicationState === "PUBLISHED" || item.marketReadiness === "PUBLISHED")
+    return "Published";
+  if (item.marketReadiness === "READY") return "Ready";
+  return "Not ready";
+}
+
+function needsAttention(item: AdminCatalogueAsset) {
+  return item.verificationState !== "COMPLETED" && item.verificationState !== "VERIFIED";
 }
 
 function Field({ label, value }: { label: string; value: string }) {

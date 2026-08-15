@@ -2145,7 +2145,41 @@ const adminRepository = (client: ApiClient): AdminRepository => {
     );
     const pagination = objectField(value.pagination, "admin collectibles pagination");
     return {
-      items: Array.isArray(value.items) ? (value.items as AdminCatalogueResponse["items"]) : [],
+      items: Array.isArray(value.items)
+        ? value.items.map((raw) => {
+            const item = objectField(raw, "admin catalogue item");
+            const identity = objectField(item.identity, "admin catalogue identity");
+            const ownership = objectField(item.ownership, "admin catalogue ownership");
+            const provenance = item.provenance === null ? null : objectField(item.provenance, "admin catalogue provenance");
+            const grading = identity.grading === null ? null : objectField(identity.grading, "admin catalogue grading");
+            return {
+              id: stringField(item.id, "admin catalogue.id"),
+              publicId: stringField(item.publicId, "admin catalogue.publicId"),
+              slug: stringField(item.slug, "admin catalogue.slug"),
+              title: stringField(item.title, "admin catalogue.title"),
+              status: stringField(item.status, "admin catalogue.status"),
+              thumbnailUrl: nullableString(item.thumbnailUrl, "admin catalogue.thumbnailUrl"),
+              identity: {
+                category: stringField(identity.category, "admin catalogue.identity.category"),
+                year: identity.year == null ? null : Number(identity.year),
+                manufacturer: nullableString(identity.manufacturer, "admin catalogue.identity.manufacturer"),
+                set: nullableString(identity.set, "admin catalogue.identity.set"),
+                cardNumber: nullableString(identity.cardNumber, "admin catalogue.identity.cardNumber"),
+                edition: nullableString(identity.edition, "admin catalogue.identity.edition"),
+                grading: grading ? { company: stringField(grading.company, "admin catalogue.grading.company"), code: stringField(grading.code, "admin catalogue.grading.code"), grade: stringField(grading.grade, "admin catalogue.grading.grade"), label: stringField(grading.label, "admin catalogue.grading.label") } : null,
+              },
+              provenance: provenance ? { submissionId: stringField(provenance.submissionId, "admin catalogue.provenance.submissionId"), submissionStatus: stringField(provenance.submissionStatus, "admin catalogue.provenance.submissionStatus"), submittedAt: nullableString(provenance.submittedAt, "admin catalogue.provenance.submittedAt"), collector: stringField(provenance.collector, "admin catalogue.provenance.collector"), username: nullableString(provenance.username, "admin catalogue.provenance.username") } : null,
+              mediaState: stringField(item.mediaState, "admin catalogue.mediaState"),
+              verificationState: stringField(item.verificationState, "admin catalogue.verificationState"),
+              valuationState: stringField(item.valuationState, "admin catalogue.valuationState"),
+              custodyState: stringField(item.custodyState, "admin catalogue.custodyState"),
+              marketReadiness: stringField(item.marketReadiness, "admin catalogue.marketReadiness"),
+              publicationState: stringField(item.publicationState, "admin catalogue.publicationState"),
+              ownership: { ownerCount: Number(ownership.ownerCount ?? 0), totalUnits: nullableString(ownership.totalUnits, "admin catalogue.ownership.totalUnits"), issuedUnits: nullableString(ownership.issuedUnits, "admin catalogue.ownership.issuedUnits") },
+              updatedAt: stringField(item.updatedAt, "admin catalogue.updatedAt"),
+            } satisfies AdminCatalogueResponse["items"][number];
+          })
+        : [],
       pagination: {
         page: Number(pagination.page ?? 1),
         pageSize: Number(pagination.pageSize ?? 25),

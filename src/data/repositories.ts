@@ -877,9 +877,18 @@ export type AdminCollectibleDetail = {
     issuedUnits: string | null;
     availableUnits: string | null;
     ownerCount: number | null;
+    holders?: Array<{
+      accountId: string;
+      userId: string | null;
+      displayName: string;
+      username: string | null;
+      units: string;
+      percentage: number | null;
+    }>;
   };
   lifecycle: {
     current: string;
+    legacy?: boolean;
     stages: Array<{
       key: string;
       label: string;
@@ -965,6 +974,7 @@ export type AdminCatalogueAsset = {
   slug: string;
   title: string;
   status: string;
+  thumbnailUrl: string | null;
   identity: {
     category: string;
     year: number | null;
@@ -987,6 +997,7 @@ export type AdminCatalogueAsset = {
   custodyState: string;
   marketReadiness: string;
   publicationState: string;
+  ownership: { ownerCount: number; totalUnits: string | null; issuedUnits: string | null };
   updatedAt: string;
 };
 

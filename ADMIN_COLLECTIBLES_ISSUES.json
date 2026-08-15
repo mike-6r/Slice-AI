@@ -1,0 +1,13 @@
+{
+  "surface": "admin-collectibles",
+  "scope": "catalogue-and-detail",
+  "issues": [],
+  "knownManualChecks": [
+    "Confirm approved front media is visible for each staging canonical collectible.",
+    "Confirm legacy fixtures do not show fabricated shipment, receipt, or custody events.",
+    "Confirm ownership holder rows match settled ledger positions for an asset with user ownership.",
+    "Confirm expiring private media links are only requested when the detail/catalogue projection loads."
+  ],
+  "providerCallsOnRender": 0,
+  "mutationAuthority": "existing lifecycle and ownership workflows"
+}
