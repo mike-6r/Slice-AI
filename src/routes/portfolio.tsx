@@ -2317,11 +2317,11 @@ function PortfolioActivityExperience({
   const pageCount = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
   const visibleEvents = filteredEvents.slice((page - 1) * pageSize, page * pageSize);
   const hasDistributionEvents = allEvents.some((event) => event.category === "DISTRIBUTIONS");
-  const failed = accountActivity.isError || transactions.isError || executions.isError;
-  // Disabled queries have an idle fetch status even though TanStack Query may
-  // report them as pending. Only an active request should keep the skeleton up.
-  const loading =
-    !failed && (accountActivity.isFetching || transactions.isFetching || executions.isFetching);
+  const failed = accountActivity.isError || transactions.isError;
+  // Activity is usable as soon as the two account-history sources resolve. Do
+  // not replace real rows with a skeleton while optional trading lookups
+  // refresh in the background.
+  const loading = !failed && (accountActivity.isLoading || transactions.isLoading);
   const updateSearch = (patch: Partial<PortfolioSearch>) => {
     void navigate({
       search: (current) => ({ ...current, tab: "activity", ...patch }),

@@ -27,9 +27,12 @@ export function formatDisplayMoney(
   rates: CurrencyRates | null | undefined,
   options: Intl.NumberFormatOptions = {},
 ) {
-  const sourceAmount = Number(valueInMinorUnits) / 100;
   const rate = exchangeRate(sourceCurrency, targetCurrency, rates);
   const displayCurrency = rate === null ? sourceCurrency : targetCurrency;
+  if (rate === 1 && sourceCurrency === targetCurrency) {
+    return formatExactMinorCurrency(valueInMinorUnits, displayCurrency, options);
+  }
+  const sourceAmount = Number(valueInMinorUnits) / 100;
   const displayAmount = rate === null ? sourceAmount : sourceAmount * rate;
   return new Intl.NumberFormat(currencyLocales[displayCurrency], {
     style: "currency",
@@ -37,6 +40,37 @@ export function formatDisplayMoney(
     maximumFractionDigits: 0,
     ...options,
   }).format(displayAmount);
+}
+
+/** Keep authoritative same-currency values exact, even beyond Number's safe integer range. */
+function formatExactMinorCurrency(
+  valueInMinorUnits: number | string | bigint,
+  currency: SupportedCurrency,
+  options: Intl.NumberFormatOptions,
+) {
+  const minor = BigInt(valueInMinorUnits);
+  const fractionDigits = Math.min(2, options.maximumFractionDigits ?? 2);
+  const roundingUnit = 10n ** BigInt(2 - fractionDigits);
+  const absoluteMinor = minor < 0n ? -minor : minor;
+  const roundedMinor = ((absoluteMinor + roundingUnit / 2n) / roundingUnit) * roundingUnit;
+  const whole = roundedMinor / 100n;
+  const formatter = new Intl.NumberFormat(currencyLocales[currency], {
+    style: "currency",
+    currency,
+    ...options,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const parts = formatter.formatToParts(minor < 0n ? -whole : whole);
+  if (fractionDigits === 0) return parts.map((part) => part.value).join("");
+  const fraction = String((roundedMinor % 100n) / roundingUnit).padStart(fractionDigits, "0");
+  const lastNumber = Math.max(
+    ...parts.map((part, index) =>
+      part.type === "integer" || part.type === "group" ? index : -1,
+    ),
+  );
+  parts.splice(lastNumber + 1, 0, { type: "decimal", value: "." }, { type: "fraction", value: fraction });
+  return parts.map((part) => part.value).join("");
 }
 
 export function formatAuthoritativeMoney(

@@ -3493,6 +3493,12 @@ function UserRoleManagement({
   retry: () => void;
 }) {
   const services = useAppServices();
+  const currentUser = useQuery({
+    queryKey: queryKeys.user.current,
+    queryFn: () => services.repositories.users.getCurrentUser(),
+    staleTime: 60_000,
+  });
+  const canManageRoles = currentUser.data?.roles.includes("ADMIN") ?? false;
   const [role, setRole] = useState("COLLECTOR");
   const grant = useMutation({
     mutationFn: () =>
@@ -3532,46 +3538,54 @@ function UserRoleManagement({
                 <small>{roleDescriptions[assignment.role] ?? "Account capability assigned by policy."}</small>
                 <span>Granted {date(assignment.createdAt)} · {assignment.scopeType}</span>
               </div>
-              <button
-                type="button"
-                className="admin-inline-action"
-                disabled={revoke.isPending}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Revoke ${sentence(assignment.role)} from ${user.displayName}? This removes the active assignment and is recorded in the audit log.`,
+              {canManageRoles ? (
+                <button
+                  type="button"
+                  className="admin-inline-action"
+                  disabled={revoke.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Revoke ${sentence(assignment.role)} from ${user.displayName}? This removes the active assignment and is recorded in the audit log.`,
+                      )
                     )
-                  )
-                    revoke.mutate(assignment.id);
-                }}
-              >
-                Remove role
-              </button>
+                      revoke.mutate(assignment.id);
+                  }}
+                >
+                  Remove role
+                </button>
+              ) : null}
             </div>
           ))}
         </div>
       ) : (
         <AdminEmpty detail="No active roles assigned." icon={ShieldCheck} />
       )}
-      <div className="admin-detail-action-form admin-role-add-form">
-        <AdminSelect label="Role to add" value={role} onChange={setRole} options={adminAssignableRoles as unknown as Array<[string, string]>} />
-        <button
-          type="button"
-          className="admin-detail-action"
-          disabled={grant.isPending}
-          onClick={() => {
-            if (
-              window.confirm(
-                `Grant ${sentence(role)} to ${user.displayName}? This is an audited privilege change and may require recent authentication.`,
+      {canManageRoles ? (
+        <div className="admin-detail-action-form admin-role-add-form">
+          <AdminSelect label="Role to add" value={role} onChange={setRole} options={adminAssignableRoles as unknown as Array<[string, string]>} />
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={grant.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Grant ${sentence(role)} to ${user.displayName}? This is an audited privilege change and may require recent authentication.`,
+                )
               )
-            )
-              grant.mutate();
-          }}
-        >
-          {grant.isPending ? "Adding…" : "+ Add role"}
-        </button>
-      </div>
-      {grant.isError || revoke.isError ? (
+                grant.mutate();
+            }}
+          >
+            {grant.isPending ? "Adding…" : "+ Add role"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note admin-role-readonly-note">
+          Roles are read-only for your workspace. Only an Administrator can add or remove access, so no role-change request will be sent.
+        </p>
+      )}
+      {canManageRoles && (grant.isError || revoke.isError) ? (
         <p className="admin-safe-note" role="alert">
           The role change was not saved. Refresh the account and confirm your permission before retrying.
         </p>
