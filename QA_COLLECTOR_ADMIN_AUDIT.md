@@ -147,3 +147,12 @@ Current deployed commit: `af17a4ecf8ee2c118226065c3b73eb8a1c2fe435` (Git `main` 
 - **Responsive:** Admin Collectibles and Platform Operations had no horizontal overflow at 390×844, 768×1024 or 1920×1080; Collector workspace browser QA had no overflow on the exercised route.
 
 Decision: Collector and Admin are **GO for controlled internal Beta**. Security and external invited Beta remain **NO-GO** pending the explicit signed-download/intake privacy/staff permission checks and a provider-backed live Ximilar result if live grading is required. Physical state is unchanged: `beta-test-uk-intake`, `SLICE-3AA5144D`, shipment `NONE`, waiting for physical shipment.
+
+## Collector final QA gate — 2026-08-15
+
+- Deployment rechecked at Git/VPS `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce`; API/web active; `/health` and `/ready` PASS; Prisma is current.
+- `COLLECTOR_ROUTE_INVENTORY.md`, `COLLECTOR_FUNCTION_INVENTORY.json`, `QA_COLLECTOR_FINAL_AUDIT.md`, and `QA_COLLECTOR_FINAL_ISSUES.json` are the current Collector QA artifacts.
+- A fresh browser tab reached `/collector-workspace` and correctly rendered the private-workspace sign-in boundary. No controlled Collector credentials were available in this pass, so no sensitive data or mutation was entered.
+- Prior authenticated evidence remains valid as historical evidence for workspace navigation, approved Charizard state, destination selection, media safety/checksums, fixture cleanup and basic RBAC checks; it is not upgraded to fresh full six-step listing proof.
+
+**Final Collector decision:** **NO-GO for the final External Invited Beta gate** pending fresh authenticated listing Steps 1–6, upload/privacy, optional Ximilar, responsive/accessibility and request-health verification. Controlled internal Beta remains available with documented limitations. Phase 9 remains waiting for a real physical shipment; Phase 10 remains not started.

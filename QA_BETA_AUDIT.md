@@ -151,3 +151,12 @@ This section is the current verification authority; earlier sections retain hist
 - No admin mutation, physical intake event, Charizard progression, provider call, publication, issuance, funding, or order was created.
 
 **Phase 3 decision:** Admin final launch gate **NO-GO pending authenticated route/mutation/RBAC/IDOR/responsive/accessibility/request-health retest**. Controlled internal read-only Beta remains available with documented limitations; Phase 10 remains **NO**.
+
+## Collector final QA gate — 2026-08-15
+
+- Deployment rechecked at Git/VPS `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce`; API/web active; `/health` and `/ready` PASS; Prisma schema current.
+- `COLLECTOR_ROUTE_INVENTORY.md` and `COLLECTOR_FUNCTION_INVENTORY.json` classify the Collector workspace/listing controls and backend authority.
+- A fresh `/collector-workspace` browser tab reached the expected private-workspace sign-in boundary. No controlled Collector session was available, so no sensitive data or state-changing listing/media/shipment action was attempted.
+- Prior authenticated evidence remains available for the approved Charizard journey, `beta-test-uk-intake` selection, media safety/checksums, fixture cleanup and basic cross-user status checks. It does not replace the missing fresh Steps 1–6/privacy/responsive/accessibility/request-health pass.
+
+**Collector decision:** **NO-GO for the final External Invited Beta gate** pending fresh authenticated Collector QA. Controlled internal Beta remains available with documented limitations. Phase 9 remains waiting for physical shipment; Phase 10 remains **NO**.

@@ -379,6 +379,17 @@ This section is the current checklist authority and supersedes earlier pending-c
 - Next action: operator physically sends the real package with a real carrier/tracking number, then enters it through the Collector UI. Do not fabricate delivery, receipt, verification, valuation, custody or publication.
 - Phase 10: **NO**.
 
+## Collector final QA gate — 2026-08-15
+
+- Deployment: `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce` on Git and VPS; API/web active; health/ready PASS; Prisma current.
+- Collector route inventory: **CREATED** (`COLLECTOR_ROUTE_INVENTORY.md`).
+- Collector function inventory: **CREATED** (`COLLECTOR_FUNCTION_INVENTORY.json`).
+- Fresh authenticated Collector browser session: **NOT EXECUTED**; staging correctly displayed the private-workspace sign-in boundary.
+- Fresh listing Steps 1–6, media/privacy matrix, Ximilar, responsive/accessibility and request-health checks: **PENDING**.
+- Collector final decision: **NO-GO for External Invited Beta**; controlled internal Beta remains **GO with documented limitations**.
+- Phase 9: **WAITING_FOR_PHYSICAL_SHIPMENT**.
+- Phase 10: **NO**.
+
 Controlled internal Beta: **GO with documented limitations**. External invited Beta: **NO-GO** until the unchecked security/privacy, fresh media/Ximilar and fixture-cleanup gates close.
 
 ## Pre-shipment gate result — 2026-08-15 (current)

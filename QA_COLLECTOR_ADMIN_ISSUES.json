@@ -2,7 +2,7 @@
   "audit": "SLICE FULL COLLECTOR + ADMIN QA",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-15",
-  "deployedCommit": "af17a4ecf8ee2c118226065c3b73eb8a1c2fe435",
+  "deployedCommit": "e6acfdaddd95e01b52011fbb6e7eecd7432f51ce",
   "issues": [
     {
       "id": "COL-ACTION-001",
@@ -105,6 +105,23 @@
       "screenshot": null,
       "rootCause": "selectVault used a direct upsert without an audit write.",
       "resolution": "selectVault now performs the upsert and INTAKE_DESTINATION_SELECTED audit event in one transaction. Verified on 2026-08-15 for SLICE-3AA5144D."
+    },
+    {
+      "id": "COLLECTOR-PHASE3-001",
+      "role": "Collector",
+      "route": "/collector-workspace and /list",
+      "severity": "HIGH",
+      "category": "Final QA evidence",
+      "title": "Fresh authenticated Collector final QA session was unavailable",
+      "status": "OPEN",
+      "reproduction": "Open a fresh staging browser session and navigate to /collector-workspace.",
+      "expected": "The complete authenticated workspace and six-step listing flow are retested with controlled identities.",
+      "actual": "The route correctly showed the private-workspace sign-in boundary; no controlled Collector credentials were available to exercise sensitive flows.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "Final QA requires controlled Collector credentials and separate identities for privacy/media/RBAC checks.",
+      "resolution": "Created Collector route/function inventories and recorded the final gate as NO-GO pending authenticated staging retest."
     }
   ],
   "notTestableWithoutAdditionalControlledData": [
@@ -112,6 +129,7 @@
     "Intake-address privacy matrix and staff-only operation checks were not exercised because they would expose or mutate controlled lifecycle data.",
     "One permitted Ximilar attempt returned NOT_CONFIGURED without a provider call; no grade was invented.",
     "Admin accept/reject, valuation, custody, publish and role mutation actions were not exercised because they would mutate controlled lifecycle or access state.",
-    "Real shipment/tracking, delivery, receipt, verification, valuation, custody, publication and Phase 10 trading remain intentionally unexecuted."
+    "Real shipment/tracking, delivery, receipt, verification, valuation, custody, publication and Phase 10 trading remain intentionally unexecuted.",
+    "Fresh Collector listing Steps 1-6, responsive/accessibility, request-health and cross-user privacy pass were not executed in the Phase 3 final pass."
   ]
 }

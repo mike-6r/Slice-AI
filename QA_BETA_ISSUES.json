@@ -25,7 +25,8 @@
     { "id": "COL-STATUS-001", "severity": "MEDIUM", "status": "FIXED", "resolution": "Browser QA now shows the controlled Charizard as Approved with the next action Ship your collectible; review-pending copy is reserved for submitted/review states." },
     { "id": "INTAKE-AUDIT-001", "severity": "HIGH", "status": "FIXED", "resolution": "Destination selection now writes the intake upsert and INTAKE_DESTINATION_SELECTED audit event atomically; verified against SLICE-3AA5144D." },
     { "id": "ADMIN-MUTATION-001", "severity": "HIGH", "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED", "resolution": "Account Detail now exposes protected status and role commands with confirmation, required status reasons, idempotency keys, refresh-safe success handling, and backend-enforced RBAC/invariants." },
-    { "id": "ADMIN-PHASE3-001", "severity": "HIGH", "status": "OPEN", "resolution": "Final Admin launch-gate browser/RBAC/IDOR/responsive/accessibility/request-health walkthrough requires a controlled authenticated Admin session and was not executed in this pass." }
+    { "id": "ADMIN-PHASE3-001", "severity": "HIGH", "status": "OPEN", "resolution": "Final Admin launch-gate browser/RBAC/IDOR/responsive/accessibility/request-health walkthrough requires a controlled authenticated Admin session and was not executed in this pass." },
+    { "id": "COLLECTOR-PHASE3-001", "severity": "HIGH", "status": "OPEN", "resolution": "Final Collector workspace/listing/media/privacy/responsive/accessibility/request-health walkthrough requires a controlled authenticated Collector session and was not executed in this pass." }
   ],
   "notExecuted": [
     "valid authorised signed private-download URL (the current public API exposes no customer download endpoint)",
@@ -34,7 +35,8 @@
     "Admin account status and role mutation walkthrough",
     "full browser media visualization pass",
     "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion",
-    "fresh authenticated Admin Phase 3 browser matrix"
+    "fresh authenticated Admin Phase 3 browser matrix",
+    "fresh authenticated Collector final QA matrix"
   ],
   "latestVerification": {
     "date": "2026-08-15",
@@ -46,7 +48,8 @@
     "ximilar": { "appCalls": 1, "providerCalls": 0, "result": "NOT_CONFIGURED", "cachedRefresh": "PASS" },
     "anonymousR2": { "object": "DENIED", "bucketListing": "DENIED" },
     "responsive": { "viewports": ["390x844", "768x1024", "1920x1080"], "adminCatalogueAndPlatformHorizontalOverflow": "NO" },
-    "phase3": { "deployment": "PASS", "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "NOT_EXECUTED", "finalDecision": "NO_GO" }
+    "phase3": { "deployment": "PASS", "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "NOT_EXECUTED", "finalDecision": "NO_GO" },
+    "collectorFinal": { "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "NOT_EXECUTED", "finalDecision": "NO_GO" }
   },
   "evidence": [
     "QA_BETA_AUDIT.md",

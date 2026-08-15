@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-08-15",
+  "deploymentCommit": "e6acfdaddd95e01b52011fbb6e7eecd7432f51ce",
+  "scope": "Collector workspace and listing controls. Statuses reflect implementation/read authority; fresh authenticated browser QA was not available in this pass.",
+  "controls": [
+    { "page": "Collector navigation", "control": "Overview/My Collectibles/Submissions/Your Actions/Subscription/Public Profile/Settings", "action": "Switch workspace view", "endpoint": "Client route state", "rbac": "Collector workspace", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Collector Overview", "control": "List an Asset", "action": "Start six-step listing flow", "endpoint": "/list", "rbac": "Collector listing access", "status": "WORKING", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Collector Overview", "control": "Needs attention / requests", "action": "Open exact task record", "endpoint": "GET /api/v1/collector-workspace/requests", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "NOT_EXECUTED_THIS_PASS" },
+    { "page": "My Collectibles", "control": "Search/filter/card click-through", "action": "Browse owned collectible projections", "endpoint": "GET /api/v1/collector-workspace/collectibles", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Collectible Detail", "control": "Overview/Submission/Market Data/Media/Valuation/Custody/Market/Activity", "action": "View authoritative detail tabs", "endpoint": "GET /api/v1/collector-workspace/collectibles/:id", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Collectible Detail", "control": "Choose intake destination", "action": "Select eligible Beta destination", "endpoint": "POST /api/v1/collector-workspace/collectibles/:id/vault", "rbac": "Owner Collector + approved state", "status": "WORKING_CONTROLLED_ONLY", "qa": "CHARIZARD_SELECTION_VERIFIED" },
+    { "page": "Collectible Detail", "control": "Add tracking", "action": "Record actual shipment details", "endpoint": "POST /api/v1/collector-workspace/collectibles/:id/shipment", "rbac": "Owner Collector + approved intake", "status": "WORKING_REAL_EVENT_REQUIRED", "qa": "NOT_EXECUTED_NO_TRACKING_FABRICATED" },
+    { "page": "Submissions", "control": "Search/list/draft status", "action": "Browse owned submissions", "endpoint": "GET /api/v1/submissions", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Your Actions", "control": "Action cards/deep links", "action": "Open required task", "endpoint": "GET /api/v1/collector-workspace/requests", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Subscription", "control": "Plan/usage/capacity", "action": "Read membership projection", "endpoint": "GET /api/v1/collector-workspace/subscription", "rbac": "Owner Collector", "status": "WORKING_READ_ONLY", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Subscription", "control": "Checkout/portal/change/cancel/resume", "action": "Membership command", "endpoint": "POST /api/v1/collector-workspace/subscription/{checkout,portal,change-plan,cancel,resume}", "rbac": "Owner Collector + configured billing provider", "status": "DISABLED_WITH_REASON_IF_UNCONFIGURED", "qa": "NOT_EXECUTED_THIS_PASS" },
+    { "page": "Public Profile", "control": "Save profile/visibility", "action": "Update public collector profile", "endpoint": "PATCH /api/v1/collector-workspace/profile", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "Settings", "control": "Collector settings cards", "action": "Open account settings", "endpoint": "Account/profile settings routes", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" },
+    { "page": "List Step 1", "control": "Paste link / Identify Card", "action": "Import exact reference", "endpoint": "POST /api/v1/collectibles/import-reference", "rbac": "Authenticated listing access", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "EXACT_URL_PRIOR_PASS" },
+    { "page": "List Step 1", "control": "Find My Card / manual entry / Use This Card", "action": "Select or declare identity", "endpoint": "POST /api/v1/submissions", "rbac": "Authenticated listing access", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "NOT_EXECUTED_THIS_PASS" },
+    { "page": "List Step 2", "control": "Identity/details fields", "action": "Save draft metadata", "endpoint": "POST /api/v1/submissions; PATCH /api/v1/submissions/:id", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "DRAFT_RECOVERY_IMPLEMENTED" },
+    { "page": "List Step 3", "control": "Check Market / Refresh Market", "action": "Request advisory market research", "endpoint": "POST /api/v1/submissions/market-research", "rbac": "Owner Collector", "status": "WORKING_EXPLICIT_ACTION_ONLY", "qa": "PRICECHARTING_PRIOR_PASS" },
+    { "page": "List Step 4", "control": "Upload Front / Upload Back", "action": "Create signed upload, upload and complete checksum", "endpoint": "POST /api/v1/submissions/:id/media/upload-intents; POST /api/v1/submissions/:id/media/:mediaId/complete", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_MEDIA_SAFE_CHECKSUM_PASS" },
+    { "page": "List Step 5", "control": "Analyze My Card", "action": "Run optional raw-card pre-grade", "endpoint": "POST /api/v1/submissions/:id/pre-grade", "rbac": "Owner Collector", "status": "OPTIONAL_PROVIDER_GATED", "qa": "NOT_CONFIGURED_PRIOR_PASS" },
+    { "page": "List Step 6", "control": "Continue / Submit", "action": "Submit one versioned draft", "endpoint": "POST /api/v1/submissions/:id/submit", "rbac": "Owner Collector + valid draft", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "NOT_EXECUTED_THIS_PASS" },
+    { "page": "List", "control": "Delete Draft", "action": "Cancel disposable draft through supported path", "endpoint": "POST /api/v1/collector-workspace/collectibles/:id/delete-draft", "rbac": "Owner Collector + draft", "status": "WORKING_IDEMPOTENT_LIFECYCLE", "qa": "PRIOR_CLEANUP_PASS" },
+    { "page": "Submission Detail", "control": "Media/status/timeline/market/AI/intake", "action": "Read submission authority", "endpoint": "GET /api/v1/submissions/:id", "rbac": "Owner Collector", "status": "WORKING_IMPLEMENTED_NOT_BROWSER_RETESTED", "qa": "PRIOR_AUTHENTICATED_PASS" }
+  ],
+  "brokenControls": 0,
+  "freshAuthenticatedBrowser": "NOT_EXECUTED",
+  "notes": [
+    "No shipment, tracking, delivery, receipt, verification, valuation, custody, publication, issuance, funding or order was created.",
+    "Provider-backed Ximilar was not called in this pass; the prior allowed attempt was NOT_CONFIGURED and did not invent a grade.",
+    "Private media and cross-user privacy require controlled separate identities for final proof."
+  ]
+}
