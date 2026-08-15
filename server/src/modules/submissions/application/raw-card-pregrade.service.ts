@@ -73,11 +73,22 @@ export class RawCardPreGradeService {
     const cached = submission.preGrades.find(
       (item) => item.analysisFingerprint === fingerprint,
     );
-    if (
-      cached?.status === 'SUCCEEDED' ||
-      cached?.status === 'NOT_CONFIGURED' ||
-      cached?.status === 'FAILED'
-    )
+    if (cached?.status === 'SUCCEEDED') {
+      const existingVisualizations = Array.isArray(cached.visualizations) ? cached.visualizations : [];
+      if (!existingVisualizations.length && cached.rawResponse && this.provider.extractVisualizations) {
+        const sourceVisualizations = this.provider.extractVisualizations(cached.rawResponse);
+        const persistedVisualizations = await this.copyVisualizations(submission.id, cached.id, front.id, back.id, sourceVisualizations);
+        if (persistedVisualizations.length) {
+          const repaired = await this.db.rawCardPreGrade.update({
+            where: { id: cached.id },
+            data: { visualizations: persistedVisualizations as Prisma.InputJsonValue },
+          });
+          return this.decorateProjection(repaired);
+        }
+      }
+      return this.decorateProjection(cached);
+    }
+    if (cached?.status === 'NOT_CONFIGURED' || cached?.status === 'FAILED')
       return this.decorateProjection(cached);
     if (cached?.status === 'IN_PROGRESS') {
       if (cached.providerRequestId)

@@ -33,6 +33,7 @@ export type RawCardPreGradeProviderInput = {
 export interface RawCardPreGradeProvider {
   readonly providerName: string;
   analyze(input: RawCardPreGradeProviderInput): Promise<RawCardPreGradeProviderResult>;
+  extractVisualizations?(rawResponse: unknown): RawCardVisualization[];
   configured(): boolean;
 }
 
@@ -60,6 +61,10 @@ export class XimilarRawCardPreGradeProvider implements RawCardPreGradeProvider {
         this.config.ximilarCardGradingEnabled &&
         this.config.ximilarApiToken,
     );
+  }
+
+  extractVisualizations(rawResponse: unknown) {
+    return normalizeResponse(null, isRecord(rawResponse) ? rawResponse : {}).visualizations;
   }
 
   async analyze(input: RawCardPreGradeProviderInput): Promise<RawCardPreGradeProviderResult> {
@@ -170,7 +175,7 @@ export class XimilarRawCardPreGradeProvider implements RawCardPreGradeProvider {
 }
 
 function normalizeResponse(
-  requestId: string,
+  requestId: string | null,
   envelope: Record<string, unknown>,
 ): RawCardPreGradeProviderResult {
   const response = record(envelope.response);
