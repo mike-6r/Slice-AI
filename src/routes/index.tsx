@@ -47,33 +47,38 @@ export const Route = createFileRoute("/")({
 const howSliceWorks = [
   {
     number: "01",
+    label: "Discover",
     icon: <Sparkles />,
-    title: "Find a card",
-    detail: "Browse published collectibles and see the market information behind each one.",
+    title: "Find a collectible",
+    detail:
+      "Browse published cards and see the identity, grade and market information behind each one.",
     action: "Browse cards",
     to: "/marketplace" as const,
   },
   {
     number: "02",
+    label: "Choose",
     icon: <CircleDollarSign />,
     title: "Choose your ownership",
-    detail: "Pick an ownership amount instead of buying the entire collectible at once.",
+    detail: "Pick an ownership position instead of buying the entire collectible in one go.",
     action: "See ownership",
     to: "/marketplace" as const,
   },
   {
     number: "03",
+    label: "Track",
     icon: <ChartNoAxesCombined />,
     title: "See your position",
-    detail: "Your portfolio shows what you own, what it cost and how it is performing.",
+    detail: "Your portfolio shows what settled, what it cost and how your position is changing.",
     action: "View portfolio",
     to: "/portfolio" as const,
   },
   {
     number: "04",
+    label: "Trade",
     icon: <TrendingUp />,
     title: "Trade when supported",
-    detail: "Place a buy or sell order when the collectible has an active market.",
+    detail: "Place a buy or sell order when that collectible has an active, supported market.",
     action: "Explore trading",
     to: "/marketplace" as const,
   },
@@ -131,8 +136,8 @@ function HomePage() {
 
       <section className="page-shell approved-home__section" aria-labelledby="what-slice-heading">
         <SectionHeading
-          eyebrow="Built for collectible ownership"
-          title="What you can do with Slice."
+          eyebrow="One clear home for your collectibles"
+          title="Everything you need to follow a card."
           headingId="what-slice-heading"
         />
         <div className="approved-home__features approved-home__features--four">
@@ -718,13 +723,35 @@ function HowSliceWorks() {
       />
       <p className="approved-home__how-intro">
         The short version: find a collectible, choose an ownership position, then track it in one
-        simple portfolio.
+        simple portfolio. Slice keeps the card, the terms and your account activity easy to follow.
       </p>
+      <div className="approved-home__how-guide">
+        <div className="approved-home__how-guide-copy">
+          <span className="approved-home__how-guide-badge">New here?</span>
+          <strong>Start with the idea, not the jargon.</strong>
+          <p>
+            A real collectible sits underneath. Slice defines the ownership terms, and your
+            portfolio keeps the record after an order settles.
+          </p>
+        </div>
+        <div className="approved-home__how-guide-points" aria-label="The Slice model at a glance">
+          <span>
+            <b>01</b> Real card
+          </span>
+          <span>
+            <b>02</b> Clear terms
+          </span>
+          <span>
+            <b>03</b> Your record
+          </span>
+        </div>
+      </div>
       <ol className="approved-home__how-grid">
         {howSliceWorks.map((step) => (
           <li key={step.number}>
             <span className="approved-home__how-number">{step.number}</span>
             <span className="approved-home__how-icon">{step.icon}</span>
+            <span className="approved-home__how-label">{step.label}</span>
             <h3>{step.title}</h3>
             <p>{step.detail}</p>
             <Link to={step.to} className="approved-home__text-link">
