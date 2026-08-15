@@ -2537,6 +2537,51 @@ body:has(.collectors-page) .site-shell {
   .portfolio-holdings-grid { grid-template-columns: 1fr; padding: 0.8rem 0.75rem; }
   .portfolio-holdings-pagination { justify-content: space-between; gap: 0.7rem; padding-inline: 0.75rem; font-size: 0.72rem; }
 }
+
+/* Review workstation refresh: keep the queue visual, compact and identity-first. */
+.admin-review-summary-strip { display:flex; align-items:center; justify-content:space-between; gap:1rem; border:1px solid #243742; border-radius:.55rem; padding:.85rem 1rem; background:#0b1921; }
+.admin-review-summary-strip strong { display:block; color:#f0f8f5; font-size:1rem; }
+.admin-review-summary-strip span { display:block; margin-top:.2rem; color:#91a6af; font-size:.65rem; }
+.admin-review-summary-actions { display:flex; gap:.35rem; flex-wrap:wrap; }
+.admin-review-summary-actions button { border:1px solid #2b4651; border-radius:.3rem; padding:.45rem .6rem; color:#9eb2ba; font-size:.6rem; }
+.admin-review-summary-actions button.is-active, .admin-review-summary-actions button:hover { border-color:#1ed2aa; color:#45dfbe; background:rgba(29,210,170,.08); }
+.admin-review-queue-layout--single { display:block; }
+.admin-review-select { flex:0 0 auto; }
+.admin-review-toolbar .admin-select select { max-width:11rem; }
+.admin-review-more-filters { border:1px solid #2c424c; border-radius:.35rem; padding:.48rem .6rem; color:#8fa4ad; font-size:.6rem; }
+.admin-review-thumb small { padding:.2rem; color:#8fa4ad; font-size:.5rem; line-height:1.2; text-align:center; }
+.admin-review-id { color:#8da4ad; font-family:var(--font-mono); font-size:.62rem; font-weight:500; }
+.admin-review-missing-media { display:grid; place-items:center; min-height:3rem; padding:.75rem; color:#8da4ad; font-size:.65rem; text-align:center; }
+.admin-review-console-shell { min-height:100vh; }
+.admin-review-console-shell .admin-console-nav a { display:flex; min-width:0; align-items:center; border-radius:.42rem; padding:.66rem .62rem; color:#91a3b1; font-size:.72rem; text-decoration:none; }
+.admin-review-console-shell .admin-console-nav a:hover, .admin-review-console-shell .admin-console-nav a.is-active { background:rgba(29,208,169,.12); color:#e4faf5; }
+.admin-review-console-shell .admin-console-account { display:flex; flex-direction:column; gap:.4rem; }
+.admin-review-console-shell .admin-console-account a { color:#42dcb8; font-size:.65rem; text-decoration:none; }
+.admin-review-console-topbar { grid-template-columns:minmax(0,1fr) auto; }
+.admin-review-back-link { border:1px solid #2b4651; border-radius:.35rem; padding:.5rem .7rem; color:#45dfbe; font-size:.65rem; text-decoration:none; }
+.admin-review-detail { max-width:none; padding:1.35rem 2rem 2.5rem; }
+.admin-review-detail .admin-review-layout { grid-template-columns:minmax(0,1fr); }
+.admin-review-detail .admin-review-top-grid { grid-template-columns:minmax(0,1.5fr) minmax(15rem,1fr) minmax(15rem,.9fr); }
+.admin-review-detail .admin-review-content-grid { grid-template-columns:minmax(0,1fr) minmax(16rem,20rem); align-items:start; }
+.admin-review-detail .admin-review-rail { position:sticky; top:1rem; }
+.admin-review-decision-select { width:100%; border:1px solid #2b4651; border-radius:.3rem; padding:.5rem .55rem; background:#09171e; color:#e2efec; font-size:.7rem; }
+.admin-review-change-request { display:grid; gap:.55rem; border:1px solid #775b29; border-radius:.35rem; padding:.7rem; background:rgba(115,84,27,.08); }
+.admin-review-change-options { display:grid; gap:.35rem; }
+.admin-review-change-options label { color:#dbe9e5; font-size:.65rem; }
+.admin-review-change-options input { accent-color:#1ed2aa; }
+.admin-review-tab-stack { display:grid; gap:.75rem; }
+.admin-review-empty-state { min-height:12rem; display:grid; align-content:center; }
+.admin-review-advisory { color:#6fb4a5; font-size:.62rem; }
+.admin-review-ai-summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.admin-review-ai-summary h3 { margin-top:.25rem; color:#f1f8f5; font-size:2rem; }
+.admin-review-ai-state { border:1px solid #2b4651; border-radius:999px; padding:.35rem .55rem; color:#45dfbe; font-size:.6rem; white-space:nowrap; }
+.admin-review-ai-state--failed, .admin-review-ai-state--temporarily_unavailable { color:#f0a19b; border-color:#7b403c; }
+.admin-review-score-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; }
+.admin-review-ai-visual { min-width:0; }
+.admin-review-ai-visual img { width:100%; height:12rem; object-fit:contain; border:1px solid #2b4651; border-radius:.35rem; background:#071219; }
+.admin-review-ai-visual figcaption { margin-top:.3rem; color:#91a6af; font-size:.6rem; }
+@media (max-width:920px) { .admin-review-detail { padding:1rem; }.admin-review-detail .admin-review-top-grid { grid-template-columns:1fr 1fr; }.admin-review-detail .admin-review-content-grid { grid-template-columns:1fr; }.admin-review-detail .admin-review-rail { position:static; }.admin-review-score-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:600px) { .admin-review-summary-strip { align-items:flex-start; flex-direction:column; }.admin-review-detail .admin-review-top-grid { grid-template-columns:1fr; }.admin-review-ai-summary { align-items:flex-start; flex-direction:column; }.admin-review-console-topbar { padding:0 1rem; }.admin-review-back-link { display:none; } }
 @media (max-width: 1100px) {
   .portfolio-overview-content { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
   .portfolio-overview-content > .portfolio-panel--holdings { grid-column: 1 / -1; }

@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import type { AssetSubmission, SubmissionReviewDetail } from "@/domain";
+import { Wordmark } from "@/components/layout/MainNavigation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/operations/submissions")({
@@ -15,13 +17,11 @@ export const Route = createFileRoute("/operations/submissions")({
 });
 
 const tabs = [
-  "Overview",
+  "Review",
   "Evidence",
-  "Collector Reference",
-  "Market Research",
-  "Review History",
-  "Notes",
-  "Related Items",
+  "AI Review",
+  "Market",
+  "History",
 ] as const;
 type Tab = (typeof tabs)[number];
 type Decision = "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
@@ -34,7 +34,7 @@ export function SubmissionOperationsPage() {
   const { submission: deepLinkedSubmission, tab: deepLinkedTab } = Route.useSearch();
   const [selected, setSelected] = useState<string | null>(deepLinkedSubmission ?? null);
   const [activeTab, setActiveTab] = useState<Tab>(
-    isTab(deepLinkedTab) ? deepLinkedTab : "Overview",
+    isTab(deepLinkedTab) ? deepLinkedTab : "Review",
   );
   const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
   const [note, setNote] = useState("");
@@ -44,7 +44,7 @@ export function SubmissionOperationsPage() {
   );
   const [confirmAction, setConfirmAction] = useState<Decision | null>(null);
   useEffect(() => setSelected(deepLinkedSubmission ?? null), [deepLinkedSubmission]);
-  useEffect(() => setActiveTab(isTab(deepLinkedTab) ? deepLinkedTab : "Overview"), [deepLinkedTab]);
+  useEffect(() => setActiveTab(isTab(deepLinkedTab) ? deepLinkedTab : "Review"), [deepLinkedTab]);
   const queue = useQuery({
     queryKey: ["review", "queue"],
     queryFn: () => services.repositories.reviews.listQueue({ limit: 50 }),
@@ -116,7 +116,8 @@ export function SubmissionOperationsPage() {
     );
   const detailData = detail.data;
   return (
-    <main className="page-shell admin-review-detail py-8">
+    <ReviewAdminShell>
+      <main className="page-shell admin-review-detail py-8">
       <div className="admin-review-layout">
         <aside className="admin-review-queue admin-panel-card">
           <p className="page-kicker">Submissions</p>
@@ -194,7 +195,52 @@ export function SubmissionOperationsPage() {
           />
         )}
       </div>
-    </main>
+      </main>
+    </ReviewAdminShell>
+  );
+}
+
+function ReviewAdminShell({ children }: { children: ReactNode }) {
+  const items = [
+    ["Overview", "control"],
+    ["Accounts", "users"],
+    ["Review Queue", "moderation"],
+    ["Physical Intake", "intake"],
+    ["Collectibles", "collectibles"],
+    ["Asset Operations", "assetOperations"],
+    ["Finance & Trading", "payments"],
+    ["Platform Operations", "health"],
+  ] as const;
+  return (
+    <div className="admin-console-shell admin-review-console-shell">
+      <aside className="admin-console-sidebar">
+        <div className="admin-console-brand"><Wordmark /></div>
+        <p className="admin-console-eyebrow">Admin Console</p>
+        <nav className="admin-console-nav" aria-label="Admin Console">
+          {items.map(([labelText, section]) => (
+            <Link key={section} to="/admin" search={{ section }} className={section === "moderation" ? "is-active" : ""}>
+              <span>{labelText}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="admin-console-account">
+          <span>Review workspace</span>
+          <Link to="/admin" search={{ section: "moderation" }}>Back to queue</Link>
+        </div>
+      </aside>
+      <div className="admin-console-main">
+        <header className="admin-console-topbar admin-review-console-topbar">
+          <div>
+            <p>Admin Console · Submissions</p>
+            <h1>Submission Review</h1>
+          </div>
+          <Link className="admin-review-back-link" to="/admin" search={{ section: "moderation" }}>
+            Review Queue →
+          </Link>
+        </header>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -269,7 +315,10 @@ function ReviewDetail({
             <span aria-hidden="true">›</span> Submission review
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h2 className="truncate text-2xl font-semibold">{detail.id}</h2>
+            <h2 className="truncate text-2xl font-semibold">
+              {collectible.title}
+              <span className="admin-review-id"> · {shortId(detail.id)}</span>
+            </h2>
             <span className="admin-review-badge">{label(detail.status)}</span>
           </div>
           <p className="mt-2 text-sm text-subtle">
@@ -296,9 +345,9 @@ function ReviewDetail({
         <section className="admin-panel-card admin-review-collectible">
           <div className="admin-review-card-media">
             {collectible.thumbnailUrl ? (
-              <img src={collectible.thumbnailUrl} alt="" />
+              <img src={collectible.thumbnailUrl} alt={`${collectible.title} front`} />
             ) : (
-              <span aria-hidden="true">◇</span>
+              <span className="admin-review-missing-media">No front image</span>
             )}
           </div>
           <div className="min-w-0">
@@ -352,32 +401,15 @@ function ReviewDetail({
             </Link>
           ) : null}
         </section>
-        <section className="admin-panel-card">
-          <SectionTitle title="Market research" />
-          <p className="mt-3 text-sm text-subtle">
-            External references are supporting evidence only. Staff valuation remains authoritative.
-          </p>
-          {detail.marketResearch ? (
-            <div className="admin-review-research-summary mt-4">
-              <strong>
-                {detail.marketResearch.snapshot.sales
-                  ? marketRange(detail.marketResearch.snapshot.sales)
-                  : "No reliable sale range"}
-              </strong>
-              <span>
-                {detail.marketResearch.observations.length} observations ·{" "}
-                {formatDate(detail.marketResearch.collectedAt)}
-              </span>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-subtle">No research attached.</p>
-          )}
-        </section>
         <ReviewActions
           detail={detail}
           inReview={inReview}
           reason={reason}
           setReason={setReason}
+          requestedItems={requestedItems}
+          setRequestedItems={setRequestedItems}
+          customerMessage={customerMessage}
+          setCustomerMessage={setCustomerMessage}
           confirmAction={confirmAction}
           setConfirmAction={setConfirmAction}
           submitAction={submitAction}
@@ -398,7 +430,7 @@ function ReviewDetail({
       </nav>
       <div className="admin-review-content-grid mt-4">
         <div className="min-w-0">
-          {activeTab === "Overview" ? (
+          {activeTab === "Review" ? (
             <Overview
               detail={detail}
               evidence={evidence}
@@ -408,19 +440,17 @@ function ReviewDetail({
             />
           ) : activeTab === "Evidence" ? (
             <Evidence detail={detail} evidence={evidence} />
-          ) : activeTab === "Collector Reference" ? (
-            <CustomerReference detail={detail} />
-          ) : activeTab === "Market Research" ? (
+          ) : activeTab === "AI Review" ? (
+            <AiReview detail={detail} />
+          ) : activeTab === "Market" ? (
             <Research detail={detail} />
-          ) : activeTab === "Review History" ? (
+          ) : activeTab === "History" ? (
             <History detail={detail} />
-          ) : activeTab === "Notes" ? (
-            <Notes detail={detail} note={note} setNote={setNote} saveNote={saveNote} />
           ) : (
-            <Related detail={detail} />
+            <Evidence detail={detail} evidence={evidence} />
           )}
         </div>
-        <ReviewRail detail={detail} />
+        {activeTab === "Review" ? <ReviewRail detail={detail} /> : null}
       </div>
       {decide.isError ? (
         <p role="alert" className="mt-4 text-sm text-negative">
@@ -436,6 +466,10 @@ function ReviewActions({
   inReview,
   reason,
   setReason,
+  requestedItems,
+  setRequestedItems,
+  customerMessage,
+  setCustomerMessage,
   confirmAction,
   setConfirmAction,
   submitAction,
@@ -445,6 +479,10 @@ function ReviewActions({
   inReview: boolean;
   reason: string;
   setReason: (value: string) => void;
+  requestedItems: string[];
+  setRequestedItems: (value: string[]) => void;
+  customerMessage: string;
+  setCustomerMessage: (value: string) => void;
   confirmAction: Decision | null;
   setConfirmAction: (value: Decision | null) => void;
   submitAction: () => void;
@@ -457,10 +495,17 @@ function ReviewActions({
         <div className="mt-4 space-y-3">
           <label className="grid gap-1 text-sm">
             Decision reason
-            <input
+            <select
               value={reason}
               onChange={(event) => setReason(event.target.value.toUpperCase())}
-            />
+              className="admin-review-decision-select"
+            >
+              <option value="INCOMPLETE_EVIDENCE">Incomplete evidence</option>
+              <option value="IDENTITY_UNCLEAR">Identity needs attention</option>
+              <option value="UNSUPPORTED_COLLECTIBLE">Unsupported collectible</option>
+              <option value="DUPLICATE_SUBMISSION">Possible duplicate</option>
+              <option value="OTHER">Other</option>
+            </select>
           </label>
           <div className="grid gap-2">
             <button
@@ -468,7 +513,7 @@ function ReviewActions({
               type="button"
               onClick={() => setConfirmAction("APPROVED")}
             >
-              Accept submission <small>Move to physical intake</small>
+              Approve submission <small>Move to physical intake review</small>
             </button>
             <button
               className="admin-review-action is-changes"
@@ -485,6 +530,21 @@ function ReviewActions({
               Reject submission <small>Close this submission</small>
             </button>
           </div>
+          {confirmAction === "CHANGES_REQUESTED" ? (
+            <div className="admin-review-change-request">
+              <strong>What should the collector update?</strong>
+              <p className="text-sm text-subtle">Select the evidence that needs attention before resubmission.</p>
+              <div className="admin-review-change-options">
+                {["Front image", "Back image", "Identity details", "Grade / certification", "Condition", "Other"].map((item) => (
+                  <label key={item}><input type="checkbox" checked={requestedItems.includes(item)} onChange={() => setRequestedItems(requestedItems.includes(item) ? requestedItems.filter((value) => value !== item) : [...requestedItems, item])} /> {item}</label>
+                ))}
+              </div>
+              <label className="grid gap-1 text-sm">
+                Message to collector
+                <textarea value={customerMessage} onChange={(event) => setCustomerMessage(event.target.value)} rows={3} />
+              </label>
+            </div>
+          ) : null}
           {confirmAction ? (
             <div className="admin-review-confirmation">
               <strong>Confirm {label(confirmAction).toLowerCase()}?</strong>
@@ -649,9 +709,9 @@ function Evidence({
           >
             <div className="admin-review-evidence-image">
               {item.thumbnailUrl ? (
-                <img src={item.thumbnailUrl} alt="" />
+                <img src={item.thumbnailUrl} alt={`${label(item.slot)} evidence`} />
               ) : (
-                <span aria-hidden="true">◇</span>
+                <span className="admin-review-missing-media">{label(item.slot)} image missing</span>
               )}
             </div>
             <strong>{label(item.slot)}</strong>
@@ -677,9 +737,9 @@ function Evidence({
             </div>
             <div className="admin-review-lightbox-media mt-4">
               {active.thumbnailUrl ? (
-                <img src={active.thumbnailUrl} alt="" />
+                <img src={active.thumbnailUrl} alt={`${label(active.slot)} evidence enlarged`} />
               ) : (
-                <span>Evidence preview is not available from the secure storage service.</span>
+                <span>Evidence preview is not available from secure storage.</span>
               )}
             </div>
           </div>
@@ -707,6 +767,55 @@ function CustomerReference({ detail }: { detail: SubmissionReviewDetail }) {
         <p className="mt-4 text-sm text-subtle">No customer reference supplied.</p>
       )}
     </section>
+  );
+}
+function AiReview({ detail }: { detail: SubmissionReviewDetail }) {
+  const result = detail.preGrade;
+  if (!result) {
+    return (
+      <section className="admin-panel-card admin-review-empty-state">
+        <SectionTitle title="AI card review" />
+        <p className="mt-3 text-sm text-subtle">AI review has not been completed for this submission.</p>
+        <span className="admin-review-advisory">Optional advisory evidence · no provider call was made while opening this review.</span>
+      </section>
+    );
+  }
+  const score = result.overallEstimate == null ? "Not returned" : result.overallEstimate.toFixed(1);
+  return (
+    <div className="admin-review-tab-stack">
+      <section className="admin-panel-card admin-review-ai-summary">
+        <div>
+          <p className="page-kicker">AI Card Review · {result.provider}</p>
+          <h3>{result.status === "SUCCEEDED" ? score : label(result.status)}</h3>
+          <p className="text-sm text-subtle">Advisory estimate only — never an official grade or valuation.</p>
+        </div>
+        <span className={`admin-review-ai-state admin-review-ai-state--${result.status.toLowerCase()}`}>
+          {result.conditionLabel ?? "No condition estimate"}
+        </span>
+      </section>
+      <section className="admin-panel-card">
+        <SectionTitle title="Component signals" />
+        <div className="admin-review-score-grid mt-4">
+          {[["Centering", result.centeringScore], ["Corners", result.cornerScore], ["Edges", result.edgeScore], ["Surface", result.surfaceScore]].map(([name, value]) => (
+            <Metric key={String(name)} title={String(name)} value={value == null ? "Not returned" : String(value)} />
+          ))}
+        </div>
+        {result.analyzedAt ? <p className="mt-4 text-xs text-subtle">Analyzed {formatDate(result.analyzedAt)}</p> : null}
+      </section>
+      {result.visualizations?.length ? (
+        <section className="admin-panel-card">
+          <SectionTitle title="AI visual review" />
+          <div className="admin-review-gallery mt-4">
+            {result.visualizations.filter((item) => item.url).map((item) => (
+              <figure key={`${item.side}-${item.type}`} className="admin-review-ai-visual">
+                <img src={item.url!} alt={`${label(item.side)} ${item.type} analysis`} />
+                <figcaption>{label(item.side)} · {label(item.type)}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 function Research({ detail }: { detail: SubmissionReviewDetail }) {
@@ -766,24 +875,29 @@ function Research({ detail }: { detail: SubmissionReviewDetail }) {
 }
 function History({ detail }: { detail: SubmissionReviewDetail }) {
   return (
-    <section className="admin-panel-card">
-      <SectionTitle title="Review history" />
-      <ul className="admin-review-history mt-4">
-        {detail.reviews.length ? (
-          detail.reviews.map((item) => (
+    <div className="admin-review-tab-stack">
+      <section className="admin-panel-card">
+        <SectionTitle title="Review history" />
+        <ul className="admin-review-history mt-4">
+          {detail.reviews.length ? detail.reviews.map((item) => (
             <li key={item.id ?? item.createdAt}>
-              <strong>{label(item.decision ?? item.status)}</strong>
-              <span>
-                {formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}
-              </span>
+              <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
+              <span>{formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}</span>
               {item.note ? <p>{item.note}</p> : null}
             </li>
-          ))
-        ) : (
-          <li className="text-sm text-subtle">No review history yet.</li>
-        )}
-      </ul>
-    </section>
+          )) : <li className="text-sm text-subtle">No review history yet.</li>}
+        </ul>
+      </section>
+      {detail.activity?.length ? (
+        <section className="admin-panel-card">
+          <SectionTitle title="Submission activity" />
+          <ul className="admin-review-activity mt-4">
+            {detail.activity.map((item) => <li key={item.id}><strong>{humanReviewEvent(item.action)}</strong><span>{item.actor} · {formatDate(item.occurredAt)}</span>{item.detail ? <small>{item.detail}</small> : null}</li>)}
+          </ul>
+        </section>
+      ) : null}
+      <Related detail={detail} />
+    </div>
   );
 }
 function Notes({
@@ -860,7 +974,8 @@ function ReviewRail({ detail }: { detail: SubmissionReviewDetail }) {
   return (
     <aside className="admin-review-rail">
       <section className="admin-panel-card">
-        <SectionTitle title="Review checklist" />
+        <SectionTitle title="Review readiness" />
+        <p className="mt-2 text-xs text-subtle">Required checks gate approval. AI and market research are advisory.</p>
         <ul className="admin-review-check-list mt-4">
           {(detail.reviewChecklist ?? []).map((item) => (
             <li key={item.key}>
@@ -869,20 +984,6 @@ function ReviewRail({ detail }: { detail: SubmissionReviewDetail }) {
               </span>
               <strong>{item.label}</strong>
               <small>{item.required ? "Required" : "Advisory"}</small>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="admin-panel-card">
-        <SectionTitle title="Submission activity" />
-        <ul className="admin-review-activity mt-4">
-          {(detail.activity ?? []).map((item) => (
-            <li key={item.id}>
-              <strong>{label(item.action)}</strong>
-              <span>
-                {item.actor} · {formatDate(item.occurredAt)}
-              </span>
-              {item.detail ? <small>{item.detail}</small> : null}
             </li>
           ))}
         </ul>
@@ -914,6 +1015,21 @@ function label(value: string) {
     .replaceAll("_", " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function humanReviewEvent(value: string) {
+  const events: Record<string, string> = {
+    CLAIMED: "Review claimed",
+    SUBMISSION_REVIEW_CLAIMED: "Review claimed",
+    SUBMISSION_SUBMITTED: "Submission submitted",
+    SUBMISSION_DRAFT_CREATED: "Draft created",
+    APPROVED: "Submission approved",
+    REJECTED: "Submission rejected",
+    CHANGES_REQUESTED: "Changes requested",
+  };
+  return events[value] ?? label(value);
+}
+function shortId(value: string) {
+  return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
 }
 function formatDate(value: string | null | undefined) {
   return value

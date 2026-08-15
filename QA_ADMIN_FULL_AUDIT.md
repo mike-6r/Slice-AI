@@ -52,3 +52,7 @@ Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated 
 - Platform Operations showed API/PostgreSQL, storage, intake and PriceCharting operational, with Ximilar optional/not configured and truthful unknown/disabled telemetry.
 - The real Charizard submission was opened read-only from Physical Intake and remained `APPROVED`, `beta-test-uk-intake`, `SLICE-3AA5144D`, awaiting shipment details with no tracking entered.
 - Safe reversible mutations, cross-role RBAC/IDOR, staff boundaries, signed-media/intake privacy, responsive/accessibility and request-health matrices were not executed. Admin Phase 3 remains **NO-GO** for invited external release.
+
+## Review workstation redesign — 2026-08-15
+
+The Review Queue now uses a compact summary strip and single toolbar; queue rows lead with collectible identity and authorized front media. Submission Review now stays in the Admin Console shell and uses Review, Evidence, AI Review, Market and History tabs. Secure signed media is projected for reviewer evidence without provider calls on page load. See `ADMIN_REVIEW_DESIGN_QA.md` and `ADMIN_REVIEW_ISSUES.json` for the focused verification boundary; authenticated staging mutation and responsive evidence remain pending.

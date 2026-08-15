@@ -943,7 +943,7 @@ export class SubmissionService {
         gradeScaleEntry: {
           select: { label: true, company: { select: { code: true } } },
         },
-        media: { select: { slot: true, status: true, deletedAt: true } },
+        media: { select: { slot: true, status: true, deletedAt: true, objectKey: true } },
         marketResearch: {
           orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
           take: 1,
@@ -951,7 +951,22 @@ export class SubmissionService {
         },
       },
     });
-    const projected = rows.map(reviewQueueProjection);
+    const projected = await Promise.all(
+      rows.map(async (row) => {
+        const item = reviewQueueProjection(row);
+        const front = row.media.find(
+          (media) => media.slot === 'front' && media.status === 'SAFE' && media.deletedAt === null,
+        );
+        return {
+          ...item,
+          thumbnailUrl: front
+            ? await this.storage
+                .createPrivateDownloadUrl(front.objectKey, new Date(Date.now() + 5 * 60_000))
+                .catch(() => null)
+            : null,
+        };
+      }),
+    );
     const counts = queueCounts(projected);
     const filtered = projected.filter((item) => {
       if (input.priority && item.priority !== input.priority) return false;
@@ -1098,6 +1113,35 @@ export class SubmissionService {
       ),
     };
     const currentPreGrade = submission!.preGrades.find((item) => !item.supersededAt);
+    const safeReviewMedia = submission!.media.filter(
+      (media) => media.status === 'SAFE' && media.deletedAt === null,
+    );
+    const signedMedia = new Map(
+      await Promise.all(
+        safeReviewMedia.map(async (media) => [
+          media.id,
+          await this.storage
+            .createPrivateDownloadUrl(media.objectKey, new Date(Date.now() + 5 * 60_000))
+            .catch(() => null),
+        ] as const),
+      ),
+    );
+    const frontMedia = safeReviewMedia.find((media) => media.slot === 'front');
+    response.collectible = response.collectible
+      ? {
+          ...response.collectible,
+          thumbnailUrl: frontMedia ? signedMedia.get(frontMedia.id) ?? null : null,
+        }
+      : response.collectible;
+    response.evidenceSummary = response.evidenceSummary
+      ? {
+          ...response.evidenceSummary,
+          items: response.evidenceSummary.items.map((item) => ({
+            ...item,
+            thumbnailUrl: signedMedia.get(item.id) ?? null,
+          })),
+        }
+      : response.evidenceSummary;
     if (response.preGrade && currentPreGrade) {
       response.preGrade.visualizations = await Promise.all((Array.isArray(currentPreGrade.visualizations) ? currentPreGrade.visualizations : []).filter(isPersistedPreGradeVisualization).map(async (visualization) => ({
         side: visualization.side,
@@ -1731,7 +1775,12 @@ type ReviewQueueRow = {
   collectibleSet: { name: string } | null;
   gradeScaleEntry: { label: string; company: { code: string } } | null;
   declaredMetadata: Prisma.JsonValue | null;
-  media: Array<{ slot: string; status: string; deletedAt: Date | null }>;
+  media: Array<{
+    slot: string;
+    status: string;
+    deletedAt: Date | null;
+    objectKey: string;
+  }>;
   marketResearch: Array<{ state: string; collectedAt: Date }>;
 };
 
@@ -1794,7 +1843,7 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
         stringMetadata(metadata.cardNumber) ??
         null,
     },
-    thumbnailUrl: null,
+    thumbnailUrl: null as string | null,
     evidence: {
       percent: Math.round(
         (presentRequired / REQUIRED_QUEUE_EVIDENCE.length) * 100,
@@ -1952,6 +2001,7 @@ type ReviewDetailRow = {
   media: Array<{
     id: string;
     slot: string;
+    objectKey: string;
     mimeType: string;
     sizeBytes: number;
     status: string;
@@ -2181,7 +2231,7 @@ function reviewDetailContextProjection(
         context?.asset?.manufacturer ??
         context?.collectibleSet?.manufacturer ??
         null,
-      thumbnailUrl: null,
+      thumbnailUrl: null as string | null,
     },
     evidenceSummary: {
       required: requiredSlots.size,
@@ -2206,7 +2256,7 @@ function reviewDetailContextProjection(
           mimeType: item.mimeType,
           sizeBytes: item.sizeBytes,
           uploadedAt: item.updatedAt.toISOString(),
-          thumbnailUrl: null,
+          thumbnailUrl: null as string | null,
         })),
     },
     condition: { overallGrade: stringMetadata(metadata.grade), fields },

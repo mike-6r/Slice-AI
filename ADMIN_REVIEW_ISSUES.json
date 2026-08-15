@@ -1,0 +1,32 @@
+[
+  {
+    "id": "ADMIN-REVIEW-MEDIA-001",
+    "status": "resolved",
+    "summary": "Review queue and evidence views did not receive authorized media URLs.",
+    "resolution": "The review projection now signs safe private media for front thumbnails and evidence previews."
+  },
+  {
+    "id": "ADMIN-REVIEW-DESIGN-001",
+    "status": "resolved",
+    "summary": "Queue duplicated summary metrics and filters in a permanent right rail.",
+    "resolution": "Replaced with a compact summary strip and a single toolbar."
+  },
+  {
+    "id": "ADMIN-REVIEW-DESIGN-002",
+    "status": "resolved",
+    "summary": "Submission review used a customer shell and seven fragmented tabs.",
+    "resolution": "Added an Admin Console review shell and consolidated tabs into Review, Evidence, AI Review, Market and History."
+  },
+  {
+    "id": "ADMIN-REVIEW-DECISION-001",
+    "status": "resolved",
+    "summary": "Request-changes action did not expose structured requested fields.",
+    "resolution": "Added requested-field checkboxes and collector message while retaining backend command authority."
+  },
+  {
+    "id": "ADMIN-REVIEW-RESPONSIVE-001",
+    "status": "staging-verification",
+    "summary": "Responsive and authenticated workflow coverage requires staging QA.",
+    "next": "Run the controlled review checklist with a disposable submission."
+  }
+]

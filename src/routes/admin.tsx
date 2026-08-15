@@ -2323,41 +2323,21 @@ function ReviewQueue({
           <p>Review and evaluate submissions before acceptance into Slice.</p>
         </div>
       </div>
-      <div className="admin-review-kpis">
-        <ReviewKpi
-          icon={ClipboardCheck}
-          label="Total in queue"
-          value={counts.all}
-          detail="Current reviewable submissions"
-        />
-        <ReviewKpi
-          icon={AlertTriangle}
-          label="High priority"
-          value={counts.highPriority}
-          detail="Operational age rule"
-          tone="warning"
-        />
-        <ReviewKpi
-          icon={Archive}
-          label="Awaiting evidence"
-          value={counts.awaitingEvidence}
-          detail="Missing required evidence"
-          tone="purple"
-        />
-        <ReviewKpi
-          icon={BarChart3}
-          label="Research pending"
-          value={counts.researchPending}
-          detail="Research not complete"
-          tone="blue"
-        />
-        <ReviewKpi
-          icon={CheckCircle2}
-          label="Ready to review"
-          value={counts.readyToReview}
-          detail="Evidence complete"
-          tone="positive"
-        />
+      <div className="admin-review-summary-strip">
+        <div>
+          <strong>{counts.all} awaiting review</strong>
+          <span>
+            {counts.readyToReview} ready · {counts.awaitingEvidence} needs evidence · {counts.researchPending} research pending
+          </span>
+        </div>
+        <div className="admin-review-summary-actions">
+          <button type="button" className="is-active" onClick={() => updateSearch({ sort: "priority", sortDirection: "desc", page: "1" })}>
+            Ready first
+          </button>
+          <button type="button" onClick={() => updateSearch({ sort: "submitted", sortDirection: "asc", page: "1" })}>
+            Oldest first
+          </button>
+        </div>
       </div>
       <div className="admin-review-queue-layout">
         <section className="admin-panel admin-review-table-panel">
@@ -2376,7 +2356,7 @@ function ReviewQueue({
             />
             <ReviewTab
               active={tab === "evidence"}
-              label="Awaiting Evidence"
+              label="Needs Evidence"
               count={counts.awaitingEvidence}
               onClick={() => selectTab("evidence")}
             />
@@ -2435,6 +2415,21 @@ function ReviewQueue({
               ]}
               onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
             />
+            <ReviewSelect
+              label="Market research"
+              value={filters.research}
+              options={[
+                ["", "Research: All"],
+                ["completed", "Matched"],
+                ["pending", "Needs review"],
+                ["unavailable", "Unavailable"],
+                ["not_requested", "Not requested"],
+              ]}
+              onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
+            />
+            <button type="button" className="admin-review-more-filters" onClick={clearFilters}>
+              Clear filters
+            </button>
           </div>
           <div className="admin-review-table-wrap">
             <table className="admin-review-table">
@@ -2476,14 +2471,17 @@ function ReviewQueue({
                             {item.thumbnailUrl ? (
                               <img src={item.thumbnailUrl} alt="" />
                             ) : (
-                              <Archive aria-hidden="true" />
+                              <small>No front image</small>
                             )}
                           </span>
                           <span>
-                            <strong>{item.submissionReference}</strong>
+                            <strong>{item.collectible.title}</strong>
                             <small>
-                              {item.category} · {item.evidence.itemCount} item
-                              {item.evidence.itemCount === 1 ? "" : "s"}
+                              {item.category} · {item.collectible.set ?? "Set pending"}
+                            </small>
+                            <small>
+                              {item.collectible.cardNumber ? `Card ${item.collectible.cardNumber} · ` : ""}
+                              Submission {shortId(item.submissionReference)}
                             </small>
                           </span>
                         </div>
@@ -2624,180 +2622,6 @@ function ReviewQueue({
             </div>
           </div>
         </section>
-        <aside className="admin-review-rail">
-          <section className="admin-panel">
-            <AdminPanelHeading title="Queue Summary" />
-            <div className="admin-review-summary">
-              <strong>{counts.all}</strong>
-              <span>Total</span>
-            </div>
-            <ReviewSummaryBar
-              label="High Priority"
-              value={counts.highPriority}
-              total={counts.all}
-              tone="warning"
-            />
-            <ReviewSummaryBar
-              label="Awaiting Evidence"
-              value={counts.awaitingEvidence}
-              total={counts.all}
-              tone="purple"
-            />
-            <ReviewSummaryBar
-              label="Research Pending"
-              value={counts.researchPending}
-              total={counts.all}
-              tone="blue"
-            />
-            <ReviewSummaryBar
-              label="Ready to Review"
-              value={counts.readyToReview}
-              total={counts.all}
-              tone="positive"
-            />
-            <small className="admin-muted">
-              Categories can overlap; counts are intentionally not presented as exclusive
-              percentages.
-            </small>
-          </section>
-          <section className="admin-panel">
-            <AdminPanelHeading title="Filters" action="Clear all" onClick={clearFilters} />
-            <label className="admin-review-side-field">
-              Search
-              <input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Collector, card, ID..."
-                aria-label="Filter review queue"
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Priority
-              <ReviewSelect
-                label="Filter priority"
-                value={filters.priority}
-                options={[
-                  ["", "All priorities"],
-                  ["HIGH", "High"],
-                  ["MEDIUM", "Medium"],
-                  ["LOW", "Low"],
-                ]}
-                onChange={(value) => updateSearch({ priority: value || undefined, page: "1" })}
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Status
-              <ReviewSelect
-                label="Filter status"
-                value={filters.status}
-                options={[
-                  ["", "All statuses"],
-                  ["SUBMITTED", "Submitted"],
-                  ["IN_REVIEW", "In Review"],
-                ]}
-                onChange={(value) => updateSearch({ status: value || undefined, page: "1" })}
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Evidence completeness
-              <ReviewSelect
-                label="Filter evidence completeness"
-                value={filters.evidence}
-                options={[
-                  ["", "All levels"],
-                  ["complete", "Complete"],
-                  ["missing", "Missing required"],
-                  ["partial", "Partial"],
-                ]}
-                onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Market Research
-              <ReviewSelect
-                label="Market research"
-                value={filters.research}
-                options={[
-                  ["", "All states"],
-                  ["completed", "Completed"],
-                  ["in_progress", "In Progress"],
-                  ["pending", "Pending"],
-                  ["unavailable", "Unavailable"],
-                  ["not_requested", "Not Requested"],
-                ]}
-                onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Submitted date
-              <div className="admin-review-date-fields">
-                <input
-                  type="date"
-                  value={filters.submittedFrom}
-                  onChange={(event) =>
-                    updateSearch({ submittedFrom: event.target.value || undefined, page: "1" })
-                  }
-                  aria-label="Submitted from"
-                />
-                <input
-                  type="date"
-                  value={filters.submittedTo}
-                  onChange={(event) =>
-                    updateSearch({ submittedTo: event.target.value || undefined, page: "1" })
-                  }
-                  aria-label="Submitted to"
-                />
-              </div>
-            </label>
-            <label className="admin-review-side-field">
-              Sort by
-              <ReviewSelect
-                label="Sort by"
-                value={filters.sort}
-                options={[
-                  ["submitted", "Submitted"],
-                  ["priority", "Priority"],
-                  ["collector", "Collector"],
-                  ["research", "Research"],
-                  ["evidence", "Evidence"],
-                ]}
-                onChange={(value) => updateSearch({ sort: value, page: "1" })}
-              />
-            </label>
-            <label className="admin-review-side-field">
-              Direction
-              <ReviewSelect
-                label="Sort direction"
-                value={filters.sortDirection}
-                options={[
-                  ["asc", "Oldest first"],
-                  ["desc", "Newest first"],
-                ]}
-                onChange={(value) => updateSearch({ sortDirection: value, page: "1" })}
-              />
-            </label>
-          </section>
-          <section className="admin-panel">
-            <AdminPanelHeading title="Quick Actions" />
-            {selected[0] ? (
-              <Link
-                className="admin-detail-action"
-                to="/operations/submissions"
-                search={{ submission: selected[0], tab: undefined }}
-              >
-                <ClipboardCheck aria-hidden="true" /> Open selected review
-              </Link>
-            ) : (
-              <button type="button" className="admin-detail-action" disabled>
-                <ClipboardCheck aria-hidden="true" /> Select submissions to review
-              </button>
-            )}
-            <p className="admin-safe-note">
-              Bulk accept/reject and evidence requests are not available without a structured batch
-              workflow.
-            </p>
-          </section>
-        </aside>
       </div>
     </div>
   );
@@ -2863,15 +2687,7 @@ function ReviewSelect({
   options: Array<[string, string]>;
   onChange: (value: string) => void;
 }) {
-  return (
-    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
-      {options.map(([optionValue, optionLabel]) => (
-        <option key={optionValue} value={optionValue}>
-          {optionLabel}
-        </option>
-      ))}
-    </select>
-  );
+  return <AdminSelect label={label} value={value} options={options} onChange={onChange} className="admin-review-select" />;
 }
 
 function ReviewSummaryBar({

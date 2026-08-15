@@ -35,3 +35,7 @@ The route normalizer keeps older links from becoming dead destinations:
 ## Final QA boundary
 
 The current artifact records implementation and read-only route coverage. A fresh authenticated Admin browser session, cross-identity RBAC/IDOR matrix, responsive/accessibility sweep, request-health capture, and controlled mutation walkthrough remain required before declaring `ADMIN GO`.
+
+## Review workstation
+
+| `/operations/submissions?submission=:id` | Admin Submission Review workstation (Review, Evidence, AI Review, Market, History) | `GET /api/v1/reviews/submissions`, `GET /api/v1/reviews/submissions/:id` | Claim, request changes, approve, reject and notes use existing protected domain commands | Submission review permission | Implemented; authenticated staging mutation retest pending |

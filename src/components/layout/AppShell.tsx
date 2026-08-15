@@ -10,7 +10,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     select: (state) =>
       state.location.pathname === "/collector-workspace" ||
       state.location.pathname === "/admin" ||
-      state.location.pathname.startsWith("/admin/"),
+      state.location.pathname.startsWith("/admin/") ||
+      state.location.pathname.startsWith("/operations/submissions"),
   });
   useNotificationStream("current", !collectorWorkspace);
   if (collectorWorkspace)
