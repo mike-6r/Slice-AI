@@ -625,7 +625,7 @@ function Submissions({
                   {item.updatedAt ? date(item.updatedAt) : "No update date"}
                 </span>
               </div>
-              <StatusBadge stage={item.stage} />
+              <StatusBadge stage={item.stage} submissionStatus={item.submissionStatus} />
               <ArrowRight aria-hidden="true" />
             </button>
           ))
@@ -690,7 +690,7 @@ function Custody({ assets, open }: { assets: CollectorWorkspaceAsset[]; open: Op
                   {item.custody ? custodyLabel(item.custody.status) : "Custody status unavailable"}
                 </span>
               </div>
-              <StatusBadge stage={item.stage} />
+              <StatusBadge stage={item.stage} submissionStatus={item.submissionStatus} />
               <ArrowRight aria-hidden="true" />
             </button>
           ))
@@ -778,7 +778,7 @@ function ValuationRecords({ assets, open }: { assets: CollectorWorkspaceAsset[];
                 </span>
                 <h3>{asset.title}</h3>
                 <p>{assetMetadata(asset)}</p>
-                <StatusBadge stage={asset.stage} />
+                <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
               </div>
               <dl className="collector-valuation-card__values">
                 <div>
@@ -971,7 +971,7 @@ function WorkspaceRecordRow({
       </span>
       {meta ? <span className="collector-record-row__meta">{meta}</span> : null}
       {value ? <b>{value}</b> : null}
-      <StatusBadge stage={asset.stage} />
+      <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
       <ArrowRight aria-hidden="true" />
     </button>
   );
@@ -1332,7 +1332,7 @@ function RequestCards({
                 <strong>{item.title}</strong>
                 <span>{item.reason}</span>
               </span>
-              <StatusBadge stage={item.stage} />
+              <StatusBadge stage={item.stage} submissionStatus={item.submissionStatus} />
               <span className="collector-button">
                 Review request <ArrowRight aria-hidden="true" />
               </span>
@@ -2314,7 +2314,7 @@ function AssetManagementView({
                   .join(" · ")}
               </p>
               <div className="collector-detail-heading__badges">
-                <StatusBadge stage={asset.stage} />
+                <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
                 <span className="collector-detail-owned">Owned</span>
               </div>
             </div>
@@ -2575,12 +2575,17 @@ function HistoryTab({
 }
 
 function DetailMarketRail({ asset }: { asset: CollectorWorkspaceAsset }) {
+  const currentStatus = asset.submissionStatus === "APPROVED"
+    ? "Approved"
+    : asset.market.isLive
+      ? "Market live"
+      : stageCopy(asset.stage).label;
   return (
     <section className="collector-panel collector-detail-rail-card">
       <PanelHeader title="Current status" />
       <DetailRailRow
         label="Current status"
-        value={asset.market.isLive ? "Market live" : stageCopy(asset.stage).label}
+        value={currentStatus}
       />
       <DetailRailRow label="Shares available" value={availability(asset)} />
       <DetailRailRow
@@ -3207,7 +3212,7 @@ function AssetCard({ asset, open }: { asset: CollectorWorkspaceAsset; open: Open
       </span>
       <span>{asset.grade ?? "Grade unavailable"}</span>
       <b>{money(asset.referenceValue)}</b>
-      <StatusBadge stage={asset.stage} />
+      <StatusBadge stage={asset.stage} submissionStatus={asset.submissionStatus} />
       <span className="collector-asset-card__cta">
         Manage collectible <ArrowRight aria-hidden="true" />
       </span>
@@ -3248,7 +3253,7 @@ function AttentionRow({
           <small>{item.grade ?? "Grade unavailable"}</small>
           <em>{item.reason}</em>
         </span>
-        <StatusBadge stage={item.stage} />
+        <StatusBadge stage={item.stage} submissionStatus={item.submissionStatus} />
         <ArrowRight aria-hidden="true" />
       </button>
     </li>
@@ -3323,10 +3328,17 @@ function PanelHeader({
     </header>
   );
 }
-function StatusBadge({ stage }: { stage: CollectorWorkspaceStage }) {
+function StatusBadge({
+  stage,
+  submissionStatus,
+}: {
+  stage: CollectorWorkspaceStage;
+  submissionStatus?: string;
+}) {
+  const label = submissionStatus === "APPROVED" ? "Approved" : stageCopy(stage).label;
   return (
     <span className={`collector-status collector-status--${stage.toLowerCase()}`}>
-      {stageCopy(stage).label}
+      {label}
     </span>
   );
 }
@@ -3547,6 +3559,13 @@ function filterAssets(assets: CollectorWorkspaceAsset[], query: string) {
 function submissionNextStep(asset: CollectorWorkspaceAsset) {
   if (asset.submissionStatus === "CHANGES_REQUESTED") return "Review requested changes";
   if (asset.stage === "DRAFT") return "Finish your draft";
+  if (
+    asset.submissionStatus === "APPROVED" &&
+    asset.intake?.status === "SHIPPING_REQUIRED" &&
+    !asset.intake.shipment
+  )
+    return "Ship your collectible";
+  if (asset.submissionStatus === "APPROVED") return "Approved";
   if (asset.stage === "SUBMITTED" || asset.stage === "REVIEW") return "Awaiting staff review";
   if (asset.stage === "VALUATION") return "Valuation in progress";
   if (asset.stage === "CUSTODY") return "Custody in progress";

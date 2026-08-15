@@ -65,6 +65,14 @@ const operationsQuery = z
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
+const catalogueQuery = z
+  .object({
+    q: z.string().trim().max(120).optional(),
+    status: z.string().trim().max(32).optional(),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
 const membershipsQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
@@ -177,6 +185,13 @@ export class AdminController {
   @RequirePermission('admin.console.read')
   operationsOverview(@Req() request: AuthenticatedRequest) {
     return this.admin.operationsOverview(request.actor!);
+  }
+
+  @Get('collectibles')
+  @RequirePermission('admin.console.read')
+  collectibles(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(catalogueQuery, query);
+    return this.admin.catalogueAssets(request.actor!, input);
   }
 
   @Get('intake')

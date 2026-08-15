@@ -1,0 +1,190 @@
+.admin-catalogue-page {
+  display: grid;
+  gap: 1.5rem;
+}
+.admin-catalogue-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.admin-catalogue-breadcrumb {
+  color: var(--slice-text-muted, #8b94a7);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.admin-catalogue-breadcrumb span {
+  margin: 0 0.35rem;
+}
+.admin-catalogue-header h2 {
+  margin: 0.3rem 0;
+}
+.admin-catalogue-header p:last-child {
+  color: var(--slice-text-muted, #8b94a7);
+  margin: 0;
+  max-width: 58rem;
+}
+.admin-catalogue-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.admin-catalogue-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.admin-catalogue-search svg {
+  width: 1rem;
+  color: var(--slice-text-muted, #8b94a7);
+  flex: 0 0 auto;
+}
+.admin-catalogue-search input,
+.admin-catalogue-toolbar select {
+  min-height: 2.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 0.7rem;
+  background: rgba(15, 23, 42, 0.55);
+  color: inherit;
+  padding: 0.55rem 0.75rem;
+}
+.admin-catalogue-search input {
+  width: 100%;
+}
+.admin-catalogue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: 1rem;
+}
+.admin-catalogue-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.58);
+  padding: 1.1rem;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.admin-catalogue-card__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.admin-catalogue-card__heading > div {
+  min-width: 0;
+}
+.admin-catalogue-card__heading small {
+  color: #9cc7ff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+}
+.admin-catalogue-card h3 {
+  margin: 0.3rem 0;
+  overflow-wrap: anywhere;
+}
+.admin-catalogue-card p {
+  color: var(--slice-text-muted, #8b94a7);
+  margin: 0;
+  font-size: 0.88rem;
+}
+.admin-catalogue-status {
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.12);
+  color: #a8d1ff;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.admin-catalogue-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.admin-catalogue-fields div {
+  min-width: 0;
+}
+.admin-catalogue-fields dt {
+  color: var(--slice-text-muted, #8b94a7);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.admin-catalogue-fields dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+.admin-catalogue-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 0.65rem;
+  background: transparent;
+  color: inherit;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+}
+.admin-catalogue-card__action svg {
+  width: 0.95rem;
+}
+.admin-catalogue-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+.admin-catalogue-empty strong {
+  display: block;
+  font-size: 1.1rem;
+}
+.admin-catalogue-empty p {
+  color: var(--slice-text-muted, #8b94a7);
+  margin: 0.55rem auto 0;
+  max-width: 36rem;
+}
+.admin-catalogue-empty button {
+  margin-top: 1rem;
+}
+.admin-catalogue-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: var(--slice-text-muted, #8b94a7);
+  font-size: 0.85rem;
+}
+.admin-catalogue-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.admin-catalogue-pagination button {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: inherit;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+}
+.admin-catalogue-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .admin-catalogue-fields {
+    grid-template-columns: 1fr;
+  }
+  .admin-catalogue-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

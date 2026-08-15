@@ -404,7 +404,13 @@ export type AdminRiskOperations = {
 
 export type AdminPlatformDashboard = {
   generatedAt: string;
-  overallHealth: "Healthy" | "Degraded" | "Unavailable" | "Unknown";
+  overallHealth:
+    | "Healthy"
+    | "Degraded"
+    | "Unavailable"
+    | "Unknown"
+    | "Operational"
+    | "Operational with limitations";
   kpis: {
     failedJobs: number;
     webhookFailures: number;
@@ -952,6 +958,42 @@ export type AdminCollectibleDetail = {
   evidence: Array<{ slot: string; filename: string; status: string; url: string | null }>;
 };
 
+export type AdminCatalogueAsset = {
+  id: string;
+  publicId: string;
+  slug: string;
+  title: string;
+  status: string;
+  identity: {
+    category: string;
+    year: number | null;
+    manufacturer: string | null;
+    set: string | null;
+    cardNumber: string | null;
+    edition: string | null;
+    grading: { company: string; code: string; grade: string; label: string } | null;
+  };
+  provenance: {
+    submissionId: string;
+    submissionStatus: string;
+    submittedAt: string | null;
+    collector: string;
+    username: string | null;
+  } | null;
+  mediaState: string;
+  verificationState: string;
+  valuationState: string;
+  custodyState: string;
+  marketReadiness: string;
+  publicationState: string;
+  updatedAt: string;
+};
+
+export type AdminCatalogueResponse = {
+  items: AdminCatalogueAsset[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
   getRiskOperations(): Promise<AdminRiskOperations>;
@@ -965,6 +1007,12 @@ export interface AdminRepository {
   }): Promise<AdminPlatformRecordsResponse>;
   getComplianceCase(id: string): Promise<AdminComplianceDetail>;
   getOperationsOverview(): Promise<AdminOperationsOverview>;
+  listCatalogueAssets(input?: {
+    q?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminCatalogueResponse>;
   listIntake(input?: {
     status?: string;
     q?: string;

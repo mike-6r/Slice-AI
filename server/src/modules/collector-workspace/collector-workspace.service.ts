@@ -1151,10 +1151,11 @@ function requestFor(asset: WorkspaceItem): CollectorRequestView[] {
         type: 'ADD_TRACKING' as const,
         category: 'SHIPPING' as const,
         priority: 'BLOCKING' as const,
-        reason: 'Add your carrier and tracking details before shipping.',
-        badge: 'Add tracking',
-        action: 'Add tracking',
-        actionLabel: 'Add tracking',
+        reason:
+          'Your approved collectible is ready. When the package is physically sent, add the carrier and tracking details.',
+        badge: 'Ship your collectible',
+        action: 'Ship your collectible',
+        actionLabel: 'Ship your collectible',
         targetRoute: 'custody',
       },
     ];
@@ -1256,16 +1257,24 @@ function lifecycleFor(
           ? ('CURRENT' as const)
           : step.status,
   }));
+  const approvedAwaitingShipment =
+    asset.submissionStatus === 'APPROVED' &&
+    asset.intake?.status === 'SHIPPING_REQUIRED' &&
+    !asset.intake.shipment;
   const currentLabel =
-    action?.actionLabel ??
-    (asset.stage === 'MARKET_LIVE' ? 'Market Live' : stageLabel(asset.stage));
+    asset.submissionStatus === 'APPROVED'
+      ? 'Approved'
+      : action?.actionLabel ??
+        (asset.stage === 'MARKET_LIVE' ? 'Market Live' : stageLabel(asset.stage));
   const currentDetail =
-    action?.reason ??
-    (hasMarket
-      ? 'Your collectible is verified, held in Slice custody, and currently available through the marketplace.'
-      : asset.stage === 'DRAFT'
-        ? 'Finish your collectible submission when you are ready.'
-        : 'Slice is moving your collectible through the authenticated workflow. No action is required from you right now.');
+    asset.submissionStatus === 'APPROVED' && approvedAwaitingShipment
+      ? 'Your submission was approved. Ship the physical collectible when you are ready, then add carrier and tracking details.'
+      : action?.reason ??
+        (hasMarket
+          ? 'Your collectible is verified, held in Slice custody, and currently available through the marketplace.'
+          : asset.stage === 'DRAFT'
+            ? 'Finish your collectible submission when you are ready.'
+            : 'Slice is moving your collectible through the authenticated workflow. No action is required from you right now.');
   const nextMilestone = action
     ? { label: action.actionLabel, detail: action.reason }
     : hasMarket

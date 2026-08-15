@@ -48,6 +48,7 @@ import { canAccessAdmin } from "@/auth/workspace-access";
 import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
+import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCatalogue";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
@@ -525,6 +526,18 @@ function AdminConsole() {
     enabled: section === "intake",
     staleTime: 30_000,
   });
+  const catalogue = useQuery({
+    queryKey: ["admin", "catalogue", reviewQuery, reviewStatus, reviewPageParam],
+    queryFn: () =>
+      services.repositories.admin.listCatalogueAssets({
+        q: reviewQuery,
+        status: reviewStatus,
+        page: Math.max(1, Number(reviewPageParam ?? 1)),
+        pageSize: 25,
+      }),
+    enabled: section === "collectibles" && !selectedAsset,
+    staleTime: 20_000,
+  });
   const memberships = useQuery({
     queryKey: [
       "admin",
@@ -951,7 +964,22 @@ function AdminConsole() {
               })
             }
           />
-        ) : section === "assetOperations" || section === "collectibles" ? (
+        ) : section === "collectibles" ? (
+          <AdminCollectibleCatalogue
+            query={reviewQuery ?? ""}
+            status={reviewStatus ?? ""}
+            page={Math.max(1, Number(reviewPageParam ?? 1))}
+            update={(patch) =>
+              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
+            }
+            onOpen={(assetId) =>
+              void navigate({
+                search: (current) => ({ ...current, section: "collectibles", asset: assetId }),
+                replace: true,
+              })
+            }
+          />
+        ) : section === "assetOperations" ? (
           <AdminAssetOperations
             tab={selectedUserTab}
             query={reviewQuery ?? ""}

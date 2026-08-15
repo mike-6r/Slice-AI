@@ -683,9 +683,24 @@ export class AdminService {
       }),
       this.db.outboxEvent.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
     ]);
-    const degraded = risk.system.filter((item) => item.status === 'Degraded');
-    const unknown = risk.system.some((item) => item.status === 'Unknown');
-    const overallHealth = degraded.length ? 'Degraded' : unknown ? 'Unknown' : 'Healthy';
+    const degraded = risk.system.filter((item) =>
+      ['Degraded', 'Unavailable', 'Outage'].includes(item.status),
+    );
+    const limited = risk.system.filter((item) =>
+      [
+        'Unknown',
+        'BETA_DISABLED',
+        'NOT_CONFIGURED',
+        'LOCAL_ONLY',
+        'CONFIGURED_NOT_EXERCISED',
+        'NO_APPROVED_DESTINATION',
+      ].includes(item.status),
+    );
+    const overallHealth = degraded.length
+      ? 'Degraded'
+      : limited.length
+        ? 'Operational with limitations'
+        : 'Operational';
     const alerts = degraded.map((item) => ({
       id: `health-${item.name}`,
       title: `${item.name} requires attention`,
@@ -1584,6 +1599,133 @@ export class AdminService {
       },
       needsAttention,
       generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Canonical catalogue projection. This intentionally reads Asset records
+   * only; submissions without an authorised canonical Asset never appear in
+   * this surface and remain owned by the review/intake workflows.
+   */
+  async catalogueAssets(
+    actor: Actor,
+    input: { q?: string; status?: string; page?: number; pageSize?: number },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const q = input.q?.trim();
+    const where: Prisma.AssetWhereInput = {
+      ...(input.status ? { status: input.status as never } : {}),
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: 'insensitive' } },
+              { publicId: { contains: q, mode: 'insensitive' } },
+              { slug: { contains: q, mode: 'insensitive' } },
+              { cardNumber: { contains: q, mode: 'insensitive' } },
+              { category: { name: { contains: q, mode: 'insensitive' } } },
+              { collectibleSet: { name: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 25;
+    const [total, assets] = await Promise.all([
+      this.db.asset.count({ where }),
+      this.db.asset.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          category: { select: { name: true } },
+          collectibleSet: { select: { name: true } },
+          gradeScaleEntry: { include: { company: { select: { name: true, code: true } } } },
+          valuationDecisions: {
+            where: { status: 'ACTIVE' },
+            orderBy: { decidedAt: 'desc' },
+            take: 1,
+            select: { status: true, decidedAt: true },
+          },
+          custodyRecord: { select: { status: true, updatedAt: true } },
+          publication: { select: { status: true, publishedAt: true, updatedAt: true } },
+          submissions: {
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              submittedAt: true,
+              updatedAt: true,
+              owner: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
+              media: { select: { status: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    return {
+      items: assets.map((asset) => {
+        const submission = asset.submissions[0] ?? null;
+        const mediaStatuses = submission?.media.map((media) => media.status) ?? [];
+        const mediaState = !mediaStatuses.length
+          ? 'NOT_AVAILABLE'
+          : mediaStatuses.every((status) => status === 'SAFE')
+            ? 'SAFE'
+            : mediaStatuses.some((status) => status === 'REJECTED')
+              ? 'REJECTED'
+              : 'IN_REVIEW';
+        const verificationState = asset.custodyRecord
+          ? asset.custodyRecord.status === 'EXPECTED'
+            ? 'AWAITING_RECEIPT'
+            : asset.custodyRecord.status
+          : 'NOT_STARTED';
+        return {
+          id: asset.id,
+          publicId: asset.publicId,
+          slug: asset.slug,
+          title: asset.title,
+          status: asset.status,
+          identity: {
+            category: asset.category.name,
+            year: asset.year,
+            manufacturer: asset.manufacturer,
+            set: asset.collectibleSet?.name ?? null,
+            cardNumber: asset.cardNumber,
+            edition: asset.edition,
+            grading: asset.gradeScaleEntry
+              ? {
+                  company: asset.gradeScaleEntry.company.name,
+                  code: asset.gradeScaleEntry.company.code,
+                  grade: asset.gradeScaleEntry.grade.toFixed(2),
+                  label: asset.gradeScaleEntry.label,
+                }
+              : null,
+          },
+          provenance: submission
+            ? {
+                submissionId: submission.id,
+                submissionStatus: submission.status,
+                submittedAt: submission.submittedAt?.toISOString() ?? null,
+                collector: submission.owner.profile?.displayName ?? 'Unnamed collector',
+                username: submission.owner.profile?.publicUsername ?? null,
+              }
+            : null,
+          mediaState,
+          verificationState,
+          valuationState: asset.valuationDecisions.length ? 'ACTIVE' : 'NOT_STARTED',
+          custodyState: asset.custodyRecord?.status ?? 'NOT_STARTED',
+          marketReadiness: asset.publication?.status === 'PUBLISHED' ? 'PUBLISHED' : 'NOT_READY',
+          publicationState: asset.publication?.status ?? 'NOT_PUBLISHED',
+          updatedAt: asset.updatedAt.toISOString(),
+        };
+      }),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
     };
   }
 

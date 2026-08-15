@@ -131,6 +131,17 @@ export const mockRepositories: AppRepositories = {
         },
       };
     },
+    async listCatalogueAssets(input) {
+      return {
+        items: [],
+        pagination: {
+          page: input?.page ?? 1,
+          pageSize: input?.pageSize ?? 25,
+          total: 0,
+          totalPages: 1,
+        },
+      };
+    },
     async getComplianceCase() {
       throw new Error("Admin compliance requires the API service.");
     },

@@ -19,6 +19,7 @@ import type {
   AdminMembershipRow,
   AdminRiskOperations,
   AdminComplianceDetail,
+  AdminCatalogueResponse,
   AdminRepository,
   AdminSearchResult,
   AdminUserDetail,
@@ -2133,6 +2134,22 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async listPlatformRecords(input) {
     return mapAdminPlatformRecords(await client.get<unknown>("/admin/platform/records", input));
+  },
+  async listCatalogueAssets(input) {
+    const value = objectField(
+      await client.get<unknown>("/admin/collectibles", input),
+      "admin collectibles catalogue",
+    );
+    const pagination = objectField(value.pagination, "admin collectibles pagination");
+    return {
+      items: Array.isArray(value.items) ? (value.items as AdminCatalogueResponse["items"]) : [],
+      pagination: {
+        page: Number(pagination.page ?? 1),
+        pageSize: Number(pagination.pageSize ?? 25),
+        total: Number(pagination.total ?? 0),
+        totalPages: Number(pagination.totalPages ?? 1),
+      },
+    };
   },
   async getComplianceCase(id) {
     return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));
