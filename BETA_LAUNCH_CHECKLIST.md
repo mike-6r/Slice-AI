@@ -6,7 +6,7 @@ Scope: controlled demo accounts only; no direct database publish or fixture rese
 
 ## Deployment
 
-- Git main / VPS: `bbf879e` (checklist commit; production code was built from `a2d0989` immediately before this doc-only sync)
+- Git main / VPS: see the latest authenticated verification record at the end of this checklist (current `628b00e1f722bffc53bf8cb57979e830a2971e10`).
 - API `/health` and `/ready`: PASS
 - API runtime version: `staging`
 - Frontend build/version endpoint: NOT EXPOSED
@@ -329,7 +329,7 @@ Phase 7 status: **NO-GO — CONFIGURATION_REQUIRED FOR DURABLE STORAGE AND OPERA
 - Canonical Asset trigger: explicit Staff/Admin Catalogue `DRAFT` creation followed by approved-submission link; premature creation `NO`; idempotent creation `PASS`; provider promotion fixture path `PASS`; provider calls during promotion `0`; timestamp-preserving snapshot promotion `PASS` when an Asset exists.
 - Controlled internal Beta: `GO`; external invited Beta: `NO-GO`; storage blocker `YES`; intake blocker `YES`.
 
-## Phase 9 physical lifecycle gate — 2026-08-15
+## Phase 9 physical lifecycle gate — superseded by latest authenticated verification below
 
 - Deployment verified on VPS at `7ada439`; API/web active; `/health` and `/ready` pass; Prisma schema is current.
 - Submission `054e7773-87ad-4b5e-9701-916a3aa5144d`: `APPROVED`, version `12`, no canonical Asset.
@@ -340,3 +340,43 @@ Phase 7 status: **NO-GO — CONFIGURATION_REQUIRED FOR DURABLE STORAGE AND OPERA
 - Shipment, delivery, Slice receipt, verification, D11 valuation, custody, Vault Ready, canonical Asset, publication, issuance, funding, and D14 orders: **NOT CREATED**.
 
 **Phase 9 status: STOPPED — WAITING_FOR_REAL_OPERATOR_APPROVED_DESTINATION_AND_PHYSICAL_SHIPMENT.** Do not ship to the staging fixture. Continue only after Operations configures and approves a real receiving destination through the audited Admin/Vault Operations flow and the operator actually sends the physical card with real tracking.
+
+## Latest authenticated Collector/Admin and real intake verification — 2026-08-15
+
+This section is the current checklist authority and supersedes earlier pending-credential and staging-destination notes.
+
+### Deployment
+
+- Git main / VPS: `628b00e1f722bffc53bf8cb57979e830a2971e10`.
+- API/web: PASS; `/health`: PASS; `/ready`: PASS; Prisma: 58 migrations, no pending migrations.
+- Beta API/data mode and configured durable object storage/provider environment: PASS (secrets intentionally omitted).
+
+### Authenticated QA gates
+
+- [x] Collector authentication, refresh and direct protected navigation.
+- [x] Collector workspace navigation and controlled Charizard detail.
+- [x] Admin authentication, direct `/admin` and read-only primary sections.
+- [x] Admin Review Queue excludes the already approved Charizard.
+- [x] Admin Physical Intake shows shipping-required with no shipment.
+- [x] Exact PriceCharting URL/product `5605741` retained as raw `PRICE_GUIDE`; ordinary page-load provider calls: `0`.
+- [x] Front/back evidence persisted as SAFE/private/durable.
+- [x] Real UK Beta destination found and verified: `beta-test-uk-intake`.
+- [x] Destination active, intake-available, operationally approved, accepting shipments and Pokémon-eligible.
+- [x] Charizard selected destination through supported Collector flow; `SLICE-3AA5144D` preserved; `shipment=null`.
+- [x] Destination selection audit event `INTAKE_DESTINATION_SELECTED` verified.
+- [ ] Fresh listing Steps 4–6 and one live Ximilar analysis.
+- [ ] Cross-user media/privacy, anonymous R2, invalid signature and separate-identity RBAC/IDOR.
+- [ ] Fixture-noise cleanup and approved-state journey copy (`COL-FIXTURE-001`, `COL-STATUS-001`).
+
+### Phase 9 decision
+
+- Evidence ready: **YES**.
+- Real destination ready: **YES**.
+- Eligible destination selected: **YES**.
+- Software ready for shipment: **YES**.
+- Physical shipment created: **NO** (intentional).
+- Current gate: `PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT`.
+- Next action: operator physically sends the real package with a real carrier/tracking number, then enters it through the Collector UI. Do not fabricate delivery, receipt, verification, valuation, custody or publication.
+- Phase 10: **NO**.
+
+Controlled internal Beta: **GO with documented limitations**. External invited Beta: **NO-GO** until the unchecked security/privacy, fresh media/Ximilar and fixture-cleanup gates close.

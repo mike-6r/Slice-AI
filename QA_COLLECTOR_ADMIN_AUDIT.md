@@ -1,9 +1,9 @@
 # SLICE FULL COLLECTOR + ADMIN QA
 
 Environment: https://staging.slicecollectable.com  
-Audit date: 2026-08-14  
-Git/VPS commit: `1aa68bb56344909fffae7157bd20f833d82df83a`  
-Account: controlled authenticated Michael Fultz session (`@michael`, Collector + Administrator)
+Audit date: 2026-08-15
+Git/VPS commit: `628b00e1f722bffc53bf8cb57979e830a2971e10`
+Accounts: controlled authenticated Collector (`@slice-demo-collector`) and Administrator (`@michael`)
 
 ## Deployment and provider gate
 
@@ -77,3 +77,58 @@ Admin decision: **NO-GO for external invited beta** while `ADMIN-COL-001` remain
 ## Issues
 
 See `QA_COLLECTOR_ADMIN_ISSUES.json` for structured reproduction details. The contained Collector CTA regression was fixed in this pass. The Admin Collectibles/Asset Operations route collision is the top remaining functional issue.
+
+## Latest authenticated Collector/Admin + intake verification — 2026-08-15
+
+This section supersedes earlier “not testable” statements that describe an empty Collector account or an unconfigured intake destination.
+
+### Deployment
+
+- Git main and VPS: `628b00e1f722bffc53bf8cb57979e830a2971e10`.
+- `slice-api.service` and `slice-web.service`: active.
+- `/health`: PASS (200).
+- `/ready`: PASS (200; PostgreSQL and Redis up).
+- Prisma: 58 migrations, no pending migrations.
+- Beta API/data mode, R2-compatible storage, PriceCharting and Ximilar configuration were present in the VPS environment; provider calls were not triggered by ordinary page loads.
+
+### Collector
+
+- Authenticated login, refresh/direct workspace navigation, workspace navigation items, Overview, My Collectibles, Submissions, Your Actions, Subscription, Public Profile and Settings: PASS.
+- Controlled Charizard submission `054e7773-87ad-4b5e-9701-916a3aa5144d` appears once and remains `APPROVED`; no shipment, receipt, valuation, custody, canonical Asset or publication was created.
+- Identity is `2023 Pokémon Charizard ex · Obsidian Flames · 223/197 · Special Illustration Rare · raw/ungraded`; front/back evidence is present, SAFE, checksummed, private and durable.
+- The exact PriceCharting research record remains persisted and customer/staff projections read it without a new page-load provider call.
+- A fresh exact-URL Base Set Charizard draft was created through the supported `/list` flow for Step 1–3 QA and was not submitted. Steps 4–6 and one live Ximilar analysis were not exercised.
+- Requests/Your Actions displayed actionable Add tracking only for the approved record; no physical action was taken.
+- Remaining Collector issues: legacy demo/draft noise in `/list` (`COL-FIXTURE-001`) and misleading review-pending journey copy for an approved record (`COL-STATUS-001`).
+
+### Admin
+
+- Authenticated Administrator login, refresh/direct `/admin`, Overview, Accounts, Review Queue, Physical Intake, Collectibles, Asset Operations, Memberships, Finance & Trading, Trust & Support and Platform Operations: PASS read-only.
+- Review Queue correctly excludes the already approved controlled Charizard; Physical Intake shows it as shipping-required with no shipment.
+- `ADMIN-COL-001` remains open: Collectibles still renders the Asset Operations board instead of a separate authoritative catalogue.
+- `ADMIN-TELEMETRY-001` remains open: aggregate Platform Operations health is Unknown where telemetry is unavailable; individual configured checks remain truthful.
+
+### Real UK Beta intake destination
+
+- Destination `beta-test-uk-intake` is present in the real destination records and is active, intake-available, operationally approved, accepting shipments, environment `beta`, and category-eligible for Pokémon TCG.
+- The operator approval audit and reason are present. The customer-safe address and testing-only shipping instructions are shown only through eligible authenticated intake flow; no public address was published.
+- The controlled Charizard destination was selected through the Collector UI and now points to `beta-test-uk-intake`; old `staging-gb-intake` is not selected. Intake reference remains `SLICE-3AA5144D` and shipment is null.
+- The destination upsert and `INTAKE_DESTINATION_SELECTED` audit event are now atomic. The event was verified for the controlled intake on 2026-08-15.
+
+### Phase 9 gate
+
+- Evidence ready: YES.
+- Real destination ready: YES.
+- Eligible destination selected: YES.
+- Software ready for shipment: YES.
+- Physical shipment: NO (intentionally not created).
+- Current real-world gate: `WAITING_FOR_PHYSICAL_SHIPMENT`.
+- Next action: the operator must physically send the real card with a real carrier and tracking number, then enter those details through the existing Collector flow. Do not fabricate any status.
+- Phase 10 trading: NOT STARTED.
+
+### Final decisions
+
+- Collector panel: **GO for controlled internal Beta; NO-GO for external invited Beta** until cross-user privacy/RBAC, fresh upload/Ximilar, and fixture-noise cleanup gates are complete.
+- Admin panel: **GO for controlled read-only internal Beta; NO-GO for external invited Beta** while the Collectibles route collision and separate-identity RBAC/IDOR checks remain open.
+- Controlled internal Beta: **GO with documented limitations**.
+- External invited Beta: **NO-GO**.

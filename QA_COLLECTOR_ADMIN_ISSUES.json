@@ -1,8 +1,8 @@
 {
   "audit": "SLICE FULL COLLECTOR + ADMIN QA",
   "environment": "https://staging.slicecollectable.com",
-  "auditedAt": "2026-08-14",
-  "deployedCommit": "1aa68bb56344909fffae7157bd20f833d82df83a",
+  "auditedAt": "2026-08-15",
+  "deployedCommit": "628b00e1f722bffc53bf8cb57979e830a2971e10",
   "issues": [
     {
       "id": "COL-ACTION-001",
@@ -54,12 +54,63 @@
       "screenshot": null,
       "rootCause": "Webhook/feature-flag telemetry is unavailable to the read model.",
       "recommendedFix": "Expose an explicit aggregate such as Operational with an Unknown/Not configured component list, without fabricating provider health."
+    },
+    {
+      "id": "COL-FIXTURE-001",
+      "role": "Collector",
+      "route": "/list",
+      "severity": "MEDIUM",
+      "category": "Data hygiene",
+      "title": "My submissions includes legacy demo/draft noise",
+      "status": "OPEN",
+      "reproduction": "Sign in as the controlled Collector, open /list, and review My submissions after the fresh identify-card draft check.",
+      "expected": "A customer-facing list should contain the collector's legitimate records, with any retained QA records clearly labelled as controlled demo data.",
+      "actual": "The list includes multiple older cancelled/demo rows and the fresh QA draft alongside the controlled lifecycle record.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "Controlled staging fixtures and QA drafts are projected together without an explicit demo/QA label or cleanup path in the customer list.",
+      "recommendedFix": "Retire or clearly label non-production fixture rows in the Collector projection; preserve supported draft deletion for disposable QA records."
+    },
+    {
+      "id": "COL-STATUS-001",
+      "role": "Collector",
+      "route": "/collector-workspace",
+      "severity": "MEDIUM",
+      "category": "Lifecycle clarity",
+      "title": "Approved submission still presents a review-pending next action",
+      "status": "OPEN",
+      "reproduction": "Open the controlled Charizard record from My Collectibles and compare the Details status with the journey/sidebar copy.",
+      "expected": "The customer-facing journey and next action should consistently reflect the authoritative APPROVED state.",
+      "actual": "Details shows Submission status Approved, while the journey/sidebar still says Submitted and Awaiting staff review; the actionable next step is Add tracking.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "The workspace stage label and next-action copy are derived from the pre-approval journey wording rather than the authoritative submission status.",
+      "recommendedFix": "Map APPROVED to an explicit approved/shipping-required presentation and reserve review-pending copy for SUBMITTED/REVIEW states."
+    },
+    {
+      "id": "INTAKE-AUDIT-001",
+      "role": "Collector",
+      "route": "/collector-workspace",
+      "severity": "HIGH",
+      "category": "Auditability",
+      "title": "Intake destination selection was not audited",
+      "status": "FIXED",
+      "reproduction": "Select an approved intake destination for an APPROVED submission before shipment.",
+      "expected": "The selection and previous/next destination are recorded atomically with the intake update.",
+      "actual": "The prior implementation updated SubmissionIntake without an audit event.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "selectVault used a direct upsert without an audit write.",
+      "resolution": "selectVault now performs the upsert and INTAKE_DESTINATION_SELECTED audit event in one transaction. Verified on 2026-08-15 for SLICE-3AA5144D."
     }
   ],
   "notTestableWithoutAdditionalControlledData": [
-    "Collector collectible/submission detail tabs because this account has zero owned records.",
-    "Changes-requested, resubmit, shipment/tracking, receipt and publication workflows because no real physical event is authorized.",
-    "Admin accept/reject, valuation, custody, publish and role mutation actions because exercising them would mutate controlled lifecycle or access state.",
-    "Investor/second-collector IDOR checks and logout/back-cache checks because the authenticated browser session was retained for the complete audit."
+    "Fresh listing Steps 4-6 and Ximilar live analysis were not completed; the fresh exact-URL draft remains a supported disposable QA draft.",
+    "Cross-user media, anonymous R2, invalid-signature and investor/second-collector IDOR checks require separate controlled browser identities.",
+    "Admin accept/reject, valuation, custody, publish and role mutation actions were not exercised because they would mutate controlled lifecycle or access state.",
+    "Real shipment/tracking, delivery, receipt, verification, valuation, custody, publication and Phase 10 trading remain intentionally unexecuted."
   ]
 }

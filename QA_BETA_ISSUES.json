@@ -2,10 +2,10 @@
   "audit": "SLICE LIVE BETA QA CONTINUATION PHASE 2",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-14",
-  "deployedCommit": "1aa68bb56344909fffae7157bd20f833d82df83a",
+  "deployedCommit": "628b00e1f722bffc53bf8cb57979e830a2971e10",
   "status": "GO_CONTROLLED_BETA_EXTERNAL_NO_GO",
   "issues": [
-    { "id": "AUTH-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Prior session bootstrap remediation remains deployed; fresh credentialed browser re-test is pending explicit credential-entry confirmation." },
+    { "id": "AUTH-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Authenticated Collector and Administrator login, refresh and direct protected navigation were re-tested on staging 2026-08-15 without an auth loop." },
     { "id": "MARKET-001", "severity": "HIGH", "status": "FIXED", "resolution": "Public Beta market projection and Marketplace both return a truthful empty state when no published assets exist." },
     { "id": "MARKET-002", "severity": "CRITICAL", "status": "FIXED", "resolution": "Staging frontend now builds with VITE_APP_ENV=beta, removing retired showcase links; direct retired asset routes remain unavailable." },
     { "id": "MARKET-003", "severity": "HIGH", "status": "FIXED", "resolution": "Educational Umbreon media is labelled static and demo trading is gated in Beta." },
@@ -17,17 +17,19 @@
   ],
   "newFindings": [
     { "id": "DEPLOY-001", "severity": "HIGH", "status": "FIXED", "resolution": "Staging deploy script now passes VITE_APP_ENV=beta to the frontend production build so backend and client Beta policy cannot diverge." },
-    { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "NOT_FIXED", "resolution": "The selected staging-gb-intake fixture is not operationally approved and is not accepting shipments. Physical lifecycle correctly stopped before shipment; a real operator-approved destination is required." },
+    { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Operations configured and approved beta-test-uk-intake. It is active, intake-available, accepting shipments and Pokémon-eligible; the controlled Charizard now selects it through the supported Collector flow. No shipment was created." },
     { "id": "COL-ACTION-001", "severity": "HIGH", "status": "FIXED", "resolution": "Collector Overview now exposes a direct List an Asset action linking to the six-step listing flow." },
     { "id": "ADMIN-COL-001", "severity": "HIGH", "status": "OPEN", "resolution": "Admin Collectibles currently renders the Asset Operations pipeline because no separate authoritative catalogue projection/component exists." },
-    { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Platform Operations aggregate health is Unknown while unavailable webhook/feature-flag telemetry is explicitly reported." }
+    { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Platform Operations aggregate health is Unknown while unavailable webhook/feature-flag telemetry is explicitly reported." },
+    { "id": "COL-FIXTURE-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Authenticated Collector QA found older cancelled/demo rows and a fresh QA draft in My submissions; customer-facing fixture labelling or supported cleanup is still needed." },
+    { "id": "COL-STATUS-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "The controlled record is authoritative APPROVED, but the workspace journey/sidebar still says Submitted/Awaiting staff review instead of approved/shipping-required copy." },
+    { "id": "INTAKE-AUDIT-001", "severity": "HIGH", "status": "FIXED", "resolution": "Destination selection now writes the intake upsert and INTAKE_DESTINATION_SELECTED audit event atomically; verified against SLICE-3AA5144D." }
   ],
   "notExecuted": [
-    "credentialed Investor/Collector/Admin browser flows",
-    "fresh listing and PriceCharting acceptance flow",
-    "fresh R2 upload and cross-user private-media checks",
+    "credentialed Investor browser flow and cross-user private-media checks",
+    "fresh listing Steps 4–6, fresh R2 upload and one live Ximilar analysis",
     "one live Ximilar analysis",
-    "Admin review/intake acceptance flow",
+    "Admin review/intake mutation flow",
     "Cross-account RBAC/IDOR and private-media checks requiring separate controlled sessions",
     "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion"
   ],
