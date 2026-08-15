@@ -2674,10 +2674,11 @@ function MembershipRail({ membership }: { membership?: CollectorSubscriptionProj
 function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
   const { repositories } = useAppServices();
   const client = useQueryClient();
+  const canSelectVault = asset.submissionStatus === "APPROVED" && !asset.intake?.shipment;
   const vaults = useQuery({
     queryKey: ["collector-workspace", "vaults"],
     queryFn: repositories.collectorWorkspace.listVaults,
-    enabled: asset.submissionStatus === "APPROVED" && !asset.intake,
+    enabled: canSelectVault,
   });
   const selectVault = useMutation({
     mutationFn: (vaultId: string) => repositories.collectorWorkspace.selectVault(asset.id, vaultId),
@@ -2716,12 +2717,13 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
             : "View submission"}{" "}
         <ArrowRight aria-hidden="true" />
       </Link>
-      {asset.submissionStatus === "APPROVED" && !asset.intake ? (
+      {canSelectVault ? (
         <div className="collector-intake-action">
           <strong>Choose a vault</strong>
           <small>
-            Your submission has been accepted for physical intake. Select a customer-safe
-            destination to continue.
+            {asset.intake
+              ? `Current destination: ${asset.intake.vault.displayName}. You can change it until shipment starts.`
+              : "Your submission has been accepted for physical intake. Select a customer-safe destination to continue."}
           </small>
           {vaults.data?.map((vault) => (
             <button
