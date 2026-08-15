@@ -23,6 +23,7 @@ import { ControlRateLimitService } from './control-rate-limit.service';
 
 const role = z.enum([
   'USER',
+  'COLLECTOR',
   'SUPPORT',
   'COMPLIANCE_ANALYST',
   'ASSET_REVIEWER',
