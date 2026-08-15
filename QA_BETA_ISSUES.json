@@ -16,14 +16,16 @@
     { "id": "GLOBAL-001", "severity": "LOW", "status": "PASS", "resolution": "Public route smoke pass produced no console errors or new layout regression." }
   ],
   "newFindings": [
-    { "id": "DEPLOY-001", "severity": "HIGH", "status": "FIXED", "resolution": "Staging deploy script now passes VITE_APP_ENV=beta to the frontend production build so backend and client Beta policy cannot diverge." }
+    { "id": "DEPLOY-001", "severity": "HIGH", "status": "FIXED", "resolution": "Staging deploy script now passes VITE_APP_ENV=beta to the frontend production build so backend and client Beta policy cannot diverge." },
+    { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "NOT_FIXED", "resolution": "The selected staging-gb-intake fixture is not operationally approved and is not accepting shipments. Physical lifecycle correctly stopped before shipment; a real operator-approved destination is required." }
   ],
   "notExecuted": [
     "credentialed Investor/Collector/Admin browser flows",
     "fresh listing and PriceCharting acceptance flow",
     "fresh R2 upload and cross-user private-media checks",
     "one live Ximilar analysis",
-    "Admin review/intake acceptance flow"
+    "Admin review/intake acceptance flow",
+    "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion"
   ],
   "evidence": [
     "QA_BETA_AUDIT.md",

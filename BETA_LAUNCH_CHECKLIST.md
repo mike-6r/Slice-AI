@@ -328,3 +328,15 @@ Phase 7 status: **NO-GO — CONFIGURATION_REQUIRED FOR DURABLE STORAGE AND OPERA
 - Ximilar: configured/enabled/card-grading enabled; storage-provider-independent byte handoff `PASS`; live calls `0`.
 - Canonical Asset trigger: explicit Staff/Admin Catalogue `DRAFT` creation followed by approved-submission link; premature creation `NO`; idempotent creation `PASS`; provider promotion fixture path `PASS`; provider calls during promotion `0`; timestamp-preserving snapshot promotion `PASS` when an Asset exists.
 - Controlled internal Beta: `GO`; external invited Beta: `NO-GO`; storage blocker `YES`; intake blocker `YES`.
+
+## Phase 9 physical lifecycle gate — 2026-08-15
+
+- Deployment verified on VPS at `7ada439`; API/web active; `/health` and `/ready` pass; Prisma schema is current.
+- Submission `054e7773-87ad-4b5e-9701-916a3aa5144d`: `APPROVED`, version `12`, no canonical Asset.
+- Front/back media: present, `SAFE`, checksummed, private, and stored through configured `S3_COMPATIBLE` durable storage.
+- PriceCharting research: exact Product `5605741`, raw `PRICE_GUIDE`, persisted observation only; no new provider call.
+- Intake reference: `SLICE-3AA5144D`.
+- Selected destination: `staging-gb-intake`, but `operationallyApproved=false` and `acceptingShipments=false`; this remains a staging fixture and is not a real receiving location.
+- Shipment, delivery, Slice receipt, verification, D11 valuation, custody, Vault Ready, canonical Asset, publication, issuance, funding, and D14 orders: **NOT CREATED**.
+
+**Phase 9 status: STOPPED — WAITING_FOR_REAL_OPERATOR_APPROVED_DESTINATION_AND_PHYSICAL_SHIPMENT.** Do not ship to the staging fixture. Continue only after Operations configures and approves a real receiving destination through the audited Admin/Vault Operations flow and the operator actually sends the physical card with real tracking.

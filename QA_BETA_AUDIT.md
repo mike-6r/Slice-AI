@@ -53,3 +53,16 @@ Investor, Collector, and Admin credentials were not entered during this pass bec
 
 **Controlled Internal Beta: GO** based on the deployed safety gates, healthy services, truthful empty public state, and prior authenticated remediation evidence.  
 **External Invited Beta: NO-GO** until the fresh authenticated listing/R2/Ximilar/Admin/intake/security acceptance run is completed and provider-backed readiness is explicitly confirmed.
+
+## Phase 9 physical lifecycle gate — 2026-08-15
+
+The approved Charizard submission was checked read-only before any physical transition:
+
+- Submission `054e7773-87ad-4b5e-9701-916a3aa5144d` remains `APPROVED`, version `12`, with no canonical Asset.
+- Front and back evidence are present, `SAFE`, checksummed, private, and stored through `S3_COMPATIBLE` durable object storage.
+- Persisted PriceCharting research remains the exact Product `5605741` raw `PRICE_GUIDE` observation (`10969` USD minor units); no provider call was made.
+- Intake reference remains `SLICE-3AA5144D`.
+- The selected `staging-gb-intake` record is `environment=beta` and active, but `operationallyApproved=false` and `acceptingShipments=false`. It is not a real operator-controlled receiving destination.
+- No shipment, tracking number, delivery, Slice receipt, verification, valuation, custody, canonical Asset, publication, issuance, funding, or order was created.
+
+**STOP CONDITION:** `WAITING_FOR_REAL_OPERATOR_APPROVED_DESTINATION_AND_PHYSICAL_SHIPMENT`. The staging fixture must not be used for a physical shipment. A real destination must be configured and approved through the audited Admin/Vault Operations flow, then the operator must actually send the card with real tracking before the next lifecycle gate can be exercised.
