@@ -612,6 +612,7 @@ export type AdminIntakeRow = {
   submissionId: string;
   intakeReference: string | null;
   title: string;
+  thumbnailUrl: string | null;
   category: string | null;
   variant: string | null;
   grader: string | null;

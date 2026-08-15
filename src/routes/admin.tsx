@@ -1250,12 +1250,13 @@ function PhysicalIntakeWorkspace({
 
 const intakeTabs = [
   ["", "All", "all"],
-  ["ACCEPTED_AWAITING_VAULT", "Accepted", "accepted"],
-  ["IN_TRANSIT", "Shipped", "shipped"],
-  ["DELIVERED_AWAITING_RECEIPT", "Delivered", "delivered"],
+  ["ACCEPTED_AWAITING_VAULT", "Awaiting shipment", "accepted"],
+  ["IN_TRANSIT", "In transit", "shipped"],
+  ["DELIVERED_AWAITING_RECEIPT", "Carrier delivered", "delivered"],
   ["RECEIVED", "Received", "received"],
+  ["VERIFICATION", "Verification", "verification"],
   ["VERIFIED", "Verified", "verified"],
-  ["VAULT_READY", "Ready for Vault", "readyForVault"],
+  ["VAULT_READY", "Ready for vault", "readyForVault"],
   ["EXCEPTION", "Exceptions", "exceptions"],
 ] as const;
 
@@ -1283,6 +1284,9 @@ function PhysicalIntakeBoard({
   const services = useAppServices();
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
+  const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
+  const [showDestinations, setShowDestinations] = useState(false);
+  const [sortMode, setSortMode] = useState("needs-action");
   const [approvalReason, setApprovalReason] = useState("");
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
@@ -1321,344 +1325,86 @@ function PhysicalIntakeBoard({
     exceptions: 0,
   };
   const countFor = (key: (typeof intakeTabs)[number][2]) =>
-    overview[key as keyof typeof overview] ?? 0;
+    key === "verification"
+      ? data?.items.filter((item) => item.stage === "VERIFICATION").length ?? 0
+      : key === "received"
+        ? data?.items.filter((item) => item.stage === "RECEIVED").length ?? 0
+        : overview[key as keyof typeof overview] ?? 0;
+  const rows = [...(data?.items ?? [])].sort((a, b) => {
+    if (sortMode === "newest") return new Date(b.currentStageSince).getTime() - new Date(a.currentStageSince).getTime();
+    if (sortMode === "delivered") return Number(Boolean(b.shipment?.deliveredAt)) - Number(Boolean(a.shipment?.deliveredAt));
+    if (sortMode === "oldest") return new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
+    const actionRank = (row: AdminIntakeRow) => row.stage === "EXCEPTION" ? 0 : row.stage === "DELIVERED_AWAITING_RECEIPT" ? 1 : row.stage === "RECEIVED" || row.stage === "VERIFICATION" ? 2 : row.stage === "ACCEPTED_AWAITING_VAULT" ? 3 : 4;
+    return actionRank(a) - actionRank(b) || new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
+  });
   return (
     <AdminPageSection
       title="Physical Intake"
-      detail="Manage physical receipts, shipping, and custody intake workflow."
+      detail="Track incoming collectibles from approved submission through physical receipt and verification."
     >
       <div className="physical-intake-header-actions">
         <button
           type="button"
-          className="admin-inline-action"
-          disabled
-          title="Export is not available until an approved reporting projection is configured."
-          aria-label="Export unavailable: approved reporting projection not configured"
+          className="admin-secondary-button"
+          onClick={() => setShowDestinations((value) => !value)}
         >
-          Export
+          Receiving destinations
         </button>
         <button
           type="button"
-          className="admin-inline-action"
-          disabled
-          title="Intake settings are managed through the approved operations configuration workflow."
-          aria-label="Intake settings unavailable: use the approved operations configuration workflow"
+          className="admin-secondary-button"
+          onClick={() => updateSearch({ status: "EXCEPTION", page: "1" })}
         >
-          Intake settings
+          View exceptions
         </button>
       </div>
-      <div className="physical-intake-kpis">
+      <div className="physical-intake-summary" aria-label="Intake lifecycle summary">
         {[
-          ["Accepted", overview.accepted, "Awaiting vault selection", "is-blue"],
-          ["Shipped", overview.shipped, "In transit to us", "is-amber"],
-          ["Carrier Delivered", overview.delivered, "Awaiting receipt", "is-purple"],
-          ["Received by Slice", overview.received, "Awaiting verification", "is-teal"],
-          ["Verified", overview.verified, "Ready for valuation", "is-green"],
-          ["Ready for Vault", overview.readyForVault, "Ready for custody", "is-blue"],
-        ].map(([title, value, detail, tone]) => (
-          <div className={`physical-intake-kpi ${tone}`} key={title as string}>
-            <span className="physical-intake-kpi-icon">◇</span>
-            <div>
-              <small>{title}</small>
-              <strong>{value}</strong>
-              <em>{detail}</em>
-            </div>
+          ["Awaiting shipment", overview.accepted],
+          ["In transit", overview.shipped],
+          ["Carrier delivered", overview.delivered],
+          ["Received", countFor("received")],
+          ["Verification", countFor("verification")],
+          ["Exceptions", overview.exceptions],
+        ].map(([label, value]) => (
+          <div key={label as string}>
+            <span>{label}</span>
+            <strong>{value}</strong>
           </div>
         ))}
       </div>
-      <div className="physical-intake-layout mt-4">
-        <section className="physical-intake-table-panel">
-          <nav className="physical-intake-tabs" aria-label="Intake stages">
-            {intakeTabs.map(([value, labelText, key]) => (
-              <button
-                type="button"
-                className={(!status && !value) || status === value ? "is-active" : ""}
-                key={key}
-                onClick={() => updateSearch({ status: value || undefined, page: "1" })}
-              >
-                {labelText} <strong>{countFor(key)}</strong>
-              </button>
-            ))}
-          </nav>
-          <div className="physical-intake-toolbar">
-            <label className="physical-intake-search">
-              <Search aria-hidden="true" />
-              <input
-                aria-label="Search intake"
-                value={draftSearch}
-                onChange={(event) => setDraftSearch(event.target.value)}
-                placeholder="Search by collector, item, submission ID, tracking..."
-              />
-            </label>
-            <select
-              aria-label="Status"
-              value={status}
-              onChange={(event) =>
-                updateSearch({ status: event.target.value || undefined, page: "1" })
-              }
-            >
-              <option value="">Status: All</option>
-              {intakeTabs.slice(1).map(([value, labelText]) => (
-                <option value={value} key={value}>
-                  {labelText}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Vault"
-              value={vault}
-              onChange={(event) =>
-                updateSearch({ vault: event.target.value || undefined, page: "1" })
-              }
-            >
-              <option value="">Vault: All</option>
-              {data?.filters.vaults.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.displayName}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Carrier"
-              value={carrier}
-              onChange={(event) =>
-                updateSearch({ carrier: event.target.value || undefined, page: "1" })
-              }
-            >
-              <option value="">Carrier: All</option>
-              {data?.filters.carriers.map((item) => (
-                <option value={item} key={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="admin-inline-action"
-              onClick={() =>
-                updateSearch({
-                  status: undefined,
-                  vault: undefined,
-                  carrier: undefined,
-                  dateFrom: undefined,
-                  dateTo: undefined,
-                  q: undefined,
-                  page: "1",
-                })
-              }
-            >
-              Clear filters
+      <section className="physical-intake-workbench">
+        <nav className="physical-intake-tabs" aria-label="Intake stages">
+          {intakeTabs.map(([value, labelText, key]) => (
+            <button type="button" className={(!status && !value) || status === value ? "is-active" : ""} key={key} onClick={() => updateSearch({ status: value || undefined, page: "1" })}>
+              <span>{labelText}</span><strong>{countFor(key)}</strong>
             </button>
-          </div>
-          <div className="physical-intake-date-filter">
-            <label>
-              Accepted / stage from
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(event) =>
-                  updateSearch({ dateFrom: event.target.value || undefined, page: "1" })
-                }
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(event) =>
-                  updateSearch({ dateTo: event.target.value || undefined, page: "1" })
-                }
-              />
-            </label>
-          </div>
-          {data?.items.length ? (
-            <div className="admin-table-wrap physical-intake-table-wrap">
-              <table className="admin-table physical-intake-table">
-                <thead>
-                  <tr>
-                    <th>Intake ID</th>
-                    <th>Submission</th>
-                    <th>Collector</th>
-                    <th>Item</th>
-                    <th>Vault</th>
-                    <th>Status</th>
-                    <th>Tracking</th>
-                    <th>Expected / Received</th>
-                    <th>Age</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((row) => (
-                    <PhysicalIntakeRow
-                      row={row}
-                      key={row.id}
-                      onReceipt={() => setReceiptRow(row)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <AdminEmpty
-              detail={
-                search || status || vault || carrier || dateFrom || dateTo
-                  ? "No intake records match these filters."
-                  : "No physical intake records."
-              }
-            />
-          )}
-          <div className="physical-intake-pagination">
-            <span>
-              Showing{" "}
-              {data?.items.length ? (data.pagination.page - 1) * data.pagination.pageSize + 1 : 0}{" "}
-              to{" "}
-              {Math.min(
-                (data?.pagination.page ?? 0) * (data?.pagination.pageSize ?? 0),
-                data?.pagination.total ?? 0,
-              )}{" "}
-              of {data?.pagination.total ?? 0} intakes
-            </span>
-            <div>
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => updateSearch({ page: String(page - 1) })}
-              >
-                ‹
-              </button>
-              <strong>{page}</strong>
-              <button
-                type="button"
-                disabled={!data || page >= data.pagination.totalPages}
-                onClick={() => updateSearch({ page: String(page + 1) })}
-              >
-                ›
-              </button>
-            </div>
-          </div>
-        </section>
-        <aside className="physical-intake-rail">
-          <section className="admin-panel physical-intake-overview">
-            <h3>Intake Overview</h3>
-            <div className="physical-intake-ring">
-              <strong>{overview.all}</strong>
-              <span>Total</span>
-            </div>
-            {intakeTabs.slice(1).map(([value, labelText, key]) => (
-              <div className="physical-intake-overview-row" key={value}>
-                <span>{labelText}</span>
-                <strong>
-                  {countFor(key)} (
-                  {overview.all ? Math.round((countFor(key) / overview.all) * 100) : 0}%)
-                </strong>
-              </div>
-            ))}
-          </section>
-          <section className="admin-panel">
-            <div className="physical-intake-rail-heading">
-              <h3>Filters</h3>
-              <button
-                type="button"
-                onClick={() =>
-                  updateSearch({
-                    status: undefined,
-                    vault: undefined,
-                    carrier: undefined,
-                    dateFrom: undefined,
-                    dateTo: undefined,
-                    q: undefined,
-                    page: "1",
-                  })
-                }
-              >
-                Clear all
-              </button>
-            </div>
-            <p className="admin-safe-note">
-              Use the shared filters above to keep the board and counts in sync.
-            </p>
-          </section>
-          <section className="admin-panel">
-            <div className="physical-intake-rail-heading">
-              <h3>Receiving destinations</h3>
-            </div>
-            <p className="admin-safe-note">
-              Approve only a real operator-controlled address. Staging fixtures must remain disabled.
-            </p>
-            <input
-              className="admin-text-input"
-              value={approvalReason}
-              onChange={(event) => setApprovalReason(event.target.value)}
-              placeholder="Approval reason / operations note"
-              aria-label="Destination approval reason"
-            />
-            {data?.filters.vaults.map((item) => (
-              <div className="physical-intake-destination" key={item.id}>
-                <div>
-                  <strong>{item.displayName}</strong>
-                  <small>
-                    {item.region}, {item.countryCode} · {item.environment ?? "unknown"}
-                  </small>
-                </div>
-                <span className={item.operationallyApproved && item.acceptingShipments ? "admin-status-pill is-green" : "admin-status-pill is-amber"}>
-                  {item.operationallyApproved && item.acceptingShipments ? "Approved" : "Not approved"}
-                </span>
-                <button
-                  type="button"
-                  className="admin-inline-action"
-                  disabled={approvalReason.trim().length < 3 || destinationApproval.isPending}
-                  onClick={() => destinationApproval.mutate({ id: item.id, approved: !(item.operationallyApproved && item.acceptingShipments) })}
-                >
-                  {item.operationallyApproved && item.acceptingShipments ? "Disable" : "Approve"}
-                </button>
-              </div>
-            ))}
-          </section>
-          <section className="admin-panel">
-            <h3>Quick Actions</h3>
-            <button
-              type="button"
-              className="physical-intake-quick"
-              disabled
-              title="Acceptance is controlled by Submission Review."
-              aria-label="Accept to intake unavailable: controlled by Submission Review"
-            >
-              Accept to intake <small>Acceptance is controlled by Submission Review</small>
-            </button>
-            {data?.items.find((item) => item.stage === "DELIVERED_AWAITING_RECEIPT") ? (
-              <button
-                type="button"
-                className="physical-intake-quick"
-                onClick={() =>
-                  setReceiptRow(
-                    data.items.find((item) => item.stage === "DELIVERED_AWAITING_RECEIPT") ?? null,
-                  )
-                }
-              >
-                Confirm receipt
-              </button>
-            ) : null}
-          </section>
-          <section className="admin-panel">
-            <div className="physical-intake-rail-heading">
-              <h3>Recent Activity</h3>
-            </div>
-            {data?.recentActivity.map((item) => (
-              <div className="physical-intake-activity" key={item.id}>
-                <span>●</span>
-                <div>
-                  <strong>{item.title}</strong>
-                  <small>
-                    {item.reference} · {date(item.occurredAt)}
-                  </small>
-                </div>
-              </div>
-            ))}
-          </section>
-        </aside>
-      </div>
+          ))}
+        </nav>
+        <div className="physical-intake-toolbar">
+          <label className="physical-intake-search"><Search aria-hidden="true" /><input aria-label="Search intake" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Search collectible, collector, reference or tracking…" /></label>
+          <select aria-label="Destination" value={vault} onChange={(event) => updateSearch({ vault: event.target.value || undefined, page: "1" })}>
+            <option value="">Destination: All</option>
+            {data?.filters.vaults.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}
+          </select>
+          <select aria-label="Carrier" value={carrier} onChange={(event) => updateSearch({ carrier: event.target.value || undefined, page: "1" })}>
+            <option value="">Carrier: All</option>
+            {data?.filters.carriers.map((item) => <option value={item} key={item}>{item}</option>)}
+          </select>
+          <select aria-label="Sort intake" value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
+            <option value="needs-action">Needs action first</option><option value="oldest">Oldest first</option><option value="newest">Newest first</option><option value="delivered">Recently delivered</option>
+          </select>
+          <button type="button" className="admin-secondary-button" onClick={() => updateSearch({ status: undefined, vault: undefined, carrier: undefined, dateFrom: undefined, dateTo: undefined, q: undefined, page: "1" })}>Clear filters</button>
+        </div>
+        <div className="physical-intake-date-filter">
+          <label>Stage from <input type="date" value={dateFrom} onChange={(event) => updateSearch({ dateFrom: event.target.value || undefined, page: "1" })} /></label>
+          <label>To <input type="date" value={dateTo} onChange={(event) => updateSearch({ dateTo: event.target.value || undefined, page: "1" })} /></label>
+        </div>
+        {rows.length ? <div className="admin-table-wrap physical-intake-table-wrap"><table className="admin-table physical-intake-table"><thead><tr><th>Collectible</th><th>Collector</th><th>Stage</th><th>Destination</th><th>Shipping</th><th>Age</th><th>Next action</th></tr></thead><tbody>{rows.map((row) => <PhysicalIntakeRow row={row} key={row.id} onOpen={() => setSelectedRow(row)} onReceipt={() => setReceiptRow(row)} />)}</tbody></table></div> : <AdminEmpty detail={search || status || vault || carrier || dateFrom || dateTo ? "No packages match these filters." : "No packages in this stage yet. Shipments will appear here when collectors provide tracking."} />}
+        <div className="physical-intake-pagination"><span>Showing {rows.length ? (data?.pagination.page ?? 1) * (data?.pagination.pageSize ?? 0) - (data?.pagination.pageSize ?? 0) + 1 : 0}–{Math.min((data?.pagination.page ?? 0) * (data?.pagination.pageSize ?? 0), data?.pagination.total ?? 0)} of {data?.pagination.total ?? 0}</span><div><button type="button" disabled={page <= 1} onClick={() => updateSearch({ page: String(page - 1) })}>‹</button><strong>{page}</strong><button type="button" disabled={!data || page >= data.pagination.totalPages} onClick={() => updateSearch({ page: String(page + 1) })}>›</button></div></div>
+      </section>
+      {selectedRow ? <IntakeDetailPanel row={selectedRow} onClose={() => setSelectedRow(null)} onReceipt={() => setReceiptRow(selectedRow)} /> : null}
+      {showDestinations ? <section className="physical-intake-destinations admin-panel"><div className="physical-intake-section-heading"><div><p className="admin-console-eyebrow">Operations configuration</p><h3>Receiving destinations</h3><p>Only approved, operator-controlled destinations can accept shipments.</p></div><button type="button" className="admin-secondary-button" onClick={() => setShowDestinations(false)}>Close</button></div><input className="admin-text-input" value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} placeholder="Reason required for approval or pause" aria-label="Destination approval reason" />{data?.filters.vaults.map((item) => <div className="physical-intake-destination" key={item.id}><div><strong>{item.displayName}</strong><small>{item.region}, {item.countryCode} · {item.environment ?? "unknown"}</small></div><span className={item.operationallyApproved && item.acceptingShipments ? "admin-status-pill is-green" : "admin-status-pill is-amber"}>{item.operationallyApproved && item.acceptingShipments ? "Approved · accepting shipments" : "Paused"}</span><button type="button" className="admin-secondary-button" disabled={approvalReason.trim().length < 3 || destinationApproval.isPending} onClick={() => destinationApproval.mutate({ id: item.id, approved: !(item.operationallyApproved && item.acceptingShipments) })}>{item.operationallyApproved && item.acceptingShipments ? "Pause shipments" : "Approve & resume"}</button></div>)}</section> : null}
       {receiptRow ? (
         <div
           className="physical-intake-modal"
@@ -1723,104 +1469,58 @@ function PhysicalIntakeBoard({
   );
 }
 
-function PhysicalIntakeRow({ row, onReceipt }: { row: AdminIntakeRow; onReceipt: () => void }) {
+function PhysicalIntakeRow({ row, onOpen, onReceipt }: { row: AdminIntakeRow; onOpen: () => void; onReceipt: () => void }) {
   return (
     <tr>
       <td>
-        <strong>{row.intakeReference ?? shortId(row.id)}</strong>
-        <small>{shortId(row.submissionId)}</small>
+        <div className="physical-intake-identity">
+          {row.thumbnailUrl ? <img src={row.thumbnailUrl} alt="" /> : <span className="physical-intake-thumbnail-placeholder" aria-hidden="true"><PackageCheck /></span>}
+          <div><strong>{row.title}</strong><small>{[row.variant, row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader].filter(Boolean).join(" · ") || row.category || "Collectible"}</small><small className="physical-intake-reference">{row.intakeReference ?? `SLICE-${shortId(row.id)}`}</small></div>
+        </div>
       </td>
       <td>
-        <Link
-          to="/operations/submissions"
-          search={{ submission: row.submissionId, tab: "Overview" }}
-        >
-          <strong>{shortId(row.submissionId)}</strong>
-        </Link>
-        <small>
-          {row.category ?? "Collectible"} · {row.itemCount} items
-        </small>
+        <strong>{row.collector.displayName}</strong><small>{row.collector.username ? `@${row.collector.username}` : "Collector account"}</small>
       </td>
       <td>
-        <strong>{row.collector.displayName}</strong>
-        <small>
-          {row.collector.username ? `@${row.collector.username}` : ""}
-          {row.membership ? ` · ${row.membership}` : ""}
-        </small>
+        <span className={`admin-status-pill physical-intake-status-${row.stage.toLowerCase()}`}>{intakeStageLabel(row.stage)}</span><small>{intakeNextActor(row)}</small>
       </td>
       <td>
-        <strong>{row.title}</strong>
-        <small>
-          {[row.variant, row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader]
-            .filter(Boolean)
-            .join(" · ")}
-        </small>
+        <strong>{row.vault?.displayName ?? "Destination not selected"}</strong><small>{row.vault ? `${row.vault.region}, ${row.vault.countryCode}` : "Review submission"}</small><small>{row.vault ? "Approved destination" : ""}</small>
       </td>
       <td>
-        {row.vault ? (
-          <>
-            <strong>{row.vault.displayName}</strong>
-            <small>{row.vault.code}</small>
-          </>
-        ) : (
-          "Awaiting vault"
-        )}
-      </td>
-      <td>
-        <span className={`admin-status-pill physical-intake-status-${row.stage.toLowerCase()}`}>
-          {sentence(row.stage)}
-        </span>
-        <small>{row.nextAction}</small>
-      </td>
-      <td>
-        {row.shipment ? (
-          <>
-            <strong>{row.shipment.carrier}</strong>
-            <small>{row.shipment.trackingNumber}</small>
-            {row.shipment.status !== "DELIVERED" &&
-            safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ? (
-              <a
-                href={
-                  safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ?? undefined
-                }
-                target="_blank"
-                rel="noreferrer"
-              >
-                Track ↗
-              </a>
-            ) : null}
-          </>
-        ) : (
-          "—"
-        )}
-      </td>
-      <td>
-        {row.shipment?.deliveredAt ? (
-          <>
-            <small>Delivered</small>
-            {date(row.shipment.deliveredAt)}
-          </>
-        ) : row.receipt ? (
-          <>
-            <small>Received</small>
-            {date(row.receipt.confirmedAt)}
-          </>
-        ) : (
-          "—"
-        )}
+        {row.shipment ? <><strong>{row.shipment.carrier}</strong><small>{row.shipment.trackingNumber}</small>{safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ? <a href={safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ?? undefined} target="_blank" rel="noreferrer">Open tracking ↗</a> : null}</> : <><strong>No shipment</strong><small>Collector adds tracking</small></>}
       </td>
       <td>{age(row.currentStageSince)}</td>
       <td>
-        {row.stage === "DELIVERED_AWAITING_RECEIPT" ? (
-          <button type="button" className="admin-inline-action" onClick={onReceipt}>
-            Receipt
-          </button>
-        ) : (
-          <span className="text-subtle">{row.nextAction}</span>
-        )}
+        <div className="physical-intake-row-actions"><button type="button" className="admin-secondary-button" onClick={onOpen}>Open intake</button>{row.stage === "DELIVERED_AWAITING_RECEIPT" ? <button type="button" className="button-primary" onClick={onReceipt}>Confirm receipt</button> : null}</div>
       </td>
     </tr>
   );
+}
+
+function intakeStageLabel(stage: string) {
+  return ({ ACCEPTED_AWAITING_VAULT: "Awaiting shipment", IN_TRANSIT: "In transit", DELIVERED_AWAITING_RECEIPT: "Carrier delivered", RECEIVED: "Received by Slice", VERIFICATION: "Awaiting verification", VERIFIED: "Verified", VAULT_READY: "Ready for vault", EXCEPTION: "Exception" } as Record<string, string>)[stage] ?? sentence(stage);
+}
+
+function intakeNextActor(row: AdminIntakeRow) {
+  if (row.stage === "ACCEPTED_AWAITING_VAULT") return "Collector action · add tracking";
+  if (row.stage === "DELIVERED_AWAITING_RECEIPT") return "Staff action · confirm receipt";
+  if (row.stage === "RECEIVED" || row.stage === "VERIFICATION") return "Staff action · begin verification";
+  if (row.stage === "EXCEPTION") return "Staff action · resolve issue";
+  return row.nextAction === "No action" ? "No action required" : `Monitor · ${row.nextAction}`;
+}
+
+function IntakeDetailPanel({ row, onClose, onReceipt }: { row: AdminIntakeRow; onClose: () => void; onReceipt: () => void }) {
+  const timeline = [
+    ["Approved", row.submissionStatus === "APPROVED", row.currentStageSince],
+    ["Destination selected", Boolean(row.vault), row.currentStageSince],
+    ["Shipment submitted", Boolean(row.shipment), row.shipment?.shippedAt],
+    ["Carrier delivered", Boolean(row.shipment?.deliveredAt), row.shipment?.deliveredAt],
+    ["Received by Slice", Boolean(row.receipt), row.receipt?.confirmedAt],
+    ["Verified", ["VERIFIED", "VAULT_READY"].includes(row.stage), null],
+    ["Ready for vault", row.stage === "VAULT_READY", null],
+  ] as const;
+  return <section className="physical-intake-detail admin-panel" aria-label="Intake detail"><header className="physical-intake-section-heading"><div><p className="admin-console-eyebrow">Intake workspace</p><h3>{row.title}</h3><p>{row.variant ?? row.category ?? "Collectible"} · {row.intakeReference ?? `SLICE-${shortId(row.id)}`}</p></div><button type="button" className="admin-secondary-button" onClick={onClose}>Close detail</button></header><div className="physical-intake-detail-grid"><div><div className="physical-intake-next-action"><small>Next action</small><strong>{intakeNextActor(row)}</strong><span>{row.nextAction}</span>{row.stage === "DELIVERED_AWAITING_RECEIPT" ? <button type="button" className="button-primary" onClick={onReceipt}>Confirm physical receipt</button> : null}</div><dl className="physical-intake-detail-facts"><div><dt>Collector</dt><dd>{row.collector.displayName}{row.collector.username ? ` · @${row.collector.username}` : ""}</dd></div><div><dt>Destination</dt><dd>{row.vault?.displayName ?? "Not selected"}</dd></div><div><dt>Status</dt><dd><span className="admin-status-pill">{intakeStageLabel(row.stage)}</span></dd></div><div><dt>Shipment</dt><dd>{row.shipment ? `${row.shipment.carrier} · ${row.shipment.trackingNumber}` : "No shipment recorded"}</dd></div></dl><div className="physical-intake-detail-links"><Link to="/operations/submissions" search={{ submission: row.submissionId, tab: "Overview" }} className="admin-secondary-button">Open submission review</Link><Link to="/admin" search={{ section: "users", user: row.collector.id }} className="admin-secondary-button">Open collector account</Link></div></div><div><h4>Lifecycle</h4><ol className="physical-intake-timeline">{timeline.map(([label, done, at]) => <li className={done ? "is-done" : "is-pending"} key={label}><span aria-hidden="true" /> <div><strong>{label}</strong><small>{done ? at ? date(at) : "Complete" : "Pending"}</small></div></li>)}</ol></div><div><h4>Evidence</h4>{row.thumbnailUrl ? <img className="physical-intake-evidence" src={row.thumbnailUrl} alt={`${row.title} front evidence`} /> : <p className="admin-safe-note">Front evidence is not available in the authorized intake projection.</p>}<p className="admin-safe-note">Evidence is private and shown only to authorized operators.</p></div></div></section>;
 }
 
 function age(value: string) {

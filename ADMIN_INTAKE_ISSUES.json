@@ -1,0 +1,11 @@
+{
+  "scope": "admin-physical-intake",
+  "issues": [
+    { "id": "ADMIN-INTAKE-DESIGN-001", "status": "resolved", "summary": "Removed duplicated KPI/donut/right-rail lifecycle presentation." },
+    { "id": "ADMIN-INTAKE-DESIGN-002", "status": "resolved", "summary": "Rebuilt table around collectible identity, collector, stage, destination, shipment, age, and next action." },
+    { "id": "ADMIN-INTAKE-DESIGN-003", "status": "resolved", "summary": "Added responsive column sizing, identity thumbnails, wrapping, and mobile workbench behavior." },
+    { "id": "ADMIN-INTAKE-SHIPMENT-001", "status": "resolved", "summary": "Carrier delivered remains distinct from Slice receipt; receipt remains an audited command." },
+    { "id": "ADMIN-INTAKE-DESTINATION-001", "status": "resolved", "summary": "Moved destination actions into an explicit management section with required reason." },
+    { "id": "ADMIN-INTAKE-RESPONSIVE-001", "status": "manual-check", "summary": "Verify 390, 768, 1366, 1920, and 2560 widths on staging." }
+  ]
+}

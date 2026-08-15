@@ -13,6 +13,7 @@ import {
   collectorUsageForMany,
 } from '../collector-workspace/collector-entitlements';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
+import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/submission-storage.ports';
 
 type AdminAttention = {
   id: string;
@@ -87,6 +88,12 @@ function intakeStage(item: {
   if (item.intake.status === 'COMPLETE') return 'VAULT_READY';
   if (item.intake.status === 'RECEIVED') return 'RECEIVED';
   if (item.intake.status === 'VERIFICATION') return 'VERIFICATION';
+  if (
+    ['SHIPPING_REQUIRED', 'VAULT_SELECTED', 'ACCEPTED_AWAITING_VAULT'].includes(
+      item.intake.status,
+    )
+  )
+    return 'ACCEPTED_AWAITING_VAULT';
   return item.intake.status;
 }
 
@@ -95,12 +102,12 @@ function nextIntakeAction(intake: {
   shipment: { status: string } | null;
   receipt: unknown;
 }) {
-  if (!intake.shipment) return 'Await shipment details';
+  if (!intake.shipment) return 'Collector needs to add tracking';
   if (intake.shipment.status === 'DELIVERED' && !intake.receipt)
-    return 'Confirm receipt';
-  if (intake.status === 'VERIFICATION') return 'Verify collectible';
-  if (intake.status === 'RECEIVED') return 'Start verification';
-  if (intake.status === 'COMPLETE') return 'No action';
+    return 'Staff needs to confirm receipt';
+  if (intake.status === 'VERIFICATION') return 'Begin verification';
+  if (intake.status === 'RECEIVED') return 'Begin verification';
+  if (intake.status === 'COMPLETE') return 'No action required';
   return 'Monitor shipment';
 }
 
@@ -142,6 +149,7 @@ export class AdminService {
     private readonly db: PrismaService,
     private readonly authorization: AuthorizationService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
   async overview(actor: Actor) {
@@ -1863,10 +1871,14 @@ export class AdminService {
           },
         },
         intake: { include: { vault: true, shipment: true, receipt: true } },
-        media: { where: { deletedAt: null }, select: { id: true } },
+        media: {
+          where: { deletedAt: null, status: 'SAFE' },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, slot: true, objectKey: true },
+        },
       },
     });
-    const projected = rows.map((item) => {
+    const projected = await Promise.all(rows.map(async (item) => {
       const intake = item.intake;
       const stage =
         item.asset?.custodyRecord?.status === 'INSPECTED'
@@ -1890,6 +1902,12 @@ export class AdminService {
               severity: 'HIGH' as const,
             }
           : null;
+      const frontMedia = item.media.find((media) => media.slot === 'front') ?? item.media[0];
+      const thumbnailUrl = frontMedia
+        ? await this.storage
+            .createPrivateDownloadUrl(frontMedia.objectKey, new Date(Date.now() + 5 * 60_000))
+            .catch(() => null)
+        : null;
       return {
         id: intake?.id ?? item.id,
         submissionId: item.id,
@@ -1898,6 +1916,7 @@ export class AdminService {
           item.asset?.title ??
           metadataString('name') ??
           `Submission ${item.id.slice(0, 8)}`,
+        thumbnailUrl,
         category: item.category.name,
         variant: metadataString('variant') ?? item.asset?.edition ?? null,
         grader:
@@ -1951,7 +1970,7 @@ export class AdminService {
         custodyStatus: item.asset?.custodyRecord?.status ?? null,
         exception,
       };
-    });
+    }));
     const filtered = projected
       .filter((item) => !input.status || item.stage === input.status)
       .filter(

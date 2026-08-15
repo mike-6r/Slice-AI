@@ -1448,6 +1448,7 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
         ? null
         : nullableString(value.intakeReference, "admin intake.intakeReference"),
     title: stringField(value.title, "admin intake.title"),
+    thumbnailUrl: nullableString(value.thumbnailUrl, "admin intake.thumbnailUrl"),
     category:
       value.category === null ? null : nullableString(value.category, "admin intake.category"),
     variant: value.variant === null ? null : nullableString(value.variant, "admin intake.variant"),
