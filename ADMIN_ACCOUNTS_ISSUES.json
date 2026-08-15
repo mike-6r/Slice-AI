@@ -1,0 +1,14 @@
+{
+  "updatedAt": "2026-08-15",
+  "scope": "Accounts directory and Account Control Center",
+  "issues": [
+    { "id": "ADMIN-ACCOUNT-DESIGN-001", "title": "Six-card KPI wall and duplicate filters", "status": "RESOLVED", "resolution": "Compact summary strip and one expandable advanced filter row." },
+    { "id": "ADMIN-ACCOUNT-DESIGN-002", "title": "Repeated right rails and oversized empty detail areas", "status": "RESOLVED", "resolution": "Single-column detail workspace with contextual header actions." },
+    { "id": "ADMIN-ACCOUNT-DESIGN-003", "title": "Browser-default dropdowns", "status": "RESOLVED", "resolution": "Slice-styled, keyboard-compatible select primitive." },
+    { "id": "ADMIN-ACCOUNT-ROLE-001", "title": "Duplicate semantic role assignments", "status": "RESOLVED", "resolution": "Role assignments are deduplicated by role and scope and shown with descriptions." },
+    { "id": "ADMIN-ACCOUNT-STATUS-001", "title": "Status form labels collide", "status": "RESOLVED", "resolution": "Vertical status form with explicit reason and confirmation." },
+    { "id": "ADMIN-ACCOUNT-SUPPORT-001", "title": "Unconnected Support placeholder in User Detail", "status": "RESOLVED", "resolution": "Removed unsupported tab; Trust & Support remains the connected support authority." },
+    { "id": "ADMIN-ACCOUNT-ACTION-001", "title": "Authenticated mutation and responsive QA", "status": "RETEST_REQUIRED", "resolution": "Requires controlled staging Admin session; no destructive production-like account testing." }
+  ],
+  "expectedBroken": 0
+}

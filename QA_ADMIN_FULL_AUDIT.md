@@ -24,6 +24,10 @@ This commit does not claim a fresh browser walkthrough of every admin section or
 
 ## Phase 2 mutation foundation — 2026-08-15
 
+## Accounts deep redesign — 2026-08-15
+
+The Accounts directory and User Detail routes now use the Account Control Center layout documented in `ADMIN_ACCOUNTS_DESIGN_QA.md`. Read projections and typed status/role commands remain server-authoritative. Fresh authenticated mutation, responsive, and IDOR evidence is still required before changing the overall Admin release gate.
+
 - Account status transitions are now exposed in the Account Detail `Roles & Access` tab through the existing protected `/admin/users/:id/status` command. The UI requires a reason, confirmation, pending state, and refreshes the authoritative projection after success.
 - Role grant/revoke actions are now exposed through the existing protected `/admin/users/:id/roles` commands. The UI confirms changes, uses idempotency keys, refreshes after success, deduplicates repeated semantic role chips, and leaves last-admin/self-lockout enforcement to the backend.
 - The status controller now accepts the domain-supported `DEACTIVATED` transition instead of rejecting it at request validation.

@@ -23,6 +23,13 @@
       "status": "OPEN",
       "area": "Final authenticated Admin launch gate",
       "resolution": "Fresh operator Admin browser evidence now covers the primary sections, read-only account detail, Platform Operations and the controlled Charizard intake view. Safe reversible mutation, cross-role RBAC/IDOR, responsive/accessibility and request-health evidence remain open."
+    },
+    {
+      "id": "ADMIN-ACCOUNT-DESIGN-001",
+      "severity": "MEDIUM",
+      "status": "FIXED",
+      "area": "Accounts directory and User Detail",
+      "resolution": "Compact account summary, single filter system, Account Control Center header, contextual actions, deduplicated roles, and Slice-styled forms are implemented. Authenticated mutation and responsive retest remains required."
     }
   ],
   "verification": {

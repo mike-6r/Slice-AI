@@ -3116,28 +3116,23 @@ function AccountsWorkspace({
       <section className="admin-console-heading">
         <div>
           <p className="admin-console-eyebrow">Admin Panel</p>
-          <h2>Users &amp; Accounts</h2>
-          <span>
-            View and manage all platform users across collectors, investors, staff and admins.
-          </span>
+          <h2>Accounts</h2>
+          <span>Manage users, access, memberships and account state.</span>
         </div>
       </section>
-      <div className="admin-kpi-grid admin-kpi-grid--six">
-        <AdminKpi icon={Users} label="Total users" value={summary ? summary.totalUsers : "—"} />
-        <AdminKpi icon={Users} label="Collectors" value={summary ? summary.collectors : "—"} />
-        <AdminKpi
-          icon={BriefcaseBusiness}
-          label="Investors"
-          value={summary ? summary.investors : "—"}
-        />
-        <AdminKpi icon={ShieldCheck} label="Staff" value={summary ? summary.staff : "—"} />
-        <AdminKpi icon={Crown} label="Admins" value={summary ? summary.admins : "—"} />
-        <AdminKpi
-          icon={AlertTriangle}
-          label="Suspended"
-          value={summary ? summary.suspended : "—"}
-        />
-      </div>
+      <section className="admin-account-summary-strip" aria-label="Account summary">
+        <div>
+          <strong>{summary ? summary.totalUsers : "—"}</strong>
+          <span>accounts</span>
+        </div>
+        <p>
+          {summary?.collectors ?? "—"} collectors · {summary?.investors ?? "—"} investors ·{" "}
+          {summary?.staff ?? "—"} staff · {summary?.admins ?? "—"} admin
+        </p>
+        <span className="admin-summary-alert">
+          <AlertTriangle aria-hidden="true" /> Suspended {summary?.suspended ?? "—"}
+        </span>
+      </section>
       {loading ? (
         <AdminState
           title="Loading platform accounts"
@@ -3190,50 +3185,30 @@ function AccountsWorkspace({
                   placeholder="Search by username, email, name or ID..."
                 />
               </label>
-              <select
-                aria-label="Type"
+              <AdminSelect
+                label="Type"
                 value={draftFilters.type}
-                onChange={(event) => updateDraft("type", event.target.value)}
-              >
-                <option value="">Type: All</option>
-                <option value="COLLECTOR">Collector</option>
-                <option value="INVESTOR">Investor</option>
-                <option value="STAFF">Staff</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-              <select
-                aria-label="Status"
+                onChange={(value) => updateDraft("type", value)}
+                options={[["", "Type: All"], ["COLLECTOR", "Collector"], ["INVESTOR", "Investor"], ["STAFF", "Staff"], ["ADMIN", "Admin"]]}
+              />
+              <AdminSelect
+                label="Status"
                 value={draftFilters.status}
-                onChange={(event) => updateDraft("status", event.target.value)}
-              >
-                <option value="">Status: All</option>
-                <option value="ACTIVE">Active</option>
-                <option value="RESTRICTED">Restricted</option>
-                <option value="SUSPENDED">Suspended</option>
-                <option value="DEACTIVATED">Deactivated</option>
-                <option value="PENDING_REVIEW">Pending review</option>
-              </select>
-              <select
-                aria-label="Membership"
+                onChange={(value) => updateDraft("status", value)}
+                options={[["", "Status: All"], ["ACTIVE", "Active"], ["RESTRICTED", "Restricted"], ["SUSPENDED", "Suspended"], ["DEACTIVATED", "Deactivated"], ["PENDING_REVIEW", "Pending review"]]}
+              />
+              <AdminSelect
+                label="Membership"
                 value={draftFilters.membershipPlan}
-                onChange={(event) => updateDraft("membershipPlan", event.target.value)}
-              >
-                <option value="">Membership: All</option>
-                <option value="STARTER">Starter</option>
-                <option value="PRO">Pro</option>
-                <option value="ELITE">Elite</option>
-              </select>
-              <select
-                aria-label="Role"
+                onChange={(value) => updateDraft("membershipPlan", value)}
+                options={[["", "Membership: All"], ["STARTER", "Starter"], ["PRO", "Pro"], ["ELITE", "Elite"]]}
+              />
+              <AdminSelect
+                label="Role"
                 value={draftFilters.role}
-                onChange={(event) => updateDraft("role", event.target.value)}
-              >
-                <option value="">Role: All</option>
-                <option value="COLLECTOR">Collector</option>
-                <option value="ADMIN">Admin</option>
-                <option value="SUPPORT">Support</option>
-                <option value="ASSET_REVIEWER">Asset reviewer</option>
-              </select>
+                onChange={(value) => updateDraft("role", value)}
+                options={[["", "Role: All"], ["COLLECTOR", "Collector"], ["ADMIN", "Admin"], ["SUPPORT", "Support"], ["ASSET_REVIEWER", "Asset reviewer"]]}
+              />
               <button
                 type="button"
                 className="admin-filter-more"
@@ -3242,19 +3217,32 @@ function AccountsWorkspace({
                 <ListChecks aria-hidden="true" /> More Filters
               </button>
             </div>
+            {filtersOpen ? (
+              <section className="admin-account-advanced-filters" aria-label="More account filters">
+                <div>
+                  <strong>More filters</strong>
+                  <span>Refine the directory without leaving the table.</span>
+                </div>
+                <AdminSelect label="Billing status" value={draftFilters.membershipStatus} onChange={(value) => updateDraft("membershipStatus", value)} options={[["", "Billing: All"], ["ACTIVE", "Active"], ["TRIALING", "Trialing"], ["PAST_DUE", "Past due"], ["CANCEL_AT_PERIOD_END", "Canceling"], ["EXPIRED", "Expired"]]} />
+                <AdminSelect label="Last active" value={draftFilters.lastActiveWindow} onChange={(value) => updateDraft("lastActiveWindow", value)} options={[["", "Last active: Any time"], ["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["inactive", "Inactive 30+ days"]]} />
+                <div className="admin-date-range">
+                  <input aria-label="Joined from" type="date" value={draftFilters.joinedFrom} onChange={(event) => updateDraft("joinedFrom", event.target.value)} />
+                  <input aria-label="Joined to" type="date" value={draftFilters.joinedTo} onChange={(event) => updateDraft("joinedTo", event.target.value)} />
+                </div>
+                <button type="button" className="admin-apply-filters" onClick={applyFilters}>Apply filters</button>
+                <button type="button" className="admin-clear-filters" onClick={clearFilters}>Clear all</button>
+              </section>
+            ) : null}
             <div className="admin-account-table-heading">
               <strong>Accounts</strong>
               <label>
                 Sort{" "}
-                <select
-                  aria-label="Sort accounts"
+                <AdminSelect
+                  label="Sort accounts"
                   value={sort}
-                  onChange={(event) => setSort(event.target.value)}
-                >
-                  <option value="joined">Joined</option>
-                  <option value="lastActive">Last active</option>
-                  <option value="username">Username</option>
-                </select>
+                  onChange={setSort}
+                  options={[["joined", "Joined"], ["lastActive", "Last active"], ["username", "Username"]]}
+                />
               </label>
             </div>
             {users.length ? (
@@ -3267,14 +3255,13 @@ function AccountsWorkspace({
                       <th>Roles</th>
                       <th>Membership</th>
                       <th>Status</th>
-                      <th>Joined</th>
                       <th>Last active</th>
-                      <th>Actions</th>
+                      <th aria-label="Action" />
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((user) => {
-                      const activeRoles = user.roles.filter((role) => role.role !== "USER");
+                      const activeRoles = uniqueRoleAssignments(user.roles).filter((role) => role.role !== "USER");
                       return (
                         <tr key={user.id}>
                           <td>
@@ -3287,6 +3274,7 @@ function AccountsWorkspace({
                                 <small>
                                   {user.username ? `@${user.username}` : "Username unavailable"}
                                 </small>
+                                {isBetaAccount(user) ? <em className="admin-beta-badge">Beta test</em> : null}
                               </span>
                             </div>
                           </td>
@@ -3296,11 +3284,14 @@ function AccountsWorkspace({
                           <td>
                             <div className="admin-tag-list">
                               {activeRoles.length ? (
-                                activeRoles.map((role) => (
-                                  <span className="admin-tag" key={role.id}>
-                                    {sentence(role.role)}
-                                  </span>
-                                ))
+                                <>
+                                  {activeRoles.slice(0, 3).map((role) => (
+                                    <span className="admin-tag" key={`${role.role}:${role.scopeType}:${role.scopeId ?? ""}`}>
+                                      {sentence(role.role)}
+                                    </span>
+                                  ))}
+                                  {activeRoles.length > 3 ? <span className="admin-tag">+{activeRoles.length - 3}</span> : null}
+                                </>
                               ) : (
                                 <span className="admin-muted">Investor</span>
                               )}
@@ -3328,16 +3319,17 @@ function AccountsWorkspace({
                               {sentence(user.accountStatus)}
                             </span>
                           </td>
-                          <td>{date(user.createdAt)}</td>
-                          <td>{user.lastActivityAt ? date(user.lastActivityAt) : "Unavailable"}</td>
+                          <td title={user.lastActivityAt ? undefined : "Activity telemetry is not available for this account."}>
+                            {user.lastActivityAt ? date(user.lastActivityAt) : "Not tracked"}
+                          </td>
                           <td>
                             <button
                               type="button"
-                              className="admin-inline-action"
-                              aria-label={`View ${user.displayName}`}
+                              className="admin-open-account"
+                              aria-label={`Open account for ${user.displayName}`}
                               onClick={() => openUser(user.id)}
                             >
-                              <ArrowRight aria-hidden="true" />
+                              Open account <ArrowRight aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -3376,151 +3368,6 @@ function AccountsWorkspace({
               </span>
             </div>
           </section>
-          <aside className={`admin-accounts-rail ${filtersOpen ? "is-open" : ""}`}>
-            <section className="admin-panel">
-              <div className="admin-panel-heading">
-                <h3>Filter by</h3>
-                <button type="button" onClick={clearFilters}>
-                  Clear all
-                </button>
-              </div>
-              <label className="admin-rail-field">
-                Search
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Username, email or ID..."
-                />
-              </label>
-              <label className="admin-rail-field">
-                Type
-                <select
-                  value={draftFilters.type}
-                  onChange={(event) => updateDraft("type", event.target.value)}
-                >
-                  <option value="">All types</option>
-                  <option value="COLLECTOR">Collector</option>
-                  <option value="INVESTOR">Investor</option>
-                  <option value="STAFF">Staff</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </label>
-              <label className="admin-rail-field">
-                Status
-                <select
-                  value={draftFilters.status}
-                  onChange={(event) => updateDraft("status", event.target.value)}
-                >
-                  <option value="">All statuses</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="RESTRICTED">Restricted</option>
-                  <option value="SUSPENDED">Suspended</option>
-                  <option value="DEACTIVATED">Deactivated</option>
-                  <option value="PENDING_REVIEW">Pending review</option>
-                </select>
-              </label>
-              <label className="admin-rail-field">
-                Membership
-                <select
-                  value={draftFilters.membershipPlan}
-                  onChange={(event) => updateDraft("membershipPlan", event.target.value)}
-                >
-                  <option value="">All memberships</option>
-                  <option value="STARTER">Starter</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ELITE">Elite</option>
-                </select>
-              </label>
-              <label className="admin-rail-field">
-                Billing status
-                <select
-                  value={draftFilters.membershipStatus}
-                  onChange={(event) => updateDraft("membershipStatus", event.target.value)}
-                >
-                  <option value="">All billing states</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="TRIALING">Trialing</option>
-                  <option value="PAST_DUE">Past due</option>
-                  <option value="CANCEL_AT_PERIOD_END">Canceling</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </label>
-              <label className="admin-rail-field">
-                Role
-                <select
-                  value={draftFilters.role}
-                  onChange={(event) => updateDraft("role", event.target.value)}
-                >
-                  <option value="">All roles</option>
-                  <option value="COLLECTOR">Collector</option>
-                  <option value="ADMIN">Admin</option>
-                  <option value="SUPPORT">Support</option>
-                  <option value="ASSET_REVIEWER">Asset reviewer</option>
-                </select>
-              </label>
-              <div className="admin-rail-field">
-                <span>Joined</span>
-                <div className="admin-date-range">
-                  <input
-                    type="date"
-                    value={draftFilters.joinedFrom}
-                    onChange={(event) => updateDraft("joinedFrom", event.target.value)}
-                  />
-                  <input
-                    type="date"
-                    value={draftFilters.joinedTo}
-                    onChange={(event) => updateDraft("joinedTo", event.target.value)}
-                  />
-                </div>
-              </div>
-              <label className="admin-rail-field">
-                Last active
-                <select
-                  value={draftFilters.lastActiveWindow}
-                  onChange={(event) => updateDraft("lastActiveWindow", event.target.value)}
-                >
-                  <option value="">Any time</option>
-                  <option value="1">Last 24 hours</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="inactive">Inactive 30+ days</option>
-                </select>
-              </label>
-              <button type="button" className="admin-apply-filters" onClick={applyFilters}>
-                Apply filters
-              </button>
-            </section>
-            <section className="admin-panel admin-account-summary">
-              <div className="admin-panel-heading">
-                <h3>Summary</h3>
-              </div>
-              <StatusRow
-                label="Active users"
-                status={String(summary?.activeUsers ?? 0)}
-                icon={CheckCircle2}
-              />
-              <StatusRow
-                label="Restricted"
-                status={String(summary?.restricted ?? 0)}
-                icon={AlertTriangle}
-              />
-              <StatusRow
-                label="Suspended"
-                status={String(summary?.suspended ?? 0)}
-                icon={ShieldCheck}
-              />
-              <StatusRow
-                label="Past due memberships"
-                status={String(summary?.pastDueMemberships ?? 0)}
-                icon={AlertTriangle}
-              />
-              <StatusRow
-                label="Trialing memberships"
-                status={String(summary?.trialingMemberships ?? 0)}
-                icon={Crown}
-              />
-            </section>
-          </aside>
         </div>
       )}
     </div>
@@ -3723,21 +3570,18 @@ function UserDetailExperience({
     );
   const tabs = [
     "Overview",
-    "Roles & Access",
-    ...(user.primaryType === "INVESTOR" ||
-    user.portfolioSummary.totalAssets ||
-    user.portfolioSummary.openOrders
+    "Access",
+    ...(user.primaryType === "INVESTOR" || user.portfolioSummary.totalAssets || user.portfolioSummary.openOrders
       ? ["Investor"]
       : []),
-    ...(user.collectorOverview ? ["Collector"] : []),
-    "Wallet",
-    "Orders",
+    "Collector",
+    "Finance",
     "Compliance",
-    "Support",
     "Activity",
     "Audit",
   ];
-  const activeTab = tabs.includes(tab ?? "") ? tab! : "Overview";
+  const normalizedTab = tab === "Roles & Access" ? "Access" : tab === "Wallet" || tab === "Orders" ? "Finance" : tab;
+  const activeTab = tabs.includes(normalizedTab ?? "") ? normalizedTab! : "Overview";
   const money = (value: string | null, currency = "GBP") =>
     value === null
       ? "Unavailable"
@@ -3808,7 +3652,7 @@ function UserDetailExperience({
           <AdminPanelHeading
             title="Recent Orders"
             action="View all"
-            onClick={() => setTab("Orders")}
+            onClick={() => setTab("Finance")}
           />
           {user.recentOrders.length ? (
             <div className="admin-record-list">
@@ -3832,8 +3676,8 @@ function UserDetailExperience({
           ) : (
             <AdminEmpty detail="No open orders." icon={WalletCards} />
           )}
-          <button type="button" className="admin-detail-link" onClick={() => setTab("Orders")}>
-            View all orders <ArrowRight aria-hidden="true" />
+          <button type="button" className="admin-detail-link" onClick={() => setTab("Finance")}>
+            View finance activity <ArrowRight aria-hidden="true" />
           </button>
         </section>
       </div>
@@ -3863,17 +3707,6 @@ function UserDetailExperience({
                 ? date(user.complianceSummary.lastReviewAt)
                 : "Unavailable"
             }
-          />
-        </section>
-        <section className="admin-panel">
-          <AdminPanelHeading
-            title="Support Overview"
-            action="View support"
-            onClick={() => setTab("Support")}
-          />
-          <AdminEmpty
-            detail="Support ticket metrics are not connected to Admin User Detail."
-            icon={LifeBuoy}
           />
         </section>
         <section className="admin-panel">
@@ -3916,7 +3749,7 @@ function UserDetailExperience({
   );
   const renderTab = () => {
     if (activeTab === "Overview") return renderOverview();
-    if (activeTab === "Roles & Access")
+    if (activeTab === "Access")
       return (
         <div className="admin-detail-overview-grid">
           <UserRoleManagement user={user} retry={retry} />
@@ -3974,10 +3807,10 @@ function UserDetailExperience({
           )}
         </section>
       );
-    if (activeTab === "Wallet")
+    if (activeTab === "Finance")
       return (
         <section className="admin-panel">
-          <AdminPanelHeading title="Wallet & Finance" />
+          <AdminPanelHeading title="Finance" />
           {user.walletSummary ? (
             <>
               <DetailRow
@@ -3999,41 +3832,24 @@ function UserDetailExperience({
                 Ledger history is immutable and financial corrections must use the
                 compensating-entry workflow.
               </p>
+              <h4 className="admin-subsection-heading">Recent orders</h4>
+              {user.recentOrders.length ? (
+                <div className="admin-record-list">
+                  {user.recentOrders.map((order) => (
+                    <article className="admin-record" key={order.id}>
+                      <span className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}>{sentence(order.side)}</span>
+                      <div className="min-w-0"><strong>{order.assetTitle}</strong><small>{order.units} ownership units · {money(order.limitPriceMinor, order.currency)} · {date(order.updatedAt)}</small></div>
+                      <span className="admin-record-status">{sentence(order.status)}</span>
+                    </article>
+                  ))}
+                </div>
+              ) : <AdminEmpty detail="No orders recorded for this account." icon={WalletCards} />}
             </>
           ) : (
             <AdminEmpty
               detail="Wallet information is temporarily unavailable."
               icon={WalletCards}
             />
-          )}
-        </section>
-      );
-    if (activeTab === "Orders")
-      return (
-        <section className="admin-panel">
-          <AdminPanelHeading title="Orders & Executions" />
-          {user.recentOrders.length ? (
-            <div className="admin-record-list">
-              {user.recentOrders.map((order) => (
-                <article className="admin-record" key={order.id}>
-                  <span
-                    className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}
-                  >
-                    {sentence(order.side)}
-                  </span>
-                  <div className="min-w-0">
-                    <strong>{order.assetTitle}</strong>
-                    <small>
-                      {order.units} shares @ {money(order.limitPriceMinor, order.currency)} ·{" "}
-                      {date(order.updatedAt)}
-                    </small>
-                  </div>
-                  <span className="admin-record-status">{sentence(order.status)}</span>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <AdminEmpty detail="No orders for this user." icon={WalletCards} />
           )}
         </section>
       );
@@ -4046,26 +3862,12 @@ function UserDetailExperience({
             value={sentence(user.complianceSummary.kycStatus)}
             tone="positive"
           />
-          <DetailRow
-            label="KYT"
-            value={sentence(user.complianceSummary.kytStatus)}
-            tone="positive"
-          />
-          <DetailRow label="Provider" value={user.complianceSummary.provider ?? "Unavailable"} />
+          <DetailRow label="Transaction monitoring" value={user.complianceSummary.kytStatus === "UNKNOWN" ? "Not configured" : sentence(user.complianceSummary.kytStatus)} />
+          <DetailRow label="Verification source" value={user.complianceSummary.provider ? "Internal verification" : "Not configured"} />
           <DetailRow label="Cases" value={String(user.complianceSummary.caseCount)} />
           <p className="admin-safe-note">
             Provider truth is preserved; sensitive evidence and secrets are not exposed.
           </p>
-        </section>
-      );
-    if (activeTab === "Support")
-      return (
-        <section className="admin-panel">
-          <AdminPanelHeading title="Support" />
-          <AdminEmpty
-            detail="Support ticket metrics are not connected to Admin User Detail."
-            icon={LifeBuoy}
-          />
         </section>
       );
     if (activeTab === "Activity" || activeTab === "Audit")
@@ -4099,68 +3901,41 @@ function UserDetailExperience({
   return (
     <div className="admin-console-content admin-user-detail-content">
       <button type="button" className="admin-back-link" onClick={back}>
-        <ChevronLeft aria-hidden="true" /> Users &amp; Accounts
+        <ChevronLeft aria-hidden="true" /> Accounts
       </button>
-      <section className="admin-user-detail-heading">
-        <div>
-          <p className="admin-console-eyebrow">Users &amp; Accounts · User Detail</p>
-          <h2>{user.displayName}</h2>
-          <span>
-            {user.username ? `@${user.username}` : "Username unavailable"} ·{" "}
-            {sentence(user.primaryType)} · Member since {date(user.createdAt)}
-          </span>
+      <section className="admin-user-detail-heading admin-detail-header">
+        <div className="admin-detail-identity">
+          <div className="admin-user-identity-avatar">{initials(user.displayName)}</div>
+          <div>
+            <p className="admin-console-eyebrow">Users &amp; Accounts · Account Control Center</p>
+            <h2>{user.displayName}</h2>
+            <span>{user.username ? `@${user.username}` : "Username unavailable"} · {user.email}</span>
+            <div className="admin-detail-chips">
+              <span>{sentence(user.primaryType)}</span>
+              {isBetaAccount(user) ? <span>Beta test</span> : null}
+              <span>{user.collectorOverview ? "Collector access" : "Investor access"}</span>
+              <span>Joined {date(user.createdAt)}</span>
+            </div>
+          </div>
         </div>
         <div className="admin-user-detail-actions">
-          <span
-            className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
-          >
+          <span className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}>
             {sentence(user.accountStatus)}
           </span>
-          <button type="button" className="admin-inline-action" onClick={() => setTab("Audit")}>
-            View audit log <ArrowRight aria-hidden="true" />
+          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("Access")}>
+            <Settings aria-hidden="true" /> Manage account
+          </button>
+          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("Audit")}>
+            <FileClock aria-hidden="true" /> Audit log
           </button>
         </div>
       </section>
-      <section className="admin-panel admin-user-identity-card">
-        <div className="admin-user-identity-avatar">{initials(user.displayName)}</div>
-        <div>
-          <h3>Contact</h3>
-          <p>{user.email}</p>
-          <p>{user.identity.phone ?? "Phone unavailable"}</p>
-          <p>{user.identity.country ?? "Country unavailable"}</p>
-        </div>
-        <div>
-          <h3>Account info</h3>
-          <p>User ID · {shortId(user.id)}</p>
-          <p>{user.username ? `@${user.username}` : "Username unavailable"}</p>
-          <p>
-            Discord ·{" "}
-            {user.identity.discord.connected
-              ? `Connected${user.identity.discord.username ? ` · ${user.identity.discord.username}` : ""}`
-              : "Not connected"}
-          </p>
-          <p>2FA · {user.identity.twoFactorEnabled ? "Enabled" : "Disabled"}</p>
-        </div>
-        <div>
-          <h3>KYC / Compliance</h3>
-          <p>KYC · {sentence(user.complianceSummary.kycStatus)}</p>
-          <p>KYT · {sentence(user.complianceSummary.kytStatus)}</p>
-          <p>
-            Last review ·{" "}
-            {user.complianceSummary.lastReviewAt
-              ? date(user.complianceSummary.lastReviewAt)
-              : "Unavailable"}
-          </p>
-        </div>
-        <div>
-          <h3>Membership</h3>
-          <p>
-            {user.collector?.subscription
-              ? user.collector.subscription.plan
-              : "No Collector membership"}
-          </p>
-          <p>{user.collector?.subscription ? sentence(user.collector.subscription.status) : "—"}</p>
-        </div>
+      <section className="admin-detail-summary" aria-label="Account summary">
+        <div><span>Verification</span><strong>{sentence(user.complianceSummary.kycStatus)}</strong></div>
+        <div><span>Collector</span><strong>{user.collectorOverview ? "Enabled" : "Not enabled"}</strong></div>
+        <div><span>Membership</span><strong>{user.collector?.subscription ? user.collector.subscription.plan : "Not applicable"}</strong></div>
+        <div><span>Last active</span><strong>{user.lastActivityAt ? date(user.lastActivityAt) : "Not tracked"}</strong></div>
+        <div><span>User ID</span><strong title={user.id}>{shortId(user.id)}…</strong></div>
       </section>
       <nav className="admin-tabs admin-user-detail-tabs" aria-label="User detail sections">
         {tabs.map((item) => (
@@ -4174,67 +3949,7 @@ function UserDetailExperience({
           </button>
         ))}
       </nav>
-      <div className="admin-user-detail-main">
-        <main>{renderTab()}</main>
-        <aside className="admin-user-detail-rail">
-          <section className="admin-panel">
-            <AdminPanelHeading title="User Actions" />
-            <button
-              type="button"
-              className="admin-detail-action"
-              onClick={() => user.collectorOverview && setTab("Collector")}
-              disabled={!user.collectorOverview}
-              title={
-                user.collectorOverview
-                  ? "Open this account's Collector workspace."
-                  : "This account has no Collector workspace."
-              }
-              aria-label={
-                user.collectorOverview
-                  ? "View Collector Workspace"
-                  : "View Collector Workspace unavailable: no Collector workspace"
-              }
-            >
-              <Archive aria-hidden="true" /> View Collector Workspace
-            </button>
-            {!user.collectorOverview ? (
-              <p className="admin-safe-note">This account does not have a Collector workspace.</p>
-            ) : null}
-            <button
-              type="button"
-              className="admin-detail-action"
-              onClick={() => setTab("Roles & Access")}
-            >
-              <ShieldCheck aria-hidden="true" /> View Roles &amp; Access
-            </button>
-            <button type="button" className="admin-detail-action" onClick={() => setTab("Audit")}>
-              <FileClock aria-hidden="true" /> View Audit Log
-            </button>
-            <p className="admin-safe-note">
-              Status and role changes are available under Roles &amp; Access and require backend
-              authorization, audit, and confirmation.
-            </p>
-          </section>
-          <section className="admin-panel">
-            <AdminPanelHeading
-              title="Activity Snapshot"
-              action="View all"
-              onClick={() => setTab("Activity")}
-            />
-            {user.activitySnapshot.length ? (
-              user.activitySnapshot.slice(0, 5).map((activity) => (
-                <div className="admin-activity-row" key={activity.id}>
-                  <Activity aria-hidden="true" />
-                  <span>{sentence(activity.action)}</span>
-                  <small>{date(activity.occurredAt)}</small>
-                </div>
-              ))
-            ) : (
-              <AdminEmpty detail="No recent activity." icon={Clock3} />
-            )}
-          </section>
-        </aside>
-      </div>
+      <div className="admin-user-detail-main"><main>{renderTab()}</main></div>
     </div>
   );
 }
@@ -4275,17 +3990,27 @@ function UserRoleManagement({
   const uniqueRoles = Array.from(
     new Map(user.roles.map((assignment) => [`${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`, assignment])).values(),
   );
+  const roleDescriptions: Record<string, string> = {
+    COLLECTOR: "Can submit and manage eligible collectibles.",
+    SUPPORT: "Can respond to customer support workflows.",
+    COMPLIANCE_ANALYST: "Can review compliance cases.",
+    ASSET_REVIEWER: "Can review collectible submissions.",
+    VAULT_OPERATOR: "Can manage authorized physical intake operations.",
+    FINANCE_OPERATOR: "Can access protected finance operations.",
+    ADMIN: "Full administrative access according to policy.",
+  };
   return (
     <section className="admin-panel">
       <AdminPanelHeading title="Roles & Access" />
       {uniqueRoles.length ? (
         <div className="admin-detail-role-list">
           {uniqueRoles.map((assignment) => (
-            <div key={assignment.id}>
-              <span className="admin-tag">{sentence(assignment.role)}</span>
-              <small>
-                Granted {date(assignment.createdAt)} · {assignment.scopeType}
-              </small>
+            <div className="admin-role-row" key={assignment.id}>
+              <div>
+                <strong>{sentence(assignment.role)}</strong>
+                <small>{roleDescriptions[assignment.role] ?? "Account capability assigned by policy."}</small>
+                <span>Granted {date(assignment.createdAt)} · {assignment.scopeType}</span>
+              </div>
               <button
                 type="button"
                 className="admin-inline-action"
@@ -4299,7 +4024,7 @@ function UserRoleManagement({
                     revoke.mutate(assignment.id);
                 }}
               >
-                Revoke
+                Remove role
               </button>
             </div>
           ))}
@@ -4307,17 +4032,8 @@ function UserRoleManagement({
       ) : (
         <AdminEmpty detail="No active roles assigned." icon={ShieldCheck} />
       )}
-      <div className="admin-detail-action-form">
-        <label>
-          Grant role
-          <select value={role} onChange={(event) => setRole(event.target.value)}>
-            {adminAssignableRoles.map(([value, label]) => (
-              <option value={value} key={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="admin-detail-action-form admin-role-add-form">
+        <AdminSelect label="Role to add" value={role} onChange={setRole} options={adminAssignableRoles as unknown as Array<[string, string]>} />
         <button
           type="button"
           className="admin-detail-action"
@@ -4331,7 +4047,7 @@ function UserRoleManagement({
               grant.mutate();
           }}
         >
-          {grant.isPending ? "Granting…" : "Grant role"}
+          {grant.isPending ? "Adding…" : "+ Add role"}
         </button>
       </div>
       {grant.isError || revoke.isError ? (
@@ -4390,28 +4106,19 @@ function AccountStatusManagement({
   };
   const options = allowedStatuses[user.accountStatus] ?? [];
   return (
-    <section className="admin-panel">
+    <section className="admin-panel admin-status-panel">
       <AdminPanelHeading title="Account status" />
-      <DetailRow label="Current status" value={sentence(user.accountStatus)} />
+      <div className="admin-current-status"><span>Current status</span><strong>{sentence(user.accountStatus)}</strong></div>
       {options.length ? (
-        <div className="admin-detail-action-form">
+        <div className="admin-status-form">
+          <AdminSelect label="Change status" value={nextStatus} onChange={setNextStatus} options={[["", "Choose a new status"], ...options]} />
           <label>
-            New status
-            <select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>
-              <option value="">Choose an action</option>
-              {options.map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Reason (required)
-            <input
+            <span>Reason <em>(required)</em></span>
+            <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Explain this administrative change"
+              placeholder="Explain why this account status is changing"
+              rows={3}
             />
           </label>
           <button
@@ -4427,7 +4134,7 @@ function AccountStatusManagement({
                 transition.mutate();
             }}
           >
-            {transition.isPending ? "Saving…" : "Apply status change"}
+            {transition.isPending ? "Saving…" : "Update account status"}
           </button>
         </div>
       ) : (
@@ -5500,4 +5207,49 @@ function initials(value?: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function uniqueRoleAssignments(
+  roles: AdminUserSummary["roles"],
+): AdminUserSummary["roles"] {
+  return Array.from(
+    new Map(
+      roles.map((assignment) => [
+        `${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`,
+        assignment,
+      ]),
+    ).values(),
+  );
+}
+
+function isBetaAccount(user: AdminUserSummary) {
+  const value = `${user.email} ${user.username ?? ""} ${user.displayName}`.toLowerCase();
+  return value.includes("demo-") || value.includes("beta") || value.includes("test");
+}
+
+function AdminSelect({
+  label,
+  value,
+  onChange,
+  options,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+  className?: string;
+}) {
+  return (
+    <label className={`admin-select ${className}`}>
+      <span className="sr-only">{label}</span>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map(([optionValue, optionLabel]) => (
+          <option value={optionValue} key={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
