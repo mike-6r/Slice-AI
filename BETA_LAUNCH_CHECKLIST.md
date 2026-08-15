@@ -402,3 +402,15 @@ Controlled internal Beta: **GO with documented limitations**. External invited B
 - Phase 9: **PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT**.
 - Destination: `beta-test-uk-intake`; intake reference `SLICE-3AA5144D`; shipment `NONE`.
 - Phase 10: **NO**. Do not create shipment, receipt, verification, valuation, custody, canonical Asset, publication, issuance, funding or orders.
+
+## Admin Phase 3 final launch gate — 2026-08-15
+
+- Deployment: `7528bfb0e507e6696507af9bd47a7ba1620558b3` on Git and VPS; API/web active; health/ready PASS; Prisma schema current.
+- Admin route inventory: **CREATED** (`ADMIN_ROUTE_INVENTORY.md`).
+- Admin function inventory: **CREATED** (`ADMIN_FUNCTION_INVENTORY.json`).
+- Disabled controls now include an accessible reason (Export, Intake settings, Accept to intake, missing Collector workspace).
+- Fresh authenticated Admin browser pass: **NOT EXECUTED** in this pass because a controlled Admin browser session/credential was not available. No high-risk mutation was run.
+- Final Admin launch gate: **NO-GO pending authenticated route, mutation, RBAC/IDOR, responsive, accessibility and request-health evidence**.
+- Controlled internal read-only Beta: **GO with documented limitations**.
+- External invited Beta: **NO-GO**.
+- Phase 10: **NO**.

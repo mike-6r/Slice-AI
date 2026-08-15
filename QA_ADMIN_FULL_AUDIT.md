@@ -30,3 +30,13 @@ This commit does not claim a fresh browser walkthrough of every admin section or
 - Intake approval requests now include an idempotency key; receipt confirmation already used the idempotent staff command.
 
 The controlled staging mutation walkthrough, including dedicated test identities, has not been executed in this code pass. Physical receipt, verification, valuation, custody, publication, finance adjustment, and real Charizard progression remain untouched.
+
+## Phase 3 final QA / launch-gate boundary — 2026-08-15
+
+Deployment was rechecked before QA: Git `main` and VPS are `7528bfb0e507e6696507af9bd47a7ba1620558b3`; `slice-api.service` and `slice-web.service` are active; `/health` and `/ready` return 200; PostgreSQL and Redis are up; Prisma reports 58 migrations and an up-to-date schema. The configured environment contains the expected Beta/storage/provider key names without exposing secret values.
+
+The route and control inventories are recorded in `ADMIN_ROUTE_INVENTORY.md` and `ADMIN_FUNCTION_INVENTORY.json`. Visible controls are classified as working, intentionally disabled with a reason, or implementation-only pending controlled staging retest. No contextless publish, valuation, receipt, adjustment, or order action was introduced.
+
+The fresh authenticated Admin browser session and full cross-section mutation/RBAC/IDOR/responsive/accessibility/request-health matrix were not executed in this pass because no controlled Admin browser credentials/session were available to the agent and high-risk mutations require an action-time controlled fixture. The unauthenticated staging route correctly presents “Admin Console sign-in required”. This is an explicit evidence gap, not a GO claim.
+
+Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated browser matrix and controlled mutation retest are completed. Controlled internal read-only Beta remains available with the previously documented limitations. External invited Beta remains blocked by the existing privacy/provider and mutation-test gaps. The controlled Charizard remains untouched: approved submission, `beta-test-uk-intake`, reference `SLICE-3AA5144D`, no shipment, receipt, verification, valuation, custody, publication, issuance, funding, or order.

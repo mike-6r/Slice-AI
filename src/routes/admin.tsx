@@ -1316,10 +1316,22 @@ function PhysicalIntakeBoard({
       detail="Manage physical receipts, shipping, and custody intake workflow."
     >
       <div className="physical-intake-header-actions">
-        <button type="button" className="admin-inline-action" disabled>
+        <button
+          type="button"
+          className="admin-inline-action"
+          disabled
+          title="Export is not available until an approved reporting projection is configured."
+          aria-label="Export unavailable: approved reporting projection not configured"
+        >
           Export
         </button>
-        <button type="button" className="admin-inline-action" disabled>
+        <button
+          type="button"
+          className="admin-inline-action"
+          disabled
+          title="Intake settings are managed through the approved operations configuration workflow."
+          aria-label="Intake settings unavailable: use the approved operations configuration workflow"
+        >
           Intake settings
         </button>
       </div>
@@ -1594,7 +1606,13 @@ function PhysicalIntakeBoard({
           </section>
           <section className="admin-panel">
             <h3>Quick Actions</h3>
-            <button type="button" className="physical-intake-quick" disabled>
+            <button
+              type="button"
+              className="physical-intake-quick"
+              disabled
+              title="Acceptance is controlled by Submission Review."
+              aria-label="Accept to intake unavailable: controlled by Submission Review"
+            >
               Accept to intake <small>Acceptance is controlled by Submission Review</small>
             </button>
             {data?.items.find((item) => item.stage === "DELIVERED_AWAITING_RECEIPT") ? (
@@ -4209,9 +4227,22 @@ function UserDetailExperience({
               className="admin-detail-action"
               onClick={() => user.collectorOverview && setTab("Collector")}
               disabled={!user.collectorOverview}
+              title={
+                user.collectorOverview
+                  ? "Open this account's Collector workspace."
+                  : "This account has no Collector workspace."
+              }
+              aria-label={
+                user.collectorOverview
+                  ? "View Collector Workspace"
+                  : "View Collector Workspace unavailable: no Collector workspace"
+              }
             >
               <Archive aria-hidden="true" /> View Collector Workspace
             </button>
+            {!user.collectorOverview ? (
+              <p className="admin-safe-note">This account does not have a Collector workspace.</p>
+            ) : null}
             <button
               type="button"
               className="admin-detail-action"
