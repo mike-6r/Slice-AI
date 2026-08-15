@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
@@ -358,7 +359,7 @@ export class CollectorWorkspaceService {
         id: true,
         status: true,
         categoryId: true,
-        intake: { include: { shipment: true } },
+        intake: { include: { shipment: true, vault: true } },
       },
     });
     if (!submission)
@@ -404,16 +405,46 @@ export class CollectorWorkspaceService {
         code: 'VAULT_CATEGORY_UNSUPPORTED',
         message: 'That destination does not accept this category.',
       });
-    return this.db.submissionIntake.upsert({
-      where: { submissionId },
-      create: {
-        submissionId,
-        vaultId,
-        intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
-        status: 'SHIPPING_REQUIRED',
-      },
-      update: { vaultId, status: 'SHIPPING_REQUIRED', updatedAt: new Date() },
-      include: { vault: true, shipment: true },
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.upsert({
+        where: { submissionId },
+        create: {
+          submissionId,
+          vaultId,
+          intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
+          status: 'SHIPPING_REQUIRED',
+        },
+        update: {
+          vaultId,
+          status: 'SHIPPING_REQUIRED',
+          updatedAt: new Date(),
+        },
+        include: { vault: true, shipment: true },
+      });
+      const previousVault = submission.intake?.vault;
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(),
+          actorUserId: userId,
+          actorType: 'USER',
+          action: 'INTAKE_DESTINATION_SELECTED',
+          resourceType: 'submission-intake',
+          resourceId: intake.id,
+          result: 'SUCCESS',
+          metadata: {
+            submissionId,
+            intakeReference: intake.intakeReference,
+            changed: previousVault?.id !== vault.id,
+            previous: previousVault
+              ? { id: previousVault.id, displayName: previousVault.displayName }
+              : null,
+            next: { id: vault.id, displayName: vault.displayName },
+            reason:
+              'Collector selected an operator-approved intake destination before shipment.',
+          },
+        },
+      });
+      return intake;
     });
   }
 
