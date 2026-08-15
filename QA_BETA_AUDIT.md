@@ -66,3 +66,17 @@ The approved Charizard submission was checked read-only before any physical tran
 - No shipment, tracking number, delivery, Slice receipt, verification, valuation, custody, canonical Asset, publication, issuance, funding, or order was created.
 
 **STOP CONDITION:** `WAITING_FOR_REAL_OPERATOR_APPROVED_DESTINATION_AND_PHYSICAL_SHIPMENT`. The staging fixture must not be used for a physical shipment. A real destination must be configured and approved through the audited Admin/Vault Operations flow, then the operator must actually send the card with real tracking before the next lifecycle gate can be exercised.
+
+## Collector + Admin panel regression audit — 2026-08-14
+
+The authenticated Collector/Admin browser pass is documented in `QA_COLLECTOR_ADMIN_AUDIT.md` with structured issues in `QA_COLLECTOR_ADMIN_ISSUES.json`.
+
+- Collector workspace routes, empty states, subscription, profile and settings loaded without console errors.
+- `/list` Step 1 accepted an exact PriceCharting URL and populated the canonical card identity without saving a new draft.
+- Collector Overview now includes a direct **List an Asset** action (`COL-ACTION-001`, fixed in this pass).
+- Admin Overview, Accounts, Review Queue, Physical Intake, Asset Operations, Memberships, Finance & Trading, Trust & Support and Platform Operations tabs loaded without console errors.
+- `ADMIN-COL-001` remains open: the Admin **Collectibles** nav item renders the Asset Operations pipeline rather than a separate canonical catalogue. This is not hidden with a front-end alias because the required authoritative catalogue projection is not present.
+- `ADMIN-TELEMETRY-001` remains open: Platform Operations aggregate health is `Unknown` while unavailable webhook/feature-flag telemetry is explicitly labelled.
+- No shipment, delivery, receipt, verification, valuation, custody, issuance, publication or order was fabricated.
+
+**Current decision:** Controlled internal read-only beta remains GO with the documented limitations. External invited beta remains NO-GO pending the open Admin Collectibles route issue, separate-identity RBAC/IDOR checks, and fresh upload/Ximilar/submission lifecycle checks.

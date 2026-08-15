@@ -1,0 +1,65 @@
+{
+  "audit": "SLICE FULL COLLECTOR + ADMIN QA",
+  "environment": "https://staging.slicecollectable.com",
+  "auditedAt": "2026-08-14",
+  "deployedCommit": "d46c5d600e2534f011c460421244417b574cccff",
+  "issues": [
+    {
+      "id": "COL-ACTION-001",
+      "role": "Collector",
+      "route": "/collector-workspace",
+      "severity": "HIGH",
+      "category": "Workflow",
+      "title": "Overview lacked a direct List an Asset action",
+      "status": "FIXED",
+      "reproduction": "Open Collector workspace Overview and inspect the primary actions.",
+      "expected": "A clear action starts a new listing.",
+      "actual": "Only section navigation and membership actions were visible.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "Overview did not render a listing CTA.",
+      "resolution": "Added a labelled link to /list using the existing Collector button treatment."
+    },
+    {
+      "id": "ADMIN-COL-001",
+      "role": "Admin",
+      "route": "/admin?section=collectibles",
+      "severity": "HIGH",
+      "category": "Navigation / Data authority",
+      "title": "Collectibles nav renders Asset Operations instead of a catalogue",
+      "status": "OPEN",
+      "reproduction": "Open Admin Console, click Collectibles, then compare the heading and controls with Asset Operations.",
+      "expected": "A canonical Collectibles catalogue with search, identity, media, custody and public-state views.",
+      "actual": "The Asset Operations pipeline board renders; Collectibles and Asset Operations are duplicate surfaces.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "admin.tsx routes both section values to AdminAssetOperations and no authoritative admin catalogue-list endpoint/component is present.",
+      "recommendedFix": "Add a backend-authoritative admin collectibles list projection and a separate catalogue component; keep operations as the lifecycle pipeline."
+    },
+    {
+      "id": "ADMIN-TELEMETRY-001",
+      "role": "Admin",
+      "route": "/admin?section=platformOperations&tab=health",
+      "severity": "MEDIUM",
+      "category": "Observability",
+      "title": "Overall health remains Unknown despite component statuses",
+      "status": "OPEN",
+      "reproduction": "Open Platform Operations > Health.",
+      "expected": "A clear aggregate state with explicit unknown/deferred contributors.",
+      "actual": "Overall health is Unknown while API, PostgreSQL, Redis-backed readiness, storage, Ximilar and PriceCharting are shown as operational.",
+      "consoleError": null,
+      "networkError": null,
+      "screenshot": null,
+      "rootCause": "Webhook/feature-flag telemetry is unavailable to the read model.",
+      "recommendedFix": "Expose an explicit aggregate such as Operational with an Unknown/Not configured component list, without fabricating provider health."
+    }
+  ],
+  "notTestableWithoutAdditionalControlledData": [
+    "Collector collectible/submission detail tabs because this account has zero owned records.",
+    "Changes-requested, resubmit, shipment/tracking, receipt and publication workflows because no real physical event is authorized.",
+    "Admin accept/reject, valuation, custody, publish and role mutation actions because exercising them would mutate controlled lifecycle or access state.",
+    "Investor/second-collector IDOR checks and logout/back-cache checks because the authenticated browser session was retained for the complete audit."
+  ]
+}

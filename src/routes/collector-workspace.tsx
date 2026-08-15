@@ -420,6 +420,11 @@ function Overview({
 }) {
   return (
     <div className="collector-workspace-content">
+      <div className="collector-workspace-overview-actions">
+        <Link className="collector-button collector-button--primary" to="/list">
+          List an Asset <ArrowRight aria-hidden="true" />
+        </Link>
+      </div>
       <section className="collector-kpis">
         <Kpi
           icon={PackageCheck}

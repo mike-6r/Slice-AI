@@ -1,8 +1,8 @@
 {
   "audit": "SLICE LIVE BETA QA CONTINUATION PHASE 2",
   "environment": "https://staging.slicecollectable.com",
-  "auditedAt": "2026-08-15",
-  "deployedCommit": "3db48f8",
+  "auditedAt": "2026-08-14",
+  "deployedCommit": "d46c5d600e2534f011c460421244417b574cccff",
   "status": "GO_CONTROLLED_BETA_EXTERNAL_NO_GO",
   "issues": [
     { "id": "AUTH-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Prior session bootstrap remediation remains deployed; fresh credentialed browser re-test is pending explicit credential-entry confirmation." },
@@ -17,7 +17,10 @@
   ],
   "newFindings": [
     { "id": "DEPLOY-001", "severity": "HIGH", "status": "FIXED", "resolution": "Staging deploy script now passes VITE_APP_ENV=beta to the frontend production build so backend and client Beta policy cannot diverge." },
-    { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "NOT_FIXED", "resolution": "The selected staging-gb-intake fixture is not operationally approved and is not accepting shipments. Physical lifecycle correctly stopped before shipment; a real operator-approved destination is required." }
+    { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "NOT_FIXED", "resolution": "The selected staging-gb-intake fixture is not operationally approved and is not accepting shipments. Physical lifecycle correctly stopped before shipment; a real operator-approved destination is required." },
+    { "id": "COL-ACTION-001", "severity": "HIGH", "status": "FIXED", "resolution": "Collector Overview now exposes a direct List an Asset action linking to the six-step listing flow." },
+    { "id": "ADMIN-COL-001", "severity": "HIGH", "status": "OPEN", "resolution": "Admin Collectibles currently renders the Asset Operations pipeline because no separate authoritative catalogue projection/component exists." },
+    { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Platform Operations aggregate health is Unknown while unavailable webhook/feature-flag telemetry is explicitly reported." }
   ],
   "notExecuted": [
     "credentialed Investor/Collector/Admin browser flows",
@@ -25,11 +28,14 @@
     "fresh R2 upload and cross-user private-media checks",
     "one live Ximilar analysis",
     "Admin review/intake acceptance flow",
+    "Cross-account RBAC/IDOR and private-media checks requiring separate controlled sessions",
     "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion"
   ],
   "evidence": [
     "QA_BETA_AUDIT.md",
     "public staging browser re-QA 2026-08-15",
-    "VPS health/ready and Prisma migration verification"
+    "VPS health/ready, environment and Prisma migration verification",
+    "QA_COLLECTOR_ADMIN_AUDIT.md",
+    "QA_COLLECTOR_ADMIN_ISSUES.json"
   ]
 }
