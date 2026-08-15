@@ -771,7 +771,9 @@ function hashIdentity(identity: Identity) {
     .update(
       JSON.stringify(
         Object.fromEntries(
-          Object.entries(identity).map(([k, v]) => [k, normalize(v ?? '')]),
+          Object.entries(identity)
+            .filter(([k, v]) => k !== 'edition' || v !== null)
+            .map(([k, v]) => [k, normalize(v ?? '')]),
         ),
       ),
     )
