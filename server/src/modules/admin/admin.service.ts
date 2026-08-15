@@ -2421,6 +2421,20 @@ export class AdminService {
       const activePercent = activeLimit
         ? Math.min(100, Math.round((usage.activeCollectibles / activeLimit) * 100))
         : null;
+      const concurrentAtLimit =
+        usage.maxConcurrentIntake !== null && usage.concurrentIntake >= usage.maxConcurrentIntake;
+      const overLimit = Boolean(
+        (activeLimit !== null && usage.activeCollectibles > activeLimit) ||
+          (monthlyLimit !== null && usage.monthlySubmissionsUsed > monthlyLimit) ||
+          (usage.maxConcurrentIntake !== null && usage.concurrentIntake > usage.maxConcurrentIntake),
+      );
+      const warnings: string[] = [];
+      if (overLimit) warnings.push('One or more plan limits are exceeded; new capacity-consuming actions may be blocked.');
+      else if ((activePercent ?? 0) >= 80) warnings.push('Active collectible capacity is at least 80% used.');
+      if (monthlyPercent !== null && monthlyPercent >= 80) warnings.push('Monthly submission allowance is at least 80% used.');
+      if (concurrentAtLimit) warnings.push('Concurrent intake capacity is currently full.');
+      const providerConfigured = Boolean(item.provider && item.provider !== 'STAGING_DEMO');
+      const billingState = item.status === 'PAST_DUE' ? 'PAST_DUE' : providerConfigured ? 'CURRENT' : 'DISABLED';
       return {
         id: item.id,
         collector: {
@@ -2438,7 +2452,9 @@ export class AdminService {
           currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
           cancelAtPeriodEnd: item.cancelAtPeriodEnd,
           trialEnd: null,
-          providerConfigured: Boolean(item.provider && item.provider !== 'STAGING_DEMO'),
+          providerConfigured,
+          billingState,
+          betaEntitlement: item.provider === 'STAGING_DEMO',
         },
         plan: {
           code: item.plan.code,
@@ -2455,15 +2471,27 @@ export class AdminService {
           monthlySubmissionsPercent: monthlyPercent,
           concurrentIntake: usage.concurrentIntake,
           concurrentIntakeLimit: usage.maxConcurrentIntake,
-          concurrentIntakeAtLimit:
-            usage.maxConcurrentIntake !== null && usage.concurrentIntake >= usage.maxConcurrentIntake,
+          concurrentIntakeAtLimit: concurrentAtLimit,
           billingPeriodStart: usage.billingPeriodStart,
           billingPeriodEnd: usage.billingPeriodEnd,
         },
         billing: {
           nextBillingDate: item.currentPeriodEnd?.toISOString() ?? null,
-          health: item.status === 'PAST_DUE' ? 'PAST_DUE' : 'CURRENT',
+          health: billingState,
         },
+        entitlements:
+          item.plan.entitlements && typeof item.plan.entitlements === 'object' && !Array.isArray(item.plan.entitlements)
+            ? item.plan.entitlements
+            : {},
+        overLimit,
+        warnings,
+        eligibleActions: providerConfigured
+          ? item.status === 'CANCEL_AT_PERIOD_END'
+            ? ['RESUME', 'CHANGE_PLAN']
+            : item.status === 'CANCELLED' || item.status === 'EXPIRED'
+              ? ['CHANGE_PLAN']
+              : ['CHANGE_PLAN', 'CANCEL']
+          : [],
         updatedAt: item.updatedAt.toISOString(),
       };
     });

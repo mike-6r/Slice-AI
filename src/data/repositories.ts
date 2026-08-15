@@ -696,6 +696,8 @@ export type AdminMembershipRow = {
     cancelAtPeriodEnd: boolean;
     trialEnd: string | null;
     providerConfigured: boolean;
+    billingState: string;
+    betaEntitlement: boolean;
   };
   usage: {
     activeCollectibles: number;
@@ -711,6 +713,10 @@ export type AdminMembershipRow = {
     billingPeriodEnd: string;
   };
   billing: { nextBillingDate: string | null; health: string };
+  entitlements: Record<string, unknown>;
+  overLimit: boolean;
+  warnings: string[];
+  eligibleActions: string[];
   updatedAt: string;
 };
 

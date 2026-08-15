@@ -37,6 +37,13 @@
       "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED",
       "area": "Review Queue and Submission Review workstation",
       "resolution": "Compact identity-first queue, Admin shell review route, focused tabs, signed private evidence media, advisory AI/market panels, and structured request-changes UI are implemented."
+    },
+    {
+      "id": "ADMIN-MEMBERSHIP-DESIGN-001",
+      "severity": "HIGH",
+      "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED",
+      "area": "Memberships directory and detail workspace",
+      "resolution": "Replaced the KPI/right-rail layout with a compact full-width directory, operational filters, usage and capacity states, truthful Beta billing state, effective entitlements, warnings, and account-linked membership detail."
     }
   ],
   "verification": {

@@ -1558,6 +1558,8 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
         cancelAtPeriodEnd: Boolean(membership.cancelAtPeriodEnd),
         trialEnd: nullableString(membership.trialEnd, "admin membership.membership.trialEnd"),
         providerConfigured: Boolean(membership.providerConfigured),
+        billingState: stringField(membership.billingState, "admin membership.membership.billingState"),
+        betaEntitlement: Boolean(membership.betaEntitlement),
       };
     })(),
     usage: (() => {
@@ -1601,6 +1603,17 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
         health: stringField(billing.health, "admin membership.billing.health"),
       };
     })(),
+    entitlements: (() => {
+      const entitlements = value.entitlements;
+      return entitlements && typeof entitlements === "object" && !Array.isArray(entitlements)
+        ? (entitlements as Record<string, unknown>)
+        : {};
+    })(),
+    overLimit: Boolean(value.overLimit),
+    warnings: Array.isArray(value.warnings) ? value.warnings.map((entry) => String(entry)) : [],
+    eligibleActions: Array.isArray(value.eligibleActions)
+      ? value.eligibleActions.map((entry) => String(entry))
+      : [],
     updatedAt: stringField(value.updatedAt, "admin membership.updatedAt"),
   };
 };

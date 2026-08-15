@@ -76,6 +76,7 @@ export const Route = createFileRoute("/admin")({
     grader: typeof search.grader === "string" ? search.grader : undefined,
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
     asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
+    membership: typeof search.membership === "string" && search.membership.length > 0 ? search.membership : undefined,
     tab:
       typeof search.tab === "string" && search.tab.length > 0
         ? search.tab
@@ -125,6 +126,7 @@ type AdminSearch = {
   section: AdminSection;
   user?: string;
   asset?: string;
+  membership?: string;
   tab?: string;
   q?: string;
   plan?: string;
@@ -257,6 +259,7 @@ function AdminConsole() {
     section,
     tab: selectedUserTab,
     asset: selectedAsset,
+    membership: selectedMembership,
     q: reviewQuery,
     plan: membershipPlan,
     type: trustTypeParam,
@@ -1030,6 +1033,7 @@ function AdminConsole() {
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             sort={reviewSort ?? "updated"}
             sortDirection={reviewSortDirection === "asc" ? "asc" : "desc"}
+            selectedId={selectedMembership}
             update={(patch) =>
               void navigate({
                 search: (current) => ({ ...current, ...patch }),

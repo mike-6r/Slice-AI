@@ -1,54 +1,53 @@
 import { useEffect, useState } from "react";
-import { Download, Filter, MoreHorizontal, Settings2, UsersRound } from "lucide-react";
+import { ArrowLeft, Download, Search, ShieldCheck } from "lucide-react";
 import type { AdminMembershipDirectoryResponse, AdminMembershipRow } from "@/data/repositories";
 import "@/styles/admin-memberships.css";
 
 const tabs = [
   ["", "All"],
   ["ACTIVE", "Active"],
-  ["PAST_DUE", "Past Due"],
-  ["CANCELLED", "Cancelled"],
-  ["CANCEL_AT_PERIOD_END", "Canceling"],
+  ["PAST_DUE", "Past due"],
   ["TRIALING", "Trialing"],
+  ["CANCEL_AT_PERIOD_END", "Cancelling"],
+  ["CANCELLED", "Cancelled"],
   ["EXPIRED", "Expired"],
 ] as const;
-
-function statusLabel(status: string) {
-  return (
-    {
-      ACTIVE: "Active",
-      PAST_DUE: "Past Due",
-      CANCEL_AT_PERIOD_END: "Canceling",
-      CANCELLED: "Cancelled",
-      TRIALING: "Trialing",
-      EXPIRED: "Expired",
-    }[status] ?? status.replaceAll("_", " ")
-  );
-}
-
-function planLabel(code: string) {
-  return `${code.slice(0, 1)}${code.slice(1).toLowerCase()} Plan`;
-}
-
+const statusLabel = (status: string) =>
+  ({
+    ACTIVE: "Active",
+    PAST_DUE: "Past due",
+    CANCEL_AT_PERIOD_END: "Cancelling",
+    CANCELLED: "Cancelled",
+    TRIALING: "Trialing",
+    EXPIRED: "Expired",
+  })[status] ?? status.replaceAll("_", " ");
+const planLabel = (code: string) =>
+  `${{ STARTER: "Starter", PRO: "Pro", ELITE: "Elite" }[code] ?? code} plan`;
 function formatDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not configured";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(parsed);
+  return Number.isNaN(parsed.getTime())
+    ? "Not configured"
+    : new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(parsed);
 }
-
-function initials(displayName: string) {
-  return displayName
+const initials = (name: string) =>
+  name
     .split(/\s+/)
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+function usageState(value: number, limit: number | null, percent: number | null) {
+  if (limit === null) return "Uncapped";
+  if (value > limit) return "Over limit";
+  if ((percent ?? 0) >= 100) return "At limit";
+  if ((percent ?? 0) >= 80) return "Near limit";
+  return "Within plan";
 }
 
 export function AdminMemberships({
@@ -60,9 +59,8 @@ export function AdminMemberships({
   plan,
   status,
   page,
-  sort,
-  sortDirection,
   update,
+  selectedId,
 }: {
   data?: AdminMembershipDirectoryResponse;
   loading: boolean;
@@ -75,8 +73,11 @@ export function AdminMemberships({
   sort: string;
   sortDirection: "asc" | "desc";
   update: (patch: Record<string, string | undefined>) => void;
+  selectedId?: string;
 }) {
   const [search, setSearch] = useState(query);
+  const [billingFilter, setBillingFilter] = useState("");
+  const [usageFilter, setUsageFilter] = useState("");
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -85,7 +86,6 @@ export function AdminMemberships({
     }, 280);
     return () => window.clearTimeout(timer);
   }, [query, search, update]);
-
   if (loading) return <MembershipLoading />;
   if (failed || !data)
     return (
@@ -97,209 +97,190 @@ export function AdminMemberships({
         </button>
       </section>
     );
-
-  const total = data.pagination.total;
-  const filteredTotal = Object.values(data.statusOverview).reduce((sum, value) => sum + value, 0);
+  const filteredItems = data.items.filter((row) => {
+    const billingMatch = !billingFilter || row.membership.billingState === billingFilter;
+    const activePercent = row.usage.activeCollectiblesPercent ?? 0;
+    const monthlyPercent = row.usage.monthlySubmissionsPercent ?? 0;
+    const state = row.overLimit
+      ? "OVER_LIMIT"
+      : Math.max(activePercent, monthlyPercent) >= 100
+        ? "AT_LIMIT"
+        : Math.max(activePercent, monthlyPercent) >= 80
+          ? "NEAR_LIMIT"
+          : "OK";
+    return billingMatch && (!usageFilter || state === usageFilter);
+  });
+  const selected = selectedId ? data.items.find((row) => row.id === selectedId) : undefined;
+  if (selectedId && selected)
+    return <MembershipDetail row={selected} back={() => update({ membership: undefined })} />;
   const statusCount = (key: string) => data.statusOverview[key] ?? 0;
-  const activePlanTotal = Object.values(data.planDistribution).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-
+  const total = data.pagination.total;
+  const totalVisible = Object.values(data.statusOverview).reduce((sum, value) => sum + value, 0);
   return (
     <main className="admin-memberships-page">
       <header className="admin-memberships-header">
         <div>
-          <p className="admin-memberships-breadcrumb">
-            Memberships <span aria-hidden="true">&gt;</span> Memberships Overview
-          </p>
+          <p className="admin-memberships-eyebrow">ADMIN CONSOLE / MEMBERSHIPS</p>
           <h2>Memberships</h2>
-          <p>Manage collector memberships, plans, and usage.</p>
+          <p>Manage Collector plans, usage, entitlements and subscription status.</p>
         </div>
         <div className="admin-memberships-header-actions">
           <button type="button" className="admin-memberships-button" disabled>
             <Download aria-hidden="true" /> Export
           </button>
-          <button type="button" className="admin-memberships-button primary" disabled>
-            <Settings2 aria-hidden="true" /> Membership Settings
-          </button>
+          <span className="admin-memberships-beta-note">
+            Billing provider is not configured in Beta
+          </span>
         </div>
       </header>
-
-      <div className="admin-membership-kpis">
-        <Kpi label="Active memberships" value={data.kpis.active} tone="teal" />
-        <Kpi label="Starter plan" value={data.kpis.starter} tone="blue" />
-        <Kpi label="Pro plan" value={data.kpis.pro} tone="purple" />
-        <Kpi label="Elite plan" value={data.kpis.elite} tone="gold" />
-        <Kpi label="Past due" value={data.kpis.pastDue} tone="red" />
-        <Kpi label="Trialing" value={data.kpis.trialing} tone="cyan" />
-      </div>
-
-      <div className="admin-memberships-layout">
-        <section className="admin-membership-table-card">
-          <nav className="admin-membership-tabs" aria-label="Membership status">
-            {tabs.map(([key, label]) => (
-              <button
-                type="button"
-                className={(status || "") === key ? "active" : ""}
-                key={key || "all"}
-                onClick={() => update({ status: key || undefined, page: "1" })}
-              >
-                {label} <b>{key ? statusCount(key) : filteredTotal}</b>
-              </button>
+      <section className="admin-membership-summary" aria-label="Membership summary">
+        <strong>
+          {data.kpis.active.toLocaleString("en-GB")} active membership
+          {data.kpis.active === 1 ? "" : "s"}
+        </strong>
+        <span>Starter {data.kpis.starter}</span>
+        <span>Pro {data.kpis.pro}</span>
+        <span>Elite {data.kpis.elite}</span>
+        <span>Past due {data.kpis.pastDue}</span>
+        <span>Trialing {data.kpis.trialing}</span>
+      </section>
+      <section className="admin-membership-table-card">
+        <nav className="admin-membership-tabs" aria-label="Membership status">
+          {tabs.map(([key, label]) => (
+            <button
+              type="button"
+              className={(status || "") === key ? "active" : ""}
+              key={key || "all"}
+              onClick={() => update({ status: key || undefined, page: "1" })}
+            >
+              {label} <b>{key ? statusCount(key) : totalVisible}</b>
+            </button>
+          ))}
+        </nav>
+        <div className="admin-membership-toolbar">
+          <label className="admin-membership-search">
+            <Search aria-hidden="true" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search name, username, email or membership ID"
+              aria-label="Search memberships"
+            />
+          </label>
+          <select
+            value={plan}
+            onChange={(event) => update({ plan: event.target.value || undefined, page: "1" })}
+            aria-label="Plan"
+          >
+            <option value="">Plan: All</option>
+            <option value="STARTER">Starter</option>
+            <option value="PRO">Pro</option>
+            <option value="ELITE">Elite</option>
+          </select>
+          <select
+            value={status}
+            onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
+            aria-label="Status"
+          >
+            <option value="">Status: All</option>
+            {tabs.slice(1).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
             ))}
-          </nav>
-          <div className="admin-membership-toolbar">
-            <label className="admin-membership-search">
-              <UsersRound aria-hidden="true" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by collector, email, username..."
-                aria-label="Search memberships"
-              />
-            </label>
-            <select
-              value={plan}
-              onChange={(event) => update({ plan: event.target.value || undefined, page: "1" })}
-              aria-label="Plan"
-            >
-              <option value="">Plan: All</option>
-              <option value="STARTER">Starter</option>
-              <option value="PRO">Pro</option>
-              <option value="ELITE">Elite</option>
-            </select>
-            <select
-              value={status}
-              onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
-              aria-label="Status"
-            >
-              <option value="">Status: All</option>
-              {tabs.slice(1).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
+          </select>
+          <select
+            value={billingFilter}
+            onChange={(event) => setBillingFilter(event.target.value)}
+            aria-label="Billing state"
+          >
+            <option value="">Billing: All</option>
+            <option value="CURRENT">Current</option>
+            <option value="PAST_DUE">Past due</option>
+            <option value="DISABLED">Not configured</option>
+          </select>
+          <select
+            value={usageFilter}
+            onChange={(event) => setUsageFilter(event.target.value)}
+            aria-label="Usage state"
+          >
+            <option value="">Usage: All</option>
+            <option value="OK">Within plan</option>
+            <option value="NEAR_LIMIT">Near limit</option>
+            <option value="AT_LIMIT">At limit</option>
+            <option value="OVER_LIMIT">Over limit</option>
+          </select>
+        </div>
+        <div className="admin-membership-table-wrap">
+          <table className="admin-membership-table">
+            <thead>
+              <tr>
+                <th>Collector</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Usage</th>
+                <th>Capacity</th>
+                <th>Renewal</th>
+                <th>Manage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((row) => (
+                <MembershipRow key={row.id} row={row} open={() => update({ membership: row.id })} />
               ))}
-            </select>
-            <button type="button" className="admin-membership-filter" disabled>
-              <Filter aria-hidden="true" /> More Filters
+            </tbody>
+          </table>
+        </div>
+        {!filteredItems.length ? (
+          <div className="admin-membership-empty">
+            {query || plan || status || billingFilter || usageFilter
+              ? "No memberships match these filters."
+              : "No Collector memberships found."}
+          </div>
+        ) : null}
+        <footer className="admin-membership-pagination">
+          <span>
+            Showing {total ? (data.pagination.page - 1) * data.pagination.pageSize + 1 : 0} to{" "}
+            {Math.min(data.pagination.page * data.pagination.pageSize, total)} of {total}{" "}
+            memberships
+          </span>
+          <div>
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => update({ page: String(page - 1) })}
+            >
+              ‹
+            </button>
+            <strong>{data.pagination.page}</strong>
+            <button
+              type="button"
+              disabled={page >= data.pagination.totalPages}
+              onClick={() => update({ page: String(page + 1) })}
+            >
+              ›
             </button>
           </div>
-          <div className="admin-membership-table-wrap">
-            <table className="admin-membership-table">
-              <thead>
-                <tr>
-                  <th>Collector</th>
-                  <th>Plan</th>
-                  <th>Status</th>
-                  <th>Active collectibles</th>
-                  <th>Plan limit</th>
-                  <th>Monthly usage</th>
-                  <th>Concurrent intake</th>
-                  <th>Next billing</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((row) => (
-                  <MembershipRow key={row.id} row={row} update={update} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!data.items.length ? (
-            <div className="admin-membership-empty">
-              {query || plan || status
-                ? "No memberships match these filters."
-                : "No Collector memberships found."}
-            </div>
-          ) : null}
-          <footer className="admin-membership-pagination">
-            <span>
-              Showing {total ? (data.pagination.page - 1) * data.pagination.pageSize + 1 : 0} to{" "}
-              {Math.min(data.pagination.page * data.pagination.pageSize, total)} of {total}{" "}
-              memberships
-            </span>
-            <div>
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => update({ page: String(page - 1) })}
-              >
-                ‹
-              </button>
-              <strong>{data.pagination.page}</strong>
-              <button
-                type="button"
-                disabled={page >= data.pagination.totalPages}
-                onClick={() => update({ page: String(page + 1) })}
-              >
-                ›
-              </button>
-            </div>
-          </footer>
-        </section>
-
-        <aside className="admin-membership-rail">
-          <MembershipOverview data={data} />
-          <PlanDistribution data={data} total={activePlanTotal} />
-          <section className="admin-membership-side-card">
-            <h3>Quick Actions</h3>
-            <button type="button" onClick={() => update({ status: "CANCELLED", page: "1" })}>
-              View Cancelled
-            </button>
-            <button type="button" disabled>
-              Export Usage Report
-            </button>
-            <p>Membership changes require the provider or an audited entitlement workflow.</p>
-          </section>
-          <section className="admin-membership-side-card">
-            <div className="admin-membership-side-heading">
-              <h3>Recent Activity</h3>
-              <span>Live history</span>
-            </div>
-            {data.recentActivity.length ? (
-              data.recentActivity.map((event) => (
-                <div className="admin-membership-activity" key={event.id}>
-                  <span />
-                  <div>
-                    <strong>{event.title}</strong>
-                    <small>{event.reference ?? "Membership event"}</small>
-                  </div>
-                  <time>{formatDate(event.occurredAt)}</time>
-                </div>
-              ))
-            ) : (
-              <p className="admin-membership-muted">No membership events recorded.</p>
-            )}
-          </section>
-        </aside>
-      </div>
+        </footer>
+      </section>
     </main>
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <article className={`admin-membership-kpi tone-${tone}`}>
-      <span>{label}</span>
-      <strong>{value.toLocaleString("en-GB")}</strong>
-      <small>Backend projection</small>
-    </article>
+function MembershipRow({ row, open }: { row: AdminMembershipRow; open: () => void }) {
+  const active = usageState(
+    row.usage.activeCollectibles,
+    row.usage.activeCollectiblesLimit,
+    row.usage.activeCollectiblesPercent,
   );
-}
-
-function MembershipRow({
-  row,
-  update,
-}: {
-  row: AdminMembershipRow;
-  update: (patch: Record<string, string | undefined>) => void;
-}) {
-  const status = row.membership.status;
-  const activePercent = row.usage.activeCollectiblesPercent ?? 0;
-  const monthlyPercent = row.usage.monthlySubmissionsPercent ?? 0;
-  const nextBilling = row.billing.nextBillingDate;
+  const monthly = usageState(
+    row.usage.monthlySubmissions,
+    row.usage.monthlySubmissionsLimit,
+    row.usage.monthlySubmissionsPercent,
+  );
+  const intakePercent = row.usage.concurrentIntakeLimit
+    ? Math.round((row.usage.concurrentIntake / row.usage.concurrentIntakeLimit) * 100)
+    : null;
   return (
     <tr>
       <td>
@@ -316,155 +297,240 @@ function MembershipRow({
       </td>
       <td>
         <strong>{planLabel(row.plan.code)}</strong>
-        <span className={`admin-membership-plan-badge plan-${row.plan.code.toLowerCase()}`}>
-          {row.plan.code.slice(0, 1) + row.plan.code.slice(1).toLowerCase()}
-        </span>
+        <small className="admin-membership-price">
+          {row.plan.monthlyPriceMinor === "0"
+            ? "No charge"
+            : `${row.plan.currency} ${(Number(row.plan.monthlyPriceMinor) / 100).toFixed(2)} / month`}
+        </small>
       </td>
       <td>
-        <span className={`admin-membership-status status-${status.toLowerCase()}`}>
-          {statusLabel(status)}
+        <span className={`admin-membership-status status-${row.membership.status.toLowerCase()}`}>
+          {statusLabel(row.membership.status)}
         </span>
+        <small>
+          {row.membership.betaEntitlement
+            ? "Internal Beta entitlement"
+            : row.membership.billingState === "DISABLED"
+              ? "Billing not configured"
+              : "Provider billing"}
+        </small>
       </td>
       <td>
         <Usage
           value={row.usage.activeCollectibles}
           limit={row.usage.activeCollectiblesLimit}
-          percent={activePercent}
+          percent={row.usage.activeCollectiblesPercent}
+          label="Collectibles"
+          state={active}
         />
-      </td>
-      <td>
-        <strong>{row.usage.activeCollectiblesLimit ?? "—"}</strong>
-      </td>
-      <td>
         <Usage
           value={row.usage.monthlySubmissions}
           limit={row.usage.monthlySubmissionsLimit}
-          percent={monthlyPercent}
+          percent={row.usage.monthlySubmissionsPercent}
+          label="Submissions this period"
+          state={monthly}
         />
       </td>
       <td>
-        <strong>
-          {row.usage.concurrentIntake} / {row.usage.concurrentIntakeLimit ?? "—"}
-        </strong>
-        {row.usage.concurrentIntakeAtLimit ? (
-          <small className="admin-membership-at-limit">At limit</small>
-        ) : null}
+        <Usage
+          value={row.usage.concurrentIntake}
+          limit={row.usage.concurrentIntakeLimit}
+          percent={intakePercent}
+          label="Concurrent intake"
+          state={usageState(
+            row.usage.concurrentIntake,
+            row.usage.concurrentIntakeLimit,
+            intakePercent,
+          )}
+        />
       </td>
       <td>
-        <strong>{formatDate(nextBilling)}</strong>
+        <strong>{formatDate(row.billing.nextBillingDate)}</strong>
         <small>
           {row.membership.cancelAtPeriodEnd
             ? "Cancels at period end"
-            : status === "PAST_DUE"
-              ? "Past due"
-              : nextBilling
-                ? "Renews"
-                : "No billing date"}
+            : row.membership.billingState === "DISABLED"
+              ? "Billing not configured"
+              : "Renews"}
         </small>
       </td>
       <td>
-        <button
-          type="button"
-          className="admin-membership-action"
-          aria-label={`View ${row.collector.displayName} membership`}
-          onClick={() => update({ section: "users", user: row.collector.id, tab: "membership" })}
-        >
-          <MoreHorizontal aria-hidden="true" />
+        <button type="button" className="admin-membership-manage" onClick={open}>
+          Manage <span aria-hidden="true">→</span>
         </button>
       </td>
     </tr>
   );
 }
-
 function Usage({
   value,
   limit,
   percent,
+  label,
+  state,
 }: {
   value: number;
   limit: number | null;
-  percent: number;
+  percent: number | null;
+  label: string;
+  state: string;
 }) {
-  const state =
-    limit === null
-      ? "Normal"
-      : value > limit
-        ? "Over limit"
-        : value === limit
-          ? "At limit"
-          : percent >= 80
-            ? "Near limit"
-            : "Normal";
   return (
     <div className="admin-membership-usage">
-      <strong>{limit === null ? `${value}` : `${value} / ${limit}`}</strong>
-      <span className="admin-membership-progress">
-        <i style={{ width: `${percent}%` }} />
+      <div>
+        <strong>
+          {value}
+          {limit === null ? "" : ` / ${limit}`}
+        </strong>
+        <small>{label}</small>
+      </div>
+      <span
+        className="admin-membership-progress"
+        title={`${label}: ${percent === null ? "uncapped" : `${percent}% used`}`}
+      >
+        <i style={{ width: `${Math.min(percent ?? 0, 100)}%` }} />
       </span>
-      <small className={`usage-${state.toLowerCase().replace(" ", "-")}`}>{state}</small>
+      <em className={`usage-${state.toLowerCase().replaceAll(" ", "-")}`}>{state}</em>
     </div>
   );
 }
 
-function MembershipOverview({ data }: { data: AdminMembershipDirectoryResponse }) {
-  const total = Object.values(data.statusOverview).reduce((sum, value) => sum + value, 0) || 1;
-  const active = data.statusOverview.ACTIVE ?? 0;
-  const activePercent = Math.round((active / total) * 100);
-  const gradient = `conic-gradient(#00c9a7 0 ${activePercent}%, #f04444 ${activePercent}% ${activePercent + Math.round(((data.statusOverview.PAST_DUE ?? 0) / total) * 100)}%, #64748b 0)`;
+function MembershipDetail({ row, back }: { row: AdminMembershipRow; back: () => void }) {
   return (
-    <section className="admin-membership-side-card">
-      <h3>Membership Overview</h3>
-      <div className="admin-membership-donut" style={{ background: gradient }}>
+    <main className="admin-memberships-page admin-membership-detail">
+      <button type="button" className="admin-membership-back" onClick={back}>
+        <ArrowLeft aria-hidden="true" /> Back to memberships
+      </button>
+      <header className="admin-memberships-header">
         <div>
-          <strong>{total.toLocaleString("en-GB")}</strong>
-          <span>Total</span>
+          <p className="admin-memberships-eyebrow">MEMBERSHIP DETAIL</p>
+          <h2>{row.collector.displayName}</h2>
+          <p>
+            {row.collector.email} · {planLabel(row.plan.code)}
+          </p>
         </div>
-      </div>
-      <div className="admin-membership-legend">
-        {tabs.slice(1).map(([key, label]) => (
-          <span key={key}>
-            <i className={`legend-${key.toLowerCase()}`} />
-            {label}
-            <b>{data.statusOverview[key] ?? 0}</b>
-          </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function PlanDistribution({
-  data,
-  total,
-}: {
-  data: AdminMembershipDirectoryResponse;
-  total: number;
-}) {
-  return (
-    <section className="admin-membership-side-card">
-      <h3>Plan Distribution</h3>
-      {["ELITE", "PRO", "STARTER"].map((code) => {
-        const value = data.planDistribution[code] ?? 0;
-        const percent = total ? Math.round((value / total) * 100) : 0;
-        return (
-          <div className="admin-membership-plan-distribution" key={code}>
-            <div>
-              <strong>{planLabel(code)}</strong>
-              <span>
-                {value} ({percent}%)
-              </span>
-            </div>
+        <button
+          type="button"
+          className="admin-memberships-button"
+          onClick={() =>
+            window.location.assign(`/admin?section=users&user=${row.collector.id}&tab=membership`)
+          }
+        >
+          Open account
+        </button>
+      </header>
+      <section className="admin-membership-detail-grid">
+        <article>
+          <h3>Overview</h3>
+          <div className="admin-membership-detail-status">
+            <span
+              className={`admin-membership-status status-${row.membership.status.toLowerCase()}`}
+            >
+              {statusLabel(row.membership.status)}
+            </span>
             <span>
-              <i className={`plan-bar-${code.toLowerCase()}`} style={{ width: `${percent}%` }} />
+              {row.membership.betaEntitlement
+                ? "Internal Beta entitlement"
+                : row.membership.billingState === "DISABLED"
+                  ? "Billing provider not configured"
+                  : "Provider billing connected"}
             </span>
           </div>
-        );
-      })}
-      <small className="admin-membership-muted">Active, trialing and past-due memberships</small>
-    </section>
+          <dl>
+            <div>
+              <dt>Plan</dt>
+              <dd>{planLabel(row.plan.code)}</dd>
+            </div>
+            <div>
+              <dt>Renewal</dt>
+              <dd>{formatDate(row.billing.nextBillingDate)}</dd>
+            </div>
+            <div>
+              <dt>Membership ID</dt>
+              <dd>{row.id}</dd>
+            </div>
+            <div>
+              <dt>Updated</dt>
+              <dd>{formatDate(row.updatedAt)}</dd>
+            </div>
+          </dl>
+        </article>
+        <article>
+          <h3>Usage & capacity</h3>
+          <Usage
+            value={row.usage.activeCollectibles}
+            limit={row.usage.activeCollectiblesLimit}
+            percent={row.usage.activeCollectiblesPercent}
+            label="Active collectibles"
+            state={usageState(
+              row.usage.activeCollectibles,
+              row.usage.activeCollectiblesLimit,
+              row.usage.activeCollectiblesPercent,
+            )}
+          />
+          <Usage
+            value={row.usage.monthlySubmissions}
+            limit={row.usage.monthlySubmissionsLimit}
+            percent={row.usage.monthlySubmissionsPercent}
+            label="Monthly submissions"
+            state={usageState(
+              row.usage.monthlySubmissions,
+              row.usage.monthlySubmissionsLimit,
+              row.usage.monthlySubmissionsPercent,
+            )}
+          />
+          {row.warnings.length ? (
+            <ul className="admin-membership-warnings">
+              {row.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="admin-membership-good">
+              <ShieldCheck aria-hidden="true" /> Within configured limits
+            </p>
+          )}
+        </article>
+        <article>
+          <h3>Entitlements</h3>
+          <p className="admin-membership-muted">Effective limits from the assigned plan.</p>
+          <div className="admin-membership-entitlements">
+            {Object.entries(row.entitlements)
+              .filter(
+                ([key]) =>
+                  key.startsWith("max") || key.includes("Limit") || key.endsWith("Enabled"),
+              )
+              .map(([key, value]) => (
+                <span key={key}>
+                  <strong>{String(value)}</strong>
+                  <small>
+                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}
+                  </small>
+                </span>
+              ))}
+          </div>
+        </article>
+        <article>
+          <h3>Manage membership</h3>
+          <p className="admin-membership-muted">
+            Changes are provider-owned. This Beta environment has no billing provider configured.
+          </p>
+          <div className="admin-membership-actions">
+            <button type="button" disabled>
+              Change plan
+            </button>
+            <button type="button" disabled>
+              {row.membership.cancelAtPeriodEnd ? "Resume membership" : "Cancel at period end"}
+            </button>
+            <button type="button" disabled>
+              Grant Beta entitlement
+            </button>
+          </div>
+        </article>
+      </section>
+    </main>
   );
 }
-
 function MembershipLoading() {
   return (
     <main className="admin-memberships-page">
@@ -473,12 +539,8 @@ function MembershipLoading() {
         <span />
         <span />
         <span />
-        <span />
-        <span />
       </div>
       <section className="admin-membership-table-card admin-membership-loading-table">
-        <div />
-        <div />
         <div />
         <div />
         <div />

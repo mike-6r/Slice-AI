@@ -60,3 +60,7 @@ The Review Queue now uses a compact summary strip and single toolbar; queue rows
 ## Asset Operations post-receipt workstation — 2026-08-15
 
 Asset Operations now uses a full-width lifecycle queue and collectible operation detail. The queue is receipt-gated, uses approved media, exposes server-authoritative readiness/blockers, and keeps lifecycle mutations behind existing protected commands. See `ADMIN_ASSET_OPS_DESIGN_QA.md` and `ADMIN_ASSET_OPS_ISSUES.json`; authenticated mutation, responsive and accessibility evidence remain pending.
+
+## Memberships deep redesign — 2026-08-15
+
+Memberships now uses a compact full-width directory with status counts, operational filters, readable usage/capacity states, billing truth, Beta entitlement labeling, and an account-linked detail workspace. The API projection includes effective entitlements, warnings, over-limit state, and eligible provider actions. Provider-owned mutations remain explicitly unavailable while Beta billing is not configured. See `ADMIN_MEMBERSHIPS_DESIGN_QA.md`; authenticated staging, responsive, RBAC/IDOR, and provider mutation retests remain pending.
