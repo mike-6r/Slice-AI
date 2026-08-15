@@ -28,7 +28,7 @@ files to a VPS.
 6. Build the SSR frontend from the repository root with:
 
    ```bash
-   VITE_DATA_SOURCE=api VITE_API_BASE_URL="$APP_PUBLIC_URL" npm run build
+   VITE_APP_ENV=beta VITE_DATA_SOURCE=api VITE_API_BASE_URL="$APP_PUBLIC_URL" npm run build
    ```
 
 7. Run the Nest API on `127.0.0.1:3101` and the SSR adapter with
@@ -50,7 +50,7 @@ npx prisma generate
 npx prisma migrate deploy
 npm run build
 cd ..
-VITE_DATA_SOURCE=api VITE_API_BASE_URL="$APP_PUBLIC_URL" npm run build
+VITE_APP_ENV=beta VITE_DATA_SOURCE=api VITE_API_BASE_URL="$APP_PUBLIC_URL" npm run build
 sudo systemctl restart slice-api.service slice-web.service
 curl --fail http://127.0.0.1:3101/ready
 ```
