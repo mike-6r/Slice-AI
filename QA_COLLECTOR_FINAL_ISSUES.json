@@ -1,7 +1,7 @@
 {
   "audit": "SLICE COLLECTOR PANEL FINAL QA",
   "auditedAt": "2026-08-15",
-  "deployedCommit": "e6acfdaddd95e01b52011fbb6e7eecd7432f51ce",
+  "deployedCommit": "387d240248aaf0fa3047b9574ffc80237a13358c",
   "status": "FINAL_NO_GO_AUTHENTICATED_RETEST_REQUIRED",
   "issues": [
     {
@@ -9,7 +9,7 @@
       "severity": "HIGH",
       "status": "OPEN",
       "area": "Final authenticated Collector launch gate",
-      "resolution": "Collector route/function inventories are complete, but fresh authenticated workspace, listing, media, privacy, Ximilar, responsive, accessibility and request-health evidence requires a controlled Collector session."
+      "resolution": "Fresh controlled Collector evidence now covers workspace tabs and the approved Charizard read-only/media view. Listing Steps 1–6, fresh media, privacy, Ximilar, responsive, accessibility and request-health evidence remain open."
     },
     {
       "id": "COL-XIMILAR-001",
@@ -31,7 +31,7 @@
     "health": "PASS",
     "ready": "PASS",
     "prisma": "PASS",
-    "freshCollectorBrowser": "NOT_EXECUTED",
+    "freshCollectorBrowser": "PARTIAL_WORKSPACE_READ_ONLY_2026-08-15",
     "listingSteps1To6": "NOT_EXECUTED_THIS_PASS",
     "freshMedia": "NOT_EXECUTED_THIS_PASS",
     "crossUserPrivacy": "NOT_EXECUTED_THIS_PASS",

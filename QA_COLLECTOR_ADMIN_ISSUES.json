@@ -2,7 +2,7 @@
   "audit": "SLICE FULL COLLECTOR + ADMIN QA",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-15",
-  "deployedCommit": "e6acfdaddd95e01b52011fbb6e7eecd7432f51ce",
+  "deployedCommit": "387d240248aaf0fa3047b9574ffc80237a13358c",
   "issues": [
     {
       "id": "COL-ACTION-001",

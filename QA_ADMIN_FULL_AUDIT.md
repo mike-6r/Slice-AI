@@ -40,3 +40,11 @@ The route and control inventories are recorded in `ADMIN_ROUTE_INVENTORY.md` and
 The fresh authenticated Admin browser session and full cross-section mutation/RBAC/IDOR/responsive/accessibility/request-health matrix were not executed in this pass because no controlled Admin browser credentials/session were available to the agent and high-risk mutations require an action-time controlled fixture. The unauthenticated staging route correctly presents “Admin Console sign-in required”. This is an explicit evidence gap, not a GO claim.
 
 Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated browser matrix and controlled mutation retest are completed. Controlled internal read-only Beta remains available with the previously documented limitations. External invited Beta remains blocked by the existing privacy/provider and mutation-test gaps. The controlled Charizard remains untouched: approved submission, `beta-test-uk-intake`, reference `SLICE-3AA5144D`, no shipment, receipt, verification, valuation, custody, publication, issuance, funding, or order.
+
+## Fresh external-gate browser evidence — 2026-08-15
+
+- Operator `povnu@icloud.com` authenticated in a fresh staging tab. Admin Console loaded after authenticated navigation retry; no console errors were observed.
+- Overview, Accounts, Review Queue, Physical Intake, Collectibles, Asset Operations, Memberships, Finance & Trading, Trust & Support and Platform Operations were opened. Read-only account detail and Roles & Access controls rendered, including required-reason/disabled mutation validation.
+- Platform Operations showed API/PostgreSQL, storage, intake and PriceCharting operational, with Ximilar optional/not configured and truthful unknown/disabled telemetry.
+- The real Charizard submission was opened read-only from Physical Intake and remained `APPROVED`, `beta-test-uk-intake`, `SLICE-3AA5144D`, awaiting shipment details with no tracking entered.
+- Safe reversible mutations, cross-role RBAC/IDOR, staff boundaries, signed-media/intake privacy, responsive/accessibility and request-health matrices were not executed. Admin Phase 3 remains **NO-GO** for invited external release.

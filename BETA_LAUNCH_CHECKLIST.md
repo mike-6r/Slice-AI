@@ -434,7 +434,7 @@ Machine-readable gate: `EXTERNAL_BETA_RELEASE_GATE.json`
 
 ### Deployment and public site
 
-- [x] Git main and VPS are `9ef152b99dc3660965ba231f73226d62452c831c`.
+- [x] Git main and VPS are `387d240248aaf0fa3047b9574ffc80237a13358c`.
 - [x] API and web services active; `/health` and `/ready` return 200.
 - [x] Prisma reports 58 migrations with no pending migrations.
 - [x] API `APP_ENV=beta`; frontend rebuilt with `VITE_APP_ENV=beta`, API data mode and the staging API origin.
@@ -444,9 +444,9 @@ Machine-readable gate: `EXTERNAL_BETA_RELEASE_GATE.json`
 
 ### External release gates
 
-- [ ] Fresh independent Investor session and Dashboard / Portfolio / Wallet / Orders / Activity / Become Collector matrix.
-- [ ] Fresh independent Collector session and `/list` Steps 1–6, media replacement, privacy and request-health matrix.
-- [ ] Fresh Admin session, every primary section, controlled mutations and RBAC/IDOR matrix.
+- [ ] Fresh independent Investor session and Dashboard / Portfolio / Wallet / Orders / Activity / Become Collector matrix (supplied credential rejected; current controlled credential required).
+- [ ] Fresh independent Collector `/list` Steps 1–6, media replacement, privacy and request-health matrix (workspace/read-only Charizard evidence fresh; listing side effects not executed).
+- [ ] Fresh Admin controlled mutations and RBAC/IDOR matrix (primary sections/read-only Charizard evidence fresh; mutation/privacy matrices not executed).
 - [ ] Owner/authorized Staff/Admin signed private-media allow checks and second-Collector/Investor/anonymous deny checks.
 - [ ] Intake-address privacy matrix and Staff-only operation checks.
 - [ ] Fresh responsive and accessibility checks for all authenticated roles.

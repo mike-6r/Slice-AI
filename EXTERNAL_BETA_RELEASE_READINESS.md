@@ -8,7 +8,7 @@ This is the final software release gate for invited external Beta users. The dec
 
 ## Deployment
 
-- Git `main`: `9ef152b99dc3660965ba231f73226d62452c831c`
+- Git `main`: `387d240248aaf0fa3047b9574ffc80237a13358c`
 - VPS `/opt/slice/app`: same commit
 - `slice-api.service`: active
 - `slice-web.service`: active
@@ -32,14 +32,18 @@ Current public browser smoke after the corrected build:
 - Public API market/collector projections: 200 with empty items.
 - Browser console after corrected build: no errors or warnings in the public smoke.
 
-## Investor, Collector and Admin
+## Fresh authenticated browser evidence
 
-The latest authenticated evidence remains the prior controlled internal-Beta evidence recorded in `QA_BETA_AUDIT.md` and the role-specific QA reports. A fresh independent Investor, Collector, second-Collector, Staff and Admin session was not completed in this gate because credentials were not entered into the browser during this run. Therefore these are not represented as fresh external-release passes.
+Fresh staging browser evidence was collected on 15 Aug 2026. The public smoke remains PASS. The operator account (`povnu@icloud.com`) authenticated and the Admin Console loaded after the authenticated navigation retry; all primary Admin sections, the read-only account detail, platform health view and the controlled Charizard intake view were exercised without console errors. The controlled Charizard remained APPROVED at `beta-test-uk-intake`, reference `SLICE-3AA5144D`, with no shipment or other physical lifecycle state changed.
+
+The verified controlled Collector account (`demo-collector@slicecollectable.com`) authenticated successfully. Collector workspace Overview, My Collectibles, Submissions, Your Actions, Subscription, Public Profile and Settings loaded without console errors. The approved Charizard view and its Media tab showed the existing front/back evidence and the correct read-only next action (ship only when a real shipment occurs). The full `/list` Steps 1–6 flow, fresh uploads, private-media matrix, intake-address matrix and Ximilar action were not executed because they require a disposable side-effecting QA record and separate role credentials.
+
+The previously supplied plural-domain demo credentials were rejected. A fresh Investor session could not be established, so the Investor matrix remains open. No credentials were written to artifacts, logs or source.
 
 Open release evidence:
 
-- `ADMIN-PHASE3-001` — fresh Admin route, mutation, RBAC/IDOR, responsive, accessibility and request-health walkthrough required.
-- `COLLECTOR-PHASE3-001` — fresh Collector Steps 1–6, media, privacy, Ximilar, responsive, accessibility and request-health walkthrough required.
+- `ADMIN-PHASE3-001` — read-only routes are fresh PASS, but safe reversible mutation, RBAC/IDOR, responsive, accessibility and request-health evidence is still required.
+- `COLLECTOR-PHASE3-001` — workspace and controlled Charizard views are fresh PASS, but Steps 1–6, fresh media, privacy, Ximilar, responsive, accessibility and request-health evidence is still required.
 - `COL-PRIVATE-MEDIA-001` — owner/Staff/Admin allow matrix and second-Collector/Investor/anonymous deny matrix require a fresh signed-download/address-privacy exercise.
 - Investor final browser matrix (Dashboard, Portfolio, Wallet, Orders, Activity, Become Collector) is not fresh evidence for this release.
 

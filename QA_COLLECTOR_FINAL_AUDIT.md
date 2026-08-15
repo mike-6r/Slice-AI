@@ -30,6 +30,8 @@ Prior authenticated evidence remains in `QA_COLLECTOR_ADMIN_AUDIT.md`: Collector
 
 **Collector Panel: NO-GO for the final External Invited Beta gate.**
 
+Fresh update: the verified controlled Collector account authenticated successfully. Workspace Overview, My Collectibles, Submissions, Your Actions, Subscription, Public Profile and Settings loaded without console errors. The approved Charizard opened read-only as `APPROVED`; its Media tab showed SAFE front/back evidence and the correct next action to ship only after a real physical shipment. The full `/list` Steps 1–6 flow, disposable uploads, private-media/intake matrix, Ximilar action, responsive/accessibility and request-health checks remain open. The supplied plural-domain demo credentials were rejected; no Investor session was inferred.
+
 The open gate is missing fresh authenticated proof for the full six-step listing flow, fresh front/back upload, cross-user private-media/address privacy, optional Ximilar behavior, mobile/accessibility, request-health and duplicate-request checks. No new Blocker/Critical code defect was established in this pass, and no real-world event was fabricated.
 
 See `COLLECTOR_ROUTE_INVENTORY.md` and `COLLECTOR_FUNCTION_INVENTORY.json` for the implementation/control map.

@@ -22,7 +22,7 @@
       "severity": "HIGH",
       "status": "OPEN",
       "area": "Final authenticated Admin launch gate",
-      "resolution": "Route and control inventories are complete, but a fresh authenticated browser session, cross-role RBAC/IDOR matrix, controlled mutation walkthrough, responsive/accessibility sweep, and request-health capture still require controlled staging access."
+      "resolution": "Fresh operator Admin browser evidence now covers the primary sections, read-only account detail, Platform Operations and the controlled Charizard intake view. Safe reversible mutation, cross-role RBAC/IDOR, responsive/accessibility and request-health evidence remain open."
     }
   ],
   "verification": {
@@ -33,7 +33,7 @@
     "serverBuild": "PASS",
     "frontendBuild": "PASS",
     "mutationBrowserWalkthrough": "NOT_EXECUTED",
-    "phase3AuthenticatedBrowserWalkthrough": "NOT_EXECUTED",
+    "phase3AuthenticatedBrowserWalkthrough": "PARTIAL_READ_ONLY_2026-08-15",
     "routeAndControlInventory": "CREATED",
     "finalDecision": "NO_GO"
   },

@@ -48,8 +48,9 @@
     "ximilar": { "appCalls": 1, "providerCalls": 0, "result": "NOT_CONFIGURED", "cachedRefresh": "PASS" },
     "anonymousR2": { "object": "DENIED", "bucketListing": "DENIED" },
     "responsive": { "viewports": ["390x844", "768x1024", "1920x1080"], "adminCatalogueAndPlatformHorizontalOverflow": "NO" },
-    "phase3": { "deployment": "PASS", "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "NOT_EXECUTED", "finalDecision": "NO_GO" },
-    "collectorFinal": { "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "NOT_EXECUTED", "finalDecision": "NO_GO" }
+    "phase3": { "deployment": "PASS", "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "PARTIAL_ADMIN_READ_ONLY", "finalDecision": "NO_GO" },
+    "collectorFinal": { "routeInventory": "CREATED", "functionInventory": "CREATED", "freshAuthenticatedBrowser": "PARTIAL_COLLECTOR_WORKSPACE_READ_ONLY", "finalDecision": "NO_GO" },
+    "externalGate2026_08_15": { "admin": "PARTIAL_PASS", "collector": "PARTIAL_PASS", "investor": "CREDENTIAL_REJECTED", "privateMedia": "NOT_EXECUTED", "intakePrivacy": "NOT_EXECUTED", "physicalLifecycle": "NOT_TOUCHED" }
   },
   "evidence": [
     "QA_BETA_AUDIT.md",

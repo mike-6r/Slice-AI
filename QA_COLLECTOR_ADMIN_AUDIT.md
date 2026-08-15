@@ -150,6 +150,8 @@ Decision: Collector and Admin are **GO for controlled internal Beta**. Security 
 
 ## Collector final QA gate — 2026-08-15
 
+Fresh external-gate evidence: the verified controlled Collector workspace authenticated successfully and all seven workspace tabs loaded without console errors. The approved Charizard read-only view and Media tab showed existing SAFE front/back evidence and no physical lifecycle progression. `/list` Steps 1–6, fresh media replacement, signed-media/intake privacy, staff matrix, responsive/accessibility and request-health checks remain open; the Investor credential supplied for this run was rejected.
+
 - Deployment rechecked at Git/VPS `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce`; API/web active; `/health` and `/ready` PASS; Prisma is current.
 - `COLLECTOR_ROUTE_INVENTORY.md`, `COLLECTOR_FUNCTION_INVENTORY.json`, `QA_COLLECTOR_FINAL_AUDIT.md`, and `QA_COLLECTOR_FINAL_ISSUES.json` are the current Collector QA artifacts.
 - A fresh browser tab reached `/collector-workspace` and correctly rendered the private-workspace sign-in boundary. No controlled Collector credentials were available in this pass, so no sensitive data or mutation was entered.

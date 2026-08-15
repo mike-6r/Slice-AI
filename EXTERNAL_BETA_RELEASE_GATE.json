@@ -1,8 +1,8 @@
 {
   "decision": "NO_GO",
-  "commit": "9ef152b99dc3660965ba231f73226d62452c831c",
+  "commit": "387d240248aaf0fa3047b9574ffc80237a13358c",
   "deployment": {
-    "vpsHead": "9ef152b99dc3660965ba231f73226d62452c831c",
+    "vpsHead": "387d240248aaf0fa3047b9574ffc80237a13358c",
     "api": "ACTIVE",
     "web": "ACTIVE",
     "health": "PASS",
@@ -50,8 +50,8 @@
     "priorRbacChecks": "PASS_WITH_FRESH_RETEST_REQUIRED",
     "anonymousR2": "DENIED",
     "bucketListing": "DENIED",
-    "signedDownloadMatrix": "NOT_EXECUTED",
-    "intakePrivacyMatrix": "NOT_EXECUTED",
+    "signedDownloadMatrix": "NOT_EXECUTED_FRESH_ROLE_CREDENTIALS_REQUIRED",
+    "intakePrivacyMatrix": "NOT_EXECUTED_FRESH_ROLE_CREDENTIALS_REQUIRED",
     "secretLeakage": "NONE_OBSERVED"
   },
   "providers": {
@@ -63,11 +63,29 @@
   },
   "roles": {
     "public": "PASS",
-    "investor": "NO_GO_FRESH_EVIDENCE_REQUIRED",
-    "collector": "NO_GO_FRESH_EVIDENCE_REQUIRED",
+    "investor": "NO_GO_CREDENTIAL_REJECTED",
+    "collector": "NO_GO_STEPS_4_TO_6_AND_PRIVACY_NOT_EXECUTED",
     "secondCollector": "NO_GO_FRESH_PRIVACY_MATRIX_REQUIRED",
     "staff": "NOT_EXECUTED",
-    "admin": "NO_GO_FRESH_EVIDENCE_REQUIRED"
+    "admin": "NO_GO_MUTATION_RBAC_IDOR_MATRIX_NOT_EXECUTED"
+  },
+  "freshBrowserEvidence": {
+    "date": "2026-08-15",
+    "public": "PASS",
+    "admin": "PARTIAL_PASS",
+    "adminRoutes": "PASS_AFTER_AUTHENTICATED_RETRY",
+    "adminPrimarySections": "PASS_READ_ONLY",
+    "adminAccountDetail": "PASS_READ_ONLY",
+    "adminControlledCharizard": "PASS_READ_ONLY_UNCHANGED",
+    "collector": "PARTIAL_PASS",
+    "collectorWorkspaceTabs": "PASS",
+    "collectorControlledCharizard": "PASS_READ_ONLY_UNCHANGED",
+    "collectorListSteps": "NOT_EXECUTED",
+    "investor": "NOT_EXECUTED_CREDENTIAL_REJECTED",
+    "credentialIssue": "The supplied demo Investor and plural-domain demo Collector credentials were rejected. The verified Collector account uses the singular slicecollectable.com address; Collector login passed with that address. Investor address/password still requires a current controlled credential.",
+    "privateMediaMatrix": "NOT_EXECUTED",
+    "intakePrivacyMatrix": "NOT_EXECUTED",
+    "physicalLifecycle": "NOT_TOUCHED"
   },
   "operations": {
     "postgres": "PASS",
