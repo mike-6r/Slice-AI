@@ -175,6 +175,31 @@ export function Portfolio() {
     queryFn: () => services.portfolio.performance(performanceRange),
     enabled: isAuthenticated,
   });
+  // Showcase fixtures are published for Market/Vault discovery, but they are
+  // not customer portfolio positions. Keep the wallet balance while keeping
+  // those seeded records out of the beta portfolio projection.
+  const displayHoldings = useMemo(
+    () => (holdings.data ?? []).filter((holding) => !isShowcaseAssetSlug(holding.slug)),
+    [holdings.data],
+  );
+  const displaySummary = useMemo(
+    () => (summary.data ? portfolioSummaryWithoutShowcase(summary.data, displayHoldings) : null),
+    [displayHoldings, summary.data],
+  );
+  const displayHoldingsQuery = useMemo(
+    () =>
+      holdings.data
+        ? ({ ...holdings, data: displayHoldings } as UseQueryResult<PortfolioHolding[]>)
+        : holdings,
+    [displayHoldings, holdings],
+  );
+  const displaySummaryQuery = useMemo(
+    () =>
+      displaySummary
+        ? ({ ...summary, data: displaySummary } as UseQueryResult<PortfolioSummary>)
+        : summary,
+    [displaySummary, summary],
+  );
   const previousTab = useRef(tab);
   useEffect(() => {
     if (previousTab.current === tab) return;
@@ -185,19 +210,19 @@ export function Portfolio() {
     () =>
       Array.from(
         new Set(
-          (holdings.data ?? [])
+          displayHoldings
             .map((holding) => holding.category?.trim())
             .filter((category): category is string => Boolean(category)),
         ),
       ),
-    [holdings.data],
+    [displayHoldings],
   );
   const visibleHoldings = useMemo(
     () =>
       holdingFilter === "ALL"
-        ? holdings.data
-        : (holdings.data ?? []).filter((holding) => holding.category === holdingFilter),
-    [holdingFilter, holdings.data],
+        ? displayHoldings
+        : displayHoldings.filter((holding) => holding.category === holdingFilter),
+    [displayHoldings, holdingFilter],
   );
   const searchedHoldings = useMemo(() => {
     const normalized = holdingSearch.trim().toLowerCase();
@@ -220,13 +245,13 @@ export function Portfolio() {
     (summary.error instanceof ApiError && summary.error.status === 401);
   if (authRequired) return <PortfolioAccessRequired />;
 
-  const holdingsForOrders = holdings.data ?? summary.data?.holdings ?? [];
+  const holdingsForOrders = displayHoldings;
 
   return (
     <main className="portfolio-page portfolio-page--approved">
       <div className="page-shell portfolio-shell">
         <PortfolioHeading
-          query={summary}
+          query={displaySummaryQuery}
           tab={tab}
           holdingSearch={holdingSearch}
           holdingFilter={holdingFilter}
@@ -242,16 +267,16 @@ export function Portfolio() {
         />
         <PortfolioTabs active={tab} />
         {tab === "holdings" ? (
-          <HoldingsKpis query={summary} />
+          <HoldingsKpis query={displaySummaryQuery} />
         ) : tab === "overview" ? (
-          <PortfolioKpis query={summary} />
+          <PortfolioKpis query={displaySummaryQuery} />
         ) : null}
         {tab === "overview" ? (
           <>
             <section className="portfolio-overview-content" aria-label="Portfolio overview">
               <HoldingsPanel
-                summary={summary}
-                query={holdings}
+                summary={displaySummaryQuery}
+                query={displayHoldingsQuery}
                 categories={categories}
                 filter={holdingFilter}
                 onFilterChange={setHoldingFilter}
@@ -259,12 +284,12 @@ export function Portfolio() {
                 compact
               />
               <PortfolioPerformancePanel
-                query={summary}
+                query={displaySummaryQuery}
                 performance={performance}
                 range={performanceRange}
                 onRangeChange={setPerformanceRange}
               />
-              <AllocationPanel query={summary} />
+              <AllocationPanel query={displaySummaryQuery} />
             </section>
             <section className="portfolio-overview-bottom" aria-label="Recent portfolio updates">
               <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
@@ -273,8 +298,8 @@ export function Portfolio() {
           </>
         ) : tab === "holdings" ? (
           <HoldingsExperience
-            summary={summary}
-            query={holdings}
+            summary={displaySummaryQuery}
+            query={displayHoldingsQuery}
             holdings={pagedHoldings}
             totalMatches={searchedHoldings.length}
             view={holdingView}
@@ -388,7 +413,10 @@ function PortfolioOrdersExperience({
       onRefresh();
     },
   });
-  const allOrders = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  const allOrders = useMemo(
+    () => (query.data?.items ?? []).filter((order) => !isShowcaseAssetSlug(order.assetSlug)),
+    [query.data?.items],
+  );
   const holdingByAsset = useMemo(
     () => new Map(holdings.map((holding) => [holding.assetId, holding])),
     [holdings],
@@ -1146,7 +1174,9 @@ function RecentOrdersPanel({
   holdings: PortfolioHolding[];
 }) {
   const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
-  const items = (query.data?.items ?? []).slice(0, 4);
+  const items = (query.data?.items ?? [])
+    .filter((order) => !isShowcaseAssetSlug(order.assetSlug))
+    .slice(0, 4);
   return (
     <PortfolioPanel
       title="Recent orders"
@@ -1488,7 +1518,7 @@ function PortfolioPerformancePanel({
               </p>
             ) : null}
           </div>
-          <PerformanceChart query={performance} />
+          <PerformanceChart query={performance} hasPortfolioData={query.data.holdings.length > 0} />
           <dl className="portfolio-performance-periods">
             <div>
               <dt>Current marked value</dt>
@@ -1521,7 +1551,7 @@ function PortfolioPerformancePanel({
             <div>
               <dt>All-time high</dt>
               <dd>
-                {performance.data?.points.length
+                {query.data.holdings.length > 0 && performance.data?.points.length
                   ? formatPortfolioMoney(
                       performance.data.points.reduce(
                         (max, point) =>
@@ -1563,8 +1593,14 @@ function PerformancePeriods({
   );
 }
 
-function PerformanceChart({ query }: { query: UseQueryResult<PortfolioPerformance> }) {
-  const points = query.data?.points ?? [];
+function PerformanceChart({
+  query,
+  hasPortfolioData,
+}: {
+  query: UseQueryResult<PortfolioPerformance>;
+  hasPortfolioData: boolean;
+}) {
+  const points = hasPortfolioData ? (query.data?.points ?? []) : [];
   if (query.isLoading) return <ChartSkeleton />;
   if (query.isError) {
     return (
@@ -2218,8 +2254,10 @@ function PortfolioActivityExperience({
       buildPortfolioActivityEvents(
         accountActivity.data?.items ?? [],
         transactions.data?.items ?? [],
-        orders.data?.items ?? [],
-        executions.data?.items ?? [],
+        (orders.data?.items ?? []).filter((order) => !isShowcaseAssetSlug(order.assetSlug)),
+        (executions.data?.items ?? []).filter(
+          (execution) => !isShowcaseAssetSlug(execution.assetSlug),
+        ),
         assets,
         holdings,
       ),
@@ -2935,6 +2973,48 @@ function PortfolioAccessRequired() {
       </section>
     </main>
   );
+}
+
+function isShowcaseAssetSlug(slug: string | null | undefined) {
+  return typeof slug === "string" && slug.startsWith("slice-demo-");
+}
+
+function portfolioSummaryWithoutShowcase(
+  summary: PortfolioSummary,
+  holdings: PortfolioHolding[],
+): PortfolioSummary {
+  const hasCompleteMarks =
+    holdings.length > 0 && holdings.every((holding) => holding.estimatedValueMinor !== null);
+  const estimatedHoldingsValueMinor = hasCompleteMarks
+    ? holdings
+        .reduce((total, holding) => total + BigInt(holding.estimatedValueMinor!), 0n)
+        .toString()
+    : null;
+  const hasCompleteCostBasis =
+    holdings.length > 0 && holdings.every((holding) => holding.costBasisMinor !== null);
+  const investedCostMinor = hasCompleteCostBasis
+    ? holdings.reduce((total, holding) => total + BigInt(holding.costBasisMinor!), 0n).toString()
+    : null;
+  const unrealisedPnlMinor =
+    estimatedHoldingsValueMinor !== null && investedCostMinor !== null
+      ? (BigInt(estimatedHoldingsValueMinor) - BigInt(investedCostMinor)).toString()
+      : null;
+  return {
+    ...summary,
+    holdings,
+    estimatedHoldingsValueMinor,
+    estimatedPortfolioValueMinor:
+      estimatedHoldingsValueMinor === null
+        ? null
+        : (BigInt(summary.cash.totalMinor) + BigInt(estimatedHoldingsValueMinor)).toString(),
+    valuationStatus: hasCompleteMarks ? "FULL" : holdings.length ? "PARTIAL" : "UNAVAILABLE",
+    investedCostMinor,
+    unrealisedPnlMinor,
+    unrealisedPnlPercent:
+      unrealisedPnlMinor !== null && investedCostMinor !== null
+        ? percentageOf(unrealisedPnlMinor, investedCostMinor)
+        : null,
+  };
 }
 
 const ALLOCATION_COLOURS = ["#23d9b4", "#8a64e9", "#f4bc28", "#3d7fe6", "#8791a1"];
