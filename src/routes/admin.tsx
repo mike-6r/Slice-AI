@@ -55,6 +55,7 @@ import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
+import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
@@ -2042,11 +2043,9 @@ function ReviewQueue({
     <div className="admin-review-queue">
       <div className="admin-review-queue-heading">
         <div>
-          <p className="admin-breadcrumb">
-            Submissions <span>›</span> Review Queue
-          </p>
-          <h2>Review Queue</h2>
-          <p>Review and evaluate submissions before acceptance into Slice.</p>
+          <p className="admin-breadcrumb">Submissions</p>
+          <h2>Submissions awaiting review</h2>
+          <p>Check the evidence, confirm the details, then choose the next step.</p>
         </div>
       </div>
       <div className="admin-review-summary-strip">
@@ -2171,7 +2170,6 @@ function ReviewQueue({
                   </th>
                   <th>Submission</th>
                   <th>Collector</th>
-                  <th>Card / Item</th>
                   <th>Evidence</th>
                   <th>Research</th>
                   <th>Priority</th>
@@ -2194,11 +2192,11 @@ function ReviewQueue({
                       <td>
                         <div className="admin-review-submission-cell">
                           <span className="admin-review-thumb">
-                            {item.thumbnailUrl ? (
-                              <img src={item.thumbnailUrl} alt="" />
-                            ) : (
-                              <small>No front image</small>
-                            )}
+                            <AdminReviewMedia
+                              src={item.thumbnailUrl}
+                              alt=""
+                              fallback={<small>Preview unavailable</small>}
+                            />
                           </span>
                           <span>
                             <strong>{item.collectible.title}</strong>
@@ -2221,25 +2219,6 @@ function ReviewQueue({
                               : "No username"}
                           </small>
                           {item.collector.membership ? <em>{item.collector.membership}</em> : null}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="admin-review-collectible">
-                          <strong>{item.collectible.title}</strong>
-                          <small>
-                            {[
-                              item.collectible.variant,
-                              item.collectible.set,
-                              item.collectible.cardNumber,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "Identity details pending"}
-                          </small>
-                          <small>
-                            {[item.collectible.grader, item.collectible.grade]
-                              .filter(Boolean)
-                              .join(" ") || "Grade not provided"}
-                          </small>
                         </div>
                       </td>
                       <td>
@@ -2290,7 +2269,7 @@ function ReviewQueue({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={8}>
                       <AdminEmpty
                         detail={
                           searchInput || filters.priority || filters.evidence || filters.research

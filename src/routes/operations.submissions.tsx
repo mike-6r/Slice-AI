@@ -6,6 +6,7 @@ import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
 import type { AssetSubmission, SubmissionReviewDetail } from "@/domain";
 import { Wordmark } from "@/components/layout/MainNavigation";
+import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/operations/submissions")({
@@ -134,7 +135,11 @@ export function SubmissionOperationsPage() {
                 onClick={() => choose(item.id)}
               >
                 <span className="admin-review-queue-thumb">
-                  {item.collectible.title.slice(0, 1)}
+                  <AdminReviewMedia
+                    src={item.thumbnailUrl}
+                    alt=""
+                    fallback={<span>{item.collectible.title.slice(0, 1)}</span>}
+                  />
                 </span>
                 <span className="min-w-0 text-left">
                   <strong className="block truncate">{item.collectible.title}</strong>
@@ -310,10 +315,7 @@ function ReviewDetail({
     <section className="admin-review-detail-main min-w-0">
       <header className="admin-review-header">
         <div className="min-w-0">
-          <p className="page-kicker">
-            Submissions <span aria-hidden="true">›</span> Review queue{" "}
-            <span aria-hidden="true">›</span> Submission review
-          </p>
+          <p className="page-kicker">Submission review</p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h2 className="truncate text-2xl font-semibold">
               {collectible.title}
@@ -344,11 +346,11 @@ function ReviewDetail({
       <div className="admin-review-top-grid mt-5">
         <section className="admin-panel-card admin-review-collectible">
           <div className="admin-review-card-media">
-            {collectible.thumbnailUrl ? (
-              <img src={collectible.thumbnailUrl} alt={`${collectible.title} front`} />
-            ) : (
-              <span className="admin-review-missing-media">No front image</span>
-            )}
+            <AdminReviewMedia
+              src={collectible.thumbnailUrl}
+              alt={`${collectible.title} front`}
+              fallback={<span>No front preview</span>}
+            />
           </div>
           <div className="min-w-0">
             <p className="page-kicker">{collectible.category}</p>
@@ -708,11 +710,11 @@ function Evidence({
             onClick={() => setFocused(item.id)}
           >
             <div className="admin-review-evidence-image">
-              {item.thumbnailUrl ? (
-                <img src={item.thumbnailUrl} alt={`${label(item.slot)} evidence`} />
-              ) : (
-                <span className="admin-review-missing-media">{label(item.slot)} image missing</span>
-              )}
+              <AdminReviewMedia
+                src={item.thumbnailUrl}
+                alt={`${label(item.slot)} evidence`}
+                fallback={<span>{label(item.slot)} preview unavailable</span>}
+              />
             </div>
             <strong>{label(item.slot)}</strong>
             <small>
@@ -736,11 +738,11 @@ function Evidence({
               </button>
             </div>
             <div className="admin-review-lightbox-media mt-4">
-              {active.thumbnailUrl ? (
-                <img src={active.thumbnailUrl} alt={`${label(active.slot)} evidence enlarged`} />
-              ) : (
-                <span>Evidence preview is not available from secure storage.</span>
-              )}
+              <AdminReviewMedia
+                src={active.thumbnailUrl}
+                alt={`${label(active.slot)} evidence enlarged`}
+                fallback={<span>Evidence preview is not available from secure storage.</span>}
+              />
             </div>
           </div>
         </div>
