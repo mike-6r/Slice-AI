@@ -24358,6 +24358,92 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   }
 }
 
+/* Homepage journey: keep the four-step story aligned and give each card room
+   for its explanation and action without allowing either to collide. */
+.approved-home__section-heading h2 {
+  min-width: 0;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.approved-home__how-intro {
+  max-width: 52rem;
+  line-height: 1.65;
+}
+
+.approved-home__how-guide {
+  min-width: 0;
+}
+
+.approved-home__how-guide-points {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.approved-home__how-guide-points span {
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.approved-home__how-guide-points span:not(:last-child) {
+  border-right-color: rgba(34, 211, 165, 0.24);
+}
+
+.approved-home__how-grid li {
+  display: flex;
+  min-width: 0;
+  min-height: 12.4rem;
+  flex-direction: column;
+}
+
+.approved-home__how-grid li:not(:last-child)::after {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: -0.58rem;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-top: 1px solid rgba(34, 211, 165, 0.48);
+  border-right: 1px solid rgba(34, 211, 165, 0.48);
+  content: "";
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.approved-home__how-grid h3,
+.approved-home__how-grid p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.approved-home__how-grid p {
+  max-width: 28rem;
+  line-height: 1.58;
+}
+
+.approved-home__how-grid .approved-home__text-link {
+  position: static;
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 0.72rem;
+  line-height: 1.25;
+}
+
+@media (max-width: 760px) {
+  .approved-home__how-grid li:not(:last-child)::after {
+    display: none;
+  }
+
+  .approved-home__how-grid li {
+    min-height: 11.5rem;
+  }
+}
+
+@media (max-width: 460px) {
+  .approved-home__how-guide-points {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* Keep explanatory copy readable instead of forcing it into a single line. */
 .approved-home__ownership-node p {
   display: -webkit-box;

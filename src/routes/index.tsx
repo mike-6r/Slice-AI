@@ -49,28 +49,30 @@ const howSliceWorks = [
     number: "01",
     label: "Discover",
     icon: <Sparkles />,
-    title: "Find a collectible",
+    title: "Find a real collectible",
     detail:
-      "Browse published cards and see the identity, grade and market information behind each one.",
-    action: "Browse cards",
+      "Explore authenticated cards with their identity, grade, provenance and market context.",
+    action: "Browse the market",
     to: "/marketplace" as const,
   },
   {
     number: "02",
     label: "Choose",
     icon: <CircleDollarSign />,
-    title: "Choose your ownership",
-    detail: "Pick an ownership position instead of buying the entire collectible in one go.",
-    action: "See ownership",
+    title: "Choose an ownership position",
+    detail:
+      "Review the whole-collectible reference, available ownership and price per unit before you commit.",
+    action: "Review ownership",
     to: "/marketplace" as const,
   },
   {
     number: "03",
     label: "Track",
     icon: <ChartNoAxesCombined />,
-    title: "See your position",
-    detail: "Your portfolio shows what settled, what it cost and how your position is changing.",
-    action: "View portfolio",
+    title: "Track your position",
+    detail:
+      "Your portfolio records settled ownership, cost basis, value and activity in one place.",
+    action: "Open portfolio",
     to: "/portfolio" as const,
   },
   {
@@ -78,8 +80,9 @@ const howSliceWorks = [
     label: "Trade",
     icon: <TrendingUp />,
     title: "Trade when supported",
-    detail: "Place a buy or sell order when that collectible has an active, supported market.",
-    action: "Explore trading",
+    detail:
+      "When a market is active, submit a buy or sell order and review its status as it moves.",
+    action: "Explore supported markets",
     to: "/marketplace" as const,
   },
 ] as const;
@@ -752,16 +755,17 @@ function HowSliceWorks() {
         headingId="how-slice-heading"
       />
       <p className="approved-home__how-intro">
-        The short version: find a collectible, choose an ownership position, then track it in one
-        simple portfolio. Slice keeps the card, the terms and your account activity easy to follow.
+        Slice connects a real collectible to a clear, trackable ownership record. Start with the
+        card, understand the terms, follow your position in Portfolio, then trade when a supported
+        market is available.
       </p>
       <div className="approved-home__how-guide">
         <div className="approved-home__how-guide-copy">
-          <span className="approved-home__how-guide-badge">New here?</span>
-          <strong>Start with the idea, not the jargon.</strong>
+          <span className="approved-home__how-guide-badge">New here? Start here.</span>
+          <strong>One real card. Four clear moments.</strong>
           <p>
-            A real collectible sits underneath. Slice defines the ownership terms, and your
-            portfolio keeps the record after an order settles.
+            The collectible stays at the centre. Slice makes the ownership terms understandable,
+            then keeps your settled position and activity together in one calm workspace.
           </p>
         </div>
         <div className="approved-home__how-guide-points" aria-label="The Slice model at a glance">
@@ -773,6 +777,9 @@ function HowSliceWorks() {
           </span>
           <span>
             <b>03</b> Your record
+          </span>
+          <span>
+            <b>04</b> Supported trading
           </span>
         </div>
       </div>
