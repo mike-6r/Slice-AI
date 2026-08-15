@@ -16,7 +16,11 @@ import { useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { isBetaEnvironment } from "@/config/environment";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { useFeaturedAssets } from "@/queries/hooks";
+import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
+import type { Asset } from "@/domain";
+import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
+import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
+import { formatPercent } from "@/lib/format";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -44,29 +48,33 @@ const howSliceWorks = [
   {
     number: "01",
     icon: <Sparkles />,
-    title: "Discover",
-    detail: "Browse authenticated collectible assets available through Slice.",
+    title: "Find a card",
+    detail: "Browse published collectibles and see the market information behind each one.",
+    action: "Browse cards",
     to: "/marketplace" as const,
   },
   {
     number: "02",
     icon: <CircleDollarSign />,
-    title: "Own a Slice",
-    detail: "Choose an ownership position without buying the entire collectible.",
+    title: "Choose your ownership",
+    detail: "Pick an ownership amount instead of buying the entire collectible at once.",
+    action: "See ownership",
     to: "/marketplace" as const,
   },
   {
     number: "03",
     icon: <ChartNoAxesCombined />,
-    title: "Track",
-    detail: "Track your ownership, cost basis and portfolio activity.",
+    title: "See your position",
+    detail: "Your portfolio shows what you own, what it cost and how it is performing.",
+    action: "View portfolio",
     to: "/portfolio" as const,
   },
   {
     number: "04",
     icon: <TrendingUp />,
-    title: "Trade",
-    detail: "Buy or sell supported share positions through the marketplace.",
+    title: "Trade when supported",
+    detail: "Place a buy or sell order when the collectible has an active market.",
+    action: "Explore trading",
     to: "/marketplace" as const,
   },
 ] as const;
@@ -74,6 +82,7 @@ const howSliceWorks = [
 function HomePage() {
   useCurrency();
   const { isAuthenticated } = useSession();
+  const trending = useTrendingAssets();
 
   return (
     <div className="approved-home">
@@ -129,26 +138,26 @@ function HomePage() {
         <div className="approved-home__features approved-home__features--four">
           <FeatureCard
             icon={<Boxes />}
-            title="Fractional ownership"
-            detail="Own a position in high-value collectible assets instead of purchasing the entire card."
+            title="Own part of a collectible"
+            detail="Start with an ownership position instead of buying the entire card."
             to="/marketplace"
           />
           <FeatureCard
             icon={<TrendingUp />}
-            title="Marketplace"
-            detail="Discover collectible share opportunities and manage supported buy or sell orders."
+            title="Find cards and market data"
+            detail="Compare published collectibles, grades and the latest available market information."
             to="/marketplace"
           />
           <FeatureCard
             icon={<ChartNoAxesCombined />}
-            title="Portfolio"
-            detail="Track ownership, cost basis and activity in one place."
+            title="Know what you own"
+            detail="See ownership, cost basis and activity in one clear portfolio."
             to="/portfolio"
           />
           <FeatureCard
             icon={<UsersRound />}
-            title="Collector network"
-            detail="Discover collectors and view public collectible catalogues across the platform."
+            title="Discover collectors"
+            detail="Explore public collector profiles and the collectibles they have published."
             to="/collectors"
           />
         </div>
@@ -156,54 +165,57 @@ function HomePage() {
 
       <section className="page-shell approved-home__section" aria-labelledby="trending-heading">
         <SectionHeading
-          eyebrow={isBetaEnvironment ? "Static showcase examples" : "Illustrative market examples"}
-          title={isBetaEnvironment ? "Collectibles to explore." : "Trending opportunities."}
+          eyebrow={isBetaEnvironment ? "Live market pulse" : "Illustrative market examples"}
+          title={isBetaEnvironment ? "What collectors are watching." : "Trending opportunities."}
           action="View all markets"
           to="/marketplace"
           headingId="trending-heading"
         />
         {isBetaEnvironment ? (
-          <p className="approved-home__showcase-note">
-            These card references are static educational examples. They are not published Slice
-            assets, live market quotes or available ownership.
-          </p>
-        ) : null}
-        <div className="approved-home__trending" data-testid="homepage-trending-assets">
-          {HOMEPAGE_TRENDING_ASSETS.map((asset) => (
-            <ShowcaseAssetLink
-              key={asset.showcaseKey}
-              asset={asset}
-              staticOnly={isBetaEnvironment}
-              className="approved-home__asset-card"
-            >
-              <div className="approved-home__asset-media">
-                <img src={asset.image} alt="" loading="lazy" />
-                <span className="approved-home__asset-category">{asset.category}</span>
-                <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
-                <Bookmark aria-hidden="true" />
-              </div>
-              <div className="approved-home__asset-body">
-                <strong>{asset.title}</strong>
-                <small>{asset.grade}</small>
-                <div className="approved-home__asset-price">
-                  <div>
-                    <small>Reference value</small>
-                    <b>{asset.displayPrice}</b>
+          trending.isPending ? (
+            <MarketPulseState kind="loading" />
+          ) : trending.isError || !trending.data?.length ? (
+            <MarketPulseState kind="empty" />
+          ) : (
+            <LiveAssetCards assets={trending.data} />
+          )
+        ) : (
+          <div className="approved-home__trending" data-testid="homepage-trending-assets">
+            {HOMEPAGE_TRENDING_ASSETS.map((asset) => (
+              <ShowcaseAssetLink
+                key={asset.showcaseKey}
+                asset={asset}
+                className="approved-home__asset-card"
+              >
+                <div className="approved-home__asset-media">
+                  <img src={asset.image} alt="" loading="lazy" />
+                  <span className="approved-home__asset-category">{asset.category}</span>
+                  <span className="approved-home__asset-grade">{asset.grade.split(" · ")[0]}</span>
+                  <Bookmark aria-hidden="true" />
+                </div>
+                <div className="approved-home__asset-body">
+                  <strong>{asset.title}</strong>
+                  <small>{asset.grade}</small>
+                  <div className="approved-home__asset-price">
+                    <div>
+                      <small>Reference value</small>
+                      <b>{asset.displayPrice}</b>
+                    </div>
+                    <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
                   </div>
-                  <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
+                  <div className="approved-home__availability">
+                    <span>
+                      <i style={{ width: asset.displayAvailability }} />
+                    </span>
+                    <small>
+                      {asset.displaySharePrice} · {asset.displayAvailability} illustrative
+                    </small>
+                  </div>
                 </div>
-                <div className="approved-home__availability">
-                  <span>
-                    <i style={{ width: asset.displayAvailability }} />
-                  </span>
-                  <small>
-                    {asset.displaySharePrice} · {asset.displayAvailability} illustrative
-                  </small>
-                </div>
-              </div>
-            </ShowcaseAssetLink>
-          ))}
-        </div>
+              </ShowcaseAssetLink>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="page-shell approved-home__final-cta">
@@ -228,6 +240,112 @@ function HomePage() {
           </Link>
         </div>
       </section>
+    </div>
+  );
+}
+
+function MarketPulseState({ kind }: { kind: "loading" | "empty" }) {
+  return (
+    <div className="approved-home__market-empty" role={kind === "empty" ? "status" : undefined}>
+      <span className="approved-home__market-empty-icon">
+        {kind === "loading" ? (
+          <ChartNoAxesCombined aria-hidden="true" />
+        ) : (
+          <Sparkles aria-hidden="true" />
+        )}
+      </span>
+      <div>
+        <h3>{kind === "loading" ? "Checking the live catalogue…" : "No live market data yet"}</h3>
+        <p>
+          {kind === "loading"
+            ? "We’re checking the latest published collectibles and market observations."
+            : "Published assets will appear here as soon as a collectible completes Slice review and market-readiness. Check the marketplace for the latest catalogue status."}
+        </p>
+        {kind === "empty" ? (
+          <Link to="/marketplace" className="approved-home__text-link">
+            Browse the marketplace <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function LiveAssetCards({ assets }: { assets: Asset[] }) {
+  const { formatMoney } = useCurrency();
+
+  return (
+    <div className="approved-home__trending" data-testid="homepage-trending-assets">
+      {assets.map((asset) => {
+        const media =
+          asset.media.find((media) => media.kind === "image") ??
+          (asset.slug ? assetShowcaseMedia(asset.slug) : undefined);
+        const imageUrl = media ? ("url" in media ? media.url : media.src) : undefined;
+        const category = marketCategoryPresentation(asset.details.category);
+        const marketValue = asset.market?.estimatedMarketValue;
+        const change = asset.market?.change24hBps;
+        const availability = asset.market?.availabilityBps;
+        const dataStatus = asset.market?.dataStatus;
+        const statusLabel =
+          dataStatus === "LIVE"
+            ? "Live market"
+            : dataStatus === "DELAYED"
+              ? "Data delayed"
+              : dataStatus === "UNAVAILABLE"
+                ? "Market unavailable"
+                : "Market status pending";
+
+        return (
+          <Link
+            key={asset.id}
+            to="/asset/$id"
+            params={{ id: asset.slug ?? asset.id }}
+            className="approved-home__asset-card approved-home__asset-card--live"
+          >
+            <div className="approved-home__asset-media">
+              {imageUrl ? (
+                <img src={imageUrl} alt={media?.alt ?? asset.details.title} loading="lazy" />
+              ) : (
+                <div className="approved-home__asset-media-pending">Market image pending</div>
+              )}
+              <span className="approved-home__asset-category">{category.label}</span>
+              <span className="approved-home__asset-grade">
+                {asset.grade ? `${asset.grade.company} ${asset.grade.label}` : "Grade pending"}
+              </span>
+              <Bookmark aria-hidden="true" />
+            </div>
+            <div className="approved-home__asset-body">
+              <strong>{asset.details.title}</strong>
+              <small className="approved-home__market-status">{statusLabel}</small>
+              <div className="approved-home__asset-price">
+                <div>
+                  <small>Market reference</small>
+                  <b>
+                    {marketValue
+                      ? formatMoney(marketValue.amount, marketValue.currency)
+                      : "Value pending"}
+                  </b>
+                </div>
+                <span className={change !== undefined && change >= 0 ? "is-up" : undefined}>
+                  {change !== undefined ? formatPercent(change / 100) : "No 24h move"}
+                </span>
+              </div>
+              <div className="approved-home__availability">
+                {availability !== undefined ? (
+                  <span>
+                    <i style={{ width: `${Math.min(100, Math.max(0, availability / 100))}%` }} />
+                  </span>
+                ) : null}
+                <small>
+                  {availability !== undefined
+                    ? `${(availability / 100).toFixed(1)}% available`
+                    : "Availability not published"}
+                </small>
+              </div>
+            </div>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -310,68 +428,77 @@ function OwnershipWorks() {
   const featuredQuery = useFeaturedAssets();
   if (isBetaEnvironment) {
     const featured = featuredQuery.data?.[0];
+    const featuredMedia = featured?.media.find((media) => media.kind === "image");
+    const featuredImage = featuredMedia?.url ?? HOMEPAGE_FEATURED_ASSET.image;
     return (
       <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
         <SectionHeading
-          eyebrow="The collectible is real"
-          title="Own part of a physical collectible."
+          eyebrow="Start here"
+          title="From a real card to your portfolio."
           headingId="ownership-heading"
         />
         <p className="approved-home__ownership-lead">
-          Slice lets investors buy ownership units in authenticated collectibles. The physical item
-          remains the underlying asset; any ownership structure and portfolio position is created
-          and tracked by Slice.
+          There are three simple ideas: the card is real, Slice defines the ownership structure, and
+          your portfolio records your position after a real order settles.
         </p>
+        <div className="approved-home__ownership-guide" aria-hidden="true">
+          <span>
+            <b>01</b> Physical collectible
+          </span>
+          <span>
+            <b>02</b> Slice ownership structure
+          </span>
+          <span>
+            <b>03</b> Your portfolio
+          </span>
+        </div>
         <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
           <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
-            {featured ? (
-              <span className="approved-home__ownership-icon">
-                <Vault aria-hidden="true" />
-              </span>
-            ) : (
-              <div className="approved-home__ownership-image">
-                <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
-              </div>
-            )}
+            <div className="approved-home__ownership-image">
+              <img
+                src={featuredImage}
+                alt={featured?.details.title ?? HOMEPAGE_FEATURED_ASSET.title}
+              />
+            </div>
             <div>
-              <small>1. Underlying collectible</small>
+              <small>Step 1 · Real collectible</small>
               <strong>{featured?.details.title ?? HOMEPAGE_FEATURED_ASSET.title}</strong>
-              <p>
-                {featured
-                  ? "A real authenticated collectible sits underneath the Slice market."
-                  : "Static example image only. A real published collectible will appear here once the Beta catalogue has one."}
-              </p>
+              <p>A real authenticated card sits underneath the Slice market.</p>
             </div>
           </article>
-          <OwnershipFlowArrow label="Slice creates the ownership structure" />
+          <OwnershipFlowArrow label="Card → terms" />
           <article className="approved-home__ownership-node approved-home__ownership-node--structure is-slice">
             <span className="approved-home__ownership-icon">
               <Boxes aria-hidden="true" />
             </span>
             <div>
-              <small>2. Slice ownership structure</small>
-              <strong>Published terms only</strong>
+              <small>Step 2 · Slice creates terms</small>
+              <strong>Ownership structure</strong>
               <p>
-                Slice publishes the total issuance and pricing only when they are backed by the
-                asset&apos;s authoritative lifecycle and market state.
+                Slice sets the units and pricing shown to investors. This is separate from the
+                external card market.
               </p>
             </div>
           </article>
-          <OwnershipFlowArrow label="Your position is tracked" />
+          <OwnershipFlowArrow label="Terms → portfolio" />
           <article className="approved-home__ownership-node approved-home__ownership-node--portfolio">
             <span className="approved-home__ownership-icon">
               <ChartNoAxesCombined aria-hidden="true" />
             </span>
             <div>
-              <small>3. Your position</small>
-              <strong>Portfolio ownership</strong>
-              <p>
-                Your settled units, cost basis and ownership percentage appear after a real order is
-                executed.
-              </p>
+              <small>Step 3 · Your account</small>
+              <strong>Your portfolio position</strong>
+              <p>After an order settles, your ownership, cost basis and activity appear here.</p>
             </div>
           </article>
         </div>
+        <aside className="approved-home__ownership-plain">
+          <strong>In plain English</strong>
+          <p>
+            You are not buying a picture or a promise of a return. You are choosing an ownership
+            position in a real collectible, then Slice keeps the record of it in your portfolio.
+          </p>
+        </aside>
       </section>
     );
   }
@@ -586,9 +713,13 @@ function HowSliceWorks() {
     >
       <SectionHeading
         eyebrow="How Slice works"
-        title="Own collectibles differently."
+        title="The Slice journey, in four simple steps."
         headingId="how-slice-heading"
       />
+      <p className="approved-home__how-intro">
+        The short version: find a collectible, choose an ownership position, then track it in one
+        simple portfolio.
+      </p>
       <ol className="approved-home__how-grid">
         {howSliceWorks.map((step) => (
           <li key={step.number}>
@@ -597,7 +728,7 @@ function HowSliceWorks() {
             <h3>{step.title}</h3>
             <p>{step.detail}</p>
             <Link to={step.to} className="approved-home__text-link">
-              Explore <ArrowRight aria-hidden="true" />
+              {step.action} <ArrowRight aria-hidden="true" />
             </Link>
           </li>
         ))}
