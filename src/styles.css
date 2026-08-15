@@ -198,6 +198,36 @@
 @media (max-width: 920px) { .admin-user-hero { align-items: flex-start; flex-wrap: wrap; }.admin-user-hero > .admin-status-pill { margin-left: 3.9rem; }.admin-search-results { right: 1rem; width: calc(100% - 2rem); } }
 @media (max-width: 620px) { .admin-table-wrap { border: 0; overflow: visible; }.admin-table { min-width: 0; }.admin-table thead { display: none; }.admin-table, .admin-table tbody, .admin-table tr, .admin-table td { display: block; width: 100%; }.admin-table tr { border: 1px solid #263741; border-radius: 0.55rem; margin-bottom: 0.5rem; padding: 0.35rem 0; }.admin-table td { display: flex; justify-content: space-between; gap: 0.7rem; border: 0; padding: 0.35rem 0.65rem; }.admin-table td::before { color: #7f96a4; content: attr(data-label); font-size: 0.54rem; text-transform: uppercase; }.admin-record--case { grid-template-columns: 2.6rem minmax(0, 1fr) auto; }.admin-record--case .admin-inline-action { grid-column: 2 / -1; justify-self: start; }.admin-user-hero > .admin-status-pill { margin-left: 0; } }
 
+/* Admin console foundation: compact hierarchy, readable actions, and predictable responsive sizing. */
+.admin-console-nav { gap: 0.8rem; }
+.admin-console-nav-group { display: grid; gap: 0.22rem; }
+.admin-console-nav-label { padding: 0.15rem 0.62rem 0.25rem; color: #6f8794; font-size: 0.53rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.admin-console-nav button { padding: 0.66rem 0.62rem; font-size: 0.72rem; }
+.admin-console-heading--overview { align-items: center; }
+.admin-kpi-grid--overview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-kpi--warning > span { background: rgba(239, 187, 86, 0.14); color: #f1bb55; }
+.admin-kpi--positive > span { background: rgba(55, 220, 180, 0.14); color: #47dfbd; }
+.admin-kpi em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-quick-actions-bar { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 0.45rem; border: 1px solid #263741; border-radius: 0.55rem; padding: 0.6rem 0.75rem; background: rgba(13, 24, 31, 0.8); }
+.admin-quick-actions-bar > span { margin-right: auto; color: #8ea1ad; font-size: 0.62rem; font-weight: 700; }
+.admin-quick-actions-bar button { display: inline-flex; min-width: 0; align-items: center; gap: 0.35rem; border: 1px solid #2d4650; border-radius: 0.4rem; padding: 0.45rem 0.58rem; color: #d8e7e5; font-size: 0.6rem; }
+.admin-quick-actions-bar button:hover { border-color: #39dcb5; color: #5ee7c6; background: rgba(29, 208, 169, 0.08); }
+.admin-quick-actions-bar svg { width: 0.78rem; height: 0.78rem; color: #43dcb8; }
+.admin-quick-actions-bar svg:last-child { width: 0.68rem; margin-left: 0.1rem; }
+.admin-attention { grid-template-columns: 1rem minmax(0, 1fr) auto; }
+.admin-attention .admin-inline-action { display: inline-flex; min-width: max-content; align-items: center; gap: 0.2rem; border: 1px solid #31505a; border-radius: 999px; padding: 0.3rem 0.45rem; color: #4adfbd; font-size: 0.55rem; }
+.admin-attention .admin-inline-action:hover { border-color: #49dfbd; background: rgba(29, 208, 169, 0.08); }
+.admin-attention .admin-inline-action svg { width: 0.65rem; height: 0.65rem; }
+.admin-status-badge { border: 1px solid transparent; border-radius: 999px; padding: 0.28rem 0.42rem; font-size: 0.55rem; font-weight: 700; white-space: nowrap; }
+.admin-status-badge--positive { border-color: rgba(55, 220, 180, 0.4); color: #51dfc0; }
+.admin-status-badge--warning { border-color: rgba(239, 187, 86, 0.45); color: #f1bd5b; }
+.admin-status-badge--muted { border-color: #36505b; color: #9aadb7; }
+.admin-pipeline > button, .admin-pipeline > div { min-height: 4.4rem; }
+.admin-dashboard-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1200px) { .admin-kpi-grid--overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 920px) { .admin-dashboard-grid--two { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .admin-console-nav-label { padding-left: 0.45rem; }.admin-console-heading--overview { align-items: start; }.admin-quick-actions-bar { align-items: stretch; }.admin-quick-actions-bar > span { width: 100%; }.admin-quick-actions-bar button { flex: 1 1 calc(50% - 0.45rem); justify-content: center; }.admin-attention { grid-template-columns: 1rem minmax(0, 1fr); align-items: start; }.admin-attention .admin-inline-action { grid-column: 2; justify-self: start; margin-top: 0.2rem; } }
+
 /* Authenticated wallet: provider-backed composition without fabricated bank or movement data. */
 .account-page {
   min-height: calc(100vh - 4.75rem);

@@ -1190,6 +1190,11 @@ export class AdminService {
           resourceType: true,
           resourceId: true,
           createdAt: true,
+          actor: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
         },
       }),
       this.db.notificationDelivery.count({
@@ -1404,14 +1409,22 @@ export class AdminService {
         .toString(),
     };
     const activityTitle = (action: string) => {
-      if (action.includes('VALUATION')) return 'Valuation completed';
-      if (action.includes('SUBMISSION_APPROVED')) return 'Submission accepted';
-      if (action.includes('RECEIPT')) return 'Receipt confirmed';
+      if (action.includes('VALUATION')) return 'Valuation updated';
+      if (action.includes('SUBMISSION_APPROVED') || action.includes('SUBMISSION_ACCEPTED'))
+        return 'Submission accepted';
+      if (action.includes('RECEIPT')) return 'Physical receipt confirmed';
+      if (action.includes('SHIPMENT') || action.includes('TRACKING')) return 'Shipment updated';
       if (action.includes('PUBLISH')) return 'Listing published';
-      if (action.includes('ORDER')) return 'Order activity';
-      if (action.includes('USER')) return 'Account activity';
-      if (action.includes('MEMBERSHIP')) return 'Membership changed';
-      return 'Admin activity';
+      if (action.includes('ORDER')) return 'Trading order updated';
+      if (action.includes('USER') || action.includes('ACCOUNT')) return 'Account updated';
+      if (action.includes('MEMBERSHIP')) return 'Membership updated';
+      if (action.includes('ROLE')) return 'Access role updated';
+      if (action.includes('WEBHOOK') || action.includes('PROVIDER')) return 'Provider event received';
+      return 'Administrative action';
+    };
+    const activityResource = (resourceType: string) => {
+      const normalized = resourceType.replace(/[_-]+/g, ' ').toLowerCase();
+      return normalized.replace(/\b\w/g, (character) => character.toUpperCase());
     };
     const systemHealth = [
       {
@@ -1565,7 +1578,7 @@ export class AdminService {
       recentActivity: activityRows.map((row) => ({
         id: row.id,
         title: activityTitle(row.action),
-        context: `${row.resourceType}${row.resourceId ? ` · ${row.resourceId.slice(0, 8)}` : ''}`,
+        context: `${activityResource(row.resourceType)}${row.resourceId ? ` · ${row.resourceId.slice(0, 8)}` : ''}${row.actor?.profile?.displayName ? ` · by ${row.actor.profile.displayName}` : ''}`,
         occurredAt: row.createdAt.toISOString(),
       })),
       systemHealth,

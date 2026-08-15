@@ -161,6 +161,13 @@ const navItems: AdminNavItem[] = [
   { id: "health", label: "Platform Operations", icon: HeartPulse },
 ];
 
+const adminNavGroups: Array<{ label: string; items: AdminNavItem[] }> = [
+  { label: "Workspace", items: navItems.slice(0, 1) },
+  { label: "Operations", items: navItems.slice(1, 6) },
+  { label: "Business", items: navItems.slice(6, 9) },
+  { label: "Platform", items: navItems.slice(9) },
+];
+
 function isAdminSection(value: unknown): value is AdminSection {
   return typeof value === "string" && navItems.some((item) => item.id === value);
 }
@@ -750,16 +757,21 @@ function AdminConsole() {
         </div>
         <p className="admin-console-eyebrow">Admin Console</p>
         <nav className="admin-console-nav" aria-label="Admin Console">
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button
-              type="button"
-              key={id}
-              className={section === id ? "is-active" : ""}
-              onClick={() => select(id)}
-            >
-              <Icon aria-hidden="true" />
-              <span>{label}</span>
-            </button>
+          {adminNavGroups.map((group) => (
+            <div className="admin-console-nav-group" key={group.label}>
+              <span className="admin-console-nav-label">{group.label}</span>
+              {group.items.map(({ id, label, icon: Icon }) => (
+                <button
+                  type="button"
+                  key={id}
+                  className={section === id ? "is-active" : ""}
+                  onClick={() => select(id)}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="admin-console-account">
@@ -1943,147 +1955,120 @@ function ControlCenter({
   const pendingReviews = overview?.reviews.pending ?? reviews.length;
   return (
     <div className="admin-console-content">
-      <section className="admin-console-heading">
+      <section className="admin-console-heading admin-console-heading--overview">
         <div>
           <p className="admin-console-eyebrow">Control Center</p>
           <h2>Monitor Slice safely.</h2>
           <span>
-            Review platform operations and work requiring attention from one focused console.
+            A calm view of what needs a decision, what is moving, and what is healthy across the
+            platform.
           </span>
         </div>
         <span className="admin-live-badge">
-          <CheckCircle2 aria-hidden="true" /> Read-only foundation
+          <CheckCircle2 aria-hidden="true" /> Beta operations
         </span>
       </section>
-      <div className="admin-kpi-grid admin-kpi-grid--six">
-        <AdminKpi icon={Users} label="Total users" value={operational?.kpis.totalUsers ?? 0} />
-        <AdminKpi
-          icon={ClipboardCheck}
-          label="Collectors"
-          value={operational?.kpis.collectors ?? 0}
-        />
-        <AdminKpi
-          icon={BriefcaseBusiness}
-          label="Investors"
-          value={operational?.kpis.investors ?? 0}
-        />
-        <AdminKpi
-          icon={Tag}
-          label="Active listings"
-          value={operational?.kpis.activeListings ?? 0}
-        />
-        <AdminKpi
-          icon={WalletCards}
-          label="Open orders"
-          value={operational?.kpis.openOrders ?? 0}
-        />
-        <AdminKpi
+      <div className="admin-kpi-grid admin-kpi-grid--overview">
+        <AdminMetric
           icon={AlertTriangle}
           label="Needs attention"
           value={operational?.kpis.needsAttention ?? 0}
+          detail={`${operational?.counts.pendingReviews ?? 0} reviews · ${operational?.counts.collectorActionsWaiting ?? 0} collector actions`}
+          tone={(operational?.kpis.needsAttention ?? 0) > 0 ? "warning" : "positive"}
         />
+        <AdminMetric
+          icon={ClipboardCheck}
+          label="Pending reviews"
+          value={operational?.counts.pendingReviews ?? pendingReviews}
+          detail="Authorised staff decisions"
+        />
+        <AdminMetric
+          icon={Truck}
+          label="Physical intake"
+          value={
+            (operational?.counts.shipmentsInTransit ?? 0) +
+            (operational?.counts.acceptedAwaitingVault ?? 0) +
+            (operational?.counts.deliveredAwaitingReceipt ?? 0)
+          }
+          detail="Accepted, moving, or awaiting receipt"
+        />
+        <AdminMetric
+          icon={WalletCards}
+          label="Open orders"
+          value={operational?.kpis.openOrders ?? 0}
+          detail="Pending reservation or execution"
+        />
+      </div>
+      <div className="admin-quick-actions-bar" aria-label="Quick actions">
+        <span>Quick actions</span>
+        <button type="button" onClick={() => select("moderation")}>
+          <ClipboardCheck aria-hidden="true" /> Review queue <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("intake")}>
+          <Inbox aria-hidden="true" /> Intake board <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("users")}>
+          <Users aria-hidden="true" /> Accounts <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("health", "audit")}>
+          <FileClock aria-hidden="true" /> Audit log <ArrowRight aria-hidden="true" />
+        </button>
       </div>
       <div className="admin-dashboard-grid">
         <section className="admin-panel">
           <AdminPanelHeading
-            title="Needs Immediate Attention"
-            action="Review assets"
+            title="Needs attention"
+            action="Open review queue"
             onClick={() => select("moderation")}
           />
-          {operational?.attentionGroups.length ? (
-            <div className="admin-attention-groups">
-              {operational.attentionGroups.slice(0, 5).map((item) => (
-                <button
-                  type="button"
-                  className="admin-attention-group"
-                  key={item.id}
-                  onClick={() => select(isAdminSection(item.section) ? item.section : "control")}
-                >
-                  <span className="admin-attention-group__count">{item.count}</span>
-                  <span className="min-w-0">
-                    <strong>{item.label}</strong>
-                    <small>{item.description}</small>
-                  </span>
-                  <ArrowRight aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {operational?.needsAttention.length || pendingReviews || attentionOperations.length ? (
+          {operational?.needsAttention.length ? (
             <div className="admin-attention-list">
-              {operational?.needsAttention.slice(0, 8).map((item) => (
+              {operational.needsAttention.slice(0, 5).map((item) => (
                 <AdminAttention
                   key={`${item.id}-${item.target}`}
-                  type={`${item.type} · waiting on ${item.waitingOn === "COLLECTOR" ? "collector" : "Slice"}`}
+                  type={adminAttentionLabel(item)}
                   subject={item.subject}
-                  detail={`${item.stage} · ${item.reason} · ${item.age} old`}
+                  detail={`${item.reason} · ${item.age} old`}
                   tone={item.severity === "HIGH" ? "warning" : "neutral"}
+                  actionLabel={item.waitingOn === "COLLECTOR" ? "View collector" : "Review"}
+                  onAction={() => select(adminAttentionSection(item.target))}
                 />
               ))}
-              {risk?.webhooks.slice(0, 3).map((event) => (
-                <AdminAttention
-                  key={`webhook-${event.id}`}
-                  type="Webhook failure"
-                  subject={`${event.provider} · ${event.eventType}`}
-                  detail={`${event.attempts} attempts · ${event.error ?? "Safe failure summary unavailable"}`}
-                  tone="warning"
-                />
-              ))}
-              {risk?.finance.reconciliation
-                .filter((run) => run.status === "MISMATCH")
-                .slice(0, 3)
-                .map((run) => (
-                  <AdminAttention
-                    key={`reconciliation-${run.id}`}
-                    type="Reconciliation exception"
-                    subject={run.scope}
-                    detail={`${run.mismatchCodes.join(", ") || "Mismatch requires inspection"} · ${date(run.createdAt)}`}
-                    tone="warning"
-                  />
-                ))}
-              {!operational?.needsAttention.length ? null : (
-                <div className="admin-attention-divider" />
-              )}
-              {reviews.slice(0, 4).map((item) => (
+            </div>
+          ) : pendingReviews || attentionOperations.length ? (
+            <div className="admin-attention-list">
+              {reviews.slice(0, 5).map((item) => (
                 <AdminAttention
                   key={item.id}
-                  type="Asset review"
+                  type="Review required"
                   subject={`Submission ${shortId(item.id)}`}
                   detail={`${sentence(item.status)} · received ${date(item.submittedAt)}`}
                   tone="warning"
-                />
-              ))}
-              {!reviews.length && pendingReviews ? (
-                <AdminAttention
-                  type="Asset review"
-                  subject={`${pendingReviews} review${pendingReviews === 1 ? "" : "s"} pending`}
-                  detail="Open Asset Moderation to inspect the authoritative queue."
-                  tone="warning"
-                />
-              ) : null}
-              {attentionOperations.slice(0, 4).map((item) => (
-                <AdminAttention
-                  key={item.id}
-                  type="Lifecycle review"
-                  subject={item.title}
-                  detail={`Valuation ${sentence(item.valuationStatus)} · updated ${date(item.updatedAt)}`}
-                  tone="neutral"
+                  actionLabel="Review"
+                  onAction={() => select("moderation")}
                 />
               ))}
             </div>
           ) : (
-            <AdminEmpty detail="No assets currently require attention." />
+            <AdminEmpty detail="No operational work is waiting right now." />
           )}
         </section>
         <section className="admin-panel">
           <AdminPanelHeading title="System Status" />
           <div className="admin-status-list">
             {operational?.systemHealth.length ? (
-              operational.systemHealth.map((item) => (
+              operational.systemHealth
+                .filter((item) =>
+                  ["API", "Database", "Background Jobs", "Market data", "Webhooks"].includes(
+                    item.name,
+                  ),
+                )
+                .map((item) => (
                 <StatusRow
                   key={item.name}
                   label={item.name}
                   status={item.status}
+                  summary={item.summary}
                   icon={
                     item.name === "Database"
                       ? Database
@@ -2094,7 +2079,7 @@ function ControlCenter({
                           : Gauge
                   }
                 />
-              ))
+                ))
             ) : (
               <AdminEmpty detail="No system health telemetry is available." />
             )}
@@ -2126,7 +2111,7 @@ function ControlCenter({
           <AdminPanelHeading title="Recent Activity" />
           {operational?.recentActivity.length ? (
             <div className="admin-record-list">
-              {operational.recentActivity.map((item) => (
+              {operational.recentActivity.slice(0, 5).map((item) => (
                 <article className="admin-record" key={item.id}>
                   <span className="admin-record-icon">
                     <Activity aria-hidden="true" />
@@ -2162,7 +2147,7 @@ function ControlCenter({
           )}
         </section>
       </div>
-      <div className="admin-dashboard-grid admin-dashboard-grid--four">
+      <div className="admin-dashboard-grid admin-dashboard-grid--two">
         <section className="admin-panel">
           <AdminPanelHeading title="Account Mix" />
           <div className="admin-mix-list">
@@ -2216,34 +2201,6 @@ function ControlCenter({
               status={String(operational?.memberships.pastDue ?? 0)}
               icon={AlertTriangle}
             />
-          </div>
-        </section>
-        <section className="admin-panel">
-          <AdminPanelHeading
-            title="Support & Cases"
-            action="Open Trust & Support"
-            onClick={() => select("support")}
-          />
-          <AdminEmpty
-            detail={operational?.support.message ?? "Support case metrics are unavailable."}
-            icon={LifeBuoy}
-          />
-        </section>
-        <section className="admin-panel">
-          <AdminPanelHeading title="Quick Actions" />
-          <div className="admin-settings-links admin-quick-actions">
-            <button type="button" onClick={() => select("moderation")}>
-              <ClipboardCheck aria-hidden="true" /> Review Queue
-            </button>
-            <button type="button" onClick={() => select("intake")}>
-              <Inbox aria-hidden="true" /> Intake Board
-            </button>
-            <button type="button" onClick={() => select("audit")}>
-              <FileClock aria-hidden="true" /> Audit Logs
-            </button>
-            <button type="button" onClick={() => select("users")}>
-              <Users aria-hidden="true" /> All Accounts
-            </button>
           </div>
         </section>
       </div>
@@ -5314,6 +5271,33 @@ function AdminKpi({
     </section>
   );
 }
+
+function AdminMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  tone = "default",
+}: {
+  icon: typeof ClipboardCheck;
+  label: string;
+  value: number | string;
+  detail: string;
+  tone?: "default" | "warning" | "positive";
+}) {
+  return (
+    <section className={`admin-kpi admin-kpi--${tone}`}>
+      <span>
+        <Icon aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <small>{label}</small>
+        <strong>{value}</strong>
+        <em>{detail}</em>
+      </div>
+    </section>
+  );
+}
 function AdminPanelHeading({
   title,
   action,
@@ -5339,11 +5323,15 @@ function AdminAttention({
   subject,
   detail,
   tone,
+  actionLabel,
+  onAction,
 }: {
   type: string;
   subject: string;
   detail: string;
   tone: "warning" | "neutral";
+  actionLabel?: string;
+  onAction?: () => void;
 }) {
   return (
     <article className={`admin-attention admin-attention--${tone}`}>
@@ -5353,6 +5341,11 @@ function AdminAttention({
         <strong>{subject}</strong>
         <span>{detail}</span>
       </div>
+      {actionLabel && onAction ? (
+        <button type="button" className="admin-inline-action" onClick={onAction}>
+          {actionLabel} <ArrowRight aria-hidden="true" />
+        </button>
+      ) : null}
     </article>
   );
 }
@@ -5360,16 +5353,20 @@ function StatusRow({
   label,
   status,
   icon: Icon,
+  summary,
 }: {
   label: string;
   status: string;
   icon: typeof Gauge;
+  summary?: string;
 }) {
   return (
-    <div className="admin-status-row">
+    <div className="admin-status-row" title={summary}>
       <Icon aria-hidden="true" />
       <span>{label}</span>
-      <strong>{status}</strong>
+      <strong className={`admin-status-badge admin-status-badge--${adminStatusTone(status)}`}>
+        {adminStatusLabel(status)}
+      </strong>
     </div>
   );
 }
@@ -5387,7 +5384,7 @@ function PipelineStage({
   const content = (
     <>
       <Icon aria-hidden="true" />
-      <span>{label}</span>
+      <span title={`${label}: ${value} items`}>{adminPipelineLabel(label)}</span>
       <strong>{value}</strong>
     </>
   );
@@ -5398,6 +5395,41 @@ function PipelineStage({
   ) : (
     <div>{content}</div>
   );
+}
+
+function adminStatusLabel(status: string) {
+  const normalized = status.trim().toUpperCase();
+  const known: Record<string, string> = {
+    OPERATIONAL: "Operational",
+    DEGRADED: "Degraded",
+    UNKNOWN: "Telemetry unavailable",
+    BETA_DISABLED: "Beta disabled",
+    NOT_CONFIGURED: "Not configured",
+  };
+  return known[normalized] ?? sentence(status);
+}
+
+function adminStatusTone(status: string) {
+  const normalized = status.trim().toUpperCase();
+  if (normalized === "OPERATIONAL") return "positive";
+  if (["DEGRADED", "BETA_DISABLED", "NOT_CONFIGURED"].includes(normalized)) return "warning";
+  return "muted";
+}
+
+function adminPipelineLabel(label: string) {
+  return label.replace("In Review", "Review").replace("Market Live", "Live");
+}
+
+function adminAttentionSection(target: string): AdminSection {
+  if (target === "reviews") return "moderation";
+  if (target === "intake") return "intake";
+  if (target === "valuations" || target === "custody") return "assetOperations";
+  return "control";
+}
+
+function adminAttentionLabel(item: { type: string; waitingOn: string }) {
+  const owner = item.waitingOn === "COLLECTOR" ? "collector" : "Slice";
+  return `${sentence(item.type)} · ${owner} action`;
 }
 function AdminEmpty({
   detail,

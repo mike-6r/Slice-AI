@@ -4,7 +4,7 @@
   "deploymentCommit": "7528bfb0e507e6696507af9bd47a7ba1620558b3",
   "scope": "Visible Admin Console controls; destructive workflows are classified without being exercised against the controlled Charizard.",
   "controls": [
-    { "page": "Overview", "control": "Primary navigation", "action": "Open admin section", "endpoint": "Client route state", "rbac": "Admin workspace", "audit": "N/A", "status": "WORKING" },
+    { "page": "Overview", "control": "Primary navigation", "action": "Open grouped admin section", "endpoint": "Client route state", "rbac": "Admin workspace", "audit": "N/A", "status": "WORKING" },
     { "page": "Overview", "control": "Workspace search", "action": "Search accounts/submissions/collectibles/intake/orders", "endpoint": "GET /api/v1/admin/search", "rbac": "Admin workspace", "audit": "Read only", "status": "WORKING_SCOPED" },
     { "page": "Accounts", "control": "Search, filters, sort, pagination", "action": "Filter account directory", "endpoint": "GET /api/v1/admin/users", "rbac": "Admin workspace", "audit": "Read only", "status": "WORKING" },
     { "page": "Account Detail", "control": "Status transition", "action": "Change account status with reason", "endpoint": "POST /api/v1/admin/users/:id/status", "rbac": "users.status.manage", "audit": "Server audit + idempotency", "status": "WORKING_STAGING_RETEST_REQUIRED" },
