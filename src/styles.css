@@ -26449,6 +26449,47 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .asset-detail-page .asset-summary,.asset-detail-page .asset-market-stats,.asset-detail-page .asset-price-panel,.asset-detail-page .asset-ownership-panel,.asset-detail-page .asset-details-panel,.asset-detail-page .asset-order-book,.asset-detail-page .asset-recent-trades,.asset-detail-page .asset-similar-card{font-size:1rem}
 .asset-detail-page .asset-summary h1{font-size:clamp(1.8rem,3vw,2.7rem)}
 
+/* Account Center clarity pass: prioritize identity/security, then expose long-tail records on demand. */
+.account-heading h1 { font-size: clamp(2.2rem, 3.35vw, 3.55rem); }
+.account-center-grid { align-items: start; }
+.account-center-grid > .account-panel--profile,
+.account-center-grid > .account-panel--security { grid-column: span 6; }
+.account-center-grid > .account-panel--access,
+.account-center-grid > .account-panel--sessions,
+.account-center-grid > .account-panel--linked,
+.account-center-grid > .account-panel--preferences { grid-column: span 4; }
+.account-panel__heading-row > span { display: none; }
+.account-panel--profile .account-profile-grid { margin-top: .75rem; }
+.account-profile-details { display: grid; min-width: 0; gap: .65rem; }
+.account-profile-more { border-top: 1px solid rgba(255,255,255,.07); padding-top: .55rem; }
+.account-profile-more summary { cursor: pointer; color: var(--color-accent); font-size: .68rem; font-weight: 700; list-style: none; }
+.account-profile-more summary::-webkit-details-marker { display: none; }
+.account-profile-more summary::before { content: "+"; display: inline-block; width: 1rem; color: var(--color-accent); }
+.account-profile-more[open] summary::before { content: "−"; }
+.account-profile-more dl { margin-top: .35rem; }
+.account-session-actions { justify-content: flex-start; margin-top: .65rem; margin-bottom: .2rem; }
+.account-view-all { display: inline-flex; margin-top: .55rem; }
+.account-session-list li, .account-activity-list li { min-width: 0; }
+.account-session-list li > div, .account-activity-list li > div { overflow-wrap: anywhere; }
+.account-activity-list time { white-space: nowrap; }
+.account-panel--access .account-panel__heading p,
+.account-panel--sessions .account-panel__heading p,
+.account-panel--activity .account-panel__heading p { max-width: 34rem; line-height: 1.45; }
+@media (max-width: 1160px) {
+  .account-center-grid > .account-panel { grid-column: span 1; }
+  .account-center-grid > .account-panel--notifications,
+  .account-center-grid > .account-panel--activity,
+  .account-center-grid > .account-panel--data,
+  .account-center-grid > .account-panel--danger { grid-column: span 2; }
+}
+@media (max-width: 640px) {
+  .account-center-grid > .account-panel,
+  .account-center-grid > .account-panel--notifications,
+  .account-center-grid > .account-panel--activity,
+  .account-center-grid > .account-panel--data,
+  .account-center-grid > .account-panel--danger { grid-column: span 1; }
+}
+
 /* Collector workspace clarity pass: keep the essentials visible and group the long-tail record. */
 .collector-detail-tab-stack--simple { gap: .75rem; }
 .collector-detail-focus-card { display: grid; gap: .7rem; min-width: 0; border: 1px solid #2a4149; border-radius: .65rem; padding: 1rem; background: linear-gradient(145deg, rgba(10, 28, 34, .92), rgba(7, 15, 21, .96)); }

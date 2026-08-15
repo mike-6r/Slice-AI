@@ -32,8 +32,9 @@ import { accountStatusLabel, initialsFor, memberSinceLabel } from "./-account-pr
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "Account Center | Slice" }] }),
-  validateSearch: (search): { sessions?: "all"; discordLink?: string } => ({
+  validateSearch: (search): { sessions?: "all"; activity?: "all"; discordLink?: string } => ({
     ...(search.sessions === "all" ? { sessions: "all" as const } : {}),
+    ...(search.activity === "all" ? { activity: "all" as const } : {}),
     ...(typeof search.discordLink === "string" ? { discordLink: search.discordLink } : {}),
   }),
   component: AccountPageForTest,
@@ -56,7 +57,7 @@ const date = (value: string | null | undefined) =>
     : "Not available";
 
 export function AccountPageForTest() {
-  const { sessions: sessionsView, discordLink } = Route.useSearch();
+  const { sessions: sessionsView, activity: activityView, discordLink } = Route.useSearch();
   const { isAuthenticated } = useSession();
   const services = useAppServices();
   const client = useQueryClient();
@@ -103,7 +104,8 @@ export function AccountPageForTest() {
   });
   const activity = useQuery({
     queryKey: queryKeys.account.activity(),
-    queryFn: () => services.repositories.account.getActivity({ limit: 10 }),
+    queryFn: () =>
+      services.repositories.account.getActivity({ limit: activityView === "all" ? 50 : 6 }),
     enabled,
   });
   const deletion = useQuery({
@@ -208,7 +210,7 @@ export function AccountPageForTest() {
               />
               <PreferencesPanel query={preferences} refresh={refresh} />
               <NotificationPreferencesPanel query={notificationPreferences} refresh={refresh} />
-              <ActivityPanel query={activity} />
+              <ActivityPanel query={activity} showAll={activityView === "all"} />
               <DataPanel refresh={refresh} />
               <DangerPanel deletion={deletion} refresh={refresh} />
             </div>
@@ -362,7 +364,7 @@ function Kpi({
   detail: string;
 }) {
   return (
-    <article className="account-kpi">
+    <article className="account-kpi" title={`${label}: ${detail}`}>
       <span className="account-kpi__icon" aria-hidden="true">
         {icon}
       </span>
@@ -481,19 +483,26 @@ function ProfilePanel({
             {update.error ? <p className="account-form-error">{errorCopy(update.error)}</p> : null}
           </form>
         ) : (
-          <dl>
-            <Definition label="Display name" value={user.profile.displayName} />
-            <Definition
-              label="Username"
-              value={user.profile.username ? `@${user.profile.username}` : "Not set"}
-              muted={!user.profile.username}
-            />
-            <Definition label="Email" value={user.email} />
-            <Definition label="Phone" value="Manage in Security" muted />
-            <Definition label="Member since" value={memberSinceLabel(user.createdAt)} />
-            <Definition label="Country" value={user.profile.countryCode} />
-            <Definition label="Timezone" value={user.profile.timezone} />
-          </dl>
+          <div className="account-profile-details">
+            <dl>
+              <Definition label="Display name" value={user.profile.displayName} />
+              <Definition
+                label="Username"
+                value={user.profile.username ? `@${user.profile.username}` : "Not set"}
+                muted={!user.profile.username}
+              />
+              <Definition label="Email" value={user.email} />
+            </dl>
+            <details className="account-profile-more">
+              <summary>More account details</summary>
+              <dl>
+                <Definition label="Phone" value="Manage in Security" muted />
+                <Definition label="Member since" value={memberSinceLabel(user.createdAt)} />
+                <Definition label="Country" value={user.profile.countryCode} />
+                <Definition label="Timezone" value={user.profile.timezone} />
+              </dl>
+            </details>
+          </div>
         )}
       </div>
     </Panel>
@@ -1305,6 +1314,7 @@ function NotificationPreferencesPanel({
 }
 function ActivityPanel({
   query,
+  showAll,
 }: {
   query: ReturnType<
     typeof useQuery<{
@@ -1318,7 +1328,10 @@ function ActivityPanel({
       nextCursor: string | null;
     }>
   >;
+  showAll: boolean;
 }) {
+  const items = query.data?.items ?? [];
+  const visible = showAll ? items : items.slice(0, 5);
   return (
     <Panel
       id="activity"
@@ -1330,9 +1343,9 @@ function ActivityPanel({
         <Rows />
       ) : query.error ? (
         <Retry detail="Unable to load account activity." retry={() => void query.refetch()} />
-      ) : query.data?.items.length ? (
+      ) : items.length ? (
         <ul className="account-activity-list">
-          {query.data.items.map((item) => (
+          {visible.map((item) => (
             <li key={item.reference}>
               <Clock3 aria-hidden="true" />
               <div>
@@ -1346,6 +1359,16 @@ function ActivityPanel({
       ) : (
         <p className="account-empty">No recent account activity.</p>
       )}
+      {!showAll && (query.data?.nextCursor || items.length > 5) ? (
+        <a href="/account?activity=all#activity" className="account-text-button account-view-all">
+          View all activity →
+        </a>
+      ) : null}
+      {showAll ? (
+        <a href="/account#overview" className="account-text-button account-view-all">
+          Back to account overview
+        </a>
+      ) : null}
     </Panel>
   );
 }

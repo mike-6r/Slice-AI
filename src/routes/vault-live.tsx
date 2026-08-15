@@ -540,7 +540,6 @@ function VaultLiveBetaEmpty() {
         {exampleMedia ? (
           <div className="vault-live-beta-example">
             <img src={exampleMedia.src} alt={exampleMedia.alt} />
-            <span>Illustrative example</span>
           </div>
         ) : null}
         <div>
