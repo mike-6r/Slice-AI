@@ -28456,3 +28456,37 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .portfolio-page.portfolio-page--approved .portfolio-activity-table__head,
   .portfolio-page.portfolio-page--approved .portfolio-activity-event { min-width: 52rem; }
 }
+
+/* Final session-boundary placement: do not inherit route/page-shell geometry. */
+.session-restore-page {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  width: auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(1.25rem, 5vh, 3.5rem) clamp(1rem, 4vw, 2.5rem);
+}
+
+.session-restore-card {
+  width: min(100%, 34rem);
+  max-height: calc(100dvh - 2.5rem);
+  margin: auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .session-restore-page {
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .session-restore-card {
+    width: min(100%, 31rem);
+    max-height: calc(100dvh - 2rem);
+  }
+}
