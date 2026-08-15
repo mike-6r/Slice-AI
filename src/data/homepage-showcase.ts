@@ -1,5 +1,5 @@
 import bedardImage from "@/assets/connor-bedard-young-guns-psa10.png";
-import charizardBaseSetImage from "@/assets/charizard-slab.jpg";
+import charizardBaseSetImage from "@/assets/charizard-slab-transparent.png";
 import charizardImage from "@/assets/charizard-ex-obsidian-flames-psa10.jpg";
 import stroudImage from "@/assets/cj-stroud-purple-pulsar-psa10.jpg";
 import pikachuImage from "@/assets/pikachu-grey-felt-hat-psa10.jpg";

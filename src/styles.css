@@ -24444,6 +24444,22 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   }
 }
 
+/* The Charizard reference is a transparent slab cutout. Let the editorial
+   glow and animated sheen sit behind the glass instead of trapping it in a
+   dark image-shaped rectangle. */
+.approved-home .featured-market-hero--charizard .featured-market-hero__static-media {
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.approved-home .featured-market-hero--charizard .featured-market-hero__static-media img {
+  filter:
+    drop-shadow(0 1.2rem 1rem rgb(0 0 0 / 0.4))
+    drop-shadow(0 0 1.8rem rgb(34 211 165 / 0.18));
+}
+
 /* Keep explanatory copy readable instead of forcing it into a single line. */
 .approved-home__ownership-node p {
   display: -webkit-box;
