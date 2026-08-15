@@ -24460,6 +24460,214 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     drop-shadow(0 0 1.8rem rgb(34 211 165 / 0.18));
 }
 
+/* Homepage rhythm pass: one readable type scale, calmer whitespace, and
+   consistent card density for first-time visitors. */
+.approved-home__hero {
+  gap: clamp(3rem, 5vw, 6rem);
+  padding-top: 2.75rem;
+  padding-bottom: 2.75rem;
+}
+
+.approved-home__section,
+.approved-home__ownership {
+  padding-top: 3.25rem;
+  padding-bottom: 1rem;
+}
+
+.approved-home__section-heading {
+  margin-bottom: 1.45rem;
+}
+
+.approved-home__section-heading h2 {
+  font-size: clamp(1.75rem, 2.8vw, 2.2rem);
+  line-height: 1.15;
+}
+
+.approved-home__section-heading .page-kicker,
+.approved-home__feature .page-kicker {
+  font-size: 0.6rem;
+}
+
+.approved-home__how-intro,
+.approved-home__ownership-lead {
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.approved-home__how-guide {
+  margin-bottom: 1.4rem;
+  padding: 1.3rem 1.4rem;
+}
+
+.approved-home__how-guide-copy strong {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.approved-home__how-guide-copy p {
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.approved-home__how-guide-points span {
+  padding: 0.72rem 0.75rem;
+  font-size: 0.64rem;
+}
+
+.approved-home__how-grid {
+  gap: 1rem;
+}
+
+.approved-home__how-grid li {
+  min-height: 13.25rem;
+  padding: 1.35rem;
+}
+
+.approved-home__how-grid h3 {
+  margin-top: 0.42rem;
+  font-size: 1.12rem;
+  line-height: 1.2;
+}
+
+.approved-home__how-grid p {
+  margin-top: 0.55rem;
+  color: #a4b1bb;
+  font-size: 0.75rem;
+  line-height: 1.62;
+}
+
+.approved-home__how-grid .approved-home__text-link {
+  padding-top: 0.95rem;
+  font-size: 0.7rem;
+}
+
+.approved-home__feature {
+  min-height: 12.25rem;
+  padding: 1.35rem;
+}
+
+.approved-home__feature .page-kicker {
+  margin-top: 1rem;
+}
+
+.approved-home__feature strong {
+  margin-top: 0.48rem;
+  color: #d2dce1;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.approved-home__ownership-flow {
+  margin-top: 1.35rem;
+}
+
+.approved-home__ownership-node {
+  padding: 1rem;
+}
+
+.approved-home__ownership-node small {
+  font-size: 0.6rem;
+}
+
+.approved-home__ownership-node strong {
+  margin-top: 0.4rem;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.approved-home__ownership-node p {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.approved-home__ownership-arrow span {
+  font-size: 0.58rem;
+}
+
+.approved-home__ownership-explainer {
+  margin-top: 1.25rem;
+  padding: 1.15rem 1.35rem;
+}
+
+.approved-home__ownership-explainer strong {
+  font-size: 0.76rem;
+}
+
+.approved-home__ownership-explainer p {
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.approved-home__trading-demo {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+}
+
+.approved-home__trade-example {
+  padding: 1.15rem;
+}
+
+.approved-home__trade-example-heading > span {
+  font-size: 0.82rem;
+}
+
+.approved-home__trade-price dt {
+  font-size: 0.64rem;
+}
+
+.approved-home__trade-result strong {
+  font-size: 0.82rem;
+}
+
+.approved-home__trade-result span,
+.approved-home__trading-demo-note {
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.approved-home__final-cta {
+  margin-top: 2.8rem;
+}
+
+@media (max-width: 899px) {
+  .approved-home__hero {
+    gap: 2.5rem;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .approved-home__section,
+  .approved-home__ownership {
+    padding-top: 2.6rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .approved-home__section,
+  .approved-home__ownership {
+    padding-top: 2.2rem;
+  }
+
+  .approved-home__section-heading h2 {
+    font-size: 1.7rem;
+  }
+
+  .approved-home__how-guide {
+    padding: 1rem;
+  }
+
+  .approved-home__how-grid li {
+    min-height: 12rem;
+    padding: 1.15rem;
+  }
+
+  .approved-home__feature {
+    min-height: 11rem;
+    padding: 1.15rem;
+  }
+}
+
 /* Keep explanatory copy readable instead of forcing it into a single line. */
 .approved-home__ownership-node p {
   display: -webkit-box;
