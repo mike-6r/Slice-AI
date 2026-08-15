@@ -132,3 +132,18 @@ This section supersedes earlier “not testable” statements that describe an e
 - Admin panel: **GO for controlled read-only internal Beta; NO-GO for external invited Beta** while the Collectibles route collision and separate-identity RBAC/IDOR checks remain open.
 - Controlled internal Beta: **GO with documented limitations**.
 - External invited Beta: **NO-GO**.
+
+## Pre-shipment gate closure record — 2026-08-15
+
+Current deployed commit: `af17a4ecf8ee2c118226065c3b73eb8a1c2fe435` (Git `main` and VPS).
+
+- **Collectibles:** PASS. Browser QA showed six canonical catalogue records; Asset Operations is a separate lifecycle board.
+- **Platform Operations:** PASS with limitation. Aggregate is `Operational with limitations`; Webhooks is `Unknown` and optional providers are explicitly Beta Disabled.
+- **Approved journey:** PASS. Charizard `054e7773-87ad-4b5e-9701-916a3aa5144d` shows Approved and `Ship your collectible`.
+- **Fixture cleanup:** PASS for disposable QA drafts. Three drafts were cancelled through the supported endpoint; cancelled history is retained and active projection now contains three records.
+- **RBAC/IDOR:** Owner submission `200`; second Collector `404`; Investor `404`; Collector Admin `403`; Investor Collector Workspace `403`.
+- **Fresh media:** front/back SAFE with checksums; anonymous private R2 object and bucket-list attempts were denied. A valid signed private-download URL was not testable because no customer-facing download endpoint is exposed.
+- **Ximilar:** one allowed application attempt returned `NOT_CONFIGURED` with zero provider calls; cached refresh returned the persisted safe result. No grade was invented.
+- **Responsive:** Admin Collectibles and Platform Operations had no horizontal overflow at 390×844, 768×1024 or 1920×1080; Collector workspace browser QA had no overflow on the exercised route.
+
+Decision: Collector and Admin are **GO for controlled internal Beta**. Security and external invited Beta remain **NO-GO** pending the explicit signed-download/intake privacy/staff permission checks and provider configuration if live Ximilar grading is required. Physical state is unchanged: `beta-test-uk-intake`, `SLICE-3AA5144D`, shipment `NONE`, waiting for physical shipment.

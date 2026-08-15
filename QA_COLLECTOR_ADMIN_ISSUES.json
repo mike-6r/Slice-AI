@@ -2,7 +2,7 @@
   "audit": "SLICE FULL COLLECTOR + ADMIN QA",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-15",
-  "deployedCommit": "628b00e1f722bffc53bf8cb57979e830a2971e10",
+  "deployedCommit": "af17a4ecf8ee2c118226065c3b73eb8a1c2fe435",
   "issues": [
     {
       "id": "COL-ACTION-001",
@@ -28,15 +28,15 @@
       "severity": "HIGH",
       "category": "Navigation / Data authority",
       "title": "Collectibles nav renders Asset Operations instead of a catalogue",
-      "status": "OPEN",
+      "status": "FIXED",
       "reproduction": "Open Admin Console, click Collectibles, then compare the heading and controls with Asset Operations.",
       "expected": "A canonical Collectibles catalogue with search, identity, media, custody and public-state views.",
-      "actual": "The Asset Operations pipeline board renders; Collectibles and Asset Operations are duplicate surfaces.",
+      "actual": "A canonical catalogue renders six authorised Asset records; Asset Operations remains a separate lifecycle board.",
       "consoleError": null,
       "networkError": null,
       "screenshot": null,
-      "rootCause": "admin.tsx routes both section values to AdminAssetOperations and no authoritative admin catalogue-list endpoint/component is present.",
-      "recommendedFix": "Add a backend-authoritative admin collectibles list projection and a separate catalogue component; keep operations as the lifecycle pipeline."
+      "rootCause": "Resolved by adding the backend-authoritative catalogue projection and dedicated frontend component.",
+      "resolution": "Browser QA at /admin?section=collectibles showed six canonical records and the separate Asset Operations route."
     },
     {
       "id": "ADMIN-TELEMETRY-001",
@@ -45,15 +45,15 @@
       "severity": "MEDIUM",
       "category": "Observability",
       "title": "Overall health remains Unknown despite component statuses",
-      "status": "OPEN",
+      "status": "ACCEPTED_LIMITATION",
       "reproduction": "Open Platform Operations > Health.",
       "expected": "A clear aggregate state with explicit unknown/deferred contributors.",
-      "actual": "Overall health is Unknown while API, PostgreSQL, Redis-backed readiness, storage, Ximilar and PriceCharting are shown as operational.",
+      "actual": "Overall health is Operational with limitations; Webhooks is Unknown and optional integrations are explicitly Beta Disabled.",
       "consoleError": null,
       "networkError": null,
       "screenshot": null,
-      "rootCause": "Webhook/feature-flag telemetry is unavailable to the read model.",
-      "recommendedFix": "Expose an explicit aggregate such as Operational with an Unknown/Not configured component list, without fabricating provider health."
+      "rootCause": "Optional webhook and feature-flag telemetry remains unavailable by design in this Beta environment.",
+      "resolution": "Browser QA confirmed the aggregate and explicit limitations without fabricating unavailable health."
     },
     {
       "id": "COL-FIXTURE-001",
@@ -62,15 +62,15 @@
       "severity": "MEDIUM",
       "category": "Data hygiene",
       "title": "My submissions includes legacy demo/draft noise",
-      "status": "OPEN",
+      "status": "FIXED_PROVENANCE_SAFE",
       "reproduction": "Sign in as the controlled Collector, open /list, and review My submissions after the fresh identify-card draft check.",
       "expected": "A customer-facing list should contain the collector's legitimate records, with any retained QA records clearly labelled as controlled demo data.",
-      "actual": "The list includes multiple older cancelled/demo rows and the fresh QA draft alongside the controlled lifecycle record.",
+      "actual": "Three disposable PriceCharting QA drafts were removed through the supported delete-draft path; cancelled history remains retained and excluded from the active projection.",
       "consoleError": null,
       "networkError": null,
       "screenshot": null,
-      "rootCause": "Controlled staging fixtures and QA drafts are projected together without an explicit demo/QA label or cleanup path in the customer list.",
-      "recommendedFix": "Retire or clearly label non-production fixture rows in the Collector projection; preserve supported draft deletion for disposable QA records."
+      "rootCause": "Disposable drafts had been left active after provider/media QA.",
+      "resolution": "Supported delete-draft calls returned 201 for the three disposable drafts; browser QA now shows three active records including the approved Charizard, with audit history preserved."
     },
     {
       "id": "COL-STATUS-001",
@@ -79,15 +79,15 @@
       "severity": "MEDIUM",
       "category": "Lifecycle clarity",
       "title": "Approved submission still presents a review-pending next action",
-      "status": "OPEN",
+      "status": "FIXED",
       "reproduction": "Open the controlled Charizard record from My Collectibles and compare the Details status with the journey/sidebar copy.",
       "expected": "The customer-facing journey and next action should consistently reflect the authoritative APPROVED state.",
-      "actual": "Details shows Submission status Approved, while the journey/sidebar still says Submitted and Awaiting staff review; the actionable next step is Add tracking.",
+      "actual": "Browser QA shows Approved and the actionable next step Ship your collectible; no shipment or tracking is implied.",
       "consoleError": null,
       "networkError": null,
       "screenshot": null,
-      "rootCause": "The workspace stage label and next-action copy are derived from the pre-approval journey wording rather than the authoritative submission status.",
-      "recommendedFix": "Map APPROVED to an explicit approved/shipping-required presentation and reserve review-pending copy for SUBMITTED/REVIEW states."
+      "rootCause": "Resolved by mapping APPROVED to the customer-safe approved/shipping-required projection.",
+      "resolution": "Collector browser QA confirmed the corrected status and next-action copy."
     },
     {
       "id": "INTAKE-AUDIT-001",
@@ -108,8 +108,9 @@
     }
   ],
   "notTestableWithoutAdditionalControlledData": [
-    "Fresh listing Steps 4-6 and Ximilar live analysis were not completed; the fresh exact-URL draft remains a supported disposable QA draft.",
-    "Cross-user media, anonymous R2, invalid-signature and investor/second-collector IDOR checks require separate controlled browser identities.",
+    "Valid authorised signed private-download URL (no customer download endpoint is exposed by the current public API); anonymous object and bucket-list requests were denied.",
+    "Intake-address privacy matrix and staff-only operation checks were not exercised because they would expose or mutate controlled lifecycle data.",
+    "One permitted Ximilar attempt returned NOT_CONFIGURED without a provider call; no grade was invented.",
     "Admin accept/reject, valuation, custody, publish and role mutation actions were not exercised because they would mutate controlled lifecycle or access state.",
     "Real shipment/tracking, delivery, receipt, verification, valuation, custody, publication and Phase 10 trading remain intentionally unexecuted."
   ]

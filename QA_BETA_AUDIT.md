@@ -114,3 +114,27 @@ The authenticated Collector/Admin browser pass is documented in `QA_COLLECTOR_AD
 - No shipment, delivery, receipt, verification, valuation, custody, issuance, publication or order was fabricated.
 
 **Current decision:** Controlled internal read-only beta remains GO with the documented limitations. External invited beta remains NO-GO pending the open Admin Collectibles route issue, separate-identity RBAC/IDOR checks, and fresh upload/Ximilar/submission lifecycle checks.
+
+## Pre-shipment external Beta gate — final verification 2026-08-15
+
+This section is the current verification authority; earlier sections retain historical findings.
+
+- Git `main` and VPS: `af17a4ecf8ee2c118226065c3b73eb8a1c2fe435`; API and web active; `/health` and `/ready` PASS with PostgreSQL and Redis up.
+- `ADMIN-COL-001`: FIXED. Browser QA rendered six canonical records in Collectibles; Asset Operations rendered a separate lifecycle board.
+- `ADMIN-TELEMETRY-001`: ACCEPTED LIMITATION. Platform Operations rendered `Operational with limitations`; Webhooks is `Unknown` and optional providers are explicitly Beta Disabled.
+- `COL-STATUS-001`: FIXED. The controlled Charizard rendered `Approved` with `Ship your collectible`; no shipment or tracking was created.
+- `COL-FIXTURE-001`: FIXED_PROVENANCE_SAFE. Three disposable PriceCharting drafts were cancelled through the supported owner delete-draft endpoint after QA; their audit/history remains retained and cancelled rows are excluded from the active projection.
+- Submission/RBAC checks: owner `200`; second Collector `404`; Investor `404`; Collector Admin `403`; Investor Collector Workspace `403`.
+- Anonymous direct R2 object and bucket-list requests were denied. A valid authorised private-download URL was not exercised because the current public API exposes no customer download endpoint.
+- Disposable front/back media: SAFE and checksummed. One allowed application pre-grade attempt returned `NOT_CONFIGURED` with zero provider calls; refresh returned the stored result and no grade was claimed.
+- Responsive Admin Collectibles and Platform Operations checks at 390×844, 768×1024 and 1920×1080 showed no horizontal overflow.
+
+### Current decisions
+
+- Collector panel: **GO for controlled internal Beta**.
+- Admin panel: **GO for controlled read-only internal Beta**.
+- Security: **NO-GO for external invited Beta** pending signed-download, intake-address privacy and staff-only permission checks.
+- External invited Beta: **NO-GO** while Ximilar is unconfigured if live grading is required.
+- Phase 9: `PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT`.
+- Destination: `beta-test-uk-intake`; intake reference `SLICE-3AA5144D`; shipment `NONE`.
+- Phase 10: **NO**. No shipment, receipt, verification, valuation, custody, Asset, publication, issuance, funding or order was created.

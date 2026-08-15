@@ -363,6 +363,9 @@ export class SubmissionService {
     const rows = await this.prisma.assetSubmission.findMany({
       where: {
         ownerUserId: actor.userId,
+        // Cancelled drafts remain in the database and audit log, but are
+        // retired from the ordinary customer-facing listing projection.
+        status: { not: 'CANCELLED' },
         ...(before
           ? {
               OR: [

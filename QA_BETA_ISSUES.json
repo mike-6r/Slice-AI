@@ -1,8 +1,8 @@
 {
   "audit": "SLICE LIVE BETA QA CONTINUATION PHASE 2",
   "environment": "https://staging.slicecollectable.com",
-  "auditedAt": "2026-08-14",
-  "deployedCommit": "628b00e1f722bffc53bf8cb57979e830a2971e10",
+  "auditedAt": "2026-08-15",
+  "deployedCommit": "af17a4ecf8ee2c118226065c3b73eb8a1c2fe435",
   "status": "GO_CONTROLLED_BETA_EXTERNAL_NO_GO",
   "issues": [
     { "id": "AUTH-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Authenticated Collector and Administrator login, refresh and direct protected navigation were re-tested on staging 2026-08-15 without an auth loop." },
@@ -19,20 +19,30 @@
     { "id": "DEPLOY-001", "severity": "HIGH", "status": "FIXED", "resolution": "Staging deploy script now passes VITE_APP_ENV=beta to the frontend production build so backend and client Beta policy cannot diverge." },
     { "id": "PHYSICAL-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Operations configured and approved beta-test-uk-intake. It is active, intake-available, accepting shipments and Pokémon-eligible; the controlled Charizard now selects it through the supported Collector flow. No shipment was created." },
     { "id": "COL-ACTION-001", "severity": "HIGH", "status": "FIXED", "resolution": "Collector Overview now exposes a direct List an Asset action linking to the six-step listing flow." },
-    { "id": "ADMIN-COL-001", "severity": "HIGH", "status": "OPEN", "resolution": "Admin Collectibles currently renders the Asset Operations pipeline because no separate authoritative catalogue projection/component exists." },
-    { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Platform Operations aggregate health is Unknown while unavailable webhook/feature-flag telemetry is explicitly reported." },
-    { "id": "COL-FIXTURE-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "Authenticated Collector QA found older cancelled/demo rows and a fresh QA draft in My submissions; customer-facing fixture labelling or supported cleanup is still needed." },
-    { "id": "COL-STATUS-001", "severity": "MEDIUM", "status": "OPEN", "resolution": "The controlled record is authoritative APPROVED, but the workspace journey/sidebar still says Submitted/Awaiting staff review instead of approved/shipping-required copy." },
+    { "id": "ADMIN-COL-001", "severity": "HIGH", "status": "FIXED", "resolution": "Admin Collectibles now reads the authorised canonical Asset catalogue through /admin/collectibles; browser QA showed six records, while Asset Operations remains a separate lifecycle board." },
+    { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "ACCEPTED_LIMITATION", "resolution": "Platform Operations now reports Operational with limitations and explicitly shows Beta Disabled/Unknown optional integrations; no unavailable telemetry is presented as healthy." },
+    { "id": "COL-FIXTURE-001", "severity": "MEDIUM", "status": "FIXED_PROVENANCE_SAFE", "resolution": "Three disposable PriceCharting QA drafts were cancelled through the supported owner delete-draft path after upload/pre-grade checks. Cancelled records and evidence remain retained for audit and are excluded from the active Collector projection." },
+    { "id": "COL-STATUS-001", "severity": "MEDIUM", "status": "FIXED", "resolution": "Browser QA now shows the controlled Charizard as Approved with the next action Ship your collectible; review-pending copy is reserved for submitted/review states." },
     { "id": "INTAKE-AUDIT-001", "severity": "HIGH", "status": "FIXED", "resolution": "Destination selection now writes the intake upsert and INTAKE_DESTINATION_SELECTED audit event atomically; verified against SLICE-3AA5144D." }
   ],
   "notExecuted": [
-    "credentialed Investor browser flow and cross-user private-media checks",
-    "fresh listing Steps 4–6, fresh R2 upload and one live Ximilar analysis",
-    "one live Ximilar analysis",
+    "valid authorised signed private-download URL (the current public API exposes no customer download endpoint)",
+    "intake-address privacy matrix and staff-only operation checks",
     "Admin review/intake mutation flow",
-    "Cross-account RBAC/IDOR and private-media checks requiring separate controlled sessions",
+    "full browser media visualization pass",
     "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion"
   ],
+  "latestVerification": {
+    "date": "2026-08-15",
+    "deployment": { "git": "af17a4ecf8ee2c118226065c3b73eb8a1c2fe435", "vps": "af17a4ecf8ee2c118226065c3b73eb8a1c2fe435", "api": "active", "web": "active", "health": "PASS", "ready": "PASS" },
+    "admin": { "catalogue": "PASS", "catalogueCount": 6, "assetOperationsSeparate": "PASS", "aggregateHealth": "Operational with limitations" },
+    "collector": { "approvedJourney": "PASS", "approvedNextAction": "Ship your collectible", "activeProjectionCount": 3 },
+    "rbac": { "investorCollectorWorkspace": 403, "investorSubmission": 404, "secondCollectorSubmission": 404, "collectorAdmin": 403, "ownerSubmission": 200 },
+    "freshMedia": { "front": "SAFE", "back": "SAFE", "checksums": "PASS", "draftCleanup": "PASS" },
+    "ximilar": { "appCalls": 1, "providerCalls": 0, "result": "NOT_CONFIGURED", "cachedRefresh": "PASS" },
+    "anonymousR2": { "object": "DENIED", "bucketListing": "DENIED" },
+    "responsive": { "viewports": ["390x844", "768x1024", "1920x1080"], "adminCatalogueAndPlatformHorizontalOverflow": "NO" }
+  },
   "evidence": [
     "QA_BETA_AUDIT.md",
     "public staging browser re-QA 2026-08-15",

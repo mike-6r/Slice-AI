@@ -380,3 +380,25 @@ This section is the current checklist authority and supersedes earlier pending-c
 - Phase 10: **NO**.
 
 Controlled internal Beta: **GO with documented limitations**. External invited Beta: **NO-GO** until the unchecked security/privacy, fresh media/Ximilar and fixture-cleanup gates close.
+
+## Pre-shipment gate result — 2026-08-15 (current)
+
+- Git/VPS: `af17a4ecf8ee2c118226065c3b73eb8a1c2fe435`; API/web active; `/health` and `/ready` PASS.
+- Admin Collectibles catalogue: **PASS** (six canonical Assets); Asset Operations: **separate/PASS**.
+- Platform aggregate: **Operational with limitations**. Webhooks is Unknown; optional integrations are Beta Disabled and are not presented as healthy.
+- Collector approved journey: **PASS** (`Approved` → `Ship your collectible`).
+- Disposable QA drafts: **cleaned through supported delete-draft path**; cancelled history retained; active projection has three records.
+- Cross-user submission/RBAC: owner `200`; second Collector `404`; Investor `404`; Collector Admin `403`; Investor Collector Workspace `403`.
+- Fresh media: front/back `SAFE`, checksummed and durable; anonymous R2 object/list requests denied.
+- Ximilar: one permitted application attempt, zero provider calls, `NOT_CONFIGURED`; no grade claimed.
+- Responsive checks: no horizontal overflow on Admin Collectibles/Platform Operations at 390×844, 768×1024 or 1920×1080.
+
+### Current launch decisions
+
+- Collector panel: **GO — controlled internal Beta**.
+- Admin panel: **GO — controlled read-only internal Beta**.
+- Security: **NO-GO** for external invited Beta pending valid signed-download, intake-address privacy and staff-only permission checks.
+- External invited Beta: **NO-GO** while Ximilar remains unconfigured if live grading is required.
+- Phase 9: **PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT**.
+- Destination: `beta-test-uk-intake`; intake reference `SLICE-3AA5144D`; shipment `NONE`.
+- Phase 10: **NO**. Do not create shipment, receipt, verification, valuation, custody, canonical Asset, publication, issuance, funding or orders.
