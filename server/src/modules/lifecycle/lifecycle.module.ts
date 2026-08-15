@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
+import { SubmissionsModule } from '../submissions/submissions.module';
 import { LifecycleService } from './application/lifecycle.service';
 import { LifecycleController } from './http/lifecycle.controller';
 import {
@@ -14,7 +15,7 @@ import {
 } from './ports/lifecycle-provider.ports';
 
 @Module({
-  imports: [AuthModule, AccessControlModule],
+  imports: [AuthModule, AccessControlModule, SubmissionsModule],
   controllers: [LifecycleController],
   providers: [
     LifecycleService,

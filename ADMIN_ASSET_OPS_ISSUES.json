@@ -1,0 +1,36 @@
+{
+  "area": "Asset Operations",
+  "updatedAt": "2026-08-15",
+  "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED",
+  "issues": [
+    {
+      "id": "ADMIN-ASSET-OPS-001",
+      "severity": "HIGH",
+      "status": "FIXED",
+      "summary": "Legacy KPI and right-rail layout replaced with a full-width work queue.",
+      "evidence": "AdminAssetOperations.tsx and admin-operations.css"
+    },
+    {
+      "id": "ADMIN-ASSET-OPS-002",
+      "severity": "HIGH",
+      "status": "FIXED",
+      "summary": "Queue now uses approved submission media and lifecycle blockers/readiness from the API projection.",
+      "evidence": "LifecycleService.operationsQueue"
+    },
+    {
+      "id": "ADMIN-ASSET-OPS-003",
+      "severity": "MEDIUM",
+      "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED",
+      "summary": "Operation detail mutation and responsive/accessibility walkthrough still require controlled staging evidence.",
+      "evidence": "No destructive or state-changing QA run in this code pass"
+    }
+  ],
+  "verification": {
+    "serverTypecheck": "PASS",
+    "frontendTypecheck": "PASS",
+    "changedFileLint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "browserMutationWalkthrough": "NOT_EXECUTED"
+  }
+}

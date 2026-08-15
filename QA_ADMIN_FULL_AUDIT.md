@@ -56,3 +56,7 @@ Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated 
 ## Review workstation redesign — 2026-08-15
 
 The Review Queue now uses a compact summary strip and single toolbar; queue rows lead with collectible identity and authorized front media. Submission Review now stays in the Admin Console shell and uses Review, Evidence, AI Review, Market and History tabs. Secure signed media is projected for reviewer evidence without provider calls on page load. See `ADMIN_REVIEW_DESIGN_QA.md` and `ADMIN_REVIEW_ISSUES.json` for the focused verification boundary; authenticated staging mutation and responsive evidence remain pending.
+
+## Asset Operations post-receipt workstation — 2026-08-15
+
+Asset Operations now uses a full-width lifecycle queue and collectible operation detail. The queue is receipt-gated, uses approved media, exposes server-authoritative readiness/blockers, and keeps lifecycle mutations behind existing protected commands. See `ADMIN_ASSET_OPS_DESIGN_QA.md` and `ADMIN_ASSET_OPS_ISSUES.json`; authenticated mutation, responsive and accessibility evidence remain pending.

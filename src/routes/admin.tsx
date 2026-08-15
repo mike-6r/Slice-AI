@@ -50,6 +50,7 @@ import { Wordmark } from "@/components/layout/MainNavigation";
 import { AdminCollectibleDetail } from "@/components/admin/AdminCollectibleDetail";
 import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCatalogue";
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
+import { AdminAssetOperationsDetail } from "@/components/admin/AdminAssetOperationsDetail";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
@@ -962,7 +963,21 @@ function AdminConsole() {
             failed={operations.isError}
             retry={() => void operations.refetch()}
           />
-        ) : (section === "assetOperations" || section === "collectibles") && selectedAsset ? (
+        ) : section === "assetOperations" && selectedAsset ? (
+          <AdminAssetOperationsDetail
+            assetId={selectedAsset}
+            tab={selectedUserTab}
+            onTab={(next) =>
+              void navigate({ search: (current) => ({ ...current, tab: next }), replace: true })
+            }
+            onBack={() =>
+              void navigate({
+                search: (current) => ({ ...current, asset: undefined, tab: undefined }),
+                replace: true,
+              })
+            }
+          />
+        ) : section === "collectibles" && selectedAsset ? (
           <AdminCollectibleDetail
             assetId={selectedAsset}
             tab={selectedUserTab}

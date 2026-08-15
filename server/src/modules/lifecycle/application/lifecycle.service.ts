@@ -12,6 +12,11 @@ import { createIdentityTransaction } from '../../identity/persistence/prisma-ide
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { RecentAuthService } from '../../identity/access/recent-auth.service';
 import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../../submissions/ports/submission-storage.ports';
+import { Inject } from '@nestjs/common';
+import {
   assertCustodyTransition,
   assertMoney,
   evaluateReadiness,
@@ -54,6 +59,7 @@ type BoardAsset = {
     company: { code: string };
   } | null;
   submissions: Array<{
+    id: string;
     status: string;
     submittedAt: Date | null;
     reviewedAt: Date | null;
@@ -61,7 +67,7 @@ type BoardAsset = {
       id: string;
       profile: { displayName: string; publicUsername: string | null } | null;
     };
-    media: Array<{ slot: string; status: string }>;
+    media: Array<{ slot: string; status: string; objectKey: string }>;
     marketResearch: Array<{ state: string; collectedAt: Date }>;
     intake: {
       status: string;
@@ -98,6 +104,7 @@ export class LifecycleService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
   async sellerStatus(actor: Actor, assetId: string) {
@@ -242,9 +249,10 @@ export class LifecycleService {
       orderBy: { updatedAt: 'asc' },
       take: 500,
     });
-    const projected = assets
-      .map((asset) => operationsItem(asset))
-      .filter((item): item is NonNullable<ReturnType<typeof operationsItem>> =>
+    const projected = (await Promise.all(
+      assets.map((asset) => operationsItem(asset, this.storage)),
+    ))
+      .filter((item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
         Boolean(item),
       )
       .filter(
@@ -261,13 +269,14 @@ export class LifecycleService {
             new Date(right.stageSince).getTime() ||
           left.id.localeCompare(right.id),
       );
+    const allProjected = await Promise.all(
+      assets.map((asset) => operationsItem(asset, this.storage)),
+    );
     const counts = stageCounts(
-      assets
-        .map(operationsItem)
-        .filter(
-          (item): item is NonNullable<ReturnType<typeof operationsItem>> =>
-            Boolean(item),
-        ),
+      allProjected.filter(
+        (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
+          Boolean(item),
+      ),
     );
     const start = (page - 1) * pageSize;
     const items = projected.slice(start, start + pageSize);
@@ -815,7 +824,7 @@ export class LifecycleService {
   }
 }
 
-function operationsItem(asset: BoardAsset) {
+async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
   const submission = asset.submissions[0];
   const intake = submission?.intake;
   if (!submission || submission.status !== 'APPROVED' || !intake?.receipt)
@@ -891,7 +900,19 @@ function operationsItem(asset: BoardAsset) {
   const source = asset.valuationEvidence.find(
     (item) => item.sourceType === 'STAGING_CURRENT_LISTING',
   );
-  const thumbnailUrl = source ? sourceImage(source.sourceRef) : null;
+  const approvedMedia = submission.media
+    .filter((item) => item.status === 'SAFE' && item.objectKey)
+    .sort((left) => (left.slot.toLowerCase() === 'front' ? -1 : 1));
+  const thumbnailUrl = approvedMedia[0]
+    ? await storage
+        .createPrivateDownloadUrl(
+          approvedMedia[0].objectKey,
+          new Date(Date.now() + 5 * 60_000),
+        )
+        .catch(() => null)
+    : source
+      ? sourceImage(source.sourceRef)
+      : null;
   const ageDays = Math.max(
     0,
     Math.floor((Date.now() - stageSince.getTime()) / 86_400_000),
@@ -950,7 +971,47 @@ function operationsItem(asset: BoardAsset) {
       : null,
     recommendedDetailTab: detailTab,
     submittedAt: submission.submittedAt?.toISOString() ?? null,
+    sourceContext: {
+      submissionId: submission.id,
+      receivedAt: intake.receivedAt?.toISOString() ?? null,
+      receiptConfirmedAt: intake.receipt.confirmedAt.toISOString(),
+      vault: intake.vault.displayName,
+    },
+    assignee: null,
+    blockers: readiness.blockingCodes,
+    readiness,
+    nextAction: nextActionFor(currentStage, readiness.blockingCodes),
+    eligibleActions: eligibleActionsFor(currentStage, readiness),
+    ageDays,
   };
+}
+
+function nextActionFor(stage: OperationsStage, blockers: string[]) {
+  if (stage === 'EXCEPTION') return 'Resolve the lifecycle exception';
+  if (stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS')
+    return 'Review identity and evidence';
+  if (stage === 'AWAITING_VALUATION') return 'Record a supported valuation';
+  if (stage === 'CUSTODY_PENDING') return 'Confirm secure custody';
+  if (stage === 'VAULT_READY')
+    return blockers.includes('ACTIVE_COVERAGE_REQUIRED')
+      ? 'Add active insurance coverage'
+      : 'Complete market readiness';
+  if (stage === 'MARKET_READY') return 'Publish when approved';
+  return 'Monitor market listing';
+}
+
+function eligibleActionsFor(
+  stage: OperationsStage,
+  readiness: { status: 'BLOCKED' | 'READY'; blockingCodes: string[] },
+) {
+  const actions: string[] = ['VIEW'];
+  if (stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS')
+    actions.push('REVIEW_VERIFICATION');
+  if (stage === 'AWAITING_VALUATION') actions.push('RECORD_VALUATION');
+  if (stage === 'CUSTODY_PENDING') actions.push('UPDATE_CUSTODY');
+  if (stage === 'MARKET_READY' && readiness.status === 'READY') actions.push('PUBLISH');
+  if (stage === 'EXCEPTION') actions.push('OPEN_EXCEPTION');
+  return actions;
 }
 
 function sourceImage(sourceRef: string | null) {
@@ -983,6 +1044,7 @@ function tabStage(value: string): OperationsStage | null {
   return map[value] ?? null;
 }
 function tabMatches(stage: OperationsStage, tab: string) {
+  if (tab === 'needs-action') return stage !== 'MARKET_LIVE';
   if (tab === 'verification')
     return (
       stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS'

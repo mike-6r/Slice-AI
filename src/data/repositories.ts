@@ -787,6 +787,18 @@ export type AssetOperationsBoardItem = {
   } | null;
   recommendedDetailTab: string;
   submittedAt: string | null;
+  sourceContext: {
+    submissionId: string;
+    receivedAt: string | null;
+    receiptConfirmedAt: string;
+    vault: string;
+  };
+  assignee: { id: string; displayName: string } | null;
+  blockers: string[];
+  readiness: { status: "BLOCKED" | "READY"; blockingCodes: string[] };
+  nextAction: string;
+  eligibleActions: string[];
+  ageDays: number;
 };
 export type AssetOperationsBoardResponse = {
   items: AssetOperationsBoardItem[];
@@ -1041,7 +1053,13 @@ export interface AdminRepository {
   setIntakeDestinationApproval(
     id: string,
     input: { operationallyApproved: boolean; acceptingShipments: boolean; reason: string },
-  ): Promise<{ id: string; displayName: string; operationallyApproved: boolean; acceptingShipments: boolean; audited: boolean }>;
+  ): Promise<{
+    id: string;
+    displayName: string;
+    operationallyApproved: boolean;
+    acceptingShipments: boolean;
+    audited: boolean;
+  }>;
   confirmIntakeReceipt(
     id: string,
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
