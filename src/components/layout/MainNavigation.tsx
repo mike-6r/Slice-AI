@@ -22,11 +22,7 @@ import { useSession } from "@/auth/use-session";
 import { MarketTicker } from "@/components/layout/MarketTicker";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
-import {
-  canAccessAdmin,
-  canAccessCollectorWorkspace,
-  canAccessStaffWorkspace,
-} from "@/auth/workspace-access";
+import { canAccessAdmin, canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { MORE_NAV, primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
 import { isBetaEnvironment } from "@/config/environment";
 
@@ -315,15 +311,6 @@ export function MainNavigation() {
                     Admin Console
                   </Link>
                 )}
-                {canAccessStaffWorkspace(roles) && (
-                  <Link
-                    to="/staff"
-                    onClick={() => setMobileOpen(false)}
-                    className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
-                  >
-                    Staff Dashboard
-                  </Link>
-                )}
                 {canAccessCollectorWorkspace(roles) && (
                   <Link
                     to="/collector-workspace"
@@ -561,14 +548,6 @@ function ProfileMenu({
             to="/admin"
             icon={<BriefcaseBusiness />}
             label="Admin Console"
-            close={close}
-          />
-        )}
-        {canAccessStaffWorkspace(roles) && (
-          <ProfileMenuLink
-            to="/staff"
-            icon={<BriefcaseBusiness />}
-            label="Staff Dashboard"
             close={close}
           />
         )}
