@@ -103,6 +103,7 @@ const priceChartingCards: Record<string, ImportedIdentity> = {
 };
 const priceChartingProductIds: Record<string, string> = {
   'pokemon-base-set/charizard-1st-edition-4': '715593',
+  'pokemon-evolving-skies/umbreon-vmax-215': '2513024',
 };
 
 /**

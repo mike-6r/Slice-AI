@@ -16,7 +16,10 @@ describe('TrustedReferenceImportService', () => {
         cardNumber: '215/203',
       },
       customerReference: {
-        externalReferenceId: 'pokemon-evolving-skies/umbreon-vmax-215',
+        externalReferenceId: '2513024',
+        normalizedUrl:
+          'https://www.pricecharting.com/game/pokemon-evolving-skies/umbreon-vmax-215',
+        matchQuality: 'MATCH_FOUND',
       },
     });
   });
