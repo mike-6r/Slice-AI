@@ -2,7 +2,7 @@
   "audit": "SLICE LIVE BETA QA CONTINUATION PHASE 2",
   "environment": "https://staging.slicecollectable.com",
   "auditedAt": "2026-08-14",
-  "deployedCommit": "d46c5d600e2534f011c460421244417b574cccff",
+  "deployedCommit": "1aa68bb56344909fffae7157bd20f833d82df83a",
   "status": "GO_CONTROLLED_BETA_EXTERNAL_NO_GO",
   "issues": [
     { "id": "AUTH-001", "severity": "BLOCKER", "status": "FIXED", "resolution": "Prior session bootstrap remediation remains deployed; fresh credentialed browser re-test is pending explicit credential-entry confirmation." },

@@ -2,7 +2,7 @@
 
 Environment: https://staging.slicecollectable.com  
 Audit date: 2026-08-14  
-Git/VPS commit: `d46c5d600e2534f011c460421244417b574cccff`  
+Git/VPS commit: `1aa68bb56344909fffae7157bd20f833d82df83a`  
 Account: controlled authenticated Michael Fultz session (`@michael`, Collector + Administrator)
 
 ## Deployment and provider gate
