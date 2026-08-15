@@ -44,11 +44,11 @@ const showcaseAsset = (
   showcaseKey,
 });
 
-const umbreon = showcaseAsset("umbreon-vmax-moonbreon", {
+const featuredCharizard = showcaseAsset("charizard-base-set-1st-edition", {
   slug: HOMEPAGE_FEATURED_ASSET.realAssetId,
   title: HOMEPAGE_FEATURED_ASSET.title,
-  category: "Pokémon TCG",
-  setName: "Evolving Skies · Alternate Art",
+  category: "Pokémon",
+  setName: "Base Set · 1st Edition · Holo",
   grade: HOMEPAGE_FEATURED_ASSET.grade,
   estimatedMarketValueMinor: 195_000,
   availabilityBps: 3_200,
@@ -103,7 +103,7 @@ const blastoise = showcaseAsset("blastoise", {
 
 export const vaultLiveShowcase = {
   statusLabel: "Illustrative Vault Live",
-  featuredAsset: umbreon,
+  featuredAsset: featuredCharizard,
   metrics: {
     publicVaultEvents: "8 examples",
     newlyPublished: "6 examples",
@@ -111,7 +111,7 @@ export const vaultLiveShowcase = {
     marketActivity: "12 examples",
   },
   recentlyReviewed: [charizard, jordan, pikachu, darkMagician, blastoise],
-  readiness: [umbreon, jordan, pikachu],
+  readiness: [featuredCharizard, jordan, pikachu],
   publishedAssets: [charizard, jordan, darkMagician, blastoise],
   recentEvents: [
     {

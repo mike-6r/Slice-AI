@@ -53,7 +53,7 @@ describe("Vault Live educational content", () => {
 
     expect(content.mode).toBe("showcase");
     expect(content.featuredAsset.source).toBe("showcase");
-    expect(content.featuredAsset.asset.title).toBe("1999 Charizard");
+    expect(content.featuredAsset.asset.title).toBe("1999 Base Set 1st Edition Charizard");
     expect(content.recentlyReviewed).toHaveLength(5);
     expect(content.metrics.publicVaultEvents).toBe("8 examples");
     expect(content.marketActivity.every((item) => item.units.includes("shares"))).toBe(true);

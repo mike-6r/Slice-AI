@@ -1,4 +1,5 @@
 import bedardImage from "@/assets/connor-bedard-young-guns-psa10.png";
+import charizardBaseSetImage from "@/assets/charizard-slab.jpg";
 import charizardImage from "@/assets/charizard-ex-obsidian-flames-psa10.jpg";
 import stroudImage from "@/assets/cj-stroud-purple-pulsar-psa10.jpg";
 import pikachuImage from "@/assets/pikachu-grey-felt-hat-psa10.jpg";
@@ -16,6 +17,7 @@ export type DemoAssetMediaKey =
   | "umbreon-psa10"
   | "pikachu-psa10"
   | "charizard-psa10"
+  | "charizard-base-set-1st-edition"
   | "wembanyama-bgs95"
   | "bedard-psa10"
   | "stroud-psa10";
@@ -23,6 +25,11 @@ export type DemoAssetMediaKey =
 type DemoAssetMedia = { key: DemoAssetMediaKey; src: string; alt: string };
 
 const stagedMedia: Partial<Record<string, DemoAssetMedia>> = {
+  "slice-demo-charizard-base-set-1st-edition": {
+    key: "charizard-base-set-1st-edition",
+    src: charizardBaseSetImage,
+    alt: "Static educational reference image: 1999 Base Set 1st Edition Charizard, #4 holo",
+  },
   "slice-demo-umbreon-vmax-moonbreon": {
     key: "umbreon-psa10",
     src: umbreonImage,

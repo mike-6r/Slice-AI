@@ -1,4 +1,5 @@
 import bedardImage from "@/assets/connor-bedard-young-guns-psa10.png";
+import charizardBaseSetImage from "@/assets/charizard-slab.jpg";
 import charizardImage from "@/assets/charizard-ex-obsidian-flames-psa10.jpg";
 import stroudImage from "@/assets/cj-stroud-purple-pulsar-psa10.jpg";
 import pikachuImage from "@/assets/pikachu-grey-felt-hat-psa10.jpg";
@@ -19,6 +20,7 @@ export type HomepageShowcaseAsset = Readonly<{
   movementTone: "positive" | "negative";
   realAssetId: string;
   fallbackRoute: "/marketplace";
+  staticExample?: boolean;
 }>;
 
 export type ShowcaseDestination =
@@ -135,7 +137,24 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
   },
 ] as const;
 
-export const HOMEPAGE_FEATURED_ASSET = catalogue[0];
+/**
+ * Editorial homepage hero only. This is a static educational reference and
+ * intentionally has no published Slice asset id or live market destination.
+ */
+export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
+  ...catalogue[0],
+  showcaseKey: "charizard-base-set-1st-edition",
+  symbol: "CHZ.004",
+  title: "1999 Base Set 1st Edition Charizard",
+  grade: "PSA 10 · Gem Mint",
+  image: charizardBaseSetImage,
+  displayPrice: "Reference only",
+  displaySharePrice: "Illustrative ownership only",
+  displayMovement: "Static example",
+  displayAvailability: "0%",
+  realAssetId: "slice-demo-charizard-base-set-1st-edition",
+  staticExample: true,
+};
 export const HOMEPAGE_TRENDING_ASSETS = catalogue;
 
 export const HOMEPAGE_MARKET_METRICS = [
@@ -191,7 +210,7 @@ export const HOMEPAGE_PORTFOLIO_EXAMPLE = [
 ] as const;
 
 export function showcaseDestination(asset: HomepageShowcaseAsset): ShowcaseDestination {
-  return asset.realAssetId
+  return asset.realAssetId && !asset.staticExample
     ? { kind: "asset", id: asset.realAssetId }
     : { kind: "marketplace", to: asset.fallbackRoute };
 }

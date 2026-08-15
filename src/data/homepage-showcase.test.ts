@@ -10,14 +10,20 @@ import {
 describe("homepage showcase routing", () => {
   it("uses the canonical published record when a showcase card is explicitly mapped", () => {
     expect(
-      [HOMEPAGE_FEATURED_ASSET, ...HOMEPAGE_TRENDING_ASSETS].every(
-        (asset) => showcaseDestination(asset).kind === "asset",
-      ),
+      HOMEPAGE_TRENDING_ASSETS.every((asset) => showcaseDestination(asset).kind === "asset"),
     ).toBe(true);
+    expect(showcaseDestination(HOMEPAGE_FEATURED_ASSET)).toEqual({
+      kind: "marketplace",
+      to: "/marketplace",
+    });
   });
 
   it("uses a real asset detail route only when an explicit published identifier is mapped", () => {
-    const mapped = { ...HOMEPAGE_FEATURED_ASSET, realAssetId: "published-charizard" };
+    const mapped = {
+      ...HOMEPAGE_FEATURED_ASSET,
+      realAssetId: "published-charizard",
+      staticExample: false,
+    };
     expect(showcaseDestination(mapped)).toEqual({ kind: "asset", id: "published-charizard" });
   });
 

@@ -530,7 +530,7 @@ function VaultLive() {
 }
 
 function VaultLiveBetaEmpty() {
-  const exampleMedia = assetShowcaseMedia("slice-demo-umbreon-vmax-moonbreon");
+  const exampleMedia = assetShowcaseMedia("slice-demo-charizard-base-set-1st-edition");
   return (
     <main className="vault-live-page">
       <section
@@ -548,8 +548,8 @@ function VaultLiveBetaEmpty() {
           <h1>No public Vault Live activity yet.</h1>
           <p>
             Vault Live only shows events that have completed Slice&apos;s real review, custody and
-            publication lifecycle. The Umbreon image is a static educational example only; it is not
-            a live custody event or market record.
+            publication lifecycle. The Charizard image is a static educational example only; it is
+            not a live custody event or market record.
           </p>
         </div>
         <Link className="vault-live-button vault-live-button--secondary" to="/collectors">
