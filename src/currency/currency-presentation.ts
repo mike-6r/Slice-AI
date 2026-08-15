@@ -65,11 +65,14 @@ function formatExactMinorCurrency(
   if (fractionDigits === 0) return parts.map((part) => part.value).join("");
   const fraction = String((roundedMinor % 100n) / roundingUnit).padStart(fractionDigits, "0");
   const lastNumber = Math.max(
-    ...parts.map((part, index) =>
-      part.type === "integer" || part.type === "group" ? index : -1,
-    ),
+    ...parts.map((part, index) => (part.type === "integer" || part.type === "group" ? index : -1)),
   );
-  parts.splice(lastNumber + 1, 0, { type: "decimal", value: "." }, { type: "fraction", value: fraction });
+  parts.splice(
+    lastNumber + 1,
+    0,
+    { type: "decimal", value: "." },
+    { type: "fraction", value: fraction },
+  );
   return parts.map((part) => part.value).join("");
 }
 
