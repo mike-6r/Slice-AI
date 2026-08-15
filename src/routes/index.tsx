@@ -467,7 +467,12 @@ function OwnershipWorks() {
   if (isBetaEnvironment) {
     const featured = featuredQuery.data?.[0];
     const featuredMedia = featured?.media.find((media) => media.kind === "image");
-    const featuredImage = featuredMedia?.url;
+    // Keep the educational block visually complete while the live catalogue is
+    // empty. The API asset remains authoritative when available; this approved
+    // showcase image is only a clearly labelled reference fallback.
+    const showcaseFallback = HOMEPAGE_FEATURED_ASSET;
+    const featuredImage = featuredMedia?.url ?? showcaseFallback.image;
+    const featuredTitle = featured?.details.title ?? showcaseFallback.title;
     return (
       <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
         <SectionHeading
@@ -493,19 +498,15 @@ function OwnershipWorks() {
         <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
           <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
             <div className="approved-home__ownership-image">
-              {featuredImage ? (
-                <img src={featuredImage} alt={featured?.details.title ?? "Published collectible"} />
-              ) : (
-                <span className="approved-home__ownership-image-empty">No image available</span>
-              )}
+              <img src={featuredImage} alt={featuredTitle} />
             </div>
             <div>
               <small>Step 1 · Real collectible</small>
-              <strong>{featured?.details.title ?? "Waiting for a published collectible"}</strong>
+              <strong>{featuredTitle}</strong>
               <p>
                 {featured
                   ? "A real authenticated card sits underneath the Slice market."
-                  : "The beta explainer will connect to the first published market-ready collectible."}
+                  : "A real card image illustrates the underlying collectible; live market data appears when an asset is published."}
               </p>
             </div>
           </article>
