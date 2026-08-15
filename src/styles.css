@@ -26139,3 +26139,181 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .list-step-progress ol{grid-template-columns:repeat(6,minmax(0,1fr))}.list-step-progress button{font-size:.78rem}.list-step>p{font-size:.98rem}.list-step>h2{font-size:clamp(1.7rem,3vw,2.25rem)}.list-step h3{font-size:1rem}.list-simple-fields--details{grid-template-columns:repeat(2,minmax(0,1fr))}
 .list-start-faster{margin-top:1.5rem;padding:1.35rem;border:1px solid rgba(34,211,165,.38);border-radius:.85rem;background:linear-gradient(135deg,rgba(20,80,70,.25),rgba(7,20,23,.8))}.list-start-faster input{min-height:3.35rem;font-size:1rem}.list-start-faster .button-primary{min-height:3.35rem;padding-inline:1.1rem;font-size:.95rem}.list-import-result{line-height:1.5}.list-simple-fields label,.list-more-details label{font-size:.88rem}.list-simple-fields input,.list-simple-fields select,.list-simple-fields textarea{min-height:3.35rem;font-size:1rem}.list-field-label{display:inline-flex;align-items:center;gap:.35rem}.list-field-tooltip{display:inline-grid;width:1.05rem;height:1.05rem;place-items:center;color:#38dcb2;cursor:help}.list-field-tooltip svg{width:.95rem;height:.95rem}.list-field-help{display:block;margin-top:.2rem;color:#9fb1ba;font-size:.8rem;font-weight:400;line-height:1.45}.list-ai-skip{margin-top:1.4rem;padding:1.2rem;border:1px solid rgba(149,171,181,.22);border-radius:.75rem;background:rgba(8,17,22,.6)}.list-ai-skip strong{color:#e8f5f1;font-size:1rem}.list-ai-skip p{margin-top:.45rem;color:#9eb1b8;font-size:.9rem;line-height:1.5}.list-ai-action{min-height:3.25rem!important;padding-inline:1.1rem!important;font-size:.95rem!important}.list-photo-card__body p{font-size:.82rem}.list-photo-card__actions label{min-height:2.65rem;font-size:.8rem}.list-guided-actions .button-secondary,.list-guided-actions .button-primary{min-height:3rem;font-size:.88rem}
 @media (max-width:720px){.list-step-progress{overflow:visible}.list-step-progress ol{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}.list-step-progress button{min-height:3.15rem}.asset-detail-page .asset-insight-grid{grid-template-columns:1fr}.asset-detail-page .asset-market-stats>div{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-detail-page .asset-ranking-strip dd{font-size:1.05rem}.list-start-faster .button-primary{width:100%}}
+
+/* Portfolio overview layout guardrails: keep dense panels readable at desktop widths. */
+.portfolio-page--approved .portfolio-overview-content > .portfolio-panel,
+.portfolio-page--approved .portfolio-overview-content > .portfolio-panel > .portfolio-panel__body,
+.portfolio-page--approved .portfolio-performance-hero,
+.portfolio-page--approved .portfolio-performance-hero__value,
+.portfolio-page--approved .portfolio-performance-periods,
+.portfolio-page--approved .portfolio-table-wrap,
+.portfolio-page--approved .portfolio-empty-state--table {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-panel__head {
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-panel__head h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-periods {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.08rem;
+  overflow: visible;
+}
+
+.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-periods button {
+  flex: 0 0 auto;
+  min-width: 1.65rem;
+  padding: 0.25rem 0.2rem;
+  font-size: 0.49rem;
+}
+
+.portfolio-page--approved .portfolio-performance-hero {
+  grid-template-columns: minmax(0, 1.15fr) minmax(8.7rem, 0.85fr);
+  gap: 0.65rem;
+}
+
+.portfolio-page--approved .portfolio-performance-hero__value > strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(1.4rem, 2vw, 1.85rem);
+  letter-spacing: -0.045em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page--approved .portfolio-performance-periods > div {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: baseline;
+  padding: 0.48rem 0;
+}
+
+.portfolio-page--approved .portfolio-performance-periods dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-page--approved .portfolio-performance-periods dd {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 0.62rem;
+}
+
+.portfolio-page--approved .portfolio-performance-chart {
+  display: flex;
+  min-width: 0;
+  min-height: 7.2rem;
+  grid-area: limited;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.portfolio-page--approved .portfolio-performance-chart svg {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 5.8rem;
+  overflow: visible;
+}
+
+.portfolio-page--approved .portfolio-performance-chart polyline {
+  stroke: #28d9ad;
+  stroke-width: 2;
+}
+
+.portfolio-page--approved .portfolio-performance-chart--negative polyline {
+  stroke: #f07883;
+}
+
+.portfolio-page--approved .portfolio-performance-chart__legend {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 0.65rem;
+  color: #8e9daa;
+  font-size: 0.56rem;
+  line-height: 1.2;
+}
+
+.portfolio-page--approved .portfolio-performance-chart__legend span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page--approved .portfolio-performance-chart__legend span:last-child {
+  color: #dfe8e5;
+  text-align: right;
+}
+
+.portfolio-page--approved .portfolio-empty-state--table {
+  width: 100%;
+  padding: 0.9rem;
+}
+
+.portfolio-page--approved .portfolio-empty-state--table .portfolio-empty-state__copy {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.portfolio-page--approved .portfolio-empty-state--table .portfolio-empty-state__copy p {
+  max-width: 26rem;
+  margin-inline: auto;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.portfolio-page--approved .portfolio-table--holdings th {
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.portfolio-page--approved .portfolio-table--holdings td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-page--approved .portfolio-recent-order,
+.portfolio-page--approved .portfolio-recent-order > *,
+.portfolio-page--approved .portfolio-activity aside {
+  min-width: 0;
+}
+
+.portfolio-page--approved .portfolio-activity aside {
+  max-width: 7.5rem;
+}
+
+.portfolio-page--approved .portfolio-activity aside strong,
+.portfolio-page--approved .portfolio-activity aside span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .portfolio-page--approved .portfolio-panel--hero-performance .portfolio-periods {
+    justify-content: flex-start;
+  }
+
+  .portfolio-page--approved .portfolio-performance-hero {
+    grid-template-columns: 1fr;
+    grid-template-areas: "value" "limited" "periods";
+  }
+}

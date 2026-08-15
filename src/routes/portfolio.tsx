@@ -2032,7 +2032,7 @@ function HoldingsPanel({
                           ? "No holdings match this filter."
                           : PORTFOLIO_EMPTY_STATES.holdings
                       }
-                      detail="Your authoritative holdings will appear here once they are issued or acquired."
+                      detail="Holdings appear here after a collectible is issued or acquired."
                     />
                   </td>
                 </tr>
