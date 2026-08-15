@@ -2767,7 +2767,7 @@ export class AdminService {
             status: true,
             currentPeriodEnd: true,
             cancelAtPeriodEnd: true,
-            plan: { select: { displayName: true } },
+            plan: { select: { code: true, displayName: true } },
           },
         },
       },
@@ -2896,13 +2896,31 @@ export class AdminService {
     const latestCompliance = complianceCases[0];
     const kycCase = complianceCases.find((item) => item.type.includes('KYC'));
     const kytCase = complianceCases.find((item) => item.type.includes('KYT'));
+    const roleNames = user.roleAssignments.map((assignment) => assignment.role);
+    const staffRoles = [
+      'SUPPORT',
+      'COMPLIANCE_ANALYST',
+      'ASSET_REVIEWER',
+      'VAULT_OPERATOR',
+      'FINANCE_OPERATOR',
+    ];
+    const primaryType = roleNames.includes('ADMIN')
+      ? 'ADMIN'
+      : staffRoles.some((role) => roleNames.includes(role as never))
+        ? 'STAFF'
+        : roleNames.includes('COLLECTOR')
+          ? 'COLLECTOR'
+          : 'INVESTOR';
     const collectorEnabled = Boolean(
       user.collectorSubscriptions.length ||
       user.roleAssignments.some((role) => role.role === 'COLLECTOR'),
     );
     return {
       id: user.id,
+      displayName: user.profile?.displayName ?? 'Unnamed user',
+      username: user.profile?.publicUsername ?? null,
       email: user.email,
+      primaryType,
       accountStatus: user.accountStatus,
       createdAt: user.createdAt.toISOString(),
       lastActivityAt: user.lastLoginAt?.toISOString() ?? null,
@@ -2911,6 +2929,12 @@ export class AdminService {
         ...assignment,
         createdAt: assignment.createdAt.toISOString(),
       })),
+      membership: user.collectorSubscriptions[0]
+        ? {
+            plan: user.collectorSubscriptions[0].plan.code,
+            status: user.collectorSubscriptions[0].status,
+          }
+        : { plan: null, status: null },
       statusHistory: user.statusHistory.map((entry) => ({
         ...entry,
         createdAt: entry.createdAt.toISOString(),

@@ -109,6 +109,9 @@ describe("HTTP catalogue mapping", () => {
         remainingUnits: "10",
         filledUnits: "0",
         averageFillPriceMinor: null,
+        requestedOwnershipPercent: null,
+        filledOwnershipPercent: null,
+        remainingOwnershipPercent: null,
         createdAt: "2026-08-08T00:00:00.000Z",
         closedAt: null,
       });
