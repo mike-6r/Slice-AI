@@ -252,6 +252,15 @@ export const mockRepositories: AppRepositories = {
     async getUser() {
       throw new Error("Admin user directory requires the API service.");
     },
+    async transitionUserStatus() {
+      throw new Error("Account status changes require the API service.");
+    },
+    async grantUserRole() {
+      throw new Error("Role changes require the API service.");
+    },
+    async revokeUserRole() {
+      throw new Error("Role changes require the API service.");
+    },
     async listComplianceCases() {
       return { items: [] };
     },

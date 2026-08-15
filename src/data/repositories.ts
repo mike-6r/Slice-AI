@@ -1065,6 +1065,18 @@ export interface AdminRepository {
     summary: AdminAccountsSummary;
   }>;
   getUser(id: string): Promise<AdminUserDetail>;
+  transitionUserStatus(
+    id: string,
+    input: { toStatus: string; reasonCode: string; restore?: boolean },
+  ): Promise<{ userId: string; accountStatus: string }>;
+  grantUserRole(
+    id: string,
+    input: { role: string; scopeType?: "GLOBAL"; scopeId?: "*" },
+  ): Promise<{ assignmentId: string; userId: string; role: string }>;
+  revokeUserRole(
+    id: string,
+    assignmentId: string,
+  ): Promise<{ assignmentId: string; userId: string; revoked: boolean }>;
   listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
   getFinanceSummary(): Promise<AdminFinanceSummary>;
   getFinanceDashboard(): Promise<AdminFinanceDashboard>;

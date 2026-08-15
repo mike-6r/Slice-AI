@@ -36,6 +36,7 @@ const statusChange = z
     toStatus: z.enum([
       'PENDING_REVIEW',
       'ACTIVE',
+      'DEACTIVATED',
       'RESTRICTED',
       'SUSPENDED',
       'CLOSED',

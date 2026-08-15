@@ -3943,27 +3943,10 @@ function UserDetailExperience({
     if (activeTab === "Overview") return renderOverview();
     if (activeTab === "Roles & Access")
       return (
-        <section className="admin-panel">
-          <AdminPanelHeading title="Roles & Access" />
-          {user.roles.length ? (
-            <div className="admin-detail-role-list">
-              {user.roles.map((role) => (
-                <div key={role.id}>
-                  <span className="admin-tag">{sentence(role.role)}</span>
-                  <small>
-                    Granted {date(role.createdAt)} · {role.scopeType}
-                  </small>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <AdminEmpty detail="No active roles assigned." icon={ShieldCheck} />
-          )}
-          <p className="admin-safe-note">
-            Role grants and revocations use protected backend workflows. No inline mutation is
-            available in this read-only detail view.
-          </p>
-        </section>
+        <div className="admin-detail-overview-grid">
+          <UserRoleManagement user={user} retry={retry} />
+          <AccountStatusManagement user={user} retry={retry} />
+        </div>
       );
     if (activeTab === "Investor")
       return (
@@ -4240,8 +4223,8 @@ function UserDetailExperience({
               <FileClock aria-hidden="true" /> View Audit Log
             </button>
             <p className="admin-safe-note">
-              High-risk actions require their protected backend workflow and are not performed
-              inline.
+              Status and role changes are available under Roles &amp; Access and require backend
+              authorization, audit, and confirmation.
             </p>
           </section>
           <section className="admin-panel">
@@ -4265,6 +4248,212 @@ function UserDetailExperience({
         </aside>
       </div>
     </div>
+  );
+}
+
+const adminAssignableRoles = [
+  ["COLLECTOR", "Collector"],
+  ["SUPPORT", "Support"],
+  ["COMPLIANCE_ANALYST", "Compliance analyst"],
+  ["ASSET_REVIEWER", "Asset reviewer"],
+  ["VAULT_OPERATOR", "Vault operator"],
+  ["FINANCE_OPERATOR", "Finance operator"],
+  ["ADMIN", "Administrator"],
+] as const;
+
+function UserRoleManagement({
+  user,
+  retry,
+}: {
+  user: AdminUserDetail;
+  retry: () => void;
+}) {
+  const services = useAppServices();
+  const [role, setRole] = useState("COLLECTOR");
+  const grant = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.grantUserRole(user.id, {
+        role,
+        scopeType: "GLOBAL",
+        scopeId: "*",
+      }),
+    onSuccess: retry,
+  });
+  const revoke = useMutation({
+    mutationFn: (assignmentId: string) =>
+      services.repositories.admin.revokeUserRole(user.id, assignmentId),
+    onSuccess: retry,
+  });
+  const uniqueRoles = Array.from(
+    new Map(user.roles.map((assignment) => [`${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`, assignment])).values(),
+  );
+  return (
+    <section className="admin-panel">
+      <AdminPanelHeading title="Roles & Access" />
+      {uniqueRoles.length ? (
+        <div className="admin-detail-role-list">
+          {uniqueRoles.map((assignment) => (
+            <div key={assignment.id}>
+              <span className="admin-tag">{sentence(assignment.role)}</span>
+              <small>
+                Granted {date(assignment.createdAt)} · {assignment.scopeType}
+              </small>
+              <button
+                type="button"
+                className="admin-inline-action"
+                disabled={revoke.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Revoke ${sentence(assignment.role)} from ${user.displayName}? This removes the active assignment and is recorded in the audit log.`,
+                    )
+                  )
+                    revoke.mutate(assignment.id);
+                }}
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <AdminEmpty detail="No active roles assigned." icon={ShieldCheck} />
+      )}
+      <div className="admin-detail-action-form">
+        <label>
+          Grant role
+          <select value={role} onChange={(event) => setRole(event.target.value)}>
+            {adminAssignableRoles.map(([value, label]) => (
+              <option value={value} key={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="admin-detail-action"
+          disabled={grant.isPending}
+          onClick={() => {
+            if (
+              window.confirm(
+                `Grant ${sentence(role)} to ${user.displayName}? This is an audited privilege change and may require recent authentication.`,
+              )
+            )
+              grant.mutate();
+          }}
+        >
+          {grant.isPending ? "Granting…" : "Grant role"}
+        </button>
+      </div>
+      {grant.isError || revoke.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The role change was not saved. Refresh the account and confirm your permission before retrying.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        Role changes are authorized and audited by the server. Duplicate semantic assignments are shown once.
+      </p>
+    </section>
+  );
+}
+
+function AccountStatusManagement({
+  user,
+  retry,
+}: {
+  user: AdminUserDetail;
+  retry: () => void;
+}) {
+  const services = useAppServices();
+  const [nextStatus, setNextStatus] = useState("");
+  const [reason, setReason] = useState("");
+  const transition = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.transitionUserStatus(user.id, {
+        toStatus: nextStatus,
+        reasonCode: reason.trim(),
+        restore: nextStatus === "ACTIVE",
+      }),
+    onSuccess: () => {
+      setNextStatus("");
+      setReason("");
+      retry();
+    },
+  });
+  const allowedStatuses: Record<string, Array<[string, string]>> = {
+    PENDING_REVIEW: [["ACTIVE", "Activate"]],
+    ACTIVE: [
+      ["RESTRICTED", "Restrict account"],
+      ["SUSPENDED", "Suspend account"],
+      ["DEACTIVATED", "Deactivate account"],
+    ],
+    RESTRICTED: [
+      ["ACTIVE", "Remove restriction"],
+      ["SUSPENDED", "Suspend account"],
+      ["DEACTIVATED", "Deactivate account"],
+    ],
+    SUSPENDED: [
+      ["ACTIVE", "Reactivate account"],
+      ["DEACTIVATED", "Deactivate account"],
+    ],
+    DEACTIVATED: [["ACTIVE", "Reactivate account"]],
+    CLOSED: [],
+  };
+  const options = allowedStatuses[user.accountStatus] ?? [];
+  return (
+    <section className="admin-panel">
+      <AdminPanelHeading title="Account status" />
+      <DetailRow label="Current status" value={sentence(user.accountStatus)} />
+      {options.length ? (
+        <div className="admin-detail-action-form">
+          <label>
+            New status
+            <select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>
+              <option value="">Choose an action</option>
+              {options.map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Reason (required)
+            <input
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Explain this administrative change"
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={!nextStatus || reason.trim().length < 3 || transition.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `${options.find(([value]) => value === nextStatus)?.[1] ?? "Change account status"} for ${user.displayName}? The previous state, next state, reason, actor and request ID will be audited.`,
+                )
+              )
+                transition.mutate();
+            }}
+          >
+            {transition.isPending ? "Saving…" : "Apply status change"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note">No further status transitions are permitted for this account.</p>
+      )}
+      {transition.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The status change was refused. No changes were saved; refresh the account before retrying.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        Suspension, restriction and closure can revoke sessions according to policy. Self-lockout and last-admin protections remain server-enforced.
+      </p>
+    </section>
   );
 }
 

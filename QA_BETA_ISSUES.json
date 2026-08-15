@@ -23,12 +23,14 @@
     { "id": "ADMIN-TELEMETRY-001", "severity": "MEDIUM", "status": "ACCEPTED_LIMITATION", "resolution": "Platform Operations now reports Operational with limitations and explicitly shows Beta Disabled/Unknown optional integrations; no unavailable telemetry is presented as healthy." },
     { "id": "COL-FIXTURE-001", "severity": "MEDIUM", "status": "FIXED_PROVENANCE_SAFE", "resolution": "Three disposable PriceCharting QA drafts were cancelled through the supported owner delete-draft path after upload/pre-grade checks. Cancelled records and evidence remain retained for audit and are excluded from the active Collector projection." },
     { "id": "COL-STATUS-001", "severity": "MEDIUM", "status": "FIXED", "resolution": "Browser QA now shows the controlled Charizard as Approved with the next action Ship your collectible; review-pending copy is reserved for submitted/review states." },
-    { "id": "INTAKE-AUDIT-001", "severity": "HIGH", "status": "FIXED", "resolution": "Destination selection now writes the intake upsert and INTAKE_DESTINATION_SELECTED audit event atomically; verified against SLICE-3AA5144D." }
+    { "id": "INTAKE-AUDIT-001", "severity": "HIGH", "status": "FIXED", "resolution": "Destination selection now writes the intake upsert and INTAKE_DESTINATION_SELECTED audit event atomically; verified against SLICE-3AA5144D." },
+    { "id": "ADMIN-MUTATION-001", "severity": "HIGH", "status": "IMPLEMENTED_STAGING_RETEST_REQUIRED", "resolution": "Account Detail now exposes protected status and role commands with confirmation, required status reasons, idempotency keys, refresh-safe success handling, and backend-enforced RBAC/invariants." }
   ],
   "notExecuted": [
     "valid authorised signed private-download URL (the current public API exposes no customer download endpoint)",
     "intake-address privacy matrix and staff-only operation checks",
     "Admin review/intake mutation flow",
+    "Admin account status and role mutation walkthrough",
     "full browser media visualization pass",
     "physical shipment, delivery, receipt, verification, valuation, custody, and canonical Asset promotion"
   ],

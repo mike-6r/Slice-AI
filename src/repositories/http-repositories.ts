@@ -2103,7 +2103,9 @@ const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
   };
 };
 
-const adminRepository = (client: ApiClient): AdminRepository => ({
+const adminRepository = (client: ApiClient): AdminRepository => {
+  const idempotencyKey = () => crypto.randomUUID();
+  return {
   async getOverview() {
     const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
     const users = objectField(value.users, "admin overview.users");
@@ -2344,7 +2346,10 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
     const value = objectField(
       await client.request<unknown>(`/admin/intake/destinations/${id}/approval`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": idempotencyKey(),
+        },
         body: JSON.stringify(input),
       }),
       "intake destination approval",
@@ -2404,6 +2409,46 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
   },
   async getUser(id) {
     return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
+  },
+  async transitionUserStatus(id, input) {
+    const value = objectField(
+      await client.request<unknown>(`/admin/users/${id}/status`, {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey() },
+      }),
+      "account status transition",
+    );
+    return {
+      userId: stringField(value.userId, "account status.userId"),
+      accountStatus: stringField(value.accountStatus, "account status.accountStatus"),
+    };
+  },
+  async grantUserRole(id, input) {
+    const value = objectField(
+      await client.request<unknown>(`/admin/users/${id}/roles`, {
+        method: "POST",
+        body: { scopeType: "GLOBAL", scopeId: "*", ...input },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      }),
+      "role grant",
+    );
+    return {
+      assignmentId: stringField(value.assignmentId, "role grant.assignmentId"),
+      userId: stringField(value.userId, "role grant.userId"),
+      role: stringField(value.role, "role grant.role"),
+    };
+  },
+  async revokeUserRole(id, assignmentId) {
+    await client.request<unknown>(`/admin/users/${id}/roles/${assignmentId}`, {
+      method: "DELETE",
+      headers: { "Idempotency-Key": idempotencyKey() },
+    });
+    return {
+      assignmentId,
+      userId: id,
+      revoked: true,
+    };
   },
   async listComplianceCases(input) {
     const value = objectField(
@@ -2482,7 +2527,8 @@ const adminRepository = (client: ApiClient): AdminRepository => ({
       tab ? { tab } : undefined,
     );
   },
-});
+  };
+};
 
 export function createHttpRepositories(client = new ApiClient()): AppRepositories {
   const idempotencyKey = () => crypto.randomUUID();

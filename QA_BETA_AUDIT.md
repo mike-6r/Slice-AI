@@ -90,6 +90,10 @@ This section supersedes earlier pending-credential and staging-fixture statement
 
 ## Phase 9 physical lifecycle gate — 2026-08-15
 
+## Admin Phase 2 mutation implementation — 2026-08-15
+
+The Admin Account Detail now exposes protected status and role commands with reason/confirmation UX and idempotency keys. This is implementation evidence only; no controlled account was mutated during this pass. The approved Charizard remains unchanged and the physical lifecycle gate below still applies.
+
 The approved Charizard submission was checked read-only before any physical transition:
 
 - Submission `054e7773-87ad-4b5e-9701-916a3aa5144d` remains `APPROVED`, version `12`, with no canonical Asset.

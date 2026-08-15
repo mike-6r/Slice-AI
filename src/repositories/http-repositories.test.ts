@@ -145,6 +145,50 @@ describe("HTTP catalogue mapping", () => {
     );
   });
 
+  it("uses protected admin account mutation routes with idempotency keys", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ userId: "user-1", accountStatus: "SUSPENDED" })
+      .mockResolvedValueOnce({
+        assignmentId: "assignment-1",
+        userId: "user-1",
+        role: "COLLECTOR",
+      })
+      .mockResolvedValueOnce(undefined);
+    const repositories = createHttpRepositories({ get: vi.fn(), request } as unknown as ApiClient);
+
+    await expect(
+      repositories.admin.transitionUserStatus("user-1", {
+        toStatus: "SUSPENDED",
+        reasonCode: "beta review",
+      }),
+    ).resolves.toEqual({ userId: "user-1", accountStatus: "SUSPENDED" });
+    await expect(
+      repositories.admin.grantUserRole("user-1", { role: "COLLECTOR" }),
+    ).resolves.toMatchObject({ assignmentId: "assignment-1", role: "COLLECTOR" });
+    await expect(repositories.admin.revokeUserRole("user-1", "assignment-1")).resolves.toEqual({
+      assignmentId: "assignment-1",
+      userId: "user-1",
+      revoked: true,
+    });
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      "/admin/users/user-1/status",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+    expect(request).toHaveBeenLastCalledWith(
+      "/admin/users/user-1/roles/assignment-1",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
   it("maps D17 notification topics without private resource identifiers", async () => {
     const get = vi.fn().mockResolvedValue({
       items: [
