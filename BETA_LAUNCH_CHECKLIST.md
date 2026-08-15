@@ -398,7 +398,7 @@ Controlled internal Beta: **GO with documented limitations**. External invited B
 - Collector panel: **GO — controlled internal Beta**.
 - Admin panel: **GO — controlled read-only internal Beta**.
 - Security: **NO-GO** for external invited Beta pending valid signed-download, intake-address privacy and staff-only permission checks.
-- External invited Beta: **NO-GO** while Ximilar remains unconfigured if live grading is required.
+- External invited Beta: **NO-GO** while no provider-backed live Ximilar result has been exercised; the disposable cached result remains `NOT_CONFIGURED`.
 - Phase 9: **PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT**.
 - Destination: `beta-test-uk-intake`; intake reference `SLICE-3AA5144D`; shipment `NONE`.
 - Phase 10: **NO**. Do not create shipment, receipt, verification, valuation, custody, canonical Asset, publication, issuance, funding or orders.
