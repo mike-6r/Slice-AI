@@ -24460,6 +24460,17 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     drop-shadow(0 0 1.8rem rgb(34 211 165 / 0.18));
 }
 
+/* The media wrapper is only a stage for the floating slab; it should not read
+   as a second card or framed image. */
+.approved-home .featured-market-hero--charizard .featured-market-hero__static-media {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none !important;
+  outline: 0;
+}
+
 /* Homepage rhythm pass: one readable type scale, calmer whitespace, and
    consistent card density for first-time visitors. */
 .approved-home__hero {
