@@ -26448,6 +26448,46 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 /* Customer readability pass for published asset detail and guided listing. */
 .asset-detail-page .asset-summary,.asset-detail-page .asset-market-stats,.asset-detail-page .asset-price-panel,.asset-detail-page .asset-ownership-panel,.asset-detail-page .asset-details-panel,.asset-detail-page .asset-order-book,.asset-detail-page .asset-recent-trades,.asset-detail-page .asset-similar-card{font-size:1rem}
 .asset-detail-page .asset-summary h1{font-size:clamp(1.8rem,3vw,2.7rem)}
+
+/* Collector workspace clarity pass: keep the essentials visible and group the long-tail record. */
+.collector-detail-tab-stack--simple { gap: .75rem; }
+.collector-detail-focus-card { display: grid; gap: .7rem; min-width: 0; border: 1px solid #2a4149; border-radius: .65rem; padding: 1rem; background: linear-gradient(145deg, rgba(10, 28, 34, .92), rgba(7, 15, 21, .96)); }
+.collector-detail-focus-card .collector-detail-section-heading { margin-bottom: 0; }
+.collector-detail-section-heading > div { min-width: 0; }
+.collector-detail-kicker { display: block; margin-bottom: .22rem; color: #41dfbb; font-size: .57rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.collector-detail-focus-card h3 { margin: 0; color: #f0f8f5; font-size: 1rem; }
+.collector-detail-help, .collector-detail-market-status { flex: 0 0 auto; border: 1px solid #31515b; border-radius: 999px; padding: .28rem .48rem; color: #9bb4bc; font-size: .56rem; font-weight: 700; }
+.collector-detail-market-status.is-live { border-color: rgba(46, 220, 177, .45); color: #42e0bb; }
+.collector-detail-intro { max-width: 48rem; margin: 0; color: #a5b8bd; font-size: .7rem; line-height: 1.55; }
+.collector-detail-secondary-line { margin: 0; color: #91a8b0; font-size: .64rem; }
+.collector-detail-secondary-line strong { color: #d9e9e5; }
+.collector-detail-focus-card > .collector-detail-valuation { margin-top: .15rem; }
+.collector-detail-focus-card > .collector-detail-market { margin-top: .15rem; border-top: 1px solid rgba(53, 77, 84, .7); padding-top: .75rem; }
+.collector-detail-disclosure { min-width: 0; border: 1px solid #2a3e47; border-radius: .62rem; background: rgba(8, 18, 24, .85); }
+.collector-detail-disclosure summary { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: .75rem; cursor: pointer; list-style: none; padding: .82rem .9rem; }
+.collector-detail-disclosure summary::-webkit-details-marker { display: none; }
+.collector-detail-disclosure summary > span { display: grid; min-width: 0; gap: .2rem; }
+.collector-detail-disclosure summary strong { color: #edf7f4; font-size: .76rem; }
+.collector-detail-disclosure summary small { overflow: hidden; color: #8fa6af; font-size: .61rem; text-overflow: ellipsis; white-space: nowrap; }
+.collector-detail-disclosure summary > svg { width: .9rem; flex: 0 0 auto; color: #42dcb8; transition: transform 160ms ease; }
+.collector-detail-disclosure[open] summary > svg { transform: rotate(90deg); }
+.collector-detail-disclosure__body { min-width: 0; border-top: 1px solid #263b44; padding: .85rem .9rem .95rem; }
+.collector-detail-disclosure__body--stack { display: grid; gap: 1rem; }
+.collector-detail-disclosure__body > .collector-detail-summary-grid { margin-top: 0; }
+.collector-detail-market-focus .collector-detail-valuation__primary { padding: .8rem; }
+.collector-detail-market-focus .collector-detail-valuation__primary strong { font-size: 1.3rem; }
+.collector-detail-market-focus .collector-detail-valuation > .collector-detail-summary-grid { gap: .55rem; }
+.collector-detail-market-focus .collector-detail-market .collector-detail-summary-grid { gap: .55rem; }
+.collector-detail-market-focus .collector-detail-market .collector-button { margin-top: .65rem; }
+.collector-detail-summary-card__image img, .collector-asset-card__image img, .collector-record-row__image img, .collector-attention__image img, .collector-request-card__image img { object-fit: contain; }
+.collector-asset-card__image img { padding: .35rem; }
+@media (max-width: 560px) {
+  .collector-detail-focus-card, .collector-detail-disclosure__body { padding: .75rem; }
+  .collector-detail-section-heading { align-items: flex-start; }
+  .collector-detail-help, .collector-detail-market-status { margin-top: .15rem; }
+  .collector-detail-disclosure summary { padding: .75rem; }
+  .collector-detail-disclosure summary small { white-space: normal; line-height: 1.35; }
+}
 .asset-detail-page .asset-identity-row,.asset-detail-page .asset-grade-line,.asset-detail-page .asset-description-copy{font-size:.95rem;line-height:1.55}
 .asset-detail-page .asset-ranking-strip dt,.asset-detail-page .asset-market-stats dt,.asset-detail-page .asset-chart-stats dt{font-size:.72rem;letter-spacing:.06em}
 .asset-detail-page .asset-ranking-strip dd,.asset-detail-page .asset-market-stats dd{font-size:1.25rem}

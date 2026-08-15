@@ -958,11 +958,11 @@ function WorkspaceRecordRow({
   value?: string;
   onClick: () => void;
 }) {
-  const media = asset.slug ? assetShowcaseMedia(asset.slug) : undefined;
+  const media = collectorAssetMedia(asset);
   return (
     <button className="collector-record-row" onClick={onClick}>
       <span className="collector-record-row__image">
-        {media ? <img src={media.src} alt="" /> : <PackageCheck aria-hidden="true" />}
+        {media ? <img src={media.src} alt={media.alt} /> : <PackageCheck aria-hidden="true" />}
       </span>
       <span className="collector-record-row__content">
         <small>{label}</small>
@@ -1317,7 +1317,7 @@ function RequestCards({
     >
       <section className="collector-request-cards">
         {items.map((item) => {
-          const media = item.slug ? assetShowcaseMedia(item.slug) : undefined;
+          const media = collectorAssetMedia(item);
           return (
             <button
               key={item.id}
@@ -1325,7 +1325,7 @@ function RequestCards({
               onClick={() => open("asset", item.id, "submission")}
             >
               <span className="collector-request-card__image">
-                {media ? <img src={media.src} alt="" /> : <Bell aria-hidden="true" />}
+                {media ? <img src={media.src} alt={media.alt} /> : <Bell aria-hidden="true" />}
               </span>
               <span className="collector-request-card__content">
                 <small>Action required</small>
@@ -2511,27 +2511,72 @@ function DetailOverview({
 }
 
 function DetailsTab({ asset }: { asset: CollectorWorkspaceAsset }) {
+  const essentials = [
+    ["Category", asset.category],
+    ["Brand", asset.manufacturer],
+    ["Year", asset.year?.toString()],
+    ["Set", asset.set],
+    ["Card number", asset.cardNumber ? `#${asset.cardNumber}` : null],
+    ["Variant", asset.edition],
+    ["Grade", normalizeGrade(asset.grader, asset.grade)],
+  ].filter(([, value]) => Boolean(value)) as Array<[string, string]>;
   return (
-    <div className="collector-detail-tab-stack">
-      <DetailPanel title="Collectible information">
-        <div className="collector-detail-summary-grid">
-          <Detail label="Category" value={asset.category ?? "Unavailable"} />
-          <Detail label="Brand" value={asset.manufacturer ?? "Unavailable"} />
-          <Detail label="Year" value={asset.year?.toString() ?? "Unavailable"} />
-          <Detail label="Set" value={asset.set ?? "Unavailable"} />
-          <Detail
-            label="Card number"
-            value={asset.cardNumber ? `#${asset.cardNumber}` : "Unavailable"}
-          />
-          <Detail label="Variant" value={asset.edition ?? "Unavailable"} />
-          <Detail label="Grader" value={asset.grader ?? "Unavailable"} />
-          <Detail label="Grade" value={normalizeGrade(asset.grader, asset.grade)} />
-          <Detail label="Certification" value={asset.certificationNumber ?? "Unavailable"} />
+    <div className="collector-detail-tab-stack collector-detail-tab-stack--simple">
+      <section className="collector-detail-focus-card">
+        <div className="collector-detail-section-heading">
+          <div>
+            <span className="collector-detail-kicker">Start here</span>
+            <h3>Collectible essentials</h3>
+          </div>
+          <span
+            className="collector-detail-help"
+            title="These are the key identity fields Slice uses for your collectible."
+          >
+            Key identity
+          </span>
         </div>
-      </DetailPanel>
-      <SubmissionDetail asset={asset} />
-      <ValuationDetail asset={asset} market={marketResearchSummary(asset)} />
-      <CustodyDetail asset={asset} />
+        <p className="collector-detail-intro">
+          A quick, readable summary of the card. Additional submission and custody information is
+          kept below so you can focus on the next step.
+        </p>
+        <div className="collector-detail-summary-grid">
+          {essentials.length ? (
+            essentials.map(([label, value]) => <Detail key={label} label={label} value={value} />)
+          ) : (
+            <Empty detail="Identity details will appear as your submission is completed." />
+          )}
+        </div>
+        {asset.certificationNumber ? (
+          <p className="collector-detail-secondary-line">
+            Certification · <strong>{asset.certificationNumber}</strong>
+          </p>
+        ) : null}
+      </section>
+      <details className="collector-detail-disclosure">
+        <summary>
+          <span>
+            <strong>Submission &amp; next step</strong>
+            <small>Review status, evidence and shipping actions</small>
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </summary>
+        <div className="collector-detail-disclosure__body">
+          <SubmissionDetail asset={asset} />
+        </div>
+      </details>
+      <details className="collector-detail-disclosure">
+        <summary>
+          <span>
+            <strong>Valuation &amp; custody</strong>
+            <small>Slice-supported value, market references and vault progress</small>
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </summary>
+        <div className="collector-detail-disclosure__body collector-detail-disclosure__body--stack">
+          <ValuationDetail asset={asset} market={marketResearchSummary(asset)} />
+          <CustodyDetail asset={asset} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -2544,10 +2589,38 @@ function MarketTab({
   market: ReturnType<typeof marketResearchSummary>;
 }) {
   return (
-    <div className="collector-detail-tab-stack">
-      <ValuationDetail asset={asset} market={market} />
-      <MarketResearchDetail asset={asset} market={market} />
-      <MarketDetail asset={asset} />
+    <div className="collector-detail-tab-stack collector-detail-tab-stack--simple">
+      <section className="collector-detail-focus-card collector-detail-market-focus">
+        <div className="collector-detail-section-heading">
+          <div>
+            <span className="collector-detail-kicker">Your market view</span>
+            <h3>What the market says</h3>
+          </div>
+          <span
+            className={`collector-detail-market-status ${asset.market.isLive ? "is-live" : ""}`}
+          >
+            {asset.market.isLive ? "Market live" : "Not published"}
+          </span>
+        </div>
+        <p className="collector-detail-intro">
+          Slice valuation and external research are shown separately. External references are
+          informational and do not change your Slice-supported value.
+        </p>
+        <ValuationDetail asset={asset} market={market} />
+        <MarketDetail asset={asset} />
+      </section>
+      <details className="collector-detail-disclosure">
+        <summary>
+          <span>
+            <strong>External research details</strong>
+            <small>Sales, listings and comparable research observations</small>
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </summary>
+        <div className="collector-detail-disclosure__body">
+          <MarketResearchDetail asset={asset} market={market} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -2575,18 +2648,16 @@ function HistoryTab({
 }
 
 function DetailMarketRail({ asset }: { asset: CollectorWorkspaceAsset }) {
-  const currentStatus = asset.submissionStatus === "APPROVED"
-    ? "Approved"
-    : asset.market.isLive
-      ? "Market live"
-      : stageCopy(asset.stage).label;
+  const currentStatus =
+    asset.submissionStatus === "APPROVED"
+      ? "Approved"
+      : asset.market.isLive
+        ? "Market live"
+        : stageCopy(asset.stage).label;
   return (
     <section className="collector-panel collector-detail-rail-card">
       <PanelHeader title="Current status" />
-      <DetailRailRow
-        label="Current status"
-        value={currentStatus}
-      />
+      <DetailRailRow label="Current status" value={currentStatus} />
       <DetailRailRow label="Shares available" value={availability(asset)} />
       <DetailRailRow
         label="Owners"
@@ -3227,12 +3298,45 @@ function AssetThumbnail({
   asset: CollectorWorkspaceAsset;
   className?: string;
 }) {
-  const media = asset.slug ? assetShowcaseMedia(asset.slug) : undefined;
+  const media = collectorAssetMedia(asset);
   return (
     <span className={className ?? "collector-asset-thumbnail"}>
-      {media ? <img src={media.src} alt="" /> : <PackageCheck aria-hidden="true" />}
+      {media ? <img src={media.src} alt={media.alt} /> : <PackageCheck aria-hidden="true" />}
     </span>
   );
+}
+
+/**
+ * Collector projections intentionally expose evidence metadata rather than private storage URLs.
+ * For the staged catalogue, use the same canonical reference image as the public catalogue when
+ * the record has not supplied a renderable front image. Unknown records retain the neutral icon.
+ */
+function collectorAssetMedia(asset: CollectorWorkspaceAsset) {
+  if (asset.slug) {
+    const media = assetShowcaseMedia(asset.slug);
+    if (media) return media;
+  }
+  const identity = [asset.title, asset.set, asset.edition, asset.cardNumber]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const stagedSlug = identity.includes("umbreon")
+    ? "slice-demo-umbreon-vmax-moonbreon"
+    : identity.includes("pikachu") && identity.includes("grey")
+      ? "slice-demo-pikachu-grey-felt-hat"
+      : identity.includes("charizard") &&
+          (identity.includes("obsidian") || identity.includes("223/197"))
+        ? "slice-demo-charizard-ex-obsidian-flames"
+        : identity.includes("charizard") && identity.includes("base")
+          ? "slice-demo-charizard-base-set-1st-edition"
+          : identity.includes("wembanyama") || identity.includes("victor")
+            ? "slice-demo-victor-wembanyama-prizm-rookie"
+            : identity.includes("bedard")
+              ? "slice-demo-connor-bedard-young-guns"
+              : identity.includes("stroud")
+                ? "slice-demo-cj-stroud-purple-pulsar-rookie"
+                : undefined;
+  return stagedSlug ? assetShowcaseMedia(stagedSlug) : undefined;
 }
 function AttentionRow({
   item,
@@ -3241,12 +3345,12 @@ function AttentionRow({
   item: CollectorWorkspaceOverview["attention"][number];
   open: Open;
 }) {
-  const media = item.slug ? assetShowcaseMedia(item.slug) : undefined;
+  const media = collectorAssetMedia(item);
   return (
     <li>
       <button onClick={() => open("asset", item.id)}>
         <span className="collector-attention__image">
-          {media ? <img src={media.src} alt="" /> : <Bell aria-hidden="true" />}
+          {media ? <img src={media.src} alt={media.alt} /> : <Bell aria-hidden="true" />}
         </span>
         <span>
           <strong>{item.title}</strong>
@@ -3337,9 +3441,7 @@ function StatusBadge({
 }) {
   const label = submissionStatus === "APPROVED" ? "Approved" : stageCopy(stage).label;
   return (
-    <span className={`collector-status collector-status--${stage.toLowerCase()}`}>
-      {label}
-    </span>
+    <span className={`collector-status collector-status--${stage.toLowerCase()}`}>{label}</span>
   );
 }
 function WorkspacePage({
