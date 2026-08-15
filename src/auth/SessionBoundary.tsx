@@ -144,13 +144,15 @@ export function SessionRestoreScreen({
         role="status"
         aria-live={isFailure ? "assertive" : "polite"}
       >
-        <div className="session-restore-brand" aria-label="Slice">
-          <img src={SLICE_LOGO_ASSET} alt="" />
-          <span>SLICE</span>
+        <div className="session-restore-identity">
+          <div className="session-restore-brand" aria-label="Slice">
+            <img src={SLICE_LOGO_ASSET} alt="" />
+            <span>SLICE</span>
+          </div>
+          <p className="session-restore-eyebrow">
+            <LockKeyhole aria-hidden="true" size={13} /> Secure session
+          </p>
         </div>
-        <p className="session-restore-eyebrow">
-          <LockKeyhole aria-hidden="true" size={13} /> Secure session
-        </p>
         <h1 id="session-restore-title" className="session-restore-title">
           {title}
         </h1>
