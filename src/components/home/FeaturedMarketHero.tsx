@@ -34,7 +34,6 @@ export function FeaturedMarketHero() {
           </div>
           <div className="featured-market-hero__static-media">
             <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
-            <span>Static educational example</span>
           </div>
           <div className="charizard-showcase__copy">
             <div className="charizard-showcase__tags">
@@ -42,11 +41,12 @@ export function FeaturedMarketHero() {
               <span>1st Edition</span>
               <span>Holo · #4</span>
             </div>
-            <p className="page-kicker">Static showcase example</p>
+            <p className="page-kicker">Featured card</p>
             <h2>{HOMEPAGE_FEATURED_ASSET.title}</h2>
             <p>
-              An iconic authenticated collectible sits underneath the idea of Slice ownership. This
-              image is a static reference only—not a live published Slice asset or market quote.
+              An iconic authenticated collectible shows the kind of card that can sit underneath a
+              Slice ownership market. Live values appear only when an asset is published and
+              market-ready.
             </p>
             <Link to="/marketplace" className="charizard-showcase__cta">
               Explore the marketplace <span aria-hidden="true">↗</span>

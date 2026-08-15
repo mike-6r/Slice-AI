@@ -22097,6 +22097,7 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   font-size: 0.7rem;
 }
 .approved-home .featured-market-hero--charizard .featured-market-hero__static-media {
+  isolation: isolate;
   z-index: 1;
   align-self: end;
   min-height: 17rem;
@@ -22107,11 +22108,50 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
     0 18px 36px rgb(0 0 0 / 0.42),
     0 0 38px rgb(34 211 165 / 0.24);
   transform: rotate(-2deg);
-  animation: charizard-card-float 6s ease-in-out infinite;
+  animation:
+    charizard-card-float 6s ease-in-out infinite,
+    charizard-card-radiance 4.8s ease-in-out infinite;
+}
+.approved-home .featured-market-hero--charizard .featured-market-hero__static-media::before {
+  position: absolute;
+  z-index: 0;
+  inset: -28%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 210deg,
+    transparent 0 32%,
+    rgb(117 255 218 / 0.2) 42%,
+    transparent 52% 75%,
+    rgb(34 211 165 / 0.16) 87%,
+    transparent
+  );
+  content: "";
+  filter: blur(16px);
+  animation: charizard-card-aura 9s linear infinite;
+  pointer-events: none;
+}
+.approved-home .featured-market-hero--charizard .featured-market-hero__static-media::after {
+  position: absolute;
+  z-index: 2;
+  inset: -20% 40% -20% -65%;
+  background: linear-gradient(
+    108deg,
+    transparent 32%,
+    rgb(255 255 255 / 0.3) 47%,
+    rgb(116 255 218 / 0.22) 51%,
+    transparent 64%
+  );
+  content: "";
+  transform: translateX(-35%) rotate(12deg);
+  animation: charizard-card-sheen 5.5s ease-in-out infinite;
+  pointer-events: none;
 }
 .approved-home .featured-market-hero--charizard .featured-market-hero__static-media img {
+  position: relative;
+  z-index: 1;
   padding: 0.35rem;
   object-fit: contain;
+  animation: charizard-card-image 7s ease-in-out infinite;
 }
 .charizard-showcase__copy {
   z-index: 1;
@@ -22198,6 +22238,32 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   0%, 100% { transform: rotate(-2deg) translateY(0); }
   50% { transform: rotate(1deg) translateY(-0.45rem); }
 }
+@keyframes charizard-card-radiance {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgb(177 250 226 / 0.1),
+      0 18px 36px rgb(0 0 0 / 0.42),
+      0 0 38px rgb(34 211 165 / 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(177 250 226 / 0.24),
+      0 22px 42px rgb(0 0 0 / 0.48),
+      0 0 58px rgb(34 211 165 / 0.42);
+  }
+}
+@keyframes charizard-card-aura {
+  to { transform: rotate(360deg); }
+}
+@keyframes charizard-card-sheen {
+  0%, 25% { opacity: 0; transform: translateX(-35%) rotate(12deg); }
+  42% { opacity: 0.9; }
+  68%, 100% { opacity: 0; transform: translateX(210%) rotate(12deg); }
+}
+@keyframes charizard-card-image {
+  0%, 100% { filter: saturate(1.04) contrast(1.02) brightness(1); }
+  50% { filter: saturate(1.12) contrast(1.05) brightness(1.06); }
+}
 @keyframes charizard-showcase-sweep {
   to { transform: rotate(360deg); }
 }
@@ -22208,7 +22274,10 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
 @media (prefers-reduced-motion: reduce) {
   .approved-home .featured-market-hero--charizard::before,
   .charizard-showcase__glow,
-  .approved-home .featured-market-hero--charizard .featured-market-hero__static-media {
+  .approved-home .featured-market-hero--charizard .featured-market-hero__static-media,
+  .approved-home .featured-market-hero--charizard .featured-market-hero__static-media::before,
+  .approved-home .featured-market-hero--charizard .featured-market-hero__static-media::after,
+  .approved-home .featured-market-hero--charizard .featured-market-hero__static-media img {
     animation: none;
   }
 }
