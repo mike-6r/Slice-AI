@@ -21,6 +21,58 @@ describe('TrustedReferenceImportService', () => {
     });
   });
 
+  it('preserves the exact Base Set 1st Edition Charizard product identity', () => {
+    expect(
+      service.identify(
+        'https://www.pricecharting.com/game/pokemon-base-set/charizard-1st-edition-4#completed',
+      ),
+    ).toMatchObject({
+      status: 'MATCH_FOUND',
+      provider: 'PriceCharting',
+      identity: {
+        name: 'Charizard',
+        year: '1999',
+        set: 'Pokemon Base Set',
+        cardNumber: '4',
+        edition: '1st Edition',
+        variant: 'Holo',
+      },
+      customerReference: {
+        externalReferenceId: '715593',
+        normalizedUrl:
+          'https://www.pricecharting.com/game/pokemon-base-set/charizard-1st-edition-4',
+        matchQuality: 'MATCH_FOUND',
+      },
+    });
+  });
+
+  it('uses the retained exact product id for live confirmation', async () => {
+    const getProduct = jest.fn().mockResolvedValue({
+      providerProductId: '715593',
+      title: 'Charizard 1st Edition #4',
+      set: 'Pokemon Base Set',
+      year: 1999,
+      upc: null,
+      releaseDate: '1999-01-09',
+      currency: 'USD',
+      references: [],
+    });
+    const live = new TrustedReferenceImportService({
+      get: () => ({
+        getProduct,
+        health: async () => ({ configured: true, status: 'UP', detail: 'test' }),
+      }),
+    } as never);
+
+    const result = await live.identifyLive(
+      'https://www.pricecharting.com/game/pokemon-base-set/charizard-1st-edition-4#completed',
+    );
+
+    expect(getProduct).toHaveBeenCalledWith('715593');
+    expect(result.customerReference?.externalReferenceId).toBe('715593');
+    expect(result.status).toBe('MATCH_FOUND');
+  });
+
   it('rejects arbitrary and private-network URLs', () => {
     expect(service.identify('http://127.0.0.1:3000/admin').status).toBe(
       'UNSUPPORTED',

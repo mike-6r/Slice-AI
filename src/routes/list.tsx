@@ -58,6 +58,7 @@ type ListingForm = {
   year: string;
   set: string;
   cardNumber: string;
+  edition: string;
   playerOrCharacter: string;
   variant: string;
   language: string;
@@ -77,6 +78,7 @@ const blank: ListingForm = {
   year: "",
   set: "",
   cardNumber: "",
+  edition: "",
   playerOrCharacter: "",
   variant: "",
   language: "",
@@ -337,6 +339,7 @@ export function SubmissionPage() {
       year: identity.year ?? current.year,
       set: identity.set ?? current.set,
       cardNumber: identity.cardNumber ?? current.cardNumber,
+      edition: identity.edition ?? current.edition,
       playerOrCharacter: identity.playerOrCharacter ?? current.playerOrCharacter,
       variant: identity.variant ?? current.variant,
       customerReference: referenceResult.customerReference ?? undefined,
@@ -703,8 +706,8 @@ function IdentityStep({
             card?
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-subtle">
-            PriceCharting links can prefill supported card details. eBay import is available when
-            Slice’s approved provider integration is configured.
+            Paste a PriceCharting link and Slice will try to identify the exact card and prefill the
+            details for you.
           </p>
         </div>
         <div className="mt-3 flex min-w-0 gap-2 max-sm:grid">
@@ -722,12 +725,13 @@ function IdentityStep({
             disabled={!referenceUrl.trim() || identifying}
             onClick={onIdentify}
           >
-            {identifying ? "Identifying…" : "Identify card"}
+            {identifying ? "Identifying…" : "Identify Card"}
           </button>
         </div>
+        <p className="mt-2 text-xs text-subtle">Currently supported: PriceCharting.</p>
         {referenceResult ? (
           <div className="list-import-result mt-3 grid gap-2 rounded-lg border border-border bg-background/50 p-3 text-sm">
-            <strong className="text-accent">{referenceResult.status.replaceAll("_", " ")}</strong>
+            <strong className="text-accent">{referenceStatusLabel(referenceResult.status)}</strong>
             <p className="text-subtle">{referenceResult.message}</p>
             {referenceResult.customerReference ? (
               <>
@@ -831,6 +835,13 @@ function DetailsStep({
           onChange={(value) => onChange("cardNumber", value)}
           placeholder="e.g. 215/203"
           help="The number printed on the card, such as 215/203 or #339."
+        />
+        <Input
+          label="Edition"
+          value={form.edition}
+          onChange={(value) => onChange("edition", value)}
+          placeholder="e.g. 1st Edition"
+          help="A special print version such as 1st Edition or Unlimited."
         />
         <Input
           label="Player or character"
@@ -989,52 +1000,75 @@ function MarketResults({ research }: { research: MarketResearchSnapshot }) {
   const sales = research.snapshot.sales;
   const listings = research.snapshot.listings;
   const priceGuides = research.snapshot.priceGuides;
+  const hasPriceGuide = Boolean(priceGuides);
+  const hasSales = Boolean(sales);
+  const hasListings = Boolean(listings);
+  const hasReference = hasPriceGuide || hasSales || hasListings;
   return (
     <section className="list-market-result">
       <div className="list-market-result__top">
-        <span>Market check</span>
+        <span>Market reference</span>
         <strong>
-          {research.state === "FOUND"
-            ? "Comparable data found"
-            : research.state === "LIMITED"
-              ? "Limited market data"
-              : "No reliable market data found"}
+          {hasReference
+            ? hasPriceGuide && !hasSales && !hasListings
+              ? "Market reference found"
+              : research.state === "FOUND"
+                ? "Comparable data found"
+                : "Limited market data"
+            : "No exact market reference found"}
         </strong>
       </div>
+      {hasPriceGuide ? (
+        <p className="list-step-hint">
+          PriceCharting provides a current market-guide reference. Completed-sale data appears
+          separately when an approved sales source is available.
+        </p>
+      ) : null}
+      {!hasReference ? (
+        <p className="list-step-hint">
+          {research.providerFailures[0]?.reason ??
+            "We couldn't confidently identify this exact version yet. Check the card number, set, and edition, or continue and our review team can verify it."}
+        </p>
+      ) : null}
       <div className="list-market-result__metrics">
-        <Metric label="Recent completed sales" value={sales ? range(sales) : "Unavailable"} />
-        <Metric
-          label="Median recent sale"
-          value={sales?.medianMinor ? money(sales.medianMinor, sales.currency) : "Unavailable"}
-        />
-        <Metric label="Current listings" value={listings ? range(listings) : "Unavailable"} />
-        <Metric
-          label="PriceCharting reference"
-          value={
-            priceGuides?.medianMinor
-              ? money(priceGuides.medianMinor, priceGuides.currency)
-              : "Unavailable"
-          }
-        />
-        <Metric label="Exact comparable sales" value={String(research.snapshot.exactCompCount)} />
+        {sales ? <Metric label="Recent completed sales" value={range(sales)} /> : null}
+        {sales?.medianMinor ? (
+          <Metric label="Median recent sale" value={money(sales.medianMinor, sales.currency)} />
+        ) : null}
+        {listings ? <Metric label="Current listings" value={range(listings)} /> : null}
+        {priceGuides?.medianMinor ? (
+          <Metric
+            label="PriceCharting current guide"
+            value={money(priceGuides.medianMinor, priceGuides.currency)}
+          />
+        ) : null}
+        {hasSales ? (
+          <Metric label="Exact comparable sales" value={String(research.snapshot.exactCompCount)} />
+        ) : null}
         <Metric label="Sources" value={String(research.sourceCoverage.available)} />
         <Metric label="Updated" value={formatDate(research.collectedAt)} />
       </div>
-      <details>
-        <summary>View comparable sales</summary>
-        <MarketObservations
-          title="Completed sales"
-          items={research.observations.filter((item) => item.observationType === "SALE")}
-        />
-        <MarketObservations
-          title="Current listings"
-          items={research.observations.filter((item) => item.observationType === "LISTING")}
-        />
-        <MarketObservations
-          title="PriceCharting market-guide references"
-          items={research.observations.filter((item) => item.observationType === "PRICE_GUIDE")}
-        />
-      </details>
+      {research.observations.length ? (
+        <details>
+          <summary>View comparable sales</summary>
+          {hasSales ? (
+            <MarketObservations
+              title="Completed sales"
+              items={research.observations.filter((item) => item.observationType === "SALE")}
+            />
+          ) : null}
+          {hasListings ? (
+            <MarketObservations
+              title="Current listings"
+              items={research.observations.filter((item) => item.observationType === "LISTING")}
+            />
+          ) : null}
+          <MarketObservations
+            title="PriceCharting market-guide references"
+            items={research.observations.filter((item) => item.observationType === "PRICE_GUIDE")}
+          />
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -1820,6 +1854,7 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
     ...optional("year"),
     ...optional("set"),
     ...optional("cardNumber"),
+    ...optional("edition"),
     ...optional("language"),
     ...optional("condition"),
     ...optional("grader"),
@@ -1837,6 +1872,20 @@ function activeMedia(submission: SubmissionDetail | undefined, slot: string) {
 }
 function slotLabel(slot: string) {
   return slot.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function referenceStatusLabel(status: CollectibleReferenceImport["status"]) {
+  switch (status) {
+    case "MATCH_FOUND":
+      return "EXACT PRODUCT FOUND";
+    case "PARTIAL_MATCH":
+      return "MORE INFORMATION NEEDED";
+    case "COULD_NOT_IDENTIFY":
+      return "NO MATCH FOUND";
+    case "PROVIDER_UNAVAILABLE":
+      return "PROVIDER UNAVAILABLE";
+    default:
+      return "MORE INFORMATION NEEDED";
+  }
 }
 function fileError(file: File) {
   if (!ACCEPTED_MEDIA_TYPES.has(file.type)) return "Choose a JPG, PNG, or WebP photo.";

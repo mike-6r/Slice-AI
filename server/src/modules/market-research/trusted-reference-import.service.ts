@@ -31,6 +31,7 @@ type ReferenceImport = {
 const trustedHosts = new Map<string, 'PRICECHARTING' | 'EBAY'>([
   ['pricecharting.com', 'PRICECHARTING'],
   ['www.pricecharting.com', 'PRICECHARTING'],
+  ['m.pricecharting.com', 'PRICECHARTING'],
   ['ebay.com', 'EBAY'],
   ['www.ebay.com', 'EBAY'],
   ['ebay.co.uk', 'EBAY'],
@@ -38,6 +39,17 @@ const trustedHosts = new Map<string, 'PRICECHARTING' | 'EBAY'>([
 ]);
 
 const priceChartingCards: Record<string, ImportedIdentity> = {
+  'pokemon-base-set/charizard-1st-edition-4': {
+    categorySlug: 'pokemon-tcg',
+    name: 'Charizard',
+    manufacturer: 'The Pokémon Company',
+    year: '1999',
+    set: 'Pokemon Base Set',
+    cardNumber: '4',
+    playerOrCharacter: 'Charizard',
+    edition: '1st Edition',
+    variant: 'Holo',
+  },
   'pokemon-evolving-skies/umbreon-vmax-215': {
     categorySlug: 'pokemon-tcg',
     name: 'Umbreon VMAX',
@@ -89,6 +101,9 @@ const priceChartingCards: Record<string, ImportedIdentity> = {
     variant: 'Alternate Art',
   },
 };
+const priceChartingProductIds: Record<string, string> = {
+  'pokemon-base-set/charizard-1st-edition-4': '715593',
+};
 
 /**
  * URL-only, provider-specific import. It deliberately never fetches a user
@@ -127,9 +142,7 @@ export class TrustedReferenceImportService {
       parsed.pathname.slice('/game/'.length).replace(/\/+$/, ''),
     ).toLowerCase();
     const providerProductId =
-      parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ?? key;
-    parsed.searchParams.delete('t');
-    parsed.searchParams.delete('token');
+      parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ?? priceChartingProductIds[key] ?? key;
     const identity = priceChartingCards[key];
     if (!identity) {
       const partial = partialIdentity(key);
@@ -157,7 +170,7 @@ export class TrustedReferenceImportService {
     const originalTitle = `${identity.year} ${identity.set} ${identity.name} #${identity.cardNumber}`;
     return {
       status: 'MATCH_FOUND',
-      message: 'We found a strong match.',
+      message: 'PriceCharting found this exact product. Check the details, then continue.',
       provider: 'PriceCharting',
       identity,
       customerReference: {
@@ -253,6 +266,12 @@ function parseTrustedUrl(
     const provider = trustedHosts.get(parsed.hostname.toLowerCase())!;
     if (provider === 'PRICECHARTING' && !parsed.pathname.startsWith('/game/'))
       return undefined;
+    if (provider === 'PRICECHARTING') {
+      parsed.hostname = 'www.pricecharting.com';
+      parsed.hash = '';
+      const id = parsed.searchParams.get('id')?.match(/^\d+$/)?.[0];
+      parsed.search = id ? `?id=${id}` : '';
+    }
     return Object.assign(parsed, { provider });
   } catch {
     return undefined;

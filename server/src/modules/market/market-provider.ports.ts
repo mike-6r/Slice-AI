@@ -4,6 +4,7 @@ export type MarketIdentity = {
   manufacturer: string | null;
   set: string | null;
   cardNumber: string | null;
+  edition?: string | null;
   title: string;
   variant: string | null;
   grader: string | null;

@@ -315,6 +315,7 @@ export interface CreateSubmissionDraft {
     set?: string;
     year?: string;
     cardNumber?: string;
+    edition?: string;
     language?: string;
     condition?: string;
     grader?: string;

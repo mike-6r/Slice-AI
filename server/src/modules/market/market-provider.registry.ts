@@ -288,7 +288,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function buildSearchQuery(identity: MarketIdentity) {
-  return [identity.title, identity.set, identity.cardNumber, identity.variant, identity.year]
+  return [identity.title, identity.edition, identity.set, identity.cardNumber, identity.variant, identity.year]
     .filter((value): value is string | number => Boolean(value))
     .join(' ');
 }

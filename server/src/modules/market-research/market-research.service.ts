@@ -34,6 +34,7 @@ type Identity = {
   set: string | null;
   year: string | null;
   cardNumber: string | null;
+  edition: string | null;
   language: string | null;
   grader: string | null;
   grade: string | null;
@@ -191,6 +192,7 @@ export class CollectibleMarketResearchService {
       manufacturer: identity.manufacturer,
       set: identity.set,
       cardNumber: identity.cardNumber,
+      edition: identity.edition,
       title: identity.name,
       variant: identity.variant,
       grader: identity.grader,
@@ -725,6 +727,7 @@ function canonicalIdentity(input: MarketResearchInput): Identity {
     set: read('set'),
     year: read('year'),
     cardNumber: read('cardNumber'),
+    edition: read('edition'),
     language: read('language'),
     grader: read('grader'),
     grade: read('grade'),

@@ -59,6 +59,7 @@ const metadataAllowedKeys = new Set([
   'set',
   'year',
   'cardNumber',
+  'edition',
   'language',
   'condition',
   'grader',
