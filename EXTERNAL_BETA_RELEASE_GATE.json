@@ -1,0 +1,84 @@
+{
+  "decision": "NO_GO",
+  "commit": "9ef152b99dc3660965ba231f73226d62452c831c",
+  "deployment": {
+    "vpsHead": "9ef152b99dc3660965ba231f73226d62452c831c",
+    "api": "ACTIVE",
+    "web": "ACTIVE",
+    "health": "PASS",
+    "ready": "PASS",
+    "migrations": "58_UP_TO_DATE",
+    "appEnv": "beta",
+    "frontend": "BETA_API_BUILD_VERIFIED"
+  },
+  "blockers": [
+    {
+      "id": "ADMIN-PHASE3-001",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "reason": "Fresh authenticated Admin route, mutation, RBAC/IDOR, responsive, accessibility and request-health evidence is missing."
+    },
+    {
+      "id": "COLLECTOR-PHASE3-001",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "reason": "Fresh authenticated Collector listing, media, privacy, Ximilar, responsive, accessibility and request-health evidence is missing."
+    },
+    {
+      "id": "COL-PRIVATE-MEDIA-001",
+      "severity": "HIGH",
+      "status": "RETEST_REQUIRED",
+      "reason": "Owner/authorized staff allow and second-Collector/Investor/anonymous deny checks for signed private media and intake address were not freshly exercised."
+    },
+    {
+      "id": "INVESTOR-EXTERNAL-001",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "reason": "Fresh independent Investor Dashboard, Portfolio, Wallet, Orders, Activity and Become Collector evidence is missing."
+    }
+  ],
+  "critical": [],
+  "high": ["ADMIN-PHASE3-001", "COLLECTOR-PHASE3-001", "COL-PRIVATE-MEDIA-001", "INVESTOR-EXTERNAL-001"],
+  "acceptedLimitations": [
+    "Ximilar is NOT_CONFIGURED and optional; the last permitted application attempt made zero provider calls and claimed no grade.",
+    "Plaid, Bridge, SMS, email verification and 2FA are Beta-disabled/deferred.",
+    "Advanced webhook and feature-flag telemetry is limited/unavailable and is labelled truthfully.",
+    "Physical shipment and Phase 10 trading require real-world events and remain untouched."
+  ],
+  "security": {
+    "publicSmoke": "PASS",
+    "priorRbacChecks": "PASS_WITH_FRESH_RETEST_REQUIRED",
+    "anonymousR2": "DENIED",
+    "bucketListing": "DENIED",
+    "signedDownloadMatrix": "NOT_EXECUTED",
+    "intakePrivacyMatrix": "NOT_EXECUTED",
+    "secretLeakage": "NONE_OBSERVED"
+  },
+  "providers": {
+    "r2": "OPERATIONAL_WITH_LIMITATIONS",
+    "priceCharting": "OPERATIONAL",
+    "priceChartingPageRenderCalls": 0,
+    "ximilar": "NOT_CONFIGURED",
+    "plaid": "BETA_DISABLED"
+  },
+  "roles": {
+    "public": "PASS",
+    "investor": "NO_GO_FRESH_EVIDENCE_REQUIRED",
+    "collector": "NO_GO_FRESH_EVIDENCE_REQUIRED",
+    "secondCollector": "NO_GO_FRESH_PRIVACY_MATRIX_REQUIRED",
+    "staff": "NOT_EXECUTED",
+    "admin": "NO_GO_FRESH_EVIDENCE_REQUIRED"
+  },
+  "operations": {
+    "postgres": "PASS",
+    "redis": "PASS",
+    "workers": "NOT_FRESHLY_VERIFIED",
+    "jobs": "NOT_FRESHLY_VERIFIED",
+    "webhooks": "TELEMETRY_UNAVAILABLE",
+    "featureFlags": "TELEMETRY_UNAVAILABLE",
+    "intake": "APPROVED_BETA_DESTINATION",
+    "finance": "D13_D14_AUTHORITY_UNTOUCHED",
+    "phase9": "WAITING_FOR_PHYSICAL_SHIPMENT",
+    "phase10": "NOT_READY"
+  }
+}

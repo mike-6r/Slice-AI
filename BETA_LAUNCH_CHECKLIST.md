@@ -425,3 +425,39 @@ Controlled internal Beta: **GO with documented limitations**. External invited B
 - Controlled internal read-only Beta: **GO with documented limitations**.
 - External invited Beta: **NO-GO**.
 - Phase 10: **NO**.
+
+## External Invited Beta Final Gate — 2026-08-15 (current)
+
+Release report: `EXTERNAL_BETA_RELEASE_READINESS.md`
+
+Machine-readable gate: `EXTERNAL_BETA_RELEASE_GATE.json`
+
+### Deployment and public site
+
+- [x] Git main and VPS are `9ef152b99dc3660965ba231f73226d62452c831c`.
+- [x] API and web services active; `/health` and `/ready` return 200.
+- [x] Prisma reports 58 migrations with no pending migrations.
+- [x] API `APP_ENV=beta`; frontend rebuilt with `VITE_APP_ENV=beta`, API data mode and the staging API origin.
+- [x] Public homepage, Marketplace, Collectors, Vault Live, login and unknown-route smoke checks pass after the corrected build.
+- [x] Public market and collector projections are truthful empty states with no retired `slice-demo-*` links.
+- [x] Browser console is clean on the corrected public smoke.
+
+### External release gates
+
+- [ ] Fresh independent Investor session and Dashboard / Portfolio / Wallet / Orders / Activity / Become Collector matrix.
+- [ ] Fresh independent Collector session and `/list` Steps 1–6, media replacement, privacy and request-health matrix.
+- [ ] Fresh Admin session, every primary section, controlled mutations and RBAC/IDOR matrix.
+- [ ] Owner/authorized Staff/Admin signed private-media allow checks and second-Collector/Investor/anonymous deny checks.
+- [ ] Intake-address privacy matrix and Staff-only operation checks.
+- [ ] Fresh responsive and accessibility checks for all authenticated roles.
+- [x] PriceCharting exact Product `5605741` remains raw `PRICE_GUIDE`; ordinary page-render provider calls remain `0`.
+- [x] Ximilar is optional and truthfully `NOT_CONFIGURED`; no grade is claimed.
+- [x] `beta-test-uk-intake` remains active, approved, accepting shipments and Pokémon-eligible.
+- [x] D13/D14 authority and physical lifecycle remain untouched; no Phase 10 trading.
+
+### Decision
+
+- Controlled internal Beta: **GO with documented limitations**.
+- External Invited Beta: **NO-GO** due unresolved core HIGH evidence gaps `ADMIN-PHASE3-001`, `COLLECTOR-PHASE3-001`, `COL-PRIVATE-MEDIA-001` and the missing fresh Investor matrix.
+- Current physical gate: `PHASE_9_SOFTWARE_READY / WAITING_FOR_PHYSICAL_SHIPMENT`.
+- Ready for Phase 10: **NO**.
