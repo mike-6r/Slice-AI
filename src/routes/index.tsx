@@ -467,7 +467,7 @@ function OwnershipWorks() {
   if (isBetaEnvironment) {
     const featured = featuredQuery.data?.[0];
     const featuredMedia = featured?.media.find((media) => media.kind === "image");
-    const featuredImage = featuredMedia?.url ?? HOMEPAGE_FEATURED_ASSET.image;
+    const featuredImage = featuredMedia?.url;
     return (
       <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
         <SectionHeading
@@ -493,15 +493,20 @@ function OwnershipWorks() {
         <div className="approved-home__ownership-flow" aria-label="How Slice ownership works">
           <article className="approved-home__ownership-node approved-home__ownership-node--collectible">
             <div className="approved-home__ownership-image">
-              <img
-                src={featuredImage}
-                alt={featured?.details.title ?? HOMEPAGE_FEATURED_ASSET.title}
-              />
+              {featuredImage ? (
+                <img src={featuredImage} alt={featured?.details.title ?? "Published collectible"} />
+              ) : (
+                <span className="approved-home__ownership-image-empty">No image available</span>
+              )}
             </div>
             <div>
               <small>Step 1 · Real collectible</small>
-              <strong>{featured?.details.title ?? HOMEPAGE_FEATURED_ASSET.title}</strong>
-              <p>A real authenticated card sits underneath the Slice market.</p>
+              <strong>{featured?.details.title ?? "Waiting for a published collectible"}</strong>
+              <p>
+                {featured
+                  ? "A real authenticated card sits underneath the Slice market."
+                  : "The beta explainer will connect to the first published market-ready collectible."}
+              </p>
             </div>
           </article>
           <OwnershipFlowArrow label="Card → terms" />

@@ -148,6 +148,12 @@
 @media (max-width: 520px) { .admin-console-heading { display: grid; }.admin-live-badge { width: fit-content; }.admin-kpi-grid { gap: 0.5rem; }.admin-kpi { padding: 0.65rem; }.admin-pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }.admin-pipeline > div, .admin-pipeline > button { border-left: 0; border-top: 1px solid #2c3c46; padding: 0.55rem 0.35rem; }.admin-record { grid-template-columns: 2.5rem minmax(0, 1fr) 0.8rem; }.admin-record-status { display: none; }.admin-user-detail-heading { display: grid; align-items: start; }.admin-user-detail-actions { justify-content: flex-start; }.admin-user-identity-card { grid-template-columns: 1fr; }.admin-user-detail-rail { grid-template-columns: 1fr; }.admin-integration-grid, .admin-settings-links, .admin-quick-actions { grid-template-columns: 1fr; } }
 
 /* Accounts / User Detail control center pass */
+.featured-market-hero--beta-empty { display:flex; min-height:18rem; align-items:center; justify-content:center; border:1px solid #24444a; border-radius:1rem; background:radial-gradient(circle at 20% 20%, rgba(30,210,170,.12), transparent 46%), #0a171e; padding:2rem; }
+.featured-beta-empty__copy { max-width:28rem; text-align:center; }
+.featured-beta-empty__copy h2 { margin:.35rem 0 .65rem; color:#f2faf7; font-family:var(--font-display); font-size:clamp(1.2rem,2vw,1.7rem); }
+.featured-beta-empty__copy p:not(.page-kicker) { color:#9db4bb; font-size:.72rem; line-height:1.55; }
+.featured-beta-empty__icon { display:grid; width:3rem; height:3rem; margin-right:1rem; place-items:center; border:1px solid #2e5a61; border-radius:50%; color:#42dfbd; font-size:1.2rem; }
+.approved-home__ownership-image-empty { display:grid; min-height:8rem; place-items:center; color:#8fa7b1; font-size:.64rem; }
 .admin-account-summary-strip { display:flex; min-width:0; align-items:center; gap:1.25rem; border:1px solid #263b45; border-radius:.55rem; padding:.85rem 1rem; background:#0b171e; }
 .admin-account-summary-strip > div { display:flex; align-items:baseline; gap:.35rem; white-space:nowrap; }
 .admin-account-summary-strip > div strong { color:#f3fbf8; font-size:1.35rem; }

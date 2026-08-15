@@ -23,42 +23,17 @@ export function FeaturedMarketHero() {
     if (!asset) {
       return (
         <section
-          className="featured-market-hero featured-market-hero--empty featured-market-hero--static-example featured-market-hero--charizard"
+          className="featured-market-hero featured-market-hero--empty featured-market-hero--beta-empty"
           aria-label="Featured asset"
-          data-static-showcase="true"
         >
-          <div className="charizard-showcase__glow" aria-hidden="true" />
-          <div className="charizard-showcase__eyebrow" aria-hidden="true">
-            <span>01</span>
-            <span>Legacy chase · Base Set</span>
-          </div>
-          <div className="featured-market-hero__static-media">
-            <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
-          </div>
-          <div className="charizard-showcase__copy">
-            <div className="charizard-showcase__tags">
-              <span>1999</span>
-              <span>1st Edition</span>
-              <span>Holo · #4</span>
-            </div>
-            <p className="page-kicker">Featured card</p>
-            <h2>{HOMEPAGE_FEATURED_ASSET.title}</h2>
-            <p>
-              An iconic authenticated collectible shows the kind of card that can sit underneath a
-              Slice ownership market. Live values appear only when an asset is published and
-              market-ready.
-            </p>
-            <Link to="/marketplace" className="charizard-showcase__cta">
-              Explore the marketplace <span aria-hidden="true">↗</span>
+          <div className="featured-beta-empty__icon" aria-hidden="true">—</div>
+          <div className="featured-beta-empty__copy">
+            <p className="page-kicker">Live beta market</p>
+            <h2>No featured asset yet</h2>
+            <p>Published, market-ready collectibles will appear here when reliable data is available.</p>
+            <Link to="/marketplace" className="text-link">
+              Browse the marketplace <span aria-hidden="true">→</span>
             </Link>
-          </div>
-          <div className="charizard-showcase__stamp" aria-hidden="true">
-            <span>SLICE</span>
-            <small>
-              COLLECTIBLE
-              <br />
-              REFERENCE
-            </small>
           </div>
         </section>
       );
