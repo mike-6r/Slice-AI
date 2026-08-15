@@ -1635,6 +1635,9 @@ export class AdminService {
     await this.authorization.authorize(actor, 'admin.console.read');
     const q = input.q?.trim();
     const where: Prisma.AssetWhereInput = {
+      ...(this.config.isBeta
+        ? { slug: { not: { startsWith: 'slice-demo-' } } }
+        : {}),
       ...(input.status
         ? { status: input.status as never }
         : { status: { not: 'ARCHIVED' } }),
@@ -1797,6 +1800,16 @@ export class AdminService {
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
+        ...(this.config.isBeta
+          ? [
+              {
+                OR: [
+                  { asset: { is: null } },
+                  { asset: { is: { slug: { not: { startsWith: 'slice-demo-' } } } } },
+                ],
+              },
+            ]
+          : []),
         ...(input.vaultId ? [{ intake: { vaultId: input.vaultId } }] : []),
         ...(input.q
           ? [

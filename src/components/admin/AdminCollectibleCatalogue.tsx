@@ -256,9 +256,6 @@ function CatalogueCard({
         </div>
         <div className="admin-catalogue-card__badges">
           <span className="admin-catalogue-status">{sentence(item.status)}</span>
-          {item.provenance?.submissionStatus === "APPROVED" && item.status === "PUBLISHED" ? (
-            <span className="admin-catalogue-beta">Beta test</span>
-          ) : null}
         </div>
       </div>
       <dl className="admin-catalogue-fields">

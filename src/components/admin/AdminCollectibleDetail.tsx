@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Image as ImageIcon, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ExternalLink, Image as ImageIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
@@ -50,11 +50,7 @@ export function AdminCollectibleDetail({
     );
   const item = detail.data;
   const front = item.media.find((media) => media.slot.toLowerCase() === "front") ?? item.media[0];
-  const physical = item.intake
-    ? sentence(item.intake.status)
-    : item.lifecycle.legacy
-      ? "Legacy fixture · no intake"
-      : "Not recorded";
+  const physical = item.intake ? sentence(item.intake.status) : "Not recorded";
   const market =
     item.market.publication === "PUBLISHED" ? "Published" : sentence(item.market.readiness.status);
   return (
@@ -81,9 +77,6 @@ export function AdminCollectibleDetail({
             <span className={`admin-detail-status ${item.status.toLowerCase()}`}>
               {sentence(item.status)}
             </span>
-            {item.lifecycle.legacy ? (
-              <span className="admin-detail-status legacy">Beta fixture</span>
-            ) : null}
             <a
               className="admin-button secondary"
               href={`/asset/${item.slug}`}
@@ -182,12 +175,6 @@ function Overview({
             <h3>Where this collectible is now</h3>
             <span>{sentence(item.lifecycle.current)}</span>
           </div>
-          {item.lifecycle.legacy ? (
-            <p className="admin-detail-callout">
-              <ShieldCheck aria-hidden="true" /> This is a seeded Beta catalogue fixture. No
-              shipment, receipt or custody event is asserted without a recorded event.
-            </p>
-          ) : null}
           <div className="admin-journey admin-journey--compact">
             {item.lifecycle.stages.map((stage) => (
               <div className={`admin-journey-step ${stage.state}`} key={stage.key}>
@@ -659,7 +646,7 @@ function label(value: string) {
       : value[0].toUpperCase() + value.slice(1);
 }
 function valuationMethod(value: string) {
-  if (value === "ILLUSTRATIVE_STAGING_SHARE_BASIS") return "Illustrative Beta valuation";
+  if (value === "ILLUSTRATIVE_STAGING_SHARE_BASIS") return "Illustrative valuation";
   if (value === "PRICE_GUIDE") return "Price guide reference";
   return sentence(value);
 }
