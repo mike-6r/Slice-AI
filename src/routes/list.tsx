@@ -553,7 +553,7 @@ export function SubmissionPage() {
               <ChevronLeft aria-hidden="true" /> Back
             </button>
           ) : (
-            <Link to="/dashboard" className="button-secondary">
+            <Link to="/portfolio" className="button-secondary">
               Cancel
             </Link>
           )}
@@ -1716,8 +1716,8 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
             <Link to="/list" className="button-secondary">
               List another card
             </Link>
-            <Link to="/dashboard" className="button-secondary">
-              Go to dashboard
+            <Link to="/portfolio" className="button-secondary">
+              Go to portfolio
             </Link>
           </div>
         </section>

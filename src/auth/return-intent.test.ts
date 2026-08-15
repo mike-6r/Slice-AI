@@ -10,9 +10,9 @@ describe("safe return intent", () => {
   });
 
   it("rejects external and script-like destinations", () => {
-    expect(safeReturnIntent("https://example.test")).toBe("/dashboard");
-    expect(safeReturnIntent("//example.test")).toBe("/dashboard");
-    expect(safeReturnIntent("javascript:alert(1)")).toBe("/dashboard");
-    expect(safeReturnIntent("")).toBe("/dashboard");
+    expect(safeReturnIntent("https://example.test")).toBe("/portfolio");
+    expect(safeReturnIntent("//example.test")).toBe("/portfolio");
+    expect(safeReturnIntent("javascript:alert(1)")).toBe("/portfolio");
+    expect(safeReturnIntent("")).toBe("/portfolio");
   });
 });

@@ -9,10 +9,10 @@ const allowedReturnPaths = new Set([
 
 /** Accept only implemented internal destinations; never carry external/open redirect targets. */
 export function safeReturnIntent(value: unknown): string {
-  if (typeof value !== "string") return "/dashboard";
+  if (typeof value !== "string") return "/portfolio";
   const candidate = value.trim();
   if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\"))
-    return "/dashboard";
+    return "/portfolio";
   const path = candidate.split(/[?#]/, 1)[0];
-  return allowedReturnPaths.has(path) ? path : "/dashboard";
+  return allowedReturnPaths.has(path) ? path : "/portfolio";
 }

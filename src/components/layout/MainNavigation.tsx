@@ -299,11 +299,11 @@ export function MainNavigation() {
             {isAuthenticated && (
               <>
                 <Link
-                  to="/dashboard"
+                  to="/portfolio"
                   onClick={() => setMobileOpen(false)}
                   className="rounded-lg px-3 py-3 text-sm font-medium text-subtle"
                 >
-                  Dashboard
+                  Portfolio
                 </Link>
                 {canAccessAdmin(currentUser.data?.roles ?? []) && (
                   <Link
@@ -551,9 +551,9 @@ function ProfileMenu({
       </div>
       <div className="border-t border-border py-1">
         <ProfileMenuLink
-          to="/dashboard"
+          to="/portfolio"
           icon={<LayoutDashboard />}
-          label="Dashboard"
+          label="Portfolio"
           close={close}
         />
         {canAccessAdmin(roles) && (

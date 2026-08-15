@@ -785,7 +785,7 @@ function AdminConsole() {
             <span>{user.data?.profile.username ? `@${user.data.profile.username}` : "Admin"}</span>
           </div>
           <small>Administrator</small>
-          <Link to="/dashboard">
+          <Link to="/portfolio">
             <BriefcaseBusiness aria-hidden="true" /> Switch to Investor
           </Link>
           <button type="button" onClick={() => void logout()}>

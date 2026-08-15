@@ -104,7 +104,7 @@ const restoreSteps = [
   "Verifying session",
   "Restoring workspace",
   "Loading permissions",
-  "Preparing your dashboard",
+  "Preparing your portfolio",
 ] as const;
 
 /** Branded, bounded restore state shown before the application is allowed to render. */

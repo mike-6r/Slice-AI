@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CircleGauge,
   Clock3,
+  Eye,
   Landmark,
   Layers3,
   PieChart,
@@ -170,6 +171,12 @@ export function Portfolio() {
     enabled: isAuthenticated && (tab === "orders" || tab === "activity"),
     staleTime: 30_000,
   });
+  const market = useQuery({
+    queryKey: queryKeys.assets.trending,
+    queryFn: services.assets.trending,
+    enabled: isAuthenticated && tab === "overview",
+    staleTime: 30_000,
+  });
   const performance = useQuery({
     queryKey: ["portfolio", "performance", performanceRange],
     queryFn: () => services.portfolio.performance(performanceRange),
@@ -291,9 +298,13 @@ export function Portfolio() {
               />
               <AllocationPanel query={displaySummaryQuery} />
             </section>
-            <section className="portfolio-overview-bottom" aria-label="Recent portfolio updates">
+            <section
+              className="portfolio-overview-bottom"
+              aria-label="Your Slice activity and discovery"
+            >
               <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
               <ActivityPanel query={transactions} compact />
+              <MarketWatchPanel query={market} />
             </section>
           </>
         ) : tab === "holdings" ? (
@@ -352,7 +363,7 @@ function PortfolioTabs({ active }: { active: PortfolioTab }) {
     ["activity", "Activity"],
   ];
   return (
-    <nav className="mb-6 flex flex-wrap gap-2" aria-label="Portfolio sections">
+    <nav className="portfolio-tabs" aria-label="Portfolio sections">
       {tabs.map(([tab, label]) => (
         <Link
           key={tab}
@@ -651,7 +662,7 @@ function PortfolioOrdersExperience({
                     <th>Side</th>
                     <th>Type</th>
                     <th>Ownership</th>
-                    <th>Units</th>
+                    <th>Ownership units</th>
                     <th>Price per Slice</th>
                     <th>Limit Price</th>
                     <th>Filled</th>
@@ -874,7 +885,7 @@ function OrderMobileCard({
           </dd>
         </div>
         <div>
-          <dt>Units</dt>
+          <dt>Ownership units</dt>
           <dd>{order.originalUnits}</dd>
         </div>
         <div>
@@ -1031,7 +1042,7 @@ function OrderDetailDialog({
             </dd>
           </div>
           <div>
-            <dt>Units</dt>
+            <dt>Ownership units</dt>
             <dd>
               {order.filledUnits} filled · {order.remainingUnits} remaining of {order.originalUnits}
             </dd>
@@ -1248,6 +1259,7 @@ function PortfolioHeading({
   const isHoldings = tab === "holdings";
   const isOrders = tab === "orders";
   const isActivity = tab === "activity";
+  const isOverview = tab === "overview";
   return (
     <header className="portfolio-heading">
       <div>
@@ -1263,7 +1275,7 @@ function PortfolioHeading({
                 ? "Orders"
                 : isActivity
                   ? "Activity"
-                  : "Portfolio"}
+                  : "Slice"}
           </span>
         </h1>
         <p>
@@ -1273,7 +1285,7 @@ function PortfolioHeading({
               ? "Track and manage your active, filled and cancelled orders."
               : isActivity
                 ? "A timeline of all activity in your account."
-                : "Track your collectible investments, ownership positions and performance across all asset classes."}
+                : "Your balances, collectibles, orders and account activity in one place."}
         </p>
       </div>
       {isHoldings ? (
@@ -1305,10 +1317,17 @@ function PortfolioHeading({
       ) : isOrders || isActivity ? (
         <span className="portfolio-heading__orders-spacer" aria-hidden="true" />
       ) : (
-        <div className="portfolio-heading__freshness" aria-live="polite">
-          <span>Portfolio last updated</span>
-          <strong>{markedAt ? formatDateTime(markedAt) : "Mark time unavailable"}</strong>
-          <i aria-hidden="true" />
+        <div className="portfolio-heading__overview-actions">
+          {isOverview ? (
+            <Link to="/marketplace" className="portfolio-heading__market-link">
+              Explore collectibles <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : null}
+          <div className="portfolio-heading__freshness" aria-live="polite">
+            <span>Last marked</span>
+            <strong>{markedAt ? formatDateTime(markedAt) : "Unavailable"}</strong>
+            <i aria-hidden="true" />
+          </div>
         </div>
       )}
     </header>
@@ -1347,7 +1366,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         label="Available cash"
         value={formatPortfolioMoney(summary.cash.availableMinor)}
         icon={WalletCards}
-        detail="Available to invest"
+        detail={`${formatPortfolioMoney(summary.cash.reservedMinor)} reserved for open activity`}
       />
       <PortfolioKpi
         label="Holdings value"
@@ -1804,6 +1823,11 @@ function HoldingsExperience({
           icon={<Landmark aria-hidden="true" />}
           message="You don't own a Slice in any collectibles yet."
           detail="Explore the market to find a collectible you'd like to own."
+          action={
+            <Link to="/marketplace" className="portfolio-empty-state__link">
+              Explore the market <ArrowRight aria-hidden="true" />
+            </Link>
+          }
         />
       ) : !hasSearchResults ? (
         <PortfolioEmptyState
@@ -2069,6 +2093,13 @@ function HoldingsPanel({
                           : PORTFOLIO_EMPTY_STATES.holdings
                       }
                       detail="Holdings appear here after a collectible is issued or acquired."
+                      action={
+                        !query.data?.length ? (
+                          <Link to="/marketplace" className="portfolio-empty-state__link">
+                            Explore the market <ArrowRight aria-hidden="true" />
+                          </Link>
+                        ) : undefined
+                      }
                     />
                   </td>
                 </tr>
@@ -2111,7 +2142,7 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
               ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
               : "Ownership unavailable"}
           </strong>
-          <small>{holding.ownedUnits} units owned</small>
+          <small>{holding.ownedUnits} ownership units</small>
         </span>
       </td>
       <td data-label="Available to sell">
@@ -2122,7 +2153,8 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
               : "Unavailable"}
           </strong>
           <small>
-            {holding.availableToSellUnits ?? holding.availableUnits} units sellable
+            {holding.availableToSellUnits ?? holding.availableUnits} ownership units available to
+            sell
             {holding.availableToBuyPercent !== null && holding.availableToBuyPercent !== undefined
               ? ` · ${holding.availableToBuyPercent}% available to buy`
               : ""}
@@ -2867,6 +2899,61 @@ function ActivityPanel({
   );
 }
 
+function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
+  return (
+    <PortfolioPanel
+      title="Explore the market"
+      className="portfolio-panel--market-watch"
+      header={
+        <Link to="/marketplace" className="portfolio-panel__link">
+          Browse market <ArrowRight aria-hidden="true" />
+        </Link>
+      }
+    >
+      {query.isLoading ? (
+        <RowsSkeleton rows={3} />
+      ) : query.isError ? (
+        <PanelError
+          message="We couldn't load market highlights."
+          retry={() => void query.refetch()}
+        />
+      ) : query.data?.length ? (
+        <ul className="portfolio-market-watch">
+          {query.data.slice(0, 3).map((asset) => {
+            const media = asset.slug ? assetShowcaseMedia(asset.slug) : undefined;
+            return (
+              <li key={asset.id}>
+                <span className="portfolio-market-watch__thumb" aria-hidden="true">
+                  {media ? <img src={media.src} alt="" /> : <Eye />}
+                </span>
+                <span className="portfolio-market-watch__copy">
+                  <strong>{asset.details.title}</strong>
+                  <small>{asset.details.card?.set ?? asset.details.category}</small>
+                </span>
+                <span className="portfolio-market-watch__value">
+                  <strong>
+                    {asset.market?.estimatedMarketValue
+                      ? formatPortfolioMoney(String(asset.market.estimatedMarketValue.amount))
+                      : "Guide unavailable"}
+                  </strong>
+                  <small>Market guide</small>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <PortfolioEmptyState
+          className="portfolio-empty-state--compact"
+          icon={<Eye aria-hidden="true" />}
+          message="Market highlights are unavailable."
+          detail="Browse the market to discover currently published collectibles."
+        />
+      )}
+    </PortfolioPanel>
+  );
+}
+
 function PortfolioPanel({
   title,
   header,
@@ -2894,11 +2981,13 @@ function PortfolioEmptyState({
   detail,
   icon,
   message,
+  action,
 }: {
   className?: string;
   detail: string;
   icon: ReactNode;
   message: string;
+  action?: ReactNode;
 }) {
   return (
     <div className={`portfolio-empty-state ${className}`}>
@@ -2908,6 +2997,7 @@ function PortfolioEmptyState({
       <div className="portfolio-empty-state__copy">
         <strong>{message}</strong>
         <p>{detail}</p>
+        {action ? <div className="portfolio-empty-state__action">{action}</div> : null}
       </div>
     </div>
   );

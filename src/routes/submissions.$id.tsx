@@ -222,8 +222,8 @@ function SubmissionDetailPage() {
             <Link to="/list" className="button-secondary">
               Submit another asset
             </Link>
-            <Link to="/dashboard" className="button-secondary">
-              Back to dashboard
+            <Link to="/portfolio" className="button-secondary">
+              Back to portfolio
             </Link>
           </div>
         </section>

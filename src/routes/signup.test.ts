@@ -35,7 +35,7 @@ describe("signup and onboarding rules", () => {
 
   it("allows only safe internal return paths", () => {
     expect(safeReturnIntent("/wallet")).toBe("/wallet");
-    expect(safeReturnIntent("https://attacker.test")).toBe("/dashboard");
-    expect(safeReturnIntent("//attacker.test")).toBe("/dashboard");
+    expect(safeReturnIntent("https://attacker.test")).toBe("/portfolio");
+    expect(safeReturnIntent("//attacker.test")).toBe("/portfolio");
   });
 });

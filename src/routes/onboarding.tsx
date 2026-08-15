@@ -991,7 +991,7 @@ function FinishStep({
         />
       </ul>
       <button className="primary-action onboarding-cta" onClick={onContinue}>
-        Continue to dashboard
+        Continue to your portfolio
       </button>
     </Step>
   );

@@ -43,10 +43,10 @@ function WorkspaceState({ title, login = false }: { title: string; login?: boole
             : "Your account does not have the server-authorised role required for this workspace."}
         </p>
         <Link
-          to={login ? "/login" : "/dashboard"}
+          to={login ? "/login" : "/portfolio"}
           className="primary-action mt-6 inline-flex rounded-lg px-5 py-3 text-sm font-semibold text-background"
         >
-          {login ? "Log in" : "Back to dashboard"}
+          {login ? "Log in" : "Back to portfolio"}
         </Link>
       </section>
     </main>

@@ -264,7 +264,7 @@ function CollectorWorkspace() {
             </div>
           </div>
           <div className="collector-workspace-sidebar__actions">
-            <Link to="/dashboard" className="collector-workspace-sidebar__link">
+            <Link to="/portfolio" className="collector-workspace-sidebar__link">
               <Home aria-hidden="true" /> <span>Switch to Investor</span>
             </Link>
             <button className="collector-workspace-sidebar__link" onClick={() => void logout()}>
