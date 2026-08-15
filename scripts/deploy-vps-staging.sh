@@ -7,6 +7,10 @@ set -euo pipefail
 
 release_dir="${1:?usage: deploy-vps-staging.sh /opt/slice/releases/<release>}"
 api_url="${VITE_API_BASE_URL:?VITE_API_BASE_URL must be the public staging origin}"
+# Keep the client-side runtime policy aligned with the staging API. Without an
+# explicit VITE_APP_ENV, the frontend defaults to development and can render
+# retired showcase/demo controls even though the backend is in Beta mode.
+frontend_app_env="${VITE_APP_ENV:-beta}"
 
 if [[ ! -f "${release_dir}/package.json" || ! -f "${release_dir}/server/package.json" ]]; then
   echo "Release directory does not contain the Slice frontend and backend." >&2
@@ -15,7 +19,10 @@ fi
 
 cd "${release_dir}"
 npm ci
-VITE_DATA_SOURCE=api VITE_API_BASE_URL="${api_url}" npm run build
+VITE_APP_ENV="${frontend_app_env}" \
+  VITE_DATA_SOURCE=api \
+  VITE_API_BASE_URL="${api_url}" \
+  npm run build
 
 cd server
 npm ci
