@@ -2616,6 +2616,214 @@ body:has(.collectors-page) .site-shell {
   .portfolio-holdings-pagination { justify-content: space-between; gap: 0.7rem; padding-inline: 0.75rem; font-size: 0.72rem; }
 }
 
+/* Session restore is intentionally a bounded, branded state rather than a blank page. */
+.session-restore-page {
+  display: grid;
+  min-height: 100dvh;
+  width: 100%;
+  place-items: center;
+  padding: 1.5rem 1rem;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(34, 211, 165, 0.1), transparent 42%),
+    var(--color-background);
+}
+
+.session-restore-card {
+  width: min(100%, 31rem);
+  padding: clamp(1.5rem, 5vw, 2.5rem);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 1.125rem;
+  background: var(--color-surface);
+  box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.32);
+  text-align: center;
+}
+
+.session-restore-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--color-foreground);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.22em;
+}
+
+.session-restore-brand img {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.session-restore-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 1.45rem 0 0.65rem;
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.session-restore-title {
+  margin: 0;
+  color: var(--color-foreground);
+  font-size: clamp(1.45rem, 4vw, 1.9rem);
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+}
+
+.session-restore-copy {
+  max-width: 31rem;
+  margin: 0.85rem auto 0;
+  color: var(--color-subtle);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.session-restore-loader {
+  position: relative;
+  height: 0.25rem;
+  margin: 1.65rem 0 1.2rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+}
+
+.session-restore-loader::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  box-shadow: 0 0 1rem rgba(34, 211, 165, 0.5);
+  content: "";
+  animation: session-restore-slide 1.5s ease-in-out infinite;
+}
+
+.session-restore-steps {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.session-restore-step {
+  display: grid;
+  min-height: 2.45rem;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.session-restore-step.is-active {
+  border-color: rgba(34, 211, 165, 0.2);
+  background: var(--color-accent-dim);
+  color: var(--color-foreground);
+}
+
+.session-restore-step.is-error {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-foreground);
+}
+
+.session-restore-step-icon {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  color: var(--color-accent);
+}
+
+.session-restore-step.is-error .session-restore-step-icon {
+  color: var(--color-negative);
+}
+
+.session-restore-step-state {
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.session-restore-security {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 1.4rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.session-restore-help {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 1.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--color-subtle);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.session-restore-help strong {
+  color: var(--color-foreground);
+  font-size: 0.8rem;
+}
+
+.session-restore-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 1.35rem;
+}
+
+.session-restore-actions .collector-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 9rem;
+}
+
+.session-restore-actions .collector-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@keyframes session-restore-slide {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(320%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-restore-loader::after { animation: session-restore-pulse 1.8s ease-in-out infinite; }
+}
+
+@keyframes session-restore-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 520px) {
+  .session-restore-card { padding: 1.35rem 1rem; }
+  .session-restore-step { grid-template-columns: 1.25rem minmax(0, 1fr); }
+  .session-restore-step-state { grid-column: 2; margin-top: -0.35rem; }
+  .session-restore-actions { flex-direction: column; }
+  .session-restore-actions .collector-button { width: 100%; }
+}
+
 /* Review workstation refresh: keep the queue visual, compact and identity-first. */
 .admin-review-summary-strip { display:flex; align-items:center; justify-content:space-between; gap:1rem; border:1px solid #243742; border-radius:.55rem; padding:.85rem 1rem; background:#0b1921; }
 .admin-review-summary-strip strong { display:block; color:#f0f8f5; font-size:1rem; }
