@@ -43,7 +43,7 @@ Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated 
 
 ## Fresh external-gate browser evidence — 2026-08-15
 
-- Operator `povnu@icloud.com` authenticated in a fresh staging tab. Admin Console loaded after authenticated navigation retry; no console errors were observed.
+- The controlled operator account authenticated in a fresh staging tab. Admin Console loaded after authenticated navigation retry; no console errors were observed.
 - Overview, Accounts, Review Queue, Physical Intake, Collectibles, Asset Operations, Memberships, Finance & Trading, Trust & Support and Platform Operations were opened. Read-only account detail and Roles & Access controls rendered, including required-reason/disabled mutation validation.
 - Platform Operations showed API/PostgreSQL, storage, intake and PriceCharting operational, with Ximilar optional/not configured and truthful unknown/disabled telemetry.
 - The real Charizard submission was opened read-only from Physical Intake and remained `APPROVED`, `beta-test-uk-intake`, `SLICE-3AA5144D`, awaiting shipment details with no tracking entered.
