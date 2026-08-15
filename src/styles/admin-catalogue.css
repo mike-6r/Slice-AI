@@ -88,6 +88,11 @@
   margin: 0.3rem 0;
   overflow-wrap: anywhere;
 }
+.admin-catalogue-card__legacy {
+  display: block;
+  color: #dca56c !important;
+  margin-top: 0.35rem !important;
+}
 .admin-catalogue-card p {
   color: var(--slice-text-muted, #8b94a7);
   margin: 0;

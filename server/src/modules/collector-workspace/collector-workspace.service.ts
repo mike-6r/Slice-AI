@@ -1359,6 +1359,9 @@ function nextActionFor(
     return 'Add required evidence';
   if (status === 'DRAFT') return 'Finish your draft';
   if (status === 'APPROVED' && !intake) return 'Choose an intake destination';
+  if (status === 'APPROVED' && intake?.status === 'SHIPPING_REQUIRED' && !intake.shipment)
+    return 'Ship your collectible';
+  if (status === 'APPROVED') return 'Approved';
   if (stage === 'SUBMITTED' || stage === 'REVIEW')
     return 'Awaiting staff review';
   if (stage === 'VALUATION') return 'Valuation in progress';

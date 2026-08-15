@@ -1614,7 +1614,9 @@ export class AdminService {
     await this.authorization.authorize(actor, 'admin.console.read');
     const q = input.q?.trim();
     const where: Prisma.AssetWhereInput = {
-      ...(input.status ? { status: input.status as never } : {}),
+      ...(input.status
+        ? { status: input.status as never }
+        : { status: { not: 'ARCHIVED' } }),
       ...(q
         ? {
             OR: [

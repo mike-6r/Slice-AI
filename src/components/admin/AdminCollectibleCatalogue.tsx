@@ -176,6 +176,11 @@ function CatalogueCard({
             {item.identity.year ?? "Year unavailable"} · {item.identity.set ?? "Set unavailable"} ·{" "}
             {item.identity.cardNumber ? `#${item.identity.cardNumber}` : "Card number unavailable"}
           </p>
+          {item.status === "ARCHIVED" ? (
+            <small className="admin-catalogue-card__legacy">
+              Legacy / archived record retained for audit
+            </small>
+          ) : null}
         </div>
         <span className="admin-catalogue-status">{sentence(item.status)}</span>
       </div>
