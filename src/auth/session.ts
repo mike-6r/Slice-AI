@@ -25,10 +25,13 @@ export const session = {
   refresh(origin: string) {
     if (refreshPromise) return refreshPromise;
     recordQaRefresh();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
     refreshPromise = fetch(new URL("/api/v1/auth/refresh", origin), {
       method: "POST",
       credentials: "include",
       headers: { Accept: "application/json" },
+      signal: controller.signal,
     })
       .then(async (response) =>
         response.ok ? (response.json() as Promise<{ accessToken: string }>) : null,
@@ -42,6 +45,7 @@ export const session = {
         return null;
       })
       .finally(() => {
+        window.clearTimeout(timeout);
         refreshPromise = null;
       });
     return refreshPromise;
