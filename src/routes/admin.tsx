@@ -1664,9 +1664,16 @@ function ControlCenter({
             platform.
           </span>
         </div>
-        <span className="admin-live-badge">
-          <CheckCircle2 aria-hidden="true" /> Beta operations
-        </span>
+        <div className="admin-overview-heading-meta">
+          <span className="admin-live-badge">
+            <CheckCircle2 aria-hidden="true" /> Beta operations
+          </span>
+          <small>
+            {operational?.generatedAt
+              ? `Projection refreshed ${date(operational.generatedAt)}`
+              : "Waiting for first projection"}
+          </small>
+        </div>
       </section>
       <div className="admin-kpi-grid admin-kpi-grid--overview">
         <AdminMetric
@@ -1715,7 +1722,7 @@ function ControlCenter({
         </button>
       </div>
       <div className="admin-dashboard-grid">
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--attention">
           <AdminPanelHeading
             title="Needs attention"
             action="Open review queue"
@@ -1753,7 +1760,7 @@ function ControlCenter({
             <AdminEmpty detail="No operational work is waiting right now." />
           )}
         </section>
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--status">
           <AdminPanelHeading title="System Status" />
           <div className="admin-status-list">
             {operational?.systemHealth.length ? (
@@ -1786,7 +1793,7 @@ function ControlCenter({
           </div>
         </section>
       </div>
-      <section className="admin-panel">
+      <section className="admin-panel admin-panel--pipeline">
         <AdminPanelHeading title="Platform Pipeline" />
         <div className="admin-pipeline admin-pipeline--full">
           {operational?.pipeline.map((stage) => (
@@ -1807,7 +1814,7 @@ function ControlCenter({
         </div>
       </section>
       <div className="admin-dashboard-grid">
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--activity">
           <AdminPanelHeading title="Recent Activity" />
           {operational?.recentActivity.length ? (
             <div className="admin-record-list">
@@ -1829,7 +1836,7 @@ function ControlCenter({
             <AdminEmpty detail="No recent platform activity." />
           )}
         </section>
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--cases">
           <AdminPanelHeading
             title="Open Cases"
             action="Open compliance"
@@ -1848,7 +1855,7 @@ function ControlCenter({
         </section>
       </div>
       <div className="admin-dashboard-grid admin-dashboard-grid--two">
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--insight">
           <AdminPanelHeading title="Account Mix" />
           <div className="admin-mix-list">
             <StatusRow
@@ -1874,7 +1881,7 @@ function ControlCenter({
           </div>
           <small className="admin-muted">Counts may overlap by capability.</small>
         </section>
-        <section className="admin-panel">
+        <section className="admin-panel admin-panel--insight">
           <AdminPanelHeading
             title="Membership & Billing"
             action="Open memberships"

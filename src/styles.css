@@ -267,6 +267,84 @@
 .admin-search-results strong { overflow: hidden; color: #eff7f5; font-size: 0.65rem; text-overflow: ellipsis; white-space: nowrap; }
 .admin-search-results span { overflow: hidden; color: #8ea2ae; font-size: 0.58rem; text-overflow: ellipsis; white-space: nowrap; }
 .admin-integration small { color: #8ea2ae; font-size: 0.57rem; }
+
+/* Control Center overview: keep each workstream compact, aligned, and scannable. */
+.admin-console-heading--overview {
+  padding: 0.35rem 0.15rem 0.15rem;
+}
+.admin-overview-heading-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+.admin-overview-heading-meta small {
+  color: #718793;
+  font-size: 0.56rem;
+}
+.admin-dashboard-grid {
+  align-items: start;
+}
+.admin-panel {
+  height: fit-content;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.11);
+}
+.admin-panel--attention,
+.admin-panel--activity {
+  background: linear-gradient(145deg, rgba(15, 29, 38, 0.98), rgba(7, 16, 23, 0.98));
+}
+.admin-panel--status,
+.admin-panel--cases {
+  background: linear-gradient(145deg, rgba(12, 25, 33, 0.98), rgba(7, 16, 23, 0.98));
+}
+.admin-panel--attention .admin-panel-heading,
+.admin-panel--status .admin-panel-heading,
+.admin-panel--activity .admin-panel-heading,
+.admin-panel--cases .admin-panel-heading,
+.admin-panel--insight .admin-panel-heading {
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(49, 72, 83, 0.75);
+}
+.admin-panel--pipeline {
+  padding: 1rem 1.15rem 1.1rem;
+  background: linear-gradient(105deg, rgba(14, 30, 38, 0.98), rgba(8, 18, 25, 0.98));
+}
+.admin-panel--pipeline .admin-panel-heading {
+  margin-bottom: 0.9rem;
+}
+.admin-panel--pipeline .admin-pipeline > button,
+.admin-panel--pipeline .admin-pipeline > div {
+  min-height: 4.8rem;
+  padding-inline: 0.8rem;
+}
+.admin-panel--cases .admin-empty {
+  min-height: 7.5rem;
+  align-content: center;
+}
+.admin-panel--activity .admin-record-list {
+  gap: 0;
+}
+.admin-panel--activity .admin-record {
+  padding-block: 0.7rem;
+}
+.admin-panel--insight {
+  min-height: 12rem;
+}
+@media (max-width: 920px) {
+  .admin-overview-heading-meta {
+    justify-items: start;
+  }
+}
+@media (max-width: 620px) {
+  .admin-overview-heading-meta {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .admin-panel--pipeline {
+    padding-inline: 0.8rem;
+  }
+}
 @media (max-width: 920px) { .admin-user-hero { align-items: flex-start; flex-wrap: wrap; }.admin-user-hero > .admin-status-pill { margin-left: 3.9rem; }.admin-search-results { right: 1rem; width: calc(100% - 2rem); } }
 @media (max-width: 620px) { .admin-table-wrap { border: 0; overflow: visible; }.admin-table { min-width: 0; }.admin-table thead { display: none; }.admin-table, .admin-table tbody, .admin-table tr, .admin-table td { display: block; width: 100%; }.admin-table tr { border: 1px solid #263741; border-radius: 0.55rem; margin-bottom: 0.5rem; padding: 0.35rem 0; }.admin-table td { display: flex; justify-content: space-between; gap: 0.7rem; border: 0; padding: 0.35rem 0.65rem; }.admin-table td::before { color: #7f96a4; content: attr(data-label); font-size: 0.54rem; text-transform: uppercase; }.admin-record--case { grid-template-columns: 2.6rem minmax(0, 1fr) auto; }.admin-record--case .admin-inline-action { grid-column: 2 / -1; justify-self: start; }.admin-user-hero > .admin-status-pill { margin-left: 0; } }
 
