@@ -208,8 +208,9 @@ export class RawCardPreGradeService {
           let response: Response;
           try { response = await fetch(url, { signal: controller.signal }); } finally { clearTimeout(timeout); }
           if (!response.ok) continue;
-          const mimeType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
-          if (!mimeType.startsWith('image/')) continue;
+          const declaredMimeType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+          const mimeType = declaredMimeType.startsWith('image/') ? declaredMimeType : imageMimeTypeFromUrl(url);
+          if (!mimeType) continue;
           const body = Buffer.from(await response.arrayBuffer());
           if (!body.length || body.length > 8 * 1024 * 1024) continue;
           const sha256 = createHash('sha256').update(body).digest('hex');
@@ -235,6 +236,18 @@ export class RawCardPreGradeService {
   }
 
   private notFound(): never { throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND', message: 'Submission not found.' }); }
+}
+
+function imageMimeTypeFromUrl(value: string) {
+  try {
+    const extension = new URL(value).pathname.toLowerCase().match(/\.(avif|bmp|gif|jpe?g|png|tiff?|webp)$/)?.[1];
+    if (!extension) return null;
+    if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+    if (extension === 'tif' || extension === 'tiff') return 'image/tiff';
+    return `image/${extension}`;
+  } catch {
+    return null;
+  }
 }
 
 function isRawMetadata(value: Prisma.JsonValue | null) {
