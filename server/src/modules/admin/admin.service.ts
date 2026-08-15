@@ -13,6 +13,7 @@ import {
   collectorUsageForMany,
 } from '../collector-workspace/collector-entitlements';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
+import { isBetaFixtureSlug } from '../../config/beta-policy';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/submission-storage.ports';
 
 type AdminAttention = {
@@ -27,6 +28,16 @@ type AdminAttention = {
   waitingOn: 'COLLECTOR' | 'SLICE';
   target: 'reviews' | 'intake' | 'valuations' | 'custody';
 };
+
+/** Demo submissions remain auditable, but are not real beta intake records. */
+function isBetaFixtureSubmission(metadata: Prisma.JsonValue | null) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  const value = metadata as Record<string, unknown>;
+  return (
+    value.betaFixtureRetired === true ||
+    (typeof value.certificationNumber === 'string' && value.certificationNumber.startsWith('STG-'))
+  );
+}
 
 function ageLabel(updatedAt: Date) {
   const minutes = Math.max(
@@ -1636,7 +1647,25 @@ export class AdminService {
     const q = input.q?.trim();
     const where: Prisma.AssetWhereInput = {
       ...(this.config.isBeta
-        ? { slug: { not: { startsWith: 'slice-demo-' } } }
+        ? {
+            slug: { not: { startsWith: 'slice-demo-' } },
+            // Static/reference records are not operator collectibles until a
+            // real account has submitted them.
+            submissions: {
+              some: {
+                status: { notIn: ['DRAFT', 'CANCELLED'] },
+                NOT: [
+                  { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+                  {
+                    declaredMetadata: {
+                      path: ['certificationNumber'],
+                      string_starts_with: 'STG-',
+                    },
+                  },
+                ],
+              },
+            },
+          }
         : {}),
       ...(input.status
         ? { status: input.status as never }
@@ -1894,6 +1923,7 @@ export class AdminService {
         category: { select: { name: true } },
         asset: {
           select: {
+            slug: true,
             title: true,
             edition: true,
             cardNumber: true,
@@ -1916,7 +1946,14 @@ export class AdminService {
         },
       },
     });
-    const projected = await Promise.all(rows.map(async (item) => {
+    const visibleRows = this.config.isBeta
+      ? rows.filter(
+          (item) =>
+            !isBetaFixtureSlug(item.asset?.slug ?? '') &&
+            !isBetaFixtureSubmission(item.declaredMetadata),
+        )
+      : rows;
+    const projected = await Promise.all(visibleRows.map(async (item) => {
       const intake = item.intake;
       const stage =
         item.asset?.custodyRecord?.status === 'INSPECTED'
@@ -3700,6 +3737,18 @@ export class AdminService {
         code: 'ASSET_NOT_FOUND',
         message: 'Collectible not found.',
       });
+    if (
+      this.config.isBeta &&
+      (isBetaFixtureSlug(asset.slug) ||
+        !asset.submissions.some(
+          (submission) => !isBetaFixtureSubmission(submission.declaredMetadata),
+        ))
+    ) {
+      throw new NotFoundException({
+        code: 'ASSET_NOT_FOUND',
+        message: 'Collectible not found.',
+      });
+    }
     const approved =
       asset.submissions.find(
         (submission) => submission.status === 'APPROVED',
