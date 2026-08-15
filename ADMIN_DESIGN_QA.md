@@ -18,8 +18,8 @@
 
 - Frontend typecheck: PASS
 - Server typecheck: PASS
-- Frontend production build: pending deployment pass
-- Server production build: pending deployment pass
+- Frontend production build: PASS
+- Server production build: PASS
 - Fresh authenticated browser walkthrough, responsive/accessibility sweep, request-health capture, and controlled mutation matrix: pending staging retest
 
 No financial, trading, physical-intake, custody, valuation, publication, or real Charizard state was changed by this redesign.

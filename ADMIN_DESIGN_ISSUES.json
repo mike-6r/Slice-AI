@@ -35,8 +35,8 @@
   "verification": {
     "frontendTypecheck": "PASS",
     "serverTypecheck": "PASS",
-    "frontendBuild": "PENDING",
-    "serverBuild": "PENDING",
+    "frontendBuild": "PASS",
+    "serverBuild": "PASS",
     "browserWalkthrough": "PENDING_STAGING_RETEST",
     "mutationMatrix": "NOT_EXECUTED",
     "finalDecision": "RETEST_REQUIRED"
