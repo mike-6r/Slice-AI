@@ -122,6 +122,36 @@ function HomePage() {
               <small>Start with an ownership position and build it over time.</small>
             </div>
           </div>
+          <aside className="approved-home__hero-guide" aria-label="Why people use Slice">
+            <div className="approved-home__hero-guide-heading">
+              <span className="approved-home__hero-guide-badge">Why Slice?</span>
+              <strong>A clearer way to follow a valuable card.</strong>
+              <p>Everything starts with the collectible, then gets easier to understand.</p>
+            </div>
+            <ul>
+              <li>
+                <BadgeCheck aria-hidden="true" />
+                <span>
+                  <b>Real collectible</b>
+                  <small>Published cards show their identity and grade.</small>
+                </span>
+              </li>
+              <li>
+                <Boxes aria-hidden="true" />
+                <span>
+                  <b>Clear ownership</b>
+                  <small>Slice explains what your position represents.</small>
+                </span>
+              </li>
+              <li>
+                <ChartNoAxesCombined aria-hidden="true" />
+                <span>
+                  <b>One simple portfolio</b>
+                  <small>Keep ownership, cost and activity together.</small>
+                </span>
+              </li>
+            </ul>
+          </aside>
         </div>
 
         <div className="approved-home__featured-stack">
