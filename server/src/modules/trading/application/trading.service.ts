@@ -1340,8 +1340,30 @@ export class TradingService {
         version: { increment: 1 },
       },
     });
+    if (order.side === 'SELL' && order.ownershipReservationId) {
+      const reservation = await db.ownershipReservation.findUnique({
+        where: { id: order.ownershipReservationId },
+      });
+      if (!reservation || reservation.status !== 'ACTIVE' || reservation.units < units)
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'Ownership reservation invariant failed.',
+        );
+      await db.ownershipReservation.update({
+        where: { id: reservation.id },
+        data: { units: { decrement: units } },
+      });
+    }
     await this.history(db, order.id, order.status, status, 'EXECUTION_SETTLED');
-    if (remaining === 0n) await this.markReservationConsumed(db, updated);
+    if (remaining === 0n) {
+      if (updated.side === 'SELL' && updated.ownershipReservationId) {
+        await db.ownershipReservation.update({
+          where: { id: updated.ownershipReservationId },
+          data: { units: 0n },
+        });
+      }
+      await this.markReservationConsumed(db, updated);
+    }
     return updated;
   }
 
