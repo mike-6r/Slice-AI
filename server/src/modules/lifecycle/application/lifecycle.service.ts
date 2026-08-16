@@ -327,14 +327,20 @@ export class LifecycleService {
     };
   }
 
-  handoff(actor: Actor, assetId: string, requestId: string, key: string) {
+  handoff(
+    actor: Actor,
+    assetId: string,
+    input: { providerCode: string; facilityCode: string; providerRef: string },
+    requestId: string,
+    key: string,
+  ) {
     this.recentAuth.require(actor);
     return this.mutate(
       actor,
       `lifecycle.handoff:${assetId}`,
       'POST',
       `/v1/admin/assets/${assetId}/handoff`,
-      {},
+      input,
       requestId,
       key,
       async (db, audit) => {
@@ -352,7 +358,9 @@ export class LifecycleService {
           create: {
             id: randomUUID(),
             assetId,
-            providerCode: 'MANUAL_UNVERIFIED',
+            providerCode: input.providerCode,
+            facilityCode: input.facilityCode,
+            providerRef: input.providerRef,
             status: 'EXPECTED',
           },
           update: {},
@@ -361,6 +369,9 @@ export class LifecycleService {
           assetId,
           fromStatus: 'NONE',
           toStatus: custody.status,
+          providerCode: custody.providerCode,
+          facilityCode: custody.facilityCode,
+          providerRef: custody.providerRef,
         });
         await this.notifyOwner(
           db,
@@ -376,7 +387,7 @@ export class LifecycleService {
   custody(
     actor: Actor,
     assetId: string,
-    toStatus: string,
+    input: { toStatus: string; providerRef?: string },
     requestId: string,
     key: string,
   ) {
@@ -386,7 +397,7 @@ export class LifecycleService {
       `lifecycle.custody:${assetId}`,
       'POST',
       `/v1/admin/assets/${assetId}/custody/transitions`,
-      { toStatus },
+      input,
       requestId,
       key,
       async (db, audit) => {
@@ -399,14 +410,29 @@ export class LifecycleService {
             code: 'CUSTODY_PROOF_REQUIRED',
             message: 'Asset intake is required.',
           });
-        assertCustodyTransition(custody.status, toStatus);
+        assertCustodyTransition(custody.status, input.toStatus);
+        if (['RECEIVED', 'INSPECTED', 'SECURED'].includes(input.toStatus) && !input.providerRef)
+          throw new ConflictException({
+            code: 'CUSTODY_EVIDENCE_REQUIRED',
+            message: 'A custody evidence or operator reference is required for this transition.',
+          });
+        if (input.toStatus === 'SECURED') {
+          if (custody.status !== 'INSPECTED')
+            throw new ConflictException({ code: 'CUSTODY_INSPECTION_REQUIRED', message: 'Custody must be inspected before it can be secured.' });
+          const coverage = await db.insuranceCoverage.count({
+            where: { assetId, status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } },
+          });
+          if (coverage !== 1)
+            throw new ConflictException({ code: 'ACTIVE_COVERAGE_REQUIRED', message: 'Active insurance coverage is required before custody can be secured.' });
+        }
         const at = new Date();
         const updated = await db.vaultCustodyRecord.update({
           where: { id: custody.id },
           data: {
-            status: toStatus as never,
-            receivedAt: toStatus === 'RECEIVED' ? at : custody.receivedAt,
-            securedAt: toStatus === 'SECURED' ? at : custody.securedAt,
+            status: input.toStatus as never,
+            providerRef: input.providerRef ?? custody.providerRef,
+            receivedAt: input.toStatus === 'RECEIVED' ? at : custody.receivedAt,
+            securedAt: input.toStatus === 'SECURED' ? at : custody.securedAt,
           },
         });
         await db.custodyEvent.create({
@@ -415,20 +441,22 @@ export class LifecycleService {
             assetId,
             custodyRecordId: custody.id,
             fromStatus: custody.status,
-            toStatus: toStatus as never,
+            toStatus: input.toStatus as never,
             actorUserId: actor.userId,
+            providerRef: input.providerRef ?? custody.providerRef,
             occurredAt: at,
           },
         });
         await audit('CUSTODY_STATUS_CHANGED', 'asset', assetId, {
           assetId,
           fromStatus: custody.status,
-          toStatus,
+          toStatus: input.toStatus,
+          providerRef: input.providerRef ?? custody.providerRef,
         });
         await this.notifyOwner(
           db,
           assetId,
-          `LIFECYCLE_CUSTODY_${toStatus}`,
+          `LIFECYCLE_CUSTODY_${input.toStatus}`,
           'Asset custody status updated',
         );
         return {

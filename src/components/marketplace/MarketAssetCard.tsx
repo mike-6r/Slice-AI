@@ -143,7 +143,7 @@ export function MarketAssetCard({
               <div>
                 <dt>Available</dt>
                 <dd>
-                  {availability === undefined ? "Unavailable" : formatOwnership(availability / 100)}
+                  {availability === undefined ? "Not yet available" : formatOwnership(availability / 100)}
                 </dd>
               </div>
               <div>
@@ -161,7 +161,7 @@ export function MarketAssetCard({
               </span>
               <small>
                 {availability === undefined
-                  ? "Availability not published"
+                  ? "Trading is not open yet"
                   : `${formatOwnership(availability / 100)} of ownership available`}
               </small>
             </div>

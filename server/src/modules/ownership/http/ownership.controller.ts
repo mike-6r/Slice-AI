@@ -19,6 +19,7 @@ import {
 } from '../../identity/auth/access-token.guard';
 import { OwnershipService } from '../application/ownership.service';
 import { OwnershipOperationsService } from '../application/ownership-operations.service';
+import { OwnershipPolicyService } from '../application/ownership-policy.service';
 
 const issue = z.object({ totalUnits: z.string().min(1).max(7) }).strict();
 const transfer = z
@@ -51,8 +52,44 @@ export class OwnershipController {
   constructor(
     private readonly ownership: OwnershipService,
     private readonly operations: OwnershipOperationsService,
+    private readonly policy: OwnershipPolicyService,
     private readonly limiter: ControlRateLimitService,
   ) {}
+
+  @Get('admin/assets/:id/ownership/supply-policy')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('ownership.issue')
+  adminSupplyPolicy(@Param('id') id: string) {
+    return this.policy.adminProjection(id);
+  }
+
+  @Post('admin/assets/:id/ownership/supply-policy/proposals')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('ownership.issue')
+  proposeSupplyPolicy(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z.object({ policyCode: z.string().min(1).max(64), totalUnits: z.string().min(1).max(7), reason: z.string().trim().min(12).max(280) }).strict().safeParse(body);
+    if (!input.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Supply policy proposal is invalid.' });
+    return this.write(req, key, () => this.policy.propose(req.actor!, id, input.data, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/assets/:id/ownership/supply-policy/approve')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('ownership.issue')
+  approveSupplyPolicy(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = z.object({ reason: z.string().trim().min(12).max(280) }).strict().safeParse(body);
+    if (!input.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Supply policy approval reason is required.' });
+    return this.write(req, key, () => this.policy.approve(req.actor!, id, input.data.reason, req.requestId ?? 'unknown', key!));
+  }
 
   /** Public aggregate only: no account, allocation, or ownership percentage. */
   @Get('market/assets/:slug/ownership/issuance')

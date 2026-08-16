@@ -142,7 +142,11 @@ async function main() {
       accessToken: operator.accessToken,
       ip: operator.ip,
       key: `${runId}-handoff`,
-      body: {},
+      body: {
+        providerCode: 'MANUAL_QA_VAULT',
+        facilityCode: 'MANUAL_QA_FACILITY',
+        providerRef: `${runId}-handoff-reference`,
+      },
     });
     assert(handoff.response.status === 201, 'handoff did not succeed');
     const blocked = await call(`/admin/assets/${assetId}/publish`, {
@@ -170,14 +174,14 @@ async function main() {
       invalid.response.status === 409,
       'invalid custody transition was accepted',
     );
-    for (const status of ['RECEIVED', 'INSPECTED', 'SECURED']) {
+    for (const status of ['RECEIVED', 'INSPECTED']) {
       const transition = await call(
         `/admin/assets/${assetId}/custody/transitions`,
         {
           accessToken: operator.accessToken,
           ip: operator.ip,
           key: `${runId}-custody-${status}`,
-          body: { toStatus: status },
+          body: { toStatus: status, providerRef: `${runId}-custody-${status}` },
         },
       );
       assert(transition.response.status === 201, `${status} transition failed`);
@@ -214,6 +218,13 @@ async function main() {
       },
     );
     assert(insurance.response.status === 201, 'insurance coverage failed');
+    const secured = await call(`/admin/assets/${assetId}/custody/transitions`, {
+      accessToken: operator.accessToken,
+      ip: operator.ip,
+      key: `${runId}-custody-SECURED`,
+      body: { toStatus: 'SECURED', providerRef: `${runId}-custody-SECURED` },
+    });
+    assert(secured.response.status === 201, 'SECURED transition failed');
     const ready = await call(`/admin/assets/${assetId}/publication-readiness`, {
       accessToken: operator.accessToken,
       ip: operator.ip,
@@ -281,7 +292,7 @@ async function main() {
       accessToken: operator.accessToken,
       ip: operator.ip,
       key: `${runId}-stale`,
-      body: { toStatus: 'RELEASE_PENDING' },
+      body: { toStatus: 'RELEASE_PENDING', providerRef: `${runId}-release-pending` },
     });
     assert(
       stale.response.status === 403,

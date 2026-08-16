@@ -120,6 +120,12 @@ function AssetPage() {
   const availableSlices = ownershipSummaryQuery.data?.availableSlices
     ? Number(ownershipSummaryQuery.data.availableSlices)
     : shares.availableShares;
+  const notYetTradeable = !issuanceQuery.isLoading && issuanceQuery.data === null;
+  const availableOwnershipLabel = notYetTradeable
+    ? "Not yet available for trading"
+    : !ownershipSummaryQuery.data
+      ? "Unavailable"
+      : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`;
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const category = marketCategoryPresentation(asset.category);
 
@@ -179,16 +185,16 @@ function AssetPage() {
                 <Stat
                   label="Price per Slice"
                   value={
-                    slicePriceMinor === undefined ? "Unavailable" : formatCurrency(slicePriceMinor)
+                    notYetTradeable
+                      ? "Not available yet"
+                      : slicePriceMinor === undefined
+                        ? "Unavailable"
+                        : formatCurrency(slicePriceMinor)
                   }
                 />
                 <Stat
                   label="Available ownership"
-                  value={
-                    !ownershipSummaryQuery.data
-                      ? "Unavailable"
-                      : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
-                  }
+                  value={availableOwnershipLabel}
                 />
                 <Stat
                   label="Last valuation"
@@ -197,19 +203,23 @@ function AssetPage() {
               </div>
             </div>
             <aside className="asset-hero-trading">
-              <TradingPanel
-                book={orderBookQuery.data}
-                isLoading={orderBookQuery.isLoading}
-                isError={orderBookQuery.isError}
-                retry={() => void orderBookQuery.refetch()}
-                id={id}
-                sharePriceMinor={slicePriceMinor}
-                issuedShares={issuedSlices}
-                availableShares={availableSlices}
-                ownShares={shares.ownShares}
-                isAuthenticated={isAuthenticated}
-                ownershipSummary={ownershipSummaryQuery.data}
-              />
+              {notYetTradeable ? (
+                <NotYetTradeablePanel />
+              ) : (
+                <TradingPanel
+                  book={orderBookQuery.data}
+                  isLoading={orderBookQuery.isLoading}
+                  isError={orderBookQuery.isError}
+                  retry={() => void orderBookQuery.refetch()}
+                  id={id}
+                  sharePriceMinor={slicePriceMinor}
+                  issuedShares={issuedSlices}
+                  availableShares={availableSlices}
+                  ownShares={shares.ownShares}
+                  isAuthenticated={isAuthenticated}
+                  ownershipSummary={ownershipSummaryQuery.data}
+                />
+              )}
               <RecentTrades
                 trades={tradesQuery.data ?? []}
                 isLoading={tradesQuery.isLoading}
@@ -230,6 +240,7 @@ function AssetPage() {
             status={assetQuery.data.status}
             verification={assetQuery.data.verification?.status}
             vaultStatus={assetQuery.data.vault?.status}
+            notYetTradeable={notYetTradeable}
           />
 
           <section className="asset-market-stats" aria-label="Market statistics">
@@ -354,7 +365,7 @@ function AssetPage() {
                   <span>
                     <strong>
                       {ownershipSummaryQuery.data
-                        ? `${ownershipSummaryQuery.data.availableOwnershipPercent}%`
+                        ? availableOwnershipLabel
                         : "—"}
                     </strong>
                     available to buy
@@ -365,7 +376,9 @@ function AssetPage() {
                     <i className="is-emerald" />
                     <span>Available to buy</span>
                     <strong>
-                      {availableSlices === undefined
+                      {notYetTradeable
+                        ? "Not yet available"
+                        : availableSlices === undefined
                         ? "Unavailable"
                         : `${availableSlices.toLocaleString()} ownership units`}
                     </strong>
@@ -457,9 +470,7 @@ function AssetPage() {
               <div>
                 <span>Ownership available</span>
                 <strong>
-                  {!ownershipSummaryQuery.data
-                    ? "Unavailable"
-                    : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`}
+                  {availableOwnershipLabel}
                 </strong>
               </div>
               <div>
@@ -497,6 +508,7 @@ function AssetOwnershipGuide({
   status,
   verification,
   vaultStatus,
+  notYetTradeable,
 }: {
   title: string;
   issuedSlices?: number;
@@ -508,6 +520,7 @@ function AssetOwnershipGuide({
   status: string;
   verification?: string;
   vaultStatus?: string;
+  notYetTradeable: boolean;
 }) {
   const ownership =
     ownSlices !== undefined && issuedSlices && issuedSlices > 0
@@ -543,7 +556,7 @@ function AssetOwnershipGuide({
         </div>
         <div>
           <span>Available ownership</span>
-          <strong>{availableSlices?.toLocaleString() ?? "Unavailable"}</strong>
+          <strong>{notYetTradeable ? "Not yet available" : availableSlices?.toLocaleString() ?? "Unavailable"}</strong>
         </div>
         <div>
           <span>Owners</span>
@@ -552,7 +565,11 @@ function AssetOwnershipGuide({
         <div>
           <span>Price per Slice</span>
           <strong>
-            {sharePriceMinor === undefined ? "Unavailable" : formatCurrency(sharePriceMinor)}
+            {notYetTradeable
+              ? "Not available yet"
+              : sharePriceMinor === undefined
+                ? "Unavailable"
+                : formatCurrency(sharePriceMinor)}
           </strong>
         </div>
       </div>
@@ -706,6 +723,24 @@ function Stat({
       <dt>{label}</dt>
       <dd>{value}</dd>
     </dl>
+  );
+}
+
+function NotYetTradeablePanel() {
+  return (
+    <section className="asset-order-book asset-not-yet-tradeable" aria-live="polite">
+      <header>
+        <h2>Ownership &amp; trading</h2>
+        <strong>Market opening soon</strong>
+      </header>
+      <p className="asset-trade-helper">
+        This collectible is published, but Slice has not approved its ownership supply yet.
+      </p>
+      <div className="asset-ownership-callout">
+        <strong>Not yet available for trading</strong>
+        <span>Slice will show the supply, price per Slice, and live availability after issuance and market readiness are complete.</span>
+      </div>
+    </section>
   );
 }
 

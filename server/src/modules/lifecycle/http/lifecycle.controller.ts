@@ -53,6 +53,14 @@ const custody = z
       'EXCEPTION',
       'EXPECTED',
     ]),
+    providerRef: z.string().trim().min(4).max(128).optional(),
+  })
+  .strict();
+const handoff = z
+  .object({
+    providerCode: z.string().trim().min(2).max(64),
+    facilityCode: z.string().trim().min(2).max(64),
+    providerRef: z.string().trim().min(4).max(128),
   })
   .strict();
 const operationsQuery = z
@@ -107,11 +115,12 @@ export class LifecycleController {
   @RequirePermission('custody.manage')
   handoff(
     @Param('id') id: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
     return this.write(req, key, () =>
-      this.lifecycle.handoff(req.actor!, id, req.requestId ?? 'unknown', key!),
+      this.lifecycle.handoff(req.actor!, id, parse(handoff, body), req.requestId ?? 'unknown', key!),
     );
   }
   @Post('admin/assets/:id/custody/transitions')
@@ -123,15 +132,10 @@ export class LifecycleController {
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.write(req, key, () =>
-      this.lifecycle.custody(
-        req.actor!,
-        id,
-        parse(custody, body).toStatus,
-        req.requestId ?? 'unknown',
-        key!,
-      ),
-    );
+    return this.write(req, key, () => {
+      const input = parse(custody, body);
+      return this.lifecycle.custody(req.actor!, id, input, req.requestId ?? 'unknown', key!);
+    });
   }
   @Post('admin/assets/:id/valuations/decisions')
   @UseGuards(AccessTokenGuard, PermissionGuard)

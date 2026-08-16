@@ -2582,7 +2582,33 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       tab ? { tab } : undefined,
     );
   },
-  };
+  async proposeOwnershipSupply(id, input) {
+    return client.request<{
+      assetId: string;
+      status: string;
+      units: string;
+      pricePerUnitMinor: string;
+      remainderMinor: string;
+    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/proposals`, {
+      method: "POST",
+      body: input,
+      headers: { "Idempotency-Key": idempotencyKey() },
+    });
+  },
+  async approveOwnershipSupply(id, reason) {
+    return client.request<{
+      assetId: string;
+      status: string;
+      units: string;
+      pricePerUnitMinor: string;
+      remainderMinor: string;
+    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/approve`, {
+      method: "POST",
+      body: { reason },
+      headers: { "Idempotency-Key": idempotencyKey() },
+    });
+  },
+};
 };
 
 export function createHttpRepositories(client = new ApiClient()): AppRepositories {
@@ -2900,16 +2926,17 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getOperationsBoard(input) {
         return mapOperationsBoard(await client.get<unknown>("/admin/assets/operations", input));
       },
-      async handoff(assetId) {
+      async handoff(assetId, input) {
         return client.request(`/admin/assets/${assetId}/handoff`, {
           method: "POST",
+          body: input,
           headers: { "Idempotency-Key": idempotencyKey() },
         });
       },
-      async transitionCustody(assetId, toStatus) {
+      async transitionCustody(assetId, toStatus, providerRef) {
         return client.request(`/admin/assets/${assetId}/custody/transitions`, {
           method: "POST",
-          body: { toStatus },
+          body: { toStatus, ...(providerRef ? { providerRef } : {}) },
           headers: { "Idempotency-Key": idempotencyKey() },
         });
       },

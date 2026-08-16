@@ -15,6 +15,7 @@ import { FinancialLedgerService } from '../modules/finance/application/financial
 import { PortfolioLotService } from '../modules/finance/application/portfolio-lot.service';
 import { OwnershipOperationsService } from '../modules/ownership/application/ownership-operations.service';
 import { OwnershipService } from '../modules/ownership/application/ownership.service';
+import { OwnershipPolicyService } from '../modules/ownership/application/ownership-policy.service';
 import { ComplianceService } from '../modules/providers/application/compliance.service';
 import { SubmissionService } from '../modules/submissions/application/submission.service';
 import { LocalSubmissionStorage } from '../modules/submissions/infrastructure/local-submission-storage';
@@ -597,6 +598,7 @@ export async function runCollectorDemoSetup() {
     const storage = app.get(LocalSubmissionStorage);
     const lifecycle = app.get(LifecycleService);
     const ownership = app.get(OwnershipService);
+    const ownershipPolicy = app.get(OwnershipPolicyService);
     const ownershipOps = app.get(OwnershipOperationsService);
     const ledger = app.get(FinancialLedgerService);
     const lots = app.get(PortfolioLotService);
@@ -700,6 +702,7 @@ export async function runCollectorDemoSetup() {
           db,
           lifecycle,
           ownership,
+          ownershipPolicy,
           ownershipOps,
           lots,
           admin,
@@ -1325,6 +1328,7 @@ async function ensureAssetLifecycle(
   db: PrismaService,
   lifecycle: LifecycleService,
   ownership: OwnershipService,
+  ownershipPolicy: OwnershipPolicyService,
   operations: OwnershipOperationsService,
   lots: PortfolioLotService,
   admin: Actor,
@@ -1338,6 +1342,11 @@ async function ensureAssetLifecycle(
     await lifecycle.handoff(
       admin,
       assetId,
+      {
+        providerCode: 'STAGING_DEMO_VAULT',
+        facilityCode: 'STAGING_DEMO_FACILITY',
+        providerRef: `collector-handoff:${spec.key}`,
+      },
       `collector-handoff-${randomUUID()}`,
       `collector-handoff:${spec.key}`,
     );
@@ -1348,7 +1357,7 @@ async function ensureAssetLifecycle(
     await lifecycle.custody(
       admin,
       assetId,
-      'RECEIVED',
+      { toStatus: 'RECEIVED', providerRef: `collector-custody-received:${spec.key}` },
       `collector-custody-${randomUUID()}`,
       `collector-custody-received:${spec.key}`,
     );
@@ -1359,21 +1368,13 @@ async function ensureAssetLifecycle(
     await lifecycle.custody(
       admin,
       assetId,
-      'INSPECTED',
+      { toStatus: 'INSPECTED', providerRef: `collector-custody-inspected:${spec.key}` },
       `collector-custody-${randomUUID()}`,
       `collector-custody-inspected:${spec.key}`,
     );
   custody = await db.vaultCustodyRecord.findUniqueOrThrow({
     where: { assetId },
   });
-  if (custody.status === 'INSPECTED')
-    await lifecycle.custody(
-      admin,
-      assetId,
-      'SECURED',
-      `collector-custody-${randomUUID()}`,
-      `collector-custody-secured:${spec.key}`,
-    );
   if (!publish) return;
   const valuation = await db.valuationDecision.findFirst({
     where: { assetId, status: 'ACTIVE' },
@@ -1409,6 +1410,15 @@ async function ensureAssetLifecycle(
       `collector-coverage-${randomUUID()}`,
       `collector-coverage:${spec.key}`,
     );
+  custody = await db.vaultCustodyRecord.findUniqueOrThrow({ where: { assetId } });
+  if (custody.status === 'INSPECTED')
+    await lifecycle.custody(
+      admin,
+      assetId,
+      { toStatus: 'SECURED', providerRef: `collector-custody-secured:${spec.key}` },
+      `collector-custody-${randomUUID()}`,
+      `collector-custody-secured:${spec.key}`,
+    );
   const asset = await db.asset.findUniqueOrThrow({
     where: { id: assetId },
     include: { publication: true, ownershipSupply: true },
@@ -1419,6 +1429,24 @@ async function ensureAssetLifecycle(
       assetId,
       `collector-publish-${randomUUID()}`,
       `collector-publish:${spec.key}`,
+    );
+  const policy = await db.ownershipSupplyPolicy.findUnique({ where: { assetId } });
+  if (!asset.ownershipSupply && !policy)
+    await ownershipPolicy.propose(
+      admin,
+      assetId,
+      { policyCode: 'STANDARD_COLLECTIBLE_V1', totalUnits: '1000', reason: 'Staging demo fixture policy.' },
+      `collector-policy-propose-${randomUUID()}`,
+      `collector-policy-propose:${spec.key}`,
+    );
+  const proposedPolicy = await db.ownershipSupplyPolicy.findUnique({ where: { assetId } });
+  if (!asset.ownershipSupply && proposedPolicy?.status === 'PROPOSED')
+    await ownershipPolicy.approve(
+      admin,
+      assetId,
+      'Staging demo fixture policy approval.',
+      `collector-policy-approve-${randomUUID()}`,
+      `collector-policy-approve:${spec.key}`,
     );
   if (!asset.ownershipSupply)
     await ownership.issue(

@@ -51,18 +51,22 @@ export function AdminAssetOperationsDetail({
     queryFn: () => services.repositories.lifecycle.getReadiness(assetId),
     staleTime: 10_000,
   });
+  const [providerCode, setProviderCode] = useState("");
+  const [facilityCode, setFacilityCode] = useState("");
+  const [providerRef, setProviderRef] = useState("");
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-readiness", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations"] });
   };
   const handoff = useMutation({
-    mutationFn: () => services.repositories.lifecycle.handoff(assetId),
+    mutationFn: () =>
+      services.repositories.lifecycle.handoff(assetId, { providerCode, facilityCode, providerRef }),
     onSuccess: refresh,
   });
   const custody = useMutation({
     mutationFn: (toStatus: string) =>
-      services.repositories.lifecycle.transitionCustody(assetId, toStatus),
+      services.repositories.lifecycle.transitionCustody(assetId, toStatus, providerRef),
     onSuccess: refresh,
   });
   const publish = useMutation({
@@ -204,6 +208,12 @@ export function AdminAssetOperationsDetail({
         <Overview
           item={item}
           readiness={readiness.data}
+          providerCode={providerCode}
+          facilityCode={facilityCode}
+          providerRef={providerRef}
+          setProviderCode={setProviderCode}
+          setFacilityCode={setFacilityCode}
+          setProviderRef={setProviderRef}
           onHandoff={() => handoff.mutate()}
           handoffPending={handoff.isPending}
         />
@@ -223,6 +233,8 @@ export function AdminAssetOperationsDetail({
       {selected === "custody" ? (
         <Custody
           item={item}
+          providerRef={providerRef}
+          setProviderRef={setProviderRef}
           transition={(status) => custody.mutate(status)}
           pending={custody.isPending}
         />
@@ -249,11 +261,23 @@ export function AdminAssetOperationsDetail({
 function Overview({
   item,
   readiness,
+  providerCode,
+  facilityCode,
+  providerRef,
+  setProviderCode,
+  setFacilityCode,
+  setProviderRef,
   onHandoff,
   handoffPending,
 }: {
   item: Detail;
   readiness?: PublicationReadiness;
+  providerCode: string;
+  facilityCode: string;
+  providerRef: string;
+  setProviderCode: (value: string) => void;
+  setFacilityCode: (value: string) => void;
+  setProviderRef: (value: string) => void;
   onHandoff: () => void;
   handoffPending: boolean;
 }) {
@@ -298,11 +322,18 @@ function Overview({
             should remain outside post-receipt operations.
           </p>
         ) : null}
+        {!item.intake ? (
+          <div className="admin-custody-fields">
+            <label>Provider code<input value={providerCode} onChange={(event) => setProviderCode(event.target.value)} placeholder="Approved operator code" /></label>
+            <label>Facility code<input value={facilityCode} onChange={(event) => setFacilityCode(event.target.value)} placeholder="Approved facility" /></label>
+            <label>Handoff reference<input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Receipt or operator reference" /></label>
+          </div>
+        ) : null}
         <button
           type="button"
           className="admin-ops-button primary"
           onClick={onHandoff}
-          disabled={handoffPending || Boolean(item.intake)}
+          disabled={handoffPending || Boolean(item.intake) || !providerCode.trim() || !facilityCode.trim() || !providerRef.trim()}
         >
           {" "}
           {item.intake ? "Receipt already recorded" : "Start custody handoff"}{" "}
@@ -453,10 +484,14 @@ function Valuation({
 }
 function Custody({
   item,
+  providerRef,
+  setProviderRef,
   transition,
   pending,
 }: {
   item: Detail;
+  providerRef: string;
+  setProviderRef: (value: string) => void;
   transition: (status: string) => void;
   pending: boolean;
 }) {
@@ -479,6 +514,10 @@ function Custody({
         <p className="admin-detail-muted">
           Transitions are validated and audited by the lifecycle service.
         </p>
+        <label className="admin-form-field">
+          Evidence or operator reference
+          <input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Reference for this custody step" />
+        </label>
         <div className="admin-action-list">
           {["RECEIVED", "INSPECTED", "SECURED", "EXCEPTION"].map((status) => (
             <button

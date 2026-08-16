@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, Image as ImageIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
 import "@/styles/admin-collectible-detail.css";
 
-const tabs = ["overview", "physical", "valuation", "ownership", "market", "history"] as const;
+const tabs = ["overview", "physical", "valuation", "ownership", "issuance", "market", "history"] as const;
 type DetailTab = (typeof tabs)[number];
 
 export function AdminCollectibleDetail({
@@ -318,6 +319,7 @@ function TabContent({ item, tab }: { item: Detail; tab: DetailTab }) {
   if (tab === "physical") return <PhysicalTab item={item} />;
   if (tab === "valuation") return <ValuationTab item={item} />;
   if (tab === "ownership") return <OwnershipTab item={item} />;
+  if (tab === "issuance") return <IssuanceTab item={item} />;
   if (tab === "market") return <MarketTab item={item} />;
   return (
     <section className="admin-detail-card admin-detail-tab-panel">
@@ -326,6 +328,114 @@ function TabContent({ item, tab }: { item: Detail; tab: DetailTab }) {
         <span>Audit events only</span>
       </div>
       <ActivityList item={item} expanded />
+    </section>
+  );
+}
+function IssuanceTab({ item }: { item: Detail }) {
+  const services = useAppServices();
+  const client = useQueryClient();
+  const [units, setUnits] = useState(item.issuance.proposed?.units ?? item.issuance.policy.defaultUnits);
+  const [reason, setReason] = useState("");
+  const propose = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.proposeOwnershipSupply(item.id, {
+        policyCode: item.issuance.policy.code,
+        totalUnits: units,
+        reason: reason.trim(),
+      }),
+    onSuccess: () => {
+      setReason("");
+      void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] });
+    },
+  });
+  const approve = useMutation({
+    mutationFn: () => services.repositories.admin.approveOwnershipSupply(item.id, reason.trim()),
+    onSuccess: () => {
+      setReason("");
+      void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] });
+    },
+  });
+  const policy = item.issuance;
+  const canPropose = !policy.proposed || policy.status === "REJECTED";
+  const canApprove = policy.status === "PROPOSED";
+  return (
+    <section className="admin-detail-card admin-detail-tab-panel">
+      <div className="admin-card-heading">
+        <div>
+          <h3>Issuance policy</h3>
+          <p className="admin-detail-muted">Configure supply before any ownership units or market activity exist.</p>
+        </div>
+        <span className={`admin-detail-status ${policy.status.toLowerCase()}`}>{sentence(policy.status)}</span>
+      </div>
+      <div className="admin-issuance-grid">
+        <InfoCard title="Readiness">
+          <Field label="Publication" value={policy.readiness.blockers.includes("CATALOGUE_NOT_PUBLISHED") ? "Blocked" : "Ready"} />
+          <Field label="Valuation" value={policy.valuation ? money(policy.valuation.minor, policy.valuation.currency) : "Required"} />
+          <Field label="Insurance" value={policy.insurance.active ? "Active" : "Required"} />
+          <Field label="Custody" value={policy.readiness.blockers.includes("CUSTODY_NOT_SECURED") ? "Not secured" : "Secured"} />
+          <Field label="Approval" value={policy.status === "APPROVED" || policy.status === "ISSUED" ? "Approved" : "Required"} accent />
+        </InfoCard>
+        <InfoCard title="Configured product policy">
+          <Field label="Template" value={policy.policy.label} />
+          <Field label="Allowed range" value={`${policy.policy.minimumUnits}–${policy.policy.maximumUnits} units`} />
+          <Field label="Rounding" value="Floor; retain remainder" />
+          <Field label="Supply" value={policy.supply ? `${policy.supply.totalUnits} units` : "Not issued"} />
+        </InfoCard>
+      </div>
+      <div className="admin-issuance-preview">
+        <div className="admin-card-heading">
+          <h4>Price preview from authoritative valuation</h4>
+          <span>{policy.valuation ? policy.valuation.currency : "No valuation"}</span>
+        </div>
+        <div className="admin-issuance-options">
+          {policy.previews.map((preview) => (
+            <button
+              type="button"
+              key={preview.units}
+              className={units === preview.units ? "active" : ""}
+              onClick={() => setUnits(preview.units)}
+              disabled={!canPropose}
+            >
+              <strong>{preview.units} units</strong>
+              <span>{preview.pricePerUnitMinor && preview.currency ? money(preview.pricePerUnitMinor, preview.currency) : "Not available"} / slice</span>
+            </button>
+          ))}
+        </div>
+        {policy.proposed ? (
+          <div className="admin-issuance-proposed">
+            <strong>Proposed: {policy.proposed.units} units</strong>
+            <span>{money(policy.proposed.pricePerUnitMinor, policy.proposed.valuationCurrency)} per slice · remainder {policy.proposed.remainderMinor} minor units</span>
+          </div>
+        ) : null}
+      </div>
+      {policy.readiness.blockers.length ? (
+        <div className="admin-detail-callout">
+          <strong>Blocked until ready:</strong> {policy.readiness.blockers.map(sentence).join(" · ")}
+        </div>
+      ) : null}
+      {canPropose || canApprove ? (
+        <div className="admin-issuance-form">
+          <label>
+            Decision note
+            <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain why this supply is appropriate for the collectible." />
+          </label>
+          <div className="admin-issuance-form__actions">
+            {canPropose ? (
+              <button className="admin-button primary" type="button" disabled={!reason.trim() || propose.isPending} onClick={() => propose.mutate()}>
+                {propose.isPending ? "Saving…" : `Propose ${units} units`}
+              </button>
+            ) : null}
+            {canApprove ? (
+              <button className="admin-button secondary" type="button" disabled={approve.isPending} onClick={() => approve.mutate()}>
+                {approve.isPending ? "Approving…" : "Approve proposed supply"}
+              </button>
+            ) : null}
+          </div>
+          {propose.isError || approve.isError ? <p className="admin-form-error">The policy change could not be saved. Refresh and try again.</p> : null}
+        </div>
+      ) : (
+        <p className="admin-detail-muted">Supply is approved or already issued. Issuance remains a separate guarded operation.</p>
+      )}
     </section>
   );
 }
@@ -643,6 +753,8 @@ function label(value: string) {
     ? "Physical"
     : value === "market"
       ? "Market"
+      : value === "issuance"
+        ? "Issuance"
       : value[0].toUpperCase() + value.slice(1);
 }
 function valuationMethod(value: string) {

@@ -589,6 +589,94 @@
   margin: 0 0 0.8rem;
   font-size: 13px;
 }
+.admin-issuance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.admin-issuance-grid .admin-detail-card {
+  background: var(--surface);
+  padding: 12px;
+}
+.admin-issuance-preview {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 14px;
+  background: var(--surface);
+}
+.admin-issuance-preview h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.admin-issuance-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-issuance-options button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.admin-issuance-options button.active {
+  border-color: var(--accent);
+  background: rgba(64, 220, 182, 0.08);
+}
+.admin-issuance-options button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.admin-issuance-options span,
+.admin-issuance-proposed span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.admin-issuance-proposed {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+  font-size: 12px;
+}
+.admin-issuance-form {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.admin-issuance-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.admin-issuance-form textarea {
+  min-height: 76px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 9px;
+  font: inherit;
+}
+.admin-issuance-form__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-form-error {
+  color: #ff8f8f;
+  font-size: 11px;
+  margin: 0;
+}
 .admin-holder-table {
   display: grid;
   gap: 0.4rem;
@@ -656,6 +744,10 @@
   }
 }
 @media (max-width: 760px) {
+  .admin-issuance-grid,
+  .admin-issuance-options {
+    grid-template-columns: 1fr;
+  }
   .admin-detail-hero {
     grid-template-columns: 1fr;
   }

@@ -15,6 +15,7 @@ import {
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { isBetaFixtureSlug } from '../../config/beta-policy';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/submission-storage.ports';
+import { OwnershipPolicyService } from '../ownership/application/ownership-policy.service';
 
 type AdminAttention = {
   id: string;
@@ -161,6 +162,7 @@ export class AdminService {
     private readonly authorization: AuthorizationService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
+    private readonly ownershipPolicy: OwnershipPolicyService,
   ) {}
 
   async overview(actor: Actor) {
@@ -3833,6 +3835,7 @@ export class AdminService {
     const publicationBlockingCodes = readinessCodes(
       asset.publication?.readiness,
     );
+    const issuance = await this.ownershipPolicy.adminProjection(asset.id);
     const saleValues = sales.map((item) => item.valueMinor);
     const avgSale = saleValues.length
       ? saleValues.reduce((sum, value) => sum + value, 0n) /
@@ -3919,6 +3922,7 @@ export class AdminService {
                   : null,
             })) ?? [],
       },
+      issuance,
       lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
       collector: owner
         ? {

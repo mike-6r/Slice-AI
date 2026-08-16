@@ -208,7 +208,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
         .set('authorization', operator.auth)
         .set('x-forwarded-for', operator.clientIp)
         .set('idempotency-key', idempotency(key))
-        .send({ toStatus });
+        .send({ toStatus, providerRef: `${h.runId}-custody-${toStatus}` });
 
     expect((await transition('RECEIVED', 'received')).status).toBe(201);
     const invalidTransition = await transition('SECURED', 'invalid-transition');
@@ -220,7 +220,6 @@ describe('Document 011 lifecycle HTTP E2E', () => {
     expect(custodyConflict.status).toBe(409);
     expect(custodyConflict.body.error.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
     expect((await transition('INSPECTED', 'inspected')).status).toBe(201);
-    expect((await transition('SECURED', 'secured')).status).toBe(201);
 
     const valuation = await request(h.app.getHttpServer())
       .post(`/api/v1/admin/assets/${assetId}/valuations/decisions`)
@@ -250,6 +249,8 @@ describe('Document 011 lifecycle HTTP E2E', () => {
         expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
       });
     expect(coverage.status).toBe(201);
+
+    expect((await transition('SECURED', 'secured')).status).toBe(201);
 
     const ready = await request(h.app.getHttpServer())
       .get(`/api/v1/admin/assets/${assetId}/publication-readiness`)

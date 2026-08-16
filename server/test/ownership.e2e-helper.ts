@@ -89,6 +89,37 @@ export async function bootOwnershipHarness(
       expiresAt: new Date(now.getTime() + 86_400_000),
     },
   });
+  await h.db.valuationDecision.create({
+    data: {
+      id: `${h.runId}-valuation`,
+      assetId,
+      valueMinor: 100_000n,
+      currency: 'GBP',
+      confidence: 90,
+      methodologyCode: 'TEST_FIXTURE',
+      decidedByUserId: admin.id,
+      decidedAt: now,
+      status: 'ACTIVE',
+    },
+  });
+  await h.db.ownershipSupplyPolicy.create({
+    data: {
+      id: `${h.runId}-supply-policy`,
+      assetId,
+      policyCode: 'STANDARD_COLLECTIBLE_V1',
+      status: 'APPROVED',
+      proposedUnits: 10_000n,
+      valuationMinor: 100_000n,
+      valuationCurrency: 'GBP',
+      pricePerUnitMinor: 10n,
+      remainderMinor: 0n,
+      reason: 'Test fixture approved supply policy.',
+      proposedByUserId: admin.id,
+      approvedByUserId: admin.id,
+      proposedAt: now,
+      approvedAt: now,
+    },
+  });
   return { ...h, categoryId, owner, admin, assetId, slug };
 }
 
@@ -284,6 +315,8 @@ export async function closeOwnershipHarness(h: OwnershipHarness | undefined) {
     },
   });
   await h.db.insuranceCoverage.deleteMany({ where: { assetId: h.assetId } });
+  await h.db.ownershipSupplyPolicy.deleteMany({ where: { assetId: h.assetId } });
+  await h.db.valuationDecision.deleteMany({ where: { assetId: h.assetId } });
   await h.db.vaultCustodyRecord.deleteMany({ where: { assetId: h.assetId } });
   await h.db.assetPublication.deleteMany({ where: { assetId: h.assetId } });
   await h.db.assetSubmission.deleteMany({ where: { assetId: h.assetId } });

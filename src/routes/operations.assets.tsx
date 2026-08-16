@@ -15,6 +15,9 @@ export function AssetOperationsPage() {
   const [valueMinor, setValueMinor] = useState("");
   const [confidence, setConfidence] = useState("80");
   const [coverageMinor, setCoverageMinor] = useState("");
+  const [providerCode, setProviderCode] = useState("");
+  const [facilityCode, setFacilityCode] = useState("");
+  const [providerRef, setProviderRef] = useState("");
   const operations = useQuery({
     queryKey: ["asset-operations"],
     queryFn: () => services.repositories.lifecycle.listOperations(),
@@ -29,12 +32,13 @@ export function AssetOperationsPage() {
     void client.invalidateQueries({ queryKey: ["asset-operations"] });
   };
   const handoff = useMutation({
-    mutationFn: () => services.repositories.lifecycle.handoff(selected!),
+    mutationFn: () =>
+      services.repositories.lifecycle.handoff(selected!, { providerCode, facilityCode, providerRef }),
     onSuccess: refresh,
   });
   const custody = useMutation({
     mutationFn: (toStatus: string) =>
-      services.repositories.lifecycle.transitionCustody(selected!, toStatus),
+      services.repositories.lifecycle.transitionCustody(selected!, toStatus, providerRef),
     onSuccess: refresh,
   });
   const valuation = useMutation({
@@ -131,11 +135,16 @@ export function AssetOperationsPage() {
             <Readiness value={readiness.data} loading={readiness.isLoading} />
             <div className="grid gap-4 md:grid-cols-2">
               <ActionCard title="Custody" detail={`Current: ${item.custodyStatus}`}>
+                <div className="grid gap-2 text-xs">
+                  <label>Provider code<input value={providerCode} onChange={(event) => setProviderCode(event.target.value)} placeholder="Approved operator code" /></label>
+                  <label>Facility code<input value={facilityCode} onChange={(event) => setFacilityCode(event.target.value)} placeholder="Approved facility" /></label>
+                  <label>Evidence / operator reference<input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Reference for this step" /></label>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     className="button-secondary"
                     onClick={() => handoff.mutate()}
-                    disabled={handoff.isPending}
+                    disabled={handoff.isPending || !providerCode.trim() || !facilityCode.trim() || !providerRef.trim()}
                   >
                     Start intake
                   </button>

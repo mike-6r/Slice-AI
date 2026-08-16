@@ -336,6 +336,12 @@ export const mockRepositories: AppRepositories = {
     async getCollectibleDetail() {
       throw new Error("Collectible admin detail requires the API service.");
     },
+    async proposeOwnershipSupply() {
+      throw new Error("Ownership supply policy requires the API service.");
+    },
+    async approveOwnershipSupply() {
+      throw new Error("Ownership supply policy requires the API service.");
+    },
     async search() {
       return { items: [] };
     },

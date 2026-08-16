@@ -79,6 +79,7 @@ export class OwnershipService {
             },
             take: 1,
           },
+          ownershipSupplyPolicy: true,
         },
       });
       if (!asset)
@@ -95,6 +96,17 @@ export class OwnershipService {
         throw new ConflictException({
           code: 'ASSET_NOT_ELIGIBLE_FOR_ISSUANCE',
           message: 'The asset is not eligible for ownership issuance.',
+        });
+      const policy = asset.ownershipSupplyPolicy;
+      if (!policy || policy.status !== 'APPROVED')
+        throw new ConflictException({
+          code: 'SUPPLY_POLICY_NOT_APPROVED',
+          message: 'An approved ownership supply policy is required before issuance.',
+        });
+      if (policy.proposedUnits !== totalUnits)
+        throw new ConflictException({
+          code: 'SUPPLY_POLICY_MISMATCH',
+          message: 'The requested quantity does not match the approved supply policy.',
         });
       if (await db.ownershipAssetSupply.findUnique({ where: { assetId } }))
         throw new ConflictException({
@@ -116,6 +128,10 @@ export class OwnershipService {
           status: 'ACTIVE',
           issuedAt: now,
         },
+      });
+      await db.ownershipSupplyPolicy.update({
+        where: { assetId },
+        data: { status: 'ISSUED', issuedAt: now },
       });
       await db.ownershipPosition.create({
         data: {

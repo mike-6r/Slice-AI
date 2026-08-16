@@ -143,10 +143,14 @@ export interface AssetLifecycleRepository {
     page?: number;
     pageSize?: number;
   }): Promise<AssetOperationsBoardResponse>;
-  handoff(assetId: string): Promise<{ assetId: string; custodyStatus: string }>;
+  handoff(
+    assetId: string,
+    input: { providerCode: string; facilityCode: string; providerRef: string },
+  ): Promise<{ assetId: string; custodyStatus: string }>;
   transitionCustody(
     assetId: string,
     toStatus: string,
+    providerRef?: string,
   ): Promise<{ assetId: string; custodyStatus: string }>;
   recordValuation(
     assetId: string,
@@ -904,6 +908,43 @@ export type AdminCollectibleDetail = {
       percentage: number | null;
     }>;
   };
+  issuance: {
+    assetId: string;
+    status: string;
+    policy: {
+      code: string;
+      label: string;
+      minimumUnits: string;
+      maximumUnits: string;
+      defaultUnits: string;
+      candidates: string[];
+      rounding: string;
+    };
+    valuation: { minor: string; currency: string; asOf: string; method: string } | null;
+    insurance: { active: boolean; expiresAt: string | null };
+    proposed: {
+      id: string;
+      status: string;
+      policyCode: string;
+      units: string;
+      pricePerUnitMinor: string;
+      remainderMinor: string;
+      valuationMinor: string;
+      valuationCurrency: string;
+      reason: string;
+      proposedAt: string;
+      approvedAt: string | null;
+    } | null;
+    previews: Array<{
+      units: string;
+      pricePerUnitMinor: string | null;
+      remainderMinor: string | null;
+      impliedWholeValueMinor: string | null;
+      currency: string | null;
+    }>;
+    readiness: { ready: boolean; blockers: string[] };
+    supply: { status: string; totalUnits: string; issuedUnits: string } | null;
+  };
   lifecycle: {
     current: string;
     legacy?: boolean;
@@ -1139,6 +1180,14 @@ export interface AdminRepository {
   getIntegrations(): Promise<AdminIntegrationsSummary>;
   search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
   getCollectibleDetail(id: string, tab?: string): Promise<AdminCollectibleDetail>;
+  proposeOwnershipSupply(
+    id: string,
+    input: { policyCode: string; totalUnits: string; reason: string },
+  ): Promise<{ assetId: string; status: string; units: string; pricePerUnitMinor: string; remainderMinor: string }>;
+  approveOwnershipSupply(
+    id: string,
+    reason: string,
+  ): Promise<{ assetId: string; status: string; units: string; pricePerUnitMinor: string; remainderMinor: string }>;
 }
 
 export interface MarketRepository {
