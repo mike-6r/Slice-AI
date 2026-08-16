@@ -180,7 +180,11 @@ export function MarketAssetCard({
               <div>
                 <dt>Availability</dt>
                 <dd>
-                  {availability === undefined ? "Not yet issued" : formatOwnership(availability / 100)}
+                  {preMarket
+                    ? "Not yet issued"
+                    : availability === undefined || availability === 0
+                      ? "No listings"
+                      : formatOwnership((availability ?? 0) / 100)}
                 </dd>
               </div>
               <div>
@@ -199,10 +203,10 @@ export function MarketAssetCard({
               </div>
             </dl>
             <div
-              className={`market-ownership${availability === undefined ? " is-pending" : ""}`}
+              className={`market-ownership${preMarket ? " is-pending" : ""}`}
               aria-label="Market availability"
             >
-              {availability === undefined ? (
+              {preMarket ? (
                 <div className="market-availability-note">
                   <span aria-hidden="true" />
                   <small>Ownership is being prepared. Trading will open once issuance is complete.</small>
@@ -213,9 +217,9 @@ export function MarketAssetCard({
                     <span style={{ width: `${availabilityWidth}%` }} />
                   </span>
                   <small>
-                    {availability === 0
+                    {availability === undefined || availability === 0
                       ? "Market open · awaiting listings"
-                      : `${formatOwnership(availability / 100)} available to own`}
+                      : `${formatOwnership((availability ?? 0) / 100)} available to own`}
                   </small>
                 </>
               )}
