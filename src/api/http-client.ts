@@ -17,7 +17,13 @@ export class ApiError extends Error {
 }
 
 type QueryValue = string | number | boolean | undefined | null;
-export const API_ORIGIN = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3001";
+// The public staging/production web server proxies `/api` on the same origin.
+// Falling back to the browser origin prevents a misconfigured client build
+// from trying to refresh against the end user's own localhost.
+const configuredApiOrigin = import.meta.env.VITE_API_BASE_URL?.trim();
+const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
+export const API_ORIGIN =
+  configuredApiOrigin || browserApiOrigin || "http://127.0.0.1:3001";
 
 const parseBody = async (response: Response): Promise<unknown> => {
   const text = await response.text();
