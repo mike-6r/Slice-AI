@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClient } from "@/api/http-client";
+import type { ISODateTime } from "@/domain";
 import { createHttpRepositories, mapMarketAsset } from "./http-repositories";
 
 const dto = {
@@ -34,7 +35,7 @@ const dto = {
     edgeScore: 3.8,
     surfaceScore: 4.1,
     conditionLabel: "Very Good",
-    analyzedAt: "2026-08-16T12:00:00.000Z",
+    analyzedAt: "2026-08-16T12:00:00.000Z" as ISODateTime,
     warnings: [],
     visualizations: [
       { side: "FRONT" as const, type: "overview" as const, url: "https://example.com/front.jpg", centering: null },

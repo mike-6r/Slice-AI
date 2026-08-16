@@ -9,7 +9,7 @@ import {
   Info,
   RotateCw,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
@@ -740,6 +740,7 @@ function ExternalReference({
 }
 
 function SliceGradePanel({ grade }: { grade: SliceGrade }) {
+  const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
   const score = (value: number | null) => (value === null ? "—" : Number(value.toFixed(1)).toString());
   const evidence = grade.visualizations.filter((item) => item.url);
   const estimate = grade.overallEstimate === null ? "—" : score(grade.overallEstimate);
@@ -747,6 +748,21 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
     grade.overallMin !== null && grade.overallMax !== null
       ? `${score(grade.overallMin)}–${score(grade.overallMax)}`
       : "—";
+  const selected = selectedEvidence === null ? null : evidence[selectedEvidence];
+
+  useEffect(() => {
+    if (selectedEvidence === null) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedEvidence(null);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedEvidence]);
 
   return (
     <section className="asset-slice-grade-panel" aria-labelledby="slice-grade-title">
@@ -787,10 +803,18 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           <div className="asset-slice-grade-panel__images">
             {evidence.map((item, index) => (
               <figure key={`${item.side}-${item.type}-${index}`}>
-                <img
-                  src={item.url ?? undefined}
-                  alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
-                />
+                <button
+                  type="button"
+                  className="asset-slice-grade-panel__image-button"
+                  aria-label={`View ${item.side === "FRONT" ? "front" : "back"} card ${item.type} evidence larger`}
+                  onClick={() => setSelectedEvidence(index)}
+                >
+                  <img
+                    src={item.url ?? undefined}
+                    alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
+                  />
+                  <span aria-hidden="true">View larger</span>
+                </button>
                 <figcaption>
                   {item.side === "FRONT" ? "Front" : "Back"} · {item.type === "centering" ? "Centering" : "Overview"}
                 </figcaption>
@@ -803,6 +827,38 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
       </div>
       {grade.warnings.length ? (
         <p className="asset-slice-grade-panel__note">Review note: {grade.warnings[0]}</p>
+      ) : null}
+      {selected?.url ? (
+        <div
+          className="asset-slice-grade-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Expanded Slice Grade evidence"
+          onClick={() => setSelectedEvidence(null)}
+        >
+          <div className="asset-slice-grade-lightbox__content" onClick={(event) => event.stopPropagation()}>
+            <div className="asset-slice-grade-lightbox__header">
+              <div>
+                <p className="asset-section-label">Slice Grade evidence</p>
+                <strong>
+                  {selected.side === "FRONT" ? "Front" : "Back"} · {selected.type === "centering" ? "Centering" : "Overview"}
+                </strong>
+              </div>
+              <button
+                type="button"
+                className="asset-slice-grade-lightbox__close"
+                aria-label="Close enlarged evidence image"
+                onClick={() => setSelectedEvidence(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="asset-slice-grade-lightbox__image-wrap">
+              <img src={selected.url} alt={`${selected.side === "FRONT" ? "Front" : "Back"} card evidence enlarged`} />
+            </div>
+            <p className="asset-slice-grade-lightbox__hint">Click outside the image or press Escape to close.</p>
+          </div>
+        </div>
       ) : null}
     </section>
   );
