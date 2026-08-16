@@ -4,10 +4,10 @@ import { MarketService } from './market.service';
 import { MarketProviderRegistry } from './market-provider.registry';
 import { MarketRefreshService } from './market-refresh.service';
 import { MarketRefreshWorker } from './market-refresh.worker';
-import { SubmissionsModule } from '../submissions/submissions.module';
+import { SubmissionStorageModule } from '../submissions/submission-storage.module';
 
 @Module({
-  imports: [SubmissionsModule],
+  imports: [SubmissionStorageModule],
   controllers: [MarketController],
   providers: [MarketService, MarketProviderRegistry, MarketRefreshService, MarketRefreshWorker],
   exports: [MarketService, MarketRefreshService, MarketProviderRegistry],
