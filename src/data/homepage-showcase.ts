@@ -31,8 +31,8 @@ export type ShowcaseDestination =
  * values are intentionally kept separate from authoritative asset data.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
-  referenceValue: "\u00a31,950",
-  collectibleValue: "£4,277",
+  referenceValue: "$343,098",
+  collectibleValue: "$343,098",
   totalShares: "195 shares",
   totalSharesCount: 195,
   availableShares: "62 shares",
@@ -160,8 +160,8 @@ export const HOMEPAGE_TRENDING_ASSETS = catalogue;
 export const HOMEPAGE_MARKET_METRICS = [
   {
     label: "Market value",
-    value: "£1,950",
-    detail: "External listing observation",
+    value: "$343,098",
+    detail: "PriceCharting PSA 10 guide",
     tone: "positive",
   },
   {

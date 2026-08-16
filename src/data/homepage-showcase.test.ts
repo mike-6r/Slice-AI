@@ -36,7 +36,7 @@ describe("homepage showcase routing", () => {
 
   it("keeps the illustrative share maths internally consistent", () => {
     expect(HOMEPAGE_OWNERSHIP_EXAMPLE).toMatchObject({
-      referenceValue: "\u00a31,950",
+      referenceValue: "$343,098",
       totalShares: "195 shares",
       totalSharesCount: 195,
       availableShares: "62 shares",
