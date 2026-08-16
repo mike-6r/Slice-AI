@@ -16,6 +16,25 @@ function gradePresentation(grade?: string) {
   return { company, score: score ?? "", label: label.join(" ") };
 }
 
+function formatReferenceMoney(
+  amountMinor: number,
+  currency: NonNullable<MarketplaceAsset["marketReference"]>["currency"],
+) {
+  const locale =
+    currency === "GBP"
+      ? "en-GB"
+      : currency === "CAD"
+        ? "en-CA"
+        : currency === "EUR"
+          ? "en-IE"
+          : "en-US";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amountMinor / 100);
+}
+
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
   const approvedMedia = asset.media?.find((item) => item.alt.toLowerCase().includes("front"));
   const media = approvedMedia
@@ -86,7 +105,6 @@ export function MarketAssetCard({
   asset: MarketplaceAsset;
   compact?: boolean;
 }) {
-  const { formatMoney } = useCurrency();
   const services = useAppServices();
   const client = useQueryClient();
   const { isAuthenticated } = useSession();
@@ -141,7 +159,10 @@ export function MarketAssetCard({
         <MarketValue asset={asset} />
         {asset.marketReference ? (
           <p className="market-card-reference">
-            Market reference: {formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)} {asset.marketReference.currency}
+            Market reference: {formatReferenceMoney(
+              asset.marketReference.amountMinor,
+              asset.marketReference.currency,
+            )} {asset.marketReference.currency}
           </p>
         ) : null}
         {!compact && (
