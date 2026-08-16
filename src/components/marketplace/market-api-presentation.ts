@@ -20,6 +20,7 @@ export type MarketplaceAsset = {
   ownersCount?: number;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   change24hBps?: number;
+  media?: Array<{ url: string; alt: string }>;
 };
 
 export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
@@ -52,4 +53,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   ownersCount: asset.market?.ownersCount,
   dataStatus: asset.market?.dataStatus,
   change24hBps: asset.market?.change24hBps,
+  media: asset.media
+    .filter((item) => item.kind === "image")
+    .map((item) => ({ url: item.url, alt: item.alt })),
 });

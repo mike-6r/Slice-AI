@@ -78,6 +78,7 @@ type MarketAssetDto = {
   manufacturer: string | null;
   cardNumber: string | null;
   description: string | null;
+  media?: Array<{ id: string; slot: string; url: string; alt: string }>;
   certificationNumber?: string;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
@@ -197,7 +198,13 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     },
   },
   status: "listed",
-  media: [],
+  media: (value.media ?? []).map((item, index) => ({
+    id: item.id,
+    url: item.url,
+    alt: item.alt,
+    kind: "image" as const,
+    order: index,
+  })),
   grade: value.grading
     ? {
         company: value.grading.companyCode.toLowerCase() as GradingCompany,

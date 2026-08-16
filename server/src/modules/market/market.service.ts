@@ -15,6 +15,10 @@ import {
   isBetaFixtureSource,
   publicBetaAssetWhere,
 } from '../../config/beta-policy';
+import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../submissions/ports/submission-storage.ports';
 
 const ranges = {
   '1D': 1,
@@ -39,6 +43,7 @@ export class MarketService {
     @Inject(CACHE_STORE) private readonly cache: CacheStore,
     private readonly providers: MarketProviderRegistry,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
   async list(query: {
@@ -106,6 +111,18 @@ export class MarketService {
           orderBy: { observedAt: 'desc' },
           take: 50,
         },
+        submissions: {
+          where: { status: 'APPROVED' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          include: {
+            media: {
+              where: { status: 'SAFE', deletedAt: null },
+              orderBy: { slot: 'asc' },
+              select: { id: true, slot: true, status: true, objectKey: true },
+            },
+          },
+        },
         publication: true,
         custodyRecord: true,
         insuranceCoverage: {
@@ -145,9 +162,11 @@ export class MarketService {
               (a.marketSnapshots[0]?.change24hBps ?? -Infinity)
             : a.title.localeCompare(b.title),
       );
-    const items = filtered
-      .slice(0, query.limit)
-      .map((asset) => assetView(asset));
+    const items = await Promise.all(
+      filtered.slice(0, query.limit).map((asset) =>
+        assetView(asset, this.storage),
+      ),
+    );
     return {
       items,
       hasMore: filtered.length > query.limit,
@@ -160,7 +179,7 @@ export class MarketService {
 
   async detail(slug: string) {
     const asset = await this.asset(slug);
-    return assetView(asset);
+    return assetView(asset, this.storage);
   }
   async history(slug: string, range: Range) {
     const asset = await this.asset(slug);
@@ -225,6 +244,18 @@ export class MarketService {
           orderBy: { observedAt: 'desc' },
           take: 50,
         },
+        submissions: {
+          where: { status: 'APPROVED' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          include: {
+            media: {
+              where: { status: 'SAFE', deletedAt: null },
+              orderBy: { slot: 'asc' },
+              select: { id: true, slot: true, status: true, objectKey: true },
+            },
+          },
+        },
         publication: true,
         custodyRecord: true,
         insuranceCoverage: {
@@ -235,7 +266,9 @@ export class MarketService {
       orderBy: { id: 'asc' },
       take: limit,
     });
-    return { items: rows.map(assetView) };
+    return {
+      items: await Promise.all(rows.map((row) => assetView(row, this.storage))),
+    };
   }
   async summary() {
     const value = await this.db.marketSnapshot.findFirst({
@@ -296,6 +329,18 @@ export class MarketService {
               orderBy: { observedAt: 'desc' },
               take: 50,
             },
+            submissions: {
+              where: { status: 'APPROVED' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              include: {
+                media: {
+                  where: { status: 'SAFE', deletedAt: null },
+                  orderBy: { slot: 'asc' },
+                  select: { id: true, slot: true, status: true, objectKey: true },
+                },
+              },
+            },
           },
         },
       },
@@ -309,12 +354,16 @@ export class MarketService {
     });
     return {
       kind,
-      items: rows
-        .filter((row) => row.asset.status === 'PUBLISHED')
-        .filter(
-          (row) => !this.config.isBeta || !isBetaFixtureSource(row.source),
-        )
-        .map((row) => assetView({ ...row.asset, marketSnapshots: [row] })),
+      items: await Promise.all(
+        rows
+          .filter((row) => row.asset.status === 'PUBLISHED')
+          .filter(
+            (row) => !this.config.isBeta || !isBetaFixtureSource(row.source),
+          )
+          .map((row) =>
+            assetView({ ...row.asset, marketSnapshots: [row] }, this.storage),
+          ),
+      ),
     };
   }
   async unavailable(slug: string, kind: 'ORDER_BOOK' | 'RECENT_TRADES') {
@@ -356,6 +405,18 @@ export class MarketService {
           where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
           take: 50,
+        },
+        submissions: {
+          where: { status: 'APPROVED' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          include: {
+            media: {
+              where: { status: 'SAFE', deletedAt: null },
+              orderBy: { slot: 'asc' },
+              select: { id: true, slot: true, status: true, objectKey: true },
+            },
+          },
         },
       },
     });
@@ -451,6 +512,14 @@ type PublicAssetRow = {
     observedAt: Date;
     occurredAt: Date | null;
   }>;
+  submissions?: Array<{
+    media: Array<{
+      id: string;
+      slot: string;
+      status: string;
+      objectKey: string;
+    }>;
+  }>;
   publication?: { status: string; publishedAt: Date | null } | null;
   custodyRecord?: { status: string; updatedAt: Date } | null;
   insuranceCoverage?: Array<{ status: string; expiresAt: Date }>;
@@ -462,8 +531,32 @@ type PublicAssetRow = {
     currency: string;
   }>;
 };
-function assetView(asset: PublicAssetRow) {
+async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
+  const approvedMedia = asset.submissions?.[0]?.media ?? [];
+  const media = (
+    await Promise.all(
+      approvedMedia.map(async (item) => ({
+        id: item.id,
+        slot: item.slot,
+        url: await storage
+          .createPrivateDownloadUrl(
+            item.objectKey,
+            new Date(Date.now() + 5 * 60_000),
+          )
+          .catch(() => null),
+      })),
+    )
+  )
+    .filter((item): item is { id: string; slot: string; url: string } =>
+      Boolean(item.url),
+    )
+    .map((item) => ({
+      id: item.id,
+      slot: item.slot,
+      url: item.url,
+      alt: `${asset.title} ${item.slot} approved media`,
+    }));
   return {
     publicId: asset.publicId,
     slug: asset.slug,
@@ -473,6 +566,7 @@ function assetView(asset: PublicAssetRow) {
     manufacturer: asset.manufacturer,
     cardNumber: asset.cardNumber,
     description: asset.description,
+    media,
     ...(asset.certificationNumber
       ? { certificationNumber: asset.certificationNumber }
       : {}),

@@ -98,7 +98,10 @@ function AssetPage() {
     );
 
   const asset = toMarketplaceAsset(assetQuery.data);
-  const media = assetShowcaseMedia(asset.slug);
+  const approvedMedia = asset.media?.[0];
+  const media = approvedMedia
+    ? { src: approvedMedia.url, alt: approvedMedia.alt }
+    : assetShowcaseMedia(asset.slug);
   const history = historyQuery.data ?? [];
   const currentValue = asset.estimatedMarketValueMinor;
   const shares = sharePresentation({
