@@ -181,6 +181,28 @@ export class TradingController {
     );
   }
 
+  @Post('admin/trading/markets/:assetId/activate')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('trading.manage')
+  async activate(
+    @Param('assetId') assetId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireKey(key);
+    await this.limiter.enforce(
+      'adminMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.trading.activateMarket(
+      req.actor!,
+      assetId,
+      req.requestId ?? 'unknown',
+      key!,
+    );
+  }
+
   @Post('admin/trading/markets/:assetId/resume')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('trading.manage')

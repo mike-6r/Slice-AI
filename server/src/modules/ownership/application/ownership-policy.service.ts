@@ -29,6 +29,7 @@ export class OwnershipPolicyService {
         id: true,
         status: true,
         custodyRecord: { select: { status: true } },
+        controlledBetaBypass: { select: { id: true } },
         insuranceCoverage: {
           where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } },
           select: { expiresAt: true },
@@ -70,7 +71,9 @@ export class OwnershipPolicyService {
     const blockers = [
       asset.status !== 'PUBLISHED' ? 'CATALOGUE_NOT_PUBLISHED' : null,
       !decision ? 'VALUATION_REQUIRED' : null,
-      asset.custodyRecord?.status !== 'SECURED' ? 'CUSTODY_NOT_SECURED' : null,
+      asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass
+        ? 'CUSTODY_NOT_SECURED'
+        : null,
       status !== 'APPROVED' && status !== 'ISSUED' ? 'SUPPLY_POLICY_NOT_APPROVED' : null,
     ].filter((value): value is string => Boolean(value));
     return {

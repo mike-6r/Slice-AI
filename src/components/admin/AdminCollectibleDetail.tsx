@@ -335,6 +335,7 @@ function TabContent({ item, tab }: { item: Detail; tab: DetailTab }) {
 function IssuanceTab({ item }: { item: Detail }) {
   const services = useAppServices();
   const client = useQueryClient();
+  const policy = item.issuance;
   const [units, setUnits] = useState(item.issuance.proposed?.units ?? item.issuance.policy.defaultUnits);
   const [reason, setReason] = useState("");
   const propose = useMutation({
@@ -356,9 +357,13 @@ function IssuanceTab({ item }: { item: Detail }) {
       void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] });
     },
   });
-  const policy = item.issuance;
+  const issue = useMutation({
+    mutationFn: () => services.repositories.admin.issueOwnership(item.id, policy.proposed?.units ?? ""),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] }),
+  });
   const canPropose = !policy.proposed || policy.status === "REJECTED";
   const canApprove = policy.status === "PROPOSED";
+  const canIssue = policy.status === "APPROVED" && policy.readiness.ready && !policy.supply;
   return (
     <section className="admin-detail-card admin-detail-tab-panel">
       <div className="admin-card-heading">
@@ -438,11 +443,16 @@ function IssuanceTab({ item }: { item: Detail }) {
                 {approve.isPending ? "Approving…" : "Approve proposed supply"}
               </button>
             ) : null}
+            {canIssue ? (
+              <button className="admin-button primary" type="button" disabled={issue.isPending} onClick={() => issue.mutate()}>
+                {issue.isPending ? "Issuing…" : `Issue ${policy.proposed?.units ?? ""} units`}
+              </button>
+            ) : null}
           </div>
-          {propose.isError || approve.isError ? <p className="admin-form-error">The policy change could not be saved. Refresh and try again.</p> : null}
+          {propose.isError || approve.isError || issue.isError ? <p className="admin-form-error">The issuance step could not be completed. Refresh and review the authoritative blocker.</p> : null}
         </div>
       ) : (
-        <p className="admin-detail-muted">Supply is approved or already issued. Issuance remains a separate guarded operation.</p>
+        <p className="admin-detail-muted">{policy.supply ? `Ownership is issued: ${policy.supply.issuedUnits} units.` : "Supply is approved or not yet ready. Issuance remains a separate guarded operation."}</p>
       )}
     </section>
   );
@@ -473,6 +483,9 @@ function PhysicalTab({ item }: { item: Detail }) {
         </InfoCard>
         <InfoCard title="Custody">
           <Field label="Status" value={sentence(item.custody.status)} accent />
+          {item.custody.controlledBetaPhysicalBypass ? (
+            <Field label="Beta QA exception" value="Applied · physical state unchanged" accent />
+          ) : null}
           <Field
             label="Received"
             value={item.custody.receivedAt ? date(item.custody.receivedAt) : "Not recorded"}
@@ -602,6 +615,12 @@ function OwnershipTab({ item }: { item: Detail }) {
   );
 }
 function MarketTab({ item }: { item: Detail }) {
+  const services = useAppServices();
+  const client = useQueryClient();
+  const activate = useMutation({
+    mutationFn: () => services.repositories.admin.activateTradingMarket(item.id),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] }),
+  });
   return (
     <section className="admin-detail-card admin-detail-tab-panel">
       <div className="admin-card-heading">
@@ -616,6 +635,17 @@ function MarketTab({ item }: { item: Detail }) {
             label="Blocking items"
             value={item.market.readiness.blockingCodes.length || "None"}
           />
+          <Field label="Trading market" value={item.market.trading ? sentence(item.market.trading.status) : "Not created"} accent />
+          {!item.market.trading ? (
+            <button
+              className="admin-button primary"
+              type="button"
+              disabled={activate.isPending || item.issuance.status !== "ISSUED"}
+              onClick={() => activate.mutate()}
+            >
+              {activate.isPending ? "Activating…" : "Activate trading market"}
+            </button>
+          ) : null}
         </InfoCard>
         <InfoCard title="Market data">
           <Field

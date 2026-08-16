@@ -71,6 +71,7 @@ export class OwnershipService {
         include: {
           publication: true,
           custodyRecord: true,
+          controlledBetaBypass: true,
           insuranceCoverage: {
             where: {
               status: 'ACTIVE',
@@ -90,7 +91,7 @@ export class OwnershipService {
       if (
         asset.status !== 'PUBLISHED' ||
         asset.publication?.status !== 'PUBLISHED' ||
-        asset.custodyRecord?.status !== 'SECURED' ||
+        (asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass) ||
         asset.insuranceCoverage.length !== 1
       )
         throw new ConflictException({

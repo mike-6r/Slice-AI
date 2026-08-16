@@ -342,6 +342,12 @@ export const mockRepositories: AppRepositories = {
     async approveOwnershipSupply() {
       throw new Error("Ownership supply policy requires the API service.");
     },
+    async issueOwnership() {
+      throw new Error("Ownership issuance requires the API service.");
+    },
+    async activateTradingMarket() {
+      throw new Error("Trading market activation requires the API service.");
+    },
     async search() {
       return { items: [] };
     },

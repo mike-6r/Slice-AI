@@ -3707,6 +3707,7 @@ export class AdminService {
         custodyRecord: {
           include: { events: { orderBy: { occurredAt: 'asc' } } },
         },
+        controlledBetaBypass: true,
         publication: true,
         ownershipSupply: {
           include: {
@@ -3964,6 +3965,7 @@ export class AdminService {
       },
       custody: {
         status: asset.custodyRecord?.status ?? 'NOT_STARTED',
+        controlledBetaPhysicalBypass: Boolean(asset.controlledBetaBypass),
         location: asset.custodyRecord?.facilityCode ?? null,
         receivedAt: asset.custodyRecord?.receivedAt?.toISOString() ?? null,
         securedAt: asset.custodyRecord?.securedAt?.toISOString() ?? null,
@@ -3975,6 +3977,12 @@ export class AdminService {
       },
       market: {
         publication: asset.publication?.status ?? 'BLOCKED',
+        trading: asset.tradingMarket
+          ? {
+              status: asset.tradingMarket.status,
+              tradingEnabled: asset.tradingMarket.tradingEnabled,
+            }
+          : null,
         asking: listing
           ? { minor: listing.minor, currency: listing.currency }
           : null,

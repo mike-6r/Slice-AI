@@ -2610,6 +2610,27 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       headers: { "Idempotency-Key": idempotencyKey() },
     });
   },
+  async issueOwnership(id, totalUnits) {
+    return client.request<{
+      assetId: string;
+      status: string;
+      totalUnits: string;
+      issuedUnits: string;
+      availableUnits: string;
+      issuedAt: string;
+      sequence: string;
+    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/issue`, {
+      method: "POST",
+      body: { totalUnits },
+      headers: { "Idempotency-Key": idempotencyKey() },
+    });
+  },
+  async activateTradingMarket(id) {
+    return client.request<{ assetId: string; status: string }>(
+      `/admin/trading/markets/${encodeURIComponent(id)}/activate`,
+      { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+    );
+  },
 };
 };
 

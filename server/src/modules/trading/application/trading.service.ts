@@ -895,6 +895,120 @@ export class TradingService {
     });
   }
 
+  /**
+   * Creates the first trading market only after immutable ownership issuance
+   * is active. The operation is idempotent and uses the platform trading
+   * policy defaults; later status changes use the halt/resume workflow.
+   */
+  async activateMarket(
+    actor: Actor,
+    assetId: string,
+    requestId: string,
+    key: string,
+  ) {
+    this.recentAuth.require(actor);
+    const identity: IdempotencyIdentity = {
+      actorScope: `user:${actor.userId}`,
+      scope: `trading.market.activate:${assetId}`,
+      key,
+    };
+    const hash = createHash('sha256')
+      .update(`POST\n/v1/admin/trading/markets/${assetId}/activate`)
+      .digest('hex');
+    return this.db.$transaction(async (db) => {
+      const tx = createIdentityTransaction(db);
+      const acquired = await tx.idempotency.acquire(
+        identity,
+        hash,
+        new Date(Date.now() + 86_400_000),
+      );
+      if (acquired.state === 'FINGERPRINT_CONFLICT')
+        throw conflict('IDEMPOTENCY_KEY_CONFLICT', 'The request key cannot be reused.');
+      if (acquired.state === 'EXISTING_IN_PROGRESS')
+        throw conflict('PERSISTENCE_CONFLICT', 'The request is already in progress.');
+      if (acquired.state === 'EXISTING_COMPLETED')
+        return acquired.record.response!.body as { assetId: string; status: string };
+
+      const resolved = await db.asset.findFirst({
+        where: { OR: [{ id: assetId }, { publicId: assetId }] },
+        select: { id: true },
+      });
+      if (!resolved) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
+      await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${resolved.id} FOR UPDATE`;
+      const asset = await db.asset.findUnique({
+        where: { id: resolved.id },
+        select: {
+          id: true,
+          status: true,
+          publication: { select: { status: true } },
+          ownershipSupply: { select: { status: true, totalUnits: true, issuedUnits: true } },
+          ownershipSupplyPolicy: { select: { status: true } },
+          tradingMarket: { select: { status: true, tradingEnabled: true } },
+        },
+      });
+      if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
+      if (
+        asset.status !== 'PUBLISHED' ||
+        asset.publication?.status !== 'PUBLISHED' ||
+        asset.ownershipSupply?.status !== 'ACTIVE' ||
+        asset.ownershipSupply.issuedUnits !== asset.ownershipSupply.totalUnits ||
+        asset.ownershipSupplyPolicy?.status !== 'ISSUED'
+      )
+        throw conflict(
+          'MARKET_ACTIVATION_BLOCKED',
+          'The market requires a published asset with fully issued ownership and an issued supply policy.',
+        );
+      if (asset.tradingMarket) {
+        if (asset.tradingMarket.status === 'OPEN' && asset.tradingMarket.tradingEnabled) {
+          const result = { assetId: resolved.id, status: 'OPEN' };
+          await tx.idempotency.complete(identity, { status: 200, body: result }, new Date());
+          return result;
+        }
+        throw conflict(
+          'MARKET_ALREADY_CONFIGURED',
+          'A market already exists for this asset. Use the resume workflow to reopen it.',
+        );
+      }
+      const market = await db.tradingMarket.create({
+        data: {
+          assetId: resolved.id,
+          status: 'OPEN',
+          tickSizeMinor: tradingPolicy.defaultTickSizeMinor,
+          lotSizeUnits: tradingPolicy.defaultLotSizeUnits,
+          minimumNotionalMinor: tradingPolicy.defaultMinimumNotionalMinor,
+          makerFeeBps: tradingPolicy.fee.makerBps,
+          takerFeeBps: tradingPolicy.fee.takerBps,
+          selfTradePrevention: tradingPolicy.selfTradePrevention,
+          tradingEnabled: true,
+          feeScheduleVersion: 'INITIAL_POLICY_V1',
+        },
+      });
+      await tx.audit.append({
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'TRADING_MARKET_ACTIVATED',
+        resourceType: 'trading-market',
+        resourceId: resolved.id,
+        requestId,
+        sessionId: actor.sessionId as never,
+        result: 'SUCCESS',
+        metadata: {
+          assetId: resolved.id,
+          status: market.status,
+          tickSizeMinor: market.tickSizeMinor.toString(),
+          lotSizeUnits: market.lotSizeUnits.toString(),
+          minimumNotionalMinor: market.minimumNotionalMinor.toString(),
+          feeScheduleVersion: market.feeScheduleVersion,
+        },
+        createdAt: new Date(),
+      });
+      const result = { assetId: resolved.id, status: market.status };
+      await tx.idempotency.complete(identity, { status: 201, body: result }, new Date());
+      return result;
+    });
+  }
+
   private async settleExecution(
     db: Db,
     market: {

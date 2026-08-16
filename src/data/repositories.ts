@@ -984,6 +984,7 @@ export type AdminCollectibleDetail = {
   };
   custody: {
     status: string;
+    controlledBetaPhysicalBypass?: boolean;
     location: string | null;
     receivedAt: string | null;
     securedAt: string | null;
@@ -991,6 +992,7 @@ export type AdminCollectibleDetail = {
   };
   market: {
     publication: string;
+    trading: { status: string; tradingEnabled: boolean } | null;
     asking: { minor: string; currency: string } | null;
     floor: { minor: string; currency: string } | null;
     salesAverage: { minor: string; currency: string } | null;
@@ -1188,6 +1190,13 @@ export interface AdminRepository {
     id: string,
     reason: string,
   ): Promise<{ assetId: string; status: string; units: string; pricePerUnitMinor: string; remainderMinor: string }>;
+  issueOwnership(
+    id: string,
+    totalUnits: string,
+  ): Promise<{ assetId: string; status: string; totalUnits: string; issuedUnits: string; availableUnits: string; issuedAt: string; sequence: string }>;
+  activateTradingMarket(
+    id: string,
+  ): Promise<{ assetId: string; status: string }>;
 }
 
 export interface MarketRepository {
