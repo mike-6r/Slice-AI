@@ -316,6 +316,9 @@ function LiveAssetCards({ assets }: { assets: Asset[] }) {
     <div className="approved-home__trending" data-testid="homepage-trending-assets">
       {assets.map((asset) => {
         const media =
+          asset.media.find(
+            (media) => media.kind === "image" && /\bfront\b/i.test(media.alt),
+          ) ??
           asset.media.find((media) => media.kind === "image") ??
           (asset.slug ? assetShowcaseMedia(asset.slug) : undefined);
         const imageUrl = media ? ("url" in media ? media.url : media.src) : undefined;
@@ -466,7 +469,10 @@ function OwnershipWorks() {
   const featuredQuery = useFeaturedAssets();
   if (isBetaEnvironment) {
     const featured = featuredQuery.data?.[0];
-    const featuredMedia = featured?.media.find((media) => media.kind === "image");
+    const featuredMedia =
+      featured?.media.find(
+        (media) => media.kind === "image" && /\bfront\b/i.test(media.alt),
+      ) ?? featured?.media.find((media) => media.kind === "image");
     // Keep the educational block visually complete while the live catalogue is
     // empty. The API asset remains authoritative when available; this approved
     // showcase image is only a clearly labelled reference fallback.
