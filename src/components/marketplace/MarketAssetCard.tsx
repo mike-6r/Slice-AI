@@ -37,6 +37,7 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
       ) : (
         <span className="market-card-media-placeholder">Media unavailable</span>
       )}
+      <span className="market-card-sheen" aria-hidden="true" />
       <div className={`market-status-badge is-${editorial.tone}`}>
         <EditorialIcon aria-hidden="true" />
         {editorial.label}
@@ -136,12 +137,14 @@ export function MarketAssetCard({
           <>
             <p className="market-card-value-helper">
               {asset.dataStatus === "DEMO"
-                ? "Illustrative Slice basis"
-                : "Current public valuation"}
+                ? "Illustrative value"
+                : asset.dataStatus === "LIVE"
+                  ? "Live market value"
+                  : "Published market value"}
             </p>
             <dl className="market-card-metrics">
               <div>
-                <dt>Available</dt>
+                <dt>Available to own</dt>
                 <dd>
                   {availability === undefined ? "Not yet available" : formatOwnership(availability / 100)}
                 </dd>
@@ -151,24 +154,36 @@ export function MarketAssetCard({
                 <dd>{asset.ownersCount?.toLocaleString("en-GB") ?? "Unavailable"}</dd>
               </div>
               <div>
-                <dt>Set / Edition</dt>
-                <dd>{asset.setName ?? "Not specified"}</dd>
+                <dt>Set</dt>
+                <dd title={asset.setName ?? "Not specified"}>{asset.setName ?? "Not specified"}</dd>
               </div>
             </dl>
-            <div className="market-ownership" aria-label="Available ownership">
-              <span>
-                <span style={{ width: `${availabilityWidth}%` }} />
-              </span>
-              <small>
-                {availability === undefined
-                  ? "Trading is not open yet"
-                  : `${formatOwnership(availability / 100)} of ownership available`}
-              </small>
+            <div
+              className={`market-ownership${availability === undefined ? " is-pending" : ""}`}
+              aria-label="Market availability"
+            >
+              {availability === undefined ? (
+                <div className="market-availability-note">
+                  <span aria-hidden="true" />
+                  <small>Trading opens after ownership is issued</small>
+                </div>
+              ) : (
+                <>
+                  <span>
+                    <span style={{ width: `${availabilityWidth}%` }} />
+                  </span>
+                  <small>
+                    {availability === 0
+                      ? "No ownership available"
+                      : `${formatOwnership(availability / 100)} available to own`}
+                  </small>
+                </>
+              )}
             </div>
           </>
         )}
         <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
-          View Asset <ArrowRight aria-hidden="true" />
+          View details <ArrowRight aria-hidden="true" />
         </Link>
       </div>
     </article>
