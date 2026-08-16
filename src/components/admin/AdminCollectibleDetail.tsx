@@ -7,7 +7,15 @@ import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
 import { formatMinorAmount, formatPricePerUnit } from "@/lib/market-presentation";
 import "@/styles/admin-collectible-detail.css";
 
-const tabs = ["overview", "physical", "valuation", "ownership", "issuance", "market", "history"] as const;
+const tabs = [
+  "overview",
+  "physical",
+  "valuation",
+  "ownership",
+  "issuance",
+  "market",
+  "history",
+] as const;
 type DetailTab = (typeof tabs)[number];
 
 export function AdminCollectibleDetail({
@@ -53,8 +61,11 @@ export function AdminCollectibleDetail({
   const item = detail.data;
   const front = item.media.find((media) => media.slot.toLowerCase() === "front") ?? item.media[0];
   const physical = item.intake ? sentence(item.intake.status) : "Not recorded";
-  const market = item.marketLifecycle?.admin.publicState ??
-    (item.market.publication === "PUBLISHED" ? "Published" : sentence(item.market.readiness.status));
+  const market =
+    item.marketLifecycle?.admin.publicState ??
+    (item.market.publication === "PUBLISHED"
+      ? "Published"
+      : sentence(item.market.readiness.status));
   return (
     <main className="admin-collectible-detail">
       <div className="admin-detail-header">
@@ -175,7 +186,9 @@ function Overview({
         <section className="admin-detail-card">
           <div className="admin-card-heading">
             <h3>Where this collectible is now</h3>
-            <span>{item.marketLifecycle?.admin.internalState ?? sentence(item.lifecycle.current)}</span>
+            <span>
+              {item.marketLifecycle?.admin.internalState ?? sentence(item.lifecycle.current)}
+            </span>
           </div>
           <div className="admin-journey admin-journey--compact">
             {item.lifecycle.stages.map((stage) => (
@@ -344,7 +357,9 @@ function IssuanceTab({ item }: { item: Detail }) {
   const services = useAppServices();
   const client = useQueryClient();
   const policy = item.issuance;
-  const [units, setUnits] = useState(item.issuance.proposed?.units ?? item.issuance.policy.defaultUnits);
+  const [units, setUnits] = useState(
+    item.issuance.proposed?.units ?? item.issuance.policy.defaultUnits,
+  );
   const [reason, setReason] = useState("");
   const propose = useMutation({
     mutationFn: () =>
@@ -366,7 +381,8 @@ function IssuanceTab({ item }: { item: Detail }) {
     },
   });
   const issue = useMutation({
-    mutationFn: () => services.repositories.admin.issueOwnership(item.id, policy.proposed?.units ?? ""),
+    mutationFn: () =>
+      services.repositories.admin.issueOwnership(item.id, policy.proposed?.units ?? ""),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] }),
   });
   const canPropose = !policy.proposed || policy.status === "REJECTED";
@@ -377,23 +393,56 @@ function IssuanceTab({ item }: { item: Detail }) {
       <div className="admin-card-heading">
         <div>
           <h3>Issuance policy</h3>
-          <p className="admin-detail-muted">Configure supply before any ownership units or market activity exist.</p>
+          <p className="admin-detail-muted">
+            Configure supply before any ownership units or market activity exist.
+          </p>
         </div>
-        <span className={`admin-detail-status ${policy.status.toLowerCase()}`}>{sentence(policy.status)}</span>
+        <span className={`admin-detail-status ${policy.status.toLowerCase()}`}>
+          {sentence(policy.status)}
+        </span>
       </div>
       <div className="admin-issuance-grid">
         <InfoCard title="Readiness">
-          <Field label="Publication" value={policy.readiness.blockers.includes("CATALOGUE_NOT_PUBLISHED") ? "Blocked" : "Ready"} />
-          <Field label="Valuation" value={policy.valuation ? money(policy.valuation.minor, policy.valuation.currency) : "Required"} />
+          <Field
+            label="Publication"
+            value={
+              policy.readiness.blockers.includes("CATALOGUE_NOT_PUBLISHED") ? "Blocked" : "Ready"
+            }
+          />
+          <Field
+            label="Valuation"
+            value={
+              policy.valuation
+                ? money(policy.valuation.minor, policy.valuation.currency)
+                : "Required"
+            }
+          />
           <Field label="Insurance" value={policy.insurance.active ? "Active" : "Required"} />
-          <Field label="Custody" value={policy.readiness.blockers.includes("CUSTODY_NOT_SECURED") ? "Not secured" : "Secured"} />
-          <Field label="Approval" value={policy.status === "APPROVED" || policy.status === "ISSUED" ? "Approved" : "Required"} accent />
+          <Field
+            label="Custody"
+            value={
+              policy.readiness.blockers.includes("CUSTODY_NOT_SECURED") ? "Not secured" : "Secured"
+            }
+          />
+          <Field
+            label="Approval"
+            value={
+              policy.status === "APPROVED" || policy.status === "ISSUED" ? "Approved" : "Required"
+            }
+            accent
+          />
         </InfoCard>
         <InfoCard title="Configured product policy">
           <Field label="Template" value={policy.policy.label} />
-          <Field label="Allowed range" value={`${policy.policy.minimumUnits}–${policy.policy.maximumUnits} units`} />
+          <Field
+            label="Allowed range"
+            value={`${policy.policy.minimumUnits}–${policy.policy.maximumUnits} units`}
+          />
           <Field label="Rounding" value="Floor; retain remainder" />
-          <Field label="Supply" value={policy.supply ? `${policy.supply.totalUnits} units` : "Not issued"} />
+          <Field
+            label="Supply"
+            value={policy.supply ? `${policy.supply.totalUnits} units` : "Not issued"}
+          />
         </InfoCard>
       </div>
       <div className="admin-issuance-preview">
@@ -411,7 +460,14 @@ function IssuanceTab({ item }: { item: Detail }) {
               disabled={!canPropose}
             >
               <strong>{preview.units} units</strong>
-              <span>{formatPricePerUnit(preview.pricePerUnitMinor, preview.currency, preview.remainderMinor)} / slice</span>
+              <span>
+                {formatPricePerUnit(
+                  preview.pricePerUnitMinor,
+                  preview.currency,
+                  preview.remainderMinor,
+                )}{" "}
+                / slice
+              </span>
               <small>
                 {preview.remainderMinor === null
                   ? "Retained remainder unavailable"
@@ -424,43 +480,79 @@ function IssuanceTab({ item }: { item: Detail }) {
           <div className="admin-issuance-proposed">
             <strong>Proposed: {policy.proposed.units} units</strong>
             <span>
-              {formatPricePerUnit(policy.proposed.pricePerUnitMinor, policy.proposed.valuationCurrency, policy.proposed.remainderMinor)} per slice · {formatMinorAmount(policy.proposed.remainderMinor, policy.proposed.valuationCurrency)} retained remainder
+              {formatPricePerUnit(
+                policy.proposed.pricePerUnitMinor,
+                policy.proposed.valuationCurrency,
+                policy.proposed.remainderMinor,
+              )}{" "}
+              per slice ·{" "}
+              {formatMinorAmount(policy.proposed.remainderMinor, policy.proposed.valuationCurrency)}{" "}
+              retained remainder
             </span>
           </div>
         ) : null}
       </div>
       {policy.readiness.blockers.length ? (
         <div className="admin-detail-callout">
-          <strong>Blocked until ready:</strong> {policy.readiness.blockers.map(sentence).join(" · ")}
+          <strong>Blocked until ready:</strong>{" "}
+          {policy.readiness.blockers.map(sentence).join(" · ")}
         </div>
       ) : null}
       {canPropose || canApprove ? (
         <div className="admin-issuance-form">
           <label>
             Decision note
-            <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain why this supply is appropriate for the collectible." />
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Explain why this supply is appropriate for the collectible."
+            />
           </label>
           <div className="admin-issuance-form__actions">
             {canPropose ? (
-              <button className="admin-button primary" type="button" disabled={!reason.trim() || propose.isPending} onClick={() => propose.mutate()}>
+              <button
+                className="admin-button primary"
+                type="button"
+                disabled={!reason.trim() || propose.isPending}
+                onClick={() => propose.mutate()}
+              >
                 {propose.isPending ? "Saving…" : `Propose ${units} units`}
               </button>
             ) : null}
             {canApprove ? (
-              <button className="admin-button secondary" type="button" disabled={approve.isPending} onClick={() => approve.mutate()}>
+              <button
+                className="admin-button secondary"
+                type="button"
+                disabled={approve.isPending}
+                onClick={() => approve.mutate()}
+              >
                 {approve.isPending ? "Approving…" : "Approve proposed supply"}
               </button>
             ) : null}
             {canIssue ? (
-              <button className="admin-button primary" type="button" disabled={issue.isPending} onClick={() => issue.mutate()}>
+              <button
+                className="admin-button primary"
+                type="button"
+                disabled={issue.isPending}
+                onClick={() => issue.mutate()}
+              >
                 {issue.isPending ? "Issuing…" : `Issue ${policy.proposed?.units ?? ""} units`}
               </button>
             ) : null}
           </div>
-          {propose.isError || approve.isError || issue.isError ? <p className="admin-form-error">The issuance step could not be completed. Refresh and review the authoritative blocker.</p> : null}
+          {propose.isError || approve.isError || issue.isError ? (
+            <p className="admin-form-error">
+              The issuance step could not be completed. Refresh and review the authoritative
+              blocker.
+            </p>
+          ) : null}
         </div>
       ) : (
-        <p className="admin-detail-muted">{policy.supply ? `Ownership is issued: ${policy.supply.issuedUnits} units.` : "Supply is approved or not yet ready. Issuance remains a separate guarded operation."}</p>
+        <p className="admin-detail-muted">
+          {policy.supply
+            ? `Ownership is issued: ${policy.supply.issuedUnits} units.`
+            : "Supply is approved or not yet ready. Issuance remains a separate guarded operation."}
+        </p>
       )}
     </section>
   );
@@ -574,52 +666,105 @@ function ValuationTab({ item }: { item: Detail }) {
 }
 function OwnershipTab({ item }: { item: Detail }) {
   const holders = item.ownership.holders ?? [];
+  const treasury = item.treasuryLiquidity;
   return (
-    <section className="admin-detail-card admin-detail-tab-panel">
-      <div className="admin-card-heading">
-        <h3>Ownership breakdown</h3>
-        <span>Authoritative settled positions</span>
-      </div>
-      <div className="admin-detail-card-grid admin-detail-card-grid--three">
-        <InfoCard title="Supply">
-          <Field label="Total units" value={item.ownership.totalUnits} />
-          <Field label="Issued" value={item.ownership.issuedUnits} />
-          <Field label="Available" value={item.ownership.availableUnits} />
-          <Field label="Owners" value={item.ownership.ownerCount} />
-        </InfoCard>
-        <div className="admin-detail-card admin-detail-card--wide">
-          <h4>Holders</h4>
-          {holders.length ? (
-            <div className="admin-holder-table">
-              {holders.map((holder) => (
-                <div className="admin-holder-row" key={holder.accountId}>
+    <div className="admin-detail-tab-panel admin-ownership-tab-stack">
+      {treasury ? (
+        <section className="admin-detail-card admin-treasury-liquidity">
+          <div className="admin-card-heading">
+            <div>
+              <h3>Treasury liquidity</h3>
+              <p className="admin-detail-muted">
+                Authoritative inventory and public sell listings.
+              </p>
+            </div>
+            <span className={`admin-detail-status ${treasury.marketStatus.toLowerCase()}`}>
+              {sentence(treasury.marketStatus)}
+            </span>
+          </div>
+          <div className="admin-treasury-metrics">
+            <InfoCard title="Treasury inventory">
+              <Field label="Settled units" value={treasury.settledUnits} />
+              <Field label="Reserved" value={treasury.reservedUnits} />
+              <Field label="Available to list" value={treasury.availableUnits} accent />
+            </InfoCard>
+            <InfoCard title="Public listings">
+              <Field label="Active listings" value={treasury.openSellOrders} />
+              <Field label="Public listed" value={`${treasury.listedUnits} units`} accent />
+              <Field label="Partially filled" value={`${treasury.partiallyFilledUnits} units`} />
+            </InfoCard>
+          </div>
+          <p className="admin-treasury-note">
+            Available to list is Treasury inventory after reservations. Public listed is the portion
+            currently visible to buyers.
+          </p>
+          {treasury.listings.length ? (
+            <div className="admin-treasury-listings" aria-label="Active Treasury sell listings">
+              {treasury.listings.map((listing) => (
+                <div className="admin-treasury-listing" key={listing.id}>
                   <div>
-                    <strong>{holder.displayName}</strong>
+                    <strong>Sell listing</strong>
                     <small>
-                      {holder.username
-                        ? `@${holder.username}`
-                        : holder.userId
-                          ? "Verified account"
-                          : "System treasury"}
+                      {listing.originalUnits} original · {listing.filledUnits} filled ·{" "}
+                      {listing.remainingUnits} remaining
                     </small>
                   </div>
                   <strong>
-                    {holder.percentage === null ? "—" : `${holder.percentage.toFixed(2)}%`}
+                    {money(listing.limitPriceMinor, item.valuation.current?.currency ?? "GBP")}
                   </strong>
-                  <span>{holder.units} units</span>
+                  <span>{sentence(listing.status)}</span>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="admin-empty-detail">No settled user positions are recorded.</p>
-          )}
+          ) : null}
+        </section>
+      ) : null}
+      <section className="admin-detail-card">
+        <div className="admin-card-heading">
+          <h3>Ownership breakdown</h3>
+          <span>Authoritative settled positions</span>
         </div>
-      </div>
-      <p className="admin-detail-muted">
-        Ownership is read-only here. Changes must come from the ownership ledger and settlement
-        workflow.
-      </p>
-    </section>
+        <div className="admin-detail-card-grid admin-detail-card-grid--three">
+          <InfoCard title="Supply">
+            <Field label="Total units" value={item.ownership.totalUnits} />
+            <Field label="Issued" value={item.ownership.issuedUnits} />
+            <Field label="Available" value={item.ownership.availableUnits} />
+            <Field label="Owners" value={item.ownership.ownerCount} />
+          </InfoCard>
+          <div className="admin-detail-card admin-detail-card--wide">
+            <h4>Holders</h4>
+            {holders.length ? (
+              <div className="admin-holder-table">
+                {holders.map((holder) => (
+                  <div className="admin-holder-row" key={holder.accountId}>
+                    <div>
+                      <strong>{holder.displayName}</strong>
+                      <small>
+                        {holder.username
+                          ? `@${holder.username}`
+                          : holder.userId
+                            ? "Verified account"
+                            : "System treasury"}
+                      </small>
+                    </div>
+                    <strong>
+                      {holder.percentage === null ? "—" : `${holder.percentage.toFixed(2)}%`}
+                    </strong>
+                    <span>{holder.units} units</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="admin-empty-detail">No settled user positions are recorded.</p>
+            )}
+          </div>
+        </div>
+        <p className="admin-detail-muted">
+          Ownership is read-only here. Changes must come from the ownership ledger and settlement
+          workflow.
+        </p>
+      </section>
+    </div>
   );
 }
 function MarketTab({ item }: { item: Detail }) {
@@ -637,7 +782,10 @@ function MarketTab({ item }: { item: Detail }) {
     <section className="admin-detail-card admin-detail-tab-panel">
       <div className="admin-card-heading">
         <h3>Market lifecycle</h3>
-        <span>{item.marketLifecycle?.admin.internalState ?? "Publication is not the same as tradeability"}</span>
+        <span>
+          {item.marketLifecycle?.admin.internalState ??
+            "Publication is not the same as tradeability"}
+        </span>
       </div>
       <div className="admin-detail-card-grid admin-detail-card-grid--three">
         <InfoCard title="Publication">
@@ -654,7 +802,11 @@ function MarketTab({ item }: { item: Detail }) {
             label="Blocking items"
             value={item.market.readiness.blockingCodes.length || "None"}
           />
-          <Field label="Trading market" value={item.market.trading ? sentence(item.market.trading.status) : "Not created"} accent />
+          <Field
+            label="Trading market"
+            value={item.market.trading ? sentence(item.market.trading.status) : "Not created"}
+            accent
+          />
           {!item.market.trading ? (
             <button
               className="admin-button primary"
@@ -669,7 +821,9 @@ function MarketTab({ item }: { item: Detail }) {
         <InfoCard title="Market data">
           <div className="admin-market-refresh-row">
             <div>
-              <strong>{item.market.reference ? "PriceCharting reference" : "Market reference"}</strong>
+              <strong>
+                {item.market.reference ? "PriceCharting reference" : "Market reference"}
+              </strong>
               <small>
                 {item.market.reference
                   ? `${item.market.reference.externalId} · ${date(item.market.reference.observedAt)}`
@@ -695,7 +849,11 @@ function MarketTab({ item }: { item: Detail }) {
           />
           <Field
             label="Next refresh"
-            value={item.market.reference?.nextRefreshAt ? date(item.market.reference.nextRefreshAt) : null}
+            value={
+              item.market.reference?.nextRefreshAt
+                ? date(item.market.reference.nextRefreshAt)
+                : null
+            }
           />
           <Field
             label="Current asking"
@@ -842,7 +1000,7 @@ function label(value: string) {
       ? "Market"
       : value === "issuance"
         ? "Issuance"
-      : value[0].toUpperCase() + value.slice(1);
+        : value[0].toUpperCase() + value.slice(1);
 }
 function valuationMethod(value: string) {
   if (value === "ILLUSTRATIVE_STAGING_SHARE_BASIS") return "Illustrative valuation";

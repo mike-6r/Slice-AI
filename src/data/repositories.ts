@@ -910,6 +910,24 @@ export type AdminCollectibleDetail = {
       percentage: number | null;
     }>;
   };
+  treasuryLiquidity: {
+    settledUnits: string;
+    reservedUnits: string;
+    availableUnits: string;
+    openSellOrders: number;
+    listedUnits: string;
+    partiallyFilledUnits: string;
+    marketStatus: string;
+    listings: Array<{
+      id: string;
+      originalUnits: string;
+      filledUnits: string;
+      remainingUnits: string;
+      limitPriceMinor: string;
+      status: string;
+      createdAt: string;
+    }>;
+  } | null;
   issuance: {
     assetId: string;
     status: string;
@@ -1202,18 +1220,36 @@ export interface AdminRepository {
   proposeOwnershipSupply(
     id: string,
     input: { policyCode: string; totalUnits: string; reason: string },
-  ): Promise<{ assetId: string; status: string; units: string; pricePerUnitMinor: string; remainderMinor: string }>;
+  ): Promise<{
+    assetId: string;
+    status: string;
+    units: string;
+    pricePerUnitMinor: string;
+    remainderMinor: string;
+  }>;
   approveOwnershipSupply(
     id: string,
     reason: string,
-  ): Promise<{ assetId: string; status: string; units: string; pricePerUnitMinor: string; remainderMinor: string }>;
+  ): Promise<{
+    assetId: string;
+    status: string;
+    units: string;
+    pricePerUnitMinor: string;
+    remainderMinor: string;
+  }>;
   issueOwnership(
     id: string,
     totalUnits: string,
-  ): Promise<{ assetId: string; status: string; totalUnits: string; issuedUnits: string; availableUnits: string; issuedAt: string; sequence: string }>;
-  activateTradingMarket(
-    id: string,
-  ): Promise<{ assetId: string; status: string }>;
+  ): Promise<{
+    assetId: string;
+    status: string;
+    totalUnits: string;
+    issuedUnits: string;
+    availableUnits: string;
+    issuedAt: string;
+    sequence: string;
+  }>;
+  activateTradingMarket(id: string): Promise<{ assetId: string; status: string }>;
 }
 
 export interface MarketRepository {

@@ -31,6 +31,7 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
   );
   const [delayed, setDelayed] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(() => session.retryAfterSeconds());
 
   useEffect(() => {
     if ((import.meta.env.VITE_DATA_SOURCE ?? "api") === "api") {
@@ -57,6 +58,17 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [restoreStatus]);
 
+  useEffect(() => {
+    if (restoreStatus !== "rate_limited") {
+      setRetryAfterSeconds(0);
+      return;
+    }
+    const update = () => setRetryAfterSeconds(session.retryAfterSeconds());
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [restoreStatus]);
+
   const retry = () => {
     if (retrying) return;
     setRetrying(true);
@@ -75,7 +87,8 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
     restoreStatus === "restoring" ||
     restoreStatus === "failed" ||
     restoreStatus === "expired" ||
-    restoreStatus === "offline";
+    restoreStatus === "offline" ||
+    restoreStatus === "rate_limited";
 
   if (needsRestoreScreen) {
     return (
@@ -83,6 +96,7 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
         status={restoreStatus}
         delayed={delayed}
         retrying={retrying}
+        retryAfterSeconds={retryAfterSeconds}
         onRetry={retry}
         onSignInAgain={signInAgain}
       />
@@ -96,6 +110,7 @@ type SessionRestoreScreenProps = {
   status: ReturnType<typeof session.restoreStatus>;
   delayed: boolean;
   retrying: boolean;
+  retryAfterSeconds: number;
   onRetry: () => void;
   onSignInAgain: () => void;
 };
@@ -112,30 +127,38 @@ export function SessionRestoreScreen({
   status,
   delayed,
   retrying,
+  retryAfterSeconds,
   onRetry,
   onSignInAgain,
 }: SessionRestoreScreenProps) {
   const isRestoring = status === "restoring";
   const isExpired = status === "expired";
   const isOffline = status === "offline";
-  const isFailure = status === "failed" || isExpired || isOffline;
+  const isRateLimited = status === "rate_limited";
+  const isFailure = status === "failed" || isExpired || isOffline || isRateLimited;
 
   const title = isExpired
     ? "Your session has expired"
     : isOffline
       ? "You’re offline"
-      : isFailure
-        ? "We couldn’t restore your session"
-        : "Restoring your secure session";
+      : isRateLimited
+        ? "Session restore is cooling down"
+        : isFailure
+          ? "We couldn’t restore your session"
+          : "Restoring your secure session";
   const copy = isExpired
     ? "For your security, please sign in again to continue to your workspace."
     : isOffline
       ? "Reconnect to the internet, then try restoring your secure session again."
-      : isFailure
-        ? "Your session may have expired, or we may have had trouble reconnecting. You can retry or sign in again."
-        : delayed
-          ? "This is taking a little longer than expected. We’re still working on it."
-          : "We’re securely reconnecting your workspace, permissions, and active session. This usually takes just a few seconds.";
+      : isRateLimited
+        ? retryAfterSeconds > 0
+          ? `Please wait ${retryAfterSeconds} seconds before trying again. Sign in again if you need immediate access.`
+          : "The restore limit has cleared. You can try again once, manually."
+        : isFailure
+          ? "Your session may have expired, or we may have had trouble reconnecting. You can retry or sign in again."
+          : delayed
+            ? "This is taking a little longer than expected. We’re still working on it."
+            : "We’re securely reconnecting your workspace, permissions, and active session. This usually takes just a few seconds.";
 
   return (
     <main className="session-restore-page" aria-labelledby="session-restore-title">
@@ -217,10 +240,16 @@ export function SessionRestoreScreen({
                 className="collector-button collector-button--primary"
                 type="button"
                 onClick={onRetry}
-                disabled={retrying}
+                disabled={retrying || (isRateLimited && retryAfterSeconds > 0)}
               >
                 {isOffline ? <WifiOff size={16} /> : <RefreshCw size={16} />}
-                {retrying ? "Trying again…" : isOffline ? "Try again" : "Retry restore"}
+                {retrying
+                  ? "Trying again…"
+                  : isOffline
+                    ? "Try again"
+                    : isRateLimited && retryAfterSeconds > 0
+                      ? `Try again in ${retryAfterSeconds}s`
+                      : "Retry restore"}
               </button>
             )}
             <button className="collector-button" type="button" onClick={onSignInAgain}>

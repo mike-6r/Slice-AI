@@ -37,4 +37,18 @@ describe("browser session", () => {
     await expect(session.refresh("https://api.slice.test")).resolves.toBeNull();
     expect(session.token()).toBeNull();
   });
+
+  it("respects Retry-After after a refresh rate limit", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 429, headers: { "Retry-After": "30" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(session.refresh("https://api.slice.test")).resolves.toBeNull();
+    await expect(session.refresh("https://api.slice.test")).resolves.toBeNull();
+
+    expect(session.restoreStatus()).toBe("rate_limited");
+    expect(session.retryAfterSeconds()).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

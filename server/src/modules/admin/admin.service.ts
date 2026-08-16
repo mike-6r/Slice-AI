@@ -3771,6 +3771,7 @@ export class AdminService {
                 accountId: true,
                 account: {
                   select: {
+                    type: true,
                     user: {
                       select: {
                         id: true,
@@ -3785,6 +3786,23 @@ export class AdminService {
         },
         ownershipSupplyPolicy: { select: { status: true } },
         tradingMarket: true,
+        tradingOrders: {
+          where: {
+            principalType: 'TREASURY',
+            side: 'SELL',
+            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            originalUnits: true,
+            filledUnits: true,
+            remainingUnits: true,
+            limitPriceMinor: true,
+            status: true,
+            createdAt: true,
+          },
+        },
         tradingExecutions: { orderBy: { executedAt: 'desc' }, take: 50 },
         vaultPublicEvents: { orderBy: { occurredAt: 'asc' }, take: 50 },
       },
@@ -3898,6 +3916,26 @@ export class AdminService {
       ? saleValues.reduce((sum, value) => sum + value, 0n) /
         BigInt(saleValues.length)
       : null;
+    const treasuryPosition =
+      asset.ownershipSupply?.positions.find(
+        (position) => position.account.type === 'TREASURY',
+      ) ?? null;
+    const treasuryListings = asset.tradingOrders;
+    const treasurySettledUnits = treasuryPosition?.settledUnits ?? 0n;
+    const treasuryReservedUnits = treasuryPosition?.reservedUnits ?? 0n;
+    const treasuryAvailableUnits =
+      treasurySettledUnits > treasuryReservedUnits
+        ? treasurySettledUnits - treasuryReservedUnits
+        : 0n;
+    const treasuryListedUnits = treasuryListings.reduce(
+      (sum, order) => sum + order.remainingUnits,
+      0n,
+    );
+    const treasuryPartiallyFilledUnits = treasuryListings.reduce(
+      (sum, order) =>
+        order.status === 'PARTIALLY_FILLED' ? sum + order.filledUnits : sum,
+      0n,
+    );
     return {
       id: asset.id,
       publicId: asset.publicId,
@@ -3979,6 +4017,27 @@ export class AdminService {
                   : null,
             })) ?? [],
       },
+      treasuryLiquidity:
+        treasuryPosition || treasuryListings.length
+          ? {
+              settledUnits: treasurySettledUnits.toString(),
+              reservedUnits: treasuryReservedUnits.toString(),
+              availableUnits: treasuryAvailableUnits.toString(),
+              openSellOrders: treasuryListings.length,
+              listedUnits: treasuryListedUnits.toString(),
+              partiallyFilledUnits: treasuryPartiallyFilledUnits.toString(),
+              marketStatus: asset.tradingMarket?.status ?? 'CLOSED',
+              listings: treasuryListings.map((order) => ({
+                id: order.id,
+                originalUnits: order.originalUnits.toString(),
+                filledUnits: order.filledUnits.toString(),
+                remainingUnits: order.remainingUnits.toString(),
+                limitPriceMinor: order.limitPriceMinor.toString(),
+                status: order.status,
+                createdAt: order.createdAt.toISOString(),
+              })),
+            }
+          : null,
       issuance,
       lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
       marketLifecycle: deriveMarketLifecycle({

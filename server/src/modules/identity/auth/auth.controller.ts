@@ -172,15 +172,26 @@ export class AuthController {
   ) {
     const token = readCookie(request, this.config.refreshCookieName);
     await this.abuse.enforce('refresh', request.ip ?? 'unknown');
-    if (!token)
+    if (!token) {
+      await this.abuse.enforce('refresh-failure', request.ip ?? 'unknown');
       throw new BadRequestException({
         code: 'REFRESH_TOKEN_INVALID',
         message: 'Your session is no longer valid.',
       });
-    return this.withCookie(
-      await this.auth.refresh(token, request.requestId ?? 'unknown'),
-      response,
-    );
+    }
+    try {
+      return this.withCookie(
+        await this.auth.refresh(token, request.requestId ?? 'unknown'),
+        response,
+      );
+    } catch (error) {
+      await this.abuse.enforce(
+        'refresh-failure',
+        request.ip ?? 'unknown',
+        token,
+      );
+      throw error;
+    }
   }
   @Post('auth/logout')
   @HttpCode(204)

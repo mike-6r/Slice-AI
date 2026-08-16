@@ -35,6 +35,7 @@ export class AuthAbuseService {
       | 'signup'
       | 'login'
       | 'refresh'
+      | 'refresh-failure'
       | 'logout-all'
       | 'profile'
       | 'password'
@@ -62,11 +63,14 @@ export class AuthAbuseService {
       operation === 'login'
         ? 10
         : operation === 'refresh'
-          ? 30
+          ? 120
+          : operation === 'refresh-failure'
+            ? 10
           : operation === 'preferences'
             ? 60
             : 5;
-    const ttlSeconds = operation === 'login' ? 900 : 3600;
+    const ttlSeconds =
+      operation === 'login' || operation === 'refresh-failure' ? 900 : 3600;
     const keys = [this.cache.key(`auth-${operation}-ip`, hash(ip))];
     if (accountHint)
       keys.push(this.cache.key(`auth-${operation}-account`, hash(accountHint)));
