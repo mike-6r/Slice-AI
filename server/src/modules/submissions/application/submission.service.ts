@@ -2259,7 +2259,13 @@ function reviewDetailContextProjection(
           thumbnailUrl: null as string | null,
         })),
     },
-    condition: { overallGrade: stringMetadata(metadata.grade), fields },
+    // `condition` is the collector-described raw-card condition. It is kept
+    // separate from `grade`, which is reserved for an official grading scale.
+    condition: {
+      overallGrade:
+        stringMetadata(metadata.condition) ?? stringMetadata(metadata.grade),
+      fields,
+    },
     notableDetails,
     customerReference: isRecord(metadata.customerReference)
       ? metadata.customerReference

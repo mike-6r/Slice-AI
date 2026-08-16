@@ -42,13 +42,19 @@ Value objects `Valuation`, `Confidence`, `CustodyStatus`, `CoverageStatus`, `Pub
 
 Valuations never overwrite evidence; one active decision per asset. Currency consistency required. Custody transitions follow explicit table; release is blocked after ownership issuance except authorized governance flow. Coverage is ACTIVE only within dates and verified evidence policy. Publish requires catalogue PUBLISHED-ready metadata, approved verification, active valuation, custody SECURED, active adequate insurance and no exception. Same actor cannot be sole submitter, verifier and publisher. Unpublish is monotonic history and does not delete records.
 
+### Controlled beta physical exception
+
+The normal custody gate remains mandatory for every ordinary asset. A narrowly scoped QA exception is available only in an explicitly beta environment through `POST /v1/admin/submissions/:submissionId/controlled-beta/physical-bypass`. It requires the `controlled_beta.lifecycle.manage` permission (ADMIN only), the named Umbreon VMAX 215/203 fixture key, an explicit reason and confirmation, recent authentication, an idempotency key, and an append-only audit event. The exception is denied outside beta, to collectors/investors/generic staff, for any other asset, after a custody record exists, or when an exception is already present.
+
+The exception records `BETA_QA_PHYSICAL_BYPASS` separately and only relaxes the publication readiness custody prerequisite for that one named beta fixture. It never creates or changes shipment, carrier delivery, receipt, inspection, secured custody, vault, or custody-event records. Internal readiness/admin views must identify the bypass; public projections must continue to report the actual physical state and must not claim receipt or physical verification. Valuation, coverage, canonical asset linking, ownership issuance, and publication still use their existing authorities and gates.
+
 ## 11. Application services
 
 Record evidence/decision with specialist permission and audit; transition custody after provider/manual verification; record coverage; calculate readiness; publish/unpublish with asset row lock/version and transaction. Publish updates catalogue/publication/read projection atomically and returns an outbox event. Provider failure is retryable and never guessed.
 
 ## 12. API specification
 
-Privileged: `POST /v1/admin/assets/:id/valuations/evidence`; `POST /valuations/decisions`; `POST /custody/transitions`; `POST /insurance/coverage`; `GET /publication-readiness`; `POST /publish`; `POST /unpublish`. Public asset/vault endpoints from 007/008 gain allowlisted `valuation {amount,currency,confidence,asOf,status}`, `custody {status,asOf}`, `insurance {status,insuredAmount?,expiresAt?}` and publication status. Mutations require permission/idempotency/rate/audit.
+Privileged: `POST /v1/admin/assets/:id/valuations/evidence`; `POST /valuations/decisions`; `POST /custody/transitions`; `POST /insurance/coverage`; `GET /publication-readiness`; `POST /publish`; `POST /unpublish`. The beta-only QA exception is `POST /v1/admin/submissions/:submissionId/controlled-beta/physical-bypass`; it is not a general custody endpoint. Public asset/vault endpoints from 007/008 gain allowlisted `valuation {amount,currency,confidence,asOf,status}`, `custody {status,asOf}`, `insurance {status,insuredAmount?,expiresAt?}` and publication status. Mutations require permission/idempotency/rate/audit.
 
 ## 13. Error catalogue
 
@@ -88,11 +94,11 @@ Create valuation/custody/insurance/publication server modules or bounded submodu
 
 ## 20. Test plan
 
-Unit all transition/readiness combinations, currency/confidence/date/separation. DB append-only evidence, active decision race, custody transition race, publication version/rollback. Provider sandbox/manual adapter success/outage/mismatch. E2E permissions/idempotency/private projection/blocking codes/publish/unpublish. Contract tests for public fields.
+Unit all transition/readiness combinations, currency/confidence/date/separation, and the controlled beta bypass/no-bypass policy. DB append-only evidence, active decision race, custody transition race, publication version/rollback, bypass idempotency and production/RBAC denial. Provider sandbox/manual adapter success/outage/mismatch. E2E permissions/idempotency/private projection/blocking codes/publish/unpublish. Contract tests for public fields.
 
 ## 21. Manual QA
 
-For an approved submission, record evidence/decision, attempt premature publish, progress custody and insurance, publish, inspect public asset/Vault event, expire/cancel coverage and verify readiness/unpublish behavior. Inspect audit/history and private field exclusion.
+For an approved ordinary submission, attempt premature publish, progress custody and insurance, publish, inspect public asset/Vault event, expire/cancel coverage and verify readiness/unpublish behavior. For the named beta fixture only, verify that premature publish is blocked before the exception, apply the exception through the protected idempotent endpoint, confirm shipment/receipt/custody remain absent, complete normal valuation/coverage/asset/ownership authorities, publish once, replay the request, and inspect audit/history plus private-field exclusion. Never rerun provider research or advisory pre-grade analysis during render QA.
 
 ## 22. Verification commands
 
@@ -112,6 +118,7 @@ Update state/control/API/entity/business/workflow/feature/baseline documents and
 - [x] Public responses exclude provider refs/private documents.
 - [x] DB/provider/E2E/race tests pass.
 - [x] No ownership/trading/frontend work was started.
+- [x] Controlled beta physical exception is named, admin-only, beta-only, audited, idempotent, and cannot change physical-state records.
 
 ## 25. Final report format
 

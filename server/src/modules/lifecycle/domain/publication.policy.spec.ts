@@ -23,7 +23,11 @@ describe('publication policy', () => {
         activeCoverage: true,
         hasException: false,
       }),
-    ).toEqual({ status: 'READY', blockingCodes: [] });
+    ).toMatchObject({
+      status: 'READY',
+      blockingCodes: [],
+      controlledBetaPhysicalBypass: false,
+    });
     expect(
       evaluateReadiness({
         cataloguePublished: false,
@@ -34,5 +38,41 @@ describe('publication policy', () => {
         hasException: true,
       }).blockingCodes,
     ).toContain('VALUATION_REQUIRED');
+  });
+
+  it('allows only the named controlled beta physical bypass to satisfy custody', () => {
+    expect(
+      evaluateReadiness({
+        cataloguePublished: true,
+        verificationApproved: true,
+        activeDecision: true,
+        custodySecured: false,
+        controlledBetaPhysicalBypass: true,
+        activeCoverage: true,
+        hasException: false,
+      }),
+    ).toMatchObject({ status: 'READY', blockingCodes: [] });
+    expect(
+      evaluateReadiness({
+        cataloguePublished: true,
+        verificationApproved: true,
+        activeDecision: true,
+        custodySecured: false,
+        controlledBetaPhysicalBypass: false,
+        activeCoverage: true,
+        hasException: false,
+      }).blockingCodes,
+    ).toContain('CUSTODY_NOT_SECURED');
+    expect(
+      evaluateReadiness({
+        cataloguePublished: true,
+        verificationApproved: true,
+        activeDecision: true,
+        custodySecured: false,
+        controlledBetaPhysicalBypass: true,
+        activeCoverage: true,
+        hasException: true,
+      }).blockingCodes,
+    ).toContain('LIFECYCLE_EXCEPTION');
   });
 });

@@ -58,6 +58,12 @@ const metadataKeys: Record<string, readonly string[]> = {
   CUSTODY_STATUS_CHANGED: ['assetId', 'fromStatus', 'toStatus'],
   INSURANCE_COVERAGE_RECORDED: ['assetId', 'status', 'currency'],
   ASSET_PUBLICATION_READINESS_EVALUATED: ['assetId', 'status'],
+  CONTROLLED_BETA_PHYSICAL_BYPASS_APPLIED: [
+    'submissionId',
+    'assetId',
+    'reasonCode',
+    'reason',
+  ],
   ASSET_PUBLISHED: ['assetId', 'version'],
   ASSET_UNPUBLISHED: ['assetId', 'version'],
   OWNERSHIP_ISSUED: ['assetId', 'totalUnits', 'sequence'],

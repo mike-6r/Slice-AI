@@ -606,6 +606,7 @@ model User {
   collectorSubscriptions      CollectorSubscription[]
   receiptConfirmations        IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
   portfolioSnapshots          PortfolioSnapshot[]
+  controlledBetaBypasses      ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
 
   @@index([accountStatus])
 }
@@ -973,6 +974,7 @@ model Asset {
   tradingExecutions      TradingExecution[]
   discussionPosts        DiscussionPost[]
   saleProposals          SaleProposal[]
+  controlledBetaBypass    ControlledBetaPhysicalBypass?
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
@@ -1065,6 +1067,7 @@ model AssetSubmission {
   marketResearch    SubmissionMarketResearch[]
   intake            SubmissionIntake?
   preGrades         RawCardPreGrade[]
+  controlledBetaBypass ControlledBetaPhysicalBypass?
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
@@ -1287,6 +1290,24 @@ model AssetPublication {
   publishedBy       User?                  @relation("PublicationActor", fields: [publishedByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, updatedAt, id])
+}
+
+/// Explicit, audited staging-only continuation for a named Beta QA asset.
+/// This does not change shipment, delivery, receipt, or custody state.
+model ControlledBetaPhysicalBypass {
+  id              String          @id @default(cuid())
+  submissionId    String          @unique
+  assetId         String          @unique
+  reasonCode      String
+  reason          String
+  createdByUserId  String
+  createdAt       DateTime        @default(now())
+  submission      AssetSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  asset           Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  createdBy       User             @relation("ControlledBetaBypassActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, createdAt, id])
+  @@index([createdByUserId, createdAt, id])
 }
 
 model VerificationReview {

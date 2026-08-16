@@ -63,7 +63,8 @@ export type Permission =
   | 'feature_flags.manage'
   | 'integrations.read'
   | 'integrations.manage'
-  | 'provider.manage';
+  | 'provider.manage'
+  | 'controlled_beta.lifecycle.manage';
 export type SessionStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'ROTATED';
 export type SessionRevocationReason =
   | 'LOGOUT'

@@ -18,7 +18,11 @@ import {
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
-import { LifecycleService } from '../application/lifecycle.service';
+import {
+  CONTROLLED_BETA_PHYSICAL_BYPASS_CONFIRMATION,
+  CONTROLLED_BETA_UMBREON_FIXTURE_KEY,
+  LifecycleService,
+} from '../application/lifecycle.service';
 
 const money = z
   .object({
@@ -62,6 +66,14 @@ const operationsQuery = z
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
     legacy: z.coerce.boolean().default(false),
+  })
+  .strict();
+const controlledBetaPhysicalBypass = z
+  .object({
+    assetId: z.string().trim().min(1).max(128),
+    fixtureKey: z.literal(CONTROLLED_BETA_UMBREON_FIXTURE_KEY),
+    reason: z.string().trim().min(12).max(280),
+    confirmation: z.literal(CONTROLLED_BETA_PHYSICAL_BYPASS_CONFIRMATION),
   })
   .strict();
 
@@ -164,6 +176,24 @@ export class LifecycleController {
   @RequirePermission('publication.manage')
   readiness(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.lifecycle.readiness(req.actor!, id, req.requestId);
+  }
+  @Post('admin/submissions/:submissionId/controlled-beta/physical-bypass')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('controlled_beta.lifecycle.manage')
+  controlledBetaPhysicalBypass(
+    @Param('submissionId') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.lifecycle.controlledBetaPhysicalBypass(
+        req.actor!,
+        { submissionId, ...parse(controlledBetaPhysicalBypass, body) },
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
   @Post('admin/assets/:id/publish')
   @UseGuards(AccessTokenGuard, PermissionGuard)

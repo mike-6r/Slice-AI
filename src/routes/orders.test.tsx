@@ -9,10 +9,14 @@ import { mockRepositories } from "@/mocks/repositories";
 import { AppServicesProvider } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 
-vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => () => ({}),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
-}));
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+  return {
+    ...actual,
+    createFileRoute: () => () => ({}),
+    Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  };
+});
 vi.mock("@/auth/use-session", () => ({ useSession: () => ({ isAuthenticated: true }) }));
 
 import { Orders } from "./orders";

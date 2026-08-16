@@ -1,9 +1,11 @@
 import {
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
@@ -15,7 +17,6 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../../submissions/ports/submission-storage.ports';
-import { Inject } from '@nestjs/common';
 import {
   assertCustodyTransition,
   assertMoney,
@@ -99,12 +100,20 @@ type BoardAsset = {
   publication: { status: string; updatedAt: Date; readiness: unknown } | null;
 };
 
+export const CONTROLLED_BETA_UMBREON_FIXTURE_KEY =
+  'UMBREON_VMAX_2021_EVOLVING_SKIES_215_203';
+export const CONTROLLED_BETA_PHYSICAL_BYPASS_REASON_CODE =
+  'BETA_QA_PHYSICAL_BYPASS';
+export const CONTROLLED_BETA_PHYSICAL_BYPASS_CONFIRMATION =
+  'BETA_QA_PHYSICAL_BYPASS';
+
 @Injectable()
 export class LifecycleService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async sellerStatus(actor: Actor, assetId: string) {
@@ -609,6 +618,125 @@ export class LifecycleService {
     return result;
   }
 
+  controlledBetaPhysicalBypass(
+    actor: Actor,
+    input: {
+      submissionId: string;
+      assetId: string;
+      fixtureKey: string;
+      reason: string;
+      confirmation: string;
+    },
+    requestId: string,
+    key: string,
+  ) {
+    this.recentAuth.require(actor);
+    if (!this.config.isBeta)
+      throw new ForbiddenException({
+        code: 'CONTROLLED_BETA_FEATURE_DISABLED',
+        message: 'This controlled lifecycle exception is available only in beta.',
+      });
+    if (!actor.roles.includes('ADMIN'))
+      throw new ForbiddenException({
+        code: 'ADMIN_REQUIRED',
+        message: 'Only an administrator can apply this controlled exception.',
+      });
+    if (
+      input.fixtureKey !== CONTROLLED_BETA_UMBREON_FIXTURE_KEY ||
+      input.confirmation !== CONTROLLED_BETA_PHYSICAL_BYPASS_CONFIRMATION
+    )
+      throw new ConflictException({
+        code: 'CONTROLLED_BETA_CONFIRMATION_REQUIRED',
+        message: 'The named beta fixture and confirmation are required.',
+      });
+
+    return this.mutate(
+      actor,
+      `lifecycle.controlled-beta-physical-bypass:${input.submissionId}`,
+      'POST',
+      `/v1/admin/submissions/${input.submissionId}/controlled-beta/physical-bypass`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const submission = await db.assetSubmission.findUnique({
+          where: { id: input.submissionId },
+          include: {
+            controlledBetaBypass: true,
+            asset: {
+              include: {
+                category: true,
+                collectibleSet: true,
+                custodyRecord: true,
+                controlledBetaBypass: true,
+              },
+            },
+          },
+        });
+        const asset = submission?.asset;
+        const fixtureMatches =
+          asset?.title.toLowerCase().includes('umbreon vmax') &&
+          asset.year === 2021 &&
+          asset.cardNumber === '215/203' &&
+          asset.collectibleSet?.name.toLowerCase() === 'evolving skies' &&
+          asset.category.name.toLowerCase() === 'pokémon tcg';
+        if (
+          !submission ||
+          submission.assetId !== input.assetId ||
+          submission.status !== 'APPROVED' ||
+          !asset ||
+          !fixtureMatches
+        )
+          throw new ConflictException({
+            code: 'CONTROLLED_BETA_FIXTURE_REQUIRED',
+            message:
+              'This exception is limited to the approved Umbreon VMAX 215/203 beta fixture.',
+          });
+        if (submission.controlledBetaBypass || asset.controlledBetaBypass)
+          throw new ConflictException({
+            code: 'CONTROLLED_BETA_BYPASS_ALREADY_APPLIED',
+            message: 'The controlled beta exception has already been applied.',
+          });
+        if (asset.custodyRecord)
+          throw new ConflictException({
+            code: 'PHYSICAL_STATE_ALREADY_STARTED',
+            message:
+              'The controlled exception cannot be applied after a custody record exists.',
+          });
+
+        const created = await db.controlledBetaPhysicalBypass.create({
+          data: {
+            id: randomUUID(),
+            submissionId: submission.id,
+            assetId: asset.id,
+            reasonCode: CONTROLLED_BETA_PHYSICAL_BYPASS_REASON_CODE,
+            reason: input.reason.trim(),
+            createdByUserId: actor.userId,
+          },
+        });
+        await audit(
+          'CONTROLLED_BETA_PHYSICAL_BYPASS_APPLIED',
+          'asset',
+          asset.id,
+          {
+            submissionId: submission.id,
+            assetId: asset.id,
+            reasonCode: CONTROLLED_BETA_PHYSICAL_BYPASS_REASON_CODE,
+            reason: input.reason.trim(),
+          },
+        );
+        return {
+          status: 'APPLIED',
+          submissionId: submission.id,
+          assetId: asset.id,
+          reasonCode: CONTROLLED_BETA_PHYSICAL_BYPASS_REASON_CODE,
+          createdAt: created.createdAt.toISOString(),
+          physicalStateUnchanged: true,
+        };
+      },
+    );
+  }
+
   publish(actor: Actor, assetId: string, requestId: string, key: string) {
     this.recentAuth.require(actor);
     return this.mutate(
@@ -698,6 +826,7 @@ export class LifecycleService {
           },
           take: 1,
         },
+        controlledBetaBypass: true,
       },
     });
     if (!asset)
@@ -710,6 +839,7 @@ export class LifecycleService {
       verificationApproved: asset.submissions.length > 0,
       activeDecision: asset.valuationDecisions.length > 0,
       custodySecured: asset.custodyRecord?.status === 'SECURED',
+      controlledBetaPhysicalBypass: Boolean(asset.controlledBetaBypass),
       activeCoverage: asset.insuranceCoverage.length > 0,
       hasException: asset.custodyRecord?.status === 'EXCEPTION',
     });

@@ -14,7 +14,6 @@ describe("public and private navigation", () => {
       "Home",
       "Markets",
       "Collectors",
-      "Vault Live",
     ]);
   });
 
