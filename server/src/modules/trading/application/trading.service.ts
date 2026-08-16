@@ -2073,16 +2073,20 @@ export class TradingService {
     }
     return (
       (await db.financialAccount.findFirst({
-        where: { ownerType: 'PLATFORM', code: 'STAGING_DEMO_CLEARING', currency: 'GBP' },
+        where: {
+          ownerType: 'PLATFORM',
+          code: 'STAGING_DEMO_TREASURY_PROCEEDS',
+          currency: 'GBP',
+        },
       })) ??
       db.financialAccount.create({
         data: {
           id: randomUUID(),
           ownerType: 'PLATFORM',
-          accountType: 'ASSET',
-          code: 'STAGING_DEMO_CLEARING',
+          accountType: 'LIABILITY',
+          code: 'STAGING_DEMO_TREASURY_PROCEEDS',
           currency: 'GBP',
-          normalSide: 'DEBIT',
+          normalSide: 'CREDIT',
         },
       })
     );
