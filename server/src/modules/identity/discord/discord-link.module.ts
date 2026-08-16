@@ -4,12 +4,13 @@ import { CollectorWorkspaceModule } from '../../collector-workspace/collector-wo
 import { AdminModule } from '../../admin/admin.module';
 import { FinanceModule } from '../../finance/finance.module';
 import { TradingModule } from '../../trading/trading.module';
+import { OutboxModule } from '../../outbox/outbox.module';
 import { DiscordLinkController } from './discord-link.controller';
 import { DiscordBotServiceGuard } from './discord-bot-service.guard';
 import { DiscordLinkService } from './discord-link.service';
 
 @Module({
-  imports: [AuthModule, CollectorWorkspaceModule, AdminModule, FinanceModule, TradingModule],
+  imports: [AuthModule, CollectorWorkspaceModule, AdminModule, FinanceModule, TradingModule, OutboxModule],
   controllers: [DiscordLinkController],
   providers: [DiscordLinkService, DiscordBotServiceGuard],
   exports: [DiscordLinkService],

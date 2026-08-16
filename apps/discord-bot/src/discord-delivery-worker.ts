@@ -1,17 +1,62 @@
-import { Client, type Guild } from 'discord.js';
-import { MarketFeedRenderer } from './market-renderer.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client } from 'discord.js';
+import { SliceCustomerRouteBuilder } from './customer-routes.js';
+import { SliceEmbed } from './embeds/slice-embed.js';
 import type { SetupRepository } from './persistence/setup-repository.js';
 import { PrismaDiscordDeliveryRepository } from './persistence/discord-delivery-repository.js';
-import { SliceDiscordDeliveryClient, type DiscordDelivery } from './slice-discord-delivery-client.js';
+import { SliceBackendClient, type CustomerDiscordDelivery, type CustomerDeliveryOutcome } from './slice-backend-client.js';
 
-const destinationResources: Record<DiscordDelivery['destinationKey'], string> = { 'discord.market_feed': 'market-feed', 'discord.recent_sales': 'recent-sales', 'discord.new_listings': 'new-listings', 'discord.price_alerts': 'price-alerts', 'discord.platform_updates': 'platform-updates' };
-/** Delivery worker consumes only an authenticated backend seam and retains no event authority. */
+/** Extends the existing bot worker; it never reads D17 tables directly or
+ * derives customer state. The API claims durable deliveries for it. */
 export class DiscordDeliveryWorker {
-  constructor(private readonly client: SliceDiscordDeliveryClient, private readonly receipts: PrismaDiscordDeliveryRepository, private readonly setup: SetupRepository, private readonly discord: Client, private readonly report: (event: string, fields: Record<string, unknown>) => void) {}
-  async scan(): Promise<void> { const response = await this.client.pull(); if (response.status !== 'READY') { if (response.status !== 'BACKEND_SEAM_REQUIRED') this.report('discord_delivery.unavailable', { status: response.status }); return; } for (const delivery of response.deliveries) await this.process(delivery); }
-  private async process(delivery: DiscordDelivery & { guildId?: string }): Promise<void> { if (!delivery.guildId || !valid(delivery)) { this.report('discord_delivery.invalid', { deliveryId: delivery.deliveryId }); return; } const receipt = await this.receipts.receipt({ guildId: delivery.guildId, deliveryId: delivery.deliveryId, eventId: delivery.eventId, destination: delivery.destinationKey }); if (receipt.status === 'DELIVERED') return; const guild = await this.discord.guilds.fetch(delivery.guildId).catch(() => null); if (!guild) return void await this.fail(delivery, 'DESTINATION_UNAVAILABLE'); const channel = await this.destination(guild, delivery.destinationKey); if (!channel) return void await this.fail(delivery, 'DESTINATION_UNAVAILABLE'); try { const message = await channel.send({ embeds: [MarketFeedRenderer.recentSale({ assetTitle: delivery.payload.assetTitle, price: { minor: delivery.payload.priceMinor, currency: delivery.payload.currency }, units: delivery.payload.units, occurredAt: delivery.payload.occurredAt })], allowedMentions: { parse: [], roles: [], users: [], repliedUser: false } }); await this.receipts.complete(delivery.deliveryId, 'DELIVERED', channel.id, message.id); await this.client.acknowledge(delivery.deliveryId, 'DELIVERED'); } catch (error) { this.report('discord_delivery.send_failed', { deliveryId: delivery.deliveryId, name: error instanceof Error ? error.name : 'unknown' }); await this.fail(delivery, 'RETRYABLE_FAILURE'); }
+  constructor(private readonly backend: SliceBackendClient, private readonly receipts: PrismaDiscordDeliveryRepository, private readonly setup: SetupRepository, private readonly discord: Client, private readonly routes: SliceCustomerRouteBuilder, private readonly report: (event: string, fields: Record<string, unknown>) => void) {}
+
+  async scan(): Promise<void> {
+    const response = await this.backend.pullCustomerDeliveries();
+    if (!response.ok) { this.report('discord_delivery.unavailable', { status: response.code }); return; }
+    for (const delivery of response.value) await this.process(delivery);
   }
-  private async destination(guild: Guild, key: DiscordDelivery['destinationKey']) { const resource = await this.setup.getResource(guild.id, 'CHANNEL', destinationResources[key]); const channel = resource ? await guild.channels.fetch(resource.discordId).catch(() => null) : null; return channel?.isTextBased() && 'send' in channel ? channel : null; }
-  private async fail(delivery: DiscordDelivery, outcome: 'RETRYABLE_FAILURE' | 'DESTINATION_UNAVAILABLE'): Promise<void> { await this.receipts.complete(delivery.deliveryId, outcome, undefined, undefined, outcome); await this.client.acknowledge(delivery.deliveryId, outcome); }
+
+  private async process(delivery: CustomerDiscordDelivery): Promise<void> {
+    // Recheck the canonical link immediately before the external side effect;
+    // a claim is not proof that a user is still linked or eligible.
+    const link = await this.backend.getLinkStatus(delivery.discordUserId);
+    if (!link.ok || !link.value.linked) return void await this.acknowledge(delivery, 'SUPPRESSED');
+    if (!(await this.preferenceEnabled(delivery.discordUserId, 'customer-orders'))) return void await this.acknowledge(delivery, 'SUPPRESSED');
+    const receipt = await this.receipts.receipt({ guildId: 'dm', deliveryId: delivery.deliveryId, eventId: delivery.eventId, destination: `dm:${delivery.discordUserId}` });
+    if (receipt.status === 'DELIVERED') return void await this.acknowledge(delivery, 'DELIVERED');
+    try {
+      const user = await this.discord.users.fetch(delivery.discordUserId);
+      const message = await user.send(orderPayload(delivery, this.routes));
+      await this.receipts.complete(delivery.deliveryId, 'DELIVERED', message.channelId, message.id);
+      await this.acknowledge(delivery, 'DELIVERED');
+    } catch (error) {
+      const code = discordFailure(error);
+      this.report('discord_delivery.send_failed', { deliveryId: delivery.deliveryId, code });
+      await this.receipts.complete(delivery.deliveryId, code === 'DESTINATION_UNAVAILABLE' ? 'DESTINATION_UNAVAILABLE' : 'RETRYABLE_FAILURE', undefined, undefined, code);
+      await this.acknowledge(delivery, code === 'DESTINATION_UNAVAILABLE' ? 'DESTINATION_UNAVAILABLE' : 'RETRYABLE_FAILURE');
+    }
+  }
+
+  private async preferenceEnabled(discordUserId: string, key: string): Promise<boolean> {
+    const rows = await this.setup.listUserNotificationPreferences(discordUserId);
+    // Existing users default to enabled until they make an explicit choice.
+    // An explicit OFF in any configured Discord context safely suppresses DMs.
+    return !rows.some((row) => row.logicalKey === key && row.enabled === false);
+  }
+
+  private async acknowledge(delivery: CustomerDiscordDelivery, outcome: CustomerDeliveryOutcome): Promise<void> {
+    const result = await this.backend.acknowledgeCustomerDelivery(delivery.deliveryId, delivery.claimToken, outcome);
+    if (!result.ok || !result.value.accepted) this.report('discord_delivery.ack_failed', { deliveryId: delivery.deliveryId, outcome, code: result.ok ? 'NOT_ACCEPTED' : result.code });
+  }
 }
-function valid(value: DiscordDelivery): boolean { return value.eventType === 'trade.completed' && value.schemaVersion === 1 && /^\S.{0,255}$/.test(value.payload.assetTitle) && /^\d+$/.test(value.payload.priceMinor) && /^[A-Z]{3}$/.test(value.payload.currency) && !Number.isNaN(Date.parse(value.payload.occurredAt)); }
+
+export function orderPayload(delivery: CustomerDiscordDelivery, routes: SliceCustomerRouteBuilder) {
+  const cancelled = delivery.order.status === 'CANCELLED';
+  const heading = cancelled ? 'Order cancelled' : 'Order opened';
+  const detail = cancelled ? 'Your order has been cancelled.' : `Your ${delivery.order.side.toLowerCase()} order is now open.`;
+  const price = money(delivery.order.limitPriceMinor, delivery.order.currency);
+  const url = routes.orderUrl(delivery.order.id);
+  return { embeds: [SliceEmbed.info(heading, `**${delivery.order.assetTitle}**\n${detail}\n${delivery.order.units} ownership unit${delivery.order.units === '1' ? '' : 's'} at **${price}**`)], components: url ? [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('View Order').setStyle(ButtonStyle.Link).setURL(url))] : [], allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } };
+}
+function money(minor: string, currency: string) { const value = BigInt(minor); const whole = value / 100n; const fraction = (value < 0n ? -value : value) % 100n; return `${currency} ${whole.toString()}.${fraction.toString().padStart(2, '0')}`; }
+function discordFailure(error: unknown): 'DESTINATION_UNAVAILABLE' | 'RETRYABLE_FAILURE' { return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 50007 ? 'DESTINATION_UNAVAILABLE' : 'RETRYABLE_FAILURE'; }

@@ -20,6 +20,7 @@ export interface SetupRepository {
   upsertPanel(panel: Panel): Promise<Panel>;
   setNotificationPreference(preference: NotificationPreference): Promise<NotificationPreference>;
   listNotificationPreferences(guildId: string, discordUserId: string): Promise<NotificationPreference[]>;
+  listUserNotificationPreferences(discordUserId: string): Promise<NotificationPreference[]>;
   listGuildNotificationPreferences(guildId: string): Promise<NotificationPreference[]>;
   transaction<T>(action: () => Promise<T>): Promise<T>;
 }
@@ -41,6 +42,7 @@ export class PrismaSetupRepository implements SetupRepository {
   async upsertPanel(panel: Panel): Promise<Panel> { const row = await this.prisma.discordPanel.upsert({ where: { guildId_logicalKey: { guildId: panel.guildId, logicalKey: panel.logicalKey } }, create: panel, update: { channelId: panel.channelId, messageId: panel.messageId, templateKey: panel.templateKey, artworkKey: panel.artworkKey, version: panel.version } }); return mapPanel(row); }
   async setNotificationPreference(preference: NotificationPreference): Promise<NotificationPreference> { const row = await this.prisma.discordNotificationPreference.upsert({ where: { guildId_discordUserId_logicalKey: preference }, create: preference, update: { enabled: preference.enabled } }); return { guildId: row.guildId, discordUserId: row.discordUserId, logicalKey: row.logicalKey, enabled: row.enabled }; }
   async listNotificationPreferences(guildId: string, discordUserId: string): Promise<NotificationPreference[]> { return (await this.prisma.discordNotificationPreference.findMany({ where: { guildId, discordUserId } })).map((row) => ({ guildId: row.guildId, discordUserId: row.discordUserId, logicalKey: row.logicalKey, enabled: row.enabled })); }
+  async listUserNotificationPreferences(discordUserId: string): Promise<NotificationPreference[]> { return (await this.prisma.discordNotificationPreference.findMany({ where: { discordUserId } })).map((row) => ({ guildId: row.guildId, discordUserId: row.discordUserId, logicalKey: row.logicalKey, enabled: row.enabled })); }
   async listGuildNotificationPreferences(guildId: string): Promise<NotificationPreference[]> { return (await this.prisma.discordNotificationPreference.findMany({ where: { guildId } })).map((row) => ({ guildId: row.guildId, discordUserId: row.discordUserId, logicalKey: row.logicalKey, enabled: row.enabled })); }
   async transaction<T>(action: () => Promise<T>): Promise<T> { return action(); }
 }
@@ -62,6 +64,7 @@ export class InMemorySetupRepository implements SetupRepository {
   async upsertPanel(panel: Panel): Promise<Panel> { this.panels.set(panelKey(panel.guildId, panel.logicalKey), panel); return panel; }
   async setNotificationPreference(preference: NotificationPreference): Promise<NotificationPreference> { this.preferences.set(`${preference.guildId}:${preference.discordUserId}:${preference.logicalKey}`, preference); return preference; }
   async listNotificationPreferences(guildId: string, discordUserId: string): Promise<NotificationPreference[]> { return [...this.preferences.values()].filter((row) => row.guildId === guildId && row.discordUserId === discordUserId); }
+  async listUserNotificationPreferences(discordUserId: string): Promise<NotificationPreference[]> { return [...this.preferences.values()].filter((row) => row.discordUserId === discordUserId); }
   async listGuildNotificationPreferences(guildId: string): Promise<NotificationPreference[]> { return [...this.preferences.values()].filter((row) => row.guildId === guildId); }
   async transaction<T>(action: () => Promise<T>): Promise<T> { return action(); }
 }

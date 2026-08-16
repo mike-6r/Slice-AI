@@ -27,7 +27,11 @@ export class NotificationRoutingService {
   private privateOrder(event: OutboxEvent): DeliveryIntent[] {
     const payload = event.payload as Partial<OrderLifecyclePayload>;
     if (!event.actorUserId || !isOrderPayload(payload)) throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_PAYLOAD_INVALID');
-    return [{ channel: 'IN_APP', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.orderUpdates, mandatory: false, payloadVersion: 1, payload: { eventId: event.eventId, orderId: payload.orderId, assetId: payload.assetId, side: payload.side, units: payload.units, status: payload.status, occurredAt: event.occurredAt.toISOString() } }];
+    const order = { eventId: event.eventId, eventType: event.eventType, orderId: payload.orderId, assetId: payload.assetId, side: payload.side, units: payload.units, status: payload.status, occurredAt: event.occurredAt.toISOString() };
+    return [
+      { channel: 'IN_APP', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.orderUpdates, mandatory: false, payloadVersion: 1, payload: order },
+      { channel: 'DISCORD', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.orderUpdates, mandatory: false, payloadVersion: 1, payload: order },
+    ];
   }
   private privateMovement(event: OutboxEvent): DeliveryIntent[] {
     const payload = event.payload as Partial<MovementSettledPayload>;

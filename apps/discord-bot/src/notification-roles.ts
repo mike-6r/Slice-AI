@@ -4,8 +4,17 @@ import { presentationConfig } from './presentation-config.js';
 
 export const NOTIFICATION_CATALOG = presentationConfig()['notifications.yml'].roles.map((role) => [role.key, role.label] as const);
 export const notificationRoleKeys = NOTIFICATION_CATALOG.map(([key]) => key);
+export const CUSTOMER_NOTIFICATION_CATALOG = [
+  ['customer-orders', 'Orders', 'Updates when your orders fill, cancel, or change.'],
+  ['customer-collector-actions', 'Collector Actions', 'Important actions required for your submitted collectibles.'],
+  ['customer-shipping', 'Shipping', 'Updates related to shipping and Slice intake.'],
+  ['customer-membership', 'Membership', 'Plan, usage, and membership status updates.'],
+  ['customer-support', 'Support', 'Replies and status updates for your support requests.'],
+] as const;
+export type CustomerNotificationKey = typeof CUSTOMER_NOTIFICATION_CATALOG[number][0];
 
 export function notificationMenu(selected: readonly string[] = []) { const settings = presentationConfig()['notifications.yml']; return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('slice:roles:notifications').setPlaceholder(settings.menu.placeholder).setMinValues(0).setMaxValues(NOTIFICATION_CATALOG.length).addOptions(NOTIFICATION_CATALOG.map(([value, label]) => ({ label, value, default: selected.includes(value) }))))]; }
+export function customerNotificationMenu(selected: readonly string[] = []) { return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('slice:notifications:customer').setPlaceholder('Customer notification preferences').setMinValues(0).setMaxValues(CUSTOMER_NOTIFICATION_CATALOG.length).addOptions(CUSTOMER_NOTIFICATION_CATALOG.map(([value, label, description]) => ({ label, value, description, default: selected.includes(value) }))))]; }
 
 /** Persisted preferences are authoritative; Discord roles are materialized state. */
 export class NotificationRoleReconciliationService {
@@ -27,4 +36,13 @@ export class NotificationRoleReconciliationService {
     }
   }
   async selected(guildId: string, userId: string): Promise<string[]> { return (await this.repository.listNotificationPreferences(guildId, userId)).filter((row) => row.enabled && notificationRoleKeys.includes(row.logicalKey as typeof notificationRoleKeys[number])).map((row) => row.logicalKey); }
+  async customerSelected(guildId: string, userId: string): Promise<CustomerNotificationKey[]> {
+    const rows = await this.repository.listNotificationPreferences(guildId, userId);
+    const known = new Map(rows.filter((row) => CUSTOMER_NOTIFICATION_CATALOG.some(([key]) => key === row.logicalKey)).map((row) => [row.logicalKey, row.enabled]));
+    return CUSTOMER_NOTIFICATION_CATALOG.filter(([key]) => known.get(key) !== false).map(([key]) => key);
+  }
+  async updateCustomer(guildId: string, userId: string, selected: ReadonlySet<string>): Promise<CustomerNotificationKey[]> {
+    for (const [key] of CUSTOMER_NOTIFICATION_CATALOG) await this.repository.setNotificationPreference({ guildId, discordUserId: userId, logicalKey: key, enabled: selected.has(key) });
+    return CUSTOMER_NOTIFICATION_CATALOG.filter(([key]) => selected.has(key)).map(([key]) => key);
+  }
 }

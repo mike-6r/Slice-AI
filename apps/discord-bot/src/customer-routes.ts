@@ -6,6 +6,7 @@ export class SliceCustomerRouteBuilder {
   accountUrl() { return this.url('/account'); }
   portfolioUrl() { return this.url('/portfolio'); }
   ordersUrl() { return this.url('/orders'); }
+  orderUrl(orderId: string) { return /^[A-Za-z0-9_-]{1,128}$/.test(orderId) ? this.url(`/orders/${encodeURIComponent(orderId)}`) : null; }
   transactionsUrl() { return this.url('/portfolio'); }
   collectorWorkspaceUrl() { return this.url('/collector-workspace'); }
   membershipUrl() { return this.url('/collector-workspace'); }

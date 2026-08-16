@@ -7,6 +7,7 @@ import { InAppNotificationTransport } from './application/in-app-notification.tr
 import { NotificationTransportRegistry } from './application/notification-transport-registry';
 import { NotificationDeliveryWorkerRepository } from './application/notification-delivery-worker.repository';
 import { NotificationDeliveryWorkerService } from './application/notification-delivery-worker.service';
+import { DiscordNotificationDeliveryService } from './application/discord-notification-delivery.service';
 import { OutboxWorkerRepository } from './application/outbox-worker.repository';
 import { OutboxWorkerService } from './application/outbox-worker.service';
 import { OutboxWriter } from './application/outbox-writer.service';
@@ -19,7 +20,7 @@ import { AccessControlModule } from '../identity/access/access-control.module';
 @Module({
   imports: [NotificationModule, AuthModule, AccessControlModule],
   controllers: [OutboxOperationsController],
-  providers: [OutboxWriter, OutboxOperationsService, NotificationDeliveryService, NotificationRoutingService, NotificationChannelCapabilityRegistry, InAppNotificationTransport, NotificationTransportRegistry, NotificationDeliveryWorkerRepository, NotificationDeliveryWorkerService, OutboxHandlerRegistry, OutboxWorkerRepository, OutboxWorkerService],
-  exports: [OutboxWriter, OutboxWorkerRepository, OutboxWorkerService],
+  providers: [OutboxWriter, OutboxOperationsService, NotificationDeliveryService, NotificationRoutingService, NotificationChannelCapabilityRegistry, InAppNotificationTransport, NotificationTransportRegistry, NotificationDeliveryWorkerRepository, NotificationDeliveryWorkerService, DiscordNotificationDeliveryService, OutboxHandlerRegistry, OutboxWorkerRepository, OutboxWorkerService],
+  exports: [OutboxWriter, OutboxWorkerRepository, OutboxWorkerService, DiscordNotificationDeliveryService],
 })
 export class OutboxModule {}

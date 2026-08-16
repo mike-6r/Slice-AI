@@ -19,11 +19,13 @@ import {
 } from '../auth/access-token.guard';
 import { DiscordLinkService } from './discord-link.service';
 import { DiscordBotServiceGuard } from './discord-bot-service.guard';
+import { DiscordNotificationDeliveryService, type DiscordDeliveryOutcome } from '../../outbox/application/discord-notification-delivery.service';
 
 @Controller()
 export class DiscordLinkController {
   constructor(
     private readonly links: DiscordLinkService,
+    private readonly deliveries: DiscordNotificationDeliveryService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -31,6 +33,20 @@ export class DiscordLinkController {
   @UseGuards(AccessTokenGuard)
   self(@Req() request: AuthenticatedRequest) {
     return this.links.self(request.actor!.userId);
+  }
+
+  @Get('discord/bot/deliveries')
+  @UseGuards(DiscordBotServiceGuard)
+  pullDeliveries(@Query('limit') limit?: string) {
+    const parsed = Number(limit);
+    return this.deliveries.pull(Number.isInteger(parsed) ? parsed : 25);
+  }
+
+  @Post('discord/bot/deliveries/:deliveryId/ack')
+  @UseGuards(DiscordBotServiceGuard)
+  acknowledgeDelivery(@Param('deliveryId') deliveryId: string, @Body() body: { claimToken?: unknown; outcome?: unknown }) {
+    const outcomes: readonly DiscordDeliveryOutcome[] = ['DELIVERED', 'SUPPRESSED', 'RETRYABLE_FAILURE', 'DESTINATION_UNAVAILABLE', 'NON_RETRYABLE_FAILURE'];
+    return this.deliveries.acknowledge(deliveryId, typeof body.claimToken === 'string' ? body.claimToken : '', outcomes.includes(body.outcome as DiscordDeliveryOutcome) ? body.outcome as DiscordDeliveryOutcome : 'NON_RETRYABLE_FAILURE');
   }
 
   @Post('me/integrations/discord/authorize')
