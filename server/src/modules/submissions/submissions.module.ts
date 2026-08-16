@@ -26,6 +26,6 @@ import {
     LocalMalwareScanner,
     { provide: MALWARE_SCANNER, useExisting: LocalMalwareScanner },
   ],
-  exports: [RawCardPreGradeService],
+  exports: [RawCardPreGradeService, SubmissionStorageModule],
 })
 export class SubmissionsModule {}
