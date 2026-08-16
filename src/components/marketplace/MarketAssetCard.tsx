@@ -17,7 +17,10 @@ function gradePresentation(grade?: string) {
 }
 
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
-  const media = assetShowcaseMedia(asset.slug);
+  const approvedMedia = asset.media?.find((item) => item.alt.toLowerCase().includes("front"));
+  const media = approvedMedia
+    ? { src: approvedMedia.url, alt: approvedMedia.alt }
+    : assetShowcaseMedia(asset.slug);
   const category = marketCategoryPresentation(asset.category);
   const CategoryIcon = category.icon;
   const editorial = marketplaceEditorialTag(asset);

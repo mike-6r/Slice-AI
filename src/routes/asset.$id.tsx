@@ -98,7 +98,8 @@ function AssetPage() {
     );
 
   const asset = toMarketplaceAsset(assetQuery.data);
-  const approvedMedia = asset.media?.[0];
+  const approvedMedia =
+    asset.media?.find((item) => item.alt.toLowerCase().includes("front")) ?? asset.media?.[0];
   const media = approvedMedia
     ? { src: approvedMedia.url, alt: approvedMedia.alt }
     : assetShowcaseMedia(asset.slug);
