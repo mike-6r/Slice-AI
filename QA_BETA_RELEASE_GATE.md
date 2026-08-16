@@ -159,3 +159,21 @@ The following existing captures are referenced as visual evidence and contain no
 **Final Beta readiness:** **NO-GO** for fully evidenced external Beta; **GO** for controlled internal/read-only Beta.
 
 **Next action:** obtain the authorized independent Investor/Staff/Reviewer sessions and run the non-destructive privacy/RBAC, responsive, and accessibility matrices. Do not mutate Umbreon or Charizard to close those evidence gaps.
+
+## Fresh evidence attempt — 2026-08-16
+
+This is an additive record of the latest non-destructive browser attempt. It does not replace the prior deployment or controlled-fixture evidence above.
+
+- Staging public routes were reachable at `https://staging.slicecollectable.com`.
+- The staging UI observed in this session still corresponds to deployed source `6ce3210` (including the older More/Vault Live navigation). Local commit `ba20ad8` removes those customer surfaces but was not deployed in this session.
+- Public DOM checks covered `/`, `/marketplace`, the public Umbreon asset, `/collectors`, and `/vault-live` at 390×844, 768×1024, 1366×768, 1920×1080, and 2560×1440. No document overflow or broken images were observed. The 390px marketplace quick-filter rail is horizontally scrollable; its buttons are not all visible at once.
+- Public console errors/warnings observed: `0`.
+- Fresh screenshot capture was attempted but blocked by the browser CDP `Page.captureScreenshot` timeout. Existing `qa-screenshots/` evidence was preserved.
+- The available authenticated browser profile was `Slice Demo Collector`, not an independent Investor, Staff, or Reviewer session.
+- Protected-route traversal reached the session-expired boundary (“Your session has expired” / “Sign in again”). No login retry, credential entry, or state-changing action was attempted.
+- Fresh Investor, Staff, Reviewer, private-media, intake-address, and IDOR matrices were not executed. Unexpected HTTP status and provider-call counts were not independently verifiable from the available browser surface; no provider errors or provider logs appeared in the public console.
+- Mutation count for this attempt: `0`. Umbreon and Charizard were not modified.
+
+### Fresh evidence disposition
+
+The release classification remains **NO-GO for a fully evidenced external Beta**. The three P1 evidence blockers and P2 accessibility/responsive blocker remain open until authorized fresh role sessions and a functioning authenticated browser session are available.
