@@ -1,8 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { isBetaEnvironment } from "@/config/environment";
-import { useFeaturedAssets } from "@/queries/hooks";
-import { useCurrency } from "@/currency/CurrencyProvider";
 
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -16,79 +13,6 @@ import {
  * intentionally does not consume or imply a live public-market quote.
  */
 export function FeaturedMarketHero() {
-  const featuredQuery = useFeaturedAssets();
-  const { formatMoney } = useCurrency();
-  if (isBetaEnvironment) {
-    const asset = featuredQuery.data?.[0];
-    if (!asset) {
-      return (
-        <section
-          className="featured-market-hero featured-market-hero--empty featured-market-hero--static-example featured-market-hero--charizard"
-          aria-label="Featured asset"
-          data-static-showcase="true"
-        >
-          <div className="charizard-showcase__glow" aria-hidden="true" />
-          <div className="charizard-showcase__eyebrow" aria-hidden="true">
-            <span>01</span>
-            <span>Legacy chase · Base Set</span>
-          </div>
-          <div className="featured-market-hero__static-media">
-            <img src={HOMEPAGE_FEATURED_ASSET.image} alt={HOMEPAGE_FEATURED_ASSET.title} />
-          </div>
-          <div className="charizard-showcase__copy">
-            <div className="charizard-showcase__tags">
-              <span>1999</span>
-              <span>1st Edition</span>
-              <span>Holo · #4</span>
-            </div>
-            <p className="page-kicker">Featured card</p>
-            <h2>{HOMEPAGE_FEATURED_ASSET.title}</h2>
-            <p>
-              An iconic authenticated collectible shows the kind of card that can sit underneath a
-              Slice ownership market. Live values appear only when an asset is published and
-              market-ready.
-            </p>
-            <Link to="/marketplace" className="charizard-showcase__cta">
-              Explore the marketplace <span aria-hidden="true">↗</span>
-            </Link>
-          </div>
-          <div className="charizard-showcase__stamp" aria-hidden="true">
-            <span>SLICE</span>
-            <small>
-              COLLECTIBLE
-              <br />
-              REFERENCE
-            </small>
-          </div>
-        </section>
-      );
-    }
-    const marketValue = asset.market?.estimatedMarketValue;
-    return (
-      <section
-        className="featured-market-hero featured-market-hero--beta"
-        aria-label="Featured asset"
-      >
-        <div className="featured-static-panel">
-          <p className="page-kicker">Published asset</p>
-          <h2 id="home-featured-heading">{asset.details.title}</h2>
-          <p className="featured-static-panel__subtitle">
-            {asset.grade?.label ?? asset.details.category}
-          </p>
-          <div className="featured-static-panel__price">
-            <strong>{marketValue ? formatMoney(marketValue.amount) : "Unavailable"}</strong>
-            <span>{marketValue ? "Authoritative market data" : "No reliable market data yet"}</span>
-          </div>
-          <p className="featured-static-panel__disclaimer">
-            Values and availability are shown only when backed by published Slice data.
-          </p>
-          <Link to="/asset/$id" params={{ id: asset.slug ?? asset.id }} className="text-link">
-            View asset <span aria-hidden="true">→</span>
-          </Link>
-        </div>
-      </section>
-    );
-  }
   const featured = HOMEPAGE_FEATURED_ASSET;
   return (
     <section
