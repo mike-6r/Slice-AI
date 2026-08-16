@@ -253,12 +253,13 @@ export class TradingService {
     const bestBid = bids[0] ? BigInt(bids[0].priceMinor) : null;
     const slicePrice = bestAsk ?? bestBid ?? (snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null);
     const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
+    const notYetIssued = total === 0n;
     return {
       assetId: asset.id,
       totalSlices: total.toString(),
       availableSlices: available.toString(),
-      availableOwnershipPercent: formatOwnershipPercent(available, total),
-      ownershipIncrementPercent: formatOwnershipPercent(1n, total),
+      availableOwnershipPercent: notYetIssued ? 'Not yet available' : formatOwnershipPercent(available, total),
+      ownershipIncrementPercent: notYetIssued ? 'Not available yet' : formatOwnershipPercent(1n, total),
       slicePriceMinor: slicePrice?.toString() ?? null,
       impliedWholeValueMinor: slicePrice === null ? null : (slicePrice * total).toString(),
       externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,
