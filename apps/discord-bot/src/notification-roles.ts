@@ -8,8 +8,8 @@ export const CUSTOMER_NOTIFICATION_CATALOG = [
   ['customer-orders', 'Orders', 'Updates when your orders fill, cancel, or change.'],
   ['customer-collector-actions', 'Collector Actions', 'Important actions required for your submitted collectibles.'],
   ['customer-shipping', 'Shipping', 'Updates related to shipping and Slice intake.'],
-  ['customer-membership', 'Membership', 'Plan, usage, and membership status updates.'],
-  ['customer-support', 'Support', 'Replies and status updates for your support requests.'],
+  ['customer-membership', 'Membership', 'Preference saved — alerts will be available when membership events are supported.'],
+  ['customer-support', 'Support', 'Preference saved — support updates are currently handled in your private ticket.'],
 ] as const;
 export type CustomerNotificationKey = typeof CUSTOMER_NOTIFICATION_CATALOG[number][0];
 
