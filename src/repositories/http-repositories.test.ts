@@ -23,6 +23,23 @@ const dto = {
   dataStatus: "DELAYED" as const,
   asOf: "2026-08-06T00:00:00.000Z",
   marketReference: null,
+  sliceGrade: {
+    status: "SUCCEEDED" as const,
+    provider: "XIMILAR",
+    overallEstimate: 4,
+    overallMin: 3.5,
+    overallMax: 4.5,
+    centeringScore: 4,
+    cornerScore: 4.2,
+    edgeScore: 3.8,
+    surfaceScore: 4.1,
+    conditionLabel: "Very Good",
+    analyzedAt: "2026-08-16T12:00:00.000Z",
+    warnings: [],
+    visualizations: [
+      { side: "FRONT" as const, type: "overview" as const, url: "https://example.com/front.jpg", centering: null },
+    ],
+  },
 };
 
 describe("HTTP catalogue mapping", () => {
@@ -66,6 +83,17 @@ describe("HTTP catalogue mapping", () => {
     expect(asset.ownershipAvailableBps).toBeUndefined();
     expect(asset.market?.source).toBe("AUCTION_COMPS");
     expect(asset.certification).toEqual({ company: "PSA", number: "58291042" });
+  });
+
+  it("keeps Slice Grade supporting evidence separate from official grading", () => {
+    const asset = mapMarketAsset({ ...dto, grading: null });
+    expect(asset.grade).toBeUndefined();
+    expect(asset.sliceGrade).toMatchObject({
+      status: "SUCCEEDED",
+      overallEstimate: 4,
+      conditionLabel: "Very Good",
+    });
+    expect(asset.sliceGrade?.visualizations).toHaveLength(1);
   });
 
   it("uses the API adapter and never falls back to mocks", async () => {

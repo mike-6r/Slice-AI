@@ -21,7 +21,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
-import type { MarketLifecycleProjection } from "@/domain";
+import type { MarketLifecycleProjection, SliceGrade } from "@/domain";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -478,6 +478,8 @@ function AssetPage() {
           </section>
         </section>
 
+        {!asset.grade && asset.sliceGrade ? <SliceGradePanel grade={asset.sliceGrade} /> : null}
+
         <section className="asset-redesign-grid asset-redesign-grid--lower">
           <section
             className="asset-ownership-panel asset-ownership-panel--simple"
@@ -737,6 +739,75 @@ function ExternalReference({
   );
 }
 
+function SliceGradePanel({ grade }: { grade: SliceGrade }) {
+  const score = (value: number | null) => (value === null ? "—" : Number(value.toFixed(1)).toString());
+  const evidence = grade.visualizations.filter((item) => item.url);
+  const estimate = grade.overallEstimate === null ? "—" : score(grade.overallEstimate);
+  const range =
+    grade.overallMin !== null && grade.overallMax !== null
+      ? `${score(grade.overallMin)}–${score(grade.overallMax)}`
+      : "—";
+
+  return (
+    <section className="asset-slice-grade-panel" aria-labelledby="slice-grade-title">
+      <header className="asset-slice-grade-panel__header">
+        <div>
+          <p className="asset-section-label">Slice Grade</p>
+          <h2 id="slice-grade-title">AI-assisted condition insight</h2>
+          <p>
+            A supporting estimate from the card images. It is separate from the collector&apos;s
+            condition and is not an official grading result.
+          </p>
+        </div>
+        <span className="asset-slice-grade-panel__badge">Supporting evidence</span>
+      </header>
+      <div className="asset-slice-grade-panel__summary">
+        <div className="asset-slice-grade-panel__score">
+          <span>Estimated grade</span>
+          <strong>{estimate}</strong>
+          <small>{grade.conditionLabel ?? "AI estimate"}</small>
+        </div>
+        <div className="asset-slice-grade-panel__facts">
+          <div><span>Estimate range</span><strong>{range}</strong></div>
+          <div><span>Centering</span><strong>{score(grade.centeringScore)}</strong></div>
+          <div><span>Corners</span><strong>{score(grade.cornerScore)}</strong></div>
+          <div><span>Edges</span><strong>{score(grade.edgeScore)}</strong></div>
+          <div><span>Surface</span><strong>{score(grade.surfaceScore)}</strong></div>
+        </div>
+      </div>
+      <div className="asset-slice-grade-panel__evidence">
+        <div className="asset-slice-grade-panel__evidence-heading">
+          <div>
+            <strong>Image evidence</strong>
+            <span>Areas used to form the estimate</span>
+          </div>
+          {grade.analyzedAt ? <small>Analyzed {formatDate(grade.analyzedAt)}</small> : null}
+        </div>
+        {evidence.length ? (
+          <div className="asset-slice-grade-panel__images">
+            {evidence.map((item, index) => (
+              <figure key={`${item.side}-${item.type}-${index}`}>
+                <img
+                  src={item.url ?? undefined}
+                  alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
+                />
+                <figcaption>
+                  {item.side === "FRONT" ? "Front" : "Back"} · {item.type === "centering" ? "Centering" : "Overview"}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="asset-slice-grade-panel__empty">Image evidence is not available for this estimate.</p>
+        )}
+      </div>
+      {grade.warnings.length ? (
+        <p className="asset-slice-grade-panel__note">Review note: {grade.warnings[0]}</p>
+      ) : null}
+    </section>
+  );
+}
+
 function AssetShowcase({
   title,
   category,
@@ -919,6 +990,7 @@ function TradingPanel({
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
+  const canSell = isAuthenticated && ownShares !== undefined && ownShares > 0;
   return (
     <section className="asset-order-book">
       <header>
@@ -1012,13 +1084,26 @@ function TradingPanel({
           </span>
           <ArrowRight aria-hidden="true" />
         </Link>
-        <Link to="/sell/$id" params={{ id }} className="is-sell">
-          <span>
-            <strong>Sell a Slice</strong>
-            <small>Manage settled units</small>
-          </span>
-          <ArrowRight aria-hidden="true" />
-        </Link>
+        {canSell ? (
+          <Link to="/sell/$id" params={{ id }} className="is-sell">
+            <span>
+              <strong>Sell a Slice</strong>
+              <small>Manage settled units</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : (
+          <div className="is-sell is-disabled" aria-disabled="true">
+            <span>
+              <strong>Sell a Slice</strong>
+              <small>
+                {isAuthenticated
+                  ? "Available after you own settled units"
+                  : "Sign in to manage settled units"}
+              </small>
+            </span>
+          </div>
+        )}
       </div>
     </section>
   );

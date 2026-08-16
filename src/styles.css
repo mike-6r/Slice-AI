@@ -3558,6 +3558,27 @@ body:has(.collectors-page) .site-shell {
   border-color: rgb(34 211 165 / 0.38);
   background: rgb(22 105 84 / 0.12);
 }
+.asset-redesign .asset-order-actions .is-disabled {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.7rem;
+  min-height: 4.1rem;
+  border: 1px solid rgb(126 163 169 / 0.14);
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  background: rgb(10 18 23 / 0.7);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+.asset-redesign .asset-order-actions .is-disabled strong,
+.asset-redesign .asset-order-actions .is-disabled small {
+  color: #8fa8ae;
+}
+.asset-redesign .asset-order-actions .is-disabled span {
+  display: grid;
+  gap: 0.2rem;
+}
 .asset-redesign .asset-order-actions a span {
   display: grid;
   gap: 0.2rem;
@@ -28225,6 +28246,46 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .asset-redesign .asset-details-panel .asset-panel-helper { margin: 0 0 .5rem; font-size: .78rem; }
 .asset-redesign .asset-similar-section { margin-top: 0; padding: 1.2rem; }
 
+.asset-slice-grade-panel {
+  min-width: 0;
+  border: 1px solid rgba(72, 196, 166, .28);
+  border-radius: 1rem;
+  padding: 1.2rem;
+  background: linear-gradient(145deg, rgba(11, 38, 40, .9), rgba(7, 16, 21, .98));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .14);
+}
+.asset-slice-grade-panel__header,
+.asset-slice-grade-panel__evidence-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.asset-slice-grade-panel__header h2 { margin: 0; font-family: inherit; font-size: 1.35rem; letter-spacing: -.035em; }
+.asset-slice-grade-panel__header p:not(.asset-section-label) { max-width: 48rem; margin: .35rem 0 0; color: #a8c0c3; font-size: .8rem; line-height: 1.5; }
+.asset-slice-grade-panel__badge { flex: 0 0 auto; border: 1px solid rgba(55, 220, 178, .42); border-radius: 999px; padding: .42rem .6rem; color: #56e1ba; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.asset-slice-grade-panel__summary { display: grid; grid-template-columns: minmax(11rem, .7fr) minmax(0, 1.3fr); gap: .8rem; margin-top: 1rem; }
+.asset-slice-grade-panel__score { display: grid; align-content: center; gap: .25rem; border: 1px solid rgba(93, 170, 165, .2); border-radius: .75rem; padding: .9rem; background: rgba(5, 18, 21, .58); }
+.asset-slice-grade-panel__score span,
+.asset-slice-grade-panel__facts span,
+.asset-slice-grade-panel__evidence-heading span { color: #8fa8ae; font-size: .68rem; }
+.asset-slice-grade-panel__score strong { color: #effcf8; font-size: 2rem; letter-spacing: -.04em; }
+.asset-slice-grade-panel__score small { color: #38dcb2; font-size: .75rem; font-weight: 750; }
+.asset-slice-grade-panel__facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid rgba(93, 170, 165, .2); border-radius: .75rem; overflow: hidden; background: rgba(5, 18, 21, .42); }
+.asset-slice-grade-panel__facts div { display: grid; align-content: center; gap: .3rem; min-width: 0; padding: .8rem; border-left: 1px solid rgba(93, 170, 165, .14); }
+.asset-slice-grade-panel__facts div:first-child { border-left: 0; }
+.asset-slice-grade-panel__facts strong { color: #e7f5f1; font-size: .95rem; }
+.asset-slice-grade-panel__evidence { margin-top: .85rem; border-top: 1px solid rgba(93, 170, 165, .17); padding-top: .9rem; }
+.asset-slice-grade-panel__evidence-heading strong { display: block; color: #e7f5f1; font-size: .86rem; }
+.asset-slice-grade-panel__evidence-heading small { color: #8fa8ae; font-size: .68rem; }
+.asset-slice-grade-panel__images { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .65rem; margin-top: .65rem; }
+.asset-slice-grade-panel__images figure { min-width: 0; margin: 0; }
+.asset-slice-grade-panel__images img { display: block; width: 100%; height: 10rem; object-fit: contain; border: 1px solid rgba(93, 170, 165, .2); border-radius: .6rem; background: #061215; }
+.asset-slice-grade-panel__images figcaption { margin-top: .35rem; color: #9eb6b9; font-size: .66rem; }
+.asset-slice-grade-panel__empty,
+.asset-slice-grade-panel__note { margin: .7rem 0 0; color: #9eb6b9; font-size: .72rem; }
+.asset-slice-grade-panel__note { color: #e0bd74; }
+
 @media (max-width: 900px) {
   .asset-redesign-hero { grid-template-columns: minmax(0, 1fr); }
   .asset-redesign-media .asset-showcase { min-height: 28rem; }
@@ -28238,7 +28299,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .asset-page-heading__actions { padding: 0; }
   .asset-redesign-media .asset-showcase { min-height: 24rem; }
   .asset-redesign-media .asset-showcase > img { max-height: 21rem; }
-  .asset-readiness-card, .asset-value-overview, .asset-how-it-works, .asset-details-panel--compact, .asset-ownership-panel--simple { padding: 1rem; }
+  .asset-readiness-card, .asset-value-overview, .asset-how-it-works, .asset-details-panel--compact, .asset-ownership-panel--simple, .asset-slice-grade-panel { padding: 1rem; }
   .asset-readiness-heading { display: grid; gap: .7rem; }
   .asset-readiness-heading .asset-status-badge { justify-self: start; }
   .asset-value-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -28254,6 +28315,11 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .asset-redesign .asset-chart-stats dl:nth-child(n+3) { border-top: 1px solid rgba(145, 174, 184, .08); }
   .asset-ownership-facts { grid-template-columns: 1fr; }
   .asset-redesign-grid--lower { grid-template-columns: minmax(0, 1fr); }
+  .asset-slice-grade-panel__header { display: grid; }
+  .asset-slice-grade-panel__summary { grid-template-columns: minmax(0, 1fr); }
+  .asset-slice-grade-panel__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .asset-slice-grade-panel__facts div:nth-child(odd) { border-left: 0; }
+  .asset-slice-grade-panel__facts div:nth-child(n+3) { border-top: 1px solid rgba(93, 170, 165, .14); }
   .asset-redesign .asset-price-panel > header { display: grid; gap: .7rem; }
   .asset-redesign .asset-price-panel > header > div:last-child { justify-content: flex-start; }
 }

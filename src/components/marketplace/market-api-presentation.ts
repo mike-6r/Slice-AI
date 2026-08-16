@@ -1,4 +1,4 @@
-import type { Asset, MarketLifecycleProjection } from "@/domain";
+import type { Asset, MarketLifecycleProjection, SliceGrade } from "@/domain";
 import type { SupportedCurrency } from "@/data/repositories";
 
 export type MarketplaceAsset = {
@@ -29,6 +29,7 @@ export type MarketplaceAsset = {
     currency: SupportedCurrency;
   };
   media?: Array<{ url: string; alt: string }>;
+  sliceGrade?: SliceGrade;
   ownershipStatus?: string;
   tradingStatus?: string;
   tradingEnabled?: boolean;
@@ -60,6 +61,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
         .join(" · ")
     : undefined,
   certificationNumber: asset.certification?.number,
+  sliceGrade: asset.sliceGrade,
   estimatedMarketValueMinor: asset.market?.estimatedMarketValue?.amount,
   estimatedMarketValueCurrency: asset.market?.estimatedMarketValue?.currency,
   source: asset.market?.source,

@@ -31,6 +31,7 @@ import type {
 import type {
   Asset,
   AssetId,
+  SliceGrade,
   CollectorProfile,
   GradingCompany,
   ISODateTime,
@@ -80,6 +81,7 @@ type MarketAssetDto = {
   description: string | null;
   conditionLabel?: string | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
+  sliceGrade?: SliceGrade | null;
   certificationNumber?: string;
   category: { slug: string; name: string };
   collectibleSet: { slug: string; name: string } | null;
@@ -218,6 +220,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     kind: "image" as const,
     order: index,
   })),
+  sliceGrade: value.sliceGrade ?? undefined,
   grade: value.grading
     ? {
         company: value.grading.companyCode.toLowerCase() as GradingCompany,

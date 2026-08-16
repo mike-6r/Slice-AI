@@ -68,6 +68,27 @@ export interface AssetMedia {
   kind: "image" | "video";
   order: number;
 }
+export interface SliceGradeVisualization {
+  side: "FRONT" | "BACK";
+  type: "overview" | "centering";
+  url: string | null;
+  centering: Record<string, number> | null;
+}
+export interface SliceGrade {
+  status: "SUCCEEDED";
+  provider: string;
+  overallEstimate: number | null;
+  overallMin: number | null;
+  overallMax: number | null;
+  centeringScore: number | null;
+  cornerScore: number | null;
+  edgeScore: number | null;
+  surfaceScore: number | null;
+  conditionLabel: string | null;
+  analyzedAt?: ISODateTime | null;
+  warnings: string[];
+  visualizations: SliceGradeVisualization[];
+}
 export interface CardDetails {
   manufacturer?: string;
   set?: string;
@@ -110,6 +131,8 @@ export interface Asset {
   conditionLabel?: string;
   status: AssetStatus;
   media: AssetMedia[];
+  /** Supporting AI condition evidence; never an official grade or valuation input. */
+  sliceGrade?: SliceGrade;
   grade?: Grade;
   certification?: Certification;
   verification?: VerificationRecord;

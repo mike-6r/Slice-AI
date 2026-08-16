@@ -269,6 +269,26 @@ export class MarketService {
           orderBy: { updatedAt: 'desc' },
           take: 1,
           include: {
+            preGrades: {
+              where: { status: 'SUCCEEDED', supersededAt: null },
+              orderBy: { analyzedAt: 'desc' },
+              take: 1,
+              select: {
+                status: true,
+                provider: true,
+                overallEstimate: true,
+                overallMin: true,
+                overallMax: true,
+                centeringScore: true,
+                cornerScore: true,
+                edgeScore: true,
+                surfaceScore: true,
+                conditionLabel: true,
+                analyzedAt: true,
+                warnings: true,
+                visualizations: true,
+              },
+            },
             media: {
               where: { status: 'SAFE', deletedAt: null },
               orderBy: { slot: 'asc' },
@@ -451,6 +471,26 @@ export class MarketService {
           orderBy: { updatedAt: 'desc' },
           take: 1,
           include: {
+            preGrades: {
+              where: { status: 'SUCCEEDED', supersededAt: null },
+              orderBy: { analyzedAt: 'desc' },
+              take: 1,
+              select: {
+                status: true,
+                provider: true,
+                overallEstimate: true,
+                overallMin: true,
+                overallMax: true,
+                centeringScore: true,
+                cornerScore: true,
+                edgeScore: true,
+                surfaceScore: true,
+                conditionLabel: true,
+                analyzedAt: true,
+                warnings: true,
+                visualizations: true,
+              },
+            },
             media: {
               where: { status: 'SAFE', deletedAt: null },
               orderBy: { slot: 'asc' },
@@ -512,6 +552,22 @@ export class MarketService {
   }
 }
 
+type PublicPreGrade = {
+  status: string;
+  provider: string;
+  overallEstimate: number | null;
+  overallMin: number | null;
+  overallMax: number | null;
+  centeringScore: number | null;
+  cornerScore: number | null;
+  edgeScore: number | null;
+  surfaceScore: number | null;
+  conditionLabel: string | null;
+  analyzedAt: Date | null;
+  warnings: unknown;
+  visualizations: unknown;
+};
+
 type PublicAssetRow = {
   publicId: string;
   slug: string;
@@ -562,6 +618,7 @@ type PublicAssetRow = {
   }>;
   submissions?: Array<{
     declaredMetadata: unknown;
+    preGrades?: PublicPreGrade[];
     media: Array<{
       id: string;
       slot: string;
@@ -645,6 +702,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
       market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference: externalMarketReference(asset.valuationEvidence ?? []),
+    sliceGrade: await publicSliceGrade(asset.submissions?.[0]?.preGrades?.[0], storage),
     dataStatus: market ? status(market.status) : 'UNAVAILABLE',
     ownership: asset.ownershipSupply
       ? {
@@ -692,7 +750,60 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           expiresAt: asset.insuranceCoverage[0].expiresAt.toISOString(),
         }
       : null,
+};
+
+async function publicSliceGrade(
+  preGrade: PublicPreGrade | undefined,
+  storage: ObjectStoragePort,
+) {
+  if (!preGrade || preGrade.status !== 'SUCCEEDED') return null;
+  const visualizations = Array.isArray(preGrade.visualizations)
+    ? await Promise.all(
+        preGrade.visualizations
+          .filter(isPublicPreGradeVisualization)
+          .map(async (visualization) => ({
+            side: visualization.side,
+            type: visualization.type,
+            url: await storage
+              .createPrivateDownloadUrl(visualization.objectKey, new Date(Date.now() + 5 * 60_000))
+              .catch(() => null),
+            centering: visualization.centering ?? null,
+          })),
+      )
+    : [];
+  return {
+    status: 'SUCCEEDED' as const,
+    provider: preGrade.provider,
+    overallEstimate: preGrade.overallEstimate,
+    overallMin: preGrade.overallMin,
+    overallMax: preGrade.overallMax,
+    centeringScore: preGrade.centeringScore,
+    cornerScore: preGrade.cornerScore,
+    edgeScore: preGrade.edgeScore,
+    surfaceScore: preGrade.surfaceScore,
+    conditionLabel: preGrade.conditionLabel,
+    analyzedAt: preGrade.analyzedAt?.toISOString() ?? null,
+    warnings: Array.isArray(preGrade.warnings)
+      ? preGrade.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
+    visualizations,
   };
+}
+
+function isPublicPreGradeVisualization(value: unknown): value is {
+  side: 'FRONT' | 'BACK';
+  type: 'overview' | 'centering';
+  objectKey: string;
+  centering?: Record<string, number> | null;
+} {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return (
+    (item.side === 'FRONT' || item.side === 'BACK') &&
+    (item.type === 'overview' || item.type === 'centering') &&
+    typeof item.objectKey === 'string'
+  );
+}
 }
 
 function collectorConditionValue(metadata: unknown) {
