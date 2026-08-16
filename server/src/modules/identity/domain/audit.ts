@@ -107,6 +107,14 @@ const metadataKeys: Record<string, readonly string[]> = {
   FINANCE_JOURNAL_REVERSED: ['transactionId', 'reversalId', 'reasonCode'],
   FINANCE_RECONCILED: ['reconciliationId', 'status', 'mismatchCodes'],
   TRADING_ORDER_OPENED: ['assetId', 'side', 'units', 'limitPriceMinor'],
+  TREASURY_SELL_ORDER_OPENED: [
+    'assetId',
+    'principalType',
+    'principalId',
+    'units',
+    'limitPriceMinor',
+    'reason',
+  ],
   TRADING_ORDER_CANCELLED: ['assetId'],
   TRADING_ORDER_EXPIRED: ['assetId'],
   TRADING_EXECUTION_SETTLED: [
