@@ -126,13 +126,17 @@ export class TradingService {
     if (!supply || supply.status !== 'ACTIVE' || supply.totalUnits < 1n)
       throw conflict('OWNERSHIP_NOT_TRADABLE', 'Ownership issuance is not active for this asset.');
 
-    const [asks, bids, snapshot, account, cashAccount] = await Promise.all([
+    const [asks, bids, snapshot, policy, account, cashAccount] = await Promise.all([
       this.bookLevels(assetId, 'SELL', 100, 'asc'),
       this.bookLevels(assetId, 'BUY', 100, 'desc'),
       this.db.assetMarketSnapshot.findFirst({
         where: { assetId, status: 'LIVE' },
         orderBy: { asOf: 'desc' },
         select: { estimatedMarketValueMinor: true },
+      }),
+      this.db.ownershipSupplyPolicy.findUnique({
+        where: { assetId },
+        select: { status: true, pricePerUnitMinor: true },
       }),
       this.db.ownershipAccount.findUnique({ where: { userId: actor.userId } }),
       this.db.financialAccount.findFirst({
@@ -151,7 +155,9 @@ export class TradingService {
       ? levels.reduce((sum, level) => sum + BigInt(level.units), 0n)
       : (availableOwned > 0n ? availableOwned : 0n);
     const bestBookPrice = levels[0] ? BigInt(levels[0].priceMinor) : null;
-    const fallbackPrice = snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null;
+    const fallbackPrice = policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
+      ? policy.pricePerUnitMinor
+      : snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null;
     const marketPrice = bestBookPrice ?? fallbackPrice;
     const limitPrice = input.limitPriceMinor ? BigInt(input.limitPriceMinor) : marketPrice;
     const requestedSlicesFromAmount = input.desiredAmountMinor
@@ -240,18 +246,23 @@ export class TradingService {
       select: { id: true },
     });
     if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
-    const [market, supply, asks, bids, snapshot] = await Promise.all([
+    const [market, supply, asks, bids, snapshot, policy] = await Promise.all([
       this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
       this.db.ownershipAssetSupply.findUnique({ where: { assetId: asset.id }, select: { totalUnits: true, status: true } }),
       this.bookLevels(asset.id, 'SELL', 100, 'asc'),
       this.bookLevels(asset.id, 'BUY', 100, 'desc'),
       this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE' }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
+      this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true } }),
     ]);
     const total = supply?.totalUnits ?? 0n;
     const available = asks.reduce((sum, level) => sum + BigInt(level.units), 0n);
     const bestAsk = asks[0] ? BigInt(asks[0].priceMinor) : null;
     const bestBid = bids[0] ? BigInt(bids[0].priceMinor) : null;
-    const slicePrice = bestAsk ?? bestBid ?? (snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null);
+    const slicePrice = bestAsk ?? bestBid ?? (
+      policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
+        ? policy.pricePerUnitMinor
+        : snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null
+    );
     const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
     const notYetIssued = total === 0n;
     return {
