@@ -115,7 +115,8 @@ export class MarketService {
           where: { status: 'APPROVED' },
           orderBy: { updatedAt: 'desc' },
           take: 1,
-          include: {
+          select: {
+            declaredMetadata: true,
             media: {
               where: { status: 'SAFE', deletedAt: null },
               orderBy: { slot: 'asc' },
@@ -513,6 +514,7 @@ type PublicAssetRow = {
     occurredAt: Date | null;
   }>;
   submissions?: Array<{
+    declaredMetadata: unknown;
     media: Array<{
       id: string;
       slot: string;
@@ -566,6 +568,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     manufacturer: asset.manufacturer,
     cardNumber: asset.cardNumber,
     description: asset.description,
+    conditionLabel: collectorConditionValue(asset.submissions?.[0]?.declaredMetadata),
     media,
     ...(asset.certificationNumber
       ? { certificationNumber: asset.certificationNumber }
@@ -618,6 +621,12 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
         }
       : null,
   };
+}
+
+function collectorConditionValue(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = (metadata as Record<string, unknown>).condition;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function summarizeObservations(

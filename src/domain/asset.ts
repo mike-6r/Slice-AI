@@ -71,6 +71,8 @@ export interface Asset {
   slug?: string;
   symbol: string;
   details: AssetDetails;
+  /** Collector-described condition, kept separate from any official grade. */
+  conditionLabel?: string;
   status: AssetStatus;
   media: AssetMedia[];
   grade?: Grade;

@@ -78,6 +78,7 @@ type MarketAssetDto = {
   manufacturer: string | null;
   cardNumber: string | null;
   description: string | null;
+  conditionLabel?: string | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
   certificationNumber?: string;
   category: { slug: string; name: string };
@@ -85,7 +86,7 @@ type MarketAssetDto = {
   // The public API serializes decimal grades as strings to preserve their
   // canonical precision (for example, "10.00").
   grading: { companyCode: string; grade: string; label: string } | null;
-  estimatedMarketValue: { minor: string; currency: "GBP" } | null;
+  estimatedMarketValue: { minor: string; currency: "GBP" | "USD" | "EUR" | "CAD" } | null;
   change24hBps: number | null;
   availabilityBps: number | null;
   ownersCount?: number | null;
@@ -197,6 +198,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
       year: value.year ?? undefined,
     },
   },
+  conditionLabel: value.conditionLabel ?? undefined,
   status: "listed",
   media: (value.media ?? []).map((item, index) => ({
     id: item.id,

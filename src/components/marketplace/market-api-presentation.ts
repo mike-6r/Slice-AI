@@ -7,6 +7,8 @@ export type MarketplaceAsset = {
   title: string;
   category: string;
   setName?: string;
+  cardNumber?: string;
+  conditionLabel?: string;
   year?: number;
   grader?: string;
   gradeScore?: number;
@@ -22,6 +24,10 @@ export type MarketplaceAsset = {
   ownersCount?: number;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   change24hBps?: number;
+  marketReference?: {
+    amountMinor: number;
+    currency: SupportedCurrency;
+  };
   media?: Array<{ url: string; alt: string }>;
 };
 
@@ -31,6 +37,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   title: asset.details.title,
   category: asset.details.category,
   setName: asset.details.card?.set,
+  cardNumber: asset.details.card?.cardNumber,
+  conditionLabel: asset.conditionLabel,
   year: asset.details.card?.year,
   grader: asset.grade?.company.toUpperCase(),
   gradeScore: asset.grade?.numeric,
@@ -56,6 +64,25 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   ownersCount: asset.market?.ownersCount,
   dataStatus: asset.market?.dataStatus,
   change24hBps: asset.market?.change24hBps,
+  marketReference: (() => {
+    const direct =
+      asset.market?.reference?.currentListing ?? asset.market?.reference?.recentCompletedSale;
+    if (direct) {
+      return {
+        amountMinor: direct.amount.amount,
+        currency: direct.amount.currency,
+      };
+    }
+    const guide = asset.marketSummary?.priceGuides;
+    if (!guide?.latestMinor || !guide.currency) return undefined;
+    const amountMinor = Number(guide.latestMinor);
+    if (!Number.isSafeInteger(amountMinor)) return undefined;
+    if (!['GBP', 'USD', 'CAD', 'EUR'].includes(guide.currency)) return undefined;
+    return {
+      amountMinor,
+      currency: guide.currency as SupportedCurrency,
+    };
+  })(),
   media: asset.media
     .filter((item) => item.kind === "image")
     .map((item) => ({ url: item.url, alt: item.alt })),

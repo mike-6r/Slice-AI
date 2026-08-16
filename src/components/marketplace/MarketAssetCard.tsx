@@ -23,9 +23,8 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
     : assetShowcaseMedia(asset.slug);
   const category = marketCategoryPresentation(asset.category);
   const CategoryIcon = category.icon;
-  const editorial = marketplaceEditorialTag(asset);
-  const EditorialIcon = editorial.icon;
   const grade = gradePresentation(asset.grade);
+  const preMarket = asset.availabilityBps === undefined;
   return (
     <div
       className="market-card-media profile-raw-card lighting-graphite"
@@ -38,10 +37,7 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
         <span className="market-card-media-placeholder">Media unavailable</span>
       )}
       <span className="market-card-sheen" aria-hidden="true" />
-      <div className={`market-status-badge is-${editorial.tone}`}>
-        <EditorialIcon aria-hidden="true" />
-        {editorial.label}
-      </div>
+      {preMarket ? <span className="market-state-badge">Pre-market</span> : null}
       <span className="market-category-chip">
         <CategoryIcon aria-hidden="true" />
         <span>{category.label}</span>
@@ -58,15 +54,21 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
 
 function MarketValue({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
-  const change = asset.change24hBps === undefined ? undefined : asset.change24hBps / 100;
+  const change =
+    asset.availabilityBps === undefined || asset.change24hBps === undefined
+      ? undefined
+      : asset.change24hBps / 100;
   const TrendIcon = (change ?? 0) >= 0 ? TrendingUp : TrendingDown;
   return (
     <div className="market-card-value">
-      <strong>
-        {asset.estimatedMarketValueMinor === undefined
-          ? "Unavailable"
-          : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
-      </strong>
+      <div>
+        <span className="market-card-value-label">Slice valuation</span>
+        <strong>
+          {asset.estimatedMarketValueMinor === undefined
+            ? "Unavailable"
+            : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
+        </strong>
+      </div>
       {change !== undefined && (
         <span className={change >= 0 ? "is-positive" : "is-negative"}>
           <TrendIcon aria-hidden="true" />
@@ -129,33 +131,35 @@ export function MarketAssetCard({
           </button>
         </div>
         <p className="market-card-grade">
-          {asset.grade ?? "Grading pending"}
-          {asset.setName ? <> &middot; {asset.setName}</> : null}
+          {asset.setName ?? "Collectible"}
+          {asset.cardNumber ? <> &middot; {asset.cardNumber}</> : null}
         </p>
+        <div className="market-card-condition">
+          <span>{asset.grade ?? "Raw / Ungraded"}</span>
+          {asset.conditionLabel ? <span>Condition: {asset.conditionLabel}</span> : null}
+        </div>
         <MarketValue asset={asset} />
+        {asset.marketReference ? (
+          <p className="market-card-reference">
+            Market reference: {formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)} {asset.marketReference.currency}
+          </p>
+        ) : null}
         {!compact && (
           <>
-            <p className="market-card-value-helper">
-              {asset.dataStatus === "DEMO"
-                ? "Illustrative value"
-                : asset.dataStatus === "LIVE"
-                  ? "Live market value"
-                  : "Published market value"}
-            </p>
             <dl className="market-card-metrics">
               <div>
-                <dt>Available to own</dt>
+                <dt>Availability</dt>
                 <dd>
-                  {availability === undefined ? "Not yet available" : formatOwnership(availability / 100)}
+                  {availability === undefined ? "Not yet issued" : formatOwnership(availability / 100)}
                 </dd>
               </div>
               <div>
                 <dt>Owners</dt>
-                <dd>{asset.ownersCount?.toLocaleString("en-GB") ?? "Unavailable"}</dd>
+                <dd>{asset.ownersCount?.toLocaleString("en-GB") ?? "—"}</dd>
               </div>
               <div>
-                <dt>Set</dt>
-                <dd title={asset.setName ?? "Not specified"}>{asset.setName ?? "Not specified"}</dd>
+                <dt>Trading</dt>
+                <dd>{availability === undefined ? "Not yet available" : "Available"}</dd>
               </div>
             </dl>
             <div
@@ -165,7 +169,7 @@ export function MarketAssetCard({
               {availability === undefined ? (
                 <div className="market-availability-note">
                   <span aria-hidden="true" />
-                  <small>Trading opens after ownership is issued</small>
+                  <small>Ownership is being prepared. Trading will open once issuance is complete.</small>
                 </div>
               ) : (
                 <>
