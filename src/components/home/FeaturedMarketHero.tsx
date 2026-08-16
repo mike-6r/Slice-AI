@@ -31,7 +31,6 @@ export function FeaturedMarketHero() {
 
       <ShowcaseLink asset={featured} className="featured-market-hero__static-media">
         <img src={featured.image} alt={featured.title} decoding="async" />
-        <span>Slice showcase</span>
       </ShowcaseLink>
 
       <div className="charizard-showcase__copy">
@@ -48,9 +47,9 @@ export function FeaturedMarketHero() {
 
         <div className="charizard-showcase__market-card">
           <div className="charizard-showcase__value">
-            <span>Market pulse</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.referenceValue}</strong>
-            <b>+8.4% · 30 days</b>
+            <span>PSA 10 market price</span>
+            <strong>{featured.displayPrice}</strong>
+            <b>PriceCharting guide · current</b>
           </div>
           <div
             className="charizard-showcase__chart"
@@ -78,8 +77,8 @@ export function FeaturedMarketHero() {
               />
               <circle cx="360" cy="9" r="3.4" fill="#a7f3d0" />
             </svg>
-            <span>£2.0K</span>
-            <span>£1.8K</span>
+            <span>$350K</span>
+            <span>$300K</span>
           </div>
         </div>
 

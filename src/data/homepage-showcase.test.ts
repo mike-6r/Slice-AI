@@ -46,4 +46,8 @@ describe("homepage showcase routing", () => {
       exampleOwnership: "12.82%",
     });
   });
+
+  it("uses the current PriceCharting PSA 10 guide for the featured Charizard", () => {
+    expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("$343,098");
+  });
 });
