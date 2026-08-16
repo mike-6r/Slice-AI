@@ -3602,7 +3602,10 @@ export class AdminService {
         this.db.tradingOrder.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip, take, include: { asset: { select: { title: true, slug: true } }, user: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } }, actorUser: { select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } } } }),
         this.db.tradingOrder.count({ where }),
       ]);
-      return this.financePage(input, total, rows.map((order) => { const owner = order.user ?? order.actorUser; return { id: order.id, kind: 'order', principalType: order.principalType, user: owner ? { id: owner.id, displayName: owner.profile?.displayName ?? 'Unnamed user', username: owner.profile?.publicUsername ?? null, email: owner.email } : { id: null, displayName: 'Slice Treasury', username: null, email: null }, asset: { title: order.asset.title, slug: order.asset.slug }, side: order.side, shares: order.originalUnits.toString(), limitPriceMinor: order.limitPriceMinor.toString(), filled: order.filledUnits.toString(), remaining: order.remainingUnits.toString(), status: order.status, createdAt: order.createdAt.toISOString() }; }));
+      return this.financePage(input, total, rows.map((order) => {
+        const owner = order.principalType === 'TREASURY' ? null : order.user ?? order.actorUser;
+        return { id: order.id, kind: 'order', principalType: order.principalType, user: owner ? { id: owner.id, displayName: owner.profile?.displayName ?? 'Unnamed user', username: owner.profile?.publicUsername ?? null, email: owner.email } : { id: null, displayName: 'Slice Treasury', username: null, email: null }, asset: { title: order.asset.title, slug: order.asset.slug }, side: order.side, shares: order.originalUnits.toString(), limitPriceMinor: order.limitPriceMinor.toString(), filled: order.filledUnits.toString(), remaining: order.remainingUnits.toString(), status: order.status, createdAt: order.createdAt.toISOString() };
+      }));
     }
     if (input.tab === 'executions') {
       const where: Prisma.TradingExecutionWhereInput = {
