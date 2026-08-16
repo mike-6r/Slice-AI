@@ -89,6 +89,8 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     return admin ? allow(action) : deny('FORBIDDEN', action);
   if (action === 'trading.manage')
     return admin ? allow(action) : deny('FORBIDDEN', action);
+  if (action === 'trading.treasury.manage')
+    return admin ? allow(action) : deny('FORBIDDEN', action);
   if (action === 'compliance.read')
     return actor.roles.includes('COMPLIANCE_ANALYST') || admin
       ? allow(action)

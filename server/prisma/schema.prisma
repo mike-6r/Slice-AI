@@ -205,6 +205,11 @@ enum TradingOrderStatus {
   REJECTED
 }
 
+enum TradingPrincipalType {
+  USER
+  TREASURY
+}
+
 enum TradingExecutionSettlementStatus {
   SETTLED
   FAILED
@@ -587,7 +592,8 @@ model User {
   ownershipAccounts               OwnershipAccount[]                 @relation("OwnershipAccountUser")
   financialAccounts               FinancialAccount[]                 @relation("FinancialAccountUser")
   portfolioLots                   PortfolioLot[]
-  tradingOrders                   TradingOrder[]
+  tradingOrders                   TradingOrder[]                 @relation("TradingOrderUser")
+  tradingOrdersActed              TradingOrder[]                 @relation("TradingOrderActor")
   followingCollectors             CollectorFollow[]                  @relation("CollectorFollower")
   followedByCollectors            CollectorFollow[]                  @relation("CollectorFollowed")
   discussionPosts                 DiscussionPost[]                   @relation("DiscussionAuthor")
@@ -2109,7 +2115,10 @@ model TradingMarket {
 /// public projection exposes them.
 model TradingOrder {
   id                     String               @id @default(cuid())
-  userId                 String
+  userId                 String?
+  principalType          TradingPrincipalType @default(USER)
+  principalId             String
+  actorUserId             String?
   assetId                String
   side                   TradingOrderSide
   type                   TradingOrderType     @default(LIMIT)
@@ -2129,7 +2138,8 @@ model TradingOrder {
   version                Int                  @default(1)
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
-  user                   User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user                   User?                @relation("TradingOrderUser", fields: [userId], references: [id], onDelete: Restrict)
+  actorUser              User?                @relation("TradingOrderActor", fields: [actorUserId], references: [id], onDelete: Restrict)
   asset                  Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingOrder_asset_fkey")
   market                 TradingMarket        @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingOrder_market_fkey")
   statusHistory          OrderStatusHistory[]
@@ -2140,6 +2150,8 @@ model TradingOrder {
 
   @@index([assetId, side, status, limitPriceMinor, prioritySequence])
   @@index([userId, createdAt, id])
+  @@index([principalType, principalId, createdAt, id])
+  @@index([actorUserId, createdAt, id])
   @@index([assetId, status, createdAt, id])
   @@index([assetId, status, expiresAt, id])
 }

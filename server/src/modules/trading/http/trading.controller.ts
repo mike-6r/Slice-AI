@@ -31,6 +31,14 @@ const orderInput = z
     limitPriceMinor: z.string().min(1).max(32),
   })
   .strict();
+const treasuryListingInput = z
+  .object({
+    units: z.string().regex(/^[1-9]\d*$/).max(32),
+    limitPriceMinor: z.string().regex(/^[1-9]\d*$/).max(32),
+    timeInForce: z.literal('GTC').default('GTC'),
+    reason: z.string().trim().min(10).max(500),
+  })
+  .strict();
 const ownershipPreviewInput = z
   .object({
     assetId: z.string().min(1).max(128),
@@ -156,6 +164,27 @@ export class TradingController {
   trades(@Param('slug') slug: string, @Query() query: unknown) {
     const input = this.parse(page, query);
     return this.trading.recentTrades(slug, input.cursor, input.limit);
+  }
+
+  @Post('admin/trading/markets/:assetId/treasury-listings')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('trading.treasury.manage')
+  async treasuryListing(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = this.parse(treasuryListingInput, body);
+    this.requireKey(key);
+    await this.limiter.enforce('adminMutation', req.ip ?? 'unknown', req.actor!.userId);
+    return this.trading.placeTreasuryListing(
+      req.actor!,
+      assetId,
+      { ...input, timeInForce: input.timeInForce ?? 'GTC' },
+      req.requestId ?? 'unknown',
+      key!,
+    );
   }
 
   @Post('admin/trading/markets/:assetId/halt')

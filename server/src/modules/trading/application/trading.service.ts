@@ -61,6 +61,12 @@ type OwnershipPreviewInput = {
   limitPriceMinor?: string;
   timeInForce: 'GTC' | 'IOC';
 };
+type TreasuryListingInput = {
+  units: string;
+  limitPriceMinor: string;
+  timeInForce: 'GTC';
+  reason: string;
+};
 
 const activeStatuses = ['OPEN', 'PARTIALLY_FILLED'] as const;
 
@@ -370,6 +376,9 @@ export class TradingService {
         data: {
           id: orderId,
           userId: actor.userId,
+          principalType: 'USER',
+          principalId: actor.userId,
+          actorUserId: actor.userId,
           assetId: canonicalInput.assetId,
           side: normalized.side,
           type: 'LIMIT',
@@ -440,6 +449,170 @@ export class TradingService {
     if (!placed.replayed && input.timeInForce === 'IOC')
       await this.cancelIocRemainder(placed.orderId);
     return this.orderForUser(actor.userId, placed.orderId);
+  }
+
+  /**
+   * Lists already-issued Treasury units without creating a customer seller.
+   * Proceeds are settled to the internal platform clearing account; the
+   * Treasury principal is never exposed as a User or customer wallet.
+   */
+  async placeTreasuryListing(
+    actor: Actor,
+    assetId: string,
+    input: TreasuryListingInput,
+    requestId: string,
+    key: string,
+  ) {
+    this.recentAuth.require(actor);
+    const canonicalAssetId = await this.resolveAssetId(assetId);
+    const identity: IdempotencyIdentity = {
+      actorScope: `user:${actor.userId}`,
+      scope: `trading.treasury.listing:${canonicalAssetId}`,
+      key,
+    };
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify({ assetId: canonicalAssetId, ...input }))
+      .digest('hex');
+    const placed = await this.db.$transaction(async (db) => {
+      const tx = createIdentityTransaction(db);
+      const acquired = await tx.idempotency.acquire(
+        identity,
+        requestHash,
+        new Date(Date.now() + 86_400_000),
+      );
+      if (acquired.state === 'FINGERPRINT_CONFLICT')
+        throw conflict('IDEMPOTENCY_KEY_CONFLICT', 'The request key cannot be reused.');
+      if (acquired.state === 'EXISTING_IN_PROGRESS')
+        throw conflict('PERSISTENCE_CONFLICT', 'The request is already in progress.');
+      if (acquired.state === 'EXISTING_COMPLETED')
+        return {
+          ...(acquired.record.response!.body as { orderId: string }),
+          replayed: true,
+        };
+
+      const market = await this.lockMarket(db, canonicalAssetId);
+      const asset = await db.asset.findUnique({
+        where: { id: canonicalAssetId },
+        select: {
+          status: true,
+          publication: { select: { status: true } },
+          ownershipSupply: { select: { status: true, issuedUnits: true, totalUnits: true } },
+          ownershipSupplyPolicy: { select: { status: true, pricePerUnitMinor: true } },
+        },
+      });
+      if (
+        !asset ||
+        asset.status !== 'PUBLISHED' ||
+        asset.publication?.status !== 'PUBLISHED' ||
+        asset.ownershipSupply?.status !== 'ACTIVE' ||
+        asset.ownershipSupply.issuedUnits !== asset.ownershipSupply.totalUnits ||
+        asset.ownershipSupplyPolicy?.status !== 'ISSUED' ||
+        asset.ownershipSupplyPolicy.pricePerUnitMinor === null
+      )
+        throw conflict('TREASURY_LISTING_BLOCKED', 'The asset is not fully issued for Treasury liquidity.');
+      if (market.status !== 'OPEN' || !market.tradingEnabled)
+        throw conflict('MARKET_NOT_OPEN', 'Trading market is not open.');
+
+      const normalized = normalizeLimitOrder({
+        ...market,
+        side: 'SELL',
+        type: 'LIMIT',
+        timeInForce: input.timeInForce,
+        units: input.units,
+        limitPriceMinor: input.limitPriceMinor,
+      });
+      if (normalized.limitPriceMinor !== asset.ownershipSupplyPolicy.pricePerUnitMinor)
+        throw conflict('TREASURY_PRICE_MISMATCH', 'Treasury listings must use the issued Slice price.');
+      const gross = checkedGross(normalized.limitPriceMinor, normalized.units);
+      if (gross < market.minimumNotionalMinor)
+        throw conflict('INVALID_ORDER_NOTIONAL', 'Order does not satisfy the market minimum notional.');
+      if (input.reason.trim().length < 10)
+        throw conflict('TREASURY_LISTING_REASON_REQUIRED', 'A clear listing reason is required.');
+
+      const treasury = await db.ownershipAccount.findFirst({
+        where: { type: 'TREASURY', status: 'ACTIVE', positions: { some: { assetId: canonicalAssetId } } },
+      });
+      if (!treasury)
+        throw conflict('OWNERSHIP_INVARIANT_VIOLATION', 'Ownership Treasury is unavailable.');
+      const orderId = randomUUID();
+      const ownershipReservationId = await this.reserveAccountUnits(
+        db,
+        canonicalAssetId,
+        treasury.id,
+        orderId,
+        normalized.units,
+      );
+      const order = await db.tradingOrder.create({
+        data: {
+          id: orderId,
+          userId: null,
+          principalType: 'TREASURY',
+          principalId: treasury.id,
+          actorUserId: actor.userId,
+          assetId: canonicalAssetId,
+          side: 'SELL',
+          type: 'LIMIT',
+          timeInForce: 'GTC',
+          status: 'OPEN',
+          limitPriceMinor: normalized.limitPriceMinor,
+          originalUnits: normalized.units,
+          remainingUnits: normalized.units,
+          filledUnits: 0n,
+          prioritySequence: market.nextPrioritySequence,
+          ownershipReservationId,
+          idempotencyRecordId: acquired.record.id,
+        },
+      });
+      await db.tradingMarket.update({
+        where: { assetId: canonicalAssetId },
+        data: { nextPrioritySequence: { increment: 1n }, version: { increment: 1 } },
+      });
+      await this.history(db, order.id, null, 'OPEN', 'TREASURY_ORDER_OPENED');
+      await this.outbox.append(
+        db,
+        orderLifecycleEvent({
+          eventType: eventType.orderOpened,
+          orderId: order.id,
+          assetId: order.assetId,
+          side: order.side,
+          units: order.originalUnits.toString(),
+          status: 'OPEN',
+          actorUserId: actor.userId,
+          correlationId: requestId,
+          occurredAt: order.createdAt,
+        }),
+      );
+      await tx.audit.append({
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: 'TREASURY_SELL_ORDER_OPENED',
+        resourceType: 'trading-order',
+        resourceId: order.id,
+        requestId,
+        sessionId: actor.sessionId as never,
+        result: 'SUCCESS',
+        metadata: {
+          assetId: canonicalAssetId,
+          principalType: 'TREASURY',
+          principalId: treasury.id,
+          units: order.originalUnits.toString(),
+          limitPriceMinor: order.limitPriceMinor.toString(),
+          reason: input.reason.trim(),
+        },
+        createdAt: new Date(),
+      });
+      const result = { orderId: order.id };
+      await tx.idempotency.complete(identity, { status: 201, body: result }, new Date());
+      return { ...result, replayed: false };
+    });
+    if (!placed.replayed) await this.matchMarket(canonicalAssetId, actor, requestId);
+    const order = await this.db.tradingOrder.findUnique({
+      where: { id: placed.orderId },
+      include: { asset: { select: { slug: true, ownershipSupply: { select: { totalUnits: true } } } } },
+    });
+    if (!order) throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found.' });
+    return this.publicOrder(order, this.publicAssetSlug(order.asset.slug), order.asset.ownershipSupply?.totalUnits);
   }
 
   async cancel(actor: Actor, orderId: string, requestId: string, key: string) {
@@ -560,7 +733,7 @@ export class TradingService {
         );
         await tradingTestFailurePoint('expiry.after-order-update');
         await this.releaseRemainder(db, order);
-        await this.outbox.append(db, orderLifecycleEvent({ eventType: eventType.orderExpired, orderId: updated.id, assetId: updated.assetId, side: updated.side, units: updated.originalUnits.toString(), status: 'EXPIRED', actorUserId: updated.userId, correlationId: requestId, occurredAt: updated.updatedAt }));
+        await this.outbox.append(db, orderLifecycleEvent({ eventType: eventType.orderExpired, orderId: updated.id, assetId: updated.assetId, side: updated.side, units: updated.originalUnits.toString(), status: 'EXPIRED', actorUserId: this.orderActorUserId(updated), correlationId: requestId, occurredAt: updated.updatedAt }));
         const tx = createIdentityTransaction(db);
         await tx.audit.append({
           id: randomUUID(),
@@ -635,7 +808,10 @@ export class TradingService {
         )
           return null;
         await tradingTestFailurePoint('execution.after-lock');
-        if (lockedBuy.userId === lockedSell.userId) {
+        if (
+          lockedBuy.principalType === lockedSell.principalType &&
+          lockedBuy.principalId === lockedSell.principalId
+        ) {
           const taker =
             (lockedBuy.prioritySequence ?? 0n) >
             (lockedSell.prioritySequence ?? 0n)
@@ -1056,38 +1232,17 @@ export class TradingService {
     );
     const sequence = market.nextExecutionSequence;
     const correlationId = `trade:${market.assetId}:${sequence}`;
-    await this.settleOwnership(
-      db,
-      market.assetId,
-      sell.userId,
-      buy.userId,
-      sell,
-      units,
-      correlationId,
-    );
+    if (!buy.userId)
+      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
+    await this.settleOwnership(db, market.assetId, sell, buy.userId, units, correlationId);
     await tradingTestFailurePoint('execution.after-ownership');
-    await this.settleCash(
-      db,
-      buy.userId,
-      sell.userId,
-      buy,
-      units,
-      gross,
-      buyerFee,
-      sellerFee,
-      market.takerFeeBps,
-      correlationId,
-    );
+    await this.settleCash(db, buy, sell, units, gross, buyerFee, sellerFee, market.takerFeeBps, correlationId);
     await tradingTestFailurePoint('execution.after-cash');
-    await this.disposeSellerLots(
-      db,
-      sell.userId,
-      market.assetId,
-      units,
-      gross,
-      sellerFee,
-      correlationId,
-    );
+    if (sell.principalType === 'USER') {
+      if (!sell.userId)
+        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer seller is missing.');
+      await this.disposeSellerLots(db, sell.userId, market.assetId, units, gross, sellerFee, correlationId);
+    }
     await this.createBuyerLot(
       db,
       buy.userId,
@@ -1137,7 +1292,7 @@ export class TradingService {
     });
     const updatedBuy = await this.applyFill(db, buy, units, price);
     const updatedSell = await this.applyFill(db, sell, units, price);
-    for (const order of [updatedBuy, updatedSell]) await this.outbox.append(db, orderLifecycleEvent({ eventType: order.status === 'FILLED' ? eventType.orderFilled : eventType.orderPartiallyFilled, orderId: order.id, assetId: order.assetId, side: order.side, units: units.toString(), priceMinor: price.toString(), status: order.status as 'PARTIALLY_FILLED' | 'FILLED', actorUserId: order.userId, correlationId: execution.correlationId, occurredAt: execution.executedAt, eventSuffix: execution.id }));
+    for (const order of [updatedBuy, updatedSell]) await this.outbox.append(db, orderLifecycleEvent({ eventType: order.status === 'FILLED' ? eventType.orderFilled : eventType.orderPartiallyFilled, orderId: order.id, assetId: order.assetId, side: order.side, units: units.toString(), priceMinor: price.toString(), status: order.status as 'PARTIALLY_FILLED' | 'FILLED', actorUserId: this.orderActorUserId(order), correlationId: execution.correlationId, occurredAt: execution.executedAt, eventSuffix: execution.id }));
     await tradingTestFailurePoint('execution.after-order-updates');
     const tx = createIdentityTransaction(db);
     await tx.audit.append({
@@ -1243,11 +1398,27 @@ export class TradingService {
         'INSUFFICIENT_OWNERSHIP',
         'Insufficient available ownership units.',
       );
+    return this.reserveAccountUnits(db, assetId, account.id, orderId, units);
+  }
+
+  private async reserveAccountUnits(
+    db: Db,
+    assetId: string,
+    accountId: string,
+    orderId: string,
+    units: bigint,
+  ) {
+    await this.lockPositions(db, assetId, [accountId]);
+    const position = await db.ownershipPosition.findUnique({
+      where: { assetId_accountId: { assetId, accountId } },
+    });
+    if (!position || position.settledUnits - position.reservedUnits < units)
+      throw conflict('INSUFFICIENT_OWNERSHIP', 'Insufficient available ownership units.');
     const reservation = await db.ownershipReservation.create({
       data: {
         id: randomUUID(),
         assetId,
-        accountId: account.id,
+        accountId,
         purposeType: 'TRADING_ORDER',
         purposeId: orderId,
         units,
@@ -1262,9 +1433,8 @@ export class TradingService {
 
   private async settleCash(
     db: Db,
-    buyerId: string,
-    sellerId: string,
-    order: TradingOrder,
+    buyOrder: TradingOrder,
+    sellOrder: TradingOrder,
     units: bigint,
     gross: bigint,
     buyerFee: bigint,
@@ -1272,17 +1442,19 @@ export class TradingService {
     maximumBuyerFeeBps: number,
     correlationId: string,
   ) {
+    if (!buyOrder.userId)
+      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
     const [buyer, seller, fees] = await Promise.all([
-      this.cashAccount(db, buyerId),
-      this.cashAccount(db, sellerId),
+      this.cashAccount(db, buyOrder.userId),
+      this.settlementSellerCashAccount(db, sellOrder),
       this.feeAccount(db),
     ]);
     await this.lockFinancialAccounts(db, [buyer.id, seller.id, fees.id]);
     const reserveReduction =
-      checkedGross(order.limitPriceMinor, units) +
-      feeMinor(checkedGross(order.limitPriceMinor, units), maximumBuyerFeeBps);
+      checkedGross(buyOrder.limitPriceMinor, units) +
+      feeMinor(checkedGross(buyOrder.limitPriceMinor, units), maximumBuyerFeeBps);
     const reservation = await db.cashReservation.findUnique({
-      where: { id: order.cashReservationId! },
+      where: { id: buyOrder.cashReservationId! },
     });
     if (!reservation || reservation.status !== 'ACTIVE')
       throw conflict('SETTLEMENT_CONFLICT', 'Cash reservation is unavailable.');
@@ -1300,14 +1472,19 @@ export class TradingService {
         version: { increment: 1 },
       },
     });
-    await db.accountBalance.upsert({
-      where: { accountId: seller.id },
-      create: { accountId: seller.id, postedCreditMinor: gross - sellerFee },
-      update: {
-        postedCreditMinor: { increment: gross - sellerFee },
-        version: { increment: 1 },
-      },
-    });
+    if (seller.normalSide === 'DEBIT') {
+      await db.accountBalance.upsert({
+        where: { accountId: seller.id },
+        create: { accountId: seller.id, postedDebitMinor: gross - sellerFee },
+        update: { postedDebitMinor: { increment: gross - sellerFee }, version: { increment: 1 } },
+      });
+    } else {
+      await db.accountBalance.upsert({
+        where: { accountId: seller.id },
+        create: { accountId: seller.id, postedCreditMinor: gross - sellerFee },
+        update: { postedCreditMinor: { increment: gross - sellerFee }, version: { increment: 1 } },
+      });
+    }
     if (buyerFee + sellerFee > 0n)
       await db.accountBalance.upsert({
         where: { accountId: fees.id },
@@ -1324,7 +1501,7 @@ export class TradingService {
         currency: 'GBP',
         correlationId,
         descriptionCode: 'TRADING_EXECUTION_WITH_FEE',
-        createdByUserId: buyerId,
+        createdByUserId: this.orderActorUserId(buyOrder),
       },
     });
     await db.journalEntry.createMany({
@@ -1343,7 +1520,7 @@ export class TradingService {
           transactionId: journal.id,
           sequence: 2,
           accountId: seller.id,
-          side: 'CREDIT',
+          side: seller.normalSide === 'DEBIT' ? 'DEBIT' : 'CREDIT',
           amountMinor: gross - sellerFee,
           currency: 'GBP',
         },
@@ -1367,14 +1544,13 @@ export class TradingService {
   private async settleOwnership(
     db: Db,
     assetId: string,
-    sellerId: string,
+    sellOrder: TradingOrder,
     buyerId: string,
-    order: TradingOrder,
     units: bigint,
     correlationId: string,
   ) {
     const [seller, buyer] = await Promise.all([
-      this.ownershipAccount(db, sellerId),
+      this.ownershipAccountForOrder(db, sellOrder),
       this.ownershipAccount(db, buyerId),
     ]);
     await this.lockPositions(db, assetId, [seller.id, buyer.id]);
@@ -1390,6 +1566,11 @@ export class TradingService {
         'SETTLEMENT_CONFLICT',
         'Ownership reservation is unavailable.',
       );
+    const reservation = sellOrder.ownershipReservationId
+      ? await db.ownershipReservation.findUnique({ where: { id: sellOrder.ownershipReservationId } })
+      : null;
+    if (!reservation || reservation.status !== 'ACTIVE' || reservation.accountId !== seller.id || reservation.units < units)
+      throw conflict('SETTLEMENT_CONFLICT', 'Ownership reservation is unavailable.');
     const buyerPosition = await db.ownershipPosition.upsert({
       where: { assetId_accountId: { assetId, accountId: buyer.id } },
       create: { id: randomUUID(), assetId, accountId: buyer.id },
@@ -1425,7 +1606,7 @@ export class TradingService {
         creditAccountId: buyer.id,
         units,
         correlationId,
-        actorUserId: sellerId,
+        actorUserId: this.orderActorUserId(sellOrder),
       },
     });
     await db.ownershipAssetSupply.update({
@@ -1668,6 +1849,13 @@ export class TradingService {
     };
   }
 
+  private orderActorUserId(order: TradingOrder) {
+    const actorUserId = order.actorUserId ?? order.userId;
+    if (!actorUserId)
+      throw conflict('TRADING_INVARIANT_VIOLATION', 'Trading order actor is unavailable.');
+    return actorUserId;
+  }
+
   private publicAssetSlug(slug: string) {
     return this.config?.isBeta === true && isBetaFixtureSlug(slug) ? undefined : slug;
   }
@@ -1834,6 +2022,46 @@ export class TradingService {
       (await db.ownershipAccount.findUnique({ where: { userId } })) ??
       db.ownershipAccount.create({
         data: { id: randomUUID(), type: 'USER', userId, status: 'ACTIVE' },
+      })
+    );
+  }
+
+  private async ownershipAccountForOrder(db: Db, order: TradingOrder) {
+    if (order.principalType === 'TREASURY') {
+      const reservation = order.ownershipReservationId
+        ? await db.ownershipReservation.findUnique({ where: { id: order.ownershipReservationId } })
+        : null;
+      if (!reservation)
+        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Treasury ownership reservation is unavailable.');
+      const account = await db.ownershipAccount.findUnique({ where: { id: reservation.accountId } });
+      if (!account || account.type !== 'TREASURY' || account.status !== 'ACTIVE')
+        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Treasury ownership account is unavailable.');
+      return account;
+    }
+    if (!order.userId)
+      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Customer ownership account is unavailable.');
+    return this.ownershipAccount(db, order.userId);
+  }
+
+  private async settlementSellerCashAccount(db: Db, order: TradingOrder) {
+    if (order.principalType !== 'TREASURY') {
+      if (!order.userId)
+        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Customer cash account is unavailable.');
+      return this.cashAccount(db, order.userId);
+    }
+    return (
+      (await db.financialAccount.findFirst({
+        where: { ownerType: 'PLATFORM', code: 'STAGING_DEMO_CLEARING', currency: 'GBP' },
+      })) ??
+      db.financialAccount.create({
+        data: {
+          id: randomUUID(),
+          ownerType: 'PLATFORM',
+          accountType: 'ASSET',
+          code: 'STAGING_DEMO_CLEARING',
+          currency: 'GBP',
+          normalSide: 'DEBIT',
+        },
       })
     );
   }

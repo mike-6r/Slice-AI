@@ -106,7 +106,7 @@ describe('Document 014 PostgreSQL order authority', () => {
     });
     for (const order of orders)
       await service.cancel(
-        actor(order.userId),
+        actor(order.userId!),
         order.id,
         `${run}-${label}-${order.id}`,
         `${run}-${label}-${order.id}`,

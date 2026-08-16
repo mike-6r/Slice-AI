@@ -52,6 +52,7 @@ export type Permission =
   | 'finance.read'
   | 'finance.adjust'
   | 'trading.manage'
+  | 'trading.treasury.manage'
   | 'community.moderate'
   | 'governance.manage'
   | 'distribution.manage'
