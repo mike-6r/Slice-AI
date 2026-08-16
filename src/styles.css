@@ -29082,9 +29082,24 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   padding: 0.7rem 0.8rem;
   font-size: inherit;
 }
+
+/* Keep the flip stage close to the collectible's portrait ratio. The image
+   already contains the authentic slab border; the stage should not add a
+   second set of empty bars around it. */
+.asset-detail-page .asset-card-stage {
+  top: 50%;
+  bottom: auto;
+  height: auto;
+  aspect-ratio: 0.70;
+  max-height: calc(100% - 2rem);
+  transform: translate(-50%, -50%);
+}
 @media (max-width: 640px) {
   .asset-detail-page .asset-redesign-media .asset-showcase {
     min-height: 25rem;
+  }
+  .asset-detail-page .asset-card-stage {
+    max-height: calc(100% - 1.5rem);
   }
   .asset-redesign .asset-order-actions a {
     min-height: 4rem;
