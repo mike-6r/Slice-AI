@@ -256,6 +256,11 @@ function CatalogueCard({
         </div>
         <div className="admin-catalogue-card__badges">
           <span className="admin-catalogue-status">{sentence(item.status)}</span>
+          {item.marketLifecycle ? (
+            <span className="admin-catalogue-status admin-catalogue-status--market">
+              {item.marketLifecycle.admin.publicState}
+            </span>
+          ) : null}
         </div>
       </div>
       <dl className="admin-catalogue-fields">
@@ -301,6 +306,7 @@ function physicalState(item: AdminCatalogueAsset) {
 }
 
 function marketState(item: AdminCatalogueAsset) {
+  if (item.marketLifecycle) return item.marketLifecycle.admin.internalState;
   if (item.publicationState === "PUBLISHED" || item.marketReadiness === "PUBLISHED")
     return "Published";
   if (item.marketReadiness === "READY") return "Ready";

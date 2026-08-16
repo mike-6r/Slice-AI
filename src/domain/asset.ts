@@ -15,6 +15,41 @@ export type AssetCategory =
 export type AssetStatus = "draft" | "verification" | "vaulted" | "listed" | "sold" | "withdrawn";
 export type GradingCompany = "PSA" | "BGS" | "CGC" | "SGC" | "TAG" | "ACE" | "other";
 export type InsuranceStatus = "pending" | "active" | "lapsed" | "not-covered";
+export type MarketLifecyclePhase =
+  | "UNPUBLISHED"
+  | "CUSTODY_REQUIRED"
+  | "SUPPLY_APPROVAL_REQUIRED"
+  | "READY_FOR_ISSUANCE"
+  | "ISSUANCE_PENDING"
+  | "LIVE"
+  | "SUSPENDED"
+  | "CLOSED";
+export type MarketLifecycleStepState = "complete" | "current" | "upcoming" | "blocked";
+export interface MarketLifecycleProjection {
+  phase: MarketLifecyclePhase;
+  badge: string;
+  headline: string;
+  statusPill: string;
+  explanation: string;
+  tradeabilityMessage: string | null;
+  canBuy: boolean;
+  canSell: boolean;
+  currentStep: number;
+  nextAction: string;
+  blockingDependency: string | null;
+  steps: Array<{
+    key: "PUBLISHED" | "CUSTODY" | "ISSUANCE" | "TRADING";
+    label: string;
+    state: MarketLifecycleStepState;
+    subtitle: string;
+  }>;
+  admin: {
+    publicState: string;
+    internalState: string;
+    nextAction: string;
+    blockingDependency: string | null;
+  };
+}
 
 export interface Grade {
   company: GradingCompany;
@@ -100,6 +135,7 @@ export interface Asset {
     enabled: boolean;
     hasExecutionHistory: boolean;
   };
+  marketLifecycle?: MarketLifecycleProjection;
   market?: {
     estimatedMarketValue?: Money;
     source?: string;

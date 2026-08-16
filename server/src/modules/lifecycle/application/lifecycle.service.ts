@@ -22,6 +22,7 @@ import {
   assertMoney,
   evaluateReadiness,
 } from '../domain/publication.policy';
+import { deriveMarketLifecycle } from '../../market-lifecycle/domain/market-lifecycle';
 
 type Db = Prisma.TransactionClient;
 type OperationsBoardInput = {
@@ -98,6 +99,10 @@ type BoardAsset = {
   custodyRecord: { status: string; updatedAt: Date } | null;
   insuranceCoverage: Array<{ status: string; expiresAt: Date }>;
   publication: { status: string; updatedAt: Date; readiness: unknown } | null;
+  ownershipSupply: { status: string; totalUnits: bigint; issuedUnits: bigint } | null;
+  ownershipSupplyPolicy: { status: string } | null;
+  tradingMarket: { status: string; tradingEnabled: boolean } | null;
+  controlledBetaBypass: { id: string } | null;
 };
 
 export const CONTROLLED_BETA_UMBREON_FIXTURE_KEY =
@@ -254,6 +259,10 @@ export class LifecycleService {
           take: 1,
         },
         publication: true,
+        ownershipSupply: true,
+        ownershipSupplyPolicy: true,
+        tradingMarket: true,
+        controlledBetaBypass: true,
       },
       orderBy: { updatedAt: 'asc' },
       take: 500,
@@ -1128,6 +1137,17 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
         }
       : null,
     recommendedDetailTab: detailTab,
+    marketLifecycle: deriveMarketLifecycle({
+      published: asset.publication?.status === 'PUBLISHED',
+      publicationStatus: asset.publication?.status,
+      custodyStatus: asset.custodyRecord?.status,
+      custodyBypass: Boolean(asset.controlledBetaBypass),
+      supplyPolicyStatus: asset.ownershipSupplyPolicy?.status,
+      supplyStatus: asset.ownershipSupply?.status,
+      issuedUnits: asset.ownershipSupply?.issuedUnits,
+      marketStatus: asset.tradingMarket?.status,
+      tradingEnabled: asset.tradingMarket?.tradingEnabled,
+    }),
     submittedAt: submission.submittedAt?.toISOString() ?? null,
     sourceContext: {
       submissionId: submission.id,

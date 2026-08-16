@@ -21,6 +21,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
+import type { MarketLifecycleProjection } from "@/domain";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -29,6 +30,63 @@ export const Route = createFileRoute("/asset/$id")({
 
 const PERIODS = ["24H", "7D", "30D", "90D", "1Y", "ALL"] as const;
 const currentUser = "current" as never;
+
+function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecycleProjection }) {
+  if (!lifecycle) {
+    return <p className="asset-detail-muted">Market status is being prepared.</p>;
+  }
+  return (
+    <>
+      <div className="asset-readiness-heading">
+        <div>
+          <h2 id="market-status-title">{lifecycle.headline}</h2>
+          <p>{lifecycle.explanation}</p>
+        </div>
+        <span className="asset-status-badge asset-status-badge--pending">
+          {lifecycle.statusPill}
+        </span>
+      </div>
+      {lifecycle.tradeabilityMessage ? (
+        <div className="asset-readiness-callout">
+          <strong>{lifecycle.phase === "SUSPENDED" ? "Why is trading paused?" : "Why can’t I buy it?"}</strong>
+          <p>{lifecycle.tradeabilityMessage}</p>
+          <InfoTip
+            label="How the process works"
+            text="These steps protect the link between the physical collectible and the digital ownership units."
+          />
+        </div>
+      ) : null}
+      <ol className="asset-readiness-steps" aria-label="Market readiness">
+        {lifecycle.steps.map((step, index) => (
+          <li className={`is-${step.state}`} key={step.key}>
+            <b>{index + 1}</b>
+            <span>
+              <strong>{step.label}</strong>
+              <small>{step.subtitle}</small>
+            </span>
+            {step.state === "complete" ? (
+              <CheckCircle2 aria-hidden="true" />
+            ) : (
+              <span className="asset-step-state">
+                {step.state === "current" ? "Next" : step.state === "blocked" ? "Blocked" : "Later"}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="asset-readiness-actions" aria-label="Trading availability">
+        <div>
+          <strong>Buy a Slice</strong>
+          <span>{lifecycle.canBuy ? "Choose a position on the live market." : "Choose a position when trading is live."}</span>
+        </div>
+        <div>
+          <strong>Sell a Slice</strong>
+          <span>{lifecycle.canSell ? "Sell settled units from your portfolio." : "Sell settled units once trading is live."}</span>
+        </div>
+      </div>
+    </>
+  );
+}
 
 function AssetPage() {
   useCurrency();
@@ -120,6 +178,7 @@ function AssetPage() {
     ? { src: approvedMedia.url, alt: approvedMedia.alt }
     : assetShowcaseMedia(asset.slug);
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
+  const lifecycle = asset.marketLifecycle;
   const history = historyQuery.data ?? [];
   const currentValue = asset.estimatedMarketValueMinor;
   const shares = sharePresentation({
@@ -137,9 +196,14 @@ function AssetPage() {
   const availableSlices = ownershipSummaryQuery.data?.availableSlices
     ? Number(ownershipSummaryQuery.data.availableSlices)
     : shares.availableShares;
-  const notYetTradeable = !issuanceQuery.isLoading && issuanceQuery.data === null;
+  const notYetTradeable = lifecycle
+    ? lifecycle.phase !== "LIVE"
+    : !issuanceQuery.isLoading && issuanceQuery.data === null;
+  const liveWithoutListings = lifecycle?.phase === "LIVE" && availableSlices === 0;
   const availableOwnershipLabel = notYetTradeable
-    ? "Not yet available"
+    ? lifecycle?.statusPill ?? "Not yet available"
+    : liveWithoutListings
+      ? "No listings"
     : !ownershipSummaryQuery.data
       ? formatAvailability(null)
       : formatAvailability(ownershipSummaryQuery.data.availableOwnershipPercent);
@@ -189,6 +253,11 @@ function AssetPage() {
             <span className="asset-status-badge">
               <CheckCircle2 aria-hidden="true" /> Published
             </span>
+            {lifecycle ? (
+              <span className="asset-status-badge asset-status-badge--pending">
+                {lifecycle.badge}
+              </span>
+            ) : null}
             <InfoTip
               label="What does published mean?"
               text="Slice has reviewed this public record. Trading still depends on custody, supply approval, and issuance."
@@ -225,75 +294,7 @@ function AssetPage() {
           <section className="asset-readiness-card" aria-labelledby="market-status-title">
             <div className="asset-section-label">Market status</div>
             {notYetTradeable ? (
-              <>
-                <div className="asset-readiness-heading">
-                  <div>
-                    <h2 id="market-status-title">Market opening soon</h2>
-                    <p>This collectible is published, but it is not ready to trade yet.</p>
-                  </div>
-                  <span className="asset-status-badge asset-status-badge--pending">
-                    Not yet available
-                  </span>
-                </div>
-                <div className="asset-readiness-callout">
-                  <strong>Why can’t I buy it?</strong>
-                  <p>
-                    Slice must complete custody, approve the ownership supply, and issue units
-                    before orders can be placed.
-                  </p>
-                  <InfoTip
-                    label="How the process works"
-                    text="These steps protect the link between the physical collectible and the digital ownership units. No price or availability is shown until the market is ready."
-                  />
-                </div>
-                <ol className="asset-readiness-steps" aria-label="Market readiness">
-                  <li className="is-complete">
-                    <b>1</b>
-                    <span>
-                      <strong>Published</strong>
-                      <small>Public record is live</small>
-                    </span>
-                    <CheckCircle2 aria-hidden="true" />
-                  </li>
-                  <li>
-                    <b>2</b>
-                    <span>
-                      <strong>Secure custody</strong>
-                      <small>The physical collectible is protected</small>
-                    </span>
-                    <span className="asset-step-state">Next</span>
-                  </li>
-                  <li>
-                    <b>3</b>
-                    <span>
-                      <strong>Issue ownership</strong>
-                      <small>Supply and pricing are prepared</small>
-                    </span>
-                    <span className="asset-step-state">Later</span>
-                  </li>
-                  <li>
-                    <b>4</b>
-                    <span>
-                      <strong>Buy &amp; sell live</strong>
-                      <small>Manage your position in Slice</small>
-                    </span>
-                    <span className="asset-step-state">Later</span>
-                  </li>
-                </ol>
-                <div
-                  className="asset-readiness-actions"
-                  aria-label="What becomes available when the market opens"
-                >
-                  <div>
-                    <strong>Buy a Slice</strong>
-                    <span>Choose a position after supply is issued.</span>
-                  </div>
-                  <div>
-                    <strong>Sell a Slice</strong>
-                    <span>Sell settled units once trading is live.</span>
-                  </div>
-                </div>
-              </>
+              <LifecycleReadinessPanel lifecycle={lifecycle} />
             ) : (
               <TradingPanel
                 book={orderBookQuery.data}

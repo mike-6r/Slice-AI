@@ -1,4 +1,4 @@
-import type { Asset } from "@/domain";
+import type { Asset, MarketLifecycleProjection } from "@/domain";
 import type { SupportedCurrency } from "@/data/repositories";
 
 export type MarketplaceAsset = {
@@ -33,6 +33,7 @@ export type MarketplaceAsset = {
   tradingStatus?: string;
   tradingEnabled?: boolean;
   tradingHasExecutionHistory?: boolean;
+  marketLifecycle?: MarketLifecycleProjection;
 };
 
 export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
@@ -94,4 +95,5 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   tradingStatus: asset.trading?.status,
   tradingEnabled: asset.trading?.enabled,
   tradingHasExecutionHistory: asset.trading?.hasExecutionHistory,
+  marketLifecycle: asset.marketLifecycle,
 });

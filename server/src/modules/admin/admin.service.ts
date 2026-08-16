@@ -16,6 +16,7 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { isBetaFixtureSlug } from '../../config/beta-policy';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/submission-storage.ports';
 import { OwnershipPolicyService } from '../ownership/application/ownership-policy.service';
+import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
 
 type AdminAttention = {
   id: string;
@@ -1723,6 +1724,7 @@ export class AdminService {
           },
           ownershipSupply: {
             select: {
+              status: true,
               totalUnits: true,
               issuedUnits: true,
               positions: {
@@ -1731,6 +1733,8 @@ export class AdminService {
               },
             },
           },
+          ownershipSupplyPolicy: { select: { status: true } },
+          tradingMarket: { select: { status: true, tradingEnabled: true } },
         },
       }),
     ]);
@@ -1799,6 +1803,17 @@ export class AdminService {
             totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,
             issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
           },
+          marketLifecycle: deriveMarketLifecycle({
+            published: asset.publication?.status === 'PUBLISHED',
+            publicationStatus: asset.publication?.status,
+            custodyStatus: asset.custodyRecord?.status,
+            supplyPolicyStatus: asset.ownershipSupplyPolicy?.status,
+            supplyStatus: asset.ownershipSupply?.status,
+            issuedUnits: asset.ownershipSupply?.issuedUnits,
+            marketStatus: asset.tradingMarket?.status,
+            tradingEnabled: asset.tradingMarket?.tradingEnabled,
+            availabilityBps: null,
+          }),
           updatedAt: asset.updatedAt.toISOString(),
         };
       })),
@@ -3730,6 +3745,7 @@ export class AdminService {
             },
           },
         },
+        ownershipSupplyPolicy: { select: { status: true } },
         tradingMarket: true,
         tradingExecutions: { orderBy: { executedAt: 'desc' }, take: 50 },
         vaultPublicEvents: { orderBy: { occurredAt: 'asc' }, take: 50 },
@@ -3925,6 +3941,18 @@ export class AdminService {
       },
       issuance,
       lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
+      marketLifecycle: deriveMarketLifecycle({
+        published: asset.publication?.status === 'PUBLISHED',
+        publicationStatus: asset.publication?.status,
+        custodyStatus: asset.custodyRecord?.status,
+        custodyBypass: Boolean(asset.controlledBetaBypass),
+        supplyPolicyStatus: asset.ownershipSupplyPolicy?.status,
+        supplyStatus: asset.ownershipSupply?.status,
+        issuedUnits: asset.ownershipSupply?.issuedUnits,
+        marketStatus: asset.tradingMarket?.status,
+        tradingEnabled: asset.tradingMarket?.tradingEnabled,
+        availabilityBps: snapshot?.availableBps,
+      }),
       collector: owner
         ? {
             id: owner.id,

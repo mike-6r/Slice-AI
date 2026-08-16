@@ -112,6 +112,7 @@ type MarketAssetDto = {
     totalUnits: string;
     issuedUnits: string;
   } | null;
+  marketLifecycle?: import("@/domain").MarketLifecycleProjection;
   trading?: {
     status: string;
     enabled: boolean;
@@ -277,6 +278,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     : undefined,
   ownership: value.ownership ?? undefined,
   trading: value.trading ?? undefined,
+  marketLifecycle: value.marketLifecycle,
 });
 
 const mapMarketObservationSummary = (value: MarketObservationSummaryDto | null | undefined) =>

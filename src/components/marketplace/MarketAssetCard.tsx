@@ -43,11 +43,14 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
   const category = marketCategoryPresentation(asset.category);
   const CategoryIcon = category.icon;
   const grade = gradePresentation(asset.grade);
-  const preMarket = asset.ownershipStatus
-    ? asset.ownershipStatus !== "ACTIVE" ||
-      asset.tradingStatus !== "OPEN" ||
-      asset.tradingEnabled === false
-    : asset.availabilityBps === undefined;
+  const lifecycle = asset.marketLifecycle;
+  const preMarket = lifecycle
+    ? lifecycle.phase !== "LIVE"
+    : asset.ownershipStatus
+      ? asset.ownershipStatus !== "ACTIVE" ||
+        asset.tradingStatus !== "OPEN" ||
+        asset.tradingEnabled === false
+      : asset.availabilityBps === undefined;
   return (
     <div
       className="market-card-media profile-raw-card lighting-graphite"
@@ -60,7 +63,11 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
         <span className="market-card-media-placeholder">Media unavailable</span>
       )}
       <span className="market-card-sheen" aria-hidden="true" />
-      {preMarket ? <span className="market-state-badge">Pre-market</span> : null}
+      {lifecycle && lifecycle.phase !== "UNPUBLISHED" ? (
+        <span className="market-state-badge">{lifecycle.badge}</span>
+      ) : preMarket ? (
+        <span className="market-state-badge">Pre-market</span>
+      ) : null}
       <span className="market-category-chip">
         <CategoryIcon aria-hidden="true" />
         <span>{category.label}</span>
@@ -122,11 +129,14 @@ export function MarketAssetCard({
   });
   const editorial = marketplaceEditorialTag(asset);
   const availability = asset.availabilityBps;
-  const preMarket = asset.ownershipStatus
-    ? asset.ownershipStatus !== "ACTIVE" ||
-      asset.tradingStatus !== "OPEN" ||
-      asset.tradingEnabled === false
-    : availability === undefined;
+  const lifecycle = asset.marketLifecycle;
+  const preMarket = lifecycle
+    ? lifecycle.phase !== "LIVE"
+    : asset.ownershipStatus
+      ? asset.ownershipStatus !== "ACTIVE" ||
+        asset.tradingStatus !== "OPEN" ||
+        asset.tradingEnabled === false
+      : availability === undefined;
   const availabilityWidth = Math.min(100, Math.max(0, (availability ?? 0) / 100));
   return (
     <article
@@ -181,7 +191,13 @@ export function MarketAssetCard({
                 <dt>Availability</dt>
                 <dd>
                   {preMarket
-                    ? "Not yet issued"
+                    ? lifecycle?.phase === "ISSUANCE_PENDING"
+                      ? "Issued"
+                      : lifecycle?.phase === "READY_FOR_ISSUANCE"
+                        ? "Ready to issue"
+                        : lifecycle?.phase === "SUPPLY_APPROVAL_REQUIRED"
+                          ? "Supply approval"
+                          : "Not yet issued"
                     : availability === undefined || availability === 0
                       ? "No listings"
                       : formatOwnership((availability ?? 0) / 100)}
@@ -195,7 +211,7 @@ export function MarketAssetCard({
                 <dt>Trading</dt>
                   <dd>
                     {preMarket
-                      ? "Not yet available"
+                      ? lifecycle?.statusPill ?? "Not yet available"
                       : availability === 0
                         ? "Awaiting listings"
                         : "Available"}
@@ -209,7 +225,10 @@ export function MarketAssetCard({
               {preMarket ? (
                 <div className="market-availability-note">
                   <span aria-hidden="true" />
-                  <small>Ownership is being prepared. Trading will open once issuance is complete.</small>
+                  <small>
+                    {lifecycle?.tradeabilityMessage ??
+                      "Ownership is being prepared. Trading will open once issuance is complete."}
+                  </small>
                 </div>
               ) : (
                 <>
@@ -237,23 +256,27 @@ export function MarketAssetCard({
 export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
   const editorial = marketplaceEditorialTag(asset);
+  const lifecycle = asset.marketLifecycle;
+  const hasLifecycleMovement = asset.tradingHasExecutionHistory && asset.change24hBps !== undefined;
   return (
     <article className="market-detailed-row">
       <Link to="/asset/$id" params={{ id: asset.slug }}>
         <AssetVisual asset={asset} />
       </Link>
       <div className="market-detailed-identity">
-        <span className={`market-status-badge is-${editorial.tone}`}>{editorial.label}</span>
+        <span className={`market-status-badge is-${editorial.tone}`}>
+          {lifecycle?.badge ?? editorial.label}
+        </span>
         <h2>
           <Link to="/asset/$id" params={{ id: asset.slug }}>
             {asset.title}
           </Link>
         </h2>
-        <p>{asset.grade ?? "Grading pending"}</p>
+        <p>{asset.grade ?? "Raw / Ungraded"}</p>
       </div>
       <dl>
         <div>
-          <dt>{asset.dataStatus === "DEMO" ? "Illustrative basis" : "Asset value"}</dt>
+          <dt>Slice valuation</dt>
           <dd>
             {asset.estimatedMarketValueMinor === undefined
               ? "Unavailable"
@@ -261,18 +284,20 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
           </dd>
         </div>
         <div>
-          <dt>24h</dt>
+          <dt>Market movement</dt>
           <dd>
-            {asset.change24hBps === undefined
-              ? "Unavailable"
-              : formatPercent(asset.change24hBps / 100)}
+            {!hasLifecycleMovement
+              ? "No trading history"
+              : formatPercent((asset.change24hBps ?? 0) / 100)}
           </dd>
         </div>
         <div>
           <dt>Available</dt>
           <dd>
-            {asset.availabilityBps === undefined
-              ? "Unavailable"
+            {lifecycle && lifecycle.phase !== "LIVE"
+              ? lifecycle.statusPill
+              : asset.availabilityBps === undefined
+                ? "Unavailable"
               : formatOwnership(asset.availabilityBps / 100)}
           </dd>
         </div>

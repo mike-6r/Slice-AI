@@ -288,6 +288,11 @@ function OperationRow({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen
         <span className={`admin-stage-badge ${item.currentStage.toLowerCase()}`}>
           {stageLabel(item.currentStage)}
         </span>
+        {item.marketLifecycle ? (
+          <span className="admin-stage-badge admin-stage-badge--market">
+            {item.marketLifecycle.admin.publicState}
+          </span>
+        ) : null}
         <small>
           {item.readiness.status === "READY" ? (
             <>
@@ -300,6 +305,7 @@ function OperationRow({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen
             </>
           )}
         </small>
+        {item.marketLifecycle ? <small>{item.marketLifecycle.admin.internalState}</small> : null}
       </div>
       <div className="admin-operation-owner">
         <strong>{item.collector?.displayName ?? "Collector unavailable"}</strong>

@@ -19,6 +19,9 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../submissions/ports/submission-storage.ports';
+import {
+  deriveMarketLifecycle,
+} from '../market-lifecycle/domain/market-lifecycle';
 
 const ranges = {
   '1D': 1,
@@ -99,6 +102,7 @@ export class MarketService {
         ownershipSupply: {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
+        ownershipSupplyPolicy: { select: { status: true } },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -240,6 +244,7 @@ export class MarketService {
         ownershipSupply: {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
+        ownershipSupplyPolicy: { select: { status: true } },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -332,9 +337,12 @@ export class MarketService {
             ownershipSupply: {
               select: { status: true, totalUnits: true, issuedUnits: true },
             },
+            ownershipSupplyPolicy: { select: { status: true } },
             tradingMarket: {
               select: { status: true, tradingEnabled: true },
             },
+            publication: { select: { status: true, publishedAt: true } },
+            custodyRecord: { select: { status: true, updatedAt: true } },
             _count: { select: { tradingExecutions: true } },
             marketSnapshots: {
               ...this.publicMarketSnapshotFilter(),
@@ -416,6 +424,9 @@ export class MarketService {
         ownershipSupply: {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
+        ownershipSupplyPolicy: { select: { status: true } },
+        publication: { select: { status: true, publishedAt: true } },
+        custodyRecord: { select: { status: true, updatedAt: true } },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -523,6 +534,7 @@ type PublicAssetRow = {
     totalUnits: bigint;
     issuedUnits: bigint;
   } | null;
+  ownershipSupplyPolicy: { status: string } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   _count?: { tradingExecutions: number };
   marketSnapshots: Array<{
@@ -648,6 +660,17 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           hasExecutionHistory: (asset._count?.tradingExecutions ?? 0) > 0,
         }
       : null,
+    marketLifecycle: deriveMarketLifecycle({
+      published: asset.publication?.status === 'PUBLISHED',
+      publicationStatus: asset.publication?.status,
+      custodyStatus: asset.custodyRecord?.status,
+      supplyPolicyStatus: asset.ownershipSupplyPolicy?.status,
+      supplyStatus: asset.ownershipSupply?.status,
+      issuedUnits: asset.ownershipSupply?.issuedUnits,
+      marketStatus: asset.tradingMarket?.status,
+      tradingEnabled: asset.tradingMarket?.tradingEnabled,
+      availabilityBps: market?.availableBps,
+    }),
     asOf: market ? asOf(market.asOf) : null,
     publication:
       asset.publication?.status === 'PUBLISHED'

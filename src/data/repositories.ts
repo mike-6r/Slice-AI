@@ -51,6 +51,7 @@ import type {
   WalletTransaction,
   AccountCapability,
   Watchlist,
+  MarketLifecycleProjection,
 } from "@/domain";
 
 export type SupportedCurrency = "GBP" | "USD" | "CAD" | "EUR";
@@ -809,6 +810,7 @@ export type AssetOperationsBoardItem = {
   nextAction: string;
   eligibleActions: string[];
   ageDays: number;
+  marketLifecycle?: MarketLifecycleProjection;
 };
 export type AssetOperationsBoardResponse = {
   items: AssetOperationsBoardItem[];
@@ -955,6 +957,7 @@ export type AdminCollectibleDetail = {
       at: string | null;
     }>;
   };
+  marketLifecycle?: MarketLifecycleProjection;
   collector: {
     id: string;
     displayName: string;
@@ -1059,6 +1062,7 @@ export type AdminCatalogueAsset = {
   marketReadiness: string;
   publicationState: string;
   ownership: { ownerCount: number; totalUnits: string | null; issuedUnits: string | null };
+  marketLifecycle?: MarketLifecycleProjection;
   updatedAt: string;
 };
 

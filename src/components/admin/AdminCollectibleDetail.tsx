@@ -53,8 +53,8 @@ export function AdminCollectibleDetail({
   const item = detail.data;
   const front = item.media.find((media) => media.slot.toLowerCase() === "front") ?? item.media[0];
   const physical = item.intake ? sentence(item.intake.status) : "Not recorded";
-  const market =
-    item.market.publication === "PUBLISHED" ? "Published" : sentence(item.market.readiness.status);
+  const market = item.marketLifecycle?.admin.publicState ??
+    (item.market.publication === "PUBLISHED" ? "Published" : sentence(item.market.readiness.status));
   return (
     <main className="admin-collectible-detail">
       <div className="admin-detail-header">
@@ -175,7 +175,7 @@ function Overview({
         <section className="admin-detail-card">
           <div className="admin-card-heading">
             <h3>Where this collectible is now</h3>
-            <span>{sentence(item.lifecycle.current)}</span>
+            <span>{item.marketLifecycle?.admin.internalState ?? sentence(item.lifecycle.current)}</span>
           </div>
           <div className="admin-journey admin-journey--compact">
             {item.lifecycle.stages.map((stage) => (
@@ -202,6 +202,14 @@ function Overview({
           ) : null}
         </section>
         <div className="admin-detail-card-grid admin-detail-card-grid--three">
+          {item.marketLifecycle ? (
+            <InfoCard title="Market lifecycle">
+              <Field label="Public state" value={item.marketLifecycle.admin.publicState} accent />
+              <Field label="Internal state" value={item.marketLifecycle.admin.internalState} />
+              <Field label="Next action" value={item.marketLifecycle.admin.nextAction} />
+              <Field label="Dependency" value={item.marketLifecycle.admin.blockingDependency} />
+            </InfoCard>
+          ) : null}
           <InfoCard title="Identity">
             <Field label="Set" value={item.identity.set} />
             <Field label="Year" value={item.identity.year} />
@@ -625,10 +633,17 @@ function MarketTab({ item }: { item: Detail }) {
     <section className="admin-detail-card admin-detail-tab-panel">
       <div className="admin-card-heading">
         <h3>Market lifecycle</h3>
-        <span>Publication is not the same as tradeability</span>
+        <span>{item.marketLifecycle?.admin.internalState ?? "Publication is not the same as tradeability"}</span>
       </div>
       <div className="admin-detail-card-grid admin-detail-card-grid--three">
         <InfoCard title="Publication">
+          {item.marketLifecycle ? (
+            <>
+              <Field label="Public state" value={item.marketLifecycle.admin.publicState} accent />
+              <Field label="Next action" value={item.marketLifecycle.admin.nextAction} />
+              <Field label="Dependency" value={item.marketLifecycle.admin.blockingDependency} />
+            </>
+          ) : null}
           <Field label="Publication" value={sentence(item.market.publication)} accent />
           <Field label="Readiness" value={sentence(item.market.readiness.status)} />
           <Field
