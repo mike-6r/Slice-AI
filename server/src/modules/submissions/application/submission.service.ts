@@ -1867,6 +1867,11 @@ function stringMetadata(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+export function collectorConditionValue(metadata: unknown) {
+  if (!isRecord(metadata)) return null;
+  return stringMetadata(metadata.condition) ?? stringMetadata(metadata.grade);
+}
+
 function researchStatusFor(state: string | undefined) {
   if (!state) return 'NOT_REQUESTED' as const;
   if (['FOUND', 'LIMITED', 'NO_MATCHES', 'COMPLETED'].includes(state))
@@ -2262,8 +2267,7 @@ function reviewDetailContextProjection(
     // `condition` is the collector-described raw-card condition. It is kept
     // separate from `grade`, which is reserved for an official grading scale.
     condition: {
-      overallGrade:
-        stringMetadata(metadata.condition) ?? stringMetadata(metadata.grade),
+      overallGrade: collectorConditionValue(metadata),
       fields,
     },
     notableDetails,
