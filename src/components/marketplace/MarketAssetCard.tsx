@@ -43,7 +43,11 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
   const category = marketCategoryPresentation(asset.category);
   const CategoryIcon = category.icon;
   const grade = gradePresentation(asset.grade);
-  const preMarket = asset.availabilityBps === undefined;
+  const preMarket = asset.ownershipStatus
+    ? asset.ownershipStatus !== "ACTIVE" ||
+      asset.tradingStatus !== "OPEN" ||
+      asset.tradingEnabled === false
+    : asset.availabilityBps === undefined;
   return (
     <div
       className="market-card-media profile-raw-card lighting-graphite"
@@ -74,7 +78,7 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
 function MarketValue({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
   const change =
-    asset.availabilityBps === undefined || asset.change24hBps === undefined
+    !asset.tradingHasExecutionHistory || asset.change24hBps === undefined
       ? undefined
       : asset.change24hBps / 100;
   const TrendIcon = (change ?? 0) >= 0 ? TrendingUp : TrendingDown;
@@ -118,6 +122,11 @@ export function MarketAssetCard({
   });
   const editorial = marketplaceEditorialTag(asset);
   const availability = asset.availabilityBps;
+  const preMarket = asset.ownershipStatus
+    ? asset.ownershipStatus !== "ACTIVE" ||
+      asset.tradingStatus !== "OPEN" ||
+      asset.tradingEnabled === false
+    : availability === undefined;
   const availabilityWidth = Math.min(100, Math.max(0, (availability ?? 0) / 100));
   return (
     <article
@@ -180,7 +189,13 @@ export function MarketAssetCard({
               </div>
               <div>
                 <dt>Trading</dt>
-                <dd>{availability === undefined ? "Not yet available" : "Available"}</dd>
+                  <dd>
+                    {preMarket
+                      ? "Not yet available"
+                      : availability === 0
+                        ? "Awaiting listings"
+                        : "Available"}
+                  </dd>
               </div>
             </dl>
             <div
@@ -199,7 +214,7 @@ export function MarketAssetCard({
                   </span>
                   <small>
                     {availability === 0
-                      ? "No ownership available"
+                      ? "Market open · awaiting listings"
                       : `${formatOwnership(availability / 100)} available to own`}
                   </small>
                 </>

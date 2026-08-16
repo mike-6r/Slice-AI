@@ -90,6 +90,16 @@ export interface Asset {
     priceGuides: MarketObservationSummary | null;
     providerCount: number;
   };
+  ownership?: {
+    status: string;
+    totalUnits: string;
+    issuedUnits: string;
+  };
+  trading?: {
+    status: string;
+    enabled: boolean;
+    hasExecutionHistory: boolean;
+  };
   market?: {
     estimatedMarketValue?: Money;
     source?: string;
@@ -104,6 +114,7 @@ export interface Asset {
     availabilityBps?: BasisPoints;
     /** Public aggregate owner count from the market snapshot. */
     ownersCount?: number;
+    hasTradingHistory?: boolean;
     /** Source-labelled external observations. Never a Slice ownership offer. */
     reference?: {
       currentListing?: ExternalMarketObservation;

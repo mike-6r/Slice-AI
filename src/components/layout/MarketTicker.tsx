@@ -75,7 +75,7 @@ function AuthoritativeMarketTicker() {
                         )
                       : "Unavailable"}
                   </span>
-                  {asset.market?.change24hBps !== undefined && (
+                  {asset.market?.hasTradingHistory && asset.market.change24hBps !== undefined && (
                     <span
                       className={asset.market.change24hBps >= 0 ? "text-positive" : "text-negative"}
                     >

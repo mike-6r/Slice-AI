@@ -96,6 +96,13 @@ export class MarketService {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
+        ownershipSupply: {
+          select: { status: true, totalUnits: true, issuedUnits: true },
+        },
+        tradingMarket: {
+          select: { status: true, tradingEnabled: true },
+        },
+        _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
           ...this.publicMarketSnapshotFilter(),
           orderBy: { asOf: 'desc' },
@@ -230,6 +237,13 @@ export class MarketService {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
+        ownershipSupply: {
+          select: { status: true, totalUnits: true, issuedUnits: true },
+        },
+        tradingMarket: {
+          select: { status: true, tradingEnabled: true },
+        },
+        _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
           ...this.publicMarketSnapshotFilter(),
           orderBy: { asOf: 'desc' },
@@ -315,6 +329,13 @@ export class MarketService {
             category: true,
             collectibleSet: true,
             gradeScaleEntry: { include: { company: true } },
+            ownershipSupply: {
+              select: { status: true, totalUnits: true, issuedUnits: true },
+            },
+            tradingMarket: {
+              select: { status: true, tradingEnabled: true },
+            },
+            _count: { select: { tradingExecutions: true } },
             marketSnapshots: {
               ...this.publicMarketSnapshotFilter(),
               orderBy: { asOf: 'desc' },
@@ -392,6 +413,13 @@ export class MarketService {
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
+        ownershipSupply: {
+          select: { status: true, totalUnits: true, issuedUnits: true },
+        },
+        tradingMarket: {
+          select: { status: true, tradingEnabled: true },
+        },
+        _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
           ...this.publicMarketSnapshotFilter(),
           orderBy: { asOf: 'desc' },
@@ -490,6 +518,13 @@ type PublicAssetRow = {
     label: string;
     company: { code: string };
   } | null;
+  ownershipSupply: {
+    status: string;
+    totalUnits: bigint;
+    issuedUnits: bigint;
+  } | null;
+  tradingMarket: { status: string; tradingEnabled: boolean } | null;
+  _count?: { tradingExecutions: number };
   marketSnapshots: Array<{
     estimatedMarketValueMinor: bigint;
     currency: string;
@@ -599,6 +634,20 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference: externalMarketReference(asset.valuationEvidence ?? []),
     dataStatus: market ? status(market.status) : 'UNAVAILABLE',
+    ownership: asset.ownershipSupply
+      ? {
+          status: asset.ownershipSupply.status,
+          totalUnits: asset.ownershipSupply.totalUnits.toString(),
+          issuedUnits: asset.ownershipSupply.issuedUnits.toString(),
+        }
+      : null,
+    trading: asset.tradingMarket
+      ? {
+          status: asset.tradingMarket.status,
+          enabled: asset.tradingMarket.tradingEnabled,
+          hasExecutionHistory: (asset._count?.tradingExecutions ?? 0) > 0,
+        }
+      : null,
     asOf: market ? asOf(market.asOf) : null,
     publication:
       asset.publication?.status === 'PUBLISHED'

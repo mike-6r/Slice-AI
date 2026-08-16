@@ -29,6 +29,10 @@ export type MarketplaceAsset = {
     currency: SupportedCurrency;
   };
   media?: Array<{ url: string; alt: string }>;
+  ownershipStatus?: string;
+  tradingStatus?: string;
+  tradingEnabled?: boolean;
+  tradingHasExecutionHistory?: boolean;
 };
 
 export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
@@ -86,4 +90,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   media: asset.media
     .filter((item) => item.kind === "image")
     .map((item) => ({ url: item.url, alt: item.alt })),
+  ownershipStatus: asset.ownership?.status,
+  tradingStatus: asset.trading?.status,
+  tradingEnabled: asset.trading?.enabled,
+  tradingHasExecutionHistory: asset.trading?.hasExecutionHistory,
 });

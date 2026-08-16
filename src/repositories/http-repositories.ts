@@ -107,6 +107,16 @@ type MarketAssetDto = {
     priceGuides: MarketObservationSummaryDto | null;
     providerCount: number;
   };
+  ownership?: {
+    status: string;
+    totalUnits: string;
+    issuedUnits: string;
+  } | null;
+  trading?: {
+    status: string;
+    enabled: boolean;
+    hasExecutionHistory: boolean;
+  } | null;
 };
 type MarketObservationSummaryDto = {
   count: number;
@@ -241,6 +251,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         ? undefined
         : basisPoints(value.availabilityBps),
     ownersCount: value.ownersCount ?? undefined,
+    hasTradingHistory: value.trading?.hasExecutionHistory ?? false,
     reference: value.marketReference
       ? {
           ...(value.marketReference.currentListing
@@ -264,6 +275,8 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         providerCount: value.marketSummary.providerCount,
       }
     : undefined,
+  ownership: value.ownership ?? undefined,
+  trading: value.trading ?? undefined,
 });
 
 const mapMarketObservationSummary = (value: MarketObservationSummaryDto | null | undefined) =>

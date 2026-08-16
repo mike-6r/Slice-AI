@@ -153,10 +153,12 @@ function AssetPage() {
     : issuedSlices === undefined
       ? "Unavailable"
       : issuedSlices.toLocaleString();
-  const marketMoveLabel =
-    notYetTradeable || asset.change24hBps === undefined
-      ? "Not available yet"
-      : formatPercent(asset.change24hBps / 100);
+  const hasTradingHistory = (tradesQuery.data?.length ?? 0) > 0;
+  const marketMoveLabel = notYetTradeable
+    ? "Not available yet"
+    : hasTradingHistory && asset.change24hBps !== undefined
+      ? formatPercent(asset.change24hBps / 100)
+      : "No trading history yet";
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const category = marketCategoryPresentation(asset.category);
 
@@ -485,11 +487,19 @@ function AssetPage() {
             <div className="asset-availability-box">
               <span className="asset-availability-icon">○</span>
               <div>
-                <strong>{notYetTradeable ? "Not yet available" : "Available to trade"}</strong>
+                <strong>
+                  {notYetTradeable
+                    ? "Not yet available"
+                    : (availableSlices ?? 0) > 0
+                      ? "Available to trade"
+                      : "Market open · awaiting listings"}
+                </strong>
                 <p>
                   {notYetTradeable
                     ? "There are no ownership units to buy today. This is different from sold out—the market has not opened."
-                    : "Ownership units are available through the live market."}
+                    : (availableSlices ?? 0) > 0
+                      ? "Ownership units are available through the live market."
+                      : "The market is open, but no ownership units are currently listed. Place a limit order or check back when a collector lists units."}
                 </p>
               </div>
             </div>
