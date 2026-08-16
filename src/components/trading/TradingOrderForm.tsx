@@ -28,6 +28,7 @@ import type {
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
+import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
 import {
   averageCostMinor,
   bestOrderBookLevel,
@@ -187,7 +188,7 @@ export function TradingOrderForm({
     if (ownershipPreview.data?.requestedSlices === null)
       return "Choose one of the closest available ownership amounts to continue.";
     if (ownershipPreview.data?.maximumExceeded)
-      return `Up to ${ownershipPreview.data.availableOwnershipPercent}% is currently available.`;
+      return `Up to ${formatAvailability(ownershipPreview.data.availableOwnershipPercent)} is currently available.`;
     if (ownershipPreview.data?.eligibility === "INELIGIBLE")
       return "Complete the required account checks before placing an order.";
     return null;
@@ -400,7 +401,7 @@ export function TradingOrderForm({
                   label="Available ownership"
                   value={
                     ownershipPreview.data
-                      ? `${ownershipPreview.data.availableOwnershipPercent}%`
+                      ? formatAvailability(ownershipPreview.data.availableOwnershipPercent)
                       : "Unavailable"
                   }
                 />
@@ -415,9 +416,9 @@ export function TradingOrderForm({
                 <ContextRow
                   label="Price per Slice"
                   value={
-                    ownershipPreview.data?.slicePriceMinor
-                      ? formatGbpMinor(ownershipPreview.data.slicePriceMinor)
-                      : "Unavailable"
+                    ownershipPreview.data?.slicePriceMinor === undefined
+                      ? "Unavailable"
+                      : formatPricePerUnit(ownershipPreview.data.slicePriceMinor, "GBP")
                   }
                 />
               </div>
@@ -736,7 +737,7 @@ export function TradingOrderForm({
                   value={
                     !ownershipPreview.data
                       ? "Unavailable"
-                      : `${ownershipPreview.data.availableOwnershipPercent}% (${ownershipPreview.data.availableSlices} units)`
+                      : `${formatAvailability(ownershipPreview.data.availableOwnershipPercent)} (${ownershipPreview.data.availableSlices} units)`
                   }
                 />
                 <ContextRow label="Minimum order" value="1 Slice" />

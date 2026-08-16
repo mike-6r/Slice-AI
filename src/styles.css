@@ -28630,6 +28630,50 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   box-sizing: border-box;
 }
 
+/* Keep the market workspace inside the viewport at tablet and phone widths. */
+.markets-page .markets-shell,
+.markets-page .markets-workspace,
+.markets-page .markets-results,
+.markets-page .markets-toolbar,
+.markets-page .market-asset-grid,
+.markets-page .market-asset-grid.is-compact {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1099px) {
+  .markets-page .markets-workspace { grid-template-columns: minmax(0, 1fr); }
+  .markets-page .markets-toolbar { flex-wrap: wrap; }
+  .markets-page .markets-toolbar-count { flex: 1 1 100%; margin-right: 0; }
+  .markets-page .markets-result-search { flex: 1 1 min(22rem, 100%); width: auto; min-width: 0; }
+}
+
+@media (max-width: 799px) {
+  .markets-page .markets-shell,
+  body:has(.markets-page) .site-shell {
+    width: calc(100% - 2rem);
+    max-width: calc(100% - 2rem);
+  }
+  .markets-page .markets-header,
+  .markets-page .markets-summary-grid { min-width: 0; }
+  .markets-page .markets-quick-rail { max-width: 100%; }
+  .markets-page .markets-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .markets-page .markets-result-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+  .markets-page .markets-mobile-filter,
+  .markets-page .markets-view-control,
+  .markets-page .markets-sort-control { min-width: 0; }
+  .markets-page .market-asset-grid,
+  .markets-page .market-asset-grid.is-compact { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 520px) {
   .session-restore-page {
     align-items: center;

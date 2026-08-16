@@ -8,6 +8,7 @@ import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
@@ -122,15 +123,15 @@ function AssetPage() {
     : shares.availableShares;
   const notYetTradeable = !issuanceQuery.isLoading && issuanceQuery.data === null;
   const availableOwnershipLabel = notYetTradeable
-    ? "Not available yet"
+    ? "Not yet available"
     : !ownershipSummaryQuery.data
-      ? "Unavailable"
-      : `${ownershipSummaryQuery.data.availableOwnershipPercent}%`;
+      ? formatAvailability(null)
+      : formatAvailability(ownershipSummaryQuery.data.availableOwnershipPercent);
   const slicePriceLabel = notYetTradeable
-    ? "Not available yet"
+    ? "Not yet available"
     : slicePriceMinor === undefined
-      ? "Unavailable"
-      : formatCurrency(slicePriceMinor);
+      ? "Not available"
+      : formatPricePerUnit(slicePriceMinor, "GBP");
   const issuanceLabel = notYetTradeable
     ? "Not issued yet"
     : issuedSlices === undefined
@@ -194,7 +195,7 @@ function AssetPage() {
                     <h2 id="market-status-title">Market opening soon</h2>
                     <p>This collectible is published, but it is not ready to trade yet.</p>
                   </div>
-                  <span className="asset-status-badge asset-status-badge--pending">Not available yet</span>
+                  <span className="asset-status-badge asset-status-badge--pending">Not yet available</span>
                 </div>
                 <div className="asset-readiness-callout">
                   <strong>Why can’t I buy it?</strong>
@@ -274,7 +275,7 @@ function AssetPage() {
         <section className="asset-redesign-grid asset-redesign-grid--lower">
           <section className="asset-ownership-panel asset-ownership-panel--simple" aria-labelledby="availability-title">
             <div className="asset-section-label">Ownership status</div><h2 id="availability-title">When can I own a Slice?</h2>
-            <div className="asset-availability-box"><span className="asset-availability-icon">○</span><div><strong>{notYetTradeable ? "Not available yet" : "Available to trade"}</strong><p>{notYetTradeable ? "There are no ownership units to buy today. This is different from sold out—the market has not opened." : "Ownership units are available through the live market."}</p></div></div>
+            <div className="asset-availability-box"><span className="asset-availability-icon">○</span><div><strong>{notYetTradeable ? "Not yet available" : "Available to trade"}</strong><p>{notYetTradeable ? "There are no ownership units to buy today. This is different from sold out—the market has not opened." : "Ownership units are available through the live market."}</p></div></div>
             <div className="asset-ownership-facts"><Stat label="Total issuance" value={issuanceLabel} /><Stat label="Available ownership" value={availableOwnershipLabel} /><Stat label="Current owners" value={asset.ownersCount === undefined ? "Unavailable" : String(asset.ownersCount)} /></div>
           </section>
           <section className="asset-details-panel" aria-labelledby="reference-data-title">
@@ -363,7 +364,7 @@ function AssetOwnershipGuide({
           <span>Price per Slice</span>
           <strong>
             {notYetTradeable
-              ? "Not available yet"
+              ? "Not yet available"
               : sharePriceMinor === undefined
                 ? "Unavailable"
                 : formatCurrency(sharePriceMinor)}
@@ -603,7 +604,7 @@ function TradingPanel({
         <Stat
           label="Available ownership"
           value={
-            !ownershipSummary ? "Unavailable" : `${ownershipSummary.availableOwnershipPercent}%`
+            formatAvailability(ownershipSummary?.availableOwnershipPercent)
           }
         />
         <Stat

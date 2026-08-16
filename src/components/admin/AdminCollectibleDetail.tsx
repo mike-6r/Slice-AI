@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
+import { formatMinorAmount, formatPricePerUnit } from "@/lib/market-presentation";
 import "@/styles/admin-collectible-detail.css";
 
 const tabs = ["overview", "physical", "valuation", "ownership", "issuance", "market", "history"] as const;
@@ -397,14 +398,21 @@ function IssuanceTab({ item }: { item: Detail }) {
               disabled={!canPropose}
             >
               <strong>{preview.units} units</strong>
-              <span>{preview.pricePerUnitMinor && preview.currency ? money(preview.pricePerUnitMinor, preview.currency) : "Not available"} / slice</span>
+              <span>{formatPricePerUnit(preview.pricePerUnitMinor, preview.currency, preview.remainderMinor)} / slice</span>
+              <small>
+                {preview.remainderMinor === null
+                  ? "Retained remainder unavailable"
+                  : `${formatMinorAmount(preview.remainderMinor, preview.currency)} retained remainder`}
+              </small>
             </button>
           ))}
         </div>
         {policy.proposed ? (
           <div className="admin-issuance-proposed">
             <strong>Proposed: {policy.proposed.units} units</strong>
-            <span>{money(policy.proposed.pricePerUnitMinor, policy.proposed.valuationCurrency)} per slice · remainder {policy.proposed.remainderMinor} minor units</span>
+            <span>
+              {formatPricePerUnit(policy.proposed.pricePerUnitMinor, policy.proposed.valuationCurrency, policy.proposed.remainderMinor)} per slice · {formatMinorAmount(policy.proposed.remainderMinor, policy.proposed.valuationCurrency)} retained remainder
+            </span>
           </div>
         ) : null}
       </div>
@@ -770,9 +778,5 @@ function date(value: string) {
   }).format(new Date(value));
 }
 function money(minor: string, currency: string) {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(Number(minor) / 100);
+  return formatMinorAmount(minor, currency);
 }
