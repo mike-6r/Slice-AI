@@ -27,8 +27,8 @@ export type ShowcaseDestination =
   Readonly<{ kind: "asset"; id: string }> | Readonly<{ kind: "marketplace"; to: "/marketplace" }>;
 
 /**
- * ILLUSTRATIVE SLICE OWNERSHIP EXAMPLE. The external listing/sale references
- * on each linked asset page remain separate from these terms.
+ * Homepage-owned example terms used to explain the Slice experience. These
+ * values are intentionally kept separate from authoritative asset data.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
   referenceValue: "\u00a31,950",
@@ -54,7 +54,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: umbreonImage,
     displayPrice: "£1,950",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "32.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-umbreon-vmax-moonbreon",
@@ -69,7 +69,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: pikachuImage,
     displayPrice: "US$470",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "41.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-pikachu-grey-felt-hat",
@@ -84,7 +84,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: charizardImage,
     displayPrice: "US$399.99",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "52.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-charizard-ex-obsidian-flames",
@@ -99,7 +99,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: wembanyamaImage,
     displayPrice: "US$215",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "60.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-victor-wembanyama-prizm-rookie",
@@ -114,7 +114,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: bedardImage,
     displayPrice: "CA$750",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "47.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-connor-bedard-young-guns",
@@ -129,7 +129,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     image: stroudImage,
     displayPrice: "US$550",
     displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Reference only",
+    displayMovement: "Market pulse",
     displayAvailability: "38.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-cj-stroud-purple-pulsar-rookie",
@@ -138,7 +138,7 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
 ] as const;
 
 /**
- * Editorial homepage hero only. This is a static educational reference and
+ * Editorial homepage hero only. This is an educational showcase and
  * intentionally has no published Slice asset id or live market destination.
  */
 export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
@@ -148,9 +148,9 @@ export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
   title: "1999 Base Set 1st Edition Charizard",
   grade: "PSA 10 · Gem Mint",
   image: charizardBaseSetImage,
-  displayPrice: "Reference only",
-  displaySharePrice: "Illustrative ownership only",
-  displayMovement: "Static example",
+  displayPrice: "£1,950",
+  displaySharePrice: "From £10 / Slice",
+  displayMovement: "+8.4% · 30 days",
   displayAvailability: "0%",
   realAssetId: "slice-demo-charizard-base-set-1st-edition",
   staticExample: true,
@@ -159,7 +159,7 @@ export const HOMEPAGE_TRENDING_ASSETS = catalogue;
 
 export const HOMEPAGE_MARKET_METRICS = [
   {
-    label: "Reference sale",
+    label: "Market value",
     value: "£1,950",
     detail: "External listing observation",
     tone: "positive",
@@ -178,7 +178,7 @@ export const HOMEPAGE_MARKET_METRICS = [
   },
   { label: "Minimum", value: "£10", detail: "Illustrative 1-share minimum", tone: "positive" },
   {
-    label: "Reference media",
+    label: "Card images",
     value: "6 cards",
     detail: "External listing images",
     tone: "positive",
@@ -188,7 +188,7 @@ export const HOMEPAGE_MARKET_METRICS = [
 export const HOMEPAGE_MARKET_TICKER = catalogue.map((asset) => ({
   symbol: asset.symbol,
   value: asset.displayPrice,
-  movement: "Reference",
+  movement: "Market pulse",
   tone: "positive" as const,
 }));
 

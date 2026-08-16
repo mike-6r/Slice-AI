@@ -16,7 +16,7 @@ import { useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { isBetaEnvironment } from "@/config/environment";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { useFeaturedAssets, useTrendingAssets } from "@/queries/hooks";
+import { useTrendingAssets } from "@/queries/hooks";
 import type { Asset } from "@/domain";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Discover authenticated collectibles and explore illustrative fractional ownership examples.",
+          "Discover authenticated collectibles, explore clear ownership and experience a simpler way to collect.",
       },
     ],
   }),
@@ -60,8 +60,7 @@ const howSliceWorks = [
     label: "Choose",
     icon: <CircleDollarSign />,
     title: "Choose an ownership position",
-    detail:
-      "Review the whole-collectible reference, available ownership and price per unit before you commit.",
+    detail: "Review the card, available ownership and price per unit before you commit.",
     action: "Review ownership",
     to: "/marketplace" as const,
   },
@@ -236,7 +235,7 @@ function HomePage() {
                   <small>{asset.grade}</small>
                   <div className="approved-home__asset-price">
                     <div>
-                      <small>Reference value</small>
+                      <small>Market value</small>
                       <b>{asset.displayPrice}</b>
                     </div>
                     <span className={`is-${asset.movementTone}`}>{asset.displayMovement}</span>
@@ -316,11 +315,9 @@ function LiveAssetCards({ assets }: { assets: Asset[] }) {
     <div className="approved-home__trending" data-testid="homepage-trending-assets">
       {assets.map((asset) => {
         const media =
-          asset.media.find(
-            (media) => media.kind === "image" && /\bfront\b/i.test(media.alt),
-          ) ??
-          asset.media.find((media) => media.kind === "image") ??
-          (asset.slug ? assetShowcaseMedia(asset.slug) : undefined);
+          asset.media.find((media) => media.kind === "image" && /\bfront\b/i.test(media.alt)) ??
+          (asset.slug ? assetShowcaseMedia(asset.slug) : undefined) ??
+          asset.media.find((media) => media.kind === "image");
         const imageUrl = media ? ("url" in media ? media.url : media.src) : undefined;
         const category = marketCategoryPresentation(asset.details.category);
         const marketValue = asset.market?.estimatedMarketValue;
@@ -360,7 +357,7 @@ function LiveAssetCards({ assets }: { assets: Asset[] }) {
               <small className="approved-home__market-status">{statusLabel}</small>
               <div className="approved-home__asset-price">
                 <div>
-                  <small>Market reference</small>
+                  <small>Market value</small>
                   <b>
                     {marketValue
                       ? formatMoney(marketValue.amount, marketValue.currency)
@@ -466,19 +463,9 @@ function LegacyOwnershipWorks() {
 }
 
 function OwnershipWorks() {
-  const featuredQuery = useFeaturedAssets();
   if (isBetaEnvironment) {
-    const featured = featuredQuery.data?.[0];
-    const featuredMedia =
-      featured?.media.find(
-        (media) => media.kind === "image" && /\bfront\b/i.test(media.alt),
-      ) ?? featured?.media.find((media) => media.kind === "image");
-    // Keep the educational block visually complete while the live catalogue is
-    // empty. The API asset remains authoritative when available; this approved
-    // showcase image is only a clearly labelled reference fallback.
-    const showcaseFallback = HOMEPAGE_FEATURED_ASSET;
-    const featuredImage = featuredMedia?.url ?? showcaseFallback.image;
-    const featuredTitle = featured?.details.title ?? showcaseFallback.title;
+    const featuredImage = HOMEPAGE_FEATURED_ASSET.image;
+    const featuredTitle = HOMEPAGE_FEATURED_ASSET.title;
     return (
       <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
         <SectionHeading
@@ -509,11 +496,7 @@ function OwnershipWorks() {
             <div>
               <small>Step 1 · Real collectible</small>
               <strong>{featuredTitle}</strong>
-              <p>
-                {featured
-                  ? "A real authenticated card sits underneath the Slice market."
-                  : "A real card image illustrates the underlying collectible; live market data appears when an asset is published."}
-              </p>
+              <p>A real collectible sits at the centre of the Slice experience.</p>
             </div>
           </article>
           <OwnershipFlowArrow label="Card → terms" />
