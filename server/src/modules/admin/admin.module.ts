@@ -7,9 +7,10 @@ import { AdminService } from './admin.service';
 import { ConfigModule } from '../../config/config.module';
 import { SubmissionsModule } from '../submissions/submissions.module';
 import { OwnershipModule } from '../ownership/ownership.module';
+import { MarketModule } from '../market/market.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule],
+  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

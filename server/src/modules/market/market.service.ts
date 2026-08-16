@@ -348,6 +348,10 @@ export class MarketService {
   }
   async movers(kind: 'gainers' | 'losers' | 'active', limit: number) {
     const rows = await this.db.assetMarketSnapshot.findMany({
+      where: {
+        source: { not: 'EXTERNAL_MARKET_REFERENCE' },
+        markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+      },
       include: {
         asset: {
           include: {
@@ -509,17 +513,20 @@ export class MarketService {
   }
 
   private publicMarketSnapshotFilter() {
-    return this.config.isBeta
-      ? {
-          where: {
-            NOT: [
+    const safeProjection = {
+      NOT: [
+        { source: 'EXTERNAL_MARKET_REFERENCE' },
+        { markSource: 'EXTERNAL_REFERENCE_FALLBACK' },
+        ...(this.config.isBeta
+          ? [
               { source: { startsWith: 'STAGING_' } },
               { source: { startsWith: 'DEMO_' } },
               { source: { startsWith: 'TEST_' } },
-            ],
-          },
-        }
-      : {};
+            ]
+          : []),
+      ],
+    };
+    return { where: safeProjection };
   }
 
   private publicValuationEvidenceFilter() {
@@ -612,7 +619,11 @@ type PublicAssetRow = {
     priceMinor: bigint;
     currency: string;
     providerCode: string;
+    providerExternalId: string;
+    matchQuality: string;
+    included: boolean;
     externalUrl: string | null;
+    title: string;
     observedAt: Date;
     occurredAt: Date | null;
   }>;
@@ -701,7 +712,9 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     lastSuccessfulRefreshAt:
       market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
-    marketReference: externalMarketReference(asset.valuationEvidence ?? []),
+    marketReference:
+      externalMarketReferenceFromObservations(asset.marketObservations ?? []) ??
+      externalMarketReference(asset.valuationEvidence ?? []),
     sliceGrade: await publicSliceGrade(asset.submissions?.[0]?.preGrades?.[0], storage),
     dataStatus: market ? status(market.status) : 'UNAVAILABLE',
     ownership: asset.ownershipSupply
@@ -899,6 +912,30 @@ function externalMarketReference(
         ...(recentCompletedSale ? { recentCompletedSale } : {}),
       }
     : null;
+}
+
+function externalMarketReferenceFromObservations(
+  observations: NonNullable<PublicAssetRow['marketObservations']>,
+) {
+  const latest = observations.find(
+    (item) =>
+      item.providerCode === 'PRICECHARTING' &&
+      item.included !== false &&
+      item.observationType === 'PRICE_GUIDE' &&
+      (item.matchQuality === 'EXACT' || item.matchQuality === 'STRONG') &&
+      item.priceMinor > 0n &&
+      Boolean(item.externalUrl),
+  );
+  if (!latest?.externalUrl) return null;
+  return {
+    currentListing: {
+      amount: asMoney(latest.priceMinor, latest.currency),
+      source: 'PRICECHARTING',
+      externalReference: latest.providerExternalId,
+      listingUrl: latest.externalUrl,
+      observedAt: latest.observedAt.toISOString(),
+    },
+  };
 }
 function encodeCursor(id: string) {
   return Buffer.from(JSON.stringify({ id })).toString('base64url');

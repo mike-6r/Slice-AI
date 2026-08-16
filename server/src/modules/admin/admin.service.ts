@@ -311,16 +311,26 @@ export class AdminService {
           ...(this.config.isBeta ? { channel: { not: 'DISCORD' as const } } : {}),
         },
       }),
-      this.db.assetMarketSnapshot.count(),
+      this.db.assetMarketSnapshot.count({
+        where: {
+          source: { not: 'EXTERNAL_MARKET_REFERENCE' },
+          markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+        },
+      }),
       this.db.assetMarketSnapshot.count({
         where: this.config.isBeta
           ? {
+              source: { not: 'EXTERNAL_MARKET_REFERENCE' },
+              markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
               asset: {
                 status: 'PUBLISHED',
                 slug: { not: { startsWith: 'slice-demo-' } },
               },
             }
-          : undefined,
+          : {
+              source: { not: 'EXTERNAL_MARKET_REFERENCE' },
+              markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+            },
       }),
       this.db.rawCardPreGrade.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { status: true, updatedAt: true } }),
       this.db.marketProviderMapping.findMany({
@@ -383,6 +393,14 @@ export class AdminService {
         (incidentCounts.get(incident.provider) ?? 0) + 1,
       );
     const dbCheckedAt = new Date().toISOString();
+    const refreshSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [refreshQueued, refreshProcessing, refreshFailed, refreshCompleted24h, persistedReferences] = await Promise.all([
+      this.db.marketRefreshJob.count({ where: { status: 'QUEUED' } }),
+      this.db.marketRefreshJob.count({ where: { status: 'PROCESSING' } }),
+      this.db.marketRefreshJob.count({ where: { status: 'FAILED' } }),
+      this.db.marketRefreshJob.count({ where: { status: 'COMPLETED', completedAt: { gte: refreshSince } } }),
+      this.db.marketObservation.count({ where: { providerCode: 'PRICECHARTING', included: true } }),
+    ]);
     const activePriceChartingMappings = this.config.isBeta
       ? priceChartingMappings.filter(
           (mapping) =>
@@ -401,12 +419,10 @@ export class AdminService {
       this.config.priceChartingEnabled && this.config.priceChartingApiToken,
     );
     const priceChartingFresh = activePriceChartingMappings.filter(
-      (mapping) => mapping.asset.marketSnapshots[0]?.freshness === 'FRESH',
+      (mapping) => mapping.lastSuccessAt && Date.now() - mapping.lastSuccessAt.getTime() <= 24 * 60 * 60 * 1000,
     ).length;
     const priceChartingStale = activePriceChartingMappings.filter((mapping) =>
-      ['AGING', 'STALE', 'UNAVAILABLE'].includes(
-        mapping.asset.marketSnapshots[0]?.freshness ?? '',
-      ),
+      !mapping.lastSuccessAt || Date.now() - mapping.lastSuccessAt.getTime() > 24 * 60 * 60 * 1000,
     ).length;
     const priceChartingFailures = activePriceChartingMappings.filter(
       (mapping) =>
@@ -435,6 +451,11 @@ export class AdminService {
       `fresh ${priceChartingFresh}`,
       `stale ${priceChartingStale}`,
       `needs mapping ${priceChartingNeedsMapping}`,
+      `refresh queued ${refreshQueued}`,
+      `processing ${refreshProcessing}`,
+      `failed ${refreshFailed}`,
+      `completed 24h ${refreshCompleted24h}`,
+      `references ${persistedReferences}`,
       `confirmed submissions ${confirmedSubmissionReferenceCount}`,
       `awaiting asset promotion ${awaitingAssetPromotionCount}`,
     ].join(' · ');
@@ -553,7 +574,7 @@ export class AdminService {
           name: 'Market data',
           status: priceChartingStatus,
           summary: marketSnapshots
-            ? `${activeMarketSnapshots} active Beta snapshots (${marketSnapshots} persisted total). ${priceChartingSummary}`
+             ? `${activeMarketSnapshots} active Slice snapshots (${marketSnapshots} persisted total). ${priceChartingSummary}`
             : `No market snapshots. ${priceChartingSummary}`,
           lastCheckedAt: dbCheckedAt,
         },

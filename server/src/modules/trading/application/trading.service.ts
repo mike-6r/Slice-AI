@@ -130,7 +130,7 @@ export class TradingService {
       this.bookLevels(assetId, 'SELL', 100, 'asc'),
       this.bookLevels(assetId, 'BUY', 100, 'desc'),
       this.db.assetMarketSnapshot.findFirst({
-        where: { assetId, status: 'LIVE' },
+        where: { assetId, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } },
         orderBy: { asOf: 'desc' },
         select: { estimatedMarketValueMinor: true },
       }),
@@ -251,7 +251,7 @@ export class TradingService {
       this.db.ownershipAssetSupply.findUnique({ where: { assetId: asset.id }, select: { totalUnits: true, status: true } }),
       this.bookLevels(asset.id, 'SELL', 100, 'asc'),
       this.bookLevels(asset.id, 'BUY', 100, 'desc'),
-      this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE' }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
+      this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
       this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true } }),
     ]);
     const total = supply?.totalUnits ?? 0n;

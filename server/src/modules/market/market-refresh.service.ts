@@ -7,7 +7,13 @@ import { Inject } from '@nestjs/common';
 import { MarketProviderRegistry } from './market-provider.registry';
 import type { MarketIdentity, ProviderObservation } from './market-provider.ports';
 
-const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const REFRESH_INTERVALS_MS = {
+  AUTO_MATCHED: 24 * 60 * 60 * 1000,
+  STRONG: 12 * 60 * 60 * 1000,
+  VERIFIED: 6 * 60 * 60 * 1000,
+  STAFF_CONFIRMED: 6 * 60 * 60 * 1000,
+} as const;
+const MANUAL_REFRESH_COOLDOWN_MS = 15 * 60 * 1000;
 const LEASE_MS = 120_000;
 
 @Injectable()
@@ -36,7 +42,9 @@ export class MarketRefreshService {
     });
     let queued = 0;
     for (const mapping of mappings) {
-      const idempotencyKey = `market-refresh:${mapping.assetId}:${mapping.providerCode}:${Math.floor(now.getTime() / REFRESH_INTERVAL_MS)}`;
+      const interval = refreshInterval(mapping.status);
+      const jitter = deterministicJitter(mapping.assetId, interval);
+      const idempotencyKey = `market-refresh:${mapping.assetId}:${mapping.providerCode}:${Math.floor((now.getTime() - jitter) / interval)}`;
       const existing = await this.db.marketRefreshJob.findUnique({ where: { idempotencyKey } });
       if (existing) continue;
       try {
@@ -47,7 +55,7 @@ export class MarketRefreshService {
             mappingId: mapping.id,
             providerCode: mapping.providerCode,
             idempotencyKey,
-            availableAt: now,
+            availableAt: new Date(Math.max(now.getTime(), (mapping.nextRefreshAt ?? now).getTime())),
           },
         });
         queued += 1;
@@ -68,13 +76,32 @@ export class MarketRefreshService {
   async refreshAsset(assetId: string, now = new Date()) {
     await this.ensureMappings(now, assetId);
     const mappings = await this.db.marketProviderMapping.findMany({ where: { assetId } });
+    const cooldownUntil = new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS);
+    let queued = 0;
     for (const mapping of mappings) {
-      const idempotencyKey = `market-refresh:manual:${assetId}:${mapping.providerCode}:${now.getTime()}`;
-      await this.db.marketRefreshJob.create({
-        data: { id: randomUUID(), assetId, mappingId: mapping.id, providerCode: mapping.providerCode, idempotencyKey, availableAt: now },
+      if (mapping.cooldownUntil && mapping.cooldownUntil > now) continue;
+      const recentlyQueued = await this.db.marketRefreshJob.findFirst({
+        where: {
+          mappingId: mapping.id,
+          createdAt: { gte: new Date(now.getTime() - MANUAL_REFRESH_COOLDOWN_MS) },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
       });
+      if (recentlyQueued) continue;
+      const idempotencyKey = `market-refresh:manual:${assetId}:${mapping.providerCode}:${Math.floor(now.getTime() / MANUAL_REFRESH_COOLDOWN_MS)}`;
+      const existing = await this.db.marketRefreshJob.findUnique({ where: { idempotencyKey } });
+      if (existing) continue;
+      try {
+        await this.db.marketRefreshJob.create({
+          data: { id: randomUUID(), assetId, mappingId: mapping.id, providerCode: mapping.providerCode, idempotencyKey, availableAt: now },
+        });
+        queued += 1;
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
     }
-    return { assetId, queued: mappings.length };
+    return { assetId, queued, cooldownUntil: queued ? cooldownUntil.toISOString() : null };
   }
 
   private async claimJobs(now: Date, workerId: string) {
@@ -128,19 +155,25 @@ export class MarketRefreshService {
       if (!provider.supports(identity.category)) throw new Error('MARKET_PROVIDER_UNSUPPORTED_CATEGORY');
       const observations = await provider.fetchObservations(identity, job.mapping.providerExternalId);
       await this.persistObservations(job.mapping.id, asset.id, observations);
-      await this.rebuildSummary(asset.id, observations, now);
+      await this.recordReferenceChange(asset.id, observations, now);
       await this.db.marketProviderMapping.update({
         where: { id: job.mapping.id },
-        data: { lastSuccessAt: now, lastFailureAt: null, lastFailureCode: null, cooldownUntil: null, nextRefreshAt: new Date(now.getTime() + REFRESH_INTERVAL_MS) },
+        data: {
+          lastSuccessAt: now,
+          lastFailureAt: null,
+          lastFailureCode: null,
+          cooldownUntil: null,
+          nextRefreshAt: new Date(now.getTime() + refreshInterval(job.mapping.status) + deterministicJitter(asset.id, refreshInterval(job.mapping.status))),
+        },
       });
       await this.db.marketRefreshJob.update({ where: { id: job.id }, data: { status: 'COMPLETED', completedAt: now, lockedAt: null, lockedBy: null, leaseExpiresAt: null } });
       this.logger.log({ jobId: job.id, workerId, provider: job.providerCode, observations: observations.length }, 'Market refresh completed');
     } catch (error) {
       const attempts = job.attempts;
-      const terminal = attempts >= this.config.marketRefreshMaxAttempts;
-      const delay = Math.min(this.config.marketRefreshRetryMaxMs, this.config.marketRefreshRetryBaseMs * 2 ** Math.max(0, attempts - 1));
-      const next = new Date(now.getTime() + delay);
       const code = safeErrorCode(error);
+      const terminal = attempts >= this.config.marketRefreshMaxAttempts || isPermanentFailure(code);
+      const delay = retryDelay(code, attempts, this.config.marketRefreshRetryBaseMs, this.config.marketRefreshRetryMaxMs);
+      const next = new Date(now.getTime() + delay);
       await this.db.marketProviderMapping.update({ where: { id: job.mapping.id }, data: { lastFailureAt: now, lastFailureCode: code, cooldownUntil: terminal ? next : null, nextRefreshAt: terminal ? next : now } });
       await this.db.marketRefreshJob.update({ where: { id: job.id }, data: { status: terminal ? 'FAILED' : 'QUEUED', availableAt: next, lastErrorCode: code, lastErrorAt: now, lockedAt: null, lockedBy: null, leaseExpiresAt: null } });
       this.logger.warn({ jobId: job.id, workerId, provider: job.providerCode, code, terminal }, 'Market refresh failed');
@@ -159,23 +192,18 @@ export class MarketRefreshService {
     if (rows.length) await this.db.marketObservation.createMany({ data: rows, skipDuplicates: true });
   }
 
-  private async rebuildSummary(assetId: string, current: ProviderObservation[], now: Date) {
-    const history = await this.db.marketObservation.findMany({ where: { assetId, included: true }, orderBy: [{ observedAt: 'desc' }, { id: 'desc' }], take: 500 });
-    const sales = history.filter((item) => item.observationType === 'COMPLETED_SALE');
-    const priceGuides = history.filter((item) => item.observationType === 'PRICE_GUIDE');
-    const sourceRows = sales.length ? sales : priceGuides;
-    if (!sourceRows.length) return;
-    const byCurrency = sourceRows.reduce((groups, item) => { const list = groups.get(item.currency) ?? []; list.push(item); groups.set(item.currency, list); return groups; }, new Map<string, typeof sourceRows>());
-    const [currency, currencySales] = [...byCurrency.entries()].sort((a, b) => b[1].length - a[1].length)[0]!;
-    const sorted = [...currencySales].sort((a, b) => (a.priceMinor < b.priceMinor ? -1 : a.priceMinor > b.priceMinor ? 1 : 0));
-    const midpoint = Math.floor(sorted.length / 2);
-    const median = sorted.length % 2 ? sorted[midpoint]!.priceMinor : (sorted[midpoint - 1]!.priceMinor + sorted[midpoint]!.priceMinor) / 2n;
-    const previous = await this.db.assetMarketSnapshot.findFirst({ where: { assetId, currency }, orderBy: [{ asOf: 'desc' }, { id: 'desc' }] });
-    const change24hBps = previous && previous.estimatedMarketValueMinor > 0n && previous.asOf.getTime() >= now.getTime() - 2 * 86_400_000
-      ? Number(((median - previous.estimatedMarketValueMinor) * 10_000n) / previous.estimatedMarketValueMinor)
-      : 0;
-    const freshness = freshnessState(now, history[0]?.observedAt ?? now);
-    await this.db.assetMarketSnapshot.create({ data: { id: randomUUID(), assetId, asOf: now, estimatedMarketValueMinor: median, currency, change24hBps, availableBps: null, ownersCount: null, watchersCount: null, confidence: null, source: 'EXTERNAL_MARKET_REFERENCE', status: 'LIVE', markSource: 'EXTERNAL_REFERENCE_FALLBACK', freshness, lastSuccessfulRefreshAt: now } });
+  private async recordReferenceChange(assetId: string, current: ProviderObservation[], now: Date) {
+    const latest = current.find((item) => item.matchQuality === 'EXACT' || item.matchQuality === 'STRONG');
+    if (!latest || latest.priceMinor <= 0n) return;
+    const previous = await this.db.marketObservation.findFirst({
+      where: { assetId, included: true, providerExternalId: latest.providerExternalId, currency: latest.currency, priceMinor: { not: latest.priceMinor } },
+      orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+    });
+    if (!previous || previous.priceMinor <= 0n) return;
+    const changeBps = Number(((latest.priceMinor - previous.priceMinor) * 10_000n) / previous.priceMinor);
+    if (Math.abs(changeBps) >= 1_000) {
+      this.logger.log({ assetId, provider: 'PRICECHARTING', changeBps, observedAt: now.toISOString() }, 'Material external reference change detected; Slice valuation was not changed');
+    }
   }
 
   private async ensureMappings(now: Date, assetId?: string) {
@@ -192,7 +220,9 @@ export class MarketRefreshService {
       const providerCode = 'PRICECHARTING';
       const identityHash = createHash('sha256').update(JSON.stringify({ category: asset.category.slug, year: asset.year, manufacturer: asset.manufacturer, set: asset.collectibleSet?.slug, cardNumber: asset.cardNumber, title: asset.title, grader: asset.gradeScaleEntry?.company.code, grade: asset.gradeScaleEntry?.grade.toString(), variant: asset.edition })).digest('hex');
       try {
-        await this.db.marketProviderMapping.upsert({ where: { assetId_providerCode: { assetId: asset.id, providerCode } }, create: { id: randomUUID(), assetId: asset.id, providerCode, providerExternalId, providerUrl: parsed.listingUrl, identityHash, nextRefreshAt: now }, update: { providerExternalId, providerUrl: parsed.listingUrl, identityHash } });
+        const existing = await this.db.marketProviderMapping.findUnique({ where: { assetId_providerCode: { assetId: asset.id, providerCode } } });
+        const identityChanged = Boolean(existing && (existing.identityHash !== identityHash || existing.providerExternalId !== providerExternalId));
+        await this.db.marketProviderMapping.upsert({ where: { assetId_providerCode: { assetId: asset.id, providerCode } }, create: { id: randomUUID(), assetId: asset.id, providerCode, providerExternalId, providerUrl: parsed.listingUrl, identityHash, nextRefreshAt: now }, update: identityChanged ? { providerExternalId, providerUrl: parsed.listingUrl, identityHash, status: 'AUTO_MATCHED', lastSuccessAt: null, lastFailureAt: null, lastFailureCode: null, cooldownUntil: null, nextRefreshAt: now } : { providerExternalId, providerUrl: parsed.listingUrl, identityHash } });
       } catch (error) { if (!isUniqueViolation(error)) throw error; }
     }
   }
@@ -203,7 +233,10 @@ function providerIdFromUrl(value: string) {
 }
 
 function fingerprint(observation: ProviderObservation) {
-  return createHash('sha256').update([observation.providerExternalId, observation.observationType, observation.priceMinor.toString(), observation.currency, observation.occurredAt?.toISOString() ?? observation.observedAt.toISOString()].join('|')).digest('hex');
+  const provenance = observation.provenance as Record<string, unknown> | undefined;
+  const stableCondition = typeof provenance?.conditionKey === 'string' ? provenance.conditionKey : '';
+  const eventTime = observation.occurredAt?.toISOString() ?? '';
+  return createHash('sha256').update([observation.providerExternalId, observation.observationType, stableCondition, observation.priceMinor.toString(), observation.currency, eventTime].join('|')).digest('hex');
 }
 
 export function freshnessState(now: Date, observedAt: Date): 'FRESH' | 'AGING' | 'STALE' | 'UNAVAILABLE' {
@@ -216,3 +249,17 @@ export function freshnessState(now: Date, observedAt: Date): 'FRESH' | 'AGING' |
 
 function safeErrorCode(error: unknown) { return error instanceof Error ? error.message.slice(0, 120) : 'MARKET_REFRESH_FAILED'; }
 function isUniqueViolation(error: unknown) { return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'; }
+function refreshInterval(status: string) {
+  return REFRESH_INTERVALS_MS[status as keyof typeof REFRESH_INTERVALS_MS] ?? REFRESH_INTERVALS_MS.AUTO_MATCHED;
+}
+function deterministicJitter(assetId: string, intervalMs: number) {
+  const digest = createHash('sha256').update(assetId).digest().readUInt32BE(0);
+  return Math.floor((digest / 0xffffffff) * Math.min(30 * 60 * 1000, Math.floor(intervalMs * 0.1)));
+}
+function isPermanentFailure(code: string) {
+  return ['PRICECHARTING_AUTH_FAILED', 'PRICECHARTING_INVALID_RESPONSE', 'PRICECHARTING_NOT_CONFIGURED', 'MARKET_PROVIDER_UNSUPPORTED_CATEGORY', 'MARKET_ASSET_NOT_FOUND'].includes(code);
+}
+function retryDelay(code: string, attempts: number, base: number, max: number) {
+  if (code === 'PRICECHARTING_RATE_LIMITED') return Math.min(max, Math.max(base, 5 * 60 * 1000));
+  return Math.min(max, base * 2 ** Math.max(0, attempts - 1));
+}

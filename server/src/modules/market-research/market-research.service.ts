@@ -12,7 +12,6 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
 import { MarketProviderRegistry } from '../market/market-provider.registry';
-import { freshnessState } from '../market/market-refresh.service';
 import type { MarketIdentity, ProviderObservation } from '../market/market-provider.ports';
 
 export type MarketResearchInput = {
@@ -559,27 +558,6 @@ export class CollectibleMarketResearchService {
           } as Prisma.InputJsonValue,
         },
       });
-      const snapshot = await db.assetMarketSnapshot.upsert({
-        where: { assetId_source_asOf: { assetId, source: 'EXTERNAL_MARKET_REFERENCE', asOf: observation.observedAt } },
-        create: {
-          id: randomUUID(),
-          assetId,
-          asOf: observation.observedAt,
-          estimatedMarketValueMinor: observation.amountMinor,
-          currency: observation.currency,
-          change24hBps: 0,
-          availableBps: null,
-          ownersCount: null,
-          watchersCount: null,
-          confidence: null,
-          source: 'EXTERNAL_MARKET_REFERENCE',
-          status: 'LIVE',
-          markSource: 'EXTERNAL_REFERENCE_FALLBACK',
-          freshness: freshnessState(now, observation.observedAt),
-          lastSuccessfulRefreshAt: observation.observedAt,
-        },
-        update: {},
-      });
       await db.auditEvent.create({
         data: {
           id: randomUUID(),
@@ -597,7 +575,6 @@ export class CollectibleMarketResearchService {
             provider: 'PRICECHARTING',
             providerProductId,
             observationId: promotedObservation.id,
-            snapshotId: snapshot.id,
             observedAt: observation.observedAt.toISOString(),
           },
           createdAt: now,
@@ -608,7 +585,6 @@ export class CollectibleMarketResearchService {
         assetId,
         mappingId: mapping.id,
         observationId: promotedObservation.id,
-        snapshotId: snapshot.id,
         providerProductId,
         providerCalls: 0,
         idempotent: Boolean(existingMapping && existingObservation),

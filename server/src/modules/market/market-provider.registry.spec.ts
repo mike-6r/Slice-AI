@@ -102,4 +102,47 @@ describe('PriceChartingProvider', () => {
       status: 'UNAVAILABLE',
     });
   });
+
+  it('marks only the raw guide as exact for an ungraded identity', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 2513024,
+          'product-name': 'Umbreon VMAX #215/203',
+          currency: 'USD',
+          'loose-price': 222500,
+          'manual-only-price': 400000,
+          'graded-price': 300000,
+        }),
+        { status: 200 },
+      ),
+    );
+    const provider = new PriceChartingProvider(config());
+
+    const observations = await provider.fetchObservations(
+      {
+        category: 'pokemon-tcg',
+        year: 2021,
+        manufacturer: 'Nintendo',
+        set: 'Evolving Skies',
+        cardNumber: '215/203',
+        title: 'Umbreon VMAX',
+        variant: null,
+        grader: null,
+        grade: null,
+      },
+      '2513024',
+    );
+
+    expect(observations.find((item) => item.grader === undefined)?.matchQuality).toBe('EXACT');
+    expect(observations.filter((item) => item.matchQuality === 'EXACT')).toHaveLength(1);
+    expect(observations.filter((item) => item.matchQuality === 'WEAK')).toHaveLength(2);
+  });
+
+  it('classifies provider authentication failures separately', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{}', { status: 401 }));
+    const provider = new PriceChartingProvider(config());
+
+    await expect(provider.getProduct('2513024')).rejects.toThrow('PRICECHARTING_AUTH_FAILED');
+  });
 });

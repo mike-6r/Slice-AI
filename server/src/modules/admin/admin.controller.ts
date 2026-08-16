@@ -18,6 +18,7 @@ import {
 import { PermissionGuard } from '../identity/access/permission.guard';
 import { RequirePermission } from '../identity/access/permission.decorator';
 import { AdminService } from './admin.service';
+import { MarketRefreshService } from '../market/market-refresh.service';
 
 const page = z
   .object({
@@ -149,7 +150,10 @@ const intakeDestination = z
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly marketRefresh: MarketRefreshService,
+  ) {}
 
   @Get('overview')
   @RequirePermission('admin.console.read')
@@ -337,6 +341,14 @@ export class AdminController {
   @RequirePermission('integrations.read')
   integrations(@Req() request: AuthenticatedRequest) {
     return this.admin.integrations(request.actor!);
+  }
+
+  @Post('market-data/refresh/:assetId')
+  @RequirePermission('integrations.manage')
+  refreshMarketData(
+    @Param('assetId') assetId: string,
+  ) {
+    return this.marketRefresh.refreshAsset(assetId);
   }
 
   @Get('search')

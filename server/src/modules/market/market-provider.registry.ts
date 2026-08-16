@@ -149,6 +149,9 @@ export class PriceChartingProvider implements MarketDataProvider {
         headers: { accept: 'application/json' },
         signal: controller.signal,
       });
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('PRICECHARTING_AUTH_FAILED');
+      }
       if (response.status === 429) throw new Error('PRICECHARTING_RATE_LIMITED');
       if (!response.ok) throw new Error(`PRICECHARTING_HTTP_${response.status}`);
       return await response.json();
@@ -176,9 +179,13 @@ export class PriceChartingProvider implements MarketDataProvider {
 
       if (this.cache) {
         const key = this.cache.key('pricecharting', 'global-rate');
+        const ttlSeconds = Math.max(
+          2,
+          Math.ceil((this.config.priceChartingMinRequestIntervalMs ?? 1_000) / 1_000) + 1,
+        );
         for (;;) {
           try {
-            if (await this.cache.set(key, '1', { ttlSeconds: 2, nx: true })) break;
+            if (await this.cache.set(key, String(Date.now()), { ttlSeconds, nx: true })) break;
           } catch {
             break;
           }
@@ -260,7 +267,11 @@ function conditionMatch(
   identity: MarketIdentity,
   reference: { grader?: string; grade?: string; exactGrader: boolean },
 ): ProviderObservation['matchQuality'] {
-  if (!identity.grader && !identity.grade) return 'STRONG';
+  if (!identity.grader && !identity.grade) {
+    return !reference.exactGrader && !reference.grader && !reference.grade
+      ? 'EXACT'
+      : 'WEAK';
+  }
   if (!reference.exactGrader) return 'WEAK';
   return normalize(identity.grader) === normalize(reference.grader) && normalize(identity.grade) === normalize(reference.grade)
     ? 'EXACT'

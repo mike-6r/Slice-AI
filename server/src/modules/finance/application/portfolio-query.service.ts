@@ -95,7 +95,7 @@ export class PortfolioQueryService {
         },
         ownershipSupply: { select: { totalUnits: true, issuedUnits: true } },
         marketSnapshots: {
-          where: { currency: 'GBP' },
+          where: { currency: 'GBP', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } },
           orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
           take: 1,
           select: { estimatedMarketValueMinor: true, asOf: true, status: true, markSource: true, freshness: true, lastSuccessfulRefreshAt: true },
