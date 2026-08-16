@@ -1,0 +1,171 @@
+{
+  "title": "SLICE BETA RELEASE GATE — FINAL CROSS-PRODUCT READINESS PASS",
+  "environment": "https://staging.slicecollectable.com",
+  "qaDate": "2026-08-16",
+  "decision": "NO_GO_EXTERNAL_FULLY_EVIDENCED_BETA",
+  "controlledInternalBeta": "GO",
+  "deployment": {
+    "sourceCommit": "6ce3210",
+    "previousExpectedCommit": "abdff60",
+    "vpsRelease": "/opt/slice/releases/20260816-6ce3210",
+    "runtimePath": "/opt/slice/app",
+    "currentSymlink": "/opt/slice/releases/20260816-6ce3210",
+    "apiService": "active",
+    "webService": "active",
+    "health": "PASS",
+    "ready": "PASS",
+    "postgres": "up",
+    "redis": "up",
+    "prismaMigrations": "61_UP_TO_DATE",
+    "frontendConfig": "BETA_API_BUILD_NO_LOCALHOST_FALLBACK"
+  },
+  "severityCounts": {
+    "p0": 0,
+    "p1Unresolved": 3,
+    "p2": 1,
+    "p3": 0
+  },
+  "routeMatrix": {
+    "public": "GO",
+    "auth": "GO",
+    "investor": "PARTIAL",
+    "collector": "PARTIAL",
+    "staffReviewer": "PARTIAL",
+    "admin": "PARTIAL",
+    "deprecatedStale": "PASS"
+  },
+  "surfaceDecisions": {
+    "public": "GO",
+    "auth": "GO",
+    "investor": "NO_GO",
+    "collector": "NO_GO",
+    "admin": "GO_CONTROLLED_INTERNAL",
+    "submission": "NO_GO_EXTERNAL_EVIDENCE_GATE",
+    "review": "GO_CONTROLLED_INTERNAL",
+    "physicalIntake": "GO_READ_ONLY_SOFTWARE_GATE",
+    "assetOperations": "GO_CONTROLLED_INTERNAL",
+    "marketData": "GO",
+    "issuance": "GO_READ_ONLY_UI_GATE",
+    "treasury": "GO",
+    "trading": "GO_PRESERVED_STATE",
+    "settlement": "GO_PRESERVED_STATE",
+    "ownership": "GO_PRESERVED_STATE",
+    "portfolio": "GO_READ_ONLY",
+    "memberships": "PARTIAL",
+    "governance": "PARTIAL",
+    "support": "PARTIAL",
+    "platformOperations": "PARTIAL",
+    "discord": "PARTIAL",
+    "privacy": "NO_GO_FRESH_MATRIX_REQUIRED",
+    "rbac": "NO_GO_FRESH_STAFF_REVIEWER_IDOR_REQUIRED",
+    "financialReconciliation": "GO_PRESERVED_STATE",
+    "responsive": "NO_GO_FRESH_FULL_MATRIX_REQUIRED",
+    "accessibility": "NO_GO_FRESH_FULL_MATRIX_REQUIRED",
+    "providers": "GO_WITH_LIMITATIONS"
+  },
+  "roleMatrix": {
+    "anonymous": "PASS_PUBLIC_AND_AUTH_BOUNDARY",
+    "investor": "PARTIAL_INDEPENDENT_SESSION_REQUIRED",
+    "collector": "PASS_READ_ONLY_WORKSPACE_AND_LIST_ENTRY",
+    "staff": "NOT_FRESHLY_EXECUTED",
+    "reviewer": "NOT_FRESHLY_EXECUTED",
+    "admin": "PASS_READ_ONLY_TREASURY"
+  },
+  "majorWorkflows": {
+    "sessionRestore": "GO",
+    "crossTabRefresh": "GO_PRIOR_TEST_EVIDENCE",
+    "refreshAbuseGuard": "GO_PRIOR_TEST_EVIDENCE",
+    "collectorSubmission": "PARTIAL_NON_DESTRUCTIVE_GATE",
+    "adminReview": "GO_CONTROLLED_INTERNAL",
+    "physicalIntake": "GO_READ_ONLY_SOFTWARE_GATE",
+    "assetOperations": "GO_CONTROLLED_INTERNAL",
+    "valuation": "GO_PERSISTED_STATE",
+    "priceCharting": "GO_ZERO_RENDER_CALL_OBSERVED",
+    "automatedMarketRefresh": "GO_PRIOR_EVIDENCE",
+    "issuance": "GO_READ_ONLY_UI_GATE",
+    "treasuryLiquidity": "GO_FRESH_READ_ONLY",
+    "marketActivation": "GO_PRESERVED_STATE",
+    "collectorBuy": "GO_PRESERVED_STATE",
+    "matchingExecutionSettlement": "GO_PRESERVED_STATE",
+    "ownershipPortfolio": "GO_PRESERVED_STATE",
+    "discord": "PARTIAL_DOCUMENTED_LIMITATIONS"
+  },
+  "umbreonRegression": {
+    "market": "OPEN",
+    "issuedSupply": 1000,
+    "treasurySettled": 999,
+    "treasuryReserved": 9,
+    "treasuryAvailableToList": 990,
+    "publicListed": 9,
+    "collectorUnits": 1,
+    "preservedExecutionUnits": 1,
+    "mutationCount": 0
+  },
+  "charizardSafety": {
+    "submissionId": "054e7773-87ad-4b5e-9701-916a3aa5144d",
+    "status": "APPROVED",
+    "shipment": "NONE",
+    "receipt": "NONE",
+    "verification": "NONE",
+    "valuation": "NONE",
+    "custody": "NONE",
+    "issuance": "NONE",
+    "market": "NONE",
+    "finance": "NONE",
+    "changed": false
+  },
+  "privacy": {
+    "publicLeakObserved": false,
+    "privateMediaFreshMatrix": "NOT_EXECUTED",
+    "intakeAddressFreshMatrix": "NOT_EXECUTED",
+    "credentialsInArtifacts": false
+  },
+  "providers": {
+    "priceChartingPageRenderCallsObserved": 0,
+    "ximilarPageRenderCallsObserved": 0,
+    "ximilar": "NOT_CONFIGURED_OPTIONAL",
+    "plaidBridgeSmsEmail2fa": "BETA_DEFERRED"
+  },
+  "browser": {
+    "freshTabPublicRoutes": "PASS",
+    "freshTabAdminTreasury": "PASS",
+    "freshTabCollectorReadOnly": "PASS",
+    "consoleErrorsFreshTab": 0,
+    "hydrationErrorsFreshTab": 0,
+    "networkUnexpected401500": 0,
+    "normalUse429": 0,
+    "responsiveEvidence": "EXISTING_SCREENSHOTS_PARTIAL_FRESH_FULL_MATRIX_REQUIRED",
+    "accessibilityEvidence": "PARTIAL_FRESH_FULL_MATRIX_REQUIRED"
+  },
+  "knownNonBlockingLimitations": [
+    "Membership provider-backed notifications are not supported.",
+    "Support D17 notifications are not supported.",
+    "Rejected-order notification is not supported.",
+    "Plaid, Bridge, SMS, email verification, and 2FA are Beta-deferred/disabled.",
+    "Ximilar is optional and not configured.",
+    "Physical shipment and custody require real-world evidence."
+  ],
+  "blockers": [
+    { "id": "FRESH-INVESTOR-001", "severity": "P1", "status": "OPEN", "reason": "Independent Investor session and customer route matrix not freshly evidenced." },
+    { "id": "FRESH-PRIVACY-001", "severity": "P1", "status": "OPEN", "reason": "Private media and intake-address allow/deny matrix not freshly exercised." },
+    { "id": "FRESH-RBAC-001", "severity": "P1", "status": "OPEN", "reason": "Fresh Staff/Reviewer and IDOR matrix not freshly exercised." },
+    { "id": "FRESH-A11Y-001", "severity": "P2", "status": "OPEN", "reason": "Full responsive and keyboard/focus/accessibility matrix not freshly captured." }
+  ],
+  "fixesMade": [
+    { "commit": "59eca22", "summary": "Public and login routes no longer block behind a protected-session refresh cooldown." },
+    { "commit": "6ce3210", "summary": "Client-mount gating removes the SSR hydration mismatch from the route-aware session boundary." },
+    { "summary": "Activated the verified release in the actual /opt/slice/app systemd working directory and retained /opt/slice/current." }
+  ],
+  "screenshots": [
+    "qa-screenshots/treasury-qa/umb-390x844.png",
+    "qa-screenshots/treasury-qa/umb-768x1024.png",
+    "qa-screenshots/treasury-qa/umb-1366x768.png",
+    "qa-screenshots/treasury-qa/umb-1920x1080.png",
+    "qa-screenshots/treasury-qa/umb-2560x1440.png",
+    "qa-screenshots/admin-market-1366-auth-final.png",
+    "qa-screenshots/admin-market-1920-auth-final.png",
+    "qa-screenshots/admin-market-2560-auth-final.png"
+  ],
+  "finalBetaReadiness": "NO_GO",
+  "nextAction": "Obtain authorized independent Investor/Staff/Reviewer sessions and complete the non-destructive privacy, RBAC/IDOR, responsive, and accessibility matrices without mutating Umbreon or Charizard."
+}
