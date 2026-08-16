@@ -1,4 +1,5 @@
 import type { Asset } from "@/domain";
+import type { SupportedCurrency } from "@/data/repositories";
 
 export type MarketplaceAsset = {
   id: string;
@@ -13,6 +14,7 @@ export type MarketplaceAsset = {
   grade?: string;
   certificationNumber?: string;
   estimatedMarketValueMinor?: number;
+  estimatedMarketValueCurrency?: SupportedCurrency;
   source?: string;
   asOf?: string;
   confidence?: number;
@@ -46,6 +48,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
     : undefined,
   certificationNumber: asset.certification?.number,
   estimatedMarketValueMinor: asset.market?.estimatedMarketValue?.amount,
+  estimatedMarketValueCurrency: asset.market?.estimatedMarketValue?.currency,
   source: asset.market?.source,
   asOf: asset.market?.asOf,
   confidence: asset.market?.confidence ?? asset.confidence,

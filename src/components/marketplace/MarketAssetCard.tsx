@@ -64,7 +64,7 @@ function MarketValue({ asset }: { asset: MarketplaceAsset }) {
       <strong>
         {asset.estimatedMarketValueMinor === undefined
           ? "Unavailable"
-          : formatMoney(asset.estimatedMarketValueMinor)}
+          : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
       </strong>
       {change !== undefined && (
         <span className={change >= 0 ? "is-positive" : "is-negative"}>
@@ -198,7 +198,7 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
           <dd>
             {asset.estimatedMarketValueMinor === undefined
               ? "Unavailable"
-              : formatMoney(asset.estimatedMarketValueMinor)}
+              : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
           </dd>
         </div>
         <div>

@@ -168,7 +168,13 @@ function AssetPage() {
               <div className="asset-ranking-strip">
                 <Stat
                   label="Asset value"
-                  value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+                  value={
+                    currentValue === undefined
+                      ? "Unavailable"
+                      : formatCurrency(currentValue, {
+                          currency: asset.estimatedMarketValueCurrency,
+                        })
+                  }
                 />
                 <Stat
                   label="Price per Slice"
@@ -231,7 +237,13 @@ function AssetPage() {
             <div>
               <Stat
                 label="Asset value"
-                value={currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+                value={
+                  currentValue === undefined
+                    ? "Unavailable"
+                    : formatCurrency(currentValue, {
+                        currency: asset.estimatedMarketValueCurrency,
+                      })
+                }
               />
               <Stat
                 label="Price per Slice"
@@ -427,7 +439,11 @@ function AssetPage() {
               <div>
                 <span>Whole collectible reference</span>
                 <strong>
-                  {currentValue === undefined ? "Unavailable" : formatCurrency(currentValue)}
+                  {currentValue === undefined
+                    ? "Unavailable"
+                    : formatCurrency(currentValue, {
+                        currency: asset.estimatedMarketValueCurrency,
+                      })}
                 </strong>
               </div>
               <ExternalReference
@@ -953,7 +969,9 @@ function SimilarAssets({
                   <strong>
                     {item.estimatedMarketValueMinor === undefined
                       ? "Unavailable"
-                      : formatCurrency(item.estimatedMarketValueMinor)}
+                      : formatCurrency(item.estimatedMarketValueMinor, {
+                          currency: item.estimatedMarketValueCurrency,
+                        })}
                   </strong>
                   {item.change24hBps !== undefined && (
                     <em>{formatPercent(item.change24hBps / 100)}</em>
