@@ -4,6 +4,9 @@ import { formatAvailability, formatMinorAmount, formatPricePerUnit } from "./mar
 describe("market presentation", () => {
   it("keeps authoritative money exact", () => {
     expect(formatMinorAmount("1250", "GBP")).toBe("£12.50");
+    expect(formatMinorAmount("164", "GBP")).toBe("£1.64");
+    expect(formatMinorAmount("50", "GBP")).toBe("£0.50");
+    expect(formatMinorAmount("1", "GBP")).toBe("£0.01");
     expect(formatMinorAmount("0", "GBP")).toBe("£0.00");
   });
   it("explains a retained sub-penny remainder", () => {
