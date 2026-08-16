@@ -2602,6 +2602,15 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       tab ? { tab } : undefined,
     );
   },
+  async refreshMarketData(id) {
+    return client.request<{
+      assetId: string;
+      queued: number;
+      cooldownUntil: string | null;
+    }>(`/admin/market-data/refresh/${encodeURIComponent(id)}`, {
+      method: "POST",
+    });
+  },
   async proposeOwnershipSupply(id, input) {
     return client.request<{
       assetId: string;

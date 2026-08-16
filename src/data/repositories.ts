@@ -997,6 +997,14 @@ export type AdminCollectibleDetail = {
     publication: string;
     trading: { status: string; tradingEnabled: boolean } | null;
     asking: { minor: string; currency: string } | null;
+    reference: {
+      provider: string;
+      externalId: string;
+      minor: string;
+      currency: string;
+      observedAt: string;
+      nextRefreshAt: string | null;
+    } | null;
     floor: { minor: string; currency: string } | null;
     salesAverage: { minor: string; currency: string } | null;
     salesCount: number;
@@ -1186,6 +1194,11 @@ export interface AdminRepository {
   getIntegrations(): Promise<AdminIntegrationsSummary>;
   search(query: string, limit?: number): Promise<{ items: AdminSearchResult[] }>;
   getCollectibleDetail(id: string, tab?: string): Promise<AdminCollectibleDetail>;
+  refreshMarketData(id: string): Promise<{
+    assetId: string;
+    queued: number;
+    cooldownUntil: string | null;
+  }>;
   proposeOwnershipSupply(
     id: string,
     input: { policyCode: string; totalUnits: string; reason: string },

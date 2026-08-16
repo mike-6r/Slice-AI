@@ -3740,6 +3740,20 @@ export class AdminService {
         },
         valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 100 },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 50 },
+        marketProviderMappings: {
+          where: { providerCode: 'PRICECHARTING' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+        marketObservations: {
+          where: {
+            providerCode: 'PRICECHARTING',
+            observationType: 'PRICE_GUIDE',
+            included: true,
+          },
+          orderBy: { observedAt: 'desc' },
+          take: 50,
+        },
         custodyRecord: {
           include: { events: { orderBy: { occurredAt: 'asc' } } },
         },
@@ -3798,6 +3812,8 @@ export class AdminService {
     const intake = approved?.intake ?? null;
     const latestReview = approved?.reviews[0] ?? null;
     const snapshot = asset.marketSnapshots[0] ?? null;
+    const mapping = asset.marketProviderMappings[0] ?? null;
+    const marketObservation = asset.marketObservations[0] ?? null;
     const activeDecision =
       asset.valuationDecisions.find((item) => item.status === 'ACTIVE') ?? null;
     const owner = approved?.owner ?? null;
@@ -4035,13 +4051,24 @@ export class AdminService {
         asking: listing
           ? { minor: listing.minor, currency: listing.currency }
           : null,
+        reference: marketObservation
+          ? {
+              provider: marketObservation.providerCode,
+              externalId: marketObservation.providerExternalId,
+              minor: marketObservation.priceMinor.toString(),
+              currency: marketObservation.currency,
+              observedAt: marketObservation.observedAt.toISOString(),
+              nextRefreshAt: mapping?.nextRefreshAt?.toISOString() ?? null,
+            }
+          : null,
         floor: null,
         salesAverage:
           avgSale === null
             ? null
             : { minor: avgSale.toString(), currency: sales[0]!.currency },
         salesCount: sales.length,
-        lastUpdated: snapshot?.asOf.toISOString() ?? null,
+        lastUpdated:
+          marketObservation?.observedAt.toISOString() ?? snapshot?.asOf.toISOString() ?? null,
         readiness: {
           status:
             asset.publication?.status === 'PUBLISHED' ||

@@ -625,6 +625,10 @@ function OwnershipTab({ item }: { item: Detail }) {
 function MarketTab({ item }: { item: Detail }) {
   const services = useAppServices();
   const client = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: () => services.repositories.admin.refreshMarketData(item.id),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] }),
+  });
   const activate = useMutation({
     mutationFn: () => services.repositories.admin.activateTradingMarket(item.id),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] }),
@@ -663,6 +667,36 @@ function MarketTab({ item }: { item: Detail }) {
           ) : null}
         </InfoCard>
         <InfoCard title="Market data">
+          <div className="admin-market-refresh-row">
+            <div>
+              <strong>{item.market.reference ? "PriceCharting reference" : "Market reference"}</strong>
+              <small>
+                {item.market.reference
+                  ? `${item.market.reference.externalId} · ${date(item.market.reference.observedAt)}`
+                  : "No persisted provider observation"}
+              </small>
+            </div>
+            <button
+              className="admin-button secondary"
+              type="button"
+              disabled={refresh.isPending}
+              onClick={() => refresh.mutate()}
+            >
+              {refresh.isPending ? "Queueing…" : "Refresh market data"}
+            </button>
+          </div>
+          <Field
+            label="Market reference"
+            value={
+              item.market.reference
+                ? money(item.market.reference.minor, item.market.reference.currency)
+                : "Not observed"
+            }
+          />
+          <Field
+            label="Next refresh"
+            value={item.market.reference?.nextRefreshAt ? date(item.market.reference.nextRefreshAt) : null}
+          />
           <Field
             label="Current asking"
             value={
