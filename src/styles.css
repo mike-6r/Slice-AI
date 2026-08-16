@@ -3421,7 +3421,6 @@ body:has(.collectors-page) .site-shell {
   transition: transform 720ms cubic-bezier(0.22, 0.72, 0.18, 1);
 }
 .asset-card-stage.has-back:hover .asset-card-flip__inner,
-.asset-card-stage.has-back:focus-within .asset-card-flip__inner,
 .asset-card-stage.is-flipped .asset-card-flip__inner {
   transform: rotateY(180deg);
 }
@@ -3648,8 +3647,7 @@ body:has(.collectors-page) .site-shell {
   .asset-card-flip__inner {
     transition: none;
   }
-  .asset-card-stage.has-back:hover .asset-card-flip__inner,
-  .asset-card-stage.has-back:focus-within .asset-card-flip__inner {
+  .asset-card-stage.has-back:hover .asset-card-flip__inner {
     transform: none;
   }
   .asset-card-stage.is-flipped .asset-card-flip__inner {
