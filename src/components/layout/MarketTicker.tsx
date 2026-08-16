@@ -69,7 +69,10 @@ function AuthoritativeMarketTicker() {
                   <span className="text-subtle">{asset.symbol}</span>
                   <span className="text-foreground">
                     {asset.market?.estimatedMarketValue
-                      ? formatMoney(asset.market.estimatedMarketValue.amount)
+                      ? formatMoney(
+                          asset.market.estimatedMarketValue.amount,
+                          asset.market.estimatedMarketValue.currency,
+                        )
                       : "Unavailable"}
                   </span>
                   {asset.market?.change24hBps !== undefined && (
