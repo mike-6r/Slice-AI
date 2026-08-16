@@ -82,13 +82,19 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
     window.location.assign(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   };
 
+  const protectedRoute =
+    typeof window !== "undefined" &&
+    /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|buy|sell|governance|watchlist)(\/|$)/.test(
+      window.location.pathname,
+    );
   const needsRestoreScreen =
-    authState === "initializing" ||
-    restoreStatus === "restoring" ||
-    restoreStatus === "failed" ||
-    restoreStatus === "expired" ||
-    restoreStatus === "offline" ||
-    restoreStatus === "rate_limited";
+    protectedRoute &&
+    (authState === "initializing" ||
+      restoreStatus === "restoring" ||
+      restoreStatus === "failed" ||
+      restoreStatus === "expired" ||
+      restoreStatus === "offline" ||
+      restoreStatus === "rate_limited");
 
   if (needsRestoreScreen) {
     return (
