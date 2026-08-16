@@ -3385,6 +3385,278 @@ body:has(.collectors-page) .site-shell {
   }
 }
 
+/* Asset detail polish: make the collectible the hero and keep the next action obvious. */
+.asset-detail-page .asset-redesign-media {
+  background:
+    radial-gradient(circle at 50% 45%, rgb(34 211 165 / 0.13), transparent 42%),
+    linear-gradient(145deg, rgb(12 34 36 / 0.98), rgb(5 13 18 / 0.99));
+}
+.asset-detail-page .asset-redesign-media .asset-showcase {
+  min-height: 35rem;
+  background:
+    radial-gradient(ellipse 48% 54% at 50% 78%, rgb(34 211 165 / 0.21), transparent 70%),
+    radial-gradient(circle at 22% 18%, rgb(117 255 218 / 0.08), transparent 38%),
+    linear-gradient(180deg, rgb(8 19 24 / 0.95), rgb(2 10 14 / 0.99));
+}
+.asset-detail-page .asset-media-caption__hint {
+  color: #a4c4c2;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+.asset-card-stage {
+  position: absolute;
+  z-index: 3;
+  top: 1.2rem;
+  bottom: 1.6rem;
+  left: 50%;
+  width: min(76%, 20rem);
+  perspective: 1100px;
+  transform: translateX(-50%);
+}
+.asset-card-flip__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 720ms cubic-bezier(0.22, 0.72, 0.18, 1);
+}
+.asset-card-stage.has-back:hover .asset-card-flip__inner,
+.asset-card-stage.has-back:focus-within .asset-card-flip__inner,
+.asset-card-stage.is-flipped .asset-card-flip__inner {
+  transform: rotateY(180deg);
+}
+.asset-card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(177 250 226 / 0.18);
+  border-radius: 0.55rem;
+  background: linear-gradient(155deg, rgb(11 25 29 / 0.98), rgb(2 9 13 / 0.98));
+  box-shadow:
+    0 22px 45px rgb(0 0 0 / 0.34),
+    0 0 34px rgb(34 211 165 / 0.12);
+  backface-visibility: hidden;
+}
+.asset-card-face::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+.asset-card-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.45rem;
+}
+.asset-card-face > span {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.55rem;
+  z-index: 1;
+  border: 1px solid rgb(34 211 165 / 0.28);
+  border-radius: 999px;
+  padding: 0.25rem 0.45rem;
+  color: #b8f9e5;
+  background: rgb(4 18 19 / 0.84);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.asset-card-face--back {
+  transform: rotateY(180deg);
+}
+.asset-card-flip-button {
+  position: absolute;
+  z-index: 5;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  border: 1px solid rgb(177 250 226 / 0.26);
+  border-radius: 999px;
+  padding: 0.35rem 0.58rem;
+  color: #d8f8ed;
+  background: rgb(4 15 18 / 0.8);
+  font-size: 0.65rem;
+  font-weight: 750;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: border-color 170ms ease, background 170ms ease, transform 170ms ease;
+}
+.asset-card-flip-button:hover,
+.asset-card-flip-button:focus-visible {
+  border-color: rgb(34 211 165 / 0.7);
+  background: rgb(12 67 59 / 0.84);
+  transform: translateY(-1px);
+}
+.asset-card-flip-button svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: #38dcb2;
+}
+.asset-readiness-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.asset-readiness-actions > div {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid rgb(126 163 169 / 0.15);
+  border-radius: 0.7rem;
+  padding: 0.75rem;
+  background: rgb(4 12 17 / 0.34);
+}
+.asset-readiness-actions strong {
+  color: #eaf8f3;
+  font-size: 0.8rem;
+}
+.asset-readiness-actions span {
+  color: #8fa8ae;
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+.asset-readiness-actions > div:first-child {
+  border-color: rgb(34 211 165 / 0.25);
+  background: rgb(21 103 82 / 0.12);
+}
+.asset-redesign .asset-how-it-works__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.asset-redesign .asset-order-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.asset-redesign .asset-order-actions a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  min-height: 4.1rem;
+  border: 1px solid rgb(126 163 169 / 0.22);
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  text-decoration: none;
+  transition: border-color 170ms ease, background 170ms ease, transform 170ms ease;
+}
+.asset-redesign .asset-order-actions a:hover,
+.asset-redesign .asset-order-actions a:focus-visible {
+  border-color: rgb(34 211 165 / 0.65);
+  background: rgb(22 105 84 / 0.16);
+  transform: translateY(-1px);
+}
+.asset-redesign .asset-order-actions a.is-buy {
+  border-color: rgb(34 211 165 / 0.38);
+  background: rgb(22 105 84 / 0.12);
+}
+.asset-redesign .asset-order-actions a span {
+  display: grid;
+  gap: 0.2rem;
+}
+.asset-redesign .asset-order-actions a strong {
+  color: #eaf8f3;
+  font-size: 0.85rem;
+}
+.asset-redesign .asset-order-actions a small {
+  color: #8fa8ae;
+  font-size: 0.68rem;
+}
+.asset-redesign .asset-order-actions a svg {
+  width: 0.9rem;
+  color: #38dcb2;
+}
+.asset-redesign-grid--activity {
+  grid-template-columns: minmax(0, 1.05fr) minmax(18rem, 0.95fr);
+}
+.asset-redesign-grid--activity > .asset-recent-trades,
+.asset-market-note {
+  min-width: 0;
+  border: 1px solid rgb(103 150 157 / 0.24);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgb(14 30 36 / 0.94), rgb(7 14 19 / 0.98));
+  box-shadow: 0 18px 45px rgb(0 0 0 / 0.14);
+}
+.asset-market-note {
+  padding: 1.2rem;
+}
+.asset-market-note h2 {
+  margin: 0;
+  color: #eff8f5;
+  font-size: 1.25rem;
+  letter-spacing: -0.035em;
+}
+.asset-market-note > p:not(.asset-section-label) {
+  margin: 0.55rem 0 0;
+  color: #a7bdc0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+.asset-market-note__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.asset-market-note__steps span {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid rgb(34 211 165 / 0.3);
+  padding-top: 0.5rem;
+  color: #dff9f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.asset-market-note__steps b {
+  color: #38dcb2;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+@media (max-width: 900px) {
+  .asset-redesign .asset-how-it-works__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .asset-redesign-grid--activity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .asset-detail-page .asset-redesign-media .asset-showcase {
+    min-height: 25rem;
+  }
+  .asset-card-stage {
+    width: min(72%, 17rem);
+  }
+  .asset-readiness-actions,
+  .asset-redesign .asset-order-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .asset-redesign .asset-how-it-works__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .asset-card-flip__inner {
+    transition: none;
+  }
+  .asset-card-stage.has-back:hover .asset-card-flip__inner,
+  .asset-card-stage.has-back:focus-within .asset-card-flip__inner {
+    transform: none;
+  }
+  .asset-card-stage.is-flipped .asset-card-flip__inner {
+    transform: rotateY(180deg);
+  }
+}
+
 @media (max-width: 360px) {
   .approved-home .featured-market-hero--charizard .charizard-showcase__facts {
     grid-template-columns: 1fr;
@@ -28796,5 +29068,27 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .session-restore-card {
     width: min(100%, 31rem);
     max-height: calc(100dvh - 2rem);
+  }
+}
+
+/* Keep the asset-detail overrides last so the older catalogue styles cannot flatten them. */
+.asset-detail-page .asset-redesign-media .asset-showcase {
+  min-height: 35rem;
+  background:
+    radial-gradient(ellipse 48% 54% at 50% 78%, rgb(34 211 165 / 0.21), transparent 70%),
+    radial-gradient(circle at 22% 18%, rgb(117 255 218 / 0.08), transparent 38%),
+    linear-gradient(180deg, rgb(8 19 24 / 0.95), rgb(2 10 14 / 0.99));
+}
+.asset-redesign .asset-order-actions a {
+  min-height: 4.1rem;
+  padding: 0.7rem 0.8rem;
+  font-size: inherit;
+}
+@media (max-width: 640px) {
+  .asset-detail-page .asset-redesign-media .asset-showcase {
+    min-height: 25rem;
+  }
+  .asset-redesign .asset-order-actions a {
+    min-height: 4rem;
   }
 }
