@@ -32,6 +32,11 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
   const [delayed, setDelayed] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(() => session.retryAfterSeconds());
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if ((import.meta.env.VITE_DATA_SOURCE ?? "api") === "api") {
@@ -83,7 +88,7 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
   };
 
   const protectedRoute =
-    typeof window !== "undefined" &&
+    isClient &&
     /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|buy|sell|governance|watchlist)(\/|$)/.test(
       window.location.pathname,
     );
