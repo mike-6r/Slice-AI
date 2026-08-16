@@ -26,13 +26,16 @@ export type HomepageShowcaseAsset = Readonly<{
 export type ShowcaseDestination =
   Readonly<{ kind: "asset"; id: string }> | Readonly<{ kind: "marketplace"; to: "/marketplace" }>;
 
+// PriceCharting PSA 10 guide: $343,098 USD converted at $1 = £0.7524.
+export const HOMEPAGE_FEATURED_PSA10_VALUE_GBP = "£258,146.94";
+
 /**
  * Homepage-owned example terms used to explain the Slice experience. These
  * values are intentionally kept separate from authoritative asset data.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
-  referenceValue: "$343,098",
-  collectibleValue: "$343,098",
+  referenceValue: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
+  collectibleValue: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
   totalShares: "195 shares",
   totalSharesCount: 195,
   availableShares: "62 shares",
@@ -148,7 +151,7 @@ export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
   title: "1999 Base Set 1st Edition Charizard",
   grade: "PSA 10 · Gem Mint",
   image: charizardBaseSetImage,
-  displayPrice: "$343,098",
+  displayPrice: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
   displaySharePrice: "From £10 / Slice",
   displayMovement: "PriceCharting guide",
   displayAvailability: "0%",
@@ -160,8 +163,8 @@ export const HOMEPAGE_TRENDING_ASSETS = catalogue;
 export const HOMEPAGE_MARKET_METRICS = [
   {
     label: "Market value",
-    value: "$343,098",
-    detail: "PriceCharting PSA 10 guide",
+    value: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
+    detail: "PriceCharting PSA 10 guide · GBP converted",
     tone: "positive",
   },
   {

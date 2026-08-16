@@ -36,7 +36,7 @@ describe("homepage showcase routing", () => {
 
   it("keeps the illustrative share maths internally consistent", () => {
     expect(HOMEPAGE_OWNERSHIP_EXAMPLE).toMatchObject({
-      referenceValue: "$343,098",
+      referenceValue: "£258,146.94",
       totalShares: "195 shares",
       totalSharesCount: 195,
       availableShares: "62 shares",
@@ -47,7 +47,7 @@ describe("homepage showcase routing", () => {
     });
   });
 
-  it("uses the current PriceCharting PSA 10 guide for the featured Charizard", () => {
-    expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("$343,098");
+  it("uses the GBP-converted PriceCharting PSA 10 guide for the featured Charizard", () => {
+    expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("£258,146.94");
   });
 });

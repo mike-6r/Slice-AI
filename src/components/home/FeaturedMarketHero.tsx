@@ -49,7 +49,7 @@ export function FeaturedMarketHero() {
           <div className="charizard-showcase__value">
             <span>PSA 10 market price</span>
             <strong>{featured.displayPrice}</strong>
-            <b>PriceCharting guide · current</b>
+            <b>PriceCharting guide · GBP converted</b>
           </div>
           <div
             className="charizard-showcase__chart"
