@@ -5,10 +5,7 @@ import { FOOTER_ROUTE_AUDIT } from "./SiteFooter";
 describe("global footer route audit", () => {
   it("keeps every rendered footer destination on an implemented first-party route", () => {
     expect(FOOTER_ROUTE_AUDIT).toEqual({
-      markets: [
-        { label: "All Assets", to: "/marketplace" },
-        { label: "Vault Live", to: "/vault-live" },
-      ],
+      markets: [{ label: "All Assets", to: "/marketplace" }],
       collectors: [{ label: "Collectors", to: "/collectors" }],
       company: [
         { label: "About Slice", to: "/about" },

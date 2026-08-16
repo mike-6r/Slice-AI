@@ -7,14 +7,7 @@ import { CurrencySelector } from "@/currency/CurrencySelector";
 import { isBetaEnvironment } from "@/config/environment";
 
 type FooterRoute =
-  | "/marketplace"
-  | "/collectors"
-  | "/vault-live"
-  | "/about"
-  | "/how-it-works"
-  | "/security"
-  | "/help"
-  | "/fees";
+  "/marketplace" | "/collectors" | "/about" | "/how-it-works" | "/security" | "/help" | "/fees";
 
 type FooterLink = { label: string; to: FooterRoute };
 
@@ -23,10 +16,7 @@ type FooterLink = { label: string; to: FooterRoute };
  * social accounts, legal documents, and marketing email signup intentionally stay absent.
  */
 export const FOOTER_ROUTE_AUDIT = {
-  markets: [
-    { label: "All Assets", to: "/marketplace" },
-    { label: "Vault Live", to: "/vault-live" },
-  ],
+  markets: [{ label: "All Assets", to: "/marketplace" }],
   collectors: [{ label: "Collectors", to: "/collectors" }],
   company: [
     { label: "About Slice", to: "/about" },

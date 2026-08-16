@@ -17,7 +17,6 @@ import { Route as CollectorWorkspaceRouteImport } from './routes/collector-works
 import { Route as CollectorsRouteImport } from './routes/collectors'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FeesRouteImport } from './routes/fees'
-import { Route as GovernanceRouteImport } from './routes/governance'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as ListRouteImport } from './routes/list'
@@ -30,7 +29,6 @@ import { Route as PortfolioRouteImport } from './routes/portfolio'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StaffRouteImport } from './routes/staff'
-import { Route as VaultLiveRouteImport } from './routes/vault-live'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as WalletRouteImport } from './routes/wallet'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
@@ -39,7 +37,6 @@ import { Route as AssetIdRouteImport } from './routes/asset.$id'
 import { Route as BuyIdRouteImport } from './routes/buy.$id'
 import { Route as OperationsAssetsRouteImport } from './routes/operations.assets'
 import { Route as OperationsSubmissionsRouteImport } from './routes/operations.submissions'
-import { Route as SellProposalIdRouteImport } from './routes/sell-proposal.$id'
 import { Route as SellIdRouteImport } from './routes/sell.$id'
 import { Route as SubmissionsIdRouteImport } from './routes/submissions.$id'
 import { Route as CollectorIdIndexRouteImport } from './routes/collector.$id.index'
@@ -83,11 +80,6 @@ const DashboardRoute = DashboardRouteImport.update({
 const FeesRoute = FeesRouteImport.update({
   id: '/fees',
   path: '/fees',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GovernanceRoute = GovernanceRouteImport.update({
-  id: '/governance',
-  path: '/governance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -150,11 +142,6 @@ const StaffRoute = StaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VaultLiveRoute = VaultLiveRouteImport.update({
-  id: '/vault-live',
-  path: '/vault-live',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
@@ -195,11 +182,6 @@ const OperationsSubmissionsRoute = OperationsSubmissionsRouteImport.update({
   path: '/operations/submissions',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SellProposalIdRoute = SellProposalIdRouteImport.update({
-  id: '/sell-proposal/$id',
-  path: '/sell-proposal/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SellIdRoute = SellIdRouteImport.update({
   id: '/sell/$id',
   path: '/sell/$id',
@@ -230,7 +212,6 @@ export interface FileRoutesByFullPath {
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
   '/fees': typeof FeesRoute
-  '/governance': typeof GovernanceRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/list': typeof ListRoute
@@ -243,7 +224,6 @@ export interface FileRoutesByFullPath {
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/vault-live': typeof VaultLiveRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wallet': typeof WalletRoute
   '/watchlist': typeof WatchlistRoute
@@ -252,7 +232,6 @@ export interface FileRoutesByFullPath {
   '/buy/$id': typeof BuyIdRoute
   '/operations/assets': typeof OperationsAssetsRoute
   '/operations/submissions': typeof OperationsSubmissionsRoute
-  '/sell-proposal/$id': typeof SellProposalIdRoute
   '/sell/$id': typeof SellIdRoute
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
@@ -267,7 +246,6 @@ export interface FileRoutesByTo {
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
   '/fees': typeof FeesRoute
-  '/governance': typeof GovernanceRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/list': typeof ListRoute
@@ -280,7 +258,6 @@ export interface FileRoutesByTo {
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/vault-live': typeof VaultLiveRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wallet': typeof WalletRoute
   '/watchlist': typeof WatchlistRoute
@@ -289,7 +266,6 @@ export interface FileRoutesByTo {
   '/buy/$id': typeof BuyIdRoute
   '/operations/assets': typeof OperationsAssetsRoute
   '/operations/submissions': typeof OperationsSubmissionsRoute
-  '/sell-proposal/$id': typeof SellProposalIdRoute
   '/sell/$id': typeof SellIdRoute
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
@@ -305,7 +281,6 @@ export interface FileRoutesById {
   '/collectors': typeof CollectorsRoute
   '/dashboard': typeof DashboardRoute
   '/fees': typeof FeesRoute
-  '/governance': typeof GovernanceRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/list': typeof ListRoute
@@ -318,7 +293,6 @@ export interface FileRoutesById {
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/vault-live': typeof VaultLiveRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wallet': typeof WalletRoute
   '/watchlist': typeof WatchlistRoute
@@ -327,7 +301,6 @@ export interface FileRoutesById {
   '/buy/$id': typeof BuyIdRoute
   '/operations/assets': typeof OperationsAssetsRoute
   '/operations/submissions': typeof OperationsSubmissionsRoute
-  '/sell-proposal/$id': typeof SellProposalIdRoute
   '/sell/$id': typeof SellIdRoute
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
@@ -344,7 +317,6 @@ export interface FileRouteTypes {
     | '/collectors'
     | '/dashboard'
     | '/fees'
-    | '/governance'
     | '/help'
     | '/how-it-works'
     | '/list'
@@ -357,7 +329,6 @@ export interface FileRouteTypes {
     | '/security'
     | '/signup'
     | '/staff'
-    | '/vault-live'
     | '/verify-email'
     | '/wallet'
     | '/watchlist'
@@ -366,7 +337,6 @@ export interface FileRouteTypes {
     | '/buy/$id'
     | '/operations/assets'
     | '/operations/submissions'
-    | '/sell-proposal/$id'
     | '/sell/$id'
     | '/submissions/$id'
     | '/collector/$id/assets'
@@ -381,7 +351,6 @@ export interface FileRouteTypes {
     | '/collectors'
     | '/dashboard'
     | '/fees'
-    | '/governance'
     | '/help'
     | '/how-it-works'
     | '/list'
@@ -394,7 +363,6 @@ export interface FileRouteTypes {
     | '/security'
     | '/signup'
     | '/staff'
-    | '/vault-live'
     | '/verify-email'
     | '/wallet'
     | '/watchlist'
@@ -403,7 +371,6 @@ export interface FileRouteTypes {
     | '/buy/$id'
     | '/operations/assets'
     | '/operations/submissions'
-    | '/sell-proposal/$id'
     | '/sell/$id'
     | '/submissions/$id'
     | '/collector/$id/assets'
@@ -418,7 +385,6 @@ export interface FileRouteTypes {
     | '/collectors'
     | '/dashboard'
     | '/fees'
-    | '/governance'
     | '/help'
     | '/how-it-works'
     | '/list'
@@ -431,7 +397,6 @@ export interface FileRouteTypes {
     | '/security'
     | '/signup'
     | '/staff'
-    | '/vault-live'
     | '/verify-email'
     | '/wallet'
     | '/watchlist'
@@ -440,7 +405,6 @@ export interface FileRouteTypes {
     | '/buy/$id'
     | '/operations/assets'
     | '/operations/submissions'
-    | '/sell-proposal/$id'
     | '/sell/$id'
     | '/submissions/$id'
     | '/collector/$id/assets'
@@ -456,7 +420,6 @@ export interface RootRouteChildren {
   CollectorsRoute: typeof CollectorsRoute
   DashboardRoute: typeof DashboardRoute
   FeesRoute: typeof FeesRoute
-  GovernanceRoute: typeof GovernanceRoute
   HelpRoute: typeof HelpRoute
   HowItWorksRoute: typeof HowItWorksRoute
   ListRoute: typeof ListRoute
@@ -469,7 +432,6 @@ export interface RootRouteChildren {
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
-  VaultLiveRoute: typeof VaultLiveRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   WalletRoute: typeof WalletRoute
   WatchlistRoute: typeof WatchlistRoute
@@ -478,7 +440,6 @@ export interface RootRouteChildren {
   BuyIdRoute: typeof BuyIdRoute
   OperationsAssetsRoute: typeof OperationsAssetsRoute
   OperationsSubmissionsRoute: typeof OperationsSubmissionsRoute
-  SellProposalIdRoute: typeof SellProposalIdRoute
   SellIdRoute: typeof SellIdRoute
   SubmissionsIdRoute: typeof SubmissionsIdRoute
   CollectorIdAssetsRoute: typeof CollectorIdAssetsRoute
@@ -541,13 +502,6 @@ declare module '@tanstack/react-router' {
       path: '/fees'
       fullPath: '/fees'
       preLoaderRoute: typeof FeesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/governance': {
-      id: '/governance'
-      path: '/governance'
-      fullPath: '/governance'
-      preLoaderRoute: typeof GovernanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -634,13 +588,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/vault-live': {
-      id: '/vault-live'
-      path: '/vault-live'
-      fullPath: '/vault-live'
-      preLoaderRoute: typeof VaultLiveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/verify-email': {
       id: '/verify-email'
       path: '/verify-email'
@@ -697,13 +644,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperationsSubmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sell-proposal/$id': {
-      id: '/sell-proposal/$id'
-      path: '/sell-proposal/$id'
-      fullPath: '/sell-proposal/$id'
-      preLoaderRoute: typeof SellProposalIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sell/$id': {
       id: '/sell/$id'
       path: '/sell/$id'
@@ -744,7 +684,6 @@ const rootRouteChildren: RootRouteChildren = {
   CollectorsRoute: CollectorsRoute,
   DashboardRoute: DashboardRoute,
   FeesRoute: FeesRoute,
-  GovernanceRoute: GovernanceRoute,
   HelpRoute: HelpRoute,
   HowItWorksRoute: HowItWorksRoute,
   ListRoute: ListRoute,
@@ -757,7 +696,6 @@ const rootRouteChildren: RootRouteChildren = {
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
-  VaultLiveRoute: VaultLiveRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   WalletRoute: WalletRoute,
   WatchlistRoute: WatchlistRoute,
@@ -766,7 +704,6 @@ const rootRouteChildren: RootRouteChildren = {
   BuyIdRoute: BuyIdRoute,
   OperationsAssetsRoute: OperationsAssetsRoute,
   OperationsSubmissionsRoute: OperationsSubmissionsRoute,
-  SellProposalIdRoute: SellProposalIdRoute,
   SellIdRoute: SellIdRoute,
   SubmissionsIdRoute: SubmissionsIdRoute,
   CollectorIdAssetsRoute: CollectorIdAssetsRoute,

@@ -162,7 +162,7 @@ export const session = {
         if (response.status === 401 || response.status === 403) {
           const path = typeof window === "undefined" ? "/" : window.location.pathname;
           const protectedPath =
-            /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|buy|sell|governance|watchlist)/.test(
+            /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|buy|sell|watchlist)/.test(
               path,
             );
           if (protectedPath) restoreStatus = "expired";

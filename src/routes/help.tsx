@@ -14,7 +14,7 @@ export const Route = createFileRoute("/help")({
         sections: [
           {
             title: "Marketplace and vault",
-            body: "Browse published assets in Markets and view public-safe custody activity in Vault Live.",
+            body: "Browse published assets and review the public information Slice has approved for each collectible.",
           },
           {
             title: "Your account",

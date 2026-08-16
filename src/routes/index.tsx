@@ -902,7 +902,7 @@ function FeatureCard({
   icon: ReactNode;
   title: string;
   detail: string;
-  to: "/marketplace" | "/vault-live" | "/collectors" | "/portfolio";
+  to: "/marketplace" | "/collectors" | "/portfolio";
 }) {
   return (
     <Link to={to} className="approved-home__feature">

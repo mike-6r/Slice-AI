@@ -9,11 +9,6 @@ export const PRIVATE_NAV = [
   { label: "Wallet", to: "/wallet" },
 ] as const;
 
-export const MORE_NAV = [
-  { label: "Vault Live", to: "/vault-live" },
-  { label: "Owner Voting", to: "/governance" },
-] as const;
-
 export const primaryNavigationFor = (isAuthenticated: boolean) =>
   isAuthenticated ? [...PUBLIC_NAV, ...PRIVATE_NAV] : PUBLIC_NAV;
 
