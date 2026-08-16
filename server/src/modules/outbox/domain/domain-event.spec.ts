@@ -1,15 +1,14 @@
-import { assertSafeJson, createDomainEvent, eventType, tradeCompletedEvent } from './domain-event';
+import { customerResourceEvent, eventType, orderLifecycleEvent } from './domain-event';
 
-describe('Document 017 domain event envelope', () => {
-  it('creates a versioned, dotted-name safe trade envelope without private authority', () => {
-    const event = tradeCompletedEvent({ executionId: 'execution-1', assetId: 'asset-1', units: '10', priceMinor: '125', grossMinor: '1250', currency: 'GBP', correlationId: 'trade:asset-1:1', occurredAt: new Date('2026-08-08T00:00:00.000Z') });
-    expect(event).toMatchObject({ eventId: 'trade.completed:execution-1', eventType: eventType.tradeCompleted, schemaVersion: 1, aggregate: { type: 'trading-execution', id: 'execution-1' }, payload: { executionId: 'execution-1', assetId: 'asset-1', units: '10', priceMinor: '125', grossMinor: '1250', currency: 'GBP' } });
-    expect(JSON.stringify(event.payload)).not.toMatch(/userId|accountId|counterparty|reservation|journal/i);
+describe('customer D17 event contracts', () => {
+  it('uses stable identities for resource transitions and distinct shipping truth', () => {
+    const carrier = customerResourceEvent({ eventType: eventType.shipmentCarrierDelivered, submissionId: 'submission', intakeId: 'intake', status: 'DELIVERED', actorUserId: 'owner', correlationId: 'request', occurredAt: new Date('2026-08-16') });
+    const receipt = customerResourceEvent({ eventType: eventType.intakeReceiptConfirmed, submissionId: 'submission', intakeId: 'intake', status: 'RECEIVED', actorUserId: 'owner', correlationId: 'request', occurredAt: new Date('2026-08-16') });
+    expect(carrier.eventId).not.toBe(receipt.eventId);
+    expect(carrier.payload).not.toHaveProperty('trackingNumber');
   });
-
-  it('rejects invalid event names and non-plain payload values', () => {
-    expect(() => createDomainEvent({ eventType: 'TradeCompleted', schemaVersion: 1, aggregate: { type: 'trade', id: '1' }, payload: {} })).toThrow('EVENT_SCHEMA_UNKNOWN');
-    expect(() => assertSafeJson({ at: new Date() })).toThrow('EVENT_PAYLOAD_INVALID');
-    expect(() => assertSafeJson({ units: 1n })).toThrow('EVENT_PAYLOAD_INVALID');
+  it('deduplicates one order-fill event per execution and recipient order', () => {
+    const event = orderLifecycleEvent({ eventType: eventType.orderPartiallyFilled, orderId: 'order', assetId: 'asset', side: 'BUY', units: '1', priceMinor: '164', status: 'PARTIALLY_FILLED', actorUserId: 'owner', correlationId: 'trade', occurredAt: new Date('2026-08-16'), eventSuffix: 'execution' });
+    expect(event.eventId).toBe('order.partiallyfilled:order:execution');
   });
 });

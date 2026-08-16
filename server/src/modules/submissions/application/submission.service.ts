@@ -25,6 +25,8 @@ import { marketResearchIdentityHash } from '../../market-research/market-researc
 import { collectorUsageFor } from '../../collector-workspace/collector-entitlements';
 import { preGradeProjection } from './raw-card-pregrade.service';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
+import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
+import { customerResourceEvent, eventType } from '../../outbox/domain/domain-event';
 import {
   assertEditableStatus,
   assertExpectedVersion,
@@ -83,6 +85,7 @@ export class SubmissionService {
     @Inject(MALWARE_SCANNER) private readonly scanner: MalwareScannerPort,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() private readonly capabilities?: AccountCapabilityService,
+    private readonly outbox: OutboxWriter = new OutboxWriter(),
   ) {}
 
   async create(
@@ -1261,21 +1264,7 @@ export class SubmissionService {
             completedAt: new Date(),
           },
         });
-        await db.notification.create({
-          data: {
-            id: randomUUID(),
-            userId: submission!.ownerUserId,
-            type: `SUBMISSION_${decision}`,
-            title: 'Submission review update',
-            body:
-              decision === 'CHANGES_REQUESTED'
-                ? (input.customerMessage ??
-                  'Please provide the requested information so our team can continue the review.')
-                : 'Your submission review status has changed.',
-            resourceType: 'submission',
-            resourceId: id,
-          },
-        });
+        if (decision === 'CHANGES_REQUESTED' || decision === 'APPROVED') await this.outbox.append(db, customerResourceEvent({ eventType: decision === 'CHANGES_REQUESTED' ? eventType.submissionChangesRequested : eventType.submissionApproved, submissionId: id, status: decision, actorUserId: submission!.ownerUserId, correlationId: requestId, occurredAt: updated.reviewedAt ?? new Date() }));
         const auditAction =
           decision === 'CHANGES_REQUESTED'
             ? 'SUBMISSION_CHANGES_REQUESTED'

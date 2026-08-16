@@ -1,17 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { type NotificationDeliveryChannel, type OutboxEvent } from '@prisma/client';
-import { eventType, type MovementSettledPayload, type OrderLifecyclePayload, type TradeCompletedPayload } from '../domain/domain-event';
+import { eventType, type CustomerResourcePayload, type MovementSettledPayload, type OrderLifecyclePayload, type TradeCompletedPayload } from '../domain/domain-event';
 import { OutboxHandlerError } from './outbox-handler';
 import type { DeliveryIntent } from './notification-delivery.service';
 
-export const notificationTopic = { marketListings: 'MARKET_LISTINGS', orderUpdates: 'ORDER_UPDATES', portfolioUpdates: 'PORTFOLIO_UPDATES', securityAlerts: 'SECURITY_ALERTS' } as const;
+export const notificationTopic = { marketListings: 'MARKET_LISTINGS', orderUpdates: 'ORDER_UPDATES', portfolioUpdates: 'PORTFOLIO_UPDATES', collectorActions: 'COLLECTOR_ACTIONS', shipping: 'SHIPPING', securityAlerts: 'SECURITY_ALERTS' } as const;
 
 @Injectable()
 export class NotificationRoutingService {
   /** Public platform routes never consult a user preference. */
   route(event: OutboxEvent): DeliveryIntent[] {
     if (event.eventType === eventType.tradeCompleted && event.schemaVersion === 1) return this.publicTrade(event);
-    if ((event.eventType === eventType.orderOpened || event.eventType === eventType.orderCancelled) && event.schemaVersion === 1) return this.privateOrder(event);
+    if ([eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateOrder(event);
+    if ([eventType.submissionChangesRequested, eventType.submissionApproved].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateResource(event, notificationTopic.collectorActions);
+    if ([eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateResource(event, notificationTopic.shipping);
     if (event.eventType === eventType.movementSettled && event.schemaVersion === 1) return this.privateMovement(event);
     throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_SCHEMA_UNKNOWN');
   }
@@ -27,7 +29,7 @@ export class NotificationRoutingService {
   private privateOrder(event: OutboxEvent): DeliveryIntent[] {
     const payload = event.payload as Partial<OrderLifecyclePayload>;
     if (!event.actorUserId || !isOrderPayload(payload)) throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_PAYLOAD_INVALID');
-    const order = { eventId: event.eventId, eventType: event.eventType, orderId: payload.orderId, assetId: payload.assetId, side: payload.side, units: payload.units, status: payload.status, occurredAt: event.occurredAt.toISOString() };
+    const order = { eventId: event.eventId, eventType: event.eventType, orderId: payload.orderId, assetId: payload.assetId, side: payload.side, units: payload.units, status: payload.status, ...(payload.priceMinor ? { priceMinor: payload.priceMinor } : {}), occurredAt: event.occurredAt.toISOString() };
     return [
       { channel: 'IN_APP', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.orderUpdates, mandatory: false, payloadVersion: 1, payload: order },
       { channel: 'DISCORD', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.orderUpdates, mandatory: false, payloadVersion: 1, payload: order },
@@ -37,6 +39,12 @@ export class NotificationRoutingService {
     const payload = event.payload as Partial<MovementSettledPayload>;
     if (!event.actorUserId || !isMovementPayload(payload)) throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_PAYLOAD_INVALID');
     return [{ channel: 'IN_APP', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic: notificationTopic.portfolioUpdates, mandatory: false, payloadVersion: 1, payload: { eventId: event.eventId, movementId: payload.movementId, type: payload.type, amountMinor: payload.amountMinor, currency: 'GBP', status: 'SETTLED', occurredAt: event.occurredAt.toISOString() } }];
+  }
+  private privateResource(event: OutboxEvent, topic: string): DeliveryIntent[] {
+    const payload = event.payload as Partial<CustomerResourcePayload>;
+    if (!event.actorUserId || !isResourcePayload(payload)) throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_PAYLOAD_INVALID');
+    const value = { eventId: event.eventId, eventType: event.eventType, submissionId: payload.submissionId, ...(payload.intakeId ? { intakeId: payload.intakeId } : {}), status: payload.status, occurredAt: event.occurredAt.toISOString() };
+    return [{ channel: 'IN_APP', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic, mandatory: false, payloadVersion: 1, payload: value }, { channel: 'DISCORD', destinationKey: `user:${event.actorUserId}`, classification: 'PRIVATE', topic, mandatory: false, payloadVersion: 1, payload: value }];
   }
 
   /** Provider-neutral policy seam for future private events; not used by trade.completed. */
@@ -49,5 +57,6 @@ export class NotificationRoutingService {
 function isTradePayload(payload: Partial<TradeCompletedPayload>): payload is TradeCompletedPayload {
   return typeof payload.executionId === 'string' && typeof payload.assetId === 'string' && typeof payload.units === 'string' && typeof payload.priceMinor === 'string' && typeof payload.grossMinor === 'string' && payload.currency === 'GBP';
 }
-function isOrderPayload(payload: Partial<OrderLifecyclePayload>): payload is OrderLifecyclePayload { return typeof payload.orderId === 'string' && typeof payload.assetId === 'string' && (payload.side === 'BUY' || payload.side === 'SELL') && typeof payload.units === 'string' && (payload.status === 'OPEN' || payload.status === 'CANCELLED'); }
+function isOrderPayload(payload: Partial<OrderLifecyclePayload>): payload is OrderLifecyclePayload { return typeof payload.orderId === 'string' && typeof payload.assetId === 'string' && (payload.side === 'BUY' || payload.side === 'SELL') && typeof payload.units === 'string' && ['OPEN', 'CANCELLED', 'PARTIALLY_FILLED', 'FILLED', 'EXPIRED'].includes(String(payload.status)); }
+function isResourcePayload(payload: Partial<CustomerResourcePayload>): payload is CustomerResourcePayload { return typeof payload.submissionId === 'string' && typeof payload.status === 'string' && (payload.intakeId === undefined || typeof payload.intakeId === 'string'); }
 function isMovementPayload(payload: Partial<MovementSettledPayload>): payload is MovementSettledPayload { return typeof payload.movementId === 'string' && (payload.type === 'DEPOSIT' || payload.type === 'WITHDRAWAL') && typeof payload.amountMinor === 'string' && payload.currency === 'GBP' && payload.status === 'SETTLED'; }

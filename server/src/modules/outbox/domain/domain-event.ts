@@ -17,7 +17,7 @@ export type DomainEventEnvelope<TPayload extends SafeJson = SafeJson> = Readonly
 }>;
 
 /** Stable dotted lower-case contracts, never class names or persistence types. */
-export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', movementSettled: 'movement.settled' } as const;
+export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', orderPartiallyFilled: 'order.partiallyfilled', orderFilled: 'order.filled', orderExpired: 'order.expired', movementSettled: 'movement.settled', submissionChangesRequested: 'submission.changesrequested', submissionApproved: 'submission.approved', shipmentTrackingAdded: 'shipment.trackingadded', shipmentInTransit: 'shipment.intransit', shipmentCarrierDelivered: 'shipment.carrierdelivered', intakeReceiptConfirmed: 'intake.receiptconfirmed' } as const;
 const eventTypePattern = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
 
 export function createDomainEvent<TPayload extends SafeJson>(input: Omit<DomainEventEnvelope<TPayload>, 'eventId' | 'occurredAt'> & { eventId?: string; occurredAt?: Date }): DomainEventEnvelope<TPayload> {
@@ -56,9 +56,14 @@ export function tradeCompletedEvent(input: TradeCompletedPayload & { correlation
   });
 }
 
-export type OrderLifecyclePayload = { orderId: string; assetId: string; side: 'BUY' | 'SELL'; units: string; status: 'OPEN' | 'CANCELLED' };
-export function orderLifecycleEvent(input: OrderLifecyclePayload & { eventType: typeof eventType.orderOpened | typeof eventType.orderCancelled; correlationId: string; actorUserId: string; occurredAt: Date }): DomainEventEnvelope<OrderLifecyclePayload> {
-  return createDomainEvent({ eventId: `${input.eventType}:${input.orderId}`, eventType: input.eventType, schemaVersion: 1, occurredAt: input.occurredAt, aggregate: { type: 'trading-order', id: input.orderId }, correlationId: input.correlationId, actorUserId: input.actorUserId, payload: { orderId: input.orderId, assetId: input.assetId, side: input.side, units: input.units, status: input.status } });
+export type OrderLifecyclePayload = { orderId: string; assetId: string; side: 'BUY' | 'SELL'; units: string; status: 'OPEN' | 'CANCELLED' | 'PARTIALLY_FILLED' | 'FILLED' | 'EXPIRED'; priceMinor?: string };
+export function orderLifecycleEvent(input: OrderLifecyclePayload & { eventType: typeof eventType.orderOpened | typeof eventType.orderCancelled | typeof eventType.orderPartiallyFilled | typeof eventType.orderFilled | typeof eventType.orderExpired; correlationId: string; actorUserId: string; occurredAt: Date; eventSuffix?: string }): DomainEventEnvelope<OrderLifecyclePayload> {
+  return createDomainEvent({ eventId: `${input.eventType}:${input.orderId}${input.eventSuffix ? `:${input.eventSuffix}` : ''}`, eventType: input.eventType, schemaVersion: 1, occurredAt: input.occurredAt, aggregate: { type: 'trading-order', id: input.orderId }, correlationId: input.correlationId, actorUserId: input.actorUserId, payload: { orderId: input.orderId, assetId: input.assetId, side: input.side, units: input.units, status: input.status, ...(input.priceMinor ? { priceMinor: input.priceMinor } : {}) } });
+}
+
+export type CustomerResourcePayload = { submissionId: string; intakeId?: string; status: string };
+export function customerResourceEvent(input: CustomerResourcePayload & { eventType: typeof eventType.submissionChangesRequested | typeof eventType.submissionApproved | typeof eventType.shipmentTrackingAdded | typeof eventType.shipmentInTransit | typeof eventType.shipmentCarrierDelivered | typeof eventType.intakeReceiptConfirmed; correlationId: string; actorUserId: string; occurredAt: Date; eventSuffix?: string }): DomainEventEnvelope<CustomerResourcePayload> {
+  return createDomainEvent({ eventId: `${input.eventType}:${input.submissionId}${input.eventSuffix ? `:${input.eventSuffix}` : ''}`, eventType: input.eventType, schemaVersion: 1, occurredAt: input.occurredAt, aggregate: { type: input.intakeId ? 'submission-intake' : 'asset-submission', id: input.intakeId ?? input.submissionId }, correlationId: input.correlationId, actorUserId: input.actorUserId, payload: { submissionId: input.submissionId, ...(input.intakeId ? { intakeId: input.intakeId } : {}), status: input.status } });
 }
 
 export type MovementSettledPayload = { movementId: string; type: 'DEPOSIT' | 'WITHDRAWAL'; amountMinor: string; currency: 'GBP'; status: 'SETTLED' };

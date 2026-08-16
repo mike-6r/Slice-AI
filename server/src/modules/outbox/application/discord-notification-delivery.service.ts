@@ -3,11 +3,13 @@ import { type NotificationDelivery } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import { NotificationDeliveryWorkerRepository } from './notification-delivery-worker.repository';
 
-export type DiscordCustomerDelivery = Readonly<{
+export type DiscordOrderDelivery = Readonly<{
   deliveryId: string; eventId: string; claimToken: string; discordUserId: string;
-  category: 'ORDERS'; eventType: 'order.opened' | 'order.cancelled'; occurredAt: string;
-  order: { id: string; assetTitle: string; side: 'BUY' | 'SELL'; units: string; limitPriceMinor: string; currency: 'GBP'; status: 'OPEN' | 'CANCELLED' };
+  category: 'ORDERS'; eventType: 'order.opened' | 'order.cancelled' | 'order.partiallyfilled' | 'order.filled' | 'order.expired'; occurredAt: string;
+  order: { id: string; assetTitle: string; side: 'BUY' | 'SELL'; units: string; limitPriceMinor: string; currency: 'GBP'; status: 'OPEN' | 'CANCELLED' | 'PARTIALLY_FILLED' | 'FILLED' | 'EXPIRED' };
 }>;
+export type DiscordResourceDelivery = Readonly<{ deliveryId: string; eventId: string; claimToken: string; discordUserId: string; category: 'COLLECTOR_ACTIONS' | 'SHIPPING'; eventType: string; occurredAt: string; resource: { submissionId: string; intakeId: string | null; title: string; status: string } }>;
+export type DiscordCustomerDelivery = DiscordOrderDelivery | DiscordResourceDelivery;
 export type DiscordDeliveryOutcome = 'DELIVERED' | 'SUPPRESSED' | 'RETRYABLE_FAILURE' | 'DESTINATION_UNAVAILABLE' | 'NON_RETRYABLE_FAILURE';
 
 /** The Discord bot consumes these claims over its service-authenticated HTTP
@@ -41,18 +43,30 @@ export class DiscordNotificationDeliveryService {
   }
 
   private async resolve(row: NotificationDelivery & { claimToken: string }): Promise<DiscordCustomerDelivery | null> {
-    if (row.topic !== 'ORDER_UPDATES' || !row.destinationKey.startsWith('user:')) return null;
+    if (!row.destinationKey.startsWith('user:')) return null;
     const payload = row.payload as Record<string, unknown>;
     const userId = row.destinationKey.slice('user:'.length);
+    if (row.topic === 'COLLECTOR_ACTIONS' || row.topic === 'SHIPPING') return this.resolveResource(row, payload, userId);
+    if (row.topic !== 'ORDER_UPDATES') return null;
     const orderId = typeof payload.orderId === 'string' ? payload.orderId : null;
     const eventType = typeof payload.eventType === 'string' ? payload.eventType : null;
-    const expectedStatus = payload.status === 'OPEN' || payload.status === 'CANCELLED' ? payload.status : null;
-    if (!orderId || (eventType !== 'order.opened' && eventType !== 'order.cancelled') || !expectedStatus) return null;
+    const expectedStatus = ['OPEN', 'CANCELLED', 'PARTIALLY_FILLED', 'FILLED', 'EXPIRED'].includes(String(payload.status)) ? payload.status as DiscordOrderDelivery['order']['status'] : null;
+    if (!orderId || !['order.opened', 'order.cancelled', 'order.partiallyfilled', 'order.filled', 'order.expired'].includes(String(eventType)) || !expectedStatus) return null;
     const [link, order] = await Promise.all([
       this.db.discordAccountLink.findUnique({ where: { userId }, select: { discordUserId: true, user: { select: { accountStatus: true } } } }),
-      this.db.tradingOrder.findFirst({ where: { id: orderId, userId, status: expectedStatus }, select: { id: true, side: true, originalUnits: true, limitPriceMinor: true, status: true, asset: { select: { title: true } } } }),
+      this.db.tradingOrder.findFirst({ where: { id: orderId, userId }, select: { id: true, side: true, originalUnits: true, limitPriceMinor: true, status: true, asset: { select: { title: true } } } }),
     ]);
     if (!link || link.user.accountStatus !== 'ACTIVE' || !order) return null;
-    return { deliveryId: row.deliveryId, eventId: String(payload.eventId ?? row.outboxEventId), claimToken: row.claimToken, discordUserId: link.discordUserId, category: 'ORDERS', eventType, occurredAt: typeof payload.occurredAt === 'string' ? payload.occurredAt : row.createdAt.toISOString(), order: { id: order.id, assetTitle: order.asset.title, side: order.side, units: order.originalUnits.toString(), limitPriceMinor: order.limitPriceMinor.toString(), currency: 'GBP', status: order.status as 'OPEN' | 'CANCELLED' } };
+    return { deliveryId: row.deliveryId, eventId: String(payload.eventId ?? row.outboxEventId), claimToken: row.claimToken, discordUserId: link.discordUserId, category: 'ORDERS', eventType: eventType as DiscordOrderDelivery['eventType'], occurredAt: typeof payload.occurredAt === 'string' ? payload.occurredAt : row.createdAt.toISOString(), order: { id: order.id, assetTitle: order.asset.title, side: order.side, units: typeof payload.units === 'string' ? payload.units : order.originalUnits.toString(), limitPriceMinor: typeof payload.priceMinor === 'string' ? payload.priceMinor : order.limitPriceMinor.toString(), currency: 'GBP', status: expectedStatus } };
+  }
+  private async resolveResource(row: NotificationDelivery & { claimToken: string }, payload: Record<string, unknown>, userId: string): Promise<DiscordResourceDelivery | null> {
+    const submissionId = typeof payload.submissionId === 'string' ? payload.submissionId : null;
+    const category = row.topic === 'COLLECTOR_ACTIONS' ? 'COLLECTOR_ACTIONS' : 'SHIPPING';
+    if (!submissionId || typeof payload.eventType !== 'string' || typeof payload.status !== 'string') return null;
+    const [link, submission] = await Promise.all([this.db.discordAccountLink.findUnique({ where: { userId }, select: { discordUserId: true, user: { select: { accountStatus: true } } } }), this.db.assetSubmission.findFirst({ where: { id: submissionId, ownerUserId: userId }, select: { id: true, declaredMetadata: true, asset: { select: { title: true } } } })]);
+    if (!link || link.user.accountStatus !== 'ACTIVE' || !submission) return null;
+    const metadata = submission.declaredMetadata as Record<string, unknown> | null;
+    const title = submission.asset?.title ?? (typeof metadata?.name === 'string' ? metadata.name.slice(0, 120) : 'Your collectible');
+    return { deliveryId: row.deliveryId, eventId: String(payload.eventId ?? row.outboxEventId), claimToken: row.claimToken, discordUserId: link.discordUserId, category, eventType: payload.eventType, occurredAt: typeof payload.occurredAt === 'string' ? payload.occurredAt : row.createdAt.toISOString(), resource: { submissionId, intakeId: typeof payload.intakeId === 'string' ? payload.intakeId : null, title, status: payload.status } };
   }
 }

@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
+import { OutboxWriter } from '../outbox/application/outbox-writer.service';
+import { customerResourceEvent, eventType } from '../outbox/domain/domain-event';
 import {
   collectorPlanRegistry,
   collectorUsageFor,
@@ -131,6 +133,7 @@ export class CollectorWorkspaceService {
   constructor(
     private readonly db: PrismaService,
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
+    private readonly outbox: OutboxWriter = new OutboxWriter(),
   ) {}
 
   async overview(userId: string) {
@@ -492,7 +495,7 @@ export class CollectorWorkspaceService {
         message: 'Enter a valid shipping date.',
       });
     return this.db.$transaction(async (db) => {
-      await db.intakeShipment.upsert({
+      const shipment = await db.intakeShipment.upsert({
         where: { intakeId: intake.id },
         create: {
           intakeId: intake.id,
@@ -510,11 +513,17 @@ export class CollectorWorkspaceService {
           notes: input.notes?.trim() || null,
         },
       });
-      return db.submissionIntake.update({
+      const updated = await db.submissionIntake.update({
         where: { id: intake.id },
         data: { status: 'IN_TRANSIT', shippedAt },
         include: { vault: true, shipment: true },
       });
+      if (!intake.shipment) {
+        const occurredAt = shipment.createdAt;
+        await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentTrackingAdded, submissionId, intakeId: intake.id, status: 'SHIPPED', actorUserId: userId, correlationId: `shipment:${shipment.id}`, occurredAt }));
+        await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentInTransit, submissionId, intakeId: intake.id, status: 'IN_TRANSIT', actorUserId: userId, correlationId: `shipment:${shipment.id}`, occurredAt }));
+      }
+      return updated;
     });
   }
 
@@ -556,11 +565,13 @@ export class CollectorWorkspaceService {
           shipmentRef: intake.shipment?.trackingNumber,
         },
       });
-      return db.submissionIntake.update({
+      const updated = await db.submissionIntake.update({
         where: { id: intakeId },
         data: { status: 'RECEIVED', receivedAt: new Date() },
-        include: { vault: true, shipment: true, receipt: true },
+        include: { vault: true, shipment: true, receipt: true, submission: { select: { ownerUserId: true } } },
       });
+      await this.outbox.append(db, customerResourceEvent({ eventType: eventType.intakeReceiptConfirmed, submissionId: updated.submissionId, intakeId, status: 'RECEIVED', actorUserId: updated.submission.ownerUserId, correlationId: `receipt:${intakeId}`, occurredAt: updated.receivedAt ?? new Date() }));
+      return updated;
     });
   }
 
@@ -585,17 +596,12 @@ export class CollectorWorkspaceService {
       });
     const deliveredAt =
       status === 'DELIVERED' ? new Date() : shipment.deliveredAt;
-    await this.db.intakeShipment.update({
-      where: { intakeId },
-      data: { status, deliveredAt, lastCheckedAt: new Date() },
-    });
-    return this.db.submissionIntake.update({
-      where: { id: intakeId },
-      data: {
-        status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT',
-        deliveredAt,
-      },
-      include: { vault: true, shipment: true, receipt: true },
+    return this.db.$transaction(async (db) => {
+      await db.intakeShipment.update({ where: { intakeId }, data: { status, deliveredAt, lastCheckedAt: new Date() } });
+      const updated = await db.submissionIntake.update({ where: { id: intakeId }, data: { status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT', deliveredAt }, include: { vault: true, shipment: true, receipt: true, submission: { select: { ownerUserId: true } } } });
+      if (status === 'DELIVERED' && shipment.status !== 'DELIVERED') await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentCarrierDelivered, submissionId: updated.submissionId, intakeId, status: 'DELIVERED', actorUserId: updated.submission.ownerUserId, correlationId: `shipment:${shipment.id}`, occurredAt: deliveredAt! }));
+      if (status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT') await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentInTransit, submissionId: updated.submissionId, intakeId, status: 'IN_TRANSIT', actorUserId: updated.submission.ownerUserId, correlationId: `shipment:${shipment.id}`, occurredAt: new Date() }));
+      return updated;
     });
   }
 

@@ -549,6 +549,7 @@ export class TradingService {
         );
         await tradingTestFailurePoint('expiry.after-order-update');
         await this.releaseRemainder(db, order);
+        await this.outbox.append(db, orderLifecycleEvent({ eventType: eventType.orderExpired, orderId: updated.id, assetId: updated.assetId, side: updated.side, units: updated.originalUnits.toString(), status: 'EXPIRED', actorUserId: updated.userId, correlationId: requestId, occurredAt: updated.updatedAt }));
         const tx = createIdentityTransaction(db);
         await tx.audit.append({
           id: randomUUID(),
@@ -1123,8 +1124,9 @@ export class TradingService {
         version: { increment: 1 },
       },
     });
-    await this.applyFill(db, buy, units, price);
-    await this.applyFill(db, sell, units, price);
+    const updatedBuy = await this.applyFill(db, buy, units, price);
+    const updatedSell = await this.applyFill(db, sell, units, price);
+    for (const order of [updatedBuy, updatedSell]) await this.outbox.append(db, orderLifecycleEvent({ eventType: order.status === 'FILLED' ? eventType.orderFilled : eventType.orderPartiallyFilled, orderId: order.id, assetId: order.assetId, side: order.side, units: units.toString(), priceMinor: price.toString(), status: order.status as 'PARTIALLY_FILLED' | 'FILLED', actorUserId: order.userId, correlationId: execution.correlationId, occurredAt: execution.executedAt, eventSuffix: execution.id }));
     await tradingTestFailurePoint('execution.after-order-updates');
     const tx = createIdentityTransaction(db);
     await tx.audit.append({
@@ -1174,6 +1176,7 @@ export class TradingService {
     });
     await this.history(db, order.id, order.status, status, 'EXECUTION_SETTLED');
     if (remaining === 0n) await this.markReservationConsumed(db, updated);
+    return updated;
   }
 
   private async reserveCash(

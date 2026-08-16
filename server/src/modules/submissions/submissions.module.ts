@@ -10,13 +10,14 @@ import {
 } from './ports/submission-storage.ports';
 import { SubmissionStorageModule } from './submission-storage.module';
 import { RawCardPreGradeService } from './application/raw-card-pregrade.service';
+import { OutboxModule } from '../outbox/outbox.module';
 import {
   RAW_CARD_PREGRADE_PROVIDER,
   XimilarRawCardPreGradeProvider,
 } from './application/raw-card-pregrade.provider';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, MarketResearchModule, SubmissionStorageModule],
+  imports: [AuthModule, AccessControlModule, MarketResearchModule, SubmissionStorageModule, OutboxModule],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
