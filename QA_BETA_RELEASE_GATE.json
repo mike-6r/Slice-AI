@@ -5,11 +5,11 @@
   "decision": "NO_GO_EXTERNAL_FULLY_EVIDENCED_BETA",
   "controlledInternalBeta": "GO",
   "deployment": {
-    "sourceCommit": "6ce3210",
+    "sourceCommit": "044a577",
     "previousExpectedCommit": "abdff60",
-    "vpsRelease": "/opt/slice/releases/20260816-6ce3210",
+    "vpsRelease": "/opt/slice/releases/20260816-044a577",
     "runtimePath": "/opt/slice/app",
-    "currentSymlink": "/opt/slice/releases/20260816-6ce3210",
+    "currentSymlink": "/opt/slice/releases/20260816-044a577",
     "apiService": "active",
     "webService": "active",
     "health": "PASS",
@@ -17,7 +17,8 @@
     "postgres": "up",
     "redis": "up",
     "prismaMigrations": "61_UP_TO_DATE",
-    "frontendConfig": "BETA_API_BUILD_NO_LOCALHOST_FALLBACK"
+    "frontendConfig": "BETA_API_BUILD_NO_LOCALHOST_FALLBACK",
+    "rollbackDirectory": "/opt/slice/app-previous-6ce3210"
   },
   "severityCounts": {
     "p0": 0,
@@ -32,7 +33,8 @@
     "collector": "PARTIAL",
     "staffReviewer": "PARTIAL",
     "admin": "PARTIAL",
-    "deprecatedStale": "PASS"
+    "deprecatedStale": "PASS",
+    "removedCustomerSurfaces": "PASS"
   },
   "surfaceDecisions": {
     "public": "GO",
@@ -164,6 +166,30 @@
     "umbreonChanged": false,
     "charizardChanged": false,
     "disposition": "NO_GO_EXTERNAL_FULLY_EVIDENCED_BETA"
+  },
+  "deploymentFollowup": {
+    "date": "2026-08-16",
+    "sourceCommit": "044a577",
+    "includedVerifiedSourceCommit": "ba20ad8",
+    "pushedToOrigin": true,
+    "vpsRelease": "/opt/slice/releases/20260816-044a577",
+    "systemdRuntimePath": "/opt/slice/app",
+    "systemdRuntimeTarget": "/opt/slice/releases/20260816-044a577",
+    "rollbackDirectory": "/opt/slice/app-previous-6ce3210",
+    "apiService": "active",
+    "webService": "active",
+    "health": 200,
+    "ready": 200,
+    "ssr": 200,
+    "prismaMigrations": "61_UP_TO_DATE",
+    "publicRouteChecks": {
+      "/": 200,
+      "/marketplace": 200,
+      "/vault-live": 404,
+      "/governance": 404
+    },
+    "localhostApiFallback": false,
+    "domainMutations": 0
   },
   "knownNonBlockingLimitations": [
     "Membership provider-backed notifications are not supported.",

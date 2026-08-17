@@ -11,9 +11,9 @@ This report separates implementation evidence from evidence that was intentional
 | Check | Result | Evidence |
 |---|---|---|
 | Local branch | PASS | `main` |
-| Source commit | PASS | `6ce3210` |
-| VPS release | PASS | `/opt/slice/releases/20260816-6ce3210` |
-| Runtime service path | PASS | `/opt/slice/app` activated from the verified release |
+| Source commit | PASS | `044a577` (includes verified `ba20ad8` source) |
+| VPS release | PASS | `/opt/slice/releases/20260816-044a577` |
+| Runtime service path | PASS | `/opt/slice/app` points to the verified release; prior app retained for rollback |
 | API/web services | PASS | `slice-api.service` and `slice-web.service` active |
 | `/health` | PASS | API returned `status: ok` |
 | `/ready` | PASS | PostgreSQL and Redis both `up` |
@@ -25,7 +25,7 @@ This report separates implementation evidence from evidence that was intentional
 
 | Surface | Routes/evidence | Result |
 |---|---|---|
-| Public | `/`, `/marketplace`, `/asset/:id`, `/collectors`, `/vault-live`, `/about`, `/how-it-works`, `/fees`, `/help` | GO; fresh post-deploy browser smoke, no console errors |
+| Public | `/`, `/marketplace`, `/asset/:id`, `/collectors`, `/about`, `/how-it-works`, `/fees`, `/help` | GO; fresh post-deploy browser smoke, no console errors |
 | Auth | `/login`, `/signup`, secure session recovery | GO; Admin and singular-domain Collector credentials authenticated; public routes remain usable during refresh cooldown |
 | Investor | `/portfolio`, `/orders`, `/wallet`, `/account` | PARTIAL; customer routes render, but an independent Investor credential/session was not freshly established |
 | Collector | `/collector-workspace`, `/list`, `/submissions/:id`, public collector routes | PARTIAL; read-only workspace and listing entry were exercised; fresh disposable listing/media/privacy workflow was not run |
@@ -177,3 +177,12 @@ This is an additive record of the latest non-destructive browser attempt. It doe
 ### Fresh evidence disposition
 
 The release classification remains **NO-GO for a fully evidenced external Beta**. The three P1 evidence blockers and P2 accessibility/responsive blocker remain open until authorized fresh role sessions and a functioning authenticated browser session are available.
+
+## Deployment follow-up — 2026-08-16
+
+- `044a577` was pushed fast-forward to `origin/main` and deployed to `/opt/slice/releases/20260816-044a577`.
+- The actual systemd working directory `/opt/slice/app` now points to that release. The previous directory is retained at `/opt/slice/app-previous-6ce3210` for rollback.
+- API health, API readiness, and SSR checks returned `200`; `slice-api.service` and `slice-web.service` are active.
+- Prisma reported 61 migrations with no pending migrations. No reset, drop, truncate, reseed, provider refresh, trading, issuance, custody, or lifecycle mutation was performed.
+- Cache-busted public checks returned: `/` `200`, `/marketplace` `200`, `/vault-live` `404`, `/governance` `404`. Homepage and marketplace HTML no longer contained Vault Live or Owner Voting navigation.
+- The external Beta decision remains **NO-GO** because fresh independent Investor/Staff/Reviewer authentication, privacy, IDOR, and authenticated accessibility evidence are still unavailable—not because deployment or public runtime health failed.
