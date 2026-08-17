@@ -168,18 +168,19 @@ export class InitialOfferingService {
       const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { inventory: { include: { account: true } }, asset: { include: { ownershipSupply: true, tradingMarket: true } } } });
       if (!offering) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
       if (offering.status !== 'APPROVED' && offering.status !== 'PAUSED') fail('INITIAL_OFFERING_NOT_READY', 'Only an approved or paused offering can be opened.');
-      if (!offering.inventory || offering.inventory.account.type !== 'INITIAL_OFFERING') fail('INITIAL_OFFERING_INVENTORY_MISSING', 'Initial offering inventory is not available.');
+      const inventory = offering.inventory ?? await this.allocateIssuedOwnershipForOffering(db, offering, key);
+      if (!inventory || inventory.account.type !== 'INITIAL_OFFERING') fail('INITIAL_OFFERING_INVENTORY_MISSING', 'Initial offering inventory is not available.');
       if (!offering.asset.ownershipSupply || offering.asset.ownershipSupply.issuedUnits !== offering.totalUnits) fail('OWNERSHIP_NOT_ISSUED', 'Ownership must be issued before opening the offering.');
       const market = offering.asset.tradingMarket;
       if (!market || market.status !== 'OPEN' || !market.tradingEnabled) fail('MARKET_NOT_OPEN', 'An open trading market is required before opening the offering.');
-      const position = await db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId: offering.assetId, accountId: offering.inventory.accountId } } });
+      const position = await db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId: offering.assetId, accountId: inventory.accountId } } });
       if (!position || position.settledUnits - position.reservedUnits < offering.offeredUnits) fail('INITIAL_OFFERING_INVENTORY_UNAVAILABLE', 'The offering inventory is not available.');
       const existingOrder = await db.tradingOrder.findFirst({ where: { initialOfferingId: offering.id, status: { in: ['OPEN', 'PARTIALLY_FILLED'] } } });
       if (existingOrder) return this.projectionFromRecord(offering);
       const order = await db.tradingOrder.create({ data: { id: randomUUID(), principalType: 'INITIAL_OFFERING', channel: 'INITIAL_OFFERING', principalId: offering.id, initialOfferingId: offering.id, actorUserId: actor.userId, assetId: offering.assetId, side: 'SELL', type: 'LIMIT', timeInForce: 'GTC', status: 'OPEN', limitPriceMinor: offering.pricePerUnitMinor, originalUnits: offering.offeredUnits, remainingUnits: offering.offeredUnits, filledUnits: 0n, prioritySequence: market.nextPrioritySequence, ownershipReservationId: randomUUID() } });
-      await db.ownershipReservation.create({ data: { id: order.ownershipReservationId!, assetId: offering.assetId, accountId: offering.inventory.accountId, purposeType: 'INITIAL_OFFERING', purposeId: offering.id, units: offering.offeredUnits, idempotencyRef: key } });
+      await db.ownershipReservation.create({ data: { id: order.ownershipReservationId!, assetId: offering.assetId, accountId: inventory.accountId, purposeType: 'INITIAL_OFFERING', purposeId: offering.id, units: offering.offeredUnits, idempotencyRef: key } });
       await db.ownershipPosition.update({ where: { id: position.id }, data: { reservedUnits: { increment: offering.offeredUnits }, version: { increment: 1 } } });
-      await db.initialOfferingInventory.update({ where: { id: offering.inventory.id }, data: { availableUnits: 0n, reservedUnits: offering.offeredUnits } });
+      await db.initialOfferingInventory.update({ where: { id: inventory.id }, data: { availableUnits: 0n, reservedUnits: offering.offeredUnits } });
       await db.tradingMarket.update({ where: { assetId: offering.assetId }, data: { nextPrioritySequence: { increment: 1n }, version: { increment: 1 } } });
       await db.orderStatusHistory.create({ data: { id: randomUUID(), orderId: order.id, fromStatus: null, toStatus: 'OPEN', reasonCode: 'INITIAL_OFFERING_OPENED' } });
       await this.outbox.append(db, orderLifecycleEvent({ eventType: eventType.orderOpened, orderId: order.id, assetId: offering.assetId, side: 'SELL', units: offering.offeredUnits.toString(), status: 'OPEN', actorUserId: actor.userId, correlationId: requestId, occurredAt: order.createdAt }));
@@ -188,6 +189,63 @@ export class InitialOfferingService {
       await audit('INITIAL_OFFERING_OPENED', { offeringId, orderId: order.id, offeredUnits: offering.offeredUnits.toString() });
       return this.projectionFromRecord(updated);
     });
+  }
+
+  /**
+   * Supports the valid lifecycle where ownership was issued before a collector
+   * created an initial offering. Issuance created Treasury ownership because
+   * no offering existed yet; opening the approved offering is the authoritative
+   * point to allocate the issued units into retained collector ownership and
+   * Initial Offering inventory.
+   */
+  private async allocateIssuedOwnershipForOffering(
+    db: Db,
+    offering: {
+      id: string;
+      assetId: string;
+      beneficiaryUserId: string;
+      totalUnits: bigint;
+      offeredUnits: bigint;
+      retainedUnits: bigint;
+      asset: { ownershipSupply: { nextSequence: bigint; issuedUnits: bigint } | null };
+    },
+    idempotencyRecordId: string,
+  ) {
+    if (!offering.asset.ownershipSupply || offering.asset.ownershipSupply.issuedUnits !== offering.totalUnits) {
+      fail('OWNERSHIP_NOT_ISSUED', 'Ownership must be issued before opening the offering.');
+    }
+    if (offering.offeredUnits + offering.retainedUnits !== offering.totalUnits) {
+      fail('INITIAL_OFFERING_ALLOCATION_INVALID', 'Offering allocation must equal the issued supply.');
+    }
+
+    const existing = await db.initialOfferingInventory.findUnique({ where: { offeringId: offering.id }, include: { account: true } });
+    if (existing) return existing;
+
+    const treasury = await db.ownershipAccount.findFirst({ where: { type: 'TREASURY', positions: { some: { assetId: offering.assetId } } } });
+    if (!treasury) fail('OWNERSHIP_TREASURY_MISSING', 'Issued ownership Treasury is unavailable.');
+    const treasuryPosition = await db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId: offering.assetId, accountId: treasury.id } } });
+    if (!treasuryPosition || treasuryPosition.settledUnits - treasuryPosition.reservedUnits < offering.totalUnits) {
+      fail('INITIAL_OFFERING_ALLOCATION_UNAVAILABLE', 'Issued ownership is not available for this offering.');
+    }
+
+    const collector = (await db.ownershipAccount.findUnique({ where: { userId: offering.beneficiaryUserId } })) ?? await db.ownershipAccount.create({ data: { id: randomUUID(), type: 'USER', userId: offering.beneficiaryUserId, status: 'ACTIVE' } });
+    if (collector.type !== 'USER') fail('OWNERSHIP_ACCOUNT_INVALID', 'Collector ownership account is unavailable.');
+    const inventoryAccount = await db.ownershipAccount.create({ data: { id: randomUUID(), type: 'INITIAL_OFFERING', status: 'ACTIVE' } });
+
+    await db.ownershipPosition.upsert({
+      where: { assetId_accountId: { assetId: offering.assetId, accountId: collector.id } },
+      create: { id: randomUUID(), assetId: offering.assetId, accountId: collector.id, settledUnits: offering.retainedUnits, reservedUnits: 0n },
+      update: { settledUnits: { increment: offering.retainedUnits }, version: { increment: 1 } },
+    });
+    await db.ownershipPosition.create({ data: { id: randomUUID(), assetId: offering.assetId, accountId: inventoryAccount.id, settledUnits: offering.offeredUnits, reservedUnits: 0n } });
+    await db.ownershipPosition.update({ where: { id: treasuryPosition.id }, data: { settledUnits: { decrement: offering.totalUnits }, version: { increment: 1 } } });
+
+    const sequence = offering.asset.ownershipSupply.nextSequence;
+    await db.ownershipLedgerEntry.create({ data: { id: randomUUID(), assetId: offering.assetId, sequence, entryType: 'TRANSFER', debitAccountId: treasury.id, creditAccountId: collector.id, units: offering.retainedUnits, correlationId: `initial-offering:${offering.id}:collector`, idempotencyRecordId, reasonCode: 'INITIAL_OFFERING_ALLOCATION', metadata: { schemaVersion: 1, channel: 'INITIAL_OFFERING' }, actorUserId: null } });
+    await db.ownershipLedgerEntry.create({ data: { id: randomUUID(), assetId: offering.assetId, sequence: sequence + 1n, entryType: 'TRANSFER', debitAccountId: treasury.id, creditAccountId: inventoryAccount.id, units: offering.offeredUnits, correlationId: `initial-offering:${offering.id}:inventory`, idempotencyRecordId, reasonCode: 'INITIAL_OFFERING_ALLOCATION', metadata: { schemaVersion: 1, channel: 'INITIAL_OFFERING' }, actorUserId: null } });
+    await db.ownershipAssetSupply.update({ where: { assetId: offering.assetId }, data: { nextSequence: { increment: 2n } } });
+
+    return db.initialOfferingInventory.create({ data: { id: randomUUID(), offeringId: offering.id, assetId: offering.assetId, accountId: inventoryAccount.id, beneficiaryUserId: offering.beneficiaryUserId, offeredUnits: offering.offeredUnits, availableUnits: offering.offeredUnits, reservedUnits: 0n, settledUnits: 0n }, include: { account: true } });
   }
 
   async transition(actor: Actor, offeringId: string, target: TransitionTarget, requestId: string, key: string) {
