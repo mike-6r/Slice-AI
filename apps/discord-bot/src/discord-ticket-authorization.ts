@@ -16,7 +16,7 @@ export function createDiscordTicketAuthorization(guild: Guild, repository: Setup
       const resource = await repository.getResource(ticket.guildId, 'ROLE', key);
       if (resource && roleIds.has(resource.discordId)) heldKeys.add(key);
     }
-    const admin = member.permissions.has(PermissionFlagsBits.Administrator) || heldKeys.has('owner') || heldKeys.has('administrator');
+    const admin = member.permissions.has(PermissionFlagsBits.Administrator) || heldKeys.has('owner');
     const staff = admin || heldKeys.size > 0;
     const eligible = admin || staffRolesForCategory(ticket.category).some((key) => heldKeys.has(key));
     return { id: userId, staff, admin, eligible, owner: ticket.creatorId === userId };

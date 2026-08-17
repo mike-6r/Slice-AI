@@ -1,18 +1,15 @@
-version: 11
+version: 12
 
 roles:
-  - { key: owner, name: Owner, color: "#F6C85F", hoist: true, staff: true }
-  - { key: administrator, name: Administrator, color: "#F56B6B", hoist: true, staff: true }
-  - { key: operations, name: Operations Lead, color: "#6CA8FF", staff: true }
-  - { key: compliance, name: Compliance, color: "#A98BFF", staff: true }
-  - { key: support, name: Support Team, color: "#27D7B1", staff: true }
-  - { key: moderator, name: Community Moderator, color: "#36E39A", staff: true }
-  - { key: developer, name: Developer, color: "#8E7CFF", staff: true }
-  - { key: verified, name: Verified Member, color: "#36E39A", hoist: true }
-  - { key: slice-member, name: Slice Member, color: "#27D7B1" }
-  - { key: collector, name: Collector, color: "#F6C85F" }
-  - { key: seller, name: Seller, color: "#6CA8FF" }
-  - { key: beta, name: Beta Access, color: "#A98BFF" }
+  - { key: owner, name: Admin, color: "#D98B8B", hoist: true, staff: true, permissions: [ManageGuild, ManageRoles, ManageChannels, ManageMessages, ManageThreads, KickMembers, BanMembers, ViewAuditLog, ManageNicknames] }
+  - { key: administrator, name: Staff, color: "#6CA8FF", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ReadMessageHistory] }
+  - { key: operations, name: Reviewer, color: "#8E7CFF", hoist: true, staff: true, permissions: [ReadMessageHistory, ManageThreads] }
+  - { key: support, name: Support, color: "#F6C85F", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ReadMessageHistory] }
+  - { key: slice, name: Slice, color: "#27D7B1", permissions: [ManageRoles, ManageChannels, ManageMessages, ManageThreads, ViewAuditLog, SendMessages, EmbedLinks, AttachFiles, ReadMessageHistory, UseApplicationCommands] }
+  - { key: verified-collector, name: Verified Collector, color: "#36E39A", hoist: true }
+  - { key: collector, name: Collector, color: "#36E39A", hoist: true }
+  - { key: verified, name: "✓ Verified", color: "#5E6675" }
+  - { key: slice-member, name: Member, color: "#5E6675" }
   - { key: new-listings, name: New Listings, color: "#27D7B1", mentionable: true }
   - { key: price-alerts, name: Price Alerts, color: "#F6C85F", mentionable: true }
   - { key: rare-cards, name: Rare Finds, color: "#A98BFF", mentionable: true }
@@ -30,50 +27,29 @@ roles:
   - { key: level-50, name: Level 50, color: "#F56B6B" }
 
 categories:
-  - { key: start, name: "01 - START HERE" }
-  - { key: slice, name: "02 - MY SLICE" }
-  - { key: marketplace, name: "03 - MARKET" }
-  - { key: collectors, name: "04 - COLLECTORS" }
-  - { key: community, name: "05 - COMMUNITY" }
-  - { key: support, name: "06 - SUPPORT" }
-  - { key: staff, name: "07 - STAFF / OPERATIONS", staff: true }
+  - { key: start, name: "START HERE" }
+  - { key: slice, name: "SLICE" }
+  - { key: collectors, name: "COLLECTORS" }
+  - { key: community, name: "COMMUNITY" }
+  - { key: support, name: "SUPPORT" }
+  - { key: private-support, name: "PRIVATE SUPPORT", staff: true }
+  - { key: staff, name: "STAFF", staff: true }
 
 channels:
-  - { key: welcome, name: welcome, category: start, order: 1, read_only: true, topic: "Start here: what Slice is, how to stay safe, and where to go next." }
-  - { key: start-here, name: start-here, category: start, order: 2, read_only: true, topic: "A simple 60-second path for new members." }
-  - { key: rules, name: rules, category: start, order: 3, read_only: true, topic: "Community standards and safety expectations." }
-  - { key: verify, name: verify, category: start, order: 4, read_only: true, topic: "Connect your Slice account and confirm access safely." }
-  - { key: roles, name: roles, category: start, order: 5, read_only: true, topic: "Choose only the notifications you actually want." }
-  - { key: faq, name: faq, category: start, order: 6, read_only: true, topic: "Fast answers before opening a ticket." }
-  - { key: roadmap, name: roadmap, category: start, order: 7, read_only: true, topic: "High-level product direction without speculative dates." }
-  - { key: my-slice, name: my-slice, category: slice, order: 1, read_only: true, topic: "Open your Slice account, portfolio, orders, and transactions securely on Slice." }
-  - { key: announcements, name: announcements, category: slice, order: 2, read_only: true, topic: "Official Slice announcements only." }
-  - { key: platform-updates, name: platform-updates, category: slice, order: 3, read_only: true, topic: "Release notes, maintenance notes, and platform updates." }
-  - { key: market-feed, name: market-feed, category: marketplace, order: 1, read_only: true, topic: "Curated marketplace activity from Slice." }
-  - { key: recent-sales, name: recent-sales, category: marketplace, order: 2, read_only: true, topic: "Recent public sale signals when available." }
-  - { key: price-alerts, name: price-alerts, category: marketplace, order: 3, read_only: true, topic: "Price movement and alert information." }
-  - { key: market-discussion, name: market-discussion, category: marketplace, order: 4, topic: "Discuss market signals without making offers or financial claims." }
-  - { key: new-listings, name: new-listings, category: marketplace, order: 5, topic: "Discover new Slice listings and discuss public details." }
-  - { key: watchlists, name: watchlists, category: marketplace, order: 6, topic: "Track items, interests, and collecting themes." }
-  - { key: portfolio-showcase, name: portfolio-showcase, category: marketplace, order: 7, topic: "Optional community-safe showcases only. No private account details." }
-  - { key: market-analysis, name: market-analysis, category: marketplace, order: 8, topic: "Research, context, and public market discussion." }
-  - { key: collector-workspace, name: collector-workspace, category: collectors, order: 1, read_only: true, topic: "Collector submissions, Your Actions, vault selection, shipping, and membership are managed on Slice." }
-  - { key: general, name: general, category: community, order: 1, topic: "General collector conversation." }
-  - { key: collecting, name: collecting, category: community, order: 2, topic: "Cards, sets, grading, collecting stories, and hobby talk." }
-  - { key: investment-discussion, name: investment-discussion, category: community, order: 3, topic: "Educational market discussion only. No financial advice." }
-  - { key: pokemon-tcg, name: pokemon-tcg, category: community, order: 4, topic: "Pokemon TCG collecting, grading, sets, and nostalgia." }
-  - { key: suggestions, name: suggestions, category: community, order: 5, topic: "Suggest improvements for the community and Slice Discord experience." }
-  - { key: off-topic, name: off-topic, category: community, order: 6, topic: "Relaxed conversation that still follows community standards." }
-  - { key: create-a-ticket, name: create-a-ticket, category: support, order: 1, read_only: true, topic: "Open the right private support request." }
-  - { key: support-information, name: support-information, category: support, order: 2, read_only: true, topic: "What support can help with and what not to post publicly." }
-  - { key: known-issues, name: known-issues, category: support, order: 3, read_only: true, topic: "Known issues, maintenance notes, and safe workarounds." }
-  - { key: staff, name: ops-center, category: staff, order: 1, staff: true, read_only: true, topic: "High-signal Slice operations summary and authorised workspace shortcuts." }
-  - { key: operations, name: asset-operations, category: staff, order: 2, staff: true, read_only: true, topic: "Verification, valuation, custody, market readiness, and asset exceptions." }
-  - { key: compliance-alerts, name: physical-intake, category: staff, order: 3, staff: true, read_only: true, topic: "Carrier delivery, receipt-pending, shipping exception, and intake handoff alerts." }
-  - { key: support-log, name: support-queue, category: staff, order: 4, staff: true, read_only: true, topic: "Canonical Discord ticket workflow and Trust & Support handoff." }
-  - { key: moderation-log, name: moderation-log, category: staff, order: 5, staff: true, topic: "Moderation cases and enforcement records." }
-  - { key: bot-log, name: system-alerts, category: staff, order: 6, staff: true, read_only: true, topic: "Meaningful platform degradation, job, webhook, and provider alerts only." }
-  - { key: provider-status, name: staff-chat, category: staff, order: 7, staff: true, topic: "Private staff coordination. No customer or provider secrets." }
+  - { key: verify, name: "🔐・verify", category: start, order: 1, read_only: true, topic: "Connect your Slice account, then verify your server access." }
+  - { key: welcome, name: "📌・welcome", category: slice, order: 1, read_only: true, topic: "Start here after verification." }
+  - { key: announcements, name: "📣・announcements", category: slice, order: 2, read_only: true, topic: "Official Slice platform updates." }
+  - { key: my-slice, name: "◈・my-slice", category: slice, order: 3, read_only: true, topic: "Private access to your Slice account with /slice." }
+  - { key: market-feed, name: "📈・market", category: slice, order: 4, read_only: true, topic: "Initial Offering and marketplace updates." }
+  - { key: collector-workspace, name: "🗂️・collector-hub", category: collectors, order: 1, read_only: true, topic: "Learn how Collector listings and ownership work." }
+  - { key: list-a-collectible, name: "🏷️・list-a-collectible", category: collectors, order: 2, read_only: true, topic: "Start your Collector submission on Slice." }
+  - { key: general, name: "💬・general", category: community, order: 1, topic: "Community discussion.", slowmode: 5 }
+  - { key: collecting, name: "🔎・collectibles", category: community, order: 2, topic: "Cards, collectibles, collections, and market talk.", slowmode: 5 }
+  - { key: create-a-ticket, name: "🎫・support", category: support, order: 1, read_only: true, topic: "Open a private support request." }
+  - { key: operations, name: "🛡️・operations", category: staff, order: 1, staff: true, topic: "Internal Slice operations." }
+  - { key: moderation-log, name: "🧾・review-queue", category: staff, order: 2, staff: true, read_only: true, topic: "Internal review activity." }
+  - { key: support-log, name: "🎫・support-ops", category: staff, order: 3, staff: true, topic: "Support operations and ticket activity." }
+  - { key: bot-log, name: "⚙️・bot-logs", category: staff, order: 4, staff: true, read_only: true, topic: "Important Discord bot operational events." }
 
 panels:
   welcome:

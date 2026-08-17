@@ -153,8 +153,8 @@ async function handleTicketIntake(interaction: ModalSubmitInteraction): Promise<
   const category = interaction.customId.split(':')[3];
   if (!interaction.guild || !interaction.guildId || !categories.has(category)) throw new TicketCreationError('Invalid ticket request.');
   await interaction.deferReply({ ephemeral: true });
-  const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'support');
-  if (!support) throw new TicketCreationError('Slice support category is missing. Ask an administrator to run /setup repair.');
+  const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'private-support');
+  if (!support) throw new TicketCreationError('Slice private support is not ready. Ask an administrator to run /setup repair.');
   const existing = (await tickets.findActive(interaction.guildId, interaction.user.id)).find((ticket) => ticket.category === category);
   if (existing?.channelId && !(await interaction.guild.channels.fetch(existing.channelId).catch(() => null))) await tickets.clearMissingChannel(existing.id, interaction.guildId, existing.channelId);
   const service = new TicketCreationService(tickets, createTicketDiscordBoundary(interaction.guild, support.discordId), { getRoleId: async (guildId, key) => (await repository.getResource(guildId, 'ROLE', key))?.discordId ?? null });
@@ -202,7 +202,7 @@ async function handleTicketCommand(interaction: ChatInputCommandInteraction): Pr
 async function handleTranscriptCommand(interaction: ChatInputCommandInteraction, router: TicketInteractionRouter, context: TicketRouteContext): Promise<void> { const ticket = await tickets.findByChannel(context.guildId!, context.channelId!); if (!ticket) return void await interaction.reply(ticketError('This ticket control is unavailable.')); const authorized = await router.authorize({ ...context, ticketId: ticket.id }); if (!authorized.ok) return void await interaction.reply(ticketError(authorized.message)); await interaction.deferReply({ ephemeral: true }); try { await generateTranscript(interaction.guild!, ticket.id); await interaction.editReply({ embeds: [SliceEmbed.success('Transcript ready', 'The closed ticket transcript was generated or reused for staff audit.') ] }); } catch { await interaction.editReply(ticketError('Transcript generation could not be completed. The closed ticket remains authoritative.')); } }
 
 function ticketRouter(guild: NonNullable<Parameters<typeof createDiscordTicketAuthorization>[0]>): TicketInteractionRouter { return new TicketInteractionRouter(lifecycle, tickets, createDiscordTicketAuthorization(guild, repository)); }
-async function moderationActor(interaction: ChatInputCommandInteraction) { if (!interaction.guild) throw new Error('Guild unavailable'); const member=await interaction.guild.members.fetch(interaction.user.id); const roles=await Promise.all(['moderator','administrator','owner','operations'].map(key=>repository.getResource(interaction.guildId!,'ROLE',key))); const ids=new Set(member.roles.cache.keys()); const admin=member.permissions.has('Administrator')||roles.slice(1).some(row=>row&&ids.has(row.discordId)); return {id:interaction.user.id,staff:admin||Boolean(roles[0]&&ids.has(roles[0].discordId)),admin,position:member.roles.highest.position}; }
+async function moderationActor(interaction: ChatInputCommandInteraction) { if (!interaction.guild) throw new Error('Guild unavailable'); const member=await interaction.guild.members.fetch(interaction.user.id); const roles=await Promise.all(['owner','administrator','operations','support'].map(key=>repository.getResource(interaction.guildId!,'ROLE',key))); const ids=new Set(member.roles.cache.keys()); const admin=member.permissions.has('Administrator')||Boolean(roles[0]&&ids.has(roles[0].discordId)); return {id:interaction.user.id,staff:admin||roles.slice(1).some(row=>row&&ids.has(row.discordId)),admin,position:member.roles.highest.position}; }
 function moderationForGuild(guild: Guild) { return new ManualModerationService(new ModerationService(moderationRepository, createDiscordModerationTransport(guild, repository)), moderationRepository, new DiscordModerationAuthorization()); }
 async function moderationTarget(guild: Guild,id:string,action:string) { if (action === 'unban') return { id, position: -1, protected: false, bot: false }; const member=await guild.members.fetch(id); const roles=await Promise.all(['owner','administrator'].map(key=>repository.getResource(guild.id,'ROLE',key))); const ids=new Set(member.roles.cache.keys()); return {id,position:member.roles.highest.position,protected:roles.some(row=>row&&ids.has(row.discordId)),bot:member.user.bot}; }
 async function applyLevelMilestoneRole(guild: Guild, userId: string, level: number): Promise<void> { const milestone = [50, 30, 20, 10, 5].find((value) => level >= value); if (!milestone) return; const role = await repository.getResource(guild.id, 'ROLE', `level-${milestone}`); if (!role) return; try { const member = await guild.members.fetch(userId); await member.roles.add(role.discordId, `Slice community level ${milestone} milestone`); } catch (error) { logger.warn('progression.level_role_failed', { guildId: guild.id, userId, level: milestone, name: error instanceof Error ? error.name : 'unknown' }); } }
@@ -321,6 +321,35 @@ async function handleOnboardingButton(interaction: ButtonInteraction): Promise<v
     await interaction.editReply({ embeds: [SliceEmbed.success('Slice account disconnected', 'Your Slice account and history were not changed.')], components: [] });
     return;
   }
+  if (action === 'verify') {
+    const guildId = interaction.guildId;
+    if (!guildId || !interaction.guild) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Verification unavailable', 'Verification is available inside the Slice server only.')] });
+    await interaction.deferReply({ ephemeral: true });
+    const status = await market.getLinkStatus(interaction.user.id);
+    if (!status.ok) {
+      await interaction.editReply({ embeds: [SliceEmbed.warning('Verification unavailable', status.message)] });
+      return;
+    }
+    if (!status.value.linked) {
+      const challenge = await market.createLinkChallenge({ discordUserId: interaction.user.id, discordUsername: interaction.user.username, discordDisplayName: interaction.user.globalName, guildId });
+      if (!challenge.ok) {
+        await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account first', challenge.message)] });
+        return;
+      }
+      await interaction.editReply({ embeds: [SliceEmbed.info('Connect your Slice account', 'Finish the secure connection on Slice, then return here and press Verify identity again.')] , components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('Connect account').setStyle(ButtonStyle.Link).setURL(challenge.value.challengeUrl))] });
+      return;
+    }
+    await syncLinkedAccountRoles(interaction, status.value.user.roles);
+    const verified = await repository.getResource(guildId, 'ROLE', 'verified');
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+    if (!verified || !member) {
+      await interaction.editReply({ embeds: [SliceEmbed.warning('Verification setup unavailable', 'The verification role is not ready yet. Ask an administrator to run `/setup repair`.')] });
+      return;
+    }
+    if (!member.roles.cache.has(verified.discordId)) await member.roles.add(verified.discordId, 'Slice account verification');
+    await interaction.editReply({ embeds: [SliceEmbed.success('You are verified', 'Welcome to Slice. The collector areas are now available to you.')] });
+    return;
+  }
   if (action === 'my-slice') return void await handleMySlice(interaction);
   const handoffs: Partial<Record<string, { destination: SliceDestination; title: string; description: string }>> = { verify: { destination: 'account', title: 'Verify on Slice', description: 'Identity and verification steps are handled only on the official Slice website.' }, 'my-slice': { destination: 'account', title: 'My Slice', description: 'Open Slice to view your account and linked services.' }, marketplace: { destination: 'marketplace', title: 'Marketplace', description: 'Open Slice for current listings and market activity.' }, portfolio: { destination: 'portfolio', title: 'Portfolio', description: 'Open Slice to view your private portfolio.' }, orders: { destination: 'orders', title: 'Orders', description: 'Open Slice to view your private order activity.' }, transactions: { destination: 'transactions', title: 'Transactions', description: 'Open Slice to view your private transaction activity.' }, 'collector-workspace': { destination: 'collector-workspace', title: 'Collector Workspace', description: 'Open Slice to view your collector workspace, if enabled for your account.' }, 'your-actions': { destination: 'your-actions', title: 'Your Actions', description: 'Open Slice to see the collector actions that currently need your attention.' }, membership: { destination: 'membership', title: 'Collector Membership', description: 'Open Slice to view membership and capacity information.' }, list: { destination: 'list', title: 'List an Asset', description: 'Open Slice to start a submission using the current review workflow.' }, 'admin-console': { destination: 'admin-console', title: 'Slice Admin Console', description: 'Open Slice to review authorized operational queues.' } };
   const handoff = handoffs[action];
@@ -331,7 +360,7 @@ async function handleOnboardingButton(interaction: ButtonInteraction): Promise<v
     return;
   }
   if (action === 'faq') { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Slice FAQ', Object.entries(FAQ).slice(0, 6).map(([key, value]) => `**${key}** — ${value}`).join('\n\n'))] }); return; }
-  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Support', 'Choose a category in #create-a-ticket to open private support.')] });
+  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Support', 'Choose a category in #🎫・support to open private support.')] });
 }
 
 async function syncLinkedAccountRoles(interaction: ButtonInteraction, sliceRoles: string[]): Promise<void> {
