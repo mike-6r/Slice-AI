@@ -36,10 +36,12 @@ import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent
 import { Inject } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { isBetaFixtureSlug } from '../../../config/beta-policy';
+import { calculateInitialOfferingSettlement } from '../../initial-offering/domain/initial-offering';
 
 export { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import {
   eventType,
+  initialOfferingLifecycleEvent,
   orderLifecycleEvent,
   tradeCompletedEvent,
 } from '../../outbox/domain/domain-event';
@@ -547,6 +549,7 @@ export class TradingService {
           id: orderId,
           userId: null,
           principalType: 'TREASURY',
+          channel: 'TREASURY_LIQUIDITY',
           principalId: treasury.id,
           actorUserId: actor.userId,
           assetId: canonicalAssetId,
@@ -1222,21 +1225,24 @@ export class TradingService {
     });
     const gross = checkedGross(price, units);
     const buyIsMaker = buy.prioritySequence! < sell.prioritySequence!;
-    const buyerFee = feeMinor(
-      gross,
-      buyIsMaker ? market.makerFeeBps : market.takerFeeBps,
-    );
-    const sellerFee = feeMinor(
-      gross,
-      buyIsMaker ? market.takerFeeBps : market.makerFeeBps,
-    );
+    const initialOffering = sell.principalType === 'INITIAL_OFFERING' && sell.initialOfferingId
+      ? await db.initialOffering.findUnique({ where: { id: sell.initialOfferingId }, include: { inventory: true } })
+      : null;
+    if (sell.principalType === 'INITIAL_OFFERING' && (!initialOffering || (initialOffering.status !== 'OPEN' && initialOffering.status !== 'PARTIALLY_FILLED') || price !== initialOffering.pricePerUnitMinor))
+      throw conflict('INITIAL_OFFERING_SETTLEMENT_INVALID', 'Initial offering terms are not available for settlement.');
+    const buyerFee = initialOffering
+      ? 0n
+      : feeMinor(gross, buyIsMaker ? market.makerFeeBps : market.takerFeeBps);
+    const sellerFee = initialOffering
+      ? calculateInitialOfferingSettlement(gross, initialOffering.feeBps).feeMinor
+      : feeMinor(gross, buyIsMaker ? market.takerFeeBps : market.makerFeeBps);
     const sequence = market.nextExecutionSequence;
     const correlationId = `trade:${market.assetId}:${sequence}`;
     if (!buy.userId)
       throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
     await this.settleOwnership(db, market.assetId, sell, buy.userId, units, correlationId);
     await tradingTestFailurePoint('execution.after-ownership');
-    await this.settleCash(db, buy, sell, units, gross, buyerFee, sellerFee, market.takerFeeBps, correlationId);
+    await this.settleCash(db, buy, sell, units, gross, buyerFee, sellerFee, market.takerFeeBps, correlationId, initialOffering);
     await tradingTestFailurePoint('execution.after-cash');
     if (sell.principalType === 'USER') {
       if (!sell.userId)
@@ -1255,6 +1261,8 @@ export class TradingService {
       data: {
         id: randomUUID(),
         assetId: market.assetId,
+        channel: initialOffering ? 'INITIAL_OFFERING' : sell.channel,
+        initialOfferingId: initialOffering?.id ?? null,
         buyOrderId: buy.id,
         sellOrderId: sell.id,
         makerOrderId: buyIsMaker ? buy.id : sell.id,
@@ -1292,6 +1300,12 @@ export class TradingService {
     });
     const updatedBuy = await this.applyFill(db, buy, units, price);
     const updatedSell = await this.applyFill(db, sell, units, price);
+    if (initialOffering && initialOffering.inventory) {
+      const terminal = updatedSell.status === 'FILLED';
+      await db.initialOfferingInventory.update({ where: { offeringId: initialOffering.id }, data: { reservedUnits: { decrement: units }, settledUnits: { increment: units } } });
+      const updatedOffering = await db.initialOffering.update({ where: { id: initialOffering.id }, data: { status: terminal ? 'SOLD_OUT' : 'PARTIALLY_FILLED', closedAt: terminal ? new Date() : null } });
+      await this.outbox.append(db, initialOfferingLifecycleEvent({ eventType: terminal ? eventType.initialOfferingSoldOut : eventType.initialOfferingPartiallyFilled, offeringId: updatedOffering.id, assetId: updatedOffering.assetId, status: updatedOffering.status, offeredUnits: updatedOffering.offeredUnits.toString(), retainedUnits: updatedOffering.retainedUnits.toString(), correlationId, actorUserId: actor.userId, occurredAt: updatedOffering.updatedAt, eventSuffix: execution.id }));
+    }
     for (const order of [updatedBuy, updatedSell]) await this.outbox.append(db, orderLifecycleEvent({ eventType: order.status === 'FILLED' ? eventType.orderFilled : eventType.orderPartiallyFilled, orderId: order.id, assetId: order.assetId, side: order.side, units: units.toString(), priceMinor: price.toString(), status: order.status as 'PARTIALLY_FILLED' | 'FILLED', actorUserId: this.orderActorUserId(order), correlationId: execution.correlationId, occurredAt: execution.executedAt, eventSuffix: execution.id }));
     await tradingTestFailurePoint('execution.after-order-updates');
     const tx = createIdentityTransaction(db);
@@ -1463,13 +1477,14 @@ export class TradingService {
     sellerFee: bigint,
     maximumBuyerFeeBps: number,
     correlationId: string,
+    initialOffering: { id: string; beneficiaryUserId: string } | null = null,
   ) {
     if (!buyOrder.userId)
       throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
     const [buyer, seller, fees] = await Promise.all([
       this.cashAccount(db, buyOrder.userId),
-      this.settlementSellerCashAccount(db, sellOrder),
-      this.feeAccount(db),
+      this.settlementSellerCashAccount(db, sellOrder, initialOffering),
+      this.feeAccount(db, Boolean(initialOffering)),
     ]);
     await this.lockFinancialAccounts(db, [buyer.id, seller.id, fees.id]);
     const reserveReduction =
@@ -1519,10 +1534,10 @@ export class TradingService {
     const journal = await db.journalTransaction.create({
       data: {
         id: randomUUID(),
-        type: 'TRADE_SETTLEMENT',
+        type: initialOffering ? 'INITIAL_OFFERING_SETTLEMENT' : 'TRADE_SETTLEMENT',
         currency: 'GBP',
         correlationId,
-        descriptionCode: 'TRADING_EXECUTION_WITH_FEE',
+        descriptionCode: initialOffering ? 'INITIAL_OFFERING_SETTLEMENT_WITH_FEE' : 'TRADING_EXECUTION_WITH_FEE',
         createdByUserId: this.orderActorUserId(buyOrder),
       },
     });
@@ -1794,6 +1809,8 @@ export class TradingService {
             version: { increment: 1 },
           },
         });
+        if (order.principalType === 'INITIAL_OFFERING' && order.initialOfferingId)
+          await db.initialOfferingInventory.update({ where: { offeringId: order.initialOfferingId }, data: { reservedUnits: { decrement: order.remainingUnits }, availableUnits: { increment: order.remainingUnits } } });
         await db.ownershipReservation.update({
           where: { id: reservation.id },
           data: { status: 'RELEASED' },
@@ -1854,6 +1871,7 @@ export class TradingService {
       id: order.id,
       assetId: order.assetId,
       assetSlug: assetSlug ?? null,
+      channel: order.channel,
       side: order.side,
       type: order.type,
       timeInForce: order.timeInForce,
@@ -2017,12 +2035,13 @@ export class TradingService {
       })
     );
   }
-  private async feeAccount(db: Db) {
+  private async feeAccount(db: Db, initialOffering = false) {
+    const code = initialOffering ? 'INITIAL_OFFERING_FEE_REVENUE' : 'TRADING_FEE_REVENUE';
     return (
       (await db.financialAccount.findFirst({
         where: {
           ownerType: 'PLATFORM',
-          code: 'TRADING_FEE_REVENUE',
+          code,
           currency: 'GBP',
         },
       })) ??
@@ -2031,7 +2050,7 @@ export class TradingService {
           id: randomUUID(),
           ownerType: 'PLATFORM',
           accountType: 'REVENUE',
-          code: 'TRADING_FEE_REVENUE',
+          code,
           currency: 'GBP',
           normalSide: 'CREDIT',
         },
@@ -2049,15 +2068,16 @@ export class TradingService {
   }
 
   private async ownershipAccountForOrder(db: Db, order: TradingOrder) {
-    if (order.principalType === 'TREASURY') {
+    if (order.principalType === 'TREASURY' || order.principalType === 'INITIAL_OFFERING') {
       const reservation = order.ownershipReservationId
         ? await db.ownershipReservation.findUnique({ where: { id: order.ownershipReservationId } })
         : null;
       if (!reservation)
         throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Treasury ownership reservation is unavailable.');
       const account = await db.ownershipAccount.findUnique({ where: { id: reservation.accountId } });
-      if (!account || account.type !== 'TREASURY' || account.status !== 'ACTIVE')
-        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Treasury ownership account is unavailable.');
+      const expectedType = order.principalType === 'TREASURY' ? 'TREASURY' : 'INITIAL_OFFERING';
+      if (!account || account.type !== expectedType || account.status !== 'ACTIVE')
+        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'The selling inventory account is unavailable.');
       return account;
     }
     if (!order.userId)
@@ -2065,7 +2085,15 @@ export class TradingService {
     return this.ownershipAccount(db, order.userId);
   }
 
-  private async settlementSellerCashAccount(db: Db, order: TradingOrder) {
+  private async settlementSellerCashAccount(db: Db, order: TradingOrder, initialOffering: { beneficiaryUserId: string } | null = null) {
+    if (order.principalType === 'INITIAL_OFFERING') {
+      if (!initialOffering) throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Initial offering beneficiary is unavailable.');
+      await this.lockUsers(db, [initialOffering.beneficiaryUserId]);
+      return (
+        (await db.financialAccount.findFirst({ where: { ownerType: 'USER', ownerUserId: initialOffering.beneficiaryUserId, code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: 'GBP' } })) ??
+        db.financialAccount.create({ data: { id: randomUUID(), ownerType: 'USER', ownerUserId: initialOffering.beneficiaryUserId, accountType: 'LIABILITY', code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: 'GBP', normalSide: 'CREDIT' } })
+      );
+    }
     if (order.principalType !== 'TREASURY') {
       if (!order.userId)
         throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Customer cash account is unavailable.');

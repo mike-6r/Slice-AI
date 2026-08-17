@@ -81,8 +81,21 @@ enum OwnershipSupplyPolicyStatus {
 enum OwnershipAccountType {
   USER
   TREASURY
+  INITIAL_OFFERING
   ESCROW
   EXTERNAL
+}
+
+enum InitialOfferingStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  APPROVED
+  OPEN
+  PARTIALLY_FILLED
+  SOLD_OUT
+  PAUSED
+  CANCELLED
+  EXPIRED
 }
 
 enum OwnershipAccountStatus {
@@ -151,6 +164,7 @@ enum JournalTransactionType {
   REVERSAL
   ADMIN_CORRECTION
   DISTRIBUTION
+  INITIAL_OFFERING_SETTLEMENT
 }
 
 enum JournalTransactionStatus {
@@ -208,6 +222,13 @@ enum TradingOrderStatus {
 enum TradingPrincipalType {
   USER
   TREASURY
+  INITIAL_OFFERING
+}
+
+enum TradingChannel {
+  INITIAL_OFFERING
+  SECONDARY_MARKET
+  TREASURY_LIQUIDITY
 }
 
 enum TradingExecutionSettlementStatus {
@@ -622,6 +643,9 @@ model User {
   receiptConfirmations            IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
   portfolioSnapshots              PortfolioSnapshot[]
   controlledBetaBypasses          ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
+  initialOfferingsOriginated      InitialOffering[]                   @relation("InitialOfferingOriginator")
+  initialOfferingsBeneficiary     InitialOffering[]                   @relation("InitialOfferingBeneficiary")
+  initialOfferingInventories      InitialOfferingInventory[]          @relation("InitialOfferingInventoryBeneficiary")
 
   @@index([accountStatus])
 }
@@ -991,6 +1015,8 @@ model Asset {
   discussionPosts        DiscussionPost[]
   saleProposals          SaleProposal[]
   controlledBetaBypass   ControlledBetaPhysicalBypass?
+  initialOffering        InitialOffering?
+  initialOfferingInventory InitialOfferingInventory[]
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
@@ -1237,6 +1263,7 @@ model ValuationDecision {
   createdAt       DateTime                @default(now())
   asset           Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
   decidedBy       User                    @relation("ValuationDecisionCreator", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  initialOfferings InitialOffering[]
 
   @@index([assetId, status, decidedAt, id])
 }
@@ -1279,6 +1306,7 @@ model OwnershipSupplyPolicy {
   asset             Asset                       @relation(fields: [assetId], references: [id], onDelete: Restrict)
   proposedBy        User                        @relation("OwnershipSupplyPolicyProposer", fields: [proposedByUserId], references: [id], onDelete: Restrict)
   approvedBy        User?                       @relation("OwnershipSupplyPolicyApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  initialOffering   InitialOffering?
 
   @@index([status, updatedAt, assetId])
 }
@@ -1684,8 +1712,69 @@ model OwnershipAccount {
   debits                OwnershipLedgerEntry[] @relation("OwnershipLedgerDebit")
   credits               OwnershipLedgerEntry[] @relation("OwnershipLedgerCredit")
   proposalEligibilities ProposalEligibility[]
+  initialOfferingInventory InitialOfferingInventory?
 
   @@index([type, status, id])
+}
+
+/// Collector-originated inventory is explicit and never silently represented
+/// as Slice Treasury. The ownership position remains the unit-level authority;
+/// this record provides the offering identity and an auditable inventory view.
+model InitialOffering {
+  id                         String                @id @default(cuid())
+  assetId                    String                @unique
+  originatingCollectorUserId String
+  beneficiaryUserId          String
+  ownershipSupplyPolicyId    String                @unique
+  valuationDecisionId        String
+  currency                   String
+  totalUnits                 BigInt
+  offeredUnits               BigInt
+  retainedUnits              BigInt
+  pricePerUnitMinor          BigInt
+  grossOfferingMinor         BigInt
+  feeScheduleVersion         String
+  feeBps                     Int                   @default(0)
+  status                     InitialOfferingStatus @default(AWAITING_APPROVAL)
+  approvedAt                 DateTime?
+  openedAt                   DateTime?
+  issuedAt                   DateTime?
+  closedAt                   DateTime?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  asset                      Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  originatingCollector       User                  @relation("InitialOfferingOriginator", fields: [originatingCollectorUserId], references: [id], onDelete: Restrict)
+  beneficiary                User                  @relation("InitialOfferingBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
+  ownershipSupplyPolicy      OwnershipSupplyPolicy @relation(fields: [ownershipSupplyPolicyId], references: [id], onDelete: Restrict)
+  valuationDecision          ValuationDecision     @relation(fields: [valuationDecisionId], references: [id], onDelete: Restrict)
+  inventory                  InitialOfferingInventory?
+  orders                     TradingOrder[]
+  executions                 TradingExecution[]
+
+  @@index([originatingCollectorUserId, status, updatedAt, id])
+  @@index([beneficiaryUserId, status, updatedAt, id])
+  @@index([status, updatedAt, assetId])
+}
+
+model InitialOfferingInventory {
+  id                String            @id @default(cuid())
+  offeringId        String            @unique
+  assetId           String
+  accountId         String            @unique
+  beneficiaryUserId String
+  offeredUnits      BigInt
+  availableUnits    BigInt
+  reservedUnits     BigInt             @default(0)
+  settledUnits      BigInt             @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  offering          InitialOffering    @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  asset             Asset              @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  account           OwnershipAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  beneficiary       User               @relation("InitialOfferingInventoryBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, createdAt, id])
+  @@index([beneficiaryUserId, createdAt, id])
 }
 
 /// Materialized ownership position. Available units are settled minus reserved;
@@ -2117,7 +2206,9 @@ model TradingOrder {
   id                     String               @id @default(cuid())
   userId                 String?
   principalType          TradingPrincipalType @default(USER)
+  channel                TradingChannel       @default(SECONDARY_MARKET)
   principalId             String
+  initialOfferingId      String?
   actorUserId             String?
   assetId                String
   side                   TradingOrderSide
@@ -2140,6 +2231,7 @@ model TradingOrder {
   updatedAt              DateTime             @updatedAt
   user                   User?                @relation("TradingOrderUser", fields: [userId], references: [id], onDelete: Restrict)
   actorUser              User?                @relation("TradingOrderActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  initialOffering        InitialOffering?     @relation(fields: [initialOfferingId], references: [id], onDelete: Restrict)
   asset                  Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingOrder_asset_fkey")
   market                 TradingMarket        @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingOrder_market_fkey")
   statusHistory          OrderStatusHistory[]
@@ -2151,6 +2243,7 @@ model TradingOrder {
   @@index([assetId, side, status, limitPriceMinor, prioritySequence])
   @@index([userId, createdAt, id])
   @@index([principalType, principalId, createdAt, id])
+  @@index([initialOfferingId, status, createdAt, id])
   @@index([actorUserId, createdAt, id])
   @@index([assetId, status, createdAt, id])
   @@index([assetId, status, expiresAt, id])
@@ -2161,6 +2254,8 @@ model TradingOrder {
 model TradingExecution {
   id               String                           @id @default(cuid())
   assetId          String
+  channel          TradingChannel                   @default(SECONDARY_MARKET)
+  initialOfferingId String?
   buyOrderId       String
   sellOrderId      String
   makerOrderId     String
@@ -2181,6 +2276,7 @@ model TradingExecution {
   sellOrder        TradingOrder                     @relation("ExecutionSellOrder", fields: [sellOrderId], references: [id], onDelete: Restrict)
   makerOrder       TradingOrder                     @relation("ExecutionMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
   takerOrder       TradingOrder                     @relation("ExecutionTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
+  initialOffering  InitialOffering?                 @relation(fields: [initialOfferingId], references: [id], onDelete: Restrict)
 
   @@unique([assetId, marketSequence])
   @@index([assetId, executedAt, id])

@@ -17,7 +17,7 @@ export type DomainEventEnvelope<TPayload extends SafeJson = SafeJson> = Readonly
 }>;
 
 /** Stable dotted lower-case contracts, never class names or persistence types. */
-export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', orderPartiallyFilled: 'order.partiallyfilled', orderFilled: 'order.filled', orderExpired: 'order.expired', movementSettled: 'movement.settled', submissionChangesRequested: 'submission.changesrequested', submissionApproved: 'submission.approved', shipmentTrackingAdded: 'shipment.trackingadded', shipmentInTransit: 'shipment.intransit', shipmentCarrierDelivered: 'shipment.carrierdelivered', intakeReceiptConfirmed: 'intake.receiptconfirmed' } as const;
+export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', orderPartiallyFilled: 'order.partiallyfilled', orderFilled: 'order.filled', orderExpired: 'order.expired', movementSettled: 'movement.settled', submissionChangesRequested: 'submission.changesrequested', submissionApproved: 'submission.approved', shipmentTrackingAdded: 'shipment.trackingadded', shipmentInTransit: 'shipment.intransit', shipmentCarrierDelivered: 'shipment.carrierdelivered', intakeReceiptConfirmed: 'intake.receiptconfirmed', initialOfferingCreated: 'initialoffering.created', initialOfferingApproved: 'initialoffering.approved', initialOfferingOpened: 'initialoffering.opened', initialOfferingPartiallyFilled: 'initialoffering.partiallyfilled', initialOfferingSoldOut: 'initialoffering.soldout', initialOfferingPaused: 'initialoffering.paused', initialOfferingCancelled: 'initialoffering.cancelled', initialOfferingExpired: 'initialoffering.expired', initialOfferingProceedsPosted: 'initialoffering.proceedsposted' } as const;
 const eventTypePattern = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
 
 export function createDomainEvent<TPayload extends SafeJson>(input: Omit<DomainEventEnvelope<TPayload>, 'eventId' | 'occurredAt'> & { eventId?: string; occurredAt?: Date }): DomainEventEnvelope<TPayload> {
@@ -43,6 +43,26 @@ export function assertSafeJson(value: unknown): asserts value is SafeJson {
 }
 
 export type TradeCompletedPayload = { executionId: string; assetId: string; units: string; priceMinor: string; grossMinor: string; currency: 'GBP' };
+
+export type InitialOfferingLifecyclePayload = { offeringId: string; assetId: string; status: string; offeredUnits: string; retainedUnits: string };
+export function initialOfferingLifecycleEvent(input: InitialOfferingLifecyclePayload & { eventType: string; correlationId: string; actorUserId?: string; occurredAt?: Date; eventSuffix?: string }): DomainEventEnvelope<InitialOfferingLifecyclePayload> {
+  return createDomainEvent({
+    eventId: `${input.eventType}:${input.offeringId}${input.eventSuffix ? `:${input.eventSuffix}` : ''}`,
+    eventType: input.eventType,
+    schemaVersion: 1,
+    occurredAt: input.occurredAt,
+    aggregate: { type: 'initial-offering', id: input.offeringId },
+    correlationId: input.correlationId,
+    actorUserId: input.actorUserId,
+    payload: {
+      offeringId: input.offeringId,
+      assetId: input.assetId,
+      status: input.status,
+      offeredUnits: input.offeredUnits,
+      retainedUnits: input.retainedUnits,
+    },
+  });
+}
 
 export function tradeCompletedEvent(input: TradeCompletedPayload & { correlationId: string; occurredAt: Date }): DomainEventEnvelope<TradeCompletedPayload> {
   return createDomainEvent({

@@ -81,6 +81,7 @@ export class OwnershipService {
             take: 1,
           },
           ownershipSupplyPolicy: true,
+          initialOffering: true,
         },
       });
       if (!asset)
@@ -116,16 +117,41 @@ export class OwnershipService {
         });
 
       const now = new Date();
-      const treasury = await db.ownershipAccount.create({
-        data: { id: randomUUID(), type: 'TREASURY', status: 'ACTIVE' },
-      });
+      const offering = asset.initialOffering;
+      if (offering && offering.status !== 'APPROVED')
+        throw new ConflictException({
+          code: 'INITIAL_OFFERING_NOT_APPROVED',
+          message: 'The collector offering must be approved before issuance.',
+        });
+      const treasury = offering
+        ? null
+        : await db.ownershipAccount.create({
+            data: { id: randomUUID(), type: 'TREASURY', status: 'ACTIVE' },
+          });
+      const collector = offering
+        ? (await db.ownershipAccount.findUnique({ where: { userId: offering.beneficiaryUserId } })) ??
+          (await db.ownershipAccount.create({
+            data: { id: randomUUID(), type: 'USER', userId: offering.beneficiaryUserId, status: 'ACTIVE' },
+          }))
+        : null;
+      if (collector && collector.type !== 'USER')
+        throw new ConflictException({ code: 'OWNERSHIP_ACCOUNT_INVALID', message: 'Collector ownership account is unavailable.' });
+      const inventoryAccount = offering
+        ? await db.ownershipAccount.create({ data: { id: randomUUID(), type: 'INITIAL_OFFERING', status: 'ACTIVE' } })
+        : null;
+      const retainedUnits = offering?.retainedUnits ?? 0n;
+      const offeredUnits = offering?.offeredUnits ?? totalUnits;
+      const issuanceEntries: Array<{ accountId: string; units: bigint; correlationId: string }> = [];
+      if (collector && retainedUnits > 0n) issuanceEntries.push({ accountId: collector.id, units: retainedUnits, correlationId: `issuance:${assetId}:collector` });
+      if (inventoryAccount && offeredUnits > 0n) issuanceEntries.push({ accountId: inventoryAccount.id, units: offeredUnits, correlationId: `issuance:${assetId}:initial-offering` });
+      if (treasury) issuanceEntries.push({ accountId: treasury.id, units: totalUnits, correlationId: `issuance:${assetId}` });
       throwIfOwnershipTestFailure('issuance.after-account');
       await db.ownershipAssetSupply.create({
         data: {
           assetId,
           totalUnits,
           issuedUnits: totalUnits,
-          nextSequence: 2n,
+          nextSequence: BigInt(issuanceEntries.length + 1),
           status: 'ACTIVE',
           issuedAt: now,
         },
@@ -134,30 +160,25 @@ export class OwnershipService {
         where: { assetId },
         data: { status: 'ISSUED', issuedAt: now },
       });
-      await db.ownershipPosition.create({
-        data: {
-          id: randomUUID(),
-          assetId,
-          accountId: treasury.id,
-          settledUnits: totalUnits,
-          reservedUnits: 0n,
-        },
-      });
-      const entry = await db.ownershipLedgerEntry.create({
-        data: {
-          id: randomUUID(),
-          assetId,
-          sequence: 1n,
-          entryType: 'ISSUANCE',
-          creditAccountId: treasury.id,
-          units: totalUnits,
-          correlationId: `issuance:${assetId}`,
-          idempotencyRecordId: acquired.record.id,
-          reasonCode: 'INITIAL_ISSUANCE',
-          metadata: { schemaVersion: 1 },
-          actorUserId: actor.userId,
-        },
-      });
+      if (treasury)
+        await db.ownershipPosition.create({
+          data: { id: randomUUID(), assetId, accountId: treasury.id, settledUnits: totalUnits, reservedUnits: 0n },
+        });
+      for (const allocation of issuanceEntries.filter((entry) => entry.accountId !== treasury?.id)) {
+        await db.ownershipPosition.create({ data: { id: randomUUID(), assetId, accountId: allocation.accountId, settledUnits: allocation.units, reservedUnits: 0n } });
+      }
+      if (offering && inventoryAccount) {
+        await db.initialOfferingInventory.create({ data: { id: randomUUID(), offeringId: offering.id, assetId, accountId: inventoryAccount.id, beneficiaryUserId: offering.beneficiaryUserId, offeredUnits, availableUnits: offeredUnits, reservedUnits: 0n, settledUnits: 0n } });
+        await db.initialOffering.update({ where: { id: offering.id }, data: { issuedAt: now } });
+      }
+      for (const [index, allocation] of issuanceEntries.entries()) {
+        await db.ownershipLedgerEntry.create({
+          data: {
+            id: randomUUID(), assetId, sequence: BigInt(index + 1), entryType: 'ISSUANCE', creditAccountId: allocation.accountId, units: allocation.units, correlationId: allocation.correlationId, idempotencyRecordId: acquired.record.id, reasonCode: offering ? 'INITIAL_OFFERING_ISSUANCE' : 'INITIAL_ISSUANCE', metadata: { schemaVersion: 1, channel: offering ? 'INITIAL_OFFERING' : 'TREASURY' }, actorUserId: actor.userId,
+          },
+        });
+      }
+      const entry = await db.ownershipLedgerEntry.findFirstOrThrow({ where: { assetId, entryType: 'ISSUANCE' }, orderBy: { sequence: 'desc' } });
       await tx.audit.append({
         id: randomUUID(),
         actorUserId: actor.userId,

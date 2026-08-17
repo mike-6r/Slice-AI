@@ -25,6 +25,7 @@ import { MarketResearchModule } from './modules/market-research/market-research.
 import { CollectorWorkspaceModule } from './modules/collector-workspace/collector-workspace.module';
 import { CurrencyModule } from './modules/currency/currency.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { InitialOfferingModule } from './modules/initial-offering/initial-offering.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AdminModule } from './modules/admin/admin.module';
     CurrencyModule,
     LifecycleModule,
     AdminModule,
+    InitialOfferingModule,
     MarketResearchModule,
     CollectorWorkspaceModule,
     ReadsModule,
