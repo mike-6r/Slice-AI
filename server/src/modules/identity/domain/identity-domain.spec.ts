@@ -87,6 +87,24 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+
+  it('allows the initial offering lifecycle audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('INITIAL_OFFERING_CREATED', {
+        offeringId: 'offering-1',
+        assetId: 'asset-1',
+        offeredUnits: '600',
+        retainedUnits: '400',
+        idempotencyRecordId: 'idem-1',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('INITIAL_OFFERING_APPROVED', {
+        offeringId: 'offering-1',
+        reason: 'Controlled QA approval',
+      }),
+    ).not.toThrow();
+  });
   it('identifies idempotency conflicts', () => {
     const f = fingerprintRequest('POST', '/signup', {
       email: 'a@example.test',
