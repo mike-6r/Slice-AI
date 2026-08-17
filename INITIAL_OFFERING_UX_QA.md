@@ -56,15 +56,23 @@ The repository-wide frontend lint command currently reports pre-existing formatt
 
 ## Controlled staging QA record
 
-Use a disposable collector-owned test asset and a fresh admin account. Do not use Umbreon or the real Charizard, and do not call PriceCharting, Ximilar, Plaid, Bridge, or live-money providers.
+Run dated 17 Aug 2026. Deployment source release: `e602143` (VPS release `/opt/slice/releases/20260817-e602143`). Health and readiness returned 200 with PostgreSQL and Redis up. Use a disposable collector-owned test asset and a fresh admin account. Do not use Umbreon or the real Charizard, and do not call PriceCharting, Ximilar, Plaid, Bridge, or live-money providers.
+
+QA fixture: asset `43212b2a-225c-4253-a1bd-47facaf6fd73`, submission `daa84751-8e27-420e-ac6e-a9b2f1054353`, titled **QA TEST Initial Offering Card**. The controlled lifecycle reached secured custody, active £10,000 valuation, active £10,000 insurance coverage, published catalogue state, issued supply, and an open trading market. No real catalogue asset was changed.
+
+The first controlled attempt found and fixed a lifecycle defect: issuance changes the supply policy state from `APPROVED` to `ISSUED`, while the collector offering preview/proposal/approval paths only accepted `APPROVED`. Commit `e602143` allows the linked policy in either authoritative state and adds focused coverage.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Collector preview at 25/50/75/100/custom | Pending authenticated staging run | Capture preview and network log |
-| Submit → admin review → request changes → resubmit | Pending controlled fixture run | Capture audit IDs and screenshots |
-| Admin approve/open/pause/cancel guards | Pending controlled fixture run | Capture state transitions |
-| Public initial-offering label and retained percentage | Pending authenticated staging run | Capture 390/768/1366/1920 screenshots |
-| Treasury separation | Pending controlled fixture run | Confirm account/channel fields |
-| Console/network/provider leakage | Pending browser run | Confirm zero provider calls and no unexpected 401/5xx |
+| Collector preview at 25/50/75/100/custom | Blocked by collector recent-auth/login limiter after controlled session refreshes | No bypass or Redis clearing performed |
+| Submit → admin review → request changes → resubmit | Blocked pending collector session | No offering record or financial record was fabricated |
+| Admin approve/open/pause/cancel guards | Blocked pending offering | Asset publication, custody, valuation, insurance, issuance, and market prerequisites passed |
+| Public initial-offering label and retained percentage | Blocked pending offering | No public availability was invented |
+| Treasury separation | PASS for pre-offering lifecycle | No Treasury listing or Treasury proceeds was created |
+| Console/network/provider leakage | Partial | Browser console showed only React DevTools info; no provider calls were made. Normal-use 403s were recent-auth session expiry, not a product authorization bypass |
+
+### Current blocker
+
+The staging login limiter returned HTTP 429 after repeated controlled session refreshes and is being allowed to expire normally. The controlled investor password is not present in the repository or staging environment and was not guessed. Phase 2 acceptance therefore remains **BLOCKED**, not complete. Resume with one fresh collector login, submit 600 offered units / 400 retained units, then use a verified controlled investor credential for the £1,000 / 100-unit purchase and reconciliation.
 
 No Umbreon or Charizard lifecycle records are created by the Phase 2 implementation or automated unit tests.
