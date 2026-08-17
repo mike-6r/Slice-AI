@@ -8,6 +8,7 @@ export const initialOfferingFeePolicy = {
 export type InitialOfferingStatus =
   | 'DRAFT'
   | 'AWAITING_APPROVAL'
+  | 'CHANGES_REQUESTED'
   | 'APPROVED'
   | 'OPEN'
   | 'PARTIALLY_FILLED'
@@ -37,7 +38,8 @@ export function validateOfferingTerms(input: {
 export function assertInitialOfferingTransition(from: InitialOfferingStatus, to: InitialOfferingStatus) {
   const allowed: Record<InitialOfferingStatus, InitialOfferingStatus[]> = {
     DRAFT: ['AWAITING_APPROVAL', 'CANCELLED'],
-    AWAITING_APPROVAL: ['APPROVED', 'CANCELLED'],
+    AWAITING_APPROVAL: ['APPROVED', 'CHANGES_REQUESTED', 'CANCELLED'],
+    CHANGES_REQUESTED: ['AWAITING_APPROVAL', 'CANCELLED'],
     APPROVED: ['OPEN', 'CANCELLED'],
     OPEN: ['PARTIALLY_FILLED', 'SOLD_OUT', 'PAUSED', 'CANCELLED', 'EXPIRED'],
     PARTIALLY_FILLED: ['SOLD_OUT', 'PAUSED', 'CANCELLED', 'EXPIRED'],
@@ -47,6 +49,49 @@ export function assertInitialOfferingTransition(from: InitialOfferingStatus, to:
     EXPIRED: [],
   };
   if (!allowed[from].includes(to)) invalid('INITIAL_OFFERING_INVALID_STATE', `Cannot move an offering from ${from} to ${to}.`);
+}
+
+export function unitsForPercentage(totalUnits: bigint, percentageBps: number) {
+  if (!Number.isInteger(percentageBps) || percentageBps < 0 || percentageBps > 10_000)
+    invalid('PERCENTAGE_INVALID', 'Percentage must be an integer between 0 and 10000 basis points.');
+  if (totalUnits <= 0n) invalid('TOTAL_UNITS_INVALID', 'Total ownership units must be positive.');
+  return (totalUnits * BigInt(percentageBps)) / 10_000n;
+}
+
+export function percentageBpsForUnits(units: bigint, totalUnits: bigint) {
+  if (units < 0n || totalUnits <= 0n || units > totalUnits) invalid('UNITS_INVALID', 'Ownership units are outside the approved supply.');
+  return Number((units * 10_000n) / totalUnits);
+}
+
+export function calculateInitialOfferingPreview(input: {
+  totalUnits: bigint;
+  valuationMinor: bigint;
+  offeredUnits: bigint;
+  pricePerUnitMinor: bigint;
+  currency: string;
+  feeBps: number;
+}) {
+  const terms = validateOfferingTerms({
+    totalUnits: input.totalUnits,
+    offeredUnits: input.offeredUnits,
+    pricePerUnitMinor: input.pricePerUnitMinor,
+    currency: input.currency,
+    approvedCurrency: input.currency,
+  });
+  const settlement = calculateInitialOfferingSettlement(terms.grossOfferingMinor, input.feeBps);
+  return {
+    totalUnits: input.totalUnits,
+    valuationMinor: input.valuationMinor,
+    offeredUnits: input.offeredUnits,
+    retainedUnits: terms.retainedUnits,
+    offeredPercentageBps: percentageBpsForUnits(input.offeredUnits, input.totalUnits),
+    retainedPercentageBps: percentageBpsForUnits(terms.retainedUnits, input.totalUnits),
+    pricePerUnitMinor: input.pricePerUnitMinor,
+    grossOfferingMinor: terms.grossOfferingMinor,
+    feeMinor: settlement.feeMinor,
+    netOfferingMinor: settlement.collectorNetMinor,
+    currency: input.currency,
+  };
 }
 
 export function calculateInitialOfferingSettlement(grossMinor: bigint, feeBps: number) {

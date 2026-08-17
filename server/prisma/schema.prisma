@@ -89,6 +89,7 @@ enum OwnershipAccountType {
 enum InitialOfferingStatus {
   DRAFT
   AWAITING_APPROVAL
+  CHANGES_REQUESTED
   APPROVED
   OPEN
   PARTIALLY_FILLED
@@ -1740,6 +1741,7 @@ model InitialOffering {
   openedAt                   DateTime?
   issuedAt                   DateTime?
   closedAt                   DateTime?
+  changeRequestReason        String?
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
   asset                      Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)

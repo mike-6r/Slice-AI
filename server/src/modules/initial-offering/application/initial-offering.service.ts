@@ -8,7 +8,7 @@ import { createIdentityTransaction } from '../../identity/persistence/prisma-ide
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { eventType, initialOfferingLifecycleEvent, orderLifecycleEvent } from '../../outbox/domain/domain-event';
-import { assertInitialOfferingTransition, initialOfferingFeePolicy, validateOfferingTerms } from '../domain/initial-offering';
+import { assertInitialOfferingTransition, calculateInitialOfferingPreview, initialOfferingFeePolicy, unitsForPercentage, validateOfferingTerms } from '../domain/initial-offering';
 
 type Db = Prisma.TransactionClient;
 type TransitionTarget = 'PAUSED' | 'CANCELLED' | 'EXPIRED';
@@ -65,6 +65,54 @@ export class InitialOfferingService {
     });
   }
 
+  async collectorPreview(actor: Actor, assetId: string, percentageBps: number) {
+    this.recentAuth.require(actor);
+    const asset = await this.authoritativeAsset(this.db, assetId, actor.userId);
+    const policy = asset.ownershipSupplyPolicy;
+    const decision = asset.valuationDecisions[0];
+    if (!asset.submissions[0]) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved collector submission is required.');
+    if (!policy || policy.status !== 'APPROVED') fail('SUPPLY_POLICY_NOT_APPROVED', 'An approved supply policy is required before configuring an offering.');
+    if (!decision) fail('VALUATION_REQUIRED', 'An active valuation is required before configuring an offering.');
+    const offeredUnits = unitsForPercentage(policy.proposedUnits, percentageBps);
+    if (offeredUnits <= 0n) fail('OFFERING_TOO_SMALL', 'Choose a percentage that creates at least one ownership unit.');
+    const preview = calculateInitialOfferingPreview({ totalUnits: policy.proposedUnits, valuationMinor: decision.valueMinor, offeredUnits, pricePerUnitMinor: policy.pricePerUnitMinor, currency: policy.valuationCurrency, feeBps: initialOfferingFeePolicy.feeBps });
+    return {
+      totalUnits: preview.totalUnits.toString(),
+      valuationMinor: preview.valuationMinor.toString(),
+      offeredUnits: preview.offeredUnits.toString(),
+      retainedUnits: preview.retainedUnits.toString(),
+      offeredPercentageBps: preview.offeredPercentageBps,
+      retainedPercentageBps: preview.retainedPercentageBps,
+      pricePerUnitMinor: preview.pricePerUnitMinor.toString(),
+      grossOfferingMinor: preview.grossOfferingMinor.toString(),
+      feeMinor: preview.feeMinor.toString(),
+      netOfferingMinor: preview.netOfferingMinor.toString(),
+      currency: preview.currency,
+      feeScheduleVersion: initialOfferingFeePolicy.version,
+      feeBps: initialOfferingFeePolicy.feeBps,
+      feePolicyStatus: 'CONFIGURED' as const,
+    };
+  }
+
+  async update(actor: Actor, offeringId: string, offeredUnitsWire: string, requestId: string, key: string) {
+    this.recentAuth.require(actor);
+    const offeredUnits = parseUnits(offeredUnitsWire);
+    return this.mutate(actor, `update:${offeringId}`, { offeringId, offeredUnits: offeredUnits.toString() }, requestId, key, async (db, audit) => {
+      const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 } } } } });
+      if (!offering || offering.originatingCollectorUserId !== actor.userId) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
+      if (offering.status !== 'AWAITING_APPROVAL' && offering.status !== 'CHANGES_REQUESTED') fail('OFFERING_IMMUTABLE', 'Offering terms cannot change after approval.');
+      const policy = offering.asset.ownershipSupplyPolicy;
+      const decision = offering.asset.valuationDecisions[0];
+      if (!policy || policy.status !== 'APPROVED' || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The approved supply policy is no longer available.');
+      if (!decision || decision.id !== offering.valuationDecisionId || decision.valueMinor !== policy.valuationMinor || decision.currency !== offering.currency) fail('VALUATION_CHANGED', 'The approved valuation has changed; request a new offering review.');
+      const terms = validateOfferingTerms({ totalUnits: policy.proposedUnits, offeredUnits, pricePerUnitMinor: policy.pricePerUnitMinor, currency: policy.valuationCurrency, approvedCurrency: policy.valuationCurrency });
+      const updated = await db.initialOffering.update({ where: { id: offeringId }, data: { offeredUnits, retainedUnits: terms.retainedUnits, grossOfferingMinor: terms.grossOfferingMinor, status: 'AWAITING_APPROVAL', changeRequestReason: null } });
+      await this.appendLifecycle(db, updated, eventType.initialOfferingUpdated, requestId, actor.userId);
+      await audit('INITIAL_OFFERING_UPDATED', { offeringId, offeredUnits: offeredUnits.toString(), retainedUnits: terms.retainedUnits.toString() });
+      return this.projectionFromRecord(updated);
+    });
+  }
+
   async collectorProjection(actor: Actor, assetId: string) {
     this.recentAuth.require(actor);
     const offering = await this.db.initialOffering.findUnique({ where: { assetId }, include: { inventory: true } });
@@ -72,10 +120,25 @@ export class InitialOfferingService {
     return this.projection(offering);
   }
 
+  async requestChanges(actor: Actor, offeringId: string, reason: string, requestId: string, key: string) {
+    this.recentAuth.require(actor);
+    return this.mutate(actor, `changes:${offeringId}`, { offeringId, reason }, requestId, key, async (db, audit) => {
+      const offering = await db.initialOffering.findUnique({ where: { id: offeringId } });
+      if (!offering) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
+      if (offering.originatingCollectorUserId === actor.userId) fail('OFFERING_SELF_REVIEW', 'The originating collector cannot review their own offering.');
+      assertInitialOfferingTransition(offering.status, 'CHANGES_REQUESTED');
+      const updated = await db.initialOffering.update({ where: { id: offeringId }, data: { status: 'CHANGES_REQUESTED', changeRequestReason: reason.trim() } });
+      await this.appendLifecycle(db, updated, eventType.initialOfferingChangesRequested, requestId, actor.userId);
+      await audit('INITIAL_OFFERING_CHANGES_REQUESTED', { offeringId, reason: reason.trim() });
+      return this.projectionFromRecord(updated);
+    });
+  }
+
   async adminProjection(offeringId: string) {
-    const offering = await this.db.initialOffering.findUnique({ where: { id: offeringId }, include: { inventory: true } });
+    const offering = await this.db.initialOffering.findUnique({ where: { id: offeringId }, include: { inventory: true, originatingCollector: { select: { id: true, profile: { select: { displayName: true, publicUsername: true } } } }, asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 }, tradingMarket: true } } } });
     if (!offering) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
-    return this.projection(offering);
+    const base = await this.projection(offering);
+    return { ...base, collector: { id: offering.originatingCollector.id, displayName: offering.originatingCollector.profile?.displayName ?? 'Collector', username: offering.originatingCollector.profile?.publicUsername ?? null }, readiness: { custody: offering.asset.custodyRecord?.status === 'SECURED' || Boolean(offering.asset.controlledBetaBypass), insurance: offering.asset.insuranceCoverage.length === 1, publication: offering.asset.publication?.status === 'PUBLISHED', market: offering.asset.tradingMarket?.status === 'OPEN' && offering.asset.tradingMarket.tradingEnabled }, valuation: offering.asset.valuationDecisions[0] ? { minor: offering.asset.valuationDecisions[0].valueMinor.toString(), currency: offering.asset.valuationDecisions[0].currency, asOf: offering.asset.valuationDecisions[0].decidedAt.toISOString() } : null, supplyPolicy: offering.asset.ownershipSupplyPolicy ? { status: offering.asset.ownershipSupplyPolicy.status, units: offering.asset.ownershipSupplyPolicy.proposedUnits.toString(), pricePerUnitMinor: offering.asset.ownershipSupplyPolicy.pricePerUnitMinor.toString() } : null };
   }
 
   async approve(actor: Actor, offeringId: string, reason: string, requestId: string, key: string) {
@@ -169,8 +232,8 @@ export class InitialOfferingService {
     await this.outbox.append(db, initialOfferingLifecycleEvent({ eventType: type, offeringId: offering.id, assetId: offering.assetId, status: offering.status, offeredUnits: offering.offeredUnits.toString(), retainedUnits: offering.retainedUnits.toString(), correlationId, actorUserId }));
   }
 
-  private projectionFromRecord(offering: { id: string; assetId: string; status: string; totalUnits: bigint; offeredUnits: bigint; retainedUnits: bigint; pricePerUnitMinor: bigint; grossOfferingMinor: bigint; currency: string; feeScheduleVersion: string; feeBps: number; approvedAt: Date | null; openedAt: Date | null; issuedAt: Date | null; closedAt: Date | null }) {
-    return { offeringId: offering.id, assetId: offering.assetId, status: offering.status, totalUnits: offering.totalUnits.toString(), offeredUnits: offering.offeredUnits.toString(), retainedUnits: offering.retainedUnits.toString(), pricePerUnitMinor: offering.pricePerUnitMinor.toString(), grossOfferingMinor: offering.grossOfferingMinor.toString(), currency: offering.currency, feeScheduleVersion: offering.feeScheduleVersion, feeBps: offering.feeBps, approvedAt: offering.approvedAt?.toISOString() ?? null, openedAt: offering.openedAt?.toISOString() ?? null, issuedAt: offering.issuedAt?.toISOString() ?? null, closedAt: offering.closedAt?.toISOString() ?? null };
+  private projectionFromRecord(offering: { id: string; assetId: string; status: string; totalUnits: bigint; offeredUnits: bigint; retainedUnits: bigint; pricePerUnitMinor: bigint; grossOfferingMinor: bigint; currency: string; feeScheduleVersion: string; feeBps: number; approvedAt: Date | null; openedAt: Date | null; issuedAt: Date | null; closedAt: Date | null; changeRequestReason?: string | null }) {
+    return { offeringId: offering.id, assetId: offering.assetId, status: offering.status, totalUnits: offering.totalUnits.toString(), offeredUnits: offering.offeredUnits.toString(), retainedUnits: offering.retainedUnits.toString(), offeredPercentageBps: Number((offering.offeredUnits * 10_000n) / offering.totalUnits), retainedPercentageBps: Number((offering.retainedUnits * 10_000n) / offering.totalUnits), pricePerUnitMinor: offering.pricePerUnitMinor.toString(), grossOfferingMinor: offering.grossOfferingMinor.toString(), feeMinor: (offering.grossOfferingMinor * BigInt(offering.feeBps) / 10_000n).toString(), netOfferingMinor: (offering.grossOfferingMinor - (offering.grossOfferingMinor * BigInt(offering.feeBps) / 10_000n)).toString(), currency: offering.currency, feeScheduleVersion: offering.feeScheduleVersion, feeBps: offering.feeBps, changeRequestReason: offering.changeRequestReason ?? null, approvedAt: offering.approvedAt?.toISOString() ?? null, openedAt: offering.openedAt?.toISOString() ?? null, issuedAt: offering.issuedAt?.toISOString() ?? null, closedAt: offering.closedAt?.toISOString() ?? null };
   }
 
   private async projection(offering: { id: string; assetId: string; beneficiaryUserId: string; status: string; totalUnits: bigint; offeredUnits: bigint; retainedUnits: bigint; pricePerUnitMinor: bigint; grossOfferingMinor: bigint; currency: string; feeScheduleVersion: string; feeBps: number; approvedAt: Date | null; openedAt: Date | null; issuedAt: Date | null; closedAt: Date | null; inventory: { offeredUnits: bigint; availableUnits: bigint; reservedUnits: bigint; settledUnits: bigint } | null }) {

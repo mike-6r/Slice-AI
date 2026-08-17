@@ -189,6 +189,8 @@ function AssetPage() {
     : assetShowcaseMedia(asset.slug);
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
   const lifecycle = asset.marketLifecycle;
+  const initialOffering = asset.initialOffering;
+  const initialOfferingOpen = Boolean(initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status) && initialOffering.inventory);
   const history = historyQuery.data ?? [];
   const currentValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
   const currentValueCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
@@ -327,6 +329,35 @@ function AssetPage() {
             )}
           </section>
         </section>
+
+        {initialOfferingOpen && initialOffering?.inventory ? (
+          <section className="asset-initial-offering" aria-labelledby="initial-offering-title">
+            <div>
+              <p className="asset-section-label">Initial offering</p>
+              <h2 id="initial-offering-title">Own a portion of this collectible</h2>
+              <p>
+                The collector is offering a defined portion of this real collectible. Slice keeps
+                the ownership record clear from your first purchase.
+              </p>
+            </div>
+            <dl>
+              <div>
+                <dt>Starting price</dt>
+                <dd>{formatPricePerUnit(Number(initialOffering.pricePerUnitMinor), initialOffering.currency)}</dd>
+                <small>per Slice</small>
+              </div>
+              <div>
+                <dt>Available ownership</dt>
+                <dd>{formatAvailability(initialOfferingAvailabilityBps(initialOffering) / 100)}</dd>
+              </div>
+              <div>
+                <dt>Collector retained</dt>
+                <dd>{formatOfferingPercentage(initialOffering.retainedUnits, initialOffering.totalUnits)}</dd>
+                <small>remains in their portfolio</small>
+              </div>
+            </dl>
+          </section>
+        ) : null}
 
         <section className="asset-value-overview" aria-labelledby="asset-overview-title">
           <div className="asset-section-heading">
@@ -1411,6 +1442,27 @@ function positiveSafeInteger(value: string | undefined, allowZero = false) {
 function safeDisplayInteger(value: bigint | undefined) {
   if (value === undefined || value > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
   return Number(value);
+}
+
+function initialOfferingAvailabilityBps(offering: NonNullable<ReturnType<typeof toMarketplaceAsset>["initialOffering"]>) {
+  if (!offering.inventory) return 0;
+  try {
+    const total = BigInt(offering.totalUnits);
+    return total > 0n
+      ? Number(((BigInt(offering.inventory.availableUnits) + BigInt(offering.inventory.reservedUnits)) * 10_000n) / total)
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function formatOfferingPercentage(units: string, totalUnits: string) {
+  try {
+    const total = BigInt(totalUnits);
+    return total > 0n ? `${Number((BigInt(units) * 10_000n) / total) / 100}%` : "—";
+  } catch {
+    return "—";
+  }
 }
 
 function formatOwnershipPercent(ownedShares: number, issuedShares: number) {

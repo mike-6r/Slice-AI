@@ -50,6 +50,20 @@ export interface MarketLifecycleProjection {
     blockingDependency: string | null;
   };
 }
+export interface InitialOfferingProjection {
+  status: string;
+  totalUnits: string;
+  offeredUnits: string;
+  retainedUnits: string;
+  pricePerUnitMinor: string;
+  currency: "GBP" | "USD" | "EUR" | "CAD";
+  inventory: {
+    offeredUnits: string;
+    availableUnits: string;
+    reservedUnits: string;
+    settledUnits: string;
+  } | null;
+}
 
 export interface Grade {
   company: GradingCompany;
@@ -168,6 +182,7 @@ export interface Asset {
     hasExecutionHistory: boolean;
   };
   marketLifecycle?: MarketLifecycleProjection;
+  initialOffering?: InitialOfferingProjection;
   market?: {
     estimatedMarketValue?: Money;
     source?: string;

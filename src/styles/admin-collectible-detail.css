@@ -72,6 +72,9 @@
   color: #f2bd5b;
   background: rgba(242, 189, 91, 0.14);
 }
+.admin-offering-panel { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.admin-offering-ledger-note { display: grid; gap: 4px; margin: 18px 0; padding: 12px 14px; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.admin-offering-ledger-note span { color: var(--text-muted); font-size: 13px; }
 .admin-detail-summary {
   display: grid;
   grid-template-columns: 150px repeat(4, minmax(0, 1fr));

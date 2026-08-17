@@ -110,8 +110,12 @@ export function TradingOrderForm({
       : undefined,
     issuance.data?.issuedUnits,
   );
+  const initialOffering = asset.data?.initialOffering;
+  const initialOfferingOpen = Boolean(initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status));
   const suggestedPrice =
-    side === "BUY"
+    side === "BUY" && initialOfferingOpen && initialOffering
+      ? BigInt(initialOffering.pricePerUnitMinor)
+      : side === "BUY"
       ? bestAsk
         ? BigInt(bestAsk.pricePerUnit.amount)
         : referencePrice
@@ -389,6 +393,9 @@ export function TradingOrderForm({
                 </Link>
               </div>
               <div className="trading-ownership-facts">
+                {side === "BUY" && initialOfferingOpen ? (
+                  <ContextRow label="Channel" value="Initial offering" />
+                ) : null}
                 <ContextRow
                   label="Slice market-implied value"
                   value={
@@ -413,8 +420,8 @@ export function TradingOrderForm({
                       : "Unavailable"
                   }
                 />
-                <ContextRow
-                  label="Price per Slice"
+                  <ContextRow
+                    label="Price per Slice"
                   value={
                     ownershipPreview.data?.slicePriceMinor === undefined
                       ? "Unavailable"

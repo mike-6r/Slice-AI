@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
 import { PermissionGuard } from '../../identity/access/permission.guard';
@@ -8,6 +8,7 @@ import { InitialOfferingService } from '../application/initial-offering.service'
 
 const propose = z.object({ offeredUnits: z.string().regex(/^[1-9]\d*$/).max(32) }).strict();
 const reason = z.object({ reason: z.string().trim().min(12).max(280) }).strict();
+const offeredUnits = z.object({ offeredUnits: z.string().regex(/^[1-9]\d*$/).max(32) }).strict();
 
 @Controller()
 export class InitialOfferingController {
@@ -28,6 +29,22 @@ export class InitialOfferingController {
     return this.offerings.collectorProjection(req.actor!, assetId);
   }
 
+  @Get('collector/assets/:assetId/offering/preview')
+  @UseGuards(AccessTokenGuard)
+  preview(@Param('assetId') assetId: string, @Query('percentageBps') percentageBps: string, @Req() req: AuthenticatedRequest) {
+    const value = Number(percentageBps);
+    if (!Number.isInteger(value) || value <= 0 || value > 10_000) throw new BadRequestException({ code: 'PERCENTAGE_INVALID', message: 'Percentage must be between 0 and 100.' });
+    return this.offerings.collectorPreview(req.actor!, assetId, value);
+  }
+
+  @Patch('collector/initial-offerings/:id')
+  @UseGuards(AccessTokenGuard)
+  update(@Param('id') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(offeredUnits, body);
+    this.requireKey(key);
+    return this.offerings.update(req.actor!, id, input.offeredUnits, req.requestId ?? 'unknown', key!);
+  }
+
   @Get('admin/initial-offerings/:id')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('ownership.issue')
@@ -39,6 +56,14 @@ export class InitialOfferingController {
   approve(@Param('id') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
     const input = this.parse(reason, body);
     return this.write(req, key, () => this.offerings.approve(req.actor!, id, input.reason, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/initial-offerings/:id/request-changes')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('ownership.issue')
+  requestChanges(@Param('id') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(reason, body);
+    return this.write(req, key, () => this.offerings.requestChanges(req.actor!, id, input.reason, req.requestId ?? 'unknown', key!));
   }
 
   @Post('admin/initial-offerings/:id/open')

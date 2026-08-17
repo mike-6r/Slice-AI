@@ -1056,6 +1056,38 @@ export type AdminCollectibleDetail = {
     note: string | null;
   }>;
   evidence: Array<{ slot: string; filename: string; status: string; url: string | null }>;
+  initialOffering: {
+    offeringId: string;
+    status: string;
+    totalUnits: string;
+    offeredUnits: string;
+    retainedUnits: string;
+    offeredPercentageBps: number;
+    retainedPercentageBps: number;
+    pricePerUnitMinor: string;
+    grossOfferingMinor: string;
+    feeMinor: string;
+    netOfferingMinor: string;
+    currency: string;
+    feeScheduleVersion: string;
+    feeBps: number;
+    changeRequestReason: string | null;
+    approvedAt: string | null;
+    openedAt: string | null;
+    issuedAt: string | null;
+    closedAt: string | null;
+    inventory: {
+      offeredUnits: string;
+      availableUnits: string;
+      reservedUnits: string;
+      settledUnits: string;
+    } | null;
+    proceeds: { postedMinor: string; reservedMinor: string; availableMinor: string; currency: string };
+    collector: { id: string; displayName: string; username: string | null };
+    readiness: { custody: boolean; insurance: boolean; publication: boolean; market: boolean };
+    valuation: { minor: string; currency: string; asOf: string } | null;
+    supplyPolicy: { status: string; units: string; pricePerUnitMinor: string } | null;
+  } | null;
 };
 
 export type AdminCatalogueAsset = {
@@ -1096,6 +1128,46 @@ export type AdminCatalogueResponse = {
   items: AdminCatalogueAsset[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 };
+
+export type InitialOfferingProjection = {
+  offeringId: string;
+  assetId: string;
+  status: string;
+  totalUnits: string;
+  offeredUnits: string;
+  retainedUnits: string;
+  offeredPercentageBps: number;
+  retainedPercentageBps: number;
+  pricePerUnitMinor: string;
+  grossOfferingMinor: string;
+  feeMinor: string;
+  netOfferingMinor: string;
+  currency: string;
+  feeScheduleVersion: string;
+  feeBps: number;
+  changeRequestReason: string | null;
+  approvedAt: string | null;
+  openedAt: string | null;
+  issuedAt: string | null;
+  closedAt: string | null;
+  inventory: {
+    offeredUnits: string;
+    availableUnits: string;
+    reservedUnits: string;
+    settledUnits: string;
+  } | null;
+  proceeds?: {
+    postedMinor: string;
+    reservedMinor: string;
+    availableMinor: string;
+    currency: string;
+  };
+};
+
+export type InitialOfferingPreview = Omit<
+  InitialOfferingProjection,
+  "offeringId" | "assetId" | "status" | "changeRequestReason" | "approvedAt" | "openedAt" | "issuedAt" | "closedAt" | "inventory" | "proceeds"
+> & { valuationMinor: string; feePolicyStatus: string };
 
 export interface AdminRepository {
   getOverview(): Promise<AdminOverview>;
@@ -1250,6 +1322,11 @@ export interface AdminRepository {
     sequence: string;
   }>;
   activateTradingMarket(id: string): Promise<{ assetId: string; status: string }>;
+  approveInitialOffering(id: string, reason: string): Promise<InitialOfferingProjection>;
+  requestInitialOfferingChanges(id: string, reason: string): Promise<InitialOfferingProjection>;
+  openInitialOffering(id: string): Promise<InitialOfferingProjection>;
+  pauseInitialOffering(id: string): Promise<InitialOfferingProjection>;
+  cancelInitialOffering(id: string): Promise<InitialOfferingProjection>;
 }
 
 export interface MarketRepository {
@@ -1294,6 +1371,10 @@ export interface CollectorWorkspaceRepository {
       occurredAt: string;
     }>;
   }>;
+  getInitialOfferingPreview(assetId: string, percentageBps: number): Promise<InitialOfferingPreview>;
+  getInitialOffering(assetId: string): Promise<InitialOfferingProjection>;
+  proposeInitialOffering(assetId: string, offeredUnits: string): Promise<InitialOfferingProjection>;
+  updateInitialOffering(offeringId: string, offeredUnits: string): Promise<InitialOfferingProjection>;
   getRequests(): Promise<Array<CollectorWorkspaceRequest>>;
   getDocuments(): Promise<Array<CollectorWorkspaceDocument>>;
   search(query: string): Promise<{

@@ -39,6 +39,7 @@ export type MarketplaceAsset = {
   tradingEnabled?: boolean;
   tradingHasExecutionHistory?: boolean;
   marketLifecycle?: MarketLifecycleProjection;
+  initialOffering?: import("@/domain").InitialOfferingProjection;
 };
 
 export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
@@ -108,4 +109,5 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   tradingEnabled: asset.trading?.enabled,
   tradingHasExecutionHistory: asset.trading?.hasExecutionHistory,
   marketLifecycle: asset.marketLifecycle,
+  initialOffering: asset.initialOffering,
 });

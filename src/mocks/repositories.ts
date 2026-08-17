@@ -351,6 +351,21 @@ export const mockRepositories: AppRepositories = {
     async activateTradingMarket() {
       throw new Error("Trading market activation requires the API service.");
     },
+    async approveInitialOffering() {
+      throw new Error("Initial offering approval requires the API service.");
+    },
+    async requestInitialOfferingChanges() {
+      throw new Error("Initial offering review requires the API service.");
+    },
+    async openInitialOffering() {
+      throw new Error("Initial offering opening requires the API service.");
+    },
+    async pauseInitialOffering() {
+      throw new Error("Initial offering pause requires the API service.");
+    },
+    async cancelInitialOffering() {
+      throw new Error("Initial offering cancellation requires the API service.");
+    },
     async search() {
       return { items: [] };
     },
@@ -691,6 +706,18 @@ export const mockRepositories: AppRepositories = {
     },
     async getCollectibleDetail() {
       throw new Error("Collector collectible not found");
+    },
+    async getInitialOfferingPreview() {
+      throw new Error("Initial offering preview requires the API service.");
+    },
+    async getInitialOffering() {
+      throw new Error("Initial offering requires the API service.");
+    },
+    async proposeInitialOffering() {
+      throw new Error("Initial offering submission requires the API service.");
+    },
+    async updateInitialOffering() {
+      throw new Error("Initial offering update requires the API service.");
     },
     async getRequests() {
       return [];

@@ -2,6 +2,8 @@ import { ConflictException } from '@nestjs/common';
 import {
   assertInitialOfferingTransition,
   calculateInitialOfferingSettlement,
+  calculateInitialOfferingPreview,
+  unitsForPercentage,
   validateOfferingTerms,
 } from './initial-offering';
 
@@ -35,5 +37,23 @@ describe('initial offering economic authority', () => {
   it('does not allow an offering to bypass approval state', () => {
     expect(() => assertInitialOfferingTransition('AWAITING_APPROVAL', 'OPEN')).toThrow(ConflictException);
     expect(() => assertInitialOfferingTransition('APPROVED', 'OPEN')).not.toThrow();
+  });
+
+  it('floors percentage previews to whole units and keeps the remainder', () => {
+    expect(unitsForPercentage(997n, 3333)).toBe(332n);
+    expect(calculateInitialOfferingPreview({ totalUnits: 997n, valuationMinor: 222_500n, offeredUnits: 332n, pricePerUnitMinor: 223n, currency: 'GBP', feeBps: 0 })).toMatchObject({
+      valuationMinor: 222_500n,
+      offeredPercentageBps: 3329,
+      retainedUnits: 665n,
+      retainedPercentageBps: 6670,
+      grossOfferingMinor: 74_036n,
+      feeMinor: 0n,
+      netOfferingMinor: 74_036n,
+    });
+  });
+
+  it('allows the full approved supply and rejects a zero-unit percentage', () => {
+    expect(unitsForPercentage(1_000n, 10_000)).toBe(1_000n);
+    expect(() => calculateInitialOfferingPreview({ totalUnits: 1_000n, valuationMinor: 100_000n, offeredUnits: 0n, pricePerUnitMinor: 100n, currency: 'GBP', feeBps: 0 })).toThrow(ConflictException);
   });
 });

@@ -27,6 +27,8 @@ import type {
   AppRepositories,
   AssetRepository,
   AssetOperationsBoardResponse,
+  InitialOfferingProjection,
+  InitialOfferingPreview,
 } from "@/data/repositories";
 import type {
   Asset,
@@ -122,6 +124,7 @@ type MarketAssetDto = {
     totalUnits: string;
     issuedUnits: string;
   } | null;
+  initialOffering?: import("@/domain").InitialOfferingProjection | null;
   marketLifecycle?: import("@/domain").MarketLifecycleProjection;
   trading?: {
     status: string;
@@ -301,6 +304,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
       }
     : undefined,
   ownership: value.ownership ?? undefined,
+  initialOffering: value.initialOffering ?? undefined,
   trading: value.trading ?? undefined,
   marketLifecycle: value.marketLifecycle,
 });
@@ -2743,6 +2747,36 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
       );
     },
+    async approveInitialOffering(id, reason) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/approve`,
+        { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async requestInitialOfferingChanges(id, reason) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/request-changes`,
+        { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async openInitialOffering(id) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/open`,
+        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async pauseInitialOffering(id) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/pause`,
+        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async cancelInitialOffering(id) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/cancel`,
+        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
   };
 };
 
@@ -3249,6 +3283,29 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             occurredAt: string;
           }>;
         }>(`/collector-workspace/collectibles/${encodeURIComponent(id)}`);
+      },
+      async getInitialOfferingPreview(assetId, percentageBps) {
+        return client.get<InitialOfferingPreview>(
+          `/collector/assets/${encodeURIComponent(assetId)}/offering/preview`,
+          { percentageBps },
+        );
+      },
+      async getInitialOffering(assetId) {
+        return client.get<InitialOfferingProjection>(
+          `/collector/assets/${encodeURIComponent(assetId)}/offering`,
+        );
+      },
+      async proposeInitialOffering(assetId, offeredUnits) {
+        return client.request<InitialOfferingProjection>(
+          `/collector/assets/${encodeURIComponent(assetId)}/offering`,
+          { method: "POST", body: { offeredUnits }, headers: { "Idempotency-Key": idempotencyKey() } },
+        );
+      },
+      async updateInitialOffering(offeringId, offeredUnits) {
+        return client.request<InitialOfferingProjection>(
+          `/collector/initial-offerings/${encodeURIComponent(offeringId)}`,
+          { method: "PATCH", body: { offeredUnits }, headers: { "Idempotency-Key": idempotencyKey() } },
+        );
       },
       async getRequests() {
         return client.get<import("@/data/repositories").CollectorWorkspaceRequest[]>(

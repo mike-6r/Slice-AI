@@ -102,6 +102,9 @@ export class MarketService {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
         ownershipSupplyPolicy: { select: { status: true } },
+        initialOffering: {
+          include: { inventory: true },
+        },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -267,6 +270,9 @@ export class MarketService {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
         ownershipSupplyPolicy: { select: { status: true } },
+        initialOffering: {
+          include: { inventory: true },
+        },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -504,6 +510,9 @@ export class MarketService {
           select: { status: true, totalUnits: true, issuedUnits: true },
         },
         ownershipSupplyPolicy: { select: { status: true } },
+        initialOffering: {
+          include: { inventory: true },
+        },
         publication: { select: { status: true, publishedAt: true } },
         custodyRecord: { select: { status: true, updatedAt: true } },
         tradingMarket: {
@@ -667,6 +676,20 @@ type PublicAssetRow = {
     issuedUnits: bigint;
   } | null;
   ownershipSupplyPolicy: { status: string } | null;
+  initialOffering?: {
+    status: string;
+    totalUnits: bigint;
+    offeredUnits: bigint;
+    retainedUnits: bigint;
+    pricePerUnitMinor: bigint;
+    currency: string;
+    inventory: {
+      offeredUnits: bigint;
+      availableUnits: bigint;
+      reservedUnits: bigint;
+      settledUnits: bigint;
+    } | null;
+  } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   _count?: { tradingExecutions: number };
   marketSnapshots: Array<{
@@ -828,6 +851,24 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           status: asset.ownershipSupply.status,
           totalUnits: asset.ownershipSupply.totalUnits.toString(),
           issuedUnits: asset.ownershipSupply.issuedUnits.toString(),
+        }
+      : null,
+    initialOffering: asset.initialOffering && ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(asset.initialOffering.status)
+      ? {
+          status: asset.initialOffering.status,
+          totalUnits: asset.initialOffering.totalUnits.toString(),
+          offeredUnits: asset.initialOffering.offeredUnits.toString(),
+          retainedUnits: asset.initialOffering.retainedUnits.toString(),
+          pricePerUnitMinor: asset.initialOffering.pricePerUnitMinor.toString(),
+          currency: asset.initialOffering.currency,
+          inventory: asset.initialOffering.inventory
+            ? {
+                offeredUnits: asset.initialOffering.inventory.offeredUnits.toString(),
+                availableUnits: asset.initialOffering.inventory.availableUnits.toString(),
+                reservedUnits: asset.initialOffering.inventory.reservedUnits.toString(),
+                settledUnits: asset.initialOffering.inventory.settledUnits.toString(),
+              }
+            : null,
         }
       : null,
     trading: asset.tradingMarket

@@ -3762,6 +3762,10 @@ export class AdminService {
         },
         controlledBetaBypass: true,
         publication: true,
+        insuranceCoverage: {
+          where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } },
+          take: 1,
+        },
         ownershipSupply: {
           include: {
             positions: {
@@ -3784,7 +3788,13 @@ export class AdminService {
             },
           },
         },
-        ownershipSupplyPolicy: { select: { status: true } },
+        ownershipSupplyPolicy: { select: { status: true, proposedUnits: true, pricePerUnitMinor: true } },
+        initialOffering: {
+          include: {
+            inventory: true,
+            originatingCollector: { select: { id: true, profile: { select: { displayName: true, publicUsername: true } } } },
+          },
+        },
         tradingMarket: true,
         tradingOrders: {
           where: {
@@ -3911,6 +3921,41 @@ export class AdminService {
       asset.publication?.readiness,
     );
     const issuance = await this.ownershipPolicy.adminProjection(asset.id);
+    const initialProceedsAccount = asset.initialOffering
+      ? await this.db.financialAccount.findFirst({
+          where: { ownerType: 'USER', ownerUserId: asset.initialOffering.beneficiaryUserId, code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: asset.initialOffering.currency },
+          include: { balance: true },
+        })
+      : null;
+    const initialOffering = asset.initialOffering
+      ? {
+          offeringId: asset.initialOffering.id,
+          status: asset.initialOffering.status,
+          totalUnits: asset.initialOffering.totalUnits.toString(),
+          offeredUnits: asset.initialOffering.offeredUnits.toString(),
+          retainedUnits: asset.initialOffering.retainedUnits.toString(),
+          offeredPercentageBps: Number((asset.initialOffering.offeredUnits * 10_000n) / asset.initialOffering.totalUnits),
+          retainedPercentageBps: Number((asset.initialOffering.retainedUnits * 10_000n) / asset.initialOffering.totalUnits),
+          pricePerUnitMinor: asset.initialOffering.pricePerUnitMinor.toString(),
+          grossOfferingMinor: asset.initialOffering.grossOfferingMinor.toString(),
+          feeMinor: (asset.initialOffering.grossOfferingMinor * BigInt(asset.initialOffering.feeBps) / 10_000n).toString(),
+          netOfferingMinor: (asset.initialOffering.grossOfferingMinor - (asset.initialOffering.grossOfferingMinor * BigInt(asset.initialOffering.feeBps) / 10_000n)).toString(),
+          currency: asset.initialOffering.currency,
+          feeScheduleVersion: asset.initialOffering.feeScheduleVersion,
+          feeBps: asset.initialOffering.feeBps,
+          changeRequestReason: asset.initialOffering.changeRequestReason,
+          approvedAt: asset.initialOffering.approvedAt?.toISOString() ?? null,
+          openedAt: asset.initialOffering.openedAt?.toISOString() ?? null,
+          issuedAt: asset.initialOffering.issuedAt?.toISOString() ?? null,
+          closedAt: asset.initialOffering.closedAt?.toISOString() ?? null,
+          inventory: asset.initialOffering.inventory ? { offeredUnits: asset.initialOffering.inventory.offeredUnits.toString(), availableUnits: asset.initialOffering.inventory.availableUnits.toString(), reservedUnits: asset.initialOffering.inventory.reservedUnits.toString(), settledUnits: asset.initialOffering.inventory.settledUnits.toString() } : null,
+          proceeds: initialProceedsAccount?.balance ? { postedMinor: (initialProceedsAccount.balance.postedCreditMinor - initialProceedsAccount.balance.postedDebitMinor).toString(), reservedMinor: initialProceedsAccount.balance.reservedMinor.toString(), availableMinor: (initialProceedsAccount.balance.postedCreditMinor - initialProceedsAccount.balance.postedDebitMinor - initialProceedsAccount.balance.reservedMinor).toString(), currency: asset.initialOffering.currency } : { postedMinor: '0', reservedMinor: '0', availableMinor: '0', currency: asset.initialOffering.currency },
+          collector: { id: asset.initialOffering.originatingCollector.id, displayName: asset.initialOffering.originatingCollector.profile?.displayName ?? 'Collector', username: asset.initialOffering.originatingCollector.profile?.publicUsername ?? null },
+          readiness: { custody: asset.custodyRecord?.status === 'SECURED' || Boolean(asset.controlledBetaBypass), insurance: Boolean(asset.insuranceCoverage?.length), publication: asset.publication?.status === 'PUBLISHED', market: asset.tradingMarket?.status === 'OPEN' && asset.tradingMarket.tradingEnabled },
+          valuation: asset.valuationDecisions.find((item) => item.status === 'ACTIVE') ? { minor: asset.valuationDecisions.find((item) => item.status === 'ACTIVE')!.valueMinor.toString(), currency: asset.valuationDecisions.find((item) => item.status === 'ACTIVE')!.currency, asOf: asset.valuationDecisions.find((item) => item.status === 'ACTIVE')!.decidedAt.toISOString() } : null,
+          supplyPolicy: asset.ownershipSupplyPolicy ? { status: asset.ownershipSupplyPolicy.status, units: asset.ownershipSupplyPolicy.proposedUnits.toString(), pricePerUnitMinor: asset.ownershipSupplyPolicy.pricePerUnitMinor.toString() } : null,
+        }
+      : null;
     const saleValues = sales.map((item) => item.valueMinor);
     const avgSale = saleValues.length
       ? saleValues.reduce((sum, value) => sum + value, 0n) /
@@ -4039,6 +4084,7 @@ export class AdminService {
             }
           : null,
       issuance,
+      initialOffering,
       lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
       marketLifecycle: deriveMarketLifecycle({
         published: asset.publication?.status === 'PUBLISHED',

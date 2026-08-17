@@ -109,6 +109,19 @@ function MarketValue({ asset }: { asset: MarketplaceAsset }) {
   );
 }
 
+function initialOfferingAvailability(asset: MarketplaceAsset) {
+  const offering = asset.initialOffering;
+  if (!offering || !["OPEN", "PARTIALLY_FILLED"].includes(offering.status) || !offering.inventory)
+    return undefined;
+  try {
+    const total = BigInt(offering.totalUnits);
+    if (total <= 0n) return undefined;
+    return Number(((BigInt(offering.inventory.availableUnits) + BigInt(offering.inventory.reservedUnits)) * 10_000n) / total) / 100;
+  } catch {
+    return undefined;
+  }
+}
+
 export function MarketAssetCard({
   asset,
   compact = false,
@@ -129,6 +142,8 @@ export function MarketAssetCard({
   });
   const editorial = marketplaceEditorialTag(asset);
   const availability = asset.availabilityBps;
+  const initialAvailability = initialOfferingAvailability(asset);
+  const initialOfferingOpen = ["OPEN", "PARTIALLY_FILLED"].includes(asset.initialOffering?.status ?? "");
   const lifecycle = asset.marketLifecycle;
   const preMarket = lifecycle
     ? lifecycle.phase !== "LIVE"
@@ -175,6 +190,9 @@ export function MarketAssetCard({
           <span>{asset.grade ?? "Raw / Ungraded"}</span>
           {asset.conditionLabel ? <span>Condition: {asset.conditionLabel}</span> : null}
         </div>
+        {asset.initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(asset.initialOffering.status) ? (
+          <p className="market-card-channel">Initial offering · ownership offered by the collector</p>
+        ) : null}
         <MarketValue asset={asset} />
         {asset.marketReference ? (
           <p className="market-card-reference">
@@ -198,7 +216,9 @@ export function MarketAssetCard({
                         : lifecycle?.phase === "SUPPLY_APPROVAL_REQUIRED"
                           ? "Supply approval"
                           : "Not yet issued"
-                    : availability === undefined || availability === 0
+                    : initialOfferingOpen && initialAvailability !== undefined
+                      ? formatOwnership(initialAvailability)
+                      : availability === undefined || availability === 0
                       ? "No listings"
                       : formatOwnership((availability ?? 0) / 100)}
                 </dd>
@@ -212,6 +232,8 @@ export function MarketAssetCard({
                   <dd>
                     {preMarket
                       ? lifecycle?.statusPill ?? "Not yet available"
+                    : initialOfferingOpen
+                      ? "Initial offering"
                       : availability === 0
                         ? "Awaiting listings"
                         : "Available"}
@@ -236,7 +258,9 @@ export function MarketAssetCard({
                     <span style={{ width: `${availabilityWidth}%` }} />
                   </span>
                   <small>
-                    {availability === undefined || availability === 0
+                      {initialOfferingOpen && initialAvailability !== undefined
+                        ? `${formatOwnership(initialAvailability)} available in initial offering`
+                        : availability === undefined || availability === 0
                       ? "Market open · awaiting listings"
                       : `${formatOwnership((availability ?? 0) / 100)} available to own`}
                   </small>

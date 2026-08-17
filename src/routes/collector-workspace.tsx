@@ -37,6 +37,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { logout } from "@/auth/actions";
 import { canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { RoleWorkspaceGuard } from "@/components/auth/RoleWorkspaceGuard";
+import { CollectorInitialOfferingTab } from "@/components/collector/CollectorInitialOfferingTab";
 import { Wordmark } from "@/components/layout/MainNavigation";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import type {
@@ -95,6 +96,7 @@ type AssetDetailSection =
   | "media"
   | "valuation"
   | "custody"
+  | "offering"
   | "market"
   | "activity";
 
@@ -2268,6 +2270,7 @@ function AssetManagementView({
     { id: "overview", label: "Overview" },
     { id: "details", label: "Details" },
     { id: "media", label: "Media" },
+    { id: "offering", label: "Offering" },
     { id: "market", label: "Market" },
     { id: "history", label: "History" },
   ];
@@ -2291,6 +2294,7 @@ function AssetManagementView({
     media: <MediaDetail asset={asset} />,
     valuation: <DetailsTab asset={asset} />,
     custody: <DetailsTab asset={asset} />,
+    offering: <CollectorInitialOfferingTab asset={asset} />,
     market: <MarketTab asset={asset} market={market} />,
     activity: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
     history: <HistoryTab asset={asset} activity={detail?.activity ?? []} />,
@@ -3527,6 +3531,7 @@ function isAssetDetailSection(value: string): value is AssetDetailSection {
     "media",
     "valuation",
     "custody",
+    "offering",
     "market",
     "activity",
   ].includes(value);
