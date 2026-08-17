@@ -93,6 +93,8 @@ export class GlobalHttpExceptionFilter extends BaseExceptionFilter {
         exception instanceof Error
           ? exception.constructor.name
           : 'UnknownError',
+      errorMessage:
+        exception instanceof Error ? exception.message : String(exception),
       code,
     };
 
