@@ -188,3 +188,18 @@ Full interactive live QA: **NO-GO pending controlled Discord QA session**
 Required human action: provide a controlled Discord QA account/session in the
 configured development guild. Rotate the supplied Discord bot token after this
 QA window.
+
+## Final interactive QA attempt — 17 August 2026
+
+The available controlled browser session was checked read-only and contained
+no open tabs. No controlled Discord User A or User B session was available.
+Consequently, the following could not be truthfully executed: `/slice`, the
+Connect Slice handoff, one-time linking/replay checks, real persistent button
+and select clicks, cross-user component denial, ticket privacy, ticket close,
+and Discord DM delivery with a controlled recipient.
+
+No Discord messages, account links, tickets, financial records, trades,
+provider calls, Umbreon data, or Charizard data were created or changed during
+this attempt.
+
+Final interactive QA status: **NO-GO — controlled Discord user session required**
