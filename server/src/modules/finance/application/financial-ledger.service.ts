@@ -50,6 +50,22 @@ export class FinancialLedgerService {
     requestId: string,
     idempotencyKey: string,
   ) {
+    return this.db.$transaction((db) =>
+      this.postInTransaction(db, actor, input, requestId, idempotencyKey),
+    );
+  }
+
+  /**
+   * Posts into a caller-owned transaction. Movement settlement uses this seam
+   * so the external-clearing journal and reservation transition are atomic.
+   */
+  async postInTransaction(
+    db: Db,
+    actor: Actor,
+    input: PostJournalInput,
+    requestId: string,
+    idempotencyKey: string,
+  ) {
     this.recentAuth.require(actor);
     const lines = validateBalancedJournal('GBP', input.lines);
     const identity: IdempotencyIdentity = {
@@ -61,105 +77,101 @@ export class FinancialLedgerService {
       .update(JSON.stringify(input))
       .digest('hex');
 
-    return this.db.$transaction(async (db) => {
-      const tx = createIdentityTransaction(db);
-      const acquired = await tx.idempotency.acquire(
-        identity,
-        requestHash,
-        new Date(Date.now() + 86_400_000),
+    const tx = createIdentityTransaction(db);
+    const acquired = await tx.idempotency.acquire(
+      identity,
+      requestHash,
+      new Date(Date.now() + 86_400_000),
+    );
+    if (acquired.state === 'FINGERPRINT_CONFLICT')
+      throw conflict(
+        'IDEMPOTENCY_KEY_CONFLICT',
+        'The request key cannot be reused.',
       );
-      if (acquired.state === 'FINGERPRINT_CONFLICT')
-        throw conflict(
-          'IDEMPOTENCY_KEY_CONFLICT',
-          'The request key cannot be reused.',
-        );
-      if (acquired.state === 'EXISTING_IN_PROGRESS')
-        throw conflict(
-          'PERSISTENCE_CONFLICT',
-          'The request is already in progress.',
-        );
-      if (acquired.state === 'EXISTING_COMPLETED')
-        return acquired.record.response!.body as {
-          transactionId: string;
-          correlationId: string;
-        };
-
-      const accountIds = [
-        ...new Set(lines.map((line) => line.accountId)),
-      ].sort();
-      await this.lockAccounts(db, accountIds);
-      const accounts = await db.financialAccount.findMany({
-        where: { id: { in: accountIds } },
-      });
-      if (accounts.length !== accountIds.length)
-        throw new NotFoundException({
-          code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
-          message: 'A financial account was not found.',
-        });
-      for (const account of accounts) {
-        if (account.currency !== 'GBP' || account.status !== 'ACTIVE')
-          throw conflict(
-            'FINANCIAL_ACCOUNT_UNAVAILABLE',
-            'A financial account is unavailable for posting.',
-          );
-      }
-
-      const existing = await db.journalTransaction.findUnique({
-        where: { correlationId: input.correlationId },
-      });
-      if (existing)
-        throw conflict(
-          'FINANCIAL_CORRELATION_CONFLICT',
-          'A journal transaction already uses this correlation.',
-        );
-      const transaction = await db.journalTransaction.create({
-        data: {
-          id: randomUUID(),
-          type: input.type,
-          currency: 'GBP',
-          correlationId: input.correlationId,
-          descriptionCode: input.descriptionCode,
-          createdByUserId: actor.userId,
-        },
-      });
-      await financeTestFailurePoint('journal.after-transaction');
-      await db.journalEntry.createMany({
-        data: lines.map((line, index) => ({
-          id: randomUUID(),
-          transactionId: transaction.id,
-          sequence: index + 1,
-          accountId: line.accountId,
-          side: line.side,
-          amountMinor: line.money.minor,
-          currency: 'GBP',
-        })),
-      });
-      for (const line of lines) await this.applyProjection(db, line);
-
-      const result = {
-        transactionId: transaction.id,
-        correlationId: transaction.correlationId,
+    if (acquired.state === 'EXISTING_IN_PROGRESS')
+      throw conflict(
+        'PERSISTENCE_CONFLICT',
+        'The request is already in progress.',
+      );
+    if (acquired.state === 'EXISTING_COMPLETED')
+      return acquired.record.response!.body as {
+        transactionId: string;
+        correlationId: string;
       };
-      await tx.audit.append({
-        id: randomUUID(),
-        actorUserId: actor.userId,
-        actorType: 'USER',
-        action: 'FINANCE_JOURNAL_POSTED',
-        resourceType: 'journal-transaction',
-        resourceId: transaction.id,
-        requestId,
-        sessionId: actor.sessionId as never,
-        result: 'SUCCESS',
-        metadata: { transactionId: transaction.id, type: input.type },
-        createdAt: new Date(),
-      });
-      await tx.idempotency.complete(
-        identity,
-        { status: 200, body: result },
-        new Date(),
-      );
-      return result;
+
+    const accountIds = [...new Set(lines.map((line) => line.accountId))].sort();
+    await this.lockAccounts(db, accountIds);
+    const accounts = await db.financialAccount.findMany({
+      where: { id: { in: accountIds } },
     });
+    if (accounts.length !== accountIds.length)
+      throw new NotFoundException({
+        code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
+        message: 'A financial account was not found.',
+      });
+    for (const account of accounts) {
+      if (account.currency !== 'GBP' || account.status !== 'ACTIVE')
+        throw conflict(
+          'FINANCIAL_ACCOUNT_UNAVAILABLE',
+          'A financial account is unavailable for posting.',
+        );
+    }
+
+    const existing = await db.journalTransaction.findUnique({
+      where: { correlationId: input.correlationId },
+    });
+    if (existing)
+      throw conflict(
+        'FINANCIAL_CORRELATION_CONFLICT',
+        'A journal transaction already uses this correlation.',
+      );
+    const transaction = await db.journalTransaction.create({
+      data: {
+        id: randomUUID(),
+        type: input.type,
+        currency: 'GBP',
+        correlationId: input.correlationId,
+        descriptionCode: input.descriptionCode,
+        createdByUserId: actor.userId,
+      },
+    });
+    await financeTestFailurePoint('journal.after-transaction');
+    await db.journalEntry.createMany({
+      data: lines.map((line, index) => ({
+        id: randomUUID(),
+        transactionId: transaction.id,
+        sequence: index + 1,
+        accountId: line.accountId,
+        side: line.side,
+        amountMinor: line.money.minor,
+        currency: 'GBP',
+      })),
+    });
+    for (const line of lines) await this.applyProjection(db, line);
+
+    const result = {
+      transactionId: transaction.id,
+      correlationId: transaction.correlationId,
+    };
+    await tx.audit.append({
+      id: randomUUID(),
+      actorUserId: actor.userId,
+      actorType: 'USER',
+      action: 'FINANCE_JOURNAL_POSTED',
+      resourceType: 'journal-transaction',
+      resourceId: transaction.id,
+      requestId,
+      sessionId: actor.sessionId as never,
+      result: 'SUCCESS',
+      metadata: { transactionId: transaction.id, type: input.type },
+      createdAt: new Date(),
+    });
+    await tx.idempotency.complete(
+      identity,
+      { status: 200, body: result },
+      new Date(),
+    );
+    return result;
   }
 
   async walletForUser(userId: string) {
@@ -168,8 +180,47 @@ export class FinancialLedgerService {
       include: { balance: true },
       orderBy: { code: 'asc' },
     });
+    const accountIds = accounts.map((account) => account.id);
+    const [pendingMovements, reservations] = await Promise.all([
+      this.db.moneyMovement.findMany({
+        where: {
+          userId,
+          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] },
+        },
+        select: { type: true, amountMinor: true },
+      }),
+      accountIds.length
+        ? this.db.cashReservation.findMany({
+            where: { accountId: { in: accountIds }, status: 'ACTIVE' },
+            select: { purposeType: true, amountMinor: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const pendingMinor = pendingMovements
+      .filter((movement) => movement.type === 'DEPOSIT')
+      .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const pendingWithdrawalMinor = pendingMovements
+      .filter((movement) => movement.type === 'WITHDRAWAL')
+      .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const orderReservedMinor = reservations
+      .filter((reservation) => reservation.purposeType === 'TRADING_ORDER')
+      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
+    const withdrawalReservedMinor = reservations
+      .filter((reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL')
+      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
+    const proceeds = accounts.find((account) => account.code === 'COLLECTOR_PROCEEDS_AVAILABLE');
+    const proceedsBalance = proceeds?.balance;
+    const collectorProceedsMinor = proceedsBalance
+      ? accountAuthority(proceeds.normalSide, proceedsBalance.postedDebitMinor, proceedsBalance.postedCreditMinor)
+      : 0n;
     return {
       currency: 'GBP',
+      pendingMinor: pendingMinor.toString(),
+      pendingWithdrawalMinor: pendingWithdrawalMinor.toString(),
+      orderReservedMinor: orderReservedMinor.toString(),
+      withdrawalReservedMinor: withdrawalReservedMinor.toString(),
+      collectorProceedsMinor: collectorProceedsMinor.toString(),
+      collectorProceedsReservedMinor: (proceedsBalance?.reservedMinor ?? 0n).toString(),
       accounts: accounts.map((account) => {
         const balance = account.balance;
         const total = accountAuthority(
@@ -235,6 +286,27 @@ export class FinancialLedgerService {
     requestId: string,
     idempotencyKey: string,
   ) {
+    return this.db.$transaction((db) =>
+      this.reverseInTransaction(
+        db,
+        actor,
+        transactionId,
+        reasonCode,
+        requestId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  /** Reversal primitive for a caller-owned movement transaction. */
+  async reverseInTransaction(
+    db: Db,
+    actor: Actor,
+    transactionId: string,
+    reasonCode: string,
+    requestId: string,
+    idempotencyKey: string,
+  ) {
     this.recentAuth.require(actor);
     const identity: IdempotencyIdentity = {
       actorScope: `user:${actor.userId}`,
@@ -244,8 +316,7 @@ export class FinancialLedgerService {
     const requestHash = createHash('sha256')
       .update(`${transactionId}\n${reasonCode}`)
       .digest('hex');
-    return this.db.$transaction(async (db) => {
-      const tx = createIdentityTransaction(db);
+    const tx = createIdentityTransaction(db);
       const acquired = await tx.idempotency.acquire(
         identity,
         requestHash,
@@ -344,7 +415,6 @@ export class FinancialLedgerService {
         new Date(),
       );
       return result;
-    });
   }
 
   /** Internal cash-control port; no public order or payment flow calls this in Document 013. */
@@ -561,6 +631,118 @@ export class FinancialLedgerService {
     );
   }
 
+  /**
+   * Reservation release for a caller-owned transaction. This is intentionally
+   * separate from the idempotent public command: a movement transition already
+   * owns the idempotency boundary and must not open a nested transaction.
+   */
+  async releaseCashInTransaction(
+    db: Db,
+    actor: Actor,
+    reservationId: string,
+    requestId: string,
+  ) {
+    this.recentAuth.require(actor);
+    await db.$queryRaw`SELECT id FROM "CashReservation" WHERE id = ${reservationId} FOR UPDATE`;
+    const reservation = await db.cashReservation.findUnique({
+      where: { id: reservationId },
+    });
+    if (!reservation)
+      throw new NotFoundException({
+        code: 'CASH_RESERVATION_NOT_FOUND',
+        message: 'Cash reservation not found.',
+      });
+    await this.lockAccounts(db, [reservation.accountId]);
+    await this.userCashAccount(db, reservation.accountId, actor.userId);
+    await this.lockBalance(db, reservation.accountId);
+    if (reservation.status === 'RELEASED')
+      return { reservationId, status: 'RELEASED' as const };
+    if (reservation.status !== 'ACTIVE')
+      throw conflict(
+        'CASH_RESERVATION_TERMINAL',
+        'Cash reservation is not active.',
+      );
+    await db.cashReservation.update({
+      where: { id: reservation.id },
+      data: { status: 'RELEASED' },
+    });
+    await db.accountBalance.update({
+      where: { accountId: reservation.accountId },
+      data: {
+        reservedMinor: { decrement: reservation.amountMinor },
+        version: { increment: 1 },
+      },
+    });
+    await createIdentityTransaction(db).audit.append({
+      id: randomUUID(),
+      actorUserId: actor.userId,
+      actorType: 'USER',
+      action: 'FINANCE_CASH_RELEASED',
+      resourceType: 'cash-reservation',
+      resourceId: reservation.id,
+      requestId,
+      sessionId: actor.sessionId as never,
+      result: 'SUCCESS',
+      metadata: { reservationId: reservation.id, amountMinor: reservation.amountMinor.toString() },
+      createdAt: new Date(),
+    });
+    return { reservationId, status: 'RELEASED' as const };
+  }
+
+  /** Consume a reservation without opening a nested transaction. */
+  async consumeCashInTransaction(
+    db: Db,
+    actor: Actor,
+    reservationId: string,
+    requestId: string,
+  ) {
+    this.recentAuth.require(actor);
+    await db.$queryRaw`SELECT id FROM "CashReservation" WHERE id = ${reservationId} FOR UPDATE`;
+    const reservation = await db.cashReservation.findUnique({
+      where: { id: reservationId },
+    });
+    if (!reservation)
+      throw new NotFoundException({
+        code: 'CASH_RESERVATION_NOT_FOUND',
+        message: 'Cash reservation not found.',
+      });
+    await this.lockAccounts(db, [reservation.accountId]);
+    await this.userCashAccount(db, reservation.accountId, actor.userId);
+    await this.lockBalance(db, reservation.accountId);
+    if (reservation.status === 'CONSUMED')
+      return { reservationId, status: 'CONSUMED' as const };
+    if (reservation.status !== 'ACTIVE')
+      throw conflict(
+        'CASH_RESERVATION_TERMINAL',
+        'Cash reservation is not active.',
+      );
+    await db.cashReservation.update({
+      where: { id: reservation.id },
+      data: { status: 'CONSUMED' },
+    });
+    await db.accountBalance.update({
+      where: { accountId: reservation.accountId },
+      data: {
+        reservedMinor: { decrement: reservation.amountMinor },
+        version: { increment: 1 },
+      },
+    });
+    await createIdentityTransaction(db).audit.append({
+      id: randomUUID(),
+      actorUserId: actor.userId,
+      actorType: 'USER',
+      action: 'FINANCE_CASH_CONSUMED',
+      resourceType: 'cash-reservation',
+      resourceId: reservation.id,
+      requestId,
+      sessionId: actor.sessionId as never,
+      result: 'SUCCESS',
+      metadata: { reservationId: reservation.id, amountMinor: reservation.amountMinor.toString() },
+      createdAt: new Date(),
+    });
+    return { reservationId, status: 'CONSUMED' as const };
+  }
+
   private async lockAccounts(db: Db, accountIds: string[]) {
     await db.$queryRaw`SELECT id FROM "FinancialAccount" WHERE id IN (${Prisma.join(accountIds)}) ORDER BY id FOR UPDATE`;
   }
@@ -597,7 +779,10 @@ export class FinancialLedgerService {
     work: (
       db: Db,
       audit: (
-        action: 'FINANCE_CASH_RESERVED' | 'FINANCE_CASH_RELEASED',
+      action:
+        | 'FINANCE_CASH_RESERVED'
+        | 'FINANCE_CASH_RELEASED'
+        | 'FINANCE_CASH_CONSUMED',
         metadata: Record<string, unknown>,
       ) => Promise<void>,
     ) => Promise<T>,
@@ -630,7 +815,10 @@ export class FinancialLedgerService {
       if (acquired.state === 'EXISTING_COMPLETED')
         return acquired.record.response!.body as T;
       const audit = (
-        action: 'FINANCE_CASH_RESERVED' | 'FINANCE_CASH_RELEASED',
+        action:
+          | 'FINANCE_CASH_RESERVED'
+          | 'FINANCE_CASH_RELEASED'
+          | 'FINANCE_CASH_CONSUMED',
         metadata: Record<string, unknown>,
       ) =>
         tx.audit.append({

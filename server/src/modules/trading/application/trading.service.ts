@@ -1365,17 +1365,14 @@ export class TradingService {
         );
       await db.ownershipReservation.update({
         where: { id: reservation.id },
-        data: { units: { decrement: units } },
+        data:
+          remaining === 0n
+            ? { status: 'CONSUMED' }
+            : { units: { decrement: units } },
       });
     }
     await this.history(db, order.id, order.status, status, 'EXECUTION_SETTLED');
     if (remaining === 0n) {
-      if (updated.side === 'SELL' && updated.ownershipReservationId) {
-        await db.ownershipReservation.update({
-          where: { id: updated.ownershipReservationId },
-          data: { units: 0n },
-        });
-      }
       await this.markReservationConsumed(db, updated);
     }
     return updated;

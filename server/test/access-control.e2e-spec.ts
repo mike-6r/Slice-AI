@@ -473,6 +473,7 @@ describe('access control HTTP E2E', () => {
         email: `${runId}-${label}@example.test`,
         password,
         displayName: label,
+        username: `qa_${label.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}`,
       });
   }
 });

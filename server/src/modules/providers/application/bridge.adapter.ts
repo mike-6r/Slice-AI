@@ -286,7 +286,7 @@ export function mapBridgeTransferState(
 ): NormalizedMovementStatus {
   if (state === 'payment_processed') return 'SETTLED';
   if (state === 'canceled') return 'CANCELLED';
-  if (state === 'returned' || state === 'refunded') return 'REVERSED';
+  if (state === 'returned' || state === 'refunded') return 'RETURNED';
   if (state === 'undeliverable' || state === 'error') return 'FAILED';
   if (state === 'in_review') return 'MANUAL_REVIEW';
   if (state === 'funds_received' || state === 'payment_submitted')

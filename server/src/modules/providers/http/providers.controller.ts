@@ -44,7 +44,7 @@ export class ProvidersController {
     return this.webhooks.receive({ provider: provider as 'BRIDGE' | 'PLAID', rawBody: req.rawBody, headers: req.headers, requestId: req.requestId ?? 'unknown' });
   }
   @Post('admin/providers/reconciliation-runs') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('provider.manage')
-  async reconcile(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const provider = this.parse(z.object({ provider: z.literal('BRIDGE') }).strict(), body).provider; return this.write(req, key, () => this.reconciliation.run(req.actor!, provider, req.requestId ?? 'unknown')); }
+  async reconcile(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const provider = this.parse(z.object({ provider: z.enum(['BRIDGE', 'LOCAL_TEST']) }).strict(), body).provider; return this.write(req, key, () => this.reconciliation.run(req.actor!, provider, req.requestId ?? 'unknown')); }
   @Post('admin/compliance/holds') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')
   async createHold(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(hold, body); return this.write(req, key, () => this.holds.create(req.actor!, { ...input, requestId: req.requestId ?? 'unknown' })); }
   @Post('admin/compliance/holds/:holdId/release') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')

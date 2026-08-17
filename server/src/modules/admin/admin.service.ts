@@ -3022,7 +3022,7 @@ export class AdminService {
       this.db.moneyMovement.aggregate({
         where: {
           userId,
-          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING'] },
+          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] },
         },
         _sum: { amountMinor: true },
       }),
@@ -3366,7 +3366,7 @@ export class AdminService {
     const [pendingMovements, exceptions, mismatches] = await Promise.all([
       this.db.moneyMovement.count({
         where: {
-          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING'] },
+          status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] },
         },
       }),
       this.db.moneyMovement.count({
@@ -3390,8 +3390,8 @@ export class AdminService {
     dayStart.setUTCHours(0, 0, 0, 0);
     const historyStart = new Date(dayStart);
     historyStart.setUTCDate(historyStart.getUTCDate() - 6);
-    const pendingStates = ['CREATED', 'PENDING_PROVIDER', 'PROCESSING'] as const;
-    const [accounts, pendingMovements, openOrders, executions, historyExecutions, reconRuns, activity] =
+    const pendingStates = ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] as const;
+    const [accounts, pendingMovements, allMovements, cashReservations, proceedsAccounts, platformAccounts, openOrders, executions, historyExecutions, reconRuns, activity] =
       await Promise.all([
         this.db.financialAccount.findMany({
           where: { ownerType: 'USER', currency: 'GBP' },
@@ -3400,6 +3400,21 @@ export class AdminService {
         this.db.moneyMovement.findMany({
           where: { status: { in: [...pendingStates] } },
           select: { type: true, amountMinor: true },
+        }),
+        this.db.moneyMovement.findMany({
+          select: { type: true, status: true, amountMinor: true },
+        }),
+        this.db.cashReservation.findMany({
+          where: { status: 'ACTIVE' },
+          select: { purposeType: true, amountMinor: true },
+        }),
+        this.db.financialAccount.findMany({
+          where: { ownerType: 'USER', code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: 'GBP' },
+          select: { normalSide: true, balance: true },
+        }),
+        this.db.financialAccount.findMany({
+          where: { code: { in: ['INITIAL_OFFERING_FEE_REVENUE', 'TRADING_FEE_REVENUE', 'EXTERNAL_GBP_CLEARING'] }, currency: 'GBP' },
+          select: { code: true, normalSide: true, balance: true },
         }),
         this.db.tradingOrder.count({
           where: { status: { in: ['PENDING_RESERVATION', 'OPEN', 'PARTIALLY_FILLED'] } },
@@ -3456,6 +3471,26 @@ export class AdminService {
     const pendingWithdrawals = pendingMovements
       .filter((movement) => movement.type === 'WITHDRAWAL')
       .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const movementTotal = (type: 'DEPOSIT' | 'WITHDRAWAL', statuses: string[]) =>
+      allMovements
+        .filter((movement) => movement.type === type && statuses.includes(movement.status))
+        .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const orderReserved = cashReservations
+      .filter((reservation) => reservation.purposeType === 'TRADING_ORDER')
+      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
+    const withdrawalReserved = cashReservations
+      .filter((reservation) => reservation.purposeType === 'EXTERNAL_WITHDRAWAL')
+      .reduce((total, reservation) => total + reservation.amountMinor, 0n);
+    const accountAuthorityValue = (account: { normalSide: string; balance: { postedDebitMinor: bigint; postedCreditMinor: bigint } | null }) => {
+      if (!account.balance) return 0n;
+      return account.normalSide === 'DEBIT'
+        ? account.balance.postedDebitMinor - account.balance.postedCreditMinor
+        : account.balance.postedCreditMinor - account.balance.postedDebitMinor;
+    };
+    const collectorProceeds = proceedsAccounts.reduce((total, account) => total + accountAuthorityValue(account), 0n);
+    const revenue = new Map<string, bigint>();
+    for (const account of platformAccounts) revenue.set(account.code, (revenue.get(account.code) ?? 0n) + accountAuthorityValue(account));
+    const externalClearing = revenue.get('EXTERNAL_GBP_CLEARING') ?? 0n;
     const totalVolume = executions.reduce((total, execution) => total + execution.grossMinor, 0n);
     const totalFees = executions.reduce(
       (total, execution) => total + execution.buyerFeeMinor + execution.sellerFeeMinor,
@@ -3498,6 +3533,17 @@ export class AdminService {
         reservedFundsMinor: reservedFunds.toString(),
         pendingDepositsMinor: pendingDeposits.toString(),
         pendingWithdrawalsMinor: pendingWithdrawals.toString(),
+        settledDepositsMinor: movementTotal('DEPOSIT', ['SETTLED']).toString(),
+        failedDepositsMinor: movementTotal('DEPOSIT', ['FAILED', 'CANCELLED']).toString(),
+        returnedDepositsMinor: movementTotal('DEPOSIT', ['RETURNED', 'REVERSED']).toString(),
+        failedWithdrawalsMinor: movementTotal('WITHDRAWAL', ['FAILED', 'CANCELLED']).toString(),
+        returnedWithdrawalsMinor: movementTotal('WITHDRAWAL', ['RETURNED', 'REVERSED']).toString(),
+        orderReservedMinor: orderReserved.toString(),
+        withdrawalReservedMinor: withdrawalReserved.toString(),
+        collectorProceedsMinor: collectorProceeds.toString(),
+        sliceFeeRevenueMinor: ((revenue.get('INITIAL_OFFERING_FEE_REVENUE') ?? 0n) + (revenue.get('TRADING_FEE_REVENUE') ?? 0n)).toString(),
+        externalClearingMinor: externalClearing.toString(),
+        reconciliationMismatches: reconRuns.filter((run) => run.status === 'MISMATCH').length,
         openOrders,
         executionsToday: executions.length,
       },

@@ -32,7 +32,7 @@ describe('BridgeAdapter', () => {
     expect(mapBridgeTransferState('payment_processed')).toBe('SETTLED');
     expect(mapBridgeTransferState('payment_submitted')).toBe('PROCESSING');
     expect(mapBridgeTransferState('in_review')).toBe('MANUAL_REVIEW');
-    expect(mapBridgeTransferState('returned')).toBe('REVERSED');
+    expect(mapBridgeTransferState('returned')).toBe('RETURNED');
     expect(mapBridgeTransferState('undeliverable')).toBe('FAILED');
   });
 

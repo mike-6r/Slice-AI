@@ -218,7 +218,7 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         icon={LockKeyhole}
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
-        detail="Reserved for supported activity"
+        detail={`${formatWalletMoney(cash.orderReservedMinor ?? "0")} orders · ${formatWalletMoney(cash.withdrawalReservedMinor ?? "0")} withdrawals`}
       />
       <WalletKpi
         icon={Layers3}
@@ -228,10 +228,24 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
       />
       <WalletKpi
         icon={BanknoteArrowDown}
-        label="Cash change (30D)"
-        value="Unavailable"
-        detail="Cash history unavailable"
+        label="Pending deposits"
+        value={formatWalletMoney(cash.pendingMinor ?? "0")}
+        detail="Not available to spend yet"
       />
+      <WalletKpi
+        icon={Clock3}
+        label="Pending withdrawals"
+        value={formatWalletMoney(cash.pendingWithdrawalMinor ?? "0")}
+        detail="Reserved until provider result"
+      />
+      {(cash.collectorProceedsMinor ?? "0") !== "0" ? (
+        <WalletKpi
+          icon={BanknoteArrowDown}
+          label="Collector proceeds"
+          value={formatWalletMoney(cash.collectorProceedsMinor ?? "0")}
+          detail={`${formatWalletMoney(cash.collectorProceedsReservedMinor ?? "0")} reserved`}
+        />
+      ) : null}
     </section>
   );
 }

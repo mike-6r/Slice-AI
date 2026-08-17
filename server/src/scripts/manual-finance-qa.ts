@@ -101,6 +101,8 @@ async function main() {
           slug: id,
           title,
           categoryId,
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
         },
       });
     }

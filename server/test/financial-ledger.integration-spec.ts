@@ -185,6 +185,12 @@ describe('Document 013 PostgreSQL finance authority', () => {
           availableMinor: '10000',
         },
       ],
+      collectorProceedsMinor: '0',
+      collectorProceedsReservedMinor: '0',
+      orderReservedMinor: '0',
+      pendingMinor: '0',
+      pendingWithdrawalMinor: '0',
+      withdrawalReservedMinor: '0',
     });
   });
 

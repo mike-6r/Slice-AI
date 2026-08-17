@@ -31,6 +31,8 @@ describe('Document 013 financial self-read HTTP contracts', () => {
         slug: `${h.runId}-asset`,
         title: 'Finance read fixture',
         categoryId,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
       },
     });
     await h.db.ownershipAccount.create({
@@ -180,6 +182,12 @@ describe('Document 013 financial self-read HTTP contracts', () => {
       expect(response.status).toBe(200);
     expect(wallet.body).toEqual({
       currency: 'GBP',
+      pendingMinor: '0',
+      pendingWithdrawalMinor: '0',
+      orderReservedMinor: '0',
+      withdrawalReservedMinor: '0',
+      collectorProceedsMinor: '0',
+      collectorProceedsReservedMinor: '0',
       accounts: [
         {
           code: 'CASH_AVAILABLE',

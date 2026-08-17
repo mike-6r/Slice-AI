@@ -672,6 +672,7 @@ const mapMovement = (raw: unknown): WalletMovementView => {
       "SETTLED",
       "FAILED",
       "CANCELLED",
+      "RETURNED",
       "MANUAL_REVIEW",
       "HELD",
       "REVERSED",
@@ -3298,13 +3299,21 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async proposeInitialOffering(assetId, offeredUnits) {
         return client.request<InitialOfferingProjection>(
           `/collector/assets/${encodeURIComponent(assetId)}/offering`,
-          { method: "POST", body: { offeredUnits }, headers: { "Idempotency-Key": idempotencyKey() } },
+          {
+            method: "POST",
+            body: { offeredUnits },
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
         );
       },
       async updateInitialOffering(offeringId, offeredUnits) {
         return client.request<InitialOfferingProjection>(
           `/collector/initial-offerings/${encodeURIComponent(offeringId)}`,
-          { method: "PATCH", body: { offeredUnits }, headers: { "Idempotency-Key": idempotencyKey() } },
+          {
+            method: "PATCH",
+            body: { offeredUnits },
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
         );
       },
       async getRequests() {

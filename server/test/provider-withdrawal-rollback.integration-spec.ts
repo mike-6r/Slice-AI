@@ -96,9 +96,9 @@ describe('Document 016 withdrawal rollback and recovery', () => {
     await expect(movements.completeFromProvider({ movementId: pending.id, providerReference: `${run}-after-ref`, providerEventId: `${run}-after-event`, requestId: `${run}-after-fail` })).rejects.toThrow('INJECTED_AFTER_JOURNAL');
     setProviderTestFailureHook(undefined);
     expect((await db.moneyMovement.findUniqueOrThrow({ where: { id: pending.id } })).status).toBe('PENDING_PROVIDER');
-    expect((await db.cashReservation.findUniqueOrThrow({ where: { id: (await db.moneyMovement.findUniqueOrThrow({ where: { id: pending.id } })).reservationId! } })).status).toBe('CONSUMED');
-    expect(await completionJournalCount(pending.id)).toBe(1);
-    await assertWallet('1000', '0', '1000');
+    expect((await db.cashReservation.findUniqueOrThrow({ where: { id: (await db.moneyMovement.findUniqueOrThrow({ where: { id: pending.id } })).reservationId! } })).status).toBe('ACTIVE');
+    expect(await completionJournalCount(pending.id)).toBe(0);
+    await assertWallet('5000', '4000', '1000');
     await complete(pending.id, 'after');
     await assertSettled(pending.id, '4000', '1000');
     await complete(pending.id, 'after-replay');

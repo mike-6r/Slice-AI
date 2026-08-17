@@ -57,6 +57,44 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
     availableMinor: sumMinor(
       accounts.map((account) => minor(account.availableMinor, "wallet.availableMinor")),
     ),
+    ...(body.pendingMinor !== undefined
+      ? { pendingMinor: minor(body.pendingMinor, "wallet.pendingMinor") }
+      : {}),
+    ...(body.pendingWithdrawalMinor !== undefined
+      ? {
+          pendingWithdrawalMinor: minor(
+            body.pendingWithdrawalMinor,
+            "wallet.pendingWithdrawalMinor",
+          ),
+        }
+      : {}),
+    ...(body.orderReservedMinor !== undefined
+      ? { orderReservedMinor: minor(body.orderReservedMinor, "wallet.orderReservedMinor") }
+      : {}),
+    ...(body.withdrawalReservedMinor !== undefined
+      ? {
+          withdrawalReservedMinor: minor(
+            body.withdrawalReservedMinor,
+            "wallet.withdrawalReservedMinor",
+          ),
+        }
+      : {}),
+    ...(body.collectorProceedsMinor !== undefined
+      ? {
+          collectorProceedsMinor: minor(
+            body.collectorProceedsMinor,
+            "wallet.collectorProceedsMinor",
+          ),
+        }
+      : {}),
+    ...(body.collectorProceedsReservedMinor !== undefined
+      ? {
+          collectorProceedsReservedMinor: minor(
+            body.collectorProceedsReservedMinor,
+            "wallet.collectorProceedsReservedMinor",
+          ),
+        }
+      : {}),
   };
 };
 

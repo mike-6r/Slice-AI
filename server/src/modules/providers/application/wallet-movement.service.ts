@@ -18,9 +18,11 @@ import { ProviderCryptoService } from './provider-crypto.service';
 import { LocalTransactionScreeningAdapter } from './local-provider.adapters';
 import { BlockchainAnalysisAdapter } from './blockchain-analysis.adapter';
 import type { TransactionScreeningProvider } from '../domain/provider.types';
+import { moneyMovementProviderCode } from '../domain/money-movement-provider';
 import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { movementSettledEvent } from '../../outbox/domain/domain-event';
+import { accountAuthority } from '../../finance/domain/journal';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
 
@@ -160,15 +162,34 @@ export class WalletMovementService {
     if (existing) return this.safe(existing, true);
 
     const movement = await this.db.$transaction(async (db) => {
-      const cash = await db.financialAccount.findFirst({
+      const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
           ownerUserId: actor.userId,
-          code: 'CASH_AVAILABLE',
+          code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
           currency: 'GBP',
           status: 'ACTIVE',
         },
+        include: { balance: true },
       });
+      const hasSufficientAvailable = (account: (typeof cashAccounts)[number]) => {
+        const balance = account.balance;
+        if (!balance) return false;
+        const authority = balance.postedCreditMinor - balance.postedDebitMinor;
+        return authority - balance.reservedMinor >= amountMinor;
+      };
+      const cash = type === 'WITHDRAWAL'
+        ? cashAccounts.find(
+            (account) =>
+              account.code === 'COLLECTOR_PROCEEDS_AVAILABLE' &&
+              hasSufficientAvailable(account),
+          ) ??
+          cashAccounts.find(
+            (account) =>
+              account.code === 'CASH_AVAILABLE' &&
+              hasSufficientAvailable(account),
+          ) ?? cashAccounts.find((account) => account.code === 'CASH_AVAILABLE')
+        : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
       if (!cash)
         throw new NotFoundException({
           code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
@@ -183,7 +204,7 @@ export class WalletMovementService {
           amountMinor,
           currency: 'GBP',
           status: 'PENDING_PROVIDER',
-          provider: 'BRIDGE',
+          provider: moneyMovementProviderCode(this.config.providerMode),
           idempotencyKeyHash: hash,
         },
       });
@@ -294,7 +315,7 @@ export class WalletMovementService {
       const referenceOwner = await db.moneyMovement.findUnique({
         where: {
           provider_providerReferenceHash: {
-            provider: 'BRIDGE',
+            provider: movement.provider,
             providerReferenceHash: referenceHash,
           },
         },
@@ -308,7 +329,8 @@ export class WalletMovementService {
       await providerTestFailurePoint('movement.complete.before-journal');
       const clearing = await this.clearingAccount();
       const actor = this.providerActor(movement.userId, movement.id);
-      const journal = await this.ledger.post(
+      const journal = await this.ledger.postInTransaction(
+        db,
         actor,
         {
           type:
@@ -348,11 +370,11 @@ export class WalletMovementService {
         `provider-movement:${movement.id}:journal`,
       );
       if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
-        await this.ledger.consumeCash(
+        await this.ledger.consumeCashInTransaction(
+          db,
           actor,
           movement.reservationId,
           input.requestId,
-          `provider-movement:${movement.id}:consume`,
         );
       }
       await providerTestFailurePoint('movement.complete.after-journal');
@@ -424,28 +446,32 @@ export class WalletMovementService {
     reasonCode: string;
     requestId: string;
   }) {
-    const movement = await this.lockMovement(input.movementId);
-    if (['FAILED', 'CANCELLED'].includes(movement.status))
-      return this.safe(movement, true);
-    if (movement.status === 'SETTLED')
-      throw new ConflictException({
-        code: 'MOVEMENT_TERMINAL',
-        message: 'A settled movement cannot fail.',
+    return this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
+      const movement = await db.moneyMovement.findUniqueOrThrow({ where: { id: input.movementId } });
+      if (['FAILED', 'CANCELLED'].includes(movement.status)) return this.safe(movement, true);
+      if (movement.status === 'SETTLED')
+        throw new ConflictException({ code: 'MOVEMENT_TERMINAL', message: 'A settled movement cannot fail.' });
+      if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
+        await this.ledger.releaseCashInTransaction(
+          db,
+          this.providerActor(movement.userId, movement.id),
+          movement.reservationId,
+          input.requestId,
+        );
+      }
+      const updated = await db.moneyMovement.update({
+        where: { id: movement.id },
+        data: { status: 'FAILED', failureCode: input.reasonCode, version: { increment: 1 } },
       });
-    if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
-      await this.ledger.releaseCash(
-        this.providerActor(movement.userId, movement.id),
-        movement.reservationId,
-        input.requestId,
-        `provider-movement:${movement.id}:release`,
-      );
-    }
-    return this.updateStatus(
-      movement.id,
-      'FAILED',
-      input.reasonCode,
-      input.requestId,
-    );
+      await db.moneyMovementHistory.create({
+        data: { id: randomUUID(), movementId: updated.id, fromStatus: movement.status, toStatus: 'FAILED', reasonCode: input.reasonCode },
+      });
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'FAILED', reasonCode: input.reasonCode }, createdAt: new Date(),
+      });
+      return this.safe(updated, false);
+    });
   }
 
   async cancelFromProvider(input: {
@@ -466,11 +492,11 @@ export class WalletMovementService {
         });
       await providerTestFailurePoint('movement.cancel.before-release');
       if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
-        await this.ledger.releaseCash(
+        await this.ledger.releaseCashInTransaction(
+          db,
           this.providerActor(movement.userId, movement.id),
           movement.reservationId,
           input.requestId,
-          `provider-movement:${movement.id}:cancel`,
         );
       }
       const current = await db.moneyMovement.findUniqueOrThrow({
@@ -555,6 +581,110 @@ export class WalletMovementService {
         code: 'MOVEMENT_REVERSAL_UNAVAILABLE',
         message: 'Only settled movements can be reversed.',
       });
+    return this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
+      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
+      if (current.status === 'REVERSED') return this.safe(current, true);
+      await this.ledger.reverseInTransaction(
+        db,
+        this.providerActor(movement.userId, movement.id),
+        movement.ledgerTransactionId!,
+        input.reasonCode,
+        input.requestId,
+        `provider-movement:${movement.id}:reversal`,
+      );
+      const updated = await db.moneyMovement.update({
+        where: { id: movement.id },
+        data: {
+          status: 'REVERSED',
+          failureCode: input.reasonCode,
+          version: { increment: 1 },
+        },
+      });
+      await db.moneyMovementHistory.create({
+        data: {
+          id: randomUUID(),
+          movementId: updated.id,
+          fromStatus: current.status,
+          toStatus: 'REVERSED',
+          reasonCode: input.reasonCode,
+        },
+      });
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'WALLET_MOVEMENT_UPDATED',
+        resourceType: 'money-movement',
+        resourceId: updated.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: { status: 'REVERSED', reasonCode: input.reasonCode },
+        createdAt: new Date(),
+      });
+      return this.safe(updated, false);
+    });
+
+  }
+
+  /**
+   * A provider return is an append-only reversal with its own movement state.
+   * The original settlement journal remains intact; any shortfall is surfaced
+   * as a hold instead of being silently covered or fabricated.
+   */
+  async returnFromProvider(input: {
+    movementId: string;
+    reasonCode: string;
+    requestId: string;
+  }) {
+    const movement = await this.lockMovement(input.movementId);
+    if (movement.status === 'RETURNED') return this.safe(movement, true);
+    if (movement.status !== 'SETTLED' || !movement.ledgerTransactionId)
+      throw new ConflictException({
+        code: 'MOVEMENT_RETURN_UNAVAILABLE',
+        message: 'Only settled movements can be returned.',
+      });
+    return this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
+      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
+      if (current.status === 'RETURNED') return this.safe(current, true);
+      await this.ledger.reverseInTransaction(
+        db,
+        this.providerActor(movement.userId, movement.id),
+        movement.ledgerTransactionId!,
+        input.reasonCode,
+        input.requestId,
+        `provider-movement:${movement.id}:return`,
+      );
+      const updated = await db.moneyMovement.update({
+        where: { id: movement.id },
+        data: { status: 'RETURNED', failureCode: input.reasonCode, version: { increment: 1 } },
+      });
+      await db.moneyMovementHistory.create({
+        data: { id: randomUUID(), movementId: updated.id, fromStatus: current.status, toStatus: 'RETURNED', reasonCode: input.reasonCode },
+      });
+      const account = await db.financialAccount.findUnique({ where: { id: updated.cashAccountId }, include: { balance: true } });
+      if (account?.balance) {
+        const authority = accountAuthority(account.normalSide, account.balance.postedDebitMinor, account.balance.postedCreditMinor);
+        const available = authority - account.balance.reservedMinor;
+        if (available < 0n) {
+          await db.complianceHold.create({
+            data: { id: randomUUID(), userId: updated.userId, movementId: updated.id, scope: 'ACCOUNT', reasonCode: 'RETURNED_FUNDS_DEFICIT', source: 'PROVIDER_RETURN' },
+          });
+          await createIdentityTransaction(db).audit.append({
+            id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_RETURN_DEFICIT_DETECTED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { availableMinor: available.toString(), reasonCode: input.reasonCode }, createdAt: new Date(),
+          });
+        }
+      }
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'RETURNED', reasonCode: input.reasonCode }, createdAt: new Date(),
+      });
+      return this.safe(updated, false);
+    });
+  }
+
+    /*
     await this.ledger.reverse(
       this.providerActor(movement.userId, movement.id),
       movement.ledgerTransactionId,
@@ -602,6 +732,109 @@ export class WalletMovementService {
     });
   }
 
+  /*
+  /**
+   * A provider return is an append-only reversal with its own movement state.
+   * The original settlement journal remains intact; any shortfall is surfaced
+   * as a hold instead of being silently covered or fabricated.
+    *
+  async returnFromProvider(input: {
+    movementId: string;
+    reasonCode: string;
+    requestId: string;
+  }) {
+    const movement = await this.lockMovement(input.movementId);
+    if (movement.status === 'RETURNED') return this.safe(movement, true);
+    if (movement.status !== 'SETTLED' || !movement.ledgerTransactionId)
+      throw new ConflictException({
+        code: 'MOVEMENT_RETURN_UNAVAILABLE',
+        message: 'Only settled movements can be returned.',
+      });
+    await this.ledger.reverse(
+      this.providerActor(movement.userId, movement.id),
+      movement.ledgerTransactionId,
+      input.reasonCode,
+      input.requestId,
+      `provider-movement:${movement.id}:return`,
+    );
+    return this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
+      const current = await db.moneyMovement.findUniqueOrThrow({
+        where: { id: movement.id },
+      });
+      if (current.status === 'RETURNED') return this.safe(current, true);
+      const updated = await db.moneyMovement.update({
+        where: { id: movement.id },
+        data: {
+          status: 'RETURNED',
+          failureCode: input.reasonCode,
+          version: { increment: 1 },
+        },
+      });
+      await db.moneyMovementHistory.create({
+        data: {
+          id: randomUUID(),
+          movementId: updated.id,
+          fromStatus: current.status,
+          toStatus: 'RETURNED',
+          reasonCode: input.reasonCode,
+        },
+      });
+      const account = await db.financialAccount.findUnique({
+        where: { id: updated.cashAccountId },
+        include: { balance: true },
+      });
+      if (account?.balance) {
+        const authority = accountAuthority(
+          account.normalSide,
+          account.balance.postedDebitMinor,
+          account.balance.postedCreditMinor,
+        );
+        const available = authority - account.balance.reservedMinor;
+        if (available < 0n) {
+          await db.complianceHold.create({
+            data: {
+              id: randomUUID(),
+              userId: updated.userId,
+              movementId: updated.id,
+              scope: 'ACCOUNT',
+              reasonCode: 'RETURNED_FUNDS_DEFICIT',
+              source: 'PROVIDER_RETURN',
+            },
+          });
+          await createIdentityTransaction(db).audit.append({
+            id: randomUUID(),
+            actorUserId: null,
+            actorType: 'SYSTEM',
+            action: 'WALLET_RETURN_DEFICIT_DETECTED',
+            resourceType: 'money-movement',
+            resourceId: updated.id,
+            requestId: input.requestId,
+            sessionId: null,
+            result: 'SUCCESS',
+            metadata: { availableMinor: available.toString(), reasonCode: input.reasonCode },
+            createdAt: new Date(),
+          });
+        }
+      }
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'WALLET_MOVEMENT_UPDATED',
+        resourceType: 'money-movement',
+        resourceId: updated.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: { status: 'RETURNED', reasonCode: input.reasonCode },
+        createdAt: new Date(),
+      });
+      return this.safe(updated, false);
+    });
+  }
+
+  */
   async list(userId: string, cursor?: string, limit = 20) {
     const rows = await this.db.moneyMovement.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },

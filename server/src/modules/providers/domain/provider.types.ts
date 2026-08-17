@@ -2,7 +2,7 @@
 export type ProviderName = 'BRIDGE' | 'LOCAL_TEST';
 export type NormalizedComplianceStatus = 'NOT_STARTED' | 'PENDING' | 'REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'MANUAL_REVIEW' | 'SUSPENDED';
 export type RiskDecision = 'ALLOW' | 'MANUAL_REVIEW' | 'BLOCK';
-export type NormalizedMovementStatus = 'CREATED' | 'PENDING_PROVIDER' | 'PROCESSING' | 'SETTLED' | 'FAILED' | 'CANCELLED' | 'REVERSED' | 'MANUAL_REVIEW' | 'HELD';
+export type NormalizedMovementStatus = 'CREATED' | 'PENDING_PROVIDER' | 'PROCESSING' | 'SETTLED' | 'FAILED' | 'CANCELLED' | 'RETURNED' | 'REVERSED' | 'MANUAL_REVIEW' | 'HELD';
 
 /** SDK DTOs remain inside adapters; this is the sole provider-neutral contract. */
 export interface IdentityVerificationProvider {

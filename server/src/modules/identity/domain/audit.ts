@@ -116,6 +116,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   FINANCE_JOURNAL_POSTED: ['transactionId', 'type'],
   FINANCE_CASH_RESERVED: ['reservationId', 'amountMinor'],
   FINANCE_CASH_RELEASED: ['reservationId', 'amountMinor'],
+  FINANCE_CASH_CONSUMED: ['reservationId', 'amountMinor'],
   FINANCE_LOT_ACQUIRED: ['lotId', 'assetId', 'units'],
   FINANCE_LOT_DISPOSED: ['assetId', 'units', 'costBasisMinor'],
   FINANCE_JOURNAL_REVERSED: ['transactionId', 'reversalId', 'reasonCode'],

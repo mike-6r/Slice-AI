@@ -41,6 +41,7 @@ export type WalletMovementStatus =
   | "SETTLED"
   | "FAILED"
   | "CANCELLED"
+  | "RETURNED"
   | "MANUAL_REVIEW"
   | "HELD"
   | "REVERSED";

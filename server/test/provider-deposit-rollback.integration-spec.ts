@@ -84,7 +84,7 @@ describe('Document 016 deposit completion rollback and recovery', () => {
     await expect(movements.completeFromProvider({ movementId: pending.id, providerReference: `${run}-after-ref`, providerEventId: `${run}-after-event`, requestId: `${run}-after-failed` })).rejects.toThrow('INJECTED_AFTER_JOURNAL');
     setProviderTestFailureHook(undefined);
     expect((await db.moneyMovement.findUniqueOrThrow({ where: { id: pending.id } })).status).toBe('PENDING_PROVIDER');
-    expect(await db.journalTransaction.count({ where: { correlationId: `provider-movement:${pending.id}` } })).toBe(1);
+    expect(await db.journalTransaction.count({ where: { correlationId: `provider-movement:${pending.id}` } })).toBe(0);
     expect(await db.moneyMovementHistory.count({ where: { movementId: pending.id, toStatus: 'SETTLED' } })).toBe(0);
 
     await movements.completeFromProvider({ movementId: pending.id, providerReference: `${run}-after-ref`, providerEventId: `${run}-after-event`, requestId: `${run}-after-retry` });

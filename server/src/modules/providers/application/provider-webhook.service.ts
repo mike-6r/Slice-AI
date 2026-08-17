@@ -127,6 +127,8 @@ export class ProviderWebhookService {
         await this.movements.failFromProvider({ movementId, reasonCode: this.text(payload.reasonCode) ?? 'PROVIDER_FAILED', requestId });
       } else if (type === 'movement.review') {
         await this.movements.holdFromProvider({ movementId, reasonCode: this.text(payload.reasonCode) ?? 'PROVIDER_REVIEW', requestId });
+      } else if (type === 'movement.returned') {
+        await this.movements.returnFromProvider({ movementId, reasonCode: this.text(payload.reasonCode) ?? 'PROVIDER_RETURNED', requestId });
       } else if (type === 'movement.reversed') {
         await this.movements.reverseFromProvider({ movementId, reasonCode: this.text(payload.reasonCode) ?? 'PROVIDER_REVERSAL', requestId });
       } else if (type === 'movement.cancelled') {
@@ -154,7 +156,7 @@ export class ProviderWebhookService {
     } else if (state === 'canceled') {
       await this.movements.cancelFromProvider({ movementId, reasonCode: 'BRIDGE_CANCELLED', requestId });
     } else if (state === 'returned' || state === 'refunded') {
-      await this.movements.reverseFromProvider({ movementId, reasonCode: `BRIDGE_${state.toUpperCase()}`, requestId });
+      await this.movements.returnFromProvider({ movementId, reasonCode: `BRIDGE_${state.toUpperCase()}`, requestId });
     } else if (state === 'undeliverable' || state === 'error') {
       await this.movements.failFromProvider({ movementId, reasonCode: `BRIDGE_${state.toUpperCase()}`, requestId });
     }

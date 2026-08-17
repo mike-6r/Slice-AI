@@ -364,6 +364,7 @@ enum MoneyMovementStatus {
   SETTLED
   FAILED
   CANCELLED
+  RETURNED
   REVERSED
   MANUAL_REVIEW
   HELD

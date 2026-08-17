@@ -9,6 +9,12 @@ export interface PortfolioCashSummary {
   totalMinor: GbpMinorUnits;
   reservedMinor: GbpMinorUnits;
   availableMinor: GbpMinorUnits;
+  pendingMinor?: GbpMinorUnits;
+  pendingWithdrawalMinor?: GbpMinorUnits;
+  orderReservedMinor?: GbpMinorUnits;
+  withdrawalReservedMinor?: GbpMinorUnits;
+  collectorProceedsMinor?: GbpMinorUnits;
+  collectorProceedsReservedMinor?: GbpMinorUnits;
 }
 
 export interface PortfolioHolding {
