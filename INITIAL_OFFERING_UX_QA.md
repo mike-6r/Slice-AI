@@ -72,10 +72,15 @@ The first controlled attempt found and fixed a lifecycle defect: issuance change
 | Ownership allocation before purchase | PASS | Read-only reconciliation after open: 1,000 issued = 400 collector USER position + 600 INITIAL_OFFERING position + 0 TREASURY. Inventory is 600 offered, 600 reserved by the open offering order, 0 settled |
 | Public initial-offering label and retained percentage | PASS | Public asset shows Initial offering, £10.00 starting price, 60% available ownership and 40% collector retained; no Treasury or collector identity/proceeds leakage observed |
 | Treasury separation | PASS | Treasury position is 0 for this offering and the open order channel/principal are both `INITIAL_OFFERING`; no Treasury proceeds were created |
+| Investor login and purchase | PASS | Normal UI authentication as `demo-investor@slicecollectable.com`; reviewed and placed the controlled 10% / 100-unit buy order at £10 per unit; the authoritative result was fully filled |
+| Investor portfolio settlement | PASS | Investor Portfolio showed 100 settled ownership units (10%), £1,000 current value, £249,000 available cash and £0 unrealised P/L after the fill |
+| Initial-offering settlement and reconciliation | PASS | Read-only reconciliation: offering `PARTIALLY_FILLED`; 600 offered = 100 settled + 500 reserved; positions are 400 Collector USER + 100 Investor USER + 500 INITIAL_OFFERING + 0 TREASURY; one settled `INITIAL_OFFERING` execution and one `INITIAL_OFFERING_SETTLEMENT` journal were recorded; Collector proceeds account credited £1,000 under the approved zero-fee policy |
 | Console/network/provider leakage | Partial | Browser console showed only React DevTools information; no PriceCharting, Ximilar, Plaid, Bridge or live-money provider calls were made. Expired sessions produced expected `RECENT_AUTH_REQUIRED` responses until normal re-authentication |
 
-### Current blocker
+### Phase 2 result and Phase 4 gate
 
-Collector and Admin work is complete through opening the controlled offering. The controlled Investor password is not available in the repository or supported staging configuration and was not guessed. Phase 2 acceptance remains **BLOCKED**, not complete. Required human input: `INVESTOR CREDENTIAL REQUIRED`. Resume with a verified Investor credential for the normal £1,000 / 100-unit purchase, then complete execution, proceeds, journal and responsive Investor QA. No investor, execution, settlement or financial records were fabricated.
+Phase 2 controlled initial-offering QA is **COMPLETE** through the normal Investor purchase and read-only reconciliation. The Investor purchase created exactly one 100-unit fill; no new bank transfer was created for the trade. No Umbreon or Charizard lifecycle records were created by this QA.
+
+Phase 4 remains **BLOCKED** at its prerequisite gate. Staging is configured with `PROVIDER_MODE=local`, `OPERATIONAL_DEPOSITS_ENABLED=false`, and `OPERATIONAL_WITHDRAWALS_ENABLED=false`; no external Bridge/Plaid sandbox money-movement configuration is enabled for browser E2E. The Phase 4 sandbox deposit, bank-link, withdrawal and provider-webhook workflow must not be started until the required external sandbox configuration and Phase 3 provider-backed guarantees are available.
 
 No Umbreon or Charizard lifecycle records are created by the Phase 2 implementation or automated unit tests.
