@@ -85,3 +85,46 @@ The controlled purchase and financial/ownership reconciliation are **PASS**, but
 Phase 4 remains **BLOCKED** at its prerequisite gate. Staging is configured with `PROVIDER_MODE=local`, `OPERATIONAL_DEPOSITS_ENABLED=false`, and `OPERATIONAL_WITHDRAWALS_ENABLED=false`; no external Bridge/Plaid sandbox money-movement configuration is enabled for browser E2E. The Phase 4 sandbox deposit, bank-link, withdrawal and provider-webhook workflow must not be started until the required external sandbox configuration and Phase 3 provider-backed guarantees are available.
 
 No Umbreon or Charizard lifecycle records are created by the Phase 2 implementation or automated unit tests.
+
+## Investor role-boundary closure
+
+Run dated 17 Aug 2026. The unexpected global Collector assignment was revoked through the supported Admin role-management endpoint only:
+
+```text
+DELETE /api/v1/admin/users/1b93edf1-ee8c-4fb4-9922-95f2fda2f1c9/roles/cmsuyga0v0001pbk5cdvuynzv
+HTTP 204 No Content
+```
+
+Only assignment `cmsuyga0v0001pbk5cdvuynzv` was targeted. The `USER` assignment was not changed. The revoked assignment remains in `RoleAssignment` history with `revokedAt=2026-08-17T16:07:30.646`; it was not deleted. The required audit record is present:
+
+```text
+AuditEvent 5a6e1f10-aef9-45a0-8d34-fa3548f32f0d
+ROLE_REVOKED / user / SUCCESS
+metadata.assignmentId=cmsuyga0v0001pbk5cdvuynzv
+```
+
+### Read-only post-revoke checks
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Fresh Investor session | PASS | `demo-investor@slicecollectable.com` authenticated normally; `GET /me` returned `roles=USER` |
+| Investor portfolio | PASS | Controlled offering position remains 100 units / 10%; the filled 10% purchase remains visible |
+| Collector Workspace | PASS | `GET /api/v1/collector-workspace/overview` returned 403 |
+| Admin access | PASS | `GET /api/v1/admin/overview` returned 403 |
+| Finance access | PASS | `GET /api/v1/admin/finance/dashboard` returned 403 |
+| Audit-management access | PASS | `GET /api/v1/admin/audit-events?limit=1` returned 403 |
+| Treasury/issuance admin access | PASS | `GET /api/v1/admin/assets/43212b2a-225c-4253-a1bd-47facaf6fd73/ownership/issuance` returned 403 |
+| Staff/reviewer access | PASS | `GET /api/v1/reviews/submissions?limit=1` returned 403 |
+| Existing execution | PASS | `1dbe0fe8-0fba-4985-8c22-f26a2b183616` remains SETTLED, INITIAL_OFFERING, 100 units at £10/unit |
+| Ownership reconciliation | PASS | Collector 400 retained, Investor 100 settled, Initial Offering 500 settled/reserved, Treasury 0 |
+| Offering state | PASS | Offering remains PARTIALLY_FILLED with 600 offered, 400 retained, 500 remaining reserved |
+| Financial state | PASS | Initial-offering settlement journal remains POSTED; £1,000 collector proceeds and investor cash settlement are unchanged |
+| Provider calls | PASS | No provider call was made by the role revoke or verification; the existing Phase 2 record remains zero provider calls |
+
+Mutation count for this closure was exactly one intentional role revocation. No portfolio, ownership, execution, balance, offering, journal, Umbreon, Charizard, or provider state was changed.
+
+## Phase 2 result and Phase 3 gate after role closure
+
+**PHASE 2: COMPLETE.** The Investor-only role boundary, controlled purchase, UI portfolio result, access denials, audit trail, and financial/ownership reconciliation are all closed successfully.
+
+**PHASE 3 UNBLOCKED: NO.** Phase 3 was not started in this task. The existing Phase 4 provider gate remains blocked because staging is still configured with `PROVIDER_MODE=local`, `OPERATIONAL_DEPOSITS_ENABLED=false`, and `OPERATIONAL_WITHDRAWALS_ENABLED=false`.
