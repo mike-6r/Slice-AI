@@ -245,6 +245,33 @@ export class SubmissionController {
       );
     });
   }
+
+  /**
+   * Complete the staff-controlled handoff from an approved submission to the
+   * canonical Asset that will carry its custody, valuation and market state.
+   * The service owns all locking, approval and duplicate-link invariants.
+   */
+  @Post('admin/submissions/:id/asset-link')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  linkApprovedAsset(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () => {
+      const input = parse(marketResearchPromotion, body);
+      return this.submissions.linkApprovedAsset(
+        req.actor!,
+        submissionId,
+        input.assetId,
+        req.requestId ?? 'unknown',
+        key!,
+      );
+    });
+  }
+
   @Get('submissions')
   @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
