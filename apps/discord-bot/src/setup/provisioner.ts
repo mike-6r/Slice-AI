@@ -6,6 +6,8 @@ import { CATEGORY_DEFINITIONS, CHANNEL_DEFINITIONS, PANEL_CHANNELS, ROLE_DEFINIT
 import type { ManagedResource, ManagedResourceType, SetupRepository } from '../persistence/setup-repository.js';
 
 export type ReconciliationPlan = { missingRoles: number; missingCategories: number; missingChannels: number; renamed: number; moved: number; permissionDrift: number; staleReferences: number; missingPanels: number; ambiguous: string[]; updateAvailable: boolean; artworkMissing: number };
+export type ResetPlan = { managedRoles: number; managedCategories: number; managedChannels: number; panels: number; ticketChannels: number; setupMetadata: boolean };
+export type ResetResult = { deletedRoles: number; deletedCategories: number; deletedChannels: number; deletedPanels: number; deletedTicketChannels: number };
 export class AmbiguousManagedResourceError extends Error { constructor(readonly keys: string[]) { super(`Ambiguous Slice-managed resources: ${keys.join(', ')}`); } }
 export class SetupProvisioner {
   constructor(private readonly repository: SetupRepository, private readonly artworkDir: string) {}
@@ -30,6 +32,16 @@ export class SetupProvisioner {
     return { created, updated, plan };
   }
   async status(guild: Guild): Promise<{ plan: ReconciliationPlan; version: number; configured: boolean }> { const config = await this.repository.getGuildConfig(guild.id); return { plan: await this.inspect(guild), version: config?.setupVersion ?? 0, configured: Boolean(config) }; }
+  async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); return { managedRoles: resources.filter((resource) => resource.resourceType === 'ROLE').length, managedCategories: resources.filter((resource) => resource.resourceType === 'CATEGORY').length, managedChannels: resources.filter((resource) => resource.resourceType === 'CHANNEL').length, panels: panels.length, ticketChannels: this.ticketChannels(guild, resources).size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length) }; }
+  async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const ticketIds = this.ticketChannels(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0;
+    for (const panel of panels) { const channel = await this.channel(guild, panel.channelId); if (channel?.isTextBased() && 'messages' in channel) { const message = await channel.messages.fetch(panel.messageId).catch(() => null); if (message) { await message.delete(); deletedPanels++; } } }
+    for (const id of ticketIds) if (await this.deleteChannel(guild, id)) deletedTicketChannels++;
+    for (const resource of resources.filter((item) => item.resourceType === 'CHANNEL' && !ticketIds.has(item.discordId))) if (await this.deleteChannel(guild, resource.discordId)) deletedChannels++;
+    for (const resource of resources.filter((item) => item.resourceType === 'CATEGORY')) if (await this.deleteChannel(guild, resource.discordId)) deletedCategories++;
+    for (const resource of resources.filter((item) => item.resourceType === 'ROLE')) { const role = await this.role(guild, resource.discordId); if (role && role.id !== guild.id) { await role.delete('Slice setup reset'); deletedRoles++; } }
+    await this.repository.resetGuildData(guild.id);
+    return { deletedRoles, deletedCategories, deletedChannels, deletedPanels, deletedTicketChannels };
+  }
   async startupAudit(guild: Guild): Promise<ReconciliationPlan> { return this.inspect(guild); }
   async generateArtwork(): Promise<void> { for (const [name, title] of [['welcome', 'Welcome to Slice'], ['verification', 'Your Slice account'], ['roles', 'Choose notifications'], ['my-slice', 'My Slice'], ['collector-workspace', 'Collector Workspace'], ['marketplace', 'Marketplace'], ['support', 'Support'], ['roadmap', 'Roadmap'], ['operations', 'Staff / Operations']] as const) await renderArtwork(this.artworkDir, name, title); }
   private inspectRole(guild: Guild, record: ManagedResource | null, name: string, plan: ReconciliationPlan): void { const current = record ? guild.roles.cache.get(record.discordId) : undefined; if (current) { if (current.name !== name) plan.renamed++; return; } if (record) plan.staleReferences++; const candidates = guild.roles.cache.filter((role) => role.name === name); if (candidates.size > 1) plan.ambiguous.push(`role:${name}`); else plan.missingRoles++; }
@@ -42,6 +54,8 @@ export class SetupProvisioner {
   private async upsertResource(guildId: string, type: ManagedResourceType, logicalKey: string, discordId: string, expectedName: string, parentLogicalKey: string | null): Promise<void> { await this.repository.upsertResource({ guildId, resourceType: type, logicalKey, discordId, expectedName, parentLogicalKey, setupVersion: SLICE_DISCORD_SETUP_VERSION, metadata: null }); }
   private async role(guild: Guild, id: string): Promise<Role | undefined> { return (await guild.roles.fetch(id).catch(() => undefined)) ?? undefined; }
   private async channel(guild: Guild, id: string): Promise<GuildBasedChannel | undefined> { return (await guild.channels.fetch(id).catch(() => undefined)) ?? undefined; }
+  private ticketChannels(guild: Guild, resources: ManagedResource[]): Set<string> { const support = resources.find((resource) => resource.resourceType === 'CATEGORY' && resource.logicalKey === 'support'); if (!support) return new Set(); return new Set(guild.channels.cache.filter((channel) => channel.parentId === support.discordId && channel.name.startsWith('ticket-')).keys()); }
+  private async deleteChannel(guild: Guild, id: string): Promise<boolean> { const channel = await this.channel(guild, id); if (!channel) return false; await channel.delete('Slice setup reset'); return true; }
   private staffRoleIds(guildId: string): Promise<string[]> { return Promise.all(['owner', 'administrator', 'operations', 'compliance', 'support', 'moderator', 'developer'].map((key) => this.repository.getResource(guildId, 'ROLE', key))).then((rows) => rows.flatMap((row) => row ? [row.discordId] : [])); }
   private async applyStaffPermissions(channel: GuildBasedChannel, guild: Guild, staff: boolean): Promise<void> {
     if (!staff || !('permissionOverwrites' in channel)) return;

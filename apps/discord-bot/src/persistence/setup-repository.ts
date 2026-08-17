@@ -11,6 +11,7 @@ export interface SetupRepository {
   getGuildConfig(guildId: string): Promise<GuildConfig | null>;
   upsertGuildConfig(config: Omit<GuildConfig, 'updatedAt'>): Promise<GuildConfig>;
   listGuildConfigs(): Promise<GuildConfig[]>;
+  resetGuildData(guildId: string): Promise<void>;
   getResource(guildId: string, resourceType: ManagedResourceType, logicalKey: string): Promise<ManagedResource | null>;
   listResources(guildId: string): Promise<ManagedResource[]>;
   upsertResource(resource: ManagedResource): Promise<ManagedResource>;
@@ -33,6 +34,7 @@ export class PrismaSetupRepository implements SetupRepository {
   async getGuildConfig(guildId: string): Promise<GuildConfig | null> { const row = await this.prisma.discordGuildConfig.findUnique({ where: { guildId } }); return row ? { guildId: row.guildId, setupVersion: row.setupVersion, setupStatus: status(row.setupStatus), updatedAt: row.updatedAt } : null; }
   async upsertGuildConfig(config: Omit<GuildConfig, 'updatedAt'>): Promise<GuildConfig> { const row = await this.prisma.discordGuildConfig.upsert({ where: { guildId: config.guildId }, create: { guildId: config.guildId, setupVersion: config.setupVersion, setupStatus: config.setupStatus }, update: { setupVersion: config.setupVersion, setupStatus: config.setupStatus } }); return { guildId: row.guildId, setupVersion: row.setupVersion, setupStatus: status(row.setupStatus), updatedAt: row.updatedAt }; }
   async listGuildConfigs(): Promise<GuildConfig[]> { const rows = await this.prisma.discordGuildConfig.findMany(); return rows.map((row) => ({ guildId: row.guildId, setupVersion: row.setupVersion, setupStatus: status(row.setupStatus), updatedAt: row.updatedAt })); }
+  async resetGuildData(guildId: string): Promise<void> { await this.prisma.discordGuildConfig.deleteMany({ where: { guildId } }); }
   async getResource(guildId: string, type: ManagedResourceType, logicalKey: string): Promise<ManagedResource | null> { const row = await this.prisma.discordManagedResource.findUnique({ where: { guildId_resourceType_logicalKey: { guildId, resourceType: type, logicalKey } } }); return row ? mapResource(row) : null; }
   async listResources(guildId: string): Promise<ManagedResource[]> { return (await this.prisma.discordManagedResource.findMany({ where: { guildId } })).map(mapResource); }
   async upsertResource(resource: ManagedResource): Promise<ManagedResource> { const metadata = resource.metadata === null ? Prisma.JsonNull : resource.metadata as Prisma.InputJsonValue; const row = await this.prisma.discordManagedResource.upsert({ where: { guildId_resourceType_logicalKey: { guildId: resource.guildId, resourceType: resource.resourceType, logicalKey: resource.logicalKey } }, create: { ...resource, metadata }, update: { discordId: resource.discordId, expectedName: resource.expectedName, parentLogicalKey: resource.parentLogicalKey, setupVersion: resource.setupVersion, metadata } }); return mapResource(row); }
@@ -55,6 +57,7 @@ export class InMemorySetupRepository implements SetupRepository {
   async getGuildConfig(guildId: string): Promise<GuildConfig | null> { return this.configs.get(guildId) ?? null; }
   async upsertGuildConfig(config: Omit<GuildConfig, 'updatedAt'>): Promise<GuildConfig> { const row = { ...config, updatedAt: new Date() }; this.configs.set(config.guildId, row); return row; }
   async listGuildConfigs(): Promise<GuildConfig[]> { return [...this.configs.values()]; }
+  async resetGuildData(guildId: string): Promise<void> { this.configs.delete(guildId); for (const key of [...this.resources.keys()]) if (key.startsWith(`${guildId}:`)) this.resources.delete(key); for (const key of [...this.panels.keys()]) if (key.startsWith(`${guildId}:`)) this.panels.delete(key); for (const key of [...this.preferences.keys()]) if (key.startsWith(`${guildId}:`)) this.preferences.delete(key); }
   async getResource(guildId: string, type: ManagedResourceType, logicalKey: string): Promise<ManagedResource | null> { return this.resources.get(resourceKey(guildId, type, logicalKey)) ?? null; }
   async listResources(guildId: string): Promise<ManagedResource[]> { return [...this.resources.values()].filter((resource) => resource.guildId === guildId); }
   async upsertResource(resource: ManagedResource): Promise<ManagedResource> { this.resources.set(resourceKey(resource.guildId, resource.resourceType, resource.logicalKey), resource); return resource; }
