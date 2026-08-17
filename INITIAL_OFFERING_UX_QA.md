@@ -56,23 +56,26 @@ The repository-wide frontend lint command currently reports pre-existing formatt
 
 ## Controlled staging QA record
 
-Run dated 17 Aug 2026. Deployment source release: `e602143` (VPS release `/opt/slice/releases/20260817-e602143`). Health and readiness returned 200 with PostgreSQL and Redis up. Use a disposable collector-owned test asset and a fresh admin account. Do not use Umbreon or the real Charizard, and do not call PriceCharting, Ximilar, Plaid, Bridge, or live-money providers.
+Run dated 17 Aug 2026. The corrected deployment is commit `c924449` (VPS release `/opt/slice/releases/20260817-c924449`; both `/opt/slice/app` and `/opt/slice/current` point to it). Health and readiness returned 200 with PostgreSQL and Redis up. Use a disposable collector-owned test asset and a fresh admin account. Do not use Umbreon or the real Charizard, and do not call PriceCharting, Ximilar, Plaid, Bridge, or live-money providers.
 
 QA fixture: asset `43212b2a-225c-4253-a1bd-47facaf6fd73`, submission `daa84751-8e27-420e-ac6e-a9b2f1054353`, titled **QA TEST Initial Offering Card**. The controlled lifecycle reached secured custody, active £10,000 valuation, active £10,000 insurance coverage, published catalogue state, issued supply, and an open trading market. No real catalogue asset was changed.
 
-The first controlled attempt found and fixed a lifecycle defect: issuance changes the supply policy state from `APPROVED` to `ISSUED`, while the collector offering preview/proposal/approval paths only accepted `APPROVED`. Commit `e602143` allows the linked policy in either authoritative state and adds focused coverage.
+The first controlled attempt found and fixed a lifecycle defect: issuance changes the supply policy state from `APPROVED` to `ISSUED`, while the collector offering preview/proposal/approval paths only accepted `APPROVED`. Commit `e602143` allows the linked policy in either authoritative state and adds focused coverage. The resumed run then found that the VPS API service was still running from the older `/opt/slice/app` symlink; the service target was corrected before the final controlled submission.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Collector preview at 25/50/75/100/custom | Blocked by collector recent-auth/login limiter after controlled session refreshes | No bypass or Redis clearing performed |
-| Submit → admin review → request changes → resubmit | Blocked pending collector session | No offering record or financial record was fabricated |
-| Admin approve/open/pause/cancel guards | Blocked pending offering | Asset publication, custody, valuation, insurance, issuance, and market prerequisites passed |
-| Public initial-offering label and retained percentage | Blocked pending offering | No public availability was invented |
-| Treasury separation | PASS for pre-offering lifecycle | No Treasury listing or Treasury proceeds was created |
-| Console/network/provider leakage | Partial | Browser console showed only React DevTools info; no provider calls were made. Normal-use 403s were recent-auth session expiry, not a product authorization bypass |
+| Collector login and ownership | PASS | Normal UI authentication as the verified controlled Collector; the QA asset belonged to the session. No limiter bypass or Redis clearing performed |
+| Collector preview at 25/50/75/100/custom | PASS | All five controls rendered through the API. Primary custom 60% preview: 600 offered, 400 retained, £10/unit, £6,000 gross, £0 fee, £6,000 estimated proceeds |
+| Submit offering | PASS | One normal submission created offering `7308f57c-63ff-488a-88f3-fa1701d5179b` in `AWAITING_APPROVAL`; no duplicate offering was created |
+| Admin review and approval | PASS | Admin Collectible → Offering showed collector, 600/400 terms, £10 valuation, `INITIAL_OFFERING_ZERO_FEE_V1`, custody, insurance, publication, issuance and market readiness; approval completed through the normal UI |
+| Admin open | PASS | Normal Admin action opened the offering and created the `INITIAL_OFFERING` sell order for 600 units at £10/unit |
+| Ownership allocation before purchase | PASS | Read-only reconciliation after open: 1,000 issued = 400 collector USER position + 600 INITIAL_OFFERING position + 0 TREASURY. Inventory is 600 offered, 600 reserved by the open offering order, 0 settled |
+| Public initial-offering label and retained percentage | PASS | Public asset shows Initial offering, £10.00 starting price, 60% available ownership and 40% collector retained; no Treasury or collector identity/proceeds leakage observed |
+| Treasury separation | PASS | Treasury position is 0 for this offering and the open order channel/principal are both `INITIAL_OFFERING`; no Treasury proceeds were created |
+| Console/network/provider leakage | Partial | Browser console showed only React DevTools information; no PriceCharting, Ximilar, Plaid, Bridge or live-money provider calls were made. Expired sessions produced expected `RECENT_AUTH_REQUIRED` responses until normal re-authentication |
 
 ### Current blocker
 
-The staging login limiter returned HTTP 429 after repeated controlled session refreshes and is being allowed to expire normally. The controlled investor password is not present in the repository or staging environment and was not guessed. Phase 2 acceptance therefore remains **BLOCKED**, not complete. Resume with one fresh collector login, submit 600 offered units / 400 retained units, then use a verified controlled investor credential for the £1,000 / 100-unit purchase and reconciliation.
+Collector and Admin work is complete through opening the controlled offering. The controlled Investor password is not available in the repository or supported staging configuration and was not guessed. Phase 2 acceptance remains **BLOCKED**, not complete. Required human input: `INVESTOR CREDENTIAL REQUIRED`. Resume with a verified Investor credential for the normal £1,000 / 100-unit purchase, then complete execution, proceeds, journal and responsive Investor QA. No investor, execution, settlement or financial records were fabricated.
 
 No Umbreon or Charizard lifecycle records are created by the Phase 2 implementation or automated unit tests.
