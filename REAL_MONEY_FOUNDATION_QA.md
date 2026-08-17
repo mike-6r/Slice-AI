@@ -187,6 +187,17 @@ Phase 2 execution changed: NO
 
 Implementation status: COMPLETE
 
-Phase 3 release status: COMPLETE pending the final main-branch push and staging
-health smoke. Phase 4 sandbox remains blocked because provider sandbox
-credentials are not available.
+Phase 3 release status: COMPLETE
+
+Deployment commit: `684fc4740b30b48ba43aa120ca9a92ebdfe0d56f`
+VPS release: `/opt/slice/releases/20260817-684fc47`
+Active release: `/opt/slice/current -> /opt/slice/releases/20260817-684fc47`
+Services: `slice-api.service` and `slice-web.service` active
+Health smoke: API `/health` 200, API `/ready` 200, web SSR `/` 200
+Migration status: 64 migrations applied; database schema up to date
+Runtime safety: `PROVIDER_MODE=local`, `PROVIDERS_PRODUCTION_ENABLED=false`
+
+The deployment script's immediate health probe raced service startup and exited
+non-zero, but the release switch completed. A subsequent read-only smoke check
+confirmed both services active and all three endpoints returning 200. Phase 4
+sandbox remains blocked because provider sandbox credentials are not available.
