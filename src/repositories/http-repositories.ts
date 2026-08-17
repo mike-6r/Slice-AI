@@ -88,6 +88,14 @@ type MarketAssetDto = {
   // The public API serializes decimal grades as strings to preserve their
   // canonical precision (for example, "10.00").
   grading: { companyCode: string; grade: string; label: string } | null;
+  sliceValuation: {
+    id: string;
+    amount: { minor: string; currency: "GBP" | "USD" | "EUR" | "CAD" };
+    confidence: number;
+    sourceType: string;
+    approvedAt: string;
+    status: "ACTIVE";
+  } | null;
   estimatedMarketValue: { minor: string; currency: "GBP" | "USD" | "EUR" | "CAD" } | null;
   change24hBps: number | null;
   availabilityBps: number | null;
@@ -235,6 +243,19 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
           number: value.certificationNumber,
         }
       : undefined,
+  sliceValuation: value.sliceValuation
+    ? {
+        id: value.sliceValuation.id,
+        amount: {
+          amount: safeMinor(value.sliceValuation.amount.minor),
+          currency: value.sliceValuation.amount.currency,
+        },
+        confidence: percentage(value.sliceValuation.confidence),
+        sourceType: value.sliceValuation.sourceType,
+        approvedAt: value.sliceValuation.approvedAt as ISODateTime,
+        status: value.sliceValuation.status,
+      }
+    : undefined,
   market: {
     estimatedMarketValue: value.estimatedMarketValue
       ? {
@@ -1585,7 +1606,10 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
         cancelAtPeriodEnd: Boolean(membership.cancelAtPeriodEnd),
         trialEnd: nullableString(membership.trialEnd, "admin membership.membership.trialEnd"),
         providerConfigured: Boolean(membership.providerConfigured),
-        billingState: stringField(membership.billingState, "admin membership.membership.billingState"),
+        billingState: stringField(
+          membership.billingState,
+          "admin membership.membership.billingState",
+        ),
         betaEntitlement: Boolean(membership.betaEntitlement),
       };
     })(),
@@ -2147,518 +2171,579 @@ const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
 const adminRepository = (client: ApiClient): AdminRepository => {
   const idempotencyKey = () => crypto.randomUUID();
   return {
-  async getOverview() {
-    const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
-    const users = objectField(value.users, "admin overview.users");
-    const reviews = objectField(value.reviews, "admin overview.reviews");
-    const assets = objectField(value.assets, "admin overview.assets");
-    return {
-      users: { active: Number(users.active ?? 0) },
-      reviews: {
-        pending: Number(reviews.pending ?? 0),
-        changesRequested: Number(reviews.changesRequested ?? 0),
-      },
-      assets: {
-        valuationPending: Number(assets.valuationPending ?? 0),
-        custodyActions: Number(assets.custodyActions ?? 0),
-        vaultReady: Number(assets.vaultReady ?? 0),
-      },
-      complianceCases: Number(value.complianceCases ?? 0),
-      paymentExceptions: Number(value.paymentExceptions ?? 0),
-      providerAlerts: Number(value.providerAlerts ?? 0),
-      generatedAt: stringField(value.generatedAt, "admin overview.generatedAt"),
-    } satisfies AdminOverview;
-  },
-  async getRiskOperations() {
-    return mapAdminRiskOperations(await client.get<unknown>("/admin/risk-operations"));
-  },
-  async getPlatformDashboard() {
-    return mapAdminPlatformDashboard(await client.get<unknown>("/admin/platform/dashboard"));
-  },
-  async listPlatformRecords(input) {
-    return mapAdminPlatformRecords(await client.get<unknown>("/admin/platform/records", input));
-  },
-  async listCatalogueAssets(input) {
-    const value = objectField(
-      await client.get<unknown>("/admin/collectibles", input),
-      "admin collectibles catalogue",
-    );
-    const pagination = objectField(value.pagination, "admin collectibles pagination");
-    return {
-      items: Array.isArray(value.items)
-        ? value.items.map((raw) => {
-            const item = objectField(raw, "admin catalogue item");
-            const identity = objectField(item.identity, "admin catalogue identity");
-            const ownership = objectField(item.ownership, "admin catalogue ownership");
-            const provenance = item.provenance === null ? null : objectField(item.provenance, "admin catalogue provenance");
-            const grading = identity.grading === null ? null : objectField(identity.grading, "admin catalogue grading");
-            return {
-              id: stringField(item.id, "admin catalogue.id"),
-              publicId: stringField(item.publicId, "admin catalogue.publicId"),
-              slug: stringField(item.slug, "admin catalogue.slug"),
-              title: stringField(item.title, "admin catalogue.title"),
-              status: stringField(item.status, "admin catalogue.status"),
-              thumbnailUrl: nullableString(item.thumbnailUrl, "admin catalogue.thumbnailUrl"),
-              identity: {
-                category: stringField(identity.category, "admin catalogue.identity.category"),
-                year: identity.year == null ? null : Number(identity.year),
-                manufacturer: nullableString(identity.manufacturer, "admin catalogue.identity.manufacturer"),
-                set: nullableString(identity.set, "admin catalogue.identity.set"),
-                cardNumber: nullableString(identity.cardNumber, "admin catalogue.identity.cardNumber"),
-                edition: nullableString(identity.edition, "admin catalogue.identity.edition"),
-                grading: grading ? { company: stringField(grading.company, "admin catalogue.grading.company"), code: stringField(grading.code, "admin catalogue.grading.code"), grade: stringField(grading.grade, "admin catalogue.grading.grade"), label: stringField(grading.label, "admin catalogue.grading.label") } : null,
-              },
-              provenance: provenance ? { submissionId: stringField(provenance.submissionId, "admin catalogue.provenance.submissionId"), submissionStatus: stringField(provenance.submissionStatus, "admin catalogue.provenance.submissionStatus"), submittedAt: nullableString(provenance.submittedAt, "admin catalogue.provenance.submittedAt"), collector: stringField(provenance.collector, "admin catalogue.provenance.collector"), username: nullableString(provenance.username, "admin catalogue.provenance.username") } : null,
-              mediaState: stringField(item.mediaState, "admin catalogue.mediaState"),
-              verificationState: stringField(item.verificationState, "admin catalogue.verificationState"),
-              valuationState: stringField(item.valuationState, "admin catalogue.valuationState"),
-              custodyState: stringField(item.custodyState, "admin catalogue.custodyState"),
-              marketReadiness: stringField(item.marketReadiness, "admin catalogue.marketReadiness"),
-              publicationState: stringField(item.publicationState, "admin catalogue.publicationState"),
-              ownership: { ownerCount: Number(ownership.ownerCount ?? 0), totalUnits: nullableString(ownership.totalUnits, "admin catalogue.ownership.totalUnits"), issuedUnits: nullableString(ownership.issuedUnits, "admin catalogue.ownership.issuedUnits") },
-              updatedAt: stringField(item.updatedAt, "admin catalogue.updatedAt"),
-            } satisfies AdminCatalogueResponse["items"][number];
-          })
-        : [],
-      pagination: {
-        page: Number(pagination.page ?? 1),
-        pageSize: Number(pagination.pageSize ?? 25),
-        total: Number(pagination.total ?? 0),
-        totalPages: Number(pagination.totalPages ?? 1),
-      },
-    };
-  },
-  async getComplianceCase(id) {
-    return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));
-  },
-  async getOperationsOverview() {
-    const value = objectField(
-      await client.get<unknown>("/admin/operations/overview"),
-      "admin operations overview",
-    );
-    const counts = objectField(value.counts, "admin operations counts");
-    const kpis = objectField(value.kpis, "admin operations kpis");
-    const accountMix = objectField(value.accountMix, "admin operations account mix");
-    const memberships = objectField(value.memberships, "admin operations memberships");
-    const support = objectField(value.support, "admin operations support");
-    return {
-      kpis: {
-        totalUsers: Number(kpis.totalUsers ?? 0),
-        collectors: Number(kpis.collectors ?? 0),
-        investors: Number(kpis.investors ?? 0),
-        activeListings: Number(kpis.activeListings ?? 0),
-        openOrders: Number(kpis.openOrders ?? 0),
-        needsAttention: Number(kpis.needsAttention ?? 0),
-      },
-      pipeline: Array.isArray(value.pipeline)
-        ? value.pipeline.map((raw) => {
-            const item = objectField(raw, "admin pipeline");
-            return {
-              id: stringField(item.id, "admin pipeline.id"),
-              label: stringField(item.label, "admin pipeline.label"),
-              count: Number(item.count ?? 0),
-            };
-          })
-        : [],
-      attentionGroups: Array.isArray(value.attentionGroups)
-        ? value.attentionGroups.map((raw) => {
-            const item = objectField(raw, "admin attention group");
-            return {
-              id: stringField(item.id, "admin attention group.id"),
-              label: stringField(item.label, "admin attention group.label"),
-              count: Number(item.count ?? 0),
-              description: stringField(item.description, "admin attention group.description"),
-              severity: stringField(item.severity, "admin attention group.severity"),
-              section: stringField(item.section, "admin attention group.section"),
-            };
-          })
-        : [],
-      recentActivity: Array.isArray(value.recentActivity)
-        ? value.recentActivity.map((raw) => {
-            const item = objectField(raw, "admin recent activity");
-            return {
-              id: stringField(item.id, "admin recent activity.id"),
-              title: stringField(item.title, "admin recent activity.title"),
-              context: stringField(item.context, "admin recent activity.context"),
-              occurredAt: stringField(item.occurredAt, "admin recent activity.occurredAt"),
-            };
-          })
-        : [],
-      systemHealth: Array.isArray(value.systemHealth)
-        ? value.systemHealth.map((raw) => {
-            const item = objectField(raw, "admin system health");
-            return {
-              name: stringField(item.name, "admin system health.name"),
-              status: stringField(item.status, "admin system health.status"),
-              summary: stringField(item.summary, "admin system health.summary"),
-            };
-          })
-        : [],
-      accountMix: {
-        collectors: Number(accountMix.collectors ?? 0),
-        investors: Number(accountMix.investors ?? 0),
-        staff: Number(accountMix.staff ?? 0),
-        admins: Number(accountMix.admins ?? 0),
-        overlapping: Boolean(accountMix.overlapping),
-      },
-      memberships: {
-        starter: Number(memberships.starter ?? 0),
-        pro: Number(memberships.pro ?? 0),
-        elite: Number(memberships.elite ?? 0),
-        trialing: Number(memberships.trialing ?? 0),
-        pastDue: Number(memberships.pastDue ?? 0),
-        mrrMinor: stringField(memberships.mrrMinor, "admin operations memberships.mrrMinor"),
-      },
-      support: {
-        available: Boolean(support.available),
-        message: stringField(support.message, "admin operations support.message"),
-        ...(typeof support.open === "number" ? { open: support.open } : {}),
-      },
-      counts: {
-        pendingReviews: Number(counts.pendingReviews ?? 0),
-        collectorActionsWaiting: Number(counts.collectorActionsWaiting ?? 0),
-        acceptedAwaitingVault: Number(counts.acceptedAwaitingVault ?? 0),
-        shipmentsInTransit: Number(counts.shipmentsInTransit ?? 0),
-        deliveredAwaitingReceipt: Number(counts.deliveredAwaitingReceipt ?? 0),
-        verificationQueue: Number(counts.verificationQueue ?? 0),
-        valuationQueue: Number(counts.valuationQueue ?? 0),
-        vaultReady: Number(counts.vaultReady ?? 0),
-        marketplaceReady: Number(counts.marketplaceReady ?? 0),
-        compliance: Number(counts.compliance ?? 0),
-        payments: Number(counts.payments ?? 0),
-        alerts: Number(counts.alerts ?? 0),
-      },
-      needsAttention: Array.isArray(value.needsAttention)
-        ? value.needsAttention.map((raw) => {
-            const item = objectField(raw, "admin attention");
-            return {
-              id: stringField(item.id, "admin attention.id"),
-              type: stringField(item.type, "admin attention.type"),
-              subject: stringField(item.subject, "admin attention.subject"),
-              collector: stringField(item.collector, "admin attention.collector"),
-              stage: stringField(item.stage, "admin attention.stage"),
-              reason: stringField(item.reason, "admin attention.reason"),
-              age: stringField(item.age, "admin attention.age"),
-              severity: stringField(
-                item.severity,
-                "admin attention.severity",
-              ) as AdminOperationsOverview["needsAttention"][number]["severity"],
-              waitingOn: stringField(
-                item.waitingOn,
-                "admin attention.waitingOn",
-              ) as AdminOperationsOverview["needsAttention"][number]["waitingOn"],
-              target: stringField(
-                item.target,
-                "admin attention.target",
-              ) as AdminOperationsOverview["needsAttention"][number]["target"],
-            };
-          })
-        : [],
-      generatedAt: stringField(value.generatedAt, "admin operations generatedAt"),
-    } satisfies AdminOperationsOverview;
-  },
-  async listIntake(input) {
-    const value = objectField(await client.get<unknown>("/admin/intake", input), "admin intake");
-    const pagination = objectField(value.pagination, "admin intake.pagination");
-    const mapInt = (key: string) =>
-      Number(objectField(value.counts, "admin intake.counts")[key] ?? 0);
-    const filters = objectField(value.filters, "admin intake.filters");
-    return {
-      items: Array.isArray(value.items) ? value.items.map(mapAdminIntake) : [],
-      pagination: {
-        page: Number(pagination.page),
-        pageSize: Number(pagination.pageSize),
-        total: Number(pagination.total),
-        totalPages: Number(pagination.totalPages),
-      },
-      counts: {
-        all: mapInt("all"),
-        accepted: mapInt("accepted"),
-        shipped: mapInt("shipped"),
-        delivered: mapInt("delivered"),
-        received: mapInt("received"),
-        verified: mapInt("verified"),
-        readyForVault: mapInt("readyForVault"),
-        exceptions: mapInt("exceptions"),
-      },
-      overview: {
-        all: mapInt("all"),
-        accepted: mapInt("accepted"),
-        shipped: mapInt("shipped"),
-        delivered: mapInt("delivered"),
-        received: mapInt("received"),
-        verified: mapInt("verified"),
-        readyForVault: mapInt("readyForVault"),
-        exceptions: mapInt("exceptions"),
-      },
-      recentActivity: Array.isArray(value.recentActivity)
-        ? (value.recentActivity as Array<{
-            id: string;
-            type: string;
-            title: string;
-            reference: string;
-            occurredAt: string;
-          }>)
-        : [],
-      filters: {
-        vaults: Array.isArray(filters.vaults)
-          ? (filters.vaults as Array<{
+    async getOverview() {
+      const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
+      const users = objectField(value.users, "admin overview.users");
+      const reviews = objectField(value.reviews, "admin overview.reviews");
+      const assets = objectField(value.assets, "admin overview.assets");
+      return {
+        users: { active: Number(users.active ?? 0) },
+        reviews: {
+          pending: Number(reviews.pending ?? 0),
+          changesRequested: Number(reviews.changesRequested ?? 0),
+        },
+        assets: {
+          valuationPending: Number(assets.valuationPending ?? 0),
+          custodyActions: Number(assets.custodyActions ?? 0),
+          vaultReady: Number(assets.vaultReady ?? 0),
+        },
+        complianceCases: Number(value.complianceCases ?? 0),
+        paymentExceptions: Number(value.paymentExceptions ?? 0),
+        providerAlerts: Number(value.providerAlerts ?? 0),
+        generatedAt: stringField(value.generatedAt, "admin overview.generatedAt"),
+      } satisfies AdminOverview;
+    },
+    async getRiskOperations() {
+      return mapAdminRiskOperations(await client.get<unknown>("/admin/risk-operations"));
+    },
+    async getPlatformDashboard() {
+      return mapAdminPlatformDashboard(await client.get<unknown>("/admin/platform/dashboard"));
+    },
+    async listPlatformRecords(input) {
+      return mapAdminPlatformRecords(await client.get<unknown>("/admin/platform/records", input));
+    },
+    async listCatalogueAssets(input) {
+      const value = objectField(
+        await client.get<unknown>("/admin/collectibles", input),
+        "admin collectibles catalogue",
+      );
+      const pagination = objectField(value.pagination, "admin collectibles pagination");
+      return {
+        items: Array.isArray(value.items)
+          ? value.items.map((raw) => {
+              const item = objectField(raw, "admin catalogue item");
+              const identity = objectField(item.identity, "admin catalogue identity");
+              const ownership = objectField(item.ownership, "admin catalogue ownership");
+              const provenance =
+                item.provenance === null
+                  ? null
+                  : objectField(item.provenance, "admin catalogue provenance");
+              const grading =
+                identity.grading === null
+                  ? null
+                  : objectField(identity.grading, "admin catalogue grading");
+              return {
+                id: stringField(item.id, "admin catalogue.id"),
+                publicId: stringField(item.publicId, "admin catalogue.publicId"),
+                slug: stringField(item.slug, "admin catalogue.slug"),
+                title: stringField(item.title, "admin catalogue.title"),
+                status: stringField(item.status, "admin catalogue.status"),
+                thumbnailUrl: nullableString(item.thumbnailUrl, "admin catalogue.thumbnailUrl"),
+                identity: {
+                  category: stringField(identity.category, "admin catalogue.identity.category"),
+                  year: identity.year == null ? null : Number(identity.year),
+                  manufacturer: nullableString(
+                    identity.manufacturer,
+                    "admin catalogue.identity.manufacturer",
+                  ),
+                  set: nullableString(identity.set, "admin catalogue.identity.set"),
+                  cardNumber: nullableString(
+                    identity.cardNumber,
+                    "admin catalogue.identity.cardNumber",
+                  ),
+                  edition: nullableString(identity.edition, "admin catalogue.identity.edition"),
+                  grading: grading
+                    ? {
+                        company: stringField(grading.company, "admin catalogue.grading.company"),
+                        code: stringField(grading.code, "admin catalogue.grading.code"),
+                        grade: stringField(grading.grade, "admin catalogue.grading.grade"),
+                        label: stringField(grading.label, "admin catalogue.grading.label"),
+                      }
+                    : null,
+                },
+                provenance: provenance
+                  ? {
+                      submissionId: stringField(
+                        provenance.submissionId,
+                        "admin catalogue.provenance.submissionId",
+                      ),
+                      submissionStatus: stringField(
+                        provenance.submissionStatus,
+                        "admin catalogue.provenance.submissionStatus",
+                      ),
+                      submittedAt: nullableString(
+                        provenance.submittedAt,
+                        "admin catalogue.provenance.submittedAt",
+                      ),
+                      collector: stringField(
+                        provenance.collector,
+                        "admin catalogue.provenance.collector",
+                      ),
+                      username: nullableString(
+                        provenance.username,
+                        "admin catalogue.provenance.username",
+                      ),
+                    }
+                  : null,
+                mediaState: stringField(item.mediaState, "admin catalogue.mediaState"),
+                verificationState: stringField(
+                  item.verificationState,
+                  "admin catalogue.verificationState",
+                ),
+                valuationState: stringField(item.valuationState, "admin catalogue.valuationState"),
+                custodyState: stringField(item.custodyState, "admin catalogue.custodyState"),
+                marketReadiness: stringField(
+                  item.marketReadiness,
+                  "admin catalogue.marketReadiness",
+                ),
+                publicationState: stringField(
+                  item.publicationState,
+                  "admin catalogue.publicationState",
+                ),
+                ownership: {
+                  ownerCount: Number(ownership.ownerCount ?? 0),
+                  totalUnits: nullableString(
+                    ownership.totalUnits,
+                    "admin catalogue.ownership.totalUnits",
+                  ),
+                  issuedUnits: nullableString(
+                    ownership.issuedUnits,
+                    "admin catalogue.ownership.issuedUnits",
+                  ),
+                },
+                updatedAt: stringField(item.updatedAt, "admin catalogue.updatedAt"),
+              } satisfies AdminCatalogueResponse["items"][number];
+            })
+          : [],
+        pagination: {
+          page: Number(pagination.page ?? 1),
+          pageSize: Number(pagination.pageSize ?? 25),
+          total: Number(pagination.total ?? 0),
+          totalPages: Number(pagination.totalPages ?? 1),
+        },
+      };
+    },
+    async getComplianceCase(id) {
+      return mapAdminComplianceDetail(await client.get<unknown>(`/admin/compliance/cases/${id}`));
+    },
+    async getOperationsOverview() {
+      const value = objectField(
+        await client.get<unknown>("/admin/operations/overview"),
+        "admin operations overview",
+      );
+      const counts = objectField(value.counts, "admin operations counts");
+      const kpis = objectField(value.kpis, "admin operations kpis");
+      const accountMix = objectField(value.accountMix, "admin operations account mix");
+      const memberships = objectField(value.memberships, "admin operations memberships");
+      const support = objectField(value.support, "admin operations support");
+      return {
+        kpis: {
+          totalUsers: Number(kpis.totalUsers ?? 0),
+          collectors: Number(kpis.collectors ?? 0),
+          investors: Number(kpis.investors ?? 0),
+          activeListings: Number(kpis.activeListings ?? 0),
+          openOrders: Number(kpis.openOrders ?? 0),
+          needsAttention: Number(kpis.needsAttention ?? 0),
+        },
+        pipeline: Array.isArray(value.pipeline)
+          ? value.pipeline.map((raw) => {
+              const item = objectField(raw, "admin pipeline");
+              return {
+                id: stringField(item.id, "admin pipeline.id"),
+                label: stringField(item.label, "admin pipeline.label"),
+                count: Number(item.count ?? 0),
+              };
+            })
+          : [],
+        attentionGroups: Array.isArray(value.attentionGroups)
+          ? value.attentionGroups.map((raw) => {
+              const item = objectField(raw, "admin attention group");
+              return {
+                id: stringField(item.id, "admin attention group.id"),
+                label: stringField(item.label, "admin attention group.label"),
+                count: Number(item.count ?? 0),
+                description: stringField(item.description, "admin attention group.description"),
+                severity: stringField(item.severity, "admin attention group.severity"),
+                section: stringField(item.section, "admin attention group.section"),
+              };
+            })
+          : [],
+        recentActivity: Array.isArray(value.recentActivity)
+          ? value.recentActivity.map((raw) => {
+              const item = objectField(raw, "admin recent activity");
+              return {
+                id: stringField(item.id, "admin recent activity.id"),
+                title: stringField(item.title, "admin recent activity.title"),
+                context: stringField(item.context, "admin recent activity.context"),
+                occurredAt: stringField(item.occurredAt, "admin recent activity.occurredAt"),
+              };
+            })
+          : [],
+        systemHealth: Array.isArray(value.systemHealth)
+          ? value.systemHealth.map((raw) => {
+              const item = objectField(raw, "admin system health");
+              return {
+                name: stringField(item.name, "admin system health.name"),
+                status: stringField(item.status, "admin system health.status"),
+                summary: stringField(item.summary, "admin system health.summary"),
+              };
+            })
+          : [],
+        accountMix: {
+          collectors: Number(accountMix.collectors ?? 0),
+          investors: Number(accountMix.investors ?? 0),
+          staff: Number(accountMix.staff ?? 0),
+          admins: Number(accountMix.admins ?? 0),
+          overlapping: Boolean(accountMix.overlapping),
+        },
+        memberships: {
+          starter: Number(memberships.starter ?? 0),
+          pro: Number(memberships.pro ?? 0),
+          elite: Number(memberships.elite ?? 0),
+          trialing: Number(memberships.trialing ?? 0),
+          pastDue: Number(memberships.pastDue ?? 0),
+          mrrMinor: stringField(memberships.mrrMinor, "admin operations memberships.mrrMinor"),
+        },
+        support: {
+          available: Boolean(support.available),
+          message: stringField(support.message, "admin operations support.message"),
+          ...(typeof support.open === "number" ? { open: support.open } : {}),
+        },
+        counts: {
+          pendingReviews: Number(counts.pendingReviews ?? 0),
+          collectorActionsWaiting: Number(counts.collectorActionsWaiting ?? 0),
+          acceptedAwaitingVault: Number(counts.acceptedAwaitingVault ?? 0),
+          shipmentsInTransit: Number(counts.shipmentsInTransit ?? 0),
+          deliveredAwaitingReceipt: Number(counts.deliveredAwaitingReceipt ?? 0),
+          verificationQueue: Number(counts.verificationQueue ?? 0),
+          valuationQueue: Number(counts.valuationQueue ?? 0),
+          vaultReady: Number(counts.vaultReady ?? 0),
+          marketplaceReady: Number(counts.marketplaceReady ?? 0),
+          compliance: Number(counts.compliance ?? 0),
+          payments: Number(counts.payments ?? 0),
+          alerts: Number(counts.alerts ?? 0),
+        },
+        needsAttention: Array.isArray(value.needsAttention)
+          ? value.needsAttention.map((raw) => {
+              const item = objectField(raw, "admin attention");
+              return {
+                id: stringField(item.id, "admin attention.id"),
+                type: stringField(item.type, "admin attention.type"),
+                subject: stringField(item.subject, "admin attention.subject"),
+                collector: stringField(item.collector, "admin attention.collector"),
+                stage: stringField(item.stage, "admin attention.stage"),
+                reason: stringField(item.reason, "admin attention.reason"),
+                age: stringField(item.age, "admin attention.age"),
+                severity: stringField(
+                  item.severity,
+                  "admin attention.severity",
+                ) as AdminOperationsOverview["needsAttention"][number]["severity"],
+                waitingOn: stringField(
+                  item.waitingOn,
+                  "admin attention.waitingOn",
+                ) as AdminOperationsOverview["needsAttention"][number]["waitingOn"],
+                target: stringField(
+                  item.target,
+                  "admin attention.target",
+                ) as AdminOperationsOverview["needsAttention"][number]["target"],
+              };
+            })
+          : [],
+        generatedAt: stringField(value.generatedAt, "admin operations generatedAt"),
+      } satisfies AdminOperationsOverview;
+    },
+    async listIntake(input) {
+      const value = objectField(await client.get<unknown>("/admin/intake", input), "admin intake");
+      const pagination = objectField(value.pagination, "admin intake.pagination");
+      const mapInt = (key: string) =>
+        Number(objectField(value.counts, "admin intake.counts")[key] ?? 0);
+      const filters = objectField(value.filters, "admin intake.filters");
+      return {
+        items: Array.isArray(value.items) ? value.items.map(mapAdminIntake) : [],
+        pagination: {
+          page: Number(pagination.page),
+          pageSize: Number(pagination.pageSize),
+          total: Number(pagination.total),
+          totalPages: Number(pagination.totalPages),
+        },
+        counts: {
+          all: mapInt("all"),
+          accepted: mapInt("accepted"),
+          shipped: mapInt("shipped"),
+          delivered: mapInt("delivered"),
+          received: mapInt("received"),
+          verified: mapInt("verified"),
+          readyForVault: mapInt("readyForVault"),
+          exceptions: mapInt("exceptions"),
+        },
+        overview: {
+          all: mapInt("all"),
+          accepted: mapInt("accepted"),
+          shipped: mapInt("shipped"),
+          delivered: mapInt("delivered"),
+          received: mapInt("received"),
+          verified: mapInt("verified"),
+          readyForVault: mapInt("readyForVault"),
+          exceptions: mapInt("exceptions"),
+        },
+        recentActivity: Array.isArray(value.recentActivity)
+          ? (value.recentActivity as Array<{
               id: string;
-              displayName: string;
-              code: string | null;
-              operationallyApproved?: boolean;
-              acceptingShipments?: boolean;
-              environment?: string;
-              region?: string;
-              countryCode?: string;
+              type: string;
+              title: string;
+              reference: string;
+              occurredAt: string;
             }>)
           : [],
-        carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
-      },
-    };
-  },
-  async setIntakeDestinationApproval(id, input) {
-    const value = objectField(
-      await client.request<unknown>(`/admin/intake/destinations/${id}/approval`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "Idempotency-Key": idempotencyKey(),
+        filters: {
+          vaults: Array.isArray(filters.vaults)
+            ? (filters.vaults as Array<{
+                id: string;
+                displayName: string;
+                code: string | null;
+                operationallyApproved?: boolean;
+                acceptingShipments?: boolean;
+                environment?: string;
+                region?: string;
+                countryCode?: string;
+              }>)
+            : [],
+          carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
         },
-        body: JSON.stringify(input),
-      }),
-      "intake destination approval",
-    );
-    return {
-      id: stringField(value.id, "intake destination.id"),
-      displayName: stringField(value.displayName, "intake destination.displayName"),
-      operationallyApproved: Boolean(value.operationallyApproved),
-      acceptingShipments: Boolean(value.acceptingShipments),
-      audited: Boolean(value.audited),
-    };
-  },
-  async confirmIntakeReceipt(id) {
-    const value = objectField(
-      await client.request<unknown>(`/admin/intake/${id}/receipt`, {
+      };
+    },
+    async setIntakeDestinationApproval(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/intake/destinations/${id}/approval`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": idempotencyKey(),
+          },
+          body: JSON.stringify(input),
+        }),
+        "intake destination approval",
+      );
+      return {
+        id: stringField(value.id, "intake destination.id"),
+        displayName: stringField(value.displayName, "intake destination.displayName"),
+        operationallyApproved: Boolean(value.operationallyApproved),
+        acceptingShipments: Boolean(value.acceptingShipments),
+        audited: Boolean(value.audited),
+      };
+    },
+    async confirmIntakeReceipt(id) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/intake/${id}/receipt`, {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+        }),
+        "intake receipt",
+      );
+      return {
+        intakeId: stringField(value.intakeId, "intake receipt.intakeId"),
+        status: stringField(value.status, "intake receipt.status"),
+        confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
+      };
+    },
+    async listMemberships(input) {
+      const value = objectField(
+        await client.get<unknown>("/admin/memberships", input),
+        "admin memberships",
+      );
+      return mapAdminMembershipDirectory(value);
+    },
+    async listUsers(input) {
+      const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
+      const summary =
+        value.summary && typeof value.summary === "object" && !Array.isArray(value.summary)
+          ? objectField(value.summary, "admin users summary")
+          : {};
+      return {
+        items: Array.isArray(value.items) ? value.items.map(mapAdminUser) : [],
+        nextCursor: nullableString(value.nextCursor, "admin users.nextCursor"),
+        total: Number(value.total ?? 0),
+        summary: {
+          totalUsers: Number(summary.totalUsers ?? 0),
+          collectors: Number(summary.collectors ?? 0),
+          investors: Number(summary.investors ?? 0),
+          staff: Number(summary.staff ?? 0),
+          admins: Number(summary.admins ?? 0),
+          suspended: Number(summary.suspended ?? 0),
+          activeUsers: Number(summary.activeUsers ?? 0),
+          restricted: Number(summary.restricted ?? 0),
+          pastDueMemberships: Number(summary.pastDueMemberships ?? 0),
+          trialingMemberships: Number(summary.trialingMemberships ?? 0),
+        },
+      };
+    },
+    async getUser(id) {
+      return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
+    },
+    async transitionUserStatus(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${id}/status`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "account status transition",
+      );
+      return {
+        userId: stringField(value.userId, "account status.userId"),
+        accountStatus: stringField(value.accountStatus, "account status.accountStatus"),
+      };
+    },
+    async grantUserRole(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${id}/roles`, {
+          method: "POST",
+          body: { scopeType: "GLOBAL", scopeId: "*", ...input },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "role grant",
+      );
+      return {
+        assignmentId: stringField(value.assignmentId, "role grant.assignmentId"),
+        userId: stringField(value.userId, "role grant.userId"),
+        role: stringField(value.role, "role grant.role"),
+      };
+    },
+    async revokeUserRole(id, assignmentId) {
+      await client.request<unknown>(`/admin/users/${id}/roles/${assignmentId}`, {
+        method: "DELETE",
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+      return {
+        assignmentId,
+        userId: id,
+        revoked: true,
+      };
+    },
+    async listComplianceCases(input) {
+      const value = objectField(
+        await client.get<unknown>("/admin/compliance/cases", input),
+        "admin compliance cases",
+      );
+      return {
+        items: Array.isArray(value.items) ? value.items.map(mapAdminComplianceCase) : [],
+      };
+    },
+    async getFinanceSummary() {
+      const value = objectField(
+        await client.get<unknown>("/admin/finance/summary"),
+        "admin finance summary",
+      );
+      return {
+        currency: "GBP",
+        pendingMovements: Number(value.pendingMovements ?? 0),
+        exceptions: Number(value.exceptions ?? 0),
+        reconciliationMismatches: Number(value.reconciliationMismatches ?? 0),
+      } satisfies AdminFinanceSummary;
+    },
+    async getFinanceDashboard() {
+      return mapAdminFinanceDashboard(await client.get<unknown>("/admin/finance/dashboard"));
+    },
+    async listFinanceRecords(input) {
+      return mapAdminFinanceRecords(await client.get<unknown>("/admin/finance/records", input));
+    },
+    async getTrustSupportDashboard() {
+      return mapAdminTrustSupportDashboard(
+        await client.get<unknown>("/admin/trust-support/dashboard"),
+      );
+    },
+    async listTrustSupportRecords(input) {
+      return mapAdminTrustSupportRecords(
+        await client.get<unknown>("/admin/trust-support/records", input),
+      );
+    },
+    async getIntegrations() {
+      const value = objectField(
+        await client.get<unknown>("/admin/integrations"),
+        "admin integrations",
+      );
+      return {
+        providerIncidents: Number(value.providerIncidents ?? 0),
+        failedWebhooks: Number(value.failedWebhooks ?? 0),
+        secrets: "redacted",
+      } satisfies AdminIntegrationsSummary;
+    },
+    async search(query, limit) {
+      const value = objectField(
+        await client.get<unknown>("/admin/search", { q: query, limit }),
+        "admin search",
+      );
+      return {
+        items: Array.isArray(value.items)
+          ? value.items.map((raw) => {
+              const item = objectField(raw, "admin search result");
+              return {
+                entityType: stringField(
+                  item.entityType,
+                  "admin search.entityType",
+                ) as AdminSearchResult["entityType"],
+                id: stringField(item.id, "admin search.id"),
+                title: stringField(item.title, "admin search.title"),
+                subtitle: stringField(item.subtitle, "admin search.subtitle"),
+                target: stringField(item.target, "admin search.target"),
+              };
+            })
+          : [],
+      };
+    },
+    async getCollectibleDetail(id, tab) {
+      return client.get<import("@/data/repositories").AdminCollectibleDetail>(
+        `/admin/assets/${encodeURIComponent(id)}`,
+        tab ? { tab } : undefined,
+      );
+    },
+    async refreshMarketData(id) {
+      return client.request<{
+        assetId: string;
+        queued: number;
+        cooldownUntil: string | null;
+      }>(`/admin/market-data/refresh/${encodeURIComponent(id)}`, {
         method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-      }),
-      "intake receipt",
-    );
-    return {
-      intakeId: stringField(value.intakeId, "intake receipt.intakeId"),
-      status: stringField(value.status, "intake receipt.status"),
-      confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
-    };
-  },
-  async listMemberships(input) {
-    const value = objectField(
-      await client.get<unknown>("/admin/memberships", input),
-      "admin memberships",
-    );
-    return mapAdminMembershipDirectory(value);
-  },
-  async listUsers(input) {
-    const value = objectField(await client.get<unknown>("/admin/users", input), "admin users");
-    const summary =
-      value.summary && typeof value.summary === "object" && !Array.isArray(value.summary)
-        ? objectField(value.summary, "admin users summary")
-        : {};
-    return {
-      items: Array.isArray(value.items) ? value.items.map(mapAdminUser) : [],
-      nextCursor: nullableString(value.nextCursor, "admin users.nextCursor"),
-      total: Number(value.total ?? 0),
-      summary: {
-        totalUsers: Number(summary.totalUsers ?? 0),
-        collectors: Number(summary.collectors ?? 0),
-        investors: Number(summary.investors ?? 0),
-        staff: Number(summary.staff ?? 0),
-        admins: Number(summary.admins ?? 0),
-        suspended: Number(summary.suspended ?? 0),
-        activeUsers: Number(summary.activeUsers ?? 0),
-        restricted: Number(summary.restricted ?? 0),
-        pastDueMemberships: Number(summary.pastDueMemberships ?? 0),
-        trialingMemberships: Number(summary.trialingMemberships ?? 0),
-      },
-    };
-  },
-  async getUser(id) {
-    return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
-  },
-  async transitionUserStatus(id, input) {
-    const value = objectField(
-      await client.request<unknown>(`/admin/users/${id}/status`, {
+      });
+    },
+    async proposeOwnershipSupply(id, input) {
+      return client.request<{
+        assetId: string;
+        status: string;
+        units: string;
+        pricePerUnitMinor: string;
+        remainderMinor: string;
+      }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/proposals`, {
         method: "POST",
         body: input,
         headers: { "Idempotency-Key": idempotencyKey() },
-      }),
-      "account status transition",
-    );
-    return {
-      userId: stringField(value.userId, "account status.userId"),
-      accountStatus: stringField(value.accountStatus, "account status.accountStatus"),
-    };
-  },
-  async grantUserRole(id, input) {
-    const value = objectField(
-      await client.request<unknown>(`/admin/users/${id}/roles`, {
+      });
+    },
+    async approveOwnershipSupply(id, reason) {
+      return client.request<{
+        assetId: string;
+        status: string;
+        units: string;
+        pricePerUnitMinor: string;
+        remainderMinor: string;
+      }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/approve`, {
         method: "POST",
-        body: { scopeType: "GLOBAL", scopeId: "*", ...input },
+        body: { reason },
         headers: { "Idempotency-Key": idempotencyKey() },
-      }),
-      "role grant",
-    );
-    return {
-      assignmentId: stringField(value.assignmentId, "role grant.assignmentId"),
-      userId: stringField(value.userId, "role grant.userId"),
-      role: stringField(value.role, "role grant.role"),
-    };
-  },
-  async revokeUserRole(id, assignmentId) {
-    await client.request<unknown>(`/admin/users/${id}/roles/${assignmentId}`, {
-      method: "DELETE",
-      headers: { "Idempotency-Key": idempotencyKey() },
-    });
-    return {
-      assignmentId,
-      userId: id,
-      revoked: true,
-    };
-  },
-  async listComplianceCases(input) {
-    const value = objectField(
-      await client.get<unknown>("/admin/compliance/cases", input),
-      "admin compliance cases",
-    );
-    return {
-      items: Array.isArray(value.items) ? value.items.map(mapAdminComplianceCase) : [],
-    };
-  },
-  async getFinanceSummary() {
-    const value = objectField(
-      await client.get<unknown>("/admin/finance/summary"),
-      "admin finance summary",
-    );
-    return {
-      currency: "GBP",
-      pendingMovements: Number(value.pendingMovements ?? 0),
-      exceptions: Number(value.exceptions ?? 0),
-      reconciliationMismatches: Number(value.reconciliationMismatches ?? 0),
-    } satisfies AdminFinanceSummary;
-  },
-  async getFinanceDashboard() {
-    return mapAdminFinanceDashboard(await client.get<unknown>("/admin/finance/dashboard"));
-  },
-  async listFinanceRecords(input) {
-    return mapAdminFinanceRecords(await client.get<unknown>("/admin/finance/records", input));
-  },
-  async getTrustSupportDashboard() {
-    return mapAdminTrustSupportDashboard(
-      await client.get<unknown>("/admin/trust-support/dashboard"),
-    );
-  },
-  async listTrustSupportRecords(input) {
-    return mapAdminTrustSupportRecords(
-      await client.get<unknown>("/admin/trust-support/records", input),
-    );
-  },
-  async getIntegrations() {
-    const value = objectField(
-      await client.get<unknown>("/admin/integrations"),
-      "admin integrations",
-    );
-    return {
-      providerIncidents: Number(value.providerIncidents ?? 0),
-      failedWebhooks: Number(value.failedWebhooks ?? 0),
-      secrets: "redacted",
-    } satisfies AdminIntegrationsSummary;
-  },
-  async search(query, limit) {
-    const value = objectField(
-      await client.get<unknown>("/admin/search", { q: query, limit }),
-      "admin search",
-    );
-    return {
-      items: Array.isArray(value.items)
-        ? value.items.map((raw) => {
-            const item = objectField(raw, "admin search result");
-            return {
-              entityType: stringField(
-                item.entityType,
-                "admin search.entityType",
-              ) as AdminSearchResult["entityType"],
-              id: stringField(item.id, "admin search.id"),
-              title: stringField(item.title, "admin search.title"),
-              subtitle: stringField(item.subtitle, "admin search.subtitle"),
-              target: stringField(item.target, "admin search.target"),
-            };
-          })
-        : [],
-    };
-  },
-  async getCollectibleDetail(id, tab) {
-    return client.get<import("@/data/repositories").AdminCollectibleDetail>(
-      `/admin/assets/${encodeURIComponent(id)}`,
-      tab ? { tab } : undefined,
-    );
-  },
-  async refreshMarketData(id) {
-    return client.request<{
-      assetId: string;
-      queued: number;
-      cooldownUntil: string | null;
-    }>(`/admin/market-data/refresh/${encodeURIComponent(id)}`, {
-      method: "POST",
-    });
-  },
-  async proposeOwnershipSupply(id, input) {
-    return client.request<{
-      assetId: string;
-      status: string;
-      units: string;
-      pricePerUnitMinor: string;
-      remainderMinor: string;
-    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/proposals`, {
-      method: "POST",
-      body: input,
-      headers: { "Idempotency-Key": idempotencyKey() },
-    });
-  },
-  async approveOwnershipSupply(id, reason) {
-    return client.request<{
-      assetId: string;
-      status: string;
-      units: string;
-      pricePerUnitMinor: string;
-      remainderMinor: string;
-    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/supply-policy/approve`, {
-      method: "POST",
-      body: { reason },
-      headers: { "Idempotency-Key": idempotencyKey() },
-    });
-  },
-  async issueOwnership(id, totalUnits) {
-    return client.request<{
-      assetId: string;
-      status: string;
-      totalUnits: string;
-      issuedUnits: string;
-      availableUnits: string;
-      issuedAt: string;
-      sequence: string;
-    }>(`/admin/assets/${encodeURIComponent(id)}/ownership/issue`, {
-      method: "POST",
-      body: { totalUnits },
-      headers: { "Idempotency-Key": idempotencyKey() },
-    });
-  },
-  async activateTradingMarket(id) {
-    return client.request<{ assetId: string; status: string }>(
-      `/admin/trading/markets/${encodeURIComponent(id)}/activate`,
-      { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
-    );
-  },
-};
+      });
+    },
+    async issueOwnership(id, totalUnits) {
+      return client.request<{
+        assetId: string;
+        status: string;
+        totalUnits: string;
+        issuedUnits: string;
+        availableUnits: string;
+        issuedAt: string;
+        sequence: string;
+      }>(`/admin/assets/${encodeURIComponent(id)}/ownership/issue`, {
+        method: "POST",
+        body: { totalUnits },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
+    async activateTradingMarket(id) {
+      return client.request<{ assetId: string; status: string }>(
+        `/admin/trading/markets/${encodeURIComponent(id)}/activate`,
+        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+  };
 };
 
 export function createHttpRepositories(client = new ApiClient()): AppRepositories {

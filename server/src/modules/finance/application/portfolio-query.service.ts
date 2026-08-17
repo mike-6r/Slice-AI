@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { FinancialLedgerService } from './financial-ledger.service';
 import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
+import { selectAuthoritativeSliceValuation } from '../../valuation/valuation-projection';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { publicBetaAssetWhere } from '../../../config/beta-policy';
 
@@ -28,16 +29,19 @@ export class PortfolioQueryService {
         (holding.estimatedValueMinor
           ? BigInt(holding.estimatedValueMinor)
           : 0n),
-        0n,
+      0n,
     );
-    const investedCostMinor = holdings.every((holding) => holding.costBasisMinor !== null)
+    const investedCostMinor = holdings.every(
+      (holding) => holding.costBasisMinor !== null,
+    )
       ? holdings.reduce(
           (sum, holding) => sum + BigInt(holding.costBasisMinor as string),
           0n,
         )
       : null;
     const unrealisedPnlMinor =
-      investedCostMinor !== null && holdings.every((holding) => holding.estimatedValueMinor !== null)
+      investedCostMinor !== null &&
+      holdings.every((holding) => holding.estimatedValueMinor !== null)
         ? holdingsMinor - investedCostMinor
         : null;
     return {
@@ -54,7 +58,9 @@ export class PortfolioQueryService {
       investedCostMinor: investedCostMinor?.toString() ?? null,
       unrealisedPnlMinor: unrealisedPnlMinor?.toString() ?? null,
       unrealisedPnlPercent:
-        investedCostMinor !== null && unrealisedPnlMinor !== null && investedCostMinor > 0n
+        investedCostMinor !== null &&
+        unrealisedPnlMinor !== null &&
+        investedCostMinor > 0n
           ? formatMoneyPercent(unrealisedPnlMinor, investedCostMinor)
           : null,
     };
@@ -95,10 +101,34 @@ export class PortfolioQueryService {
         },
         ownershipSupply: { select: { totalUnits: true, issuedUnits: true } },
         marketSnapshots: {
-          where: { currency: 'GBP', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } },
+          where: {
+            currency: 'GBP',
+            markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+          },
           orderBy: [{ asOf: 'desc' }, { id: 'desc' }],
           take: 1,
-          select: { estimatedMarketValueMinor: true, asOf: true, status: true, markSource: true, freshness: true, lastSuccessfulRefreshAt: true },
+          select: {
+            estimatedMarketValueMinor: true,
+            asOf: true,
+            status: true,
+            markSource: true,
+            freshness: true,
+            lastSuccessfulRefreshAt: true,
+          },
+        },
+        valuationDecisions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            valueMinor: true,
+            currency: true,
+            confidence: true,
+            methodologyCode: true,
+            decidedAt: true,
+            status: true,
+          },
         },
         tradingOrders: {
           where: {
@@ -119,9 +149,18 @@ export class PortfolioQueryService {
       if (!asset) return [];
       const supply = asset.ownershipSupply?.totalUnits;
       const mark = asset.marketSnapshots[0];
+      const sliceValuation = selectAuthoritativeSliceValuation(
+        asset.valuationDecisions,
+      );
+      const valuation =
+        sliceValuation?.currency === 'GBP' ? sliceValuation : mark;
+      const valuationMinor =
+        sliceValuation?.currency === 'GBP'
+          ? sliceValuation.amountMinor
+          : mark?.estimatedMarketValueMinor;
       const estimated =
-        supply && mark
-          ? (mark.estimatedMarketValueMinor * position.settledUnits) / supply
+        supply && valuationMinor
+          ? (valuationMinor * position.settledUnits) / supply
           : null;
       const relevantLots = lots.filter(
         (lot) => lot.assetId === position.assetId,
@@ -140,9 +179,12 @@ export class PortfolioQueryService {
         (sum, order) => sum + order.remainingUnits,
         0n,
       );
-      const availableToSellUnits = position.settledUnits - position.reservedUnits;
+      const availableToSellUnits =
+        position.settledUnits - position.reservedUnits;
       const unrealisedPnlMinor =
-        estimated !== null && relevantLots.length ? estimated - costBasis : null;
+        estimated !== null && relevantLots.length
+          ? estimated - costBasis
+          : null;
       return {
         assetId: position.assetId,
         slug: asset.slug,
@@ -161,9 +203,7 @@ export class PortfolioQueryService {
         availableToSellUnits: (
           position.settledUnits - position.reservedUnits
         ).toString(),
-        availableUnits: (
-          availableToSellUnits
-        ).toString(),
+        availableUnits: availableToSellUnits.toString(),
         totalIssuedQuantity: supply?.toString() ?? null,
         userOwnershipPercent: supply
           ? formatOwnershipPercent(position.settledUnits, supply)
@@ -176,11 +216,23 @@ export class PortfolioQueryService {
           ? formatOwnershipPercent(availableToBuyUnits, supply)
           : null,
         estimatedValueMinor: estimated?.toString() ?? null,
-        valuationAsOf: mark?.asOf.toISOString() ?? null,
-        valuationStatus: mark ? 'FULL' : 'UNAVAILABLE',
-        valuationSource: mark?.markSource ?? null,
-        valuationFreshness: mark?.freshness ?? 'UNAVAILABLE',
-        lastSuccessfulRefreshAt: mark?.lastSuccessfulRefreshAt?.toISOString() ?? null,
+        valuationAsOf:
+          sliceValuation?.currency === 'GBP'
+            ? sliceValuation.approvedAt.toISOString()
+            : (mark?.asOf.toISOString() ?? null),
+        valuationStatus: valuation ? 'FULL' : 'UNAVAILABLE',
+        valuationSource:
+          sliceValuation?.currency === 'GBP'
+            ? 'SLICE_VALUATION'
+            : (mark?.markSource ?? null),
+        valuationFreshness:
+          sliceValuation?.currency === 'GBP'
+            ? 'FRESH'
+            : (mark?.freshness ?? 'UNAVAILABLE'),
+        lastSuccessfulRefreshAt:
+          sliceValuation?.currency === 'GBP'
+            ? sliceValuation.approvedAt.toISOString()
+            : (mark?.lastSuccessfulRefreshAt?.toISOString() ?? null),
         costBasisMinor: relevantLots.length ? costBasis.toString() : null,
         unrealisedPnlMinor: unrealisedPnlMinor?.toString() ?? null,
         unrealisedPnlPercent:
@@ -195,7 +247,10 @@ export class PortfolioQueryService {
     const lots = await this.db.portfolioLot.findMany({
       where: {
         userId,
-        asset: { status: 'PUBLISHED', ...publicBetaAssetWhere(this.config?.isBeta === true) },
+        asset: {
+          status: 'PUBLISHED',
+          ...publicBetaAssetWhere(this.config?.isBeta === true),
+        },
       },
       include: { asset: { select: { slug: true, title: true } } },
       orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
@@ -217,6 +272,9 @@ function formatMoneyPercent(value: bigint, basis: bigint) {
   const sign = scaled < 0n ? '-' : '';
   const absolute = scaled < 0n ? -scaled : scaled;
   const whole = absolute / 100n;
-  const fraction = (absolute % 100n).toString().padStart(2, '0').replace(/0+$/, '');
+  const fraction = (absolute % 100n)
+    .toString()
+    .padStart(2, '0')
+    .replace(/0+$/, '');
   return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
 }

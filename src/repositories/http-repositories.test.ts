@@ -16,6 +16,14 @@ const dto = {
   category: { slug: "pokemon", name: "Pokémon" },
   collectibleSet: null,
   grading: { companyCode: "PSA", grade: "10.00", label: "10" },
+  sliceValuation: {
+    id: "valuation-1",
+    amount: { minor: "2458000", currency: "GBP" as const },
+    confidence: 92,
+    sourceType: "MANUAL_RESEARCH",
+    approvedAt: "2026-08-06T00:00:00.000Z",
+    status: "ACTIVE" as const,
+  },
   estimatedMarketValue: { minor: "2458000", currency: "GBP" as const },
   change24hBps: 1243,
   availabilityBps: null,
@@ -38,7 +46,12 @@ const dto = {
     analyzedAt: "2026-08-16T12:00:00.000Z" as ISODateTime,
     warnings: [],
     visualizations: [
-      { side: "FRONT" as const, type: "overview" as const, url: "https://example.com/front.jpg", centering: null },
+      {
+        side: "FRONT" as const,
+        type: "overview" as const,
+        url: "https://example.com/front.jpg",
+        centering: null,
+      },
     ],
   },
 };
@@ -79,6 +92,11 @@ describe("HTTP catalogue mapping", () => {
 
   it("maps public market fields without inventing a generic price or ownership", () => {
     const asset = mapMarketAsset(dto);
+    expect(asset.sliceValuation).toMatchObject({
+      amount: { amount: 2458000, currency: "GBP" },
+      confidence: 92,
+      status: "ACTIVE",
+    });
     expect(asset.market?.estimatedMarketValue?.amount).toBe(2458000);
     expect(asset.marketValue).toBeUndefined();
     expect(asset.ownershipAvailableBps).toBeUndefined();

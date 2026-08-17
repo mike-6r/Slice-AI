@@ -19,9 +19,8 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../submissions/ports/submission-storage.ports';
-import {
-  deriveMarketLifecycle,
-} from '../market-lifecycle/domain/market-lifecycle';
+import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
+import { selectAuthoritativeSliceValuation } from '../valuation/valuation-projection';
 
 const ranges = {
   '1D': 1,
@@ -117,6 +116,20 @@ export class MarketService {
           orderBy: { observedAt: 'desc' },
           take: 2,
         },
+        valuationDecisions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            valueMinor: true,
+            currency: true,
+            confidence: true,
+            methodologyCode: true,
+            decidedAt: true,
+            status: true,
+          },
+        },
         marketObservations: {
           where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
@@ -152,13 +165,16 @@ export class MarketService {
     const filtered = rows
       .filter((asset) => {
         const snapshot = asset.marketSnapshots[0];
+        const valuation = selectAuthoritativeSliceValuation(
+          asset.valuationDecisions,
+        );
+        const valueMinor =
+          valuation?.amountMinor ?? snapshot?.estimatedMarketValueMinor;
         return (
           (!query.estimatedMarketValueMinMinor ||
-            (snapshot?.estimatedMarketValueMinor ?? 0n) >=
-              query.estimatedMarketValueMinMinor) &&
+            (valueMinor ?? 0n) >= query.estimatedMarketValueMinMinor) &&
           (!query.estimatedMarketValueMaxMinor ||
-            (snapshot?.estimatedMarketValueMinor ?? 0n) <=
-              query.estimatedMarketValueMaxMinor) &&
+            (valueMinor ?? 0n) <= query.estimatedMarketValueMaxMinor) &&
           (query.availabilityMinBps === undefined ||
             (snapshot?.availableBps ?? -1) >= query.availabilityMinBps)
         );
@@ -166,8 +182,14 @@ export class MarketService {
       .sort((a, b) =>
         query.sort === 'estimatedMarketValue'
           ? Number(
-              (b.marketSnapshots[0]?.estimatedMarketValueMinor ?? 0n) -
-                (a.marketSnapshots[0]?.estimatedMarketValueMinor ?? 0n),
+              (selectAuthoritativeSliceValuation(b.valuationDecisions)
+                ?.amountMinor ??
+                b.marketSnapshots[0]?.estimatedMarketValueMinor ??
+                0n) -
+                (selectAuthoritativeSliceValuation(a.valuationDecisions)
+                  ?.amountMinor ??
+                  a.marketSnapshots[0]?.estimatedMarketValueMinor ??
+                  0n),
             )
           : query.sort === 'change24h'
             ? (b.marketSnapshots[0]?.change24hBps ?? -Infinity) -
@@ -175,9 +197,9 @@ export class MarketService {
             : a.title.localeCompare(b.title),
       );
     const items = await Promise.all(
-      filtered.slice(0, query.limit).map((asset) =>
-        assetView(asset, this.storage),
-      ),
+      filtered
+        .slice(0, query.limit)
+        .map((asset) => assetView(asset, this.storage)),
     );
     return {
       items,
@@ -258,6 +280,20 @@ export class MarketService {
           where: this.publicValuationEvidenceFilter(),
           orderBy: { observedAt: 'desc' },
           take: 2,
+        },
+        valuationDecisions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            valueMinor: true,
+            currency: true,
+            confidence: true,
+            methodologyCode: true,
+            decidedAt: true,
+            status: true,
+          },
         },
         marketObservations: {
           where: this.publicMarketObservationFilter(),
@@ -378,6 +414,20 @@ export class MarketService {
               orderBy: { observedAt: 'desc' },
               take: 2,
             },
+            valuationDecisions: {
+              where: { status: 'ACTIVE' },
+              orderBy: { decidedAt: 'desc' },
+              take: 1,
+              select: {
+                id: true,
+                valueMinor: true,
+                currency: true,
+                confidence: true,
+                methodologyCode: true,
+                decidedAt: true,
+                status: true,
+              },
+            },
             marketObservations: {
               where: this.publicMarketObservationFilter(),
               orderBy: { observedAt: 'desc' },
@@ -391,7 +441,12 @@ export class MarketService {
                 media: {
                   where: { status: 'SAFE', deletedAt: null },
                   orderBy: { slot: 'asc' },
-                  select: { id: true, slot: true, status: true, objectKey: true },
+                  select: {
+                    id: true,
+                    slot: true,
+                    status: true,
+                    objectKey: true,
+                  },
                 },
               },
             },
@@ -464,6 +519,20 @@ export class MarketService {
           where: this.publicValuationEvidenceFilter(),
           orderBy: { observedAt: 'desc' },
           take: 2,
+        },
+        valuationDecisions: {
+          where: { status: 'ACTIVE' },
+          orderBy: { decidedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            valueMinor: true,
+            currency: true,
+            confidence: true,
+            methodologyCode: true,
+            decidedAt: true,
+            status: true,
+          },
         },
         marketObservations: {
           where: this.publicMarketObservationFilter(),
@@ -647,9 +716,21 @@ type PublicAssetRow = {
     valueMinor: bigint;
     currency: string;
   }>;
+  valuationDecisions: Array<{
+    id: string;
+    valueMinor: bigint;
+    currency: string;
+    confidence: number;
+    methodologyCode: string;
+    decidedAt: Date;
+    status: string;
+  }>;
 };
 async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
+  const sliceValuation = selectAuthoritativeSliceValuation(
+    asset.valuationDecisions,
+  );
   const approvedMedia = asset.submissions?.[0]?.media ?? [];
   const media = (
     await Promise.all(
@@ -683,7 +764,9 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     manufacturer: asset.manufacturer,
     cardNumber: asset.cardNumber,
     description: asset.description,
-    conditionLabel: collectorConditionValue(asset.submissions?.[0]?.declaredMetadata),
+    conditionLabel: collectorConditionValue(
+      asset.submissions?.[0]?.declaredMetadata,
+    ),
     media,
     ...(asset.certificationNumber
       ? { certificationNumber: asset.certificationNumber }
@@ -699,14 +782,30 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           label: asset.gradeScaleEntry.label,
         }
       : null,
-    estimatedMarketValue: market
-      ? asMoney(market.estimatedMarketValueMinor, market.currency)
+    sliceValuation: sliceValuation
+      ? {
+          id: sliceValuation.id,
+          amount: asMoney(sliceValuation.amountMinor, sliceValuation.currency),
+          confidence: sliceValuation.confidence,
+          sourceType: sliceValuation.sourceType,
+          approvedAt: sliceValuation.approvedAt.toISOString(),
+          status: sliceValuation.status,
+        }
       : null,
+    // Keep the legacy field populated for existing clients, but derive it from
+    // the approved Slice decision rather than an external market reference.
+    estimatedMarketValue: sliceValuation
+      ? asMoney(sliceValuation.amountMinor, sliceValuation.currency)
+      : market
+        ? asMoney(market.estimatedMarketValueMinor, market.currency)
+        : null,
     change24hBps: market?.change24hBps ?? null,
     availabilityBps: market?.availableBps ?? null,
     ownersCount: market?.ownersCount ?? null,
     confidence: market?.confidence ?? null,
-    source: market?.source ?? 'NO_MARKET_DATA',
+    source: sliceValuation
+      ? 'SLICE_VALUATION'
+      : (market?.source ?? 'NO_MARKET_DATA'),
     markSource: market?.markSource ?? null,
     freshness: market?.freshness ?? 'UNAVAILABLE',
     lastSuccessfulRefreshAt:
@@ -715,8 +814,15 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     marketReference:
       externalMarketReferenceFromObservations(asset.marketObservations ?? []) ??
       externalMarketReference(asset.valuationEvidence ?? []),
-    sliceGrade: await publicSliceGrade(asset.submissions?.[0]?.preGrades?.[0], storage),
-    dataStatus: market ? status(market.status) : 'UNAVAILABLE',
+    sliceGrade: await publicSliceGrade(
+      asset.submissions?.[0]?.preGrades?.[0],
+      storage,
+    ),
+    dataStatus: sliceValuation
+      ? 'LIVE'
+      : market
+        ? status(market.status)
+        : 'UNAVAILABLE',
     ownership: asset.ownershipSupply
       ? {
           status: asset.ownershipSupply.status,
@@ -763,64 +869,70 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           expiresAt: asset.insuranceCoverage[0].expiresAt.toISOString(),
         }
       : null,
-};
-
-async function publicSliceGrade(
-  preGrade: PublicPreGrade | undefined,
-  storage: ObjectStoragePort,
-) {
-  if (!preGrade || preGrade.status !== 'SUCCEEDED') return null;
-  const visualizations = Array.isArray(preGrade.visualizations)
-    ? await Promise.all(
-        preGrade.visualizations
-          .filter(isPublicPreGradeVisualization)
-          .map(async (visualization) => ({
-            side: visualization.side,
-            type: visualization.type,
-            url: await storage
-              .createPrivateDownloadUrl(visualization.objectKey, new Date(Date.now() + 5 * 60_000))
-              .catch(() => null),
-            centering: visualization.centering ?? null,
-          })),
-      )
-    : [];
-  return {
-    status: 'SUCCEEDED' as const,
-    provider: preGrade.provider,
-    overallEstimate: preGrade.overallEstimate,
-    overallMin: preGrade.overallMin,
-    overallMax: preGrade.overallMax,
-    centeringScore: preGrade.centeringScore,
-    cornerScore: preGrade.cornerScore,
-    edgeScore: preGrade.edgeScore,
-    surfaceScore: preGrade.surfaceScore,
-    conditionLabel: preGrade.conditionLabel,
-    analyzedAt: preGrade.analyzedAt?.toISOString() ?? null,
-    warnings: Array.isArray(preGrade.warnings)
-      ? preGrade.warnings.filter((warning): warning is string => typeof warning === 'string')
-      : [],
-    visualizations,
   };
-}
 
-function isPublicPreGradeVisualization(value: unknown): value is {
-  side: 'FRONT' | 'BACK';
-  type: 'overview' | 'centering';
-  objectKey: string;
-  centering?: Record<string, number> | null;
-} {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Record<string, unknown>;
-  return (
-    (item.side === 'FRONT' || item.side === 'BACK') &&
-    (item.type === 'overview' || item.type === 'centering') &&
-    typeof item.objectKey === 'string'
-  );
-}
+  async function publicSliceGrade(
+    preGrade: PublicPreGrade | undefined,
+    storage: ObjectStoragePort,
+  ) {
+    if (!preGrade || preGrade.status !== 'SUCCEEDED') return null;
+    const visualizations = Array.isArray(preGrade.visualizations)
+      ? await Promise.all(
+          preGrade.visualizations
+            .filter(isPublicPreGradeVisualization)
+            .map(async (visualization) => ({
+              side: visualization.side,
+              type: visualization.type,
+              url: await storage
+                .createPrivateDownloadUrl(
+                  visualization.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
+                .catch(() => null),
+              centering: visualization.centering ?? null,
+            })),
+        )
+      : [];
+    return {
+      status: 'SUCCEEDED' as const,
+      provider: preGrade.provider,
+      overallEstimate: preGrade.overallEstimate,
+      overallMin: preGrade.overallMin,
+      overallMax: preGrade.overallMax,
+      centeringScore: preGrade.centeringScore,
+      cornerScore: preGrade.cornerScore,
+      edgeScore: preGrade.edgeScore,
+      surfaceScore: preGrade.surfaceScore,
+      conditionLabel: preGrade.conditionLabel,
+      analyzedAt: preGrade.analyzedAt?.toISOString() ?? null,
+      warnings: Array.isArray(preGrade.warnings)
+        ? preGrade.warnings.filter(
+            (warning): warning is string => typeof warning === 'string',
+          )
+        : [],
+      visualizations,
+    };
+  }
+
+  function isPublicPreGradeVisualization(value: unknown): value is {
+    side: 'FRONT' | 'BACK';
+    type: 'overview' | 'centering';
+    objectKey: string;
+    centering?: Record<string, number> | null;
+  } {
+    if (!value || typeof value !== 'object') return false;
+    const item = value as Record<string, unknown>;
+    return (
+      (item.side === 'FRONT' || item.side === 'BACK') &&
+      (item.type === 'overview' || item.type === 'centering') &&
+      typeof item.objectKey === 'string'
+    );
+  }
 }
 
 function collectorConditionValue(metadata: unknown) {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+    return null;
   const value = (metadata as Record<string, unknown>).condition;
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }

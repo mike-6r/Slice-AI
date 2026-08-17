@@ -48,7 +48,9 @@ function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecyclePro
       </div>
       {lifecycle.tradeabilityMessage ? (
         <div className="asset-readiness-callout">
-          <strong>{lifecycle.phase === "SUSPENDED" ? "Why is trading paused?" : "Why can’t I buy it?"}</strong>
+          <strong>
+            {lifecycle.phase === "SUSPENDED" ? "Why is trading paused?" : "Why can’t I buy it?"}
+          </strong>
           <p>{lifecycle.tradeabilityMessage}</p>
           <InfoTip
             label="How the process works"
@@ -77,11 +79,19 @@ function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecyclePro
       <div className="asset-readiness-actions" aria-label="Trading availability">
         <div>
           <strong>Buy a Slice</strong>
-          <span>{lifecycle.canBuy ? "Choose a position on the live market." : "Choose a position when trading is live."}</span>
+          <span>
+            {lifecycle.canBuy
+              ? "Choose a position on the live market."
+              : "Choose a position when trading is live."}
+          </span>
         </div>
         <div>
           <strong>Sell a Slice</strong>
-          <span>{lifecycle.canSell ? "Sell settled units from your portfolio." : "Sell settled units once trading is live."}</span>
+          <span>
+            {lifecycle.canSell
+              ? "Sell settled units from your portfolio."
+              : "Sell settled units once trading is live."}
+          </span>
         </div>
       </div>
     </>
@@ -180,7 +190,12 @@ function AssetPage() {
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
   const lifecycle = asset.marketLifecycle;
   const history = historyQuery.data ?? [];
-  const currentValue = asset.estimatedMarketValueMinor;
+  const currentValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
+  const currentValueCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
+  const sliceValuationAt = asset.sliceValuationApprovedAt ?? asset.asOf;
+  const marketReferenceAt =
+    assetQuery.data.market?.reference?.currentListing?.observedAt ??
+    assetQuery.data.market?.reference?.recentCompletedSale?.observedAt;
   const shares = sharePresentation({
     issuedUnits: issuanceQuery.data?.issuedUnits,
     valueMinor: currentValue,
@@ -201,12 +216,12 @@ function AssetPage() {
     : !issuanceQuery.isLoading && issuanceQuery.data === null;
   const liveWithoutListings = lifecycle?.phase === "LIVE" && availableSlices === 0;
   const availableOwnershipLabel = notYetTradeable
-    ? lifecycle?.statusPill ?? "Not yet available"
+    ? (lifecycle?.statusPill ?? "Not yet available")
     : liveWithoutListings
       ? "No listings"
-    : !ownershipSummaryQuery.data
-      ? formatAvailability(null)
-      : formatAvailability(ownershipSummaryQuery.data.availableOwnershipPercent);
+      : !ownershipSummaryQuery.data
+        ? formatAvailability(null)
+        : formatAvailability(ownershipSummaryQuery.data.availableOwnershipPercent);
   const slicePriceLabel = notYetTradeable
     ? "Not yet available"
     : slicePriceMinor === undefined
@@ -321,7 +336,7 @@ function AssetPage() {
             </div>
             <InfoTip
               label="About these values"
-              text="The whole collectible value is reference data. A Slice price appears only after supply is approved and ownership units are issued."
+              text="The Slice valuation is staff-approved and remains separate from external market references. A Slice price appears after supply is approved and ownership units are issued."
             />
           </div>
           <div className="asset-value-grid">
@@ -330,14 +345,14 @@ function AssetPage() {
               value={
                 currentValue === undefined
                   ? "Unavailable"
-                  : formatCurrency(currentValue, { currency: asset.estimatedMarketValueCurrency })
+                  : formatCurrency(currentValue, { currency: currentValueCurrency })
               }
             />
             <Stat label="Price per Slice" value={slicePriceLabel} />
             <Stat label="Ownership availability" value={availableOwnershipLabel} />
             <Stat
               label="Last valuation"
-              value={asset.asOf ? formatDate(asset.asOf) : "Unavailable"}
+              value={sliceValuationAt ? formatDate(sliceValuationAt) : "Unavailable"}
             />
           </div>
         </section>
@@ -527,11 +542,11 @@ function AssetPage() {
               <strong>Published</strong>
             </div>
             <div>
-              <span>Whole collectible reference</span>
+              <span>Slice valuation</span>
               <strong>
                 {currentValue === undefined
                   ? "Unavailable"
-                  : formatCurrency(currentValue, { currency: asset.estimatedMarketValueCurrency })}
+                  : formatCurrency(currentValue, { currency: currentValueCurrency })}
               </strong>
             </div>
             <ExternalReference
@@ -544,7 +559,7 @@ function AssetPage() {
             />
             <div>
               <span>Updated</span>
-              <strong>{asset.asOf ? formatDate(asset.asOf) : "Unavailable"}</strong>
+              <strong>{marketReferenceAt ? formatDate(marketReferenceAt) : "Unavailable"}</strong>
             </div>
           </section>
         </section>
@@ -741,7 +756,8 @@ function ExternalReference({
 
 function SliceGradePanel({ grade }: { grade: SliceGrade }) {
   const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-  const score = (value: number | null) => (value === null ? "—" : Number(value.toFixed(1)).toString());
+  const score = (value: number | null) =>
+    value === null ? "—" : Number(value.toFixed(1)).toString();
   const evidence = grade.visualizations.filter((item) => item.url);
   const estimate = grade.overallEstimate === null ? "—" : score(grade.overallEstimate);
   const range =
@@ -784,11 +800,26 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           <small>{grade.conditionLabel ?? "AI estimate"}</small>
         </div>
         <div className="asset-slice-grade-panel__facts">
-          <div><span>Estimate range</span><strong>{range}</strong></div>
-          <div><span>Centering</span><strong>{score(grade.centeringScore)}</strong></div>
-          <div><span>Corners</span><strong>{score(grade.cornerScore)}</strong></div>
-          <div><span>Edges</span><strong>{score(grade.edgeScore)}</strong></div>
-          <div><span>Surface</span><strong>{score(grade.surfaceScore)}</strong></div>
+          <div>
+            <span>Estimate range</span>
+            <strong>{range}</strong>
+          </div>
+          <div>
+            <span>Centering</span>
+            <strong>{score(grade.centeringScore)}</strong>
+          </div>
+          <div>
+            <span>Corners</span>
+            <strong>{score(grade.cornerScore)}</strong>
+          </div>
+          <div>
+            <span>Edges</span>
+            <strong>{score(grade.edgeScore)}</strong>
+          </div>
+          <div>
+            <span>Surface</span>
+            <strong>{score(grade.surfaceScore)}</strong>
+          </div>
         </div>
       </div>
       <div className="asset-slice-grade-panel__evidence">
@@ -816,13 +847,16 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
                   <span aria-hidden="true">View larger</span>
                 </button>
                 <figcaption>
-                  {item.side === "FRONT" ? "Front" : "Back"} · {item.type === "centering" ? "Centering" : "Overview"}
+                  {item.side === "FRONT" ? "Front" : "Back"} ·{" "}
+                  {item.type === "centering" ? "Centering" : "Overview"}
                 </figcaption>
               </figure>
             ))}
           </div>
         ) : (
-          <p className="asset-slice-grade-panel__empty">Image evidence is not available for this estimate.</p>
+          <p className="asset-slice-grade-panel__empty">
+            Image evidence is not available for this estimate.
+          </p>
         )}
       </div>
       {grade.warnings.length ? (
@@ -836,12 +870,16 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           aria-label="Expanded Slice Grade evidence"
           onClick={() => setSelectedEvidence(null)}
         >
-          <div className="asset-slice-grade-lightbox__content" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="asset-slice-grade-lightbox__content"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="asset-slice-grade-lightbox__header">
               <div>
                 <p className="asset-section-label">Slice Grade evidence</p>
                 <strong>
-                  {selected.side === "FRONT" ? "Front" : "Back"} · {selected.type === "centering" ? "Centering" : "Overview"}
+                  {selected.side === "FRONT" ? "Front" : "Back"} ·{" "}
+                  {selected.type === "centering" ? "Centering" : "Overview"}
                 </strong>
               </div>
               <button
@@ -854,9 +892,14 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
               </button>
             </div>
             <div className="asset-slice-grade-lightbox__image-wrap">
-              <img src={selected.url} alt={`${selected.side === "FRONT" ? "Front" : "Back"} card evidence enlarged`} />
+              <img
+                src={selected.url}
+                alt={`${selected.side === "FRONT" ? "Front" : "Back"} card evidence enlarged`}
+              />
             </div>
-            <p className="asset-slice-grade-lightbox__hint">Click outside the image or press Escape to close.</p>
+            <p className="asset-slice-grade-lightbox__hint">
+              Click outside the image or press Escape to close.
+            </p>
           </div>
         </div>
       ) : null}

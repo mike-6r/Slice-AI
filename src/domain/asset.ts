@@ -133,6 +133,15 @@ export interface Asset {
   media: AssetMedia[];
   /** Supporting AI condition evidence; never an official grade or valuation input. */
   sliceGrade?: SliceGrade;
+  /** Staff-approved Slice valuation; external market references remain separate. */
+  sliceValuation?: {
+    id: string;
+    amount: Money;
+    confidence: Percentage;
+    sourceType: string;
+    approvedAt: ISODateTime;
+    status: "ACTIVE";
+  };
   grade?: Grade;
   certification?: Certification;
   verification?: VerificationRecord;

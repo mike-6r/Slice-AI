@@ -5,7 +5,7 @@ import { formatPercent } from "@/lib/format";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { isBetaEnvironment } from "@/config/environment";
 
-/** Published market snapshots; it never substitutes the legacy sample tape in API mode. */
+/** Published Slice market data; it never substitutes the legacy sample tape in API mode. */
 export function MarketTicker() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
@@ -59,32 +59,34 @@ function AuthoritativeMarketTicker() {
           <span className="text-muted">Market data unavailable</span>
         ) : assets.length ? (
           <ul className="flex items-center gap-5 overflow-hidden">
-            {assets.slice(0, 5).map((asset) => (
-              <li key={asset.id} className="shrink-0">
-                <Link
-                  to="/asset/$id"
-                  params={{ id: asset.slug ?? asset.id }}
-                  className="market-tape__item flex items-center gap-2 rounded-sm"
-                >
-                  <span className="text-subtle">{asset.symbol}</span>
-                  <span className="text-foreground">
-                    {asset.market?.estimatedMarketValue
-                      ? formatMoney(
-                          asset.market.estimatedMarketValue.amount,
-                          asset.market.estimatedMarketValue.currency,
-                        )
-                      : "Unavailable"}
-                  </span>
-                  {asset.market?.hasTradingHistory && asset.market.change24hBps !== undefined && (
-                    <span
-                      className={asset.market.change24hBps >= 0 ? "text-positive" : "text-negative"}
-                    >
-                      {formatPercent(asset.market.change24hBps / 100)}
+            {assets.slice(0, 5).map((asset) => {
+              const valuation = asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
+              return (
+                <li key={asset.id} className="shrink-0">
+                  <Link
+                    to="/asset/$id"
+                    params={{ id: asset.slug ?? asset.id }}
+                    className="market-tape__item flex items-center gap-2 rounded-sm"
+                  >
+                    <span className="text-subtle">{asset.symbol}</span>
+                    <span className="text-foreground">
+                      {valuation
+                        ? formatMoney(valuation.amount, valuation.currency)
+                        : "Unavailable"}
                     </span>
-                  )}
-                </Link>
-              </li>
-            ))}
+                    {asset.market?.hasTradingHistory && asset.market.change24hBps !== undefined && (
+                      <span
+                        className={
+                          asset.market.change24hBps >= 0 ? "text-positive" : "text-negative"
+                        }
+                      >
+                        {formatPercent(asset.market.change24hBps / 100)}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <span className="text-muted">No published market data yet</span>

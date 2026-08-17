@@ -15,6 +15,10 @@ export type MarketplaceAsset = {
   gradeLabel?: string;
   grade?: string;
   certificationNumber?: string;
+  sliceValuationAmountMinor?: number;
+  sliceValuationCurrency?: SupportedCurrency;
+  sliceValuationApprovedAt?: string;
+  sliceValuationSourceType?: string;
   estimatedMarketValueMinor?: number;
   estimatedMarketValueCurrency?: SupportedCurrency;
   source?: string;
@@ -62,8 +66,14 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
     : undefined,
   certificationNumber: asset.certification?.number,
   sliceGrade: asset.sliceGrade,
-  estimatedMarketValueMinor: asset.market?.estimatedMarketValue?.amount,
-  estimatedMarketValueCurrency: asset.market?.estimatedMarketValue?.currency,
+  sliceValuationAmountMinor: asset.sliceValuation?.amount.amount,
+  sliceValuationCurrency: asset.sliceValuation?.amount.currency,
+  sliceValuationApprovedAt: asset.sliceValuation?.approvedAt,
+  sliceValuationSourceType: asset.sliceValuation?.sourceType,
+  estimatedMarketValueMinor:
+    asset.sliceValuation?.amount.amount ?? asset.market?.estimatedMarketValue?.amount,
+  estimatedMarketValueCurrency:
+    asset.sliceValuation?.amount.currency ?? asset.market?.estimatedMarketValue?.currency,
   source: asset.market?.source,
   asOf: asset.market?.asOf,
   confidence: asset.market?.confidence ?? asset.confidence,
@@ -84,7 +94,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
     if (!guide?.latestMinor || !guide.currency) return undefined;
     const amountMinor = Number(guide.latestMinor);
     if (!Number.isSafeInteger(amountMinor)) return undefined;
-    if (!['GBP', 'USD', 'CAD', 'EUR'].includes(guide.currency)) return undefined;
+    if (!["GBP", "USD", "CAD", "EUR"].includes(guide.currency)) return undefined;
     return {
       amountMinor,
       currency: guide.currency as SupportedCurrency,
