@@ -17,6 +17,15 @@ export type InitialOfferingStatus =
   | 'CANCELLED'
   | 'EXPIRED';
 
+/**
+ * Issuance consumes the approved supply-policy proposal and marks it ISSUED.
+ * An offering is allowed to reference either lifecycle state, but never an
+ * unapproved or superseded policy.
+ */
+export function isInitialOfferingSupplyPolicyReady(status: string | null | undefined) {
+  return status === 'APPROVED' || status === 'ISSUED';
+}
+
 export function validateOfferingTerms(input: {
   totalUnits: bigint;
   offeredUnits: bigint;

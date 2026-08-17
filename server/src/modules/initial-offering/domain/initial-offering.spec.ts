@@ -3,6 +3,7 @@ import {
   assertInitialOfferingTransition,
   calculateInitialOfferingSettlement,
   calculateInitialOfferingPreview,
+  isInitialOfferingSupplyPolicyReady,
   unitsForPercentage,
   validateOfferingTerms,
 } from './initial-offering';
@@ -55,5 +56,12 @@ describe('initial offering economic authority', () => {
   it('allows the full approved supply and rejects a zero-unit percentage', () => {
     expect(unitsForPercentage(1_000n, 10_000)).toBe(1_000n);
     expect(() => calculateInitialOfferingPreview({ totalUnits: 1_000n, valuationMinor: 100_000n, offeredUnits: 0n, pricePerUnitMinor: 100n, currency: 'GBP', feeBps: 0 })).toThrow(ConflictException);
+  });
+
+  it('accepts an issued policy after ownership issuance', () => {
+    expect(isInitialOfferingSupplyPolicyReady('APPROVED')).toBe(true);
+    expect(isInitialOfferingSupplyPolicyReady('ISSUED')).toBe(true);
+    expect(isInitialOfferingSupplyPolicyReady('PROPOSED')).toBe(false);
+    expect(isInitialOfferingSupplyPolicyReady('REJECTED')).toBe(false);
   });
 });

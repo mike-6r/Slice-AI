@@ -8,7 +8,7 @@ import { createIdentityTransaction } from '../../identity/persistence/prisma-ide
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { eventType, initialOfferingLifecycleEvent, orderLifecycleEvent } from '../../outbox/domain/domain-event';
-import { assertInitialOfferingTransition, calculateInitialOfferingPreview, initialOfferingFeePolicy, unitsForPercentage, validateOfferingTerms } from '../domain/initial-offering';
+import { assertInitialOfferingTransition, calculateInitialOfferingPreview, initialOfferingFeePolicy, isInitialOfferingSupplyPolicyReady, unitsForPercentage, validateOfferingTerms } from '../domain/initial-offering';
 
 type Db = Prisma.TransactionClient;
 type TransitionTarget = 'PAUSED' | 'CANCELLED' | 'EXPIRED';
@@ -30,7 +30,7 @@ export class InitialOfferingService {
       const decision = asset.valuationDecisions[0];
       const submission = asset.submissions[0];
       if (!submission) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved collector submission is required.');
-      if (!policy || policy.status !== 'APPROVED') fail('SUPPLY_POLICY_NOT_APPROVED', 'An approved supply policy is required before proposing an offering.');
+      if (!policy || !isInitialOfferingSupplyPolicyReady(policy.status)) fail('SUPPLY_POLICY_NOT_APPROVED', 'An approved supply policy is required before proposing an offering.');
       if (!decision) fail('VALUATION_REQUIRED', 'An active valuation is required before proposing an offering.');
       if (asset.initialOffering) fail('INITIAL_OFFERING_ALREADY_EXISTS', 'This asset already has an authoritative initial offering.');
       const terms = validateOfferingTerms({
@@ -71,7 +71,7 @@ export class InitialOfferingService {
     const policy = asset.ownershipSupplyPolicy;
     const decision = asset.valuationDecisions[0];
     if (!asset.submissions[0]) fail('APPROVED_SUBMISSION_REQUIRED', 'An approved collector submission is required.');
-    if (!policy || policy.status !== 'APPROVED') fail('SUPPLY_POLICY_NOT_APPROVED', 'An approved supply policy is required before configuring an offering.');
+    if (!policy || !isInitialOfferingSupplyPolicyReady(policy.status)) fail('SUPPLY_POLICY_NOT_APPROVED', 'An approved supply policy is required before configuring an offering.');
     if (!decision) fail('VALUATION_REQUIRED', 'An active valuation is required before configuring an offering.');
     const offeredUnits = unitsForPercentage(policy.proposedUnits, percentageBps);
     if (offeredUnits <= 0n) fail('OFFERING_TOO_SMALL', 'Choose a percentage that creates at least one ownership unit.');
@@ -103,7 +103,7 @@ export class InitialOfferingService {
       if (offering.status !== 'AWAITING_APPROVAL' && offering.status !== 'CHANGES_REQUESTED') fail('OFFERING_IMMUTABLE', 'Offering terms cannot change after approval.');
       const policy = offering.asset.ownershipSupplyPolicy;
       const decision = offering.asset.valuationDecisions[0];
-      if (!policy || policy.status !== 'APPROVED' || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The approved supply policy is no longer available.');
+      if (!policy || !isInitialOfferingSupplyPolicyReady(policy.status) || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The approved supply policy is no longer available.');
       if (!decision || decision.id !== offering.valuationDecisionId || decision.valueMinor !== policy.valuationMinor || decision.currency !== offering.currency) fail('VALUATION_CHANGED', 'The approved valuation has changed; request a new offering review.');
       const terms = validateOfferingTerms({ totalUnits: policy.proposedUnits, offeredUnits, pricePerUnitMinor: policy.pricePerUnitMinor, currency: policy.valuationCurrency, approvedCurrency: policy.valuationCurrency });
       const updated = await db.initialOffering.update({ where: { id: offeringId }, data: { offeredUnits, retainedUnits: terms.retainedUnits, grossOfferingMinor: terms.grossOfferingMinor, status: 'AWAITING_APPROVAL', changeRequestReason: null } });
@@ -150,7 +150,7 @@ export class InitialOfferingService {
       assertInitialOfferingTransition(offering.status, 'APPROVED');
       const policy = offering.asset.ownershipSupplyPolicy;
       const decision = offering.asset.valuationDecisions[0];
-      if (!policy || policy.status !== 'APPROVED' || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The linked supply policy is not approved.');
+      if (!policy || !isInitialOfferingSupplyPolicyReady(policy.status) || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The linked supply policy is not approved.');
       if (!decision || decision.id !== offering.valuationDecisionId || decision.valueMinor !== policy.valuationMinor || decision.currency !== offering.currency) fail('VALUATION_CHANGED', 'The linked valuation is no longer authoritative.');
       if (offering.asset.status !== 'PUBLISHED' || offering.asset.publication?.status !== 'PUBLISHED') fail('ASSET_NOT_PUBLISHED', 'The asset must be published before approval.');
       if (offering.asset.custodyRecord?.status !== 'SECURED' && !offering.asset.controlledBetaBypass) fail('CUSTODY_NOT_SECURED', 'The asset must be secured before approval.');
