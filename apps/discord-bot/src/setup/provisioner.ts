@@ -2,7 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder
 import { renderArtwork } from '../artwork.js';
 import { SliceEmbed } from '../embeds/slice-embed.js';
 import { colorNumber, presentationConfig, renderTemplate } from '../presentation-config.js';
-import { CATEGORY_DEFINITIONS, CHANNEL_DEFINITIONS, PANEL_CHANNELS, ROLE_DEFINITIONS, SLICE_DISCORD_SETUP_VERSION } from './manifest.js';
+import { CATEGORY_DEFINITIONS, CHANNEL_DEFINITIONS, LEGACY_CATEGORY_NAMES, LEGACY_CHANNEL_NAMES, PANEL_CHANNELS, ROLE_DEFINITIONS, SLICE_DISCORD_SETUP_VERSION } from './manifest.js';
 import type { ManagedResource, ManagedResourceType, SetupRepository } from '../persistence/setup-repository.js';
 
 export type ReconciliationPlan = { missingRoles: number; missingCategories: number; missingChannels: number; renamed: number; moved: number; permissionDrift: number; staleReferences: number; missingPanels: number; ambiguous: string[]; updateAvailable: boolean; artworkMissing: number };
@@ -32,13 +32,13 @@ export class SetupProvisioner {
     return { created, updated, plan };
   }
   async status(guild: Guild): Promise<{ plan: ReconciliationPlan; version: number; configured: boolean }> { const config = await this.repository.getGuildConfig(guild.id); return { plan: await this.inspect(guild), version: config?.setupVersion ?? 0, configured: Boolean(config) }; }
-  async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); return { managedRoles: resources.filter((resource) => resource.resourceType === 'ROLE').length, managedCategories: resources.filter((resource) => resource.resourceType === 'CATEGORY').length, managedChannels: resources.filter((resource) => resource.resourceType === 'CHANNEL').length, panels: panels.length, ticketChannels: this.ticketChannels(guild, resources).size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length) }; }
-  async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const ticketIds = this.ticketChannels(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0;
+  async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); return { managedRoles: scan.roleIds.size, managedCategories: scan.categoryIds.size, managedChannels: scan.channelIds.size, panels: panels.length, ticketChannels: scan.ticketIds.size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length || scan.roleIds.size || scan.categoryIds.size || scan.channelIds.size || scan.ticketIds.size) }; }
+  async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0;
     for (const panel of panels) { const channel = await this.channel(guild, panel.channelId); if (channel?.isTextBased() && 'messages' in channel) { const message = await channel.messages.fetch(panel.messageId).catch(() => null); if (message) { await message.delete(); deletedPanels++; } } }
-    for (const id of ticketIds) if (await this.deleteChannel(guild, id)) deletedTicketChannels++;
-    for (const resource of resources.filter((item) => item.resourceType === 'CHANNEL' && !ticketIds.has(item.discordId))) if (await this.deleteChannel(guild, resource.discordId)) deletedChannels++;
-    for (const resource of resources.filter((item) => item.resourceType === 'CATEGORY')) if (await this.deleteChannel(guild, resource.discordId)) deletedCategories++;
-    for (const resource of resources.filter((item) => item.resourceType === 'ROLE')) { const role = await this.role(guild, resource.discordId); if (role && role.id !== guild.id) { await role.delete('Slice setup reset'); deletedRoles++; } }
+    for (const id of scan.ticketIds) if (await this.deleteChannel(guild, id)) deletedTicketChannels++;
+    for (const id of scan.channelIds) if (await this.deleteChannel(guild, id)) deletedChannels++;
+    for (const id of scan.categoryIds) if (await this.deleteChannel(guild, id)) deletedCategories++;
+    for (const id of scan.roleIds) { const role = await this.role(guild, id); if (role && role.id !== guild.id) { await role.delete('Slice setup reset'); deletedRoles++; } }
     await this.repository.resetGuildData(guild.id);
     return { deletedRoles, deletedCategories, deletedChannels, deletedPanels, deletedTicketChannels };
   }
@@ -54,7 +54,34 @@ export class SetupProvisioner {
   private async upsertResource(guildId: string, type: ManagedResourceType, logicalKey: string, discordId: string, expectedName: string, parentLogicalKey: string | null): Promise<void> { await this.repository.upsertResource({ guildId, resourceType: type, logicalKey, discordId, expectedName, parentLogicalKey, setupVersion: SLICE_DISCORD_SETUP_VERSION, metadata: null }); }
   private async role(guild: Guild, id: string): Promise<Role | undefined> { return (await guild.roles.fetch(id).catch(() => undefined)) ?? undefined; }
   private async channel(guild: Guild, id: string): Promise<GuildBasedChannel | undefined> { return (await guild.channels.fetch(id).catch(() => undefined)) ?? undefined; }
-  private ticketChannels(guild: Guild, resources: ManagedResource[]): Set<string> { const support = resources.find((resource) => resource.resourceType === 'CATEGORY' && resource.logicalKey === 'support'); if (!support) return new Set(); return new Set(guild.channels.cache.filter((channel) => channel.parentId === support.discordId && channel.name.startsWith('ticket-')).keys()); }
+  private scanGuild(guild: Guild, resources: ManagedResource[]): { roleIds: Set<string>; categoryIds: Set<string>; channelIds: Set<string>; ticketIds: Set<string> } {
+    const storedRoleIds = new Set(resources.filter((resource) => resource.resourceType === 'ROLE').map((resource) => resource.discordId));
+    const storedCategoryIds = new Set(resources.filter((resource) => resource.resourceType === 'CATEGORY').map((resource) => resource.discordId));
+    const storedChannelIds = new Set(resources.filter((resource) => resource.resourceType === 'CHANNEL').map((resource) => resource.discordId));
+    const categoryNames = new Map<string, string>();
+    for (const spec of CATEGORY_DEFINITIONS) { categoryNames.set(this.normalizedName(spec.name), spec.key); for (const alias of LEGACY_CATEGORY_NAMES[spec.key] ?? []) categoryNames.set(this.normalizedName(alias), spec.key); }
+    const categories = guild.channels.cache.filter((channel) => channel.type === ChannelType.GuildCategory && (storedCategoryIds.has(channel.id) || categoryNames.has(this.normalizedName(channel.name))));
+    const categoryIds = new Set(categories.keys());
+    const categoryKeyById = new Map<string, string>();
+    for (const category of categories.values()) categoryKeyById.set(category.id, categoryNames.get(this.normalizedName(category.name)) ?? resources.find((resource) => resource.resourceType === 'CATEGORY' && resource.discordId === category.id)?.logicalKey ?? '');
+    const knownChannels = new Map<string, string[]>();
+    for (const spec of CHANNEL_DEFINITIONS) knownChannels.set(spec.key, [spec.name, ...(LEGACY_CHANNEL_NAMES[spec.key] ?? [])]);
+    const knownMarkerKeys = new Set(CHANNEL_DEFINITIONS.map((spec) => spec.key));
+    const channelIds = new Set<string>();
+    for (const channel of guild.channels.cache.values()) {
+      if (channel.type !== ChannelType.GuildText) continue;
+      const managedTopic = Boolean(channel.topic && channel.topic.startsWith('Slice AI managed channel • ') && knownMarkerKeys.has(channel.topic.slice('Slice AI managed channel • '.length)));
+      const matchingSpec = [...knownChannels.entries()].find(([, names]) => names.includes(channel.name));
+      const managedByLocation = Boolean(matchingSpec && categoryIds.has(channel.parentId ?? '') && categoryKeyById.get(channel.parentId ?? '') === CHANNEL_DEFINITIONS.find((spec) => spec.key === matchingSpec[0])?.category);
+      if (storedChannelIds.has(channel.id) || managedTopic || managedByLocation) channelIds.add(channel.id);
+    }
+    const supportCategoryIds = new Set([...categoryKeyById.entries()].filter(([, key]) => key === 'support').map(([id]) => id));
+    const ticketIds = new Set(guild.channels.cache.filter((channel) => channel.type === ChannelType.GuildText && supportCategoryIds.has(channel.parentId ?? '') && channel.name.startsWith('ticket-')).keys());
+    for (const id of ticketIds) channelIds.delete(id);
+    const roleIds = new Set(guild.roles.cache.filter((role) => role.id !== guild.id && (storedRoleIds.has(role.id) || ROLE_DEFINITIONS.some((spec) => spec.name === role.name))).keys());
+    return { roleIds, categoryIds, channelIds, ticketIds };
+  }
+  private normalizedName(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' '); }
   private async deleteChannel(guild: Guild, id: string): Promise<boolean> { const channel = await this.channel(guild, id); if (!channel) return false; await channel.delete('Slice setup reset'); return true; }
   private staffRoleIds(guildId: string): Promise<string[]> { return Promise.all(['owner', 'administrator', 'operations', 'compliance', 'support', 'moderator', 'developer'].map((key) => this.repository.getResource(guildId, 'ROLE', key))).then((rows) => rows.flatMap((row) => row ? [row.discordId] : [])); }
   private async applyStaffPermissions(channel: GuildBasedChannel, guild: Guild, staff: boolean): Promise<void> {
