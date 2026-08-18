@@ -3,11 +3,11 @@ import { ProviderResilienceService } from './provider-resilience.service';
 describe('ProviderResilienceService', () => {
   it('opens after bounded temporary failures and closes after a successful half-open probe', () => {
     const service = new ProviderResilienceService();
-    service.failure('BRIDGE', 'TEMPORARY'); service.failure('BRIDGE', 'TIMEOUT'); service.failure('BRIDGE', 'RATE_LIMIT');
-    expect(service.state('BRIDGE')).toBe('OPEN');
-    expect(() => service.beforeOutbound('BRIDGE')).toThrow('temporarily unavailable');
-    service.success('BRIDGE');
-    expect(service.state('BRIDGE')).toBe('CLOSED');
+    service.failure('STRIPE_SANDBOX', 'TEMPORARY'); service.failure('STRIPE_SANDBOX', 'TIMEOUT'); service.failure('STRIPE_SANDBOX', 'RATE_LIMIT');
+    expect(service.state('STRIPE_SANDBOX')).toBe('OPEN');
+    expect(() => service.beforeOutbound('STRIPE_SANDBOX')).toThrow('temporarily unavailable');
+    service.success('STRIPE_SANDBOX');
+    expect(service.state('STRIPE_SANDBOX')).toBe('CLOSED');
     expect(service.maxImmediateAttempts).toBe(3);
     expect(service.retryDelayMs(1, () => 0)).toBe(100);
     expect(service.retryDelayMs(1, () => 0.5)).toBe(150);

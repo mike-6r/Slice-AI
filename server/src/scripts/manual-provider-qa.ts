@@ -22,7 +22,7 @@ const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
 const config = {
   providerMode: 'local',
-  providersProductionEnabled: false,
+  stripeLiveEnabled: false,
   providerEncryptionKey: 'provider-qa-local-key-not-production',
   providerWebhookToleranceSeconds: 300,
   withdrawalLimitPerMovementMinor: 500_000,

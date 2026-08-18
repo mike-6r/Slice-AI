@@ -10,7 +10,7 @@ import { ProviderWebhookService } from './application/provider-webhook.service';
 import { ProviderReconciliationService } from './application/provider-reconciliation.service';
 import { ComplianceHoldService } from './application/compliance-hold.service';
 import { ProviderResilienceService } from './application/provider-resilience.service';
-import { PlaidBankLinkService } from './application/plaid-bank-link.service';
+import { BankConnectionService } from './application/external-provider-boundaries';
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
@@ -24,7 +24,7 @@ import { ProvidersController } from './http/providers.controller';
     ProviderReconciliationService,
     ComplianceHoldService,
     ProviderResilienceService,
-    PlaidBankLinkService,
+    BankConnectionService,
   ],
   exports: [
     ProviderCryptoService,
@@ -34,7 +34,7 @@ import { ProvidersController } from './http/providers.controller';
     ProviderReconciliationService,
     ComplianceHoldService,
     ProviderResilienceService,
-    PlaidBankLinkService,
+    BankConnectionService,
   ],
 })
 export class ProvidersModule {}

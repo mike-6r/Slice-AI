@@ -162,7 +162,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   DISTRIBUTION_PREPARED: ['netMinor'],
   DISTRIBUTION_POSTED: ['netMinor'],
   COMPLIANCE_SESSION_STARTED: ['provider'],
-  PLAID_BANK_CONNECTED: ['provider', 'accountCount'],
+  BANK_CONNECTION_CONNECTED: ['provider', 'accountCount'],
   COMPLIANCE_DECISION_RECORDED: ['status', 'reasonCode'],
   WALLET_MOVEMENT_CREATED: ['type', 'amountMinor'],
   WALLET_MOVEMENT_UPDATED: ['status', 'reasonCode'],

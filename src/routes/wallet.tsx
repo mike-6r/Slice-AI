@@ -23,8 +23,7 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { usePlaidLink } from "react-plaid-link";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/http-client";
@@ -315,7 +314,7 @@ function ConnectedBankPanel({
           </ul>
         ) : null}
         {!query.isLoading && !query.isError && !query.data?.length ? <BankEmpty /> : null}
-        <PlaidLinkControl refreshWallet={refreshWallet} />
+        <BankConnectionControl />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />
@@ -785,97 +784,15 @@ function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPa
   );
 }
 
-function PlaidLinkControl({ refreshWallet }: { refreshWallet: () => void }) {
-  const services = useAppServices();
-  const [token, setToken] = useState<string | null>(null);
-  const [linkError, setLinkError] = useState<unknown>(null);
-  const tokenRequest = useMutation({
-    mutationFn: services.providers.createBankLinkToken,
-    onSuccess: (result) => {
-      setLinkError(null);
-      setToken(result.linkToken);
-    },
-  });
-  const exchange = useMutation({
-    mutationFn: services.providers.exchangeBankLinkPublicToken,
-    onSuccess: (result) => {
-      setToken(null);
-      refreshWallet();
-      toast.success(result.replayed ? "Bank connection already saved." : "Bank account connected.");
-    },
-  });
-  const currentError = tokenRequest.error ?? exchange.error ?? linkError;
+function BankConnectionControl() {
   return (
     <div className="wallet-bank-connect">
-      {token ? (
-        <PlaidLinkSession
-          token={token}
-          exchange={(publicToken) => exchange.mutate(publicToken)}
-          close={() => setToken(null)}
-          reportError={setLinkError}
-          busy={exchange.isPending}
-        />
-      ) : (
-        <button
-          type="button"
-          disabled={tokenRequest.isPending || exchange.isPending}
-          onClick={() => {
-            setLinkError(null);
-            tokenRequest.mutate();
-          }}
-        >
-          <Landmark aria-hidden="true" />
-          {tokenRequest.isPending
-            ? "Preparing secure connection…"
-            : exchange.isPending
-              ? "Saving connection…"
-              : "Connect bank"}
-          <ArrowRight aria-hidden="true" />
-        </button>
-      )}
-      {currentError ? <InlineError error={currentError} /> : null}
+      <button type="button" disabled title="Bank connection setup is coming soon.">
+        <Landmark aria-hidden="true" />
+        Bank connection setup coming soon
+        <ArrowRight aria-hidden="true" />
+      </button>
     </div>
-  );
-}
-
-/** Load Plaid Link only after a user has explicitly requested a connection. */
-function PlaidLinkSession({
-  token,
-  exchange,
-  close,
-  reportError,
-  busy,
-}: {
-  token: string;
-  exchange: (publicToken: string) => void;
-  close: () => void;
-  reportError: (error: unknown) => void;
-  busy: boolean;
-}) {
-  const { open, ready, error } = usePlaidLink({
-    token,
-    onSuccess: exchange,
-    onExit: (exitError) => {
-      close();
-      if (exitError) {
-        reportError(exitError);
-        toast.error("Bank Link could not complete. No bank account was connected.");
-      }
-    },
-  });
-  useEffect(() => {
-    if (error) reportError(error);
-  }, [error, reportError]);
-  useEffect(() => {
-    if (ready && !busy) open();
-  }, [busy, open, ready]);
-
-  return (
-    <button type="button" disabled>
-      <Landmark aria-hidden="true" />
-      {busy ? "Saving connection…" : "Opening secure connection…"}
-      <ArrowRight aria-hidden="true" />
-    </button>
   );
 }
 

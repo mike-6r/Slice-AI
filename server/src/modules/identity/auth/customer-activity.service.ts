@@ -23,7 +23,7 @@ const customerActions = [
   'ACCOUNT_PREFERENCES_UPDATED',
   'DISCORD_ACCOUNT_LINKED',
   'DISCORD_ACCOUNT_UNLINKED',
-  'PLAID_BANK_CONNECTED',
+  'BANK_CONNECTION_CONNECTED',
   'DATA_EXPORT_REQUESTED',
   'ACCOUNT_DEACTIVATED',
   'ACCOUNT_DELETION_REQUESTED',
@@ -103,7 +103,7 @@ function activityCopy(action: CustomerAction) {
     case 'ACCOUNT_PREFERENCES_UPDATED': return { type: 'PREFERENCES_UPDATED', title: 'Preferences updated', description: 'Your account preferences were updated.' };
     case 'DISCORD_ACCOUNT_LINKED': return { type: 'DISCORD_LINKED', title: 'Discord linked', description: 'A Discord account was linked.' };
     case 'DISCORD_ACCOUNT_UNLINKED': return { type: 'DISCORD_UNLINKED', title: 'Discord unlinked', description: 'Your Discord account was unlinked.' };
-    case 'PLAID_BANK_CONNECTED': return { type: 'BANK_LINKED', title: 'Bank connected', description: 'A bank account was connected.' };
+    case 'BANK_CONNECTION_CONNECTED': return { type: 'BANK_LINKED', title: 'Bank connected', description: 'A bank account was connected.' };
     case 'DATA_EXPORT_REQUESTED': return { type: 'DATA_EXPORT_REQUESTED', title: 'Data export requested', description: 'Your account data export was generated.' };
     case 'ACCOUNT_DEACTIVATED': return { type: 'ACCOUNT_DEACTIVATED', title: 'Account deactivated', description: 'Your account was deactivated.' };
     case 'ACCOUNT_DELETION_REQUESTED': return { type: 'DELETION_REQUESTED', title: 'Deletion requested', description: 'Your account deletion request was recorded.' };

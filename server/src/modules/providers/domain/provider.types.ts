@@ -1,5 +1,5 @@
-/** Old provider codes remain readable only for historical persisted records. */
-export type ProviderName = 'BRIDGE' | 'LOCAL_TEST';
+/** Active provider codes. Legacy enum values remain readable in persistence only. */
+export type ProviderName = 'LOCAL_TEST' | 'STRIPE_SANDBOX' | 'STRIPE_LIVE';
 export type NormalizedComplianceStatus = 'NOT_STARTED' | 'PENDING' | 'REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'MANUAL_REVIEW' | 'SUSPENDED';
 export type RiskDecision = 'ALLOW' | 'MANUAL_REVIEW' | 'BLOCK';
 export type NormalizedMovementStatus = 'CREATED' | 'PENDING_PROVIDER' | 'PROCESSING' | 'SETTLED' | 'FAILED' | 'CANCELLED' | 'RETURNED' | 'REVERSED' | 'MANUAL_REVIEW' | 'HELD';
@@ -23,15 +23,3 @@ export interface ExternalMovementProvider {
   createWithdrawal(input: { movementId: string; amountMinor: string; currency: 'GBP' }): Promise<{ providerReference: string; status: 'PENDING' }>;
   lookup(input: { providerReference: string }): Promise<{ status: NormalizedMovementStatus }>;
 }
-
-export type BridgeTransferState =
-  | 'awaiting_funds'
-  | 'in_review'
-  | 'funds_received'
-  | 'payment_submitted'
-  | 'payment_processed'
-  | 'canceled'
-  | 'undeliverable'
-  | 'returned'
-  | 'refunded'
-  | 'error';

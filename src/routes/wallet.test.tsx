@@ -19,19 +19,11 @@ import {
   walletAccessPresentation,
 } from "./-wallet-presentation";
 
-const { usePlaidLinkSpy } = vi.hoisted(() => ({
-  usePlaidLinkSpy: vi.fn(() => ({ open: vi.fn(), ready: false, error: null })),
-}));
-
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }));
 vi.mock("@/auth/use-session", () => ({ useSession: () => ({ isAuthenticated: true }) }));
-vi.mock("react-plaid-link", () => ({
-  usePlaidLink: usePlaidLinkSpy,
-}));
-
 import { Wallet } from "./wallet";
 
 const populatedSummary: PortfolioSummary = {
@@ -111,10 +103,9 @@ function renderWallet({
 }
 
 describe("Document 016 wallet UI", () => {
-  it("does not initialize Plaid Link until the customer requests a bank connection", () => {
-    usePlaidLinkSpy.mockClear();
-    renderWallet({ banks: [], movements: { items: [], nextCursor: null } });
-    expect(usePlaidLinkSpy).not.toHaveBeenCalled();
+  it("keeps external bank setup visibly deferred without fabricating a connection", () => {
+    const html = renderWallet({ banks: [], movements: { items: [], nextCursor: null } });
+    expect(html).toContain("Bank connection setup coming soon");
   });
 
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
@@ -146,7 +137,7 @@ describe("Document 016 wallet UI", () => {
     });
     expect(html).toContain("£0.00");
     expect(html).toContain("No bank connected");
-    expect(html).toContain("Connect bank");
+    expect(html).toContain("Bank connection setup coming soon");
     expect(html).toContain("No movements yet");
     expect(html).toContain("Wallet insights unavailable");
     expect(html).toContain("No recent activity");

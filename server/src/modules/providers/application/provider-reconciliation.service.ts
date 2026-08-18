@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ProviderCode } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
@@ -10,7 +11,7 @@ export class ProviderReconciliationService {
   constructor(private readonly db: PrismaService, private readonly recentAuth: RecentAuthService) {}
 
   /** Read-only reconciliation: discrepancies are durable; authority is never repaired here. */
-  async run(actor: Actor, provider: 'BRIDGE' | 'LOCAL_TEST', requestId: string) {
+  async run(actor: Actor, provider: ProviderCode, requestId: string) {
     this.recentAuth.require(actor);
     return this.db.$transaction(async (db) => {
       const movements = await db.moneyMovement.findMany({

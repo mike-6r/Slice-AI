@@ -3524,12 +3524,12 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           !["NOT_STARTED", "PENDING", "APPROVED", "REVIEW", "REJECTED"].includes(
             String(value.status),
           ) ||
-          (value.provider !== "LOCAL_TEST" && value.provider !== "PLAID")
+          !["LOCAL_TEST", "STRIPE_SANDBOX", "STRIPE_LIVE"].includes(String(value.provider))
         )
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid compliance session from service.");
         return {
           status: value.status as ComplianceSession["status"],
-          provider: value.provider,
+          provider: value.provider as ComplianceSession["provider"],
           sessionUrl: nullableString(value.sessionUrl, "compliance.sessionUrl"),
           capability:
             value.capability === "NOT_REQUIRED_IN_CURRENT_BETA" ||
@@ -3541,11 +3541,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async createBankLinkToken() {
         const value = objectField(
           await client.request<unknown>("/wallet/bank-link/token", { method: "POST" }),
-          "Plaid Link token",
+          "bank connection token",
         );
         return {
-          linkToken: stringField(value.linkToken, "plaid.linkToken"),
-          expiration: stringField(value.expiration, "plaid.expiration") as ISODateTime,
+          linkToken: stringField(value.linkToken, "bankConnection.linkToken"),
+          expiration: stringField(value.expiration, "bankConnection.expiration") as ISODateTime,
         };
       },
       async exchangeBankLinkPublicToken(publicToken) {
@@ -3555,7 +3555,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             body: { publicToken },
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
-          "Plaid Link exchange",
+          "bank connection exchange",
         );
         if (!Array.isArray(value.connections) || typeof value.replayed !== "boolean")
           throw new ApiError(

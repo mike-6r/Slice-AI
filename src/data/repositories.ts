@@ -25,7 +25,7 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   BankConnection,
-  PlaidLinkToken,
+  BankConnectionToken,
   PriceAlert,
   PricePoint,
   SaleProposal,
@@ -1614,7 +1614,7 @@ export interface WalletRepository {
 export interface ProviderRepository {
   getCompliance(): Promise<ComplianceSummary>;
   startCompliance(): Promise<ComplianceSession>;
-  createBankLinkToken(): Promise<PlaidLinkToken>;
+  createBankLinkToken(): Promise<BankConnectionToken>;
   exchangeBankLinkPublicToken(
     publicToken: string,
   ): Promise<{ connections: BankConnection[]; replayed: boolean }>;

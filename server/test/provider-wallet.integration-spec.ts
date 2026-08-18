@@ -95,8 +95,8 @@ describe('Document 016 provider-neutral wallet authority', () => {
   });
 
   it('persists deterministic provider reconciliation discrepancies without repairing authority', async () => {
-    const movement = await db.moneyMovement.create({ data: { id: `${run}-mismatch`, userId, cashAccountId: cashId, type: 'DEPOSIT', amountMinor: 99n, currency: 'GBP', status: 'SETTLED', provider: 'BRIDGE', idempotencyKeyHash: crypto.hash(`${run}-mismatch-key`) } });
-    const result = await reconciliation.run(actor, 'BRIDGE', `${run}-reconcile`);
+    const movement = await db.moneyMovement.create({ data: { id: `${run}-mismatch`, userId, cashAccountId: cashId, type: 'DEPOSIT', amountMinor: 99n, currency: 'GBP', status: 'SETTLED', provider: 'LOCAL_TEST', idempotencyKeyHash: crypto.hash(`${run}-mismatch-key`) } });
+    const result = await reconciliation.run(actor, 'LOCAL_TEST', `${run}-reconcile`);
     expect(result).toMatchObject({ reconciled: false, mismatchCodes: ['MISSING_JOURNAL', 'STATUS_MISMATCH'] });
     expect((await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } })).status).toBe('SETTLED');
     expect(await db.providerDiscrepancy.count({ where: { runId: result.id } })).toBe(2);

@@ -3,9 +3,9 @@
 ## Deployment posture
 
 Slice is **not authorised for production launch**. Provider certification and human security,
-legal, operations and launch approvals remain required. `PROVIDERS_PRODUCTION_ENABLED=false` is the
-safe default; setting it to `true` requires production-mode Bridge, Plaid and
-BlockchainAnalysis.io credentials plus a non-placeholder encryption key.
+legal, operations and launch approvals remain required. `STRIPE_LIVE_ENABLED=false` is the
+safe default; enabling live mode requires explicit `PROVIDER_MODE=stripe_live`, Stripe and
+BlockchainAnalysis.io credentials, plus a non-placeholder encryption key.
 
 Production configuration must be supplied from a deployment secret manager. It must set explicit
 HTTPS `CORS_ORIGINS`, a non-loopback `HOST`, `COOKIE_SECURE=true`, PostgreSQL/Redis URLs and a
@@ -28,8 +28,8 @@ organisation's change-control system.
 - All ownership, finance, trading, provider and outbox reconciliations are green.
 - There are no unreviewed critical dead letters or open critical incidents.
 - A PostgreSQL restore rehearsal has met the approved RPO/RTO and is recorded.
-- Bridge and Plaid sandbox certification and BlockchainAnalysis.io account certification are signed
-  off by their respective owners.
+- Stripe sandbox certification and BlockchainAnalysis.io account certification are signed
+  off by their respective owners before any external provider mode is enabled.
 - Human security, legal, operations and product owners record an explicit launch decision.
 
 ## Local Phase 3 evidence

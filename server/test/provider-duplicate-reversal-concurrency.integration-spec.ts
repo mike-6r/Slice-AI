@@ -95,7 +95,7 @@ describe('Document 016 duplicate provider reversal concurrency', () => {
     expect(balance.postedDebitMinor).toBe(totals.find((item) => item.side === 'DEBIT')?._sum.amountMinor ?? 0n);
     expect(balance.postedCreditMinor).toBe(totals.find((item) => item.side === 'CREDIT')?._sum.amountMinor ?? 0n);
     expect(balance.postedCreditMinor - balance.postedDebitMinor - balance.reservedMinor).toBeGreaterThanOrEqual(0n);
-    expect(await reconciliation.run(actor, 'BRIDGE', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
+    expect(await reconciliation.run(actor, 'LOCAL_TEST', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
   });
 
   async function rebuildProviderClearingProjection() {

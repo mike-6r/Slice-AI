@@ -247,7 +247,7 @@ describe('loadAppConfig', () => {
     ).toThrow('CORS_ORIGINS must contain valid HTTP(S) origins only.');
   });
 
-  it('fails closed when explicitly enabled Bridge mode lacks credentials or webhook key', () => {
+  it('fails closed when explicitly enabled Stripe live mode lacks credentials or webhook key', () => {
     const production = {
       NODE_ENV: 'production' as const,
       DATABASE_URL: 'postgresql://user:pass@localhost:5432/slice',
@@ -265,21 +265,21 @@ describe('loadAppConfig', () => {
       TWILIO_AUTH_TOKEN: 'twilio-test-token',
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
-      PROVIDER_MODE: 'production',
-      PROVIDERS_PRODUCTION_ENABLED: 'true',
+      PROVIDER_MODE: 'stripe_live',
+      STRIPE_LIVE_ENABLED: 'true',
       PROVIDER_ENCRYPTION_KEY:
         'an-encryption-key-that-is-long-enough-for-tests',
     };
-    expect(() => loadAppConfig(production)).toThrow('BRIDGE_API_KEY');
+    expect(() => loadAppConfig(production)).toThrow('STRIPE_SECRET_KEY');
     expect(() =>
       loadAppConfig({
         ...production,
-        BRIDGE_API_KEY: 'bridge-api-key-not-a-real-secret',
+        STRIPE_SECRET_KEY: 'stripe-secret-not-a-real-secret',
       }),
-    ).toThrow('BRIDGE_WEBHOOK_PUBLIC_KEY');
+    ).toThrow('STRIPE_WEBHOOK_SECRET');
   });
 
-  it('rejects placeholder secrets and Sandbox Plaid when production providers are enabled', () => {
+  it('rejects placeholder secrets in Stripe live mode', () => {
     const production = {
       NODE_ENV: 'production' as const,
       DATABASE_URL: 'postgresql://user:pass@localhost:5432/slice',
@@ -298,24 +298,32 @@ describe('loadAppConfig', () => {
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
       COOKIE_SECURE: 'true' as const,
-      PROVIDER_MODE: 'production' as const,
-      PROVIDERS_PRODUCTION_ENABLED: 'true' as const,
+      PROVIDER_MODE: 'stripe_live' as const,
+      STRIPE_LIVE_ENABLED: 'true' as const,
       PROVIDER_ENCRYPTION_KEY: 'replace-with-production-encryption-key',
-      BRIDGE_API_KEY: 'replace-with-bridge-api-key',
-      BRIDGE_WEBHOOK_PUBLIC_KEY: 'a'.repeat(64),
-      PLAID_CLIENT_ID: 'plaid-client-id',
-      PLAID_SECRET: 'plaid-secret-that-is-long-enough',
-      PLAID_IDV_TEMPLATE_ID: 'plaid-idv-template',
+      STRIPE_SECRET_KEY: 'replace-with-stripe-secret-key',
+      STRIPE_WEBHOOK_SECRET: 'a'.repeat(32),
       BLOCKCHAIN_ANALYSIS_API_KEY: 'blockchain-analysis-key',
     };
     expect(() => loadAppConfig(production)).toThrow(
-      'PLAID_ENV must be production',
-    );
-    expect(() =>
-      loadAppConfig({ ...production, PLAID_ENV: 'production' }),
-    ).toThrow(
       'PROVIDER_ENCRYPTION_KEY must be supplied from the deployment secret manager.',
     );
+  });
+
+  it('keeps Stripe sandbox representable without activating live mode', () => {
+    const config = loadAppConfig({
+      ...unitTestEnvironment,
+      PROVIDER_MODE: 'stripe_sandbox',
+      STRIPE_LIVE_ENABLED: 'false',
+    });
+    expect(config.providerMode).toBe('stripe_sandbox');
+    expect(config.stripeLiveEnabled).toBe(false);
+  });
+
+  it('rejects live enablement unless Stripe live mode is selected', () => {
+    expect(() =>
+      loadAppConfig({ ...unitTestEnvironment, STRIPE_LIVE_ENABLED: 'true' }),
+    ).toThrow('STRIPE_LIVE_ENABLED requires PROVIDER_MODE=stripe_live.');
   });
 
   it('uses explicit proxy hop configuration and rejects the retired broad setting', () => {

@@ -64,28 +64,12 @@ const configSchema = z.object({
     .default('slice_refresh'),
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
   COOKIE_DOMAIN: z.string().min(1).optional(),
-  PROVIDER_MODE: z.enum(['local', 'sandbox', 'production']).default('local'),
-  PROVIDERS_PRODUCTION_ENABLED: z.enum(['true', 'false']).default('false'),
+  PROVIDER_MODE: z.enum(['local', 'stripe_sandbox', 'stripe_live']).default('local'),
+  STRIPE_LIVE_ENABLED: z.enum(['true', 'false']).default('false'),
   PROVIDER_ENCRYPTION_KEY: z.string().min(32).optional(),
-  BRIDGE_API_KEY: z.string().min(16).optional(),
-  BRIDGE_API_BASE_URL: z.string().url().default('https://api.bridge.xyz/v0'),
-  BRIDGE_WEBHOOK_PUBLIC_KEY: z.string().min(64).optional(),
-  BRIDGE_REQUEST_TIMEOUT_MS: z.coerce
-    .number()
-    .int()
-    .min(100)
-    .max(30_000)
-    .default(10_000),
-  PLAID_CLIENT_ID: z.string().min(1).optional(),
-  PLAID_SECRET: z.string().min(16).optional(),
-  PLAID_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
-  PLAID_IDV_TEMPLATE_ID: z.string().min(1).optional(),
-  PLAID_REQUEST_TIMEOUT_MS: z.coerce
-    .number()
-    .int()
-    .min(100)
-    .max(30_000)
-    .default(10_000),
+  STRIPE_SECRET_KEY: z.string().min(16).optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(16).optional(),
   XIMILAR_API_TOKEN: z.string().min(1).optional(),
   XIMILAR_ENABLED: z.enum(['true', 'false']).default('false'),
   XIMILAR_CARD_GRADING_ENABLED: z.enum(['true', 'false']).default('false'),
@@ -184,7 +168,8 @@ const configSchema = z.object({
     .min(100)
     .max(30_000)
     .default(10_000),
-  // Deterministic local-only webhook signing. Never used for Bridge webhooks.
+  // Deterministic local-only webhook signing. External webhook verification is
+  // intentionally deferred until the Stripe integration phase.
   PROVIDER_WEBHOOK_SIGNING_SECRET: z.string().min(32).optional(),
   PROVIDER_WEBHOOK_PREVIOUS_SIGNING_SECRET: z.string().min(32).optional(),
   PROVIDER_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT: z.coerce.date().optional(),
@@ -351,18 +336,14 @@ export type AppConfig = {
   refreshCookieName: string;
   cookieSecure: boolean;
   cookieDomain?: string;
-  providerMode: 'local' | 'sandbox' | 'production';
-  providersProductionEnabled: boolean;
+  providerMode: 'local' | 'stripe_sandbox' | 'stripe_live';
+  /** @deprecated Test fixtures may still provide this historical flag. */
+  providersProductionEnabled?: boolean;
+  stripeLiveEnabled: boolean;
   providerEncryptionKey?: string;
-  bridgeApiKey?: string;
-  bridgeApiBaseUrl: string;
-  bridgeWebhookPublicKey?: string;
-  bridgeRequestTimeoutMs: number;
-  plaidClientId?: string;
-  plaidSecret?: string;
-  plaidEnvironment: 'sandbox' | 'production';
-  plaidIdentityVerificationTemplateId?: string;
-  plaidRequestTimeoutMs: number;
+  stripeSecretKey?: string;
+  stripePublishableKey?: string;
+  stripeWebhookSecret?: string;
   ximilarApiToken?: string;
   ximilarEnabled?: boolean;
   ximilarCardGradingEnabled?: boolean;
@@ -667,8 +648,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       assertNoPlaceholderSecret(parsed.JWT_ACCESS_SECRET, 'JWT_ACCESS_SECRET');
     }
   }
-  const providersProductionEnabled =
-    parsed.PROVIDERS_PRODUCTION_ENABLED === 'true';
+  const stripeLiveEnabled = parsed.STRIPE_LIVE_ENABLED === 'true';
   const operationalFeatureDefault = parsed.NODE_ENV !== 'production';
   const localSubmissionStorageEnabled =
     parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === 'true' ||
@@ -684,66 +664,36 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       'S3_COMPATIBLE object storage requires OBJECT_STORAGE_BUCKET and OBJECT_STORAGE_REGION.',
     );
   }
-  if (providersProductionEnabled && parsed.PROVIDER_MODE !== 'production') {
+  if (stripeLiveEnabled && parsed.PROVIDER_MODE !== 'stripe_live') {
+    throw new Error('STRIPE_LIVE_ENABLED requires PROVIDER_MODE=stripe_live.');
+  }
+  if (parsed.PROVIDER_MODE === 'stripe_live' && !stripeLiveEnabled) {
     throw new Error(
-      'PROVIDERS_PRODUCTION_ENABLED requires PROVIDER_MODE=production.',
+      'Stripe live mode is fail-closed until STRIPE_LIVE_ENABLED=true.',
     );
   }
-  if (parsed.PROVIDER_MODE === 'production' && !providersProductionEnabled) {
+  if (parsed.PROVIDER_MODE === 'stripe_live' &&
+    (!parsed.PROVIDER_ENCRYPTION_KEY ||
+      !parsed.STRIPE_SECRET_KEY ||
+      !parsed.STRIPE_WEBHOOK_SECRET)) {
     throw new Error(
-      'Provider production mode is fail-closed until explicitly enabled.',
+      'PROVIDER_ENCRYPTION_KEY, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET are required for Stripe live mode.',
     );
   }
-  if (providersProductionEnabled && !parsed.PROVIDER_ENCRYPTION_KEY) {
-    throw new Error(
-      'PROVIDER_ENCRYPTION_KEY is required when production providers are enabled.',
-    );
-  }
-  if (providersProductionEnabled && !parsed.BRIDGE_API_KEY) {
-    throw new Error(
-      'BRIDGE_API_KEY is required when production providers are enabled.',
-    );
-  }
-  if (providersProductionEnabled && !parsed.BRIDGE_WEBHOOK_PUBLIC_KEY) {
-    throw new Error(
-      'BRIDGE_WEBHOOK_PUBLIC_KEY is required when production providers are enabled.',
-    );
-  }
-  if (
-    providersProductionEnabled &&
-    (!parsed.PLAID_CLIENT_ID ||
-      !parsed.PLAID_SECRET ||
-      !parsed.PLAID_IDV_TEMPLATE_ID)
-  ) {
-    throw new Error(
-      'PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_IDV_TEMPLATE_ID are required when production providers are enabled.',
-    );
-  }
-  if (providersProductionEnabled && !parsed.BLOCKCHAIN_ANALYSIS_API_KEY) {
-    throw new Error(
-      'BLOCKCHAIN_ANALYSIS_API_KEY is required when production providers are enabled.',
-    );
-  }
-  if (providersProductionEnabled) {
-    if (parsed.PLAID_ENV !== 'production') {
+  if (parsed.PROVIDER_MODE === 'stripe_live') {
+    if (!parsed.BLOCKCHAIN_ANALYSIS_API_KEY) {
       throw new Error(
-        'PLAID_ENV must be production when production providers are enabled.',
+        'BLOCKCHAIN_ANALYSIS_API_KEY is required in Stripe live mode.',
       );
     }
     assertNoPlaceholderSecret(
       parsed.PROVIDER_ENCRYPTION_KEY,
       'PROVIDER_ENCRYPTION_KEY',
     );
-    assertNoPlaceholderSecret(parsed.BRIDGE_API_KEY, 'BRIDGE_API_KEY');
+    assertNoPlaceholderSecret(parsed.STRIPE_SECRET_KEY, 'STRIPE_SECRET_KEY');
     assertNoPlaceholderSecret(
-      parsed.BRIDGE_WEBHOOK_PUBLIC_KEY,
-      'BRIDGE_WEBHOOK_PUBLIC_KEY',
-    );
-    assertNoPlaceholderSecret(parsed.PLAID_CLIENT_ID, 'PLAID_CLIENT_ID');
-    assertNoPlaceholderSecret(parsed.PLAID_SECRET, 'PLAID_SECRET');
-    assertNoPlaceholderSecret(
-      parsed.PLAID_IDV_TEMPLATE_ID,
-      'PLAID_IDV_TEMPLATE_ID',
+      parsed.STRIPE_WEBHOOK_SECRET,
+      'STRIPE_WEBHOOK_SECRET',
     );
     assertNoPlaceholderSecret(
       parsed.BLOCKCHAIN_ANALYSIS_API_KEY,
@@ -793,17 +743,11 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       : parsed.NODE_ENV === 'production' || isBeta,
     cookieDomain: parsed.COOKIE_DOMAIN,
     providerMode: parsed.PROVIDER_MODE,
-    providersProductionEnabled,
+    stripeLiveEnabled,
     providerEncryptionKey: parsed.PROVIDER_ENCRYPTION_KEY,
-    bridgeApiKey: parsed.BRIDGE_API_KEY,
-    bridgeApiBaseUrl: parsed.BRIDGE_API_BASE_URL.replace(/\/$/, ''),
-    bridgeWebhookPublicKey: parsed.BRIDGE_WEBHOOK_PUBLIC_KEY,
-    bridgeRequestTimeoutMs: parsed.BRIDGE_REQUEST_TIMEOUT_MS,
-    plaidClientId: parsed.PLAID_CLIENT_ID,
-    plaidSecret: parsed.PLAID_SECRET,
-    plaidEnvironment: parsed.PLAID_ENV,
-    plaidIdentityVerificationTemplateId: parsed.PLAID_IDV_TEMPLATE_ID,
-    plaidRequestTimeoutMs: parsed.PLAID_REQUEST_TIMEOUT_MS,
+    stripeSecretKey: parsed.STRIPE_SECRET_KEY,
+    stripePublishableKey: parsed.STRIPE_PUBLISHABLE_KEY,
+    stripeWebhookSecret: parsed.STRIPE_WEBHOOK_SECRET,
     ximilarApiToken: parsed.XIMILAR_API_TOKEN,
     ximilarEnabled: parsed.XIMILAR_ENABLED === 'true',
     ximilarCardGradingEnabled: parsed.XIMILAR_CARD_GRADING_ENABLED === 'true',

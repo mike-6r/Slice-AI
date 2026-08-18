@@ -7,11 +7,14 @@ import { ProviderCryptoService } from './provider-crypto.service';
 import { LocalIdentityVerificationAdapter } from './local-provider.adapters';
 import type { NormalizedComplianceStatus } from '../domain/provider.types';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
-import { PlaidAdapter } from './plaid.adapter';
+import {
+  UnavailableExternalIdentityProvider,
+  providerCode,
+} from './external-provider-boundaries';
 
 @Injectable()
 export class ComplianceService {
-  private readonly identity: LocalIdentityVerificationAdapter | PlaidAdapter;
+  private readonly identity: LocalIdentityVerificationAdapter | UnavailableExternalIdentityProvider;
   constructor(
     private readonly db: PrismaService,
     private readonly crypto: ProviderCryptoService,
@@ -21,13 +24,13 @@ export class ComplianceService {
     this.identity =
       config.providerMode === 'local'
         ? new LocalIdentityVerificationAdapter()
-        : new PlaidAdapter(config);
+        : new UnavailableExternalIdentityProvider(providerCode(config.providerMode));
   }
   async start(actor: Actor, requestId: string) {
     if (this.config.isBeta) {
       return {
         status: 'NOT_STARTED' as const,
-        provider: 'PLAID' as const,
+        provider: providerCode(this.config.providerMode),
         sessionUrl: null,
         capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
       };
@@ -62,7 +65,7 @@ export class ComplianceService {
         await this.persistDecision({
           userId: actor.userId,
           status: current.status,
-          reasonCode: 'PLAID_STATUS_REFRESH',
+          reasonCode: 'PROVIDER_STATUS_REFRESH',
           providerEventId: `start-refresh:${reference}:${current.status}`,
           requestId,
           actorUserId: null,
@@ -238,28 +241,6 @@ export class ComplianceService {
       sessionId: null,
     });
   }
-  async refreshPlaidDecision(
-    userId: string,
-    verificationId: string,
-    providerEventId: string,
-    requestId: string,
-  ) {
-    if (!(this.identity instanceof PlaidAdapter))
-      throw new ConflictException({
-        code: 'PROVIDER_NOT_CONFIGURED',
-        message: 'Plaid compliance is not configured.',
-      });
-    const current = await this.identity.getIdentityVerification(verificationId);
-    return this.persistDecision({
-      userId,
-      status: current.status,
-      reasonCode: 'PLAID_STATUS_REFRESH',
-      providerEventId,
-      requestId,
-      actorUserId: null,
-      sessionId: null,
-    });
-  }
   private async persistDecision(input: {
     userId: string;
     status: NormalizedComplianceStatus;
@@ -315,9 +296,7 @@ export class ComplianceService {
     });
   }
   private provider() {
-    return this.config.providerMode === 'local'
-      ? ('LOCAL_TEST' as const)
-      : ('PLAID' as const);
+    return providerCode(this.config.providerMode);
   }
 }
 

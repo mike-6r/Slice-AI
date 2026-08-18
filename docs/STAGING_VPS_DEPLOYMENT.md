@@ -29,9 +29,10 @@ real-user or production use, configure a real hostname and HTTPS, then use
 `COOKIE_SECURE=true`. The backend rejects insecure cookie/CORS combinations in
 production mode.
 
-Provider production mode, trading, deposits, withdrawals and listing remain
-off/fail-closed in the current staging environment. Plaid is configured for
-Sandbox only. Supplying real provider credentials or enabling those flags is a
+External provider mode, trading, deposits, withdrawals and listing remain
+off/fail-closed in the current staging environment. `PROVIDER_MODE=local` is
+the deterministic QA path; `stripe_sandbox` and `stripe_live` are represented
+but not enabled. Supplying Stripe credentials or enabling those flags is a
 separate approved change and is not part of this deployment procedure.
 
 Apache sets `nosniff`, `DENY` framing, a strict referrer policy, a restrictive

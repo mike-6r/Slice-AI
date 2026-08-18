@@ -5,17 +5,16 @@ import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
 import { LocalWebhookVerifier } from './local-provider.adapters';
-import { BridgeWebhookVerifier } from './bridge.adapter';
-import { PlaidAdapter } from './plaid.adapter';
 import { ComplianceService } from './compliance.service';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { WalletMovementService } from './wallet-movement.service';
+import { providerUnavailable, type ActiveProviderCode } from './external-provider-boundaries';
 
-type Provider = 'BRIDGE' | 'PLAID';
+type Provider = ActiveProviderCode;
 
 /**
- * Raw-body inbox boundary: local mode uses the deterministic verifier; Bridge
- * mode uses Bridge's documented RSA signature verifier and fails closed.
+ * Raw-body inbox boundary: local mode uses the deterministic verifier. Stripe
+ * verification is intentionally deferred until the Stripe integration phase.
  */
 @Injectable()
 export class ProviderWebhookService {
@@ -73,9 +72,8 @@ export class ProviderWebhookService {
   }
 
   private async verify(provider: Provider, rawBody: Buffer, headers: Record<string, string | string[] | undefined>) {
-    if (this.config.providerMode !== 'local') {
-      if (provider === 'BRIDGE') return new BridgeWebhookVerifier(this.config.bridgeWebhookPublicKey, this.config.providerWebhookToleranceSeconds).verify({ rawBody, headers, now: new Date() });
-      return new PlaidAdapter(this.config).verify({ rawBody, headers, now: new Date() });
+    if (provider !== 'LOCAL_TEST' || this.config.providerMode !== 'local') {
+      throw providerUnavailable(provider, 'External webhook verification is not enabled yet.');
     }
     const active = this.config.providerWebhookSigningSecret ?? 'slice-local-webhook-signing-secret-not-production';
     const previousAllowed = this.config.providerWebhookPreviousSigningSecret && (!this.config.providerWebhookPreviousSecretExpiresAt || this.config.providerWebhookPreviousSecretExpiresAt > new Date());
@@ -94,21 +92,6 @@ export class ProviderWebhookService {
   }
 
   private async process(provider: Provider, type: string, payload: Record<string, unknown>, eventId: string, requestId: string) {
-    if (provider === 'PLAID') {
-      const webhookType = this.text(payload.webhook_type);
-      const webhookCode = this.text(payload.webhook_code);
-      const userId = this.text(payload.client_user_id);
-      const verificationId = this.text(payload.identity_verification_id);
-      if (webhookType === 'IDENTITY_VERIFICATION' && ['STATUS_UPDATED', 'STEP_UPDATED', 'RETRIED'].includes(webhookCode ?? '') && userId && verificationId) {
-        // Plaid does not guarantee webhook order, so retrieve current authority.
-        await this.compliance.refreshPlaidDecision(userId, verificationId, eventId, requestId);
-      }
-      return;
-    }
-    if (provider === 'BRIDGE' && this.text(payload.event_category) === 'transfer') {
-      await this.processBridgeTransfer(payload, eventId, requestId);
-      return;
-    }
     if (type.startsWith('compliance.')) {
       const userId = this.text(payload.userId);
       const status = ({ 'compliance.approved': 'APPROVED', 'compliance.rejected': 'REJECTED', 'compliance.review': 'MANUAL_REVIEW' } as const)[type];
@@ -138,28 +121,6 @@ export class ProviderWebhookService {
     }
     // Unknown signed events stay durably recorded but never mutate authority.
     void provider;
-  }
-
-  private async processBridgeTransfer(payload: Record<string, unknown>, eventId: string, requestId: string) {
-    const transfer = payload.event_object;
-    if (!transfer || typeof transfer !== 'object' || Array.isArray(transfer)) return;
-    const object = transfer as Record<string, unknown>;
-    // Slice creates Bridge transfers with its movement id as client_reference_id.
-    const movementId = this.text(object.client_reference_id);
-    const reference = this.text(object.id) ?? this.text(payload.event_object_id);
-    const state = this.text(object.state) ?? this.text(payload.event_object_status);
-    if (!movementId || !reference || !state) return;
-    if (state === 'payment_processed') {
-      await this.movements.completeFromProvider({ movementId, providerReference: reference, providerEventId: eventId, requestId });
-    } else if (state === 'in_review') {
-      await this.movements.holdFromProvider({ movementId, reasonCode: 'BRIDGE_IN_REVIEW', requestId });
-    } else if (state === 'canceled') {
-      await this.movements.cancelFromProvider({ movementId, reasonCode: 'BRIDGE_CANCELLED', requestId });
-    } else if (state === 'returned' || state === 'refunded') {
-      await this.movements.returnFromProvider({ movementId, reasonCode: `BRIDGE_${state.toUpperCase()}`, requestId });
-    } else if (state === 'undeliverable' || state === 'error') {
-      await this.movements.failFromProvider({ movementId, reasonCode: `BRIDGE_${state.toUpperCase()}`, requestId });
-    }
   }
 
   private text(value: unknown) { return typeof value === 'string' && value.length > 0 ? value : null; }

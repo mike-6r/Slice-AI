@@ -1011,10 +1011,10 @@ export const mockRepositories: AppRepositories = {
       return { status: "PENDING" as const, provider: "LOCAL_TEST" as const, sessionUrl: null };
     },
     async createBankLinkToken() {
-      throw new Error("Plaid Link is unavailable in explicit mock mode.");
+      throw new Error("Bank connection setup is unavailable in explicit mock mode.");
     },
     async exchangeBankLinkPublicToken() {
-      throw new Error("Plaid Link is unavailable in explicit mock mode.");
+      throw new Error("Bank connection setup is unavailable in explicit mock mode.");
     },
     async listBankConnections() {
       return [];

@@ -36,7 +36,7 @@ describe('operational controls middleware', () => {
       featureForRequest('DELETE', '/api/v1/trading/orders/order-1'),
     ).toBeUndefined();
     expect(
-      featureForRequest('POST', '/api/v1/providers/BRIDGE/webhooks'),
+      featureForRequest('POST', '/api/v1/providers/STRIPE_SANDBOX/webhooks'),
     ).toBeUndefined();
   });
 

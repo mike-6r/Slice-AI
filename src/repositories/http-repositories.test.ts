@@ -292,7 +292,7 @@ describe("HTTP catalogue mapping", () => {
     );
   });
 
-  it("maps only the safe persisted Plaid bank projection and never fabricates institution data", async () => {
+  it("maps only the safe persisted bank projection and never fabricates institution data", async () => {
     const get = vi.fn().mockResolvedValue({
       items: [
         {

@@ -475,7 +475,7 @@ function CollectorOnboardingStep({
       <p className="onboarding-field-help">
         {betaDeferred
           ? "Identity verification is intentionally deferred for this controlled Beta; this account can continue with Beta listing tests."
-          : "Plaid status is confirmed by Slice&apos;s provider authority. Completing the Link flow alone does not mark you verified."}
+          : "Verification status is confirmed by Slice&apos;s provider authority. Completing an external flow alone does not mark you verified."}
       </p>
     </Step>
   );
@@ -509,7 +509,7 @@ function CollectorBetaOnboarding({
         <h1 id="collector-beta-title">Turn your account into a Collector workspace.</h1>
         <p className="onboarding-step__lead">
           Hi {displayName || "there"}. This controlled Beta uses a clear access status instead of
-          requiring deferred Plaid, SMS, email, or 2FA providers.
+          requiring deferred external, SMS, email, or 2FA providers.
         </p>
         {error ? (
           <p className="form-error onboarding-error" role="alert">
@@ -529,7 +529,7 @@ function CollectorBetaOnboarding({
             <span>
               <strong>Beta verification status</strong>
               <small>
-                Deferred during the current controlled Beta; this is not Plaid verification.
+                Deferred during the current controlled Beta; Slice remains the source of truth.
               </small>
             </span>
           </li>
@@ -551,7 +551,7 @@ function CollectorBetaOnboarding({
         <aside className="onboarding-callout">
           <ShieldCheck aria-hidden="true" />
           <span>
-            <strong>Provider status</strong> Plaid IDV, SMS, email verification, and 2FA are
+            <strong>Provider status</strong> External identity, SMS, email verification, and 2FA are
             deferred in this Beta.
           </span>
         </aside>

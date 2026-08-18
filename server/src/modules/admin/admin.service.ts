@@ -649,20 +649,11 @@ export class AdminService {
           status: approvedIntakeDestinations ? ('Operational' as const) : ('NO_APPROVED_DESTINATION' as const),
         },
         integration(
-          'Plaid',
+          'External provider boundary',
           false,
-          incidentCounts.get('PLAID')
-            ? 'Open provider incident.'
-            : 'Provider configuration is not exposed in Admin.',
-          incidentCounts.get('PLAID') ?? 0,
-        ),
-        integration(
-          'Bridge',
-          false,
-          incidentCounts.get('BRIDGE')
-            ? 'Open provider incident.'
-            : 'Provider configuration is not exposed in Admin.',
-          incidentCounts.get('BRIDGE') ?? 0,
+          'Stripe integration is prepared but not enabled in this release.',
+          (incidentCounts.get('STRIPE_SANDBOX') ?? 0) +
+            (incidentCounts.get('STRIPE_LIVE') ?? 0),
         ),
         integration(
           'BlockchainAnalysis.io',

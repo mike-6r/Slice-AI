@@ -94,6 +94,7 @@ export class LocalTestMoneyMovementProvider implements MoneyMovementProvider {
   }
 }
 
-export function moneyMovementProviderCode(mode: 'local' | 'sandbox' | 'production'): ProviderCode {
-  return mode === 'local' ? 'LOCAL_TEST' : 'BRIDGE';
+export function moneyMovementProviderCode(mode: 'local' | 'stripe_sandbox' | 'stripe_live'): ProviderCode {
+  if (mode === 'local') return 'LOCAL_TEST';
+  return mode === 'stripe_live' ? 'STRIPE_LIVE' : 'STRIPE_SANDBOX';
 }

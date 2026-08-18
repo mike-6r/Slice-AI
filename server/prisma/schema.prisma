@@ -329,6 +329,8 @@ enum ProviderCode {
   BLOCKCHAIN_ANALYSIS
   BRIDGE
   PLAID
+  STRIPE_SANDBOX
+  STRIPE_LIVE
   /// Historical compatibility only; no active runtime adapter selects these.
   SUMSUB
   TRM

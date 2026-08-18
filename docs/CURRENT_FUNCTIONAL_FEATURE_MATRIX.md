@@ -33,9 +33,9 @@ privilege boundary, not a missing fixture.
 | Watchlist | `/watchlist`, `/asset/:id` | `MarketController` / market persistence | Authenticated user | Published assets | FUNCTIONAL WITH STAGING FIXTURE |
 | Portfolio, wallet balances, lots and history | `/portfolio`, `/wallet` | `FinanceController`, `PortfolioQueryService`, `PortfolioLotService` | `VIEW_PORTFOLIO` | Valid D13 journals/lots | FUNCTIONAL WITH STAGING FIXTURE |
 | Internal cash reservation | Orders/wallet projections | `FinancialLedgerService` / cash reservation authority | Trading capability | Valid D13 account + journal | FUNCTIONAL WITH STAGING FIXTURE |
-| Banking link | `/wallet` | `ProvidersController`, `PlaidBankLinkService` | `LINK_BANK` | Plaid credentials/product access | EXTERNAL CONFIGURATION GATE |
-| Provider deposit / withdrawal | `/wallet` | `WalletMovementService`, provider webhooks | `DEPOSIT_FUNDS` / `WITHDRAW_FUNDS` | Bridge, KYC, bank, provider configuration | EXTERNAL CONFIGURATION GATE |
-| Compliance status and holds | `/wallet`, `/account` | `ComplianceService`, `ComplianceHoldService` | Authenticated user | Local adapter only outside production; otherwise Plaid/provider | EXTERNAL CONFIGURATION GATE |
+| Banking link | `/wallet` | `ProvidersController`, `BankConnectionService` | `LINK_BANK` | Future Stripe Financial Connections integration | PREPARED / NOT ENABLED |
+| Provider deposit / withdrawal | `/wallet` | `WalletMovementService`, provider-neutral webhooks | `DEPOSIT_FUNDS` / `WITHDRAW_FUNDS` | `LOCAL_TEST` or future Stripe provider | LOCAL_TEST FUNCTIONAL / STRIPE NOT ENABLED |
+| Compliance status and holds | `/wallet`, `/account` | `ComplianceService`, `ComplianceHoldService` | Authenticated user | `LOCAL_TEST` or future Stripe Identity integration | LOCAL_TEST FUNCTIONAL / STRIPE NOT ENABLED |
 | Trading order preview / place / cancel | `/buy/:id`, `/sell/:id`, `/orders` | `TradingController`, `TradingService` | `PLACE_BUY_ORDER`, `PLACE_SELL_ORDER`; ACTIVE/email/KYC/flags | Valid D12/D13/D14 fixtures and trading flag | FUNCTIONAL WITH STAGING FIXTURE |
 | GTC and IOC limit orders | `/orders` | `TradingService` | Trading capabilities | Same as above | FUNCTIONAL WITH STAGING FIXTURE |
 | Market orders and automatic expiry | No supported customer route | No supported current contract | — | — | NOT YET IMPLEMENTED |

@@ -104,7 +104,7 @@ describe('Document 016 withdrawal rollback and recovery', () => {
     await complete(pending.id, 'after-replay');
     expect(await completionJournalCount(pending.id)).toBe(1);
     expect(await db.moneyMovementHistory.count({ where: { movementId: pending.id, toStatus: 'SETTLED' } })).toBe(1);
-    expect(await reconciliation.run(actor, 'BRIDGE', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
+    expect(await reconciliation.run(actor, 'LOCAL_TEST', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
   });
 
   it('rolls back cancellation before release and retries one coherent release', async () => {

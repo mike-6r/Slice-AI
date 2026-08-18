@@ -12,12 +12,12 @@ export interface ComplianceSummary {
 
 export interface ComplianceSession {
   status: ComplianceState;
-  provider: "LOCAL_TEST" | "PLAID";
+  provider: "LOCAL_TEST" | "STRIPE_SANDBOX" | "STRIPE_LIVE";
   sessionUrl: string | null;
   capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
 }
 
-/** Safe persisted Plaid Link account projection. No Item/access token is a UI value. */
+/** Safe persisted bank connection projection. No provider secret is a UI value. */
 export interface BankConnection {
   id: string;
   institutionName: string | null;
@@ -29,7 +29,7 @@ export interface BankConnection {
   updatedAt: ISODateTime;
 }
 
-export interface PlaidLinkToken {
+export interface BankConnectionToken {
   linkToken: string;
   expiration: ISODateTime;
 }

@@ -92,7 +92,7 @@ describe('Document 016 deposit completion rollback and recovery', () => {
     await movements.completeFromProvider({ movementId: pending.id, providerReference: `${run}-after-ref`, providerEventId: `${run}-after-event`, requestId: `${run}-after-replay` });
     expect(await db.journalTransaction.count({ where: { correlationId: `provider-movement:${pending.id}` } })).toBe(1);
     expect(await db.moneyMovementHistory.count({ where: { movementId: pending.id, toStatus: 'SETTLED' } })).toBe(1);
-    expect(await reconciliation.run(actor, 'BRIDGE', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
+    expect(await reconciliation.run(actor, 'LOCAL_TEST', `${run}-reconcile`)).toMatchObject({ reconciled: true, mismatchCodes: [] });
   });
 
   async function assertSettledExactlyOnce(movementId: string, amount: string) {

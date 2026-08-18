@@ -88,11 +88,10 @@ async function main() {
           },
           providers: {
             mode: config.providerMode,
-            productionEnabled: config.providersProductionEnabled,
-            plaidConfigured: Boolean(
-              config.plaidClientId && config.plaidSecret,
+            stripeLiveEnabled: config.stripeLiveEnabled,
+            stripeConfigured: Boolean(
+              config.stripeSecretKey && config.stripeWebhookSecret,
             ),
-            bridgeConfigured: Boolean(config.bridgeApiKey),
             blockchainAnalysisConfigured: Boolean(
               config.blockchainAnalysisApiKey,
             ),
