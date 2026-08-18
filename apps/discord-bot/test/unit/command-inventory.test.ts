@@ -7,5 +7,12 @@ describe('Discord command inventory', () => {
     expect(names).toEqual(expect.arrayContaining(['slice', 'warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory', 'ops', 'asset', 'market', 'collector', 'vault', 'giveaway', 'meme']));
     expect(new Set(names).size).toBe(names.length);
     expect(names).toHaveLength(58);
+    for (const command of discordCommandInventory.map((entry) => entry.toJSON())) {
+      for (const subcommand of command.options?.filter((option) => option.type === 1) ?? []) {
+        const required = subcommand.options?.filter((option) => option.required) ?? [];
+        const optional = subcommand.options?.filter((option) => !option.required) ?? [];
+        expect(subcommand.options).toEqual([...required, ...optional]);
+      }
+    }
   });
 });
