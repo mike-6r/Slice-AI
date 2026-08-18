@@ -47,6 +47,9 @@ import { DiscordHumanVerification } from './discord-human-verification.js';
 import { DiscordPaginator } from './paginator.js';
 import { handleGiveawayButton, handleGiveawayCommand, publishGiveawayCompletion, refreshGiveawayMessage } from './commands/giveaway.js';
 import { PrismaGiveawayRepository } from './persistence/giveaway-repository.js';
+import { handleMemeCommand } from './commands/meme.js';
+import { PrismaMemeCompetitionRepository } from './persistence/meme-competition-repository.js';
+import { publishMemeResult, resolveMemeCompetition } from './meme-competition-worker.js';
 
 const config = loadConfig();
 const logger = new Logger();
@@ -71,6 +74,7 @@ const customerRoutes = new SliceCustomerRouteBuilder(config.SLICE_WEB_BASE_URL);
 const humanVerification = new DiscordHumanVerification();
 const paginator = new DiscordPaginator();
 const giveaways = new PrismaGiveawayRepository(prisma);
+const memes = new PrismaMemeCompetitionRepository(prisma);
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const categories = new Set(presentationConfig()['tickets.yml'].categories.map((category) => category.key));
 const messageSafetyWindow = new Map<string, { timestamps: number[]; messages: Array<{ content: string; at: number }> }>();
@@ -108,6 +112,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand() && ['level', 'leaderboard', 'rep', 'reputation', 'achievements', 'daily'].includes(interaction.commandName)) return void await handleProgressionCommand(interaction, progression);
     if (interaction.isChatInputCommand() && ['notifications', 'suggest', 'suggestion', 'poll', 'birthday'].includes(interaction.commandName)) return void await handleCommunityCommand(interaction, community, config, communityChannel(interaction.guild!), async () => notificationResponse(interaction), refreshSuggestion);
     if (interaction.isChatInputCommand() && interaction.commandName === 'giveaway') return void await handleGiveawayCommand(interaction, giveaways, () => communityChannel(interaction.guild!)('general'), (giveaway) => publishGiveawayCompletion(client, giveaways, giveaway), (giveaway) => refreshGiveawayMessage(client, giveaway));
+    if (interaction.isChatInputCommand() && interaction.commandName === 'meme') return void await handleMemeCommand(interaction, memes, config.MEME_COMPETITION_VOTE_EMOJI, async (competition, actorDiscordId, automatic) => { const result = await resolveMemeCompetition(client, memes, competition, actorDiscordId, automatic, config.MEME_COMPETITION_VOTE_EMOJI); if (result?.closedNow && !(await publishMemeResult(client, memes, result.competition, config.MEME_COMPETITION_VOTE_EMOJI))) logger.warn('meme.result_announcement_failed', { competitionId: result.competition.id }); return result; });
     if (interaction.isChatInputCommand() && ['card', 'search', 'value', 'price', 'history', 'top', 'asset', 'market', 'collector', 'vault', 'portfolio', 'balance', 'transactions', 'watchlist', 'profile'].includes(interaction.commandName)) return void await handleMarketCommand(interaction, market, links, progression, investorProfiles, paginator);
     if (interaction.isChatInputCommand() && interaction.commandName === 'pricealert') return void await handlePriceAlert(interaction, discordDeliveries);
     if (interaction.isChatInputCommand() && ['ask', 'help', 'summary', 'insights', 'trending', 'about', 'status'].includes(interaction.commandName)) return void await handleIntelligence(interaction, ai, market);

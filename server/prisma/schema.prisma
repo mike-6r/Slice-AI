@@ -599,6 +599,26 @@ enum DiscordGiveawayAuditAction {
   CANCELLED
 }
 
+/// Discord-only weekly meme competition lifecycle. It never represents a
+/// Slice financial, ownership, Collector, market, account, or provider state.
+enum DiscordMemeCompetitionStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  AWARDED
+  CANCELLED
+}
+
+enum DiscordMemeCompetitionAuditAction {
+  OPENED
+  SUBMISSION_REGISTERED
+  CLOSED_MANUALLY
+  CLOSED_AUTOMATICALLY
+  WINNER_SELECTED
+  XP_AWARDED
+  CANCELLED
+}
+
 enum AssetPublicationStatus {
   BLOCKED
   READY
@@ -2896,6 +2916,79 @@ model DiscordCommunityScheduleState {
 
 /// Bot-owned community engagement state. A giveaway never represents a
 /// purchase, investment, wallet, balance, ownership, or product entitlement.
+model DiscordMemeCompetition {
+  id                              String                       @id @default(cuid())
+  guildId                         String
+  channelId                       String
+  periodKey                       String
+  announcementMessageId           String?                      @unique
+  startsAt                        DateTime
+  endsAt                          DateTime
+  status                          DiscordMemeCompetitionStatus @default(OPEN)
+  rewardXp                        Int
+  winnerDiscordUserId             String?
+  winningSubmissionId             String?
+  closingClaimedAt                DateTime?
+  closedAt                        DateTime?
+  awardedAt                       DateTime?
+  resultAnnouncedAt               DateTime?
+  resultAnnouncementClaimedAt     DateTime?
+  createdAt                       DateTime                     @default(now())
+  updatedAt                       DateTime                     @updatedAt
+  submissions                     DiscordMemeSubmission[]
+  award                           DiscordMemeAward?
+  auditEvents                     DiscordMemeCompetitionAuditEvent[]
+
+  @@unique([guildId, periodKey])
+  @@index([guildId, status, endsAt])
+  @@index([status, endsAt])
+}
+
+/// A registered Discord message reference only. Meme media itself stays in Discord.
+model DiscordMemeSubmission {
+  id                  String                @id @default(cuid())
+  competitionId       String
+  guildId             String
+  channelId           String
+  messageId           String                @unique
+  discordUserId       String
+  submittedAt         DateTime              @default(now())
+  invalidatedAt       DateTime?
+  invalidReason       String?
+  finalVoteCount      Int?
+  competition         DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, discordUserId])
+  @@index([competitionId, invalidatedAt])
+  @@index([guildId, channelId, messageId])
+}
+
+/// One per competition is the durable exactly-once marker for existing bot XP.
+model DiscordMemeAward {
+  id                  String                @id @default(cuid())
+  competitionId       String                @unique
+  recipientDiscordUserId String
+  xpAmount            Int
+  awardedAt           DateTime              @default(now())
+  competition         DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@index([recipientDiscordUserId, awardedAt])
+}
+
+/// Append-only operational audit for the weekly Discord meme lifecycle.
+model DiscordMemeCompetitionAuditEvent {
+  id                  String                         @id @default(cuid())
+  competitionId       String
+  action              DiscordMemeCompetitionAuditAction
+  actorDiscordId      String
+  details             Json?
+  createdAt           DateTime                       @default(now())
+  competition         DiscordMemeCompetition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@index([competitionId, createdAt])
+  @@index([action, createdAt])
+}
+
 model DiscordGiveaway {
   id                              String               @id @default(cuid())
   guildId                         String

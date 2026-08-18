@@ -38,6 +38,9 @@ const envSchema = z.object({
   DAILY_CONVERSATION_HOUR: z.coerce.number().int().min(0).max(23).default(10),
   WEEKLY_COMMUNITY_POST_ENABLED: z.coerce.boolean().default(true),
   WEEKLY_COMMUNITY_DAY: z.coerce.number().int().min(0).max(6).default(1),
+  MEME_COMPETITION_ENABLED: z.coerce.boolean().default(true),
+  MEME_COMPETITION_REWARD_XP: z.coerce.number().int().min(1).max(500).default(100),
+  MEME_COMPETITION_VOTE_EMOJI: z.string().min(1).max(64).default('🔥'),
   HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3101),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 });
