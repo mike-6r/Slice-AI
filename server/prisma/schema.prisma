@@ -3088,19 +3088,73 @@ model DiscordDeliveryReceipt {
 
 /// Discord-only alert preference. It cannot create orders or affect valuation.
 model DiscordPriceAlert {
-  id              String    @id @default(cuid())
-  guildId         String
-  discordUserId   String
-  assetId         String
-  condition       String
-  thresholdMinor  BigInt
-  enabled         Boolean   @default(true)
-  lastTriggeredAt DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                 String                     @id @default(cuid())
+  guildId            String
+  discordUserId      String
+  assetId            String
+  condition          String
+  thresholdMinor     BigInt
+  currency           String?
+  enabled            Boolean                    @default(true)
+  lastEvaluatedMinor BigInt?
+  lastConditionMet   Boolean?
+  lastObservedAt     DateTime?
+  lastSource         String?
+  lastDataStatus     String?
+  lastTriggeredAt    DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  deliveries         DiscordPriceAlertDelivery[]
 
   @@index([guildId, assetId, enabled])
   @@index([guildId, discordUserId, enabled])
+}
+
+/// Durable private-delivery claims for bot-owned threshold alerts. A claimed
+/// send is never automatically replayed after an uncertain Discord outcome.
+model DiscordPriceAlertDelivery {
+  id                String             @id @default(cuid())
+  alertId           String
+  idempotencyKey    String             @unique
+  assetTitle        String
+  observedMinor     BigInt
+  currency          String
+  source            String
+  dataStatus        String
+  observedAt        DateTime
+  status            String             @default("PENDING")
+  attempts          Int                @default(0)
+  claimedAt         DateTime?
+  deliveredAt       DateTime?
+  discordChannelId  String?
+  discordMessageId  String?
+  failureCode       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  alert             DiscordPriceAlert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([alertId, status])
+}
+
+/// One durable claim per guild and UTC digest period. It contains no market
+/// snapshot, only publication state and source metadata for idempotency.
+model DiscordMarketDigestRun {
+  id                String   @id @default(cuid())
+  guildId           String
+  periodKey         String
+  status            String   @default("PUBLISHING")
+  source            String
+  dataStatus        String
+  asOf              DateTime
+  channelId         String?
+  messageId         String?
+  failureCode       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([guildId, periodKey])
+  @@index([status, createdAt])
 }
 
 /// A first-unlock-only record for a public, non-financial community badge.

@@ -41,6 +41,14 @@ const envSchema = z.object({
   MEME_COMPETITION_ENABLED: z.coerce.boolean().default(true),
   MEME_COMPETITION_REWARD_XP: z.coerce.number().int().min(1).max(500).default(100),
   MEME_COMPETITION_VOTE_EMOJI: z.string().min(1).max(64).default('🔥'),
+  MARKET_DIGEST_ENABLED: z.coerce.boolean().default(true),
+  MARKET_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(9),
+  MARKET_DIGEST_MAX_ITEMS: z.coerce.number().int().min(1).max(5).default(3),
+  MARKET_DIGEST_MENTION_OPT_IN_ROLE: z.coerce.boolean().default(false),
+  PRICE_ALERTS_ENABLED: z.coerce.boolean().default(true),
+  PRICE_ALERT_SCAN_INTERVAL_MS: z.coerce.number().int().min(300_000).max(900_000).default(600_000),
+  PRICE_ALERT_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(100),
+  PRICE_ALERT_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
   HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3101),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 });
