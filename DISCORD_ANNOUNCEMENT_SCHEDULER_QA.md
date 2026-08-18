@@ -80,11 +80,11 @@ Discord cannot provide a cross-system transaction with PostgreSQL; the implement
 
 # Git
 
-Runtime implementation: `647cbab` (`feat(discord): add announcement scheduler`).
+Runtime implementation: `51b9386` (`fix(discord): apply scheduler guild timezone defaults`), following the scheduler foundation in `647cbab`.
 
 # Deployment
 
-Deployed to `/opt/slice/releases/20260818-647cbab`; both Embed Builder and scheduler migrations applied to the protected runtime database. Gateway and worker are active and both readiness endpoints passed. Protected command synchronization confirmed 60 commands.
+Deployed to `/opt/slice/releases/20260818-51b9386`; both Embed Builder and scheduler migrations applied to the protected runtime database. Gateway and worker are active and both readiness endpoints passed. Protected command synchronization confirmed 60 commands.
 
 # Release Decision
 
