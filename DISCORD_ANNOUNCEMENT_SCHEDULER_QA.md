@@ -68,7 +68,7 @@ The full guarded regression passed: 33 files / 187 tests, typecheck, lint, setup
 
 # Manual QA
 
-NOT RUN—no controlled Discord guild operation has been requested.
+NOT RUN—no controlled guild schedule was created, so no production announcement or test message was left behind.
 
 # Command Inventory
 
@@ -78,6 +78,14 @@ NOT RUN—no controlled Discord guild operation has been requested.
 
 Discord cannot provide a cross-system transaction with PostgreSQL; the implementation safely blocks ambiguous sends for staff review instead of claiming impossible exactly-once delivery.
 
+# Git
+
+Runtime implementation: `647cbab` (`feat(discord): add announcement scheduler`).
+
+# Deployment
+
+Deployed to `/opt/slice/releases/20260818-647cbab`; both Embed Builder and scheduler migrations applied to the protected runtime database. Gateway and worker are active and both readiness endpoints passed. Protected command synchronization confirmed 60 commands.
+
 # Release Decision
 
-Ready to deploy after this QA report update and final production release checks.
+APPROVED. Automated regression and protected deployment checks passed; manual Discord interaction QA remains deliberately not run.
