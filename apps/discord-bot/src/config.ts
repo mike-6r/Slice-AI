@@ -49,6 +49,11 @@ const envSchema = z.object({
   PRICE_ALERT_SCAN_INTERVAL_MS: z.coerce.number().int().min(300_000).max(900_000).default(600_000),
   PRICE_ALERT_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(100),
   PRICE_ALERT_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
+  NEWS_FEED_ENABLED: z.coerce.boolean().default(true),
+  NEWS_FEED_POLL_INTERVAL_MS: z.coerce.number().int().min(900_000).max(1_800_000).default(1_800_000),
+  NEWS_FEED_CONCURRENCY: z.coerce.number().int().min(1).max(6).default(3),
+  NEWS_FEED_BOOTSTRAP_HOURS: z.coerce.number().int().min(1).max(72).default(24),
+  NEWS_FEED_MENTION_OPT_IN_ROLE: z.coerce.boolean().default(false),
   HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3101),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 });

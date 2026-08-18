@@ -619,6 +619,31 @@ enum DiscordMemeCompetitionAuditAction {
   CANCELLED
 }
 
+/// Bounded, external informational-news categories. They never express
+/// Slice valuation, market prediction, trading, or investment authority.
+enum DiscordNewsCategory {
+  POKEMON_OFFICIAL
+  TCG_PRODUCT
+  TOURNAMENT
+  GRADING
+  AUCTION
+  INDUSTRY
+}
+
+enum DiscordNewsItemStatus {
+  DISCOVERED
+  PUBLISHED
+  DELIVERY_UNCERTAIN
+}
+
+enum DiscordNewsDeliveryStatus {
+  PENDING
+  SENDING
+  DELIVERED
+  RETRYABLE_FAILURE
+  DELIVERY_UNCERTAIN
+}
+
 enum AssetPublicationStatus {
   BLOCKED
   READY
@@ -3154,6 +3179,68 @@ model DiscordMarketDigestRun {
   updatedAt         DateTime @updatedAt
 
   @@unique([guildId, periodKey])
+  @@index([status, createdAt])
+}
+
+/// Poll state for an explicitly configured trusted news source. No article
+/// body is retained, only conditional-request metadata and safe failure state.
+model DiscordNewsSourceState {
+  sourceId            String   @id
+  lastPollAt          DateTime?
+  lastSuccessAt       DateTime?
+  etag                String?
+  lastModified        String?
+  nextPollAt          DateTime?
+  consecutiveFailures Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+/// Metadata-only external-news record. `dedupKey` is stable across polling,
+/// restarts, and harmless feed title changes; copyrighted article bodies are
+/// intentionally never persisted.
+model DiscordNewsItem {
+  id               String                 @id @default(cuid())
+  sourceId         String
+  dedupKey         String                 @unique
+  externalId       String?
+  canonicalUrl     String
+  canonicalUrlHash String
+  title            String
+  publishedAt      DateTime
+  discoveredAt     DateTime               @default(now())
+  category         DiscordNewsCategory
+  priority         String
+  summary          String
+  contentHash      String
+  status           DiscordNewsItemStatus  @default(DISCOVERED)
+  postedAt         DateTime?
+  deliveries       DiscordNewsDelivery[]
+
+  @@index([sourceId, publishedAt])
+  @@unique([sourceId, contentHash])
+  @@index([status, discoveredAt])
+  @@index([canonicalUrlHash])
+}
+
+/// One public Discord destination receipt per discovered news item. The
+/// unique key prevents a scheduler restart from reposting the same item.
+model DiscordNewsDelivery {
+  id              String                    @id @default(cuid())
+  guildId         String
+  channelId       String
+  newsItemId      String
+  status          DiscordNewsDeliveryStatus @default(PENDING)
+  attempts        Int                       @default(0)
+  claimedAt       DateTime?
+  deliveredAt     DateTime?
+  discordMessageId String?
+  failureCode     String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  newsItem        DiscordNewsItem           @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, newsItemId])
   @@index([status, createdAt])
 }
 

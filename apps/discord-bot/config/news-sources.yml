@@ -1,0 +1,35 @@
+# Explicit trusted-source allowlist. URLs are RSS/Atom endpoints; no arbitrary
+# HTML crawling or user-submitted links are fetched.
+sources:
+  - id: pokemon-official
+    name: Pokémon
+    type: RSS
+    feed_url: https://www.pokemon.com/static-assets/content-assets/cms2/en-us/xml/rss.xml
+    domain: pokemon.com
+    enabled: true
+    category: POKEMON_OFFICIAL
+    priority: major
+  - id: psa-news
+    name: PSA
+    type: RSS
+    feed_url: https://www.psacard.com/articles/rss
+    domain: psacard.com
+    enabled: true
+    category: GRADING
+    priority: routine
+  - id: cgc-news
+    name: CGC Cards
+    type: RSS
+    feed_url: https://www.cgccards.com/news/rss/
+    domain: cgccards.com
+    enabled: true
+    category: GRADING
+    priority: routine
+  - id: sothebys-collectibles
+    name: Sotheby's Collectibles
+    type: RSS
+    feed_url: https://www.sothebys.com/en/rss.xml
+    domain: sothebys.com
+    enabled: false
+    category: AUCTION
+    priority: routine
