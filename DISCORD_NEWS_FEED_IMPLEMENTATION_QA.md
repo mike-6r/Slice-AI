@@ -36,7 +36,7 @@ The existing `Slice News` (`news`) notification role is used only when `NEWS_FEE
 
 # Worker
 
-`NewsFeedWorker` runs once on worker start and then every `NEWS_FEED_POLL_INTERVAL_MS` (30 minutes by default; configurable 15–30 minutes). It uses one bounded, per-source-isolated polling cycle and no BullMQ.
+`NewsFeedWorker` is deployed disabled by default (`NEWS_FEED_ENABLED=false`) and, when explicitly enabled, runs once on worker start and then every `NEWS_FEED_POLL_INTERVAL_MS` (30 minutes by default; configurable 15–30 minutes). It uses one bounded, per-source-isolated polling cycle and no BullMQ.
 
 # Dedup
 
@@ -72,4 +72,4 @@ Configured RSS endpoints must be verified during a controlled development poll b
 
 # Release Decision
 
-Pending final full-suite and release validation. No command is added, and no live source polling is included in automated QA.
+APPROVED FOR SAFE DEPLOYMENT WITH THE FEED DISABLED. The protected `slice_test` full suite passed: 31 files / 168 tests. Typecheck, bot-scoped lint, setup check, Prisma generation/validation, build, and migration status all passed; `slice_test` has 68 current migrations. No command is added, and no live source polling is included in automated QA. A controlled source validation is required before explicitly enabling `NEWS_FEED_ENABLED`.
