@@ -45,6 +45,8 @@ import { SliceCustomerRouteBuilder } from './customer-routes.js';
 import { connectPayload, mySliceActionsPayload, mySlicePayload } from './my-slice.js';
 import { DiscordHumanVerification } from './discord-human-verification.js';
 import { DiscordPaginator } from './paginator.js';
+import { handleGiveawayButton, handleGiveawayCommand, publishGiveawayCompletion, refreshGiveawayMessage } from './commands/giveaway.js';
+import { PrismaGiveawayRepository } from './persistence/giveaway-repository.js';
 
 const config = loadConfig();
 const logger = new Logger();
@@ -68,6 +70,7 @@ const adminRoutes = new SliceAdminRouteBuilder(config.SLICE_WEB_BASE_URL);
 const customerRoutes = new SliceCustomerRouteBuilder(config.SLICE_WEB_BASE_URL);
 const humanVerification = new DiscordHumanVerification();
 const paginator = new DiscordPaginator();
+const giveaways = new PrismaGiveawayRepository(prisma);
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const categories = new Set(presentationConfig()['tickets.yml'].categories.map((category) => category.key));
 const messageSafetyWindow = new Map<string, { timestamps: number[]; messages: Array<{ content: string; at: number }> }>();
@@ -104,6 +107,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand() && ['warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory'].includes(interaction.commandName)) return void await handleModerationCommand(interaction, moderationForGuild(interaction.guild!), await moderationActor(interaction), (id, action) => moderationTarget(interaction.guild!, id, action));
     if (interaction.isChatInputCommand() && ['level', 'leaderboard', 'rep', 'reputation', 'achievements', 'daily'].includes(interaction.commandName)) return void await handleProgressionCommand(interaction, progression);
     if (interaction.isChatInputCommand() && ['notifications', 'suggest', 'suggestion', 'poll', 'birthday'].includes(interaction.commandName)) return void await handleCommunityCommand(interaction, community, config, communityChannel(interaction.guild!), async () => notificationResponse(interaction), refreshSuggestion);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'giveaway') return void await handleGiveawayCommand(interaction, giveaways, () => communityChannel(interaction.guild!)('general'), (giveaway) => publishGiveawayCompletion(client, giveaways, giveaway), (giveaway) => refreshGiveawayMessage(client, giveaway));
     if (interaction.isChatInputCommand() && ['card', 'search', 'value', 'price', 'history', 'top', 'asset', 'market', 'collector', 'vault', 'portfolio', 'balance', 'transactions', 'watchlist', 'profile'].includes(interaction.commandName)) return void await handleMarketCommand(interaction, market, links, progression, investorProfiles, paginator);
     if (interaction.isChatInputCommand() && interaction.commandName === 'pricealert') return void await handlePriceAlert(interaction, discordDeliveries);
     if (interaction.isChatInputCommand() && ['ask', 'help', 'summary', 'insights', 'trending', 'about', 'status'].includes(interaction.commandName)) return void await handleIntelligence(interaction, ai, market);
@@ -114,6 +118,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton() && interaction.customId === 'slice:ticket:open') return void await openTicketPicker(interaction);
     if (interaction.isButton() && interaction.customId === 'slice:ticket:mine') return void await listMyTickets(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketButton(interaction);
+    if (interaction.isButton() && interaction.customId.startsWith('slice:giveaway:')) return void await handleGiveawayButton(interaction, giveaways, (giveaway) => refreshGiveawayMessage(client, giveaway));
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:ticket:create') return void await handleTicketCreationCategory(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketPriority(interaction);
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketTransfer(interaction);

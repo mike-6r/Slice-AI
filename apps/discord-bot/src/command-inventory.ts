@@ -5,6 +5,7 @@ import { ticketCommand } from './commands/tickets.js';
 import { banCommand, modcaseCommand, modhistoryCommand, noteCommand, timeoutCommand, unbanCommand, untimeoutCommand, warnCommand } from './commands/moderation.js';
 import { achievementsCommand, dailyCommand, leaderboardCommand, levelCommand, repCommand, reputationCommand } from './commands/progression.js';
 import { birthdayCommand, notificationsCommand, pollCommand, suggestCommand, suggestionCommand } from './commands/community.js';
+import { giveawayCommand } from './commands/giveaway.js';
 import { assetCommand, balanceCommand, cardCommand, collectorCommand, historyCommand, marketCommand, portfolioCommand, priceCommand, profileCommand, searchCommand, topCommand, transactionsCommand, valueCommand, vaultCommand, watchlistCommand } from './commands/market.js';
 import { priceAlertCommand } from './commands/price-alerts.js';
 import { aboutCommand, askCommand, helpCommand, insightsCommand, statusCommand, summaryCommand, trendingCommand } from './commands/intelligence.js';
@@ -17,7 +18,7 @@ export const discordCommandInventory = [
   setupCommand, configurationCommand, accountCommand, sliceCommand, rolesCommand, faqCommand, supportCommand, opsCommand, ticketCommand,
   warnCommand, noteCommand, timeoutCommand, untimeoutCommand, banCommand, unbanCommand, modcaseCommand, modhistoryCommand,
   levelCommand, leaderboardCommand, repCommand, reputationCommand, achievementsCommand, dailyCommand,
-  notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand,
+  notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand, giveawayCommand,
   cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, assetCommand, marketCommand, collectorCommand, vaultCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand,
   askCommand, helpCommand, summaryCommand, insightsCommand, trendingCommand, aboutCommand, statusCommand,
   inviteCommand, roadmapCommand, announceCommand, requestCommand, offerCommand,
