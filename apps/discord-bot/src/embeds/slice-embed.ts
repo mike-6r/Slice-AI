@@ -8,14 +8,22 @@ export class SliceEmbed {
   static error(title: string, description: string): EmbedBuilder { return this.base('error', title, description); }
   static staff(title: string, description: string): EmbedBuilder { return this.base('staff', title, description); }
   static configured(file: keyof PresentationConfig, key: string, values: Record<string, string | number | undefined> = {}): EmbedBuilder {
-    const source = presentationConfig()[file] as { messages?: Record<string, { title: string; description: string; color: 'info' | 'success' | 'warning' | 'error' | 'staff'; footer?: string; thumbnail?: string; image?: string; timestamp?: boolean }> };
+    const source = presentationConfig()[file] as { messages?: Record<string, { eyebrow?: string; title: string; description: string; color: 'info' | 'success' | 'warning' | 'error' | 'staff'; footer?: string; thumbnail?: string; image?: string; timestamp?: boolean }> };
     const message = source.messages?.[key];
     if (!message) throw new Error(`Configuration error: missing ${String(file)}.messages.${key}.`);
-    const embed = this.base(message.color, renderTemplate(message.title, values), renderTemplate(message.description, values));
+    const embed = this.base(message.color, renderTemplate(message.title, values), this.withEyebrow(message.eyebrow, renderTemplate(message.description, values), values));
     if (message.footer) embed.setFooter({ text: renderTemplate(message.footer, values) });
     if (message.thumbnail) embed.setThumbnail(message.thumbnail);
     if (message.image) embed.setImage(message.image);
     if (message.timestamp === false) embed.setTimestamp(null);
+    return embed;
+  }
+  static panel(panel: { eyebrow?: string; title: string; description: string; color: 'info' | 'success' | 'warning' | 'error' | 'staff'; footer?: string; thumbnail?: string; image?: string; timestamp?: boolean }): EmbedBuilder {
+    const branding = presentationConfig()['branding.yml'];
+    const embed = this.base(panel.color, panel.title, this.withEyebrow(panel.eyebrow, panel.description)).setFooter({ text: panel.footer ?? branding.footer.text });
+    if (panel.thumbnail) embed.setThumbnail(panel.thumbnail); else if (branding.images.thumbnail_url) embed.setThumbnail(branding.images.thumbnail_url);
+    if (panel.image) embed.setImage(panel.image);
+    if (panel.timestamp === false) embed.setTimestamp(null);
     return embed;
   }
   private static base(kind: 'info' | 'success' | 'warning' | 'error' | 'staff', title: string, description: string): EmbedBuilder {
@@ -23,5 +31,8 @@ export class SliceEmbed {
     const embed = new EmbedBuilder().setColor(colorNumber(branding.colors[kind])).setTitle(title).setDescription(description).setFooter({ text: branding.footer.text }).setTimestamp();
     if (branding.images.thumbnail_url) embed.setThumbnail(branding.images.thumbnail_url);
     return embed;
+  }
+  private static withEyebrow(eyebrow: string | undefined, description: string, values: Record<string, string | number | undefined> = {}): string {
+    return eyebrow ? `**${renderTemplate(eyebrow, values)}**\n${description}` : description;
   }
 }

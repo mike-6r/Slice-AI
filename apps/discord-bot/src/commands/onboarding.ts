@@ -8,6 +8,7 @@ import {
 import { FAQ, SliceWebsiteHandoffClient } from '../onboarding.js';
 import { SliceEmbed } from '../embeds/slice-embed.js';
 import { presentationConfig } from '../presentation-config.js';
+import { notificationMenu } from '../notification-roles.js';
 import { SliceBackendClient, type BackendResult, type DiscordLinkStatus } from '../slice-backend-client.js';
 
 const copy = presentationConfig()['commands.yml'];
@@ -45,6 +46,7 @@ export async function handleOnboardingCommand(
     await interaction.reply({
       ephemeral: true,
       embeds: [SliceEmbed.configured('onboarding.yml', 'roles')],
+      components: notificationMenu(),
     });
     return;
   }

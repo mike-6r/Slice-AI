@@ -5,7 +5,7 @@ import { ticketCommand } from './commands/tickets.js';
 import { banCommand, modcaseCommand, modhistoryCommand, noteCommand, timeoutCommand, unbanCommand, untimeoutCommand, warnCommand } from './commands/moderation.js';
 import { achievementsCommand, dailyCommand, leaderboardCommand, levelCommand, repCommand, reputationCommand } from './commands/progression.js';
 import { birthdayCommand, notificationsCommand, pollCommand, suggestCommand, suggestionCommand } from './commands/community.js';
-import { balanceCommand, cardCommand, historyCommand, portfolioCommand, priceCommand, profileCommand, searchCommand, topCommand, transactionsCommand, valueCommand, watchlistCommand } from './commands/market.js';
+import { assetCommand, balanceCommand, cardCommand, collectorCommand, historyCommand, marketCommand, portfolioCommand, priceCommand, profileCommand, searchCommand, topCommand, transactionsCommand, valueCommand, vaultCommand, watchlistCommand } from './commands/market.js';
 import { priceAlertCommand } from './commands/price-alerts.js';
 import { aboutCommand, askCommand, helpCommand, insightsCommand, statusCommand, summaryCommand, trendingCommand } from './commands/intelligence.js';
 import { announceCommand, inviteCommand, offerCommand, requestCommand, roadmapCommand } from './commands/gap-sweep.js';
@@ -18,7 +18,7 @@ export const discordCommandInventory = [
   warnCommand, noteCommand, timeoutCommand, untimeoutCommand, banCommand, unbanCommand, modcaseCommand, modhistoryCommand,
   levelCommand, leaderboardCommand, repCommand, reputationCommand, achievementsCommand, dailyCommand,
   notificationsCommand, suggestCommand, suggestionCommand, pollCommand, birthdayCommand,
-  cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand,
+  cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, assetCommand, marketCommand, collectorCommand, vaultCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand,
   askCommand, helpCommand, summaryCommand, insightsCommand, trendingCommand, aboutCommand, statusCommand,
   inviteCommand, roadmapCommand, announceCommand, requestCommand, offerCommand,
 ];

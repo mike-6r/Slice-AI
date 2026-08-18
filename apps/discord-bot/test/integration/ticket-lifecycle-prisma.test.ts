@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/index.js';
 import { PrismaTicketRepository } from '../../src/persistence/ticket-repository.js';
+import { testDatabaseUrl } from '../test-database-url.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-const prisma = new PrismaClient({ datasources: databaseUrl ? { db: { url: databaseUrl } } : undefined });
+const prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl() } } });
 const repository = new PrismaTicketRepository(prisma); const prefix = `discord-test-${Date.now()}`;
 let guildA = ''; let guildB = ''; let ticketId = ''; let guildFixturesCreated = false;
 beforeAll(async () => { await prisma.$connect(); guildA = `${prefix}-a`; guildB = `${prefix}-b`; await prisma.discordGuildConfig.createMany({ data: [{ guildId: guildA, setupVersion: 0, setupStatus: 'NOT_CONFIGURED' }, { guildId: guildB, setupVersion: 0, setupStatus: 'NOT_CONFIGURED' }] }); guildFixturesCreated = true; const ticket = await prisma.discordTicket.create({ data: { guildId: guildA, creatorDiscordId: 'creator', category: 'general-support', channelId: `${prefix}-channel`, subject: 'Integration ticket', safeSummary: 'Safe test fixture', status: 'OPEN', priority: 'NORMAL' } }); ticketId = ticket.id; });

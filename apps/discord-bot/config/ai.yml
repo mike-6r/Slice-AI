@@ -4,7 +4,8 @@ messages:
     title: "Slice Command Center"
     description: |
       **Start:** `/account`, `/faq`, `/roles`, `/support`
-      **Market:** `/card`, `/search`, `/value`, `/price`, `/history`, `/top`, `/insights`
+      **Market:** `/asset search`, `/asset view`, `/market movers`, `/top`, `/card`, `/search`, `/value`, `/price`, `/history`, `/insights`
+      **Collectors:** `/collector search`, `/collector view`, `/vault latest`, `/vault summary`
       **Portfolio:** `/portfolio`, `/balance`, `/transactions`, `/watchlist`, `/profile`
       **Community:** `/suggest`, `/poll`, `/summary`, `/trending`, `/birthday`
       **Progression:** `/level`, `/leaderboard`, `/rep`, `/achievements`, `/daily`

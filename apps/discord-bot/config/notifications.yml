@@ -1,13 +1,13 @@
 menu:
-  placeholder: "Choose your Slice notifications"
+  placeholder: "Choose your notifications"
   title: "Notification Preferences"
   description: "Keep Discord useful. Pick only the alerts you want, then update them anytime from the roles panel."
 roles:
-  - { key: new-listings, label: "New Listings", emoji: "🆕", description: "New public marketplace listings." }
-  - { key: price-alerts, label: "Price Alerts", emoji: "📈", description: "Configured price movement alerts." }
-  - { key: rare-cards, label: "Rare Finds", emoji: "💎", description: "Notable or hard-to-find collectibles." }
-  - { key: auctions, label: "Auctions", emoji: "🔨", description: "Auction activity and closing reminders." }
-  - { key: giveaways, label: "Giveaways", emoji: "🎁", description: "Community giveaway announcements." }
-  - { key: news, label: "Slice News", emoji: "📰", description: "Official Slice news and announcements." }
-  - { key: market-summary, label: "Market Brief", emoji: "📊", description: "Clean market summary updates." }
-  - { key: platform-updates, label: "Platform Updates", emoji: "⚙️", description: "Product, maintenance, and release notes." }
+  - { key: new-listings, label: "New Listings", emoji: "📦", description: "New collectibles or Initial Offerings." }
+  - { key: price-alerts, label: "Price Alerts", emoji: "📈", description: "Supported market-reference updates." }
+  - { key: rare-cards, label: "Rare Finds", emoji: "🔎", description: "Curated rare-item discovery updates." }
+  - { key: auctions, label: "Auctions", emoji: "🏷️", description: "Auction community or platform notices." }
+  - { key: giveaways, label: "Giveaways", emoji: "🎁", description: "Community giveaway notifications." }
+  - { key: news, label: "Slice News", emoji: "📣", description: "General Slice news and product updates." }
+  - { key: market-summary, label: "Market Brief", emoji: "📊", description: "Periodic market-summary notifications." }
+  - { key: platform-updates, label: "Platform Updates", emoji: "⚙️", description: "Maintenance, Beta, and product updates." }

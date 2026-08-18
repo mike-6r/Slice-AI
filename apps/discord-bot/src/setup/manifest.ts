@@ -1,13 +1,13 @@
 import { colorNumber, presentationConfig } from '../presentation-config.js';
 import type { PermissionResolvable } from 'discord.js';
 
-export type RoleDefinition = { key: string; name: string; color: number; hoist?: boolean; mentionable?: boolean; staff?: boolean; permissions?: PermissionResolvable[] };
+export type RoleDefinition = { key: string; name: string; color: number; hoist?: boolean; mentionable?: boolean; staff?: boolean; separator?: boolean; permissions?: PermissionResolvable[] };
 export type CategoryDefinition = { key: string; name: string; staff?: boolean };
 export type ChannelDefinition = { key: string; name: string; category: string; kind?: 'text' | 'forum'; order?: number; readOnly?: boolean; staff?: boolean; slowmode?: number; topic?: string };
 
 function setup() { return presentationConfig()['setup.yml']; }
 export const SLICE_DISCORD_SETUP_VERSION = setup().version;
-export const ROLE_DEFINITIONS: RoleDefinition[] = setup().roles.map((role) => ({ key: role.key, name: role.name, color: colorNumber(role.color), hoist: role.hoist, mentionable: role.mentionable, staff: role.staff, permissions: role.permissions as PermissionResolvable[] }));
+export const ROLE_DEFINITIONS: RoleDefinition[] = setup().roles.map((role) => ({ key: role.key, name: role.name, color: colorNumber(role.color), hoist: role.hoist, mentionable: role.mentionable, staff: role.staff, separator: role.separator, permissions: role.permissions as PermissionResolvable[] }));
 export const CATEGORY_DEFINITIONS: CategoryDefinition[] = setup().categories.map((category) => ({ key: category.key, name: category.name, staff: category.staff }));
 export const CHANNEL_DEFINITIONS: ChannelDefinition[] = setup().channels.map((channel) => ({ key: channel.key, name: channel.name, category: channel.category, kind: channel.type, order: channel.order, readOnly: channel.read_only, staff: channel.staff, slowmode: channel.slowmode, topic: channel.topic }));
 export const PANEL_CHANNELS = Object.keys(setup().panels).filter((key) => CHANNEL_DEFINITIONS.some((channel) => channel.key === key));
@@ -41,6 +41,7 @@ export const LEGACY_CHANNEL_NAMES: Record<string, string[]> = {
   announcements: ['announcements'],
   'my-slice': ['my-slice'],
   'market-feed': ['market-feed'],
+  roles: ['roles'],
   'collector-workspace': ['collector-workspace'],
   'list-a-collectible': ['list-a-collectible'],
   general: ['general'],

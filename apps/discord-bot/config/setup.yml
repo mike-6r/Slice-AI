@@ -1,30 +1,36 @@
-version: 12
+version: 16
 
 roles:
-  - { key: owner, name: Admin, color: "#D98B8B", hoist: true, staff: true, permissions: [ManageGuild, ManageRoles, ManageChannels, ManageMessages, ManageThreads, KickMembers, BanMembers, ViewAuditLog, ManageNicknames] }
-  - { key: administrator, name: Staff, color: "#6CA8FF", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ReadMessageHistory] }
-  - { key: operations, name: Reviewer, color: "#8E7CFF", hoist: true, staff: true, permissions: [ReadMessageHistory, ManageThreads] }
-  - { key: support, name: Support, color: "#F6C85F", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ReadMessageHistory] }
-  - { key: slice, name: Slice, color: "#27D7B1", permissions: [ManageRoles, ManageChannels, ManageMessages, ManageThreads, ViewAuditLog, SendMessages, EmbedLinks, AttachFiles, ReadMessageHistory, UseApplicationCommands] }
-  - { key: verified-collector, name: Verified Collector, color: "#36E39A", hoist: true }
-  - { key: collector, name: Collector, color: "#36E39A", hoist: true }
-  - { key: verified, name: "✓ Verified", color: "#5E6675" }
-  - { key: slice-member, name: Member, color: "#5E6675" }
-  - { key: new-listings, name: New Listings, color: "#27D7B1", mentionable: true }
-  - { key: price-alerts, name: Price Alerts, color: "#F6C85F", mentionable: true }
-  - { key: rare-cards, name: Rare Finds, color: "#A98BFF", mentionable: true }
-  - { key: auctions, name: Auctions, color: "#F56B6B", mentionable: true }
-  - { key: giveaways, name: Giveaways, color: "#6CA8FF", mentionable: true }
-  - { key: news, name: Slice News, color: "#27D7B1", mentionable: true }
-  - { key: market-summary, name: Market Brief, color: "#9AA3B2", mentionable: true }
-  - { key: platform-updates, name: Platform Updates, color: "#6CA8FF", mentionable: true }
-  - { key: restricted, name: Restricted, color: "#737B8A" }
-  - { key: muted, name: Muted, color: "#5A606B" }
-  - { key: level-5, name: Level 5, color: "#27D7B1" }
-  - { key: level-10, name: Level 10, color: "#6CA8FF" }
-  - { key: level-20, name: Level 20, color: "#8E7CFF" }
-  - { key: level-30, name: Level 30, color: "#F6C85F" }
-  - { key: level-50, name: Level 50, color: "#F56B6B" }
+  - { key: slice, name: Slice, color: "#68E0B6", permissions: [ManageRoles, ManageChannels, ManageMessages, ManageThreads, ModerateMembers, ViewAuditLog, SendMessages, EmbedLinks, AttachFiles, ReadMessageHistory, UseExternalEmojis, UseApplicationCommands] }
+  - { key: separator-slice, name: "──────── SLICE ────────", color: "#000000", separator: true }
+  - { key: separator-staff, name: "──────── STAFF ────────", color: "#000000", separator: true }
+  - { key: owner, name: Admin, color: "#FF6B6B", hoist: true, staff: true, permissions: [ManageGuild, ManageRoles, ManageChannels, ManageMessages, ManageThreads, KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageNicknames] }
+  - { key: administrator, name: Staff, color: "#8FA8FF", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ModerateMembers, ReadMessageHistory] }
+  - { key: operations, name: Reviewer, color: "#A998E8", hoist: true, staff: true, permissions: [ReadMessageHistory, ManageThreads] }
+  - { key: support, name: Support, color: "#E7BD68", hoist: true, staff: true, permissions: [ManageMessages, ManageThreads, ReadMessageHistory] }
+  - { key: separator-collectors, name: "──────── COLLECTORS ────────", color: "#000000", separator: true }
+  - { key: verified-collector, name: Verified Collector, color: "#79E5BC", hoist: true }
+  - { key: collector, name: Collector, color: "#63D6AE", hoist: true }
+  - { key: separator-access, name: "──────── ACCESS ────────", color: "#000000", separator: true }
+  - { key: verified, name: "✓ Verified", color: "#000000" }
+  - { key: separator-notifications, name: "──────── NOTIFICATIONS ────────", color: "#000000", separator: true }
+  - { key: new-listings, name: New Listings, color: "#000000" }
+  - { key: price-alerts, name: Price Alerts, color: "#000000" }
+  - { key: rare-cards, name: Rare Finds, color: "#000000" }
+  - { key: auctions, name: Auctions, color: "#000000" }
+  - { key: giveaways, name: Giveaways, color: "#000000" }
+  - { key: news, name: Slice News, color: "#000000" }
+  - { key: market-summary, name: Market Brief, color: "#000000" }
+  - { key: platform-updates, name: Platform Updates, color: "#000000" }
+  - { key: separator-community, name: "──────── PROGRESSION ────────", color: "#000000", separator: true }
+  - { key: level-50, name: Level 50, color: "#000000" }
+  - { key: level-30, name: Level 30, color: "#000000" }
+  - { key: level-20, name: Level 20, color: "#000000" }
+  - { key: level-10, name: Level 10, color: "#000000" }
+  - { key: level-5, name: Level 5, color: "#000000" }
+  - { key: separator-system, name: "──────── SYSTEM ────────", color: "#000000", separator: true }
+  - { key: restricted, name: Restricted, color: "#000000" }
+  - { key: muted, name: Muted, color: "#000000" }
 
 categories:
   - { key: start, name: "START HERE" }
@@ -41,6 +47,7 @@ channels:
   - { key: announcements, name: "📣・announcements", category: slice, order: 2, read_only: true, topic: "Official Slice platform updates." }
   - { key: my-slice, name: "◈・my-slice", category: slice, order: 3, read_only: true, topic: "Private access to your Slice account with /slice." }
   - { key: market-feed, name: "📈・market", category: slice, order: 4, read_only: true, topic: "Initial Offering and marketplace updates." }
+  - { key: roles, name: "🎛️・roles", category: slice, order: 5, read_only: true, topic: "Choose your Slice notification preferences." }
   - { key: collector-workspace, name: "🗂️・collector-hub", category: collectors, order: 1, read_only: true, topic: "Learn how Collector listings and ownership work." }
   - { key: list-a-collectible, name: "🏷️・list-a-collectible", category: collectors, order: 2, read_only: true, topic: "Start your Collector submission on Slice." }
   - { key: general, name: "💬・general", category: community, order: 1, topic: "Community discussion.", slowmode: 5 }
@@ -53,16 +60,18 @@ channels:
 
 panels:
   welcome:
+    eyebrow: "SLICE COMMUNITY"
     title: "Welcome to Slice"
     description: |
-      **Collectibles, market context, and private support in one organized workspace.**
+      A focused space for collecting, market context, and private support.
 
-      Use this server to discover public Slice information, follow official updates, discuss the hobby, and get routed to the right private support path.
-
-      **Start**
-      Connect your account, review the standards, choose alerts, then explore the marketplace channels.
+      **Find your place**
+      ◈ **My Slice** — your private account companion
+      📈 **Market** — public marketplace activity
+      🗂️ **Collector Hub** — submit a collectible
+      🎫 **Support** — private help when you need it
     color: info
-    footer: "Slice AI | Start here"
+    timestamp: false
   start-here:
     title: "Start in 60 Seconds"
     description: |
@@ -90,23 +99,23 @@ panels:
     color: warning
     footer: "Slice AI | Safety first"
   verify:
-    title: "Connect Your Slice Account"
+    eyebrow: "SLICE ACCESS"
+    title: "Verify to enter Slice"
     description: |
-      **Secure handoff only**
-      Account linking, identity checks, payments, deposits, withdrawals, ownership records, and transaction actions stay on the official Slice platform.
+      Complete a short human check to unlock the server.
 
-      Discord helps route you. Slice remains the source of truth.
+      This only protects Discord access. It does not verify your identity, banking, or Slice account.
     color: info
-    footer: "Slice AI | Account security"
+    timestamp: false
   roles:
-    title: "Choose Your Alerts"
+    eyebrow: "YOUR PREFERENCES"
+    title: "Choose what you want to follow"
     description: |
-      **Keep the server clean**
-      Select only the notifications you want: listings, price alerts, rare finds, auctions, giveaways, news, market briefs, or platform updates.
+      Personalize the updates you receive from Slice.
 
-      You can update these preferences anytime.
+      These roles only control notifications and community preferences. They do not change your Slice account, ownership, permissions, or verification status.
     color: info
-    footer: "Slice AI | Notification control"
+    timestamp: false
   faq:
     title: "Slice Help Center"
     description: |
@@ -117,23 +126,21 @@ panels:
     color: info
     footer: "Slice AI | Help center"
   my-slice:
-    title: "My Slice"
+    eyebrow: "MY SLICE"
+    title: "Your Slice account, inside Discord."
     description: |
-      **Your account stays private.**
-      Open Slice to manage your account, portfolio, orders, transactions, and account preferences.
+      Use `/slice` or the controls below for a private view of your account.
 
-      Discord is a companion. Slice remains authoritative for account, financial, and verification information.
+      Sensitive results are visible only to you.
     color: info
-    footer: "Slice AI | Your private account"
+    timestamp: false
   announcements:
-    title: "Official Announcements"
+    eyebrow: "SLICE UPDATES"
+    title: "Platform announcements"
     description: |
-      **High-signal updates only**
-      This channel is reserved for official Slice announcements, community notices, and important product communication.
-
-      Questions belong in community channels or private support.
+      Important product, marketplace, maintenance, and Beta updates from Slice.
     color: info
-    footer: "Slice AI | Official updates"
+    timestamp: false
   platform-updates:
     title: "Platform Updates"
     description: |
@@ -144,14 +151,14 @@ panels:
     color: info
     footer: "Slice AI | Product notes"
   market-feed:
-    title: "Curated Market Feed"
+    eyebrow: "SLICE MARKET"
+    title: "Marketplace activity"
     description: |
-      **Public marketplace signals**
-      Watch curated listing, movement, and marketplace context when available.
+      New Initial Offerings and meaningful marketplace updates.
 
-      Private account values, transactions, and ownership records remain outside Discord.
+      Availability and pricing are confirmed on Slice.
     color: info
-    footer: "Slice AI | Market signal"
+    timestamp: false
   recent-sales:
     title: "Recent Sales"
     description: |
@@ -189,25 +196,29 @@ panels:
     color: info
     footer: "Slice AI | Research space"
   collector-workspace:
-    title: "Collector Workspace"
+    eyebrow: "FOR COLLECTORS"
+    title: "Turn a collectible into an offering."
     description: |
-      **Manage your collectible journey on Slice.**
-      Submit an asset, review only the actions that need your attention, choose a vault, add tracking, and follow receipt, verification, valuation, vault readiness, and Market Live on Slice.
+      Submit a collectible to Slice, complete review and custody, then choose how much ownership you want to offer while retaining the rest.
 
-      Carrier delivery and receipt confirmation are different steps. Slice confirms physical receipt after intake.
-
-      Collector membership plans and capacity limits are always shown by Slice.
+      **1. Submit**
+      **2. Review & secure**
+      **3. Choose your offering**
     color: info
-    footer: "Slice AI | Collector workflow"
+    timestamp: false
+  list-a-collectible:
+    eyebrow: "COLLECTOR SUBMISSIONS"
+    title: "List a collectible with Slice."
+    description: "Start your submission on Slice. Discord never collects card photos, identity documents, or financial information."
+    color: info
+    timestamp: false
   create-a-ticket:
-    title: "Open the Right Request"
+    eyebrow: "PRIVATE SUPPORT"
+    title: "How can we help?"
     description: |
-      **Private support starts here**
-      Choose the closest support path so your request reaches the right team with the right context.
-
-      Use tickets for account access, verification, deposits, withdrawals, seller support, marketplace issues, technical problems, partnerships, reports, or security concerns.
+      Choose the area that best matches your issue. Your request will be created privately and routed to the right team.
     color: info
-    footer: "Slice Support | Private by default"
+    timestamp: false
   support-information:
     title: "Support Guidance"
     description: |
@@ -234,14 +245,12 @@ panels:
     color: staff
     footer: "Slice AI | Authorised staff only"
   operations:
-    title: "Asset Operations"
+    eyebrow: "SLICE OPERATIONS"
+    title: "Operations Center"
     description: |
-      **Use this feed for meaningful operational handoffs.**
-      Verification, valuation, custody, market readiness, and exceptions are reviewed in Slice.
-
-      Discord never creates a second lifecycle state machine or auto-publishes an asset.
+      Internal Discord operations and service status. Slice remains the source of truth for operational authority.
     color: staff
-    footer: "Slice AI | Asset operations"
+    timestamp: false
   compliance-alerts:
     title: "Physical Intake"
     description: |
@@ -252,16 +261,24 @@ panels:
     color: warning
     footer: "Slice AI | Physical intake"
   support-log:
+    eyebrow: "SUPPORT OPERATIONS"
     title: "Support Queue"
     description: |
-      **Discord tickets remain the canonical Discord support workflow.**
-      Use this channel for ticket activity; open Slice for account, compliance, and escalation context.
+      Ticket activity and support handoffs for authorized staff.
     color: staff
-    footer: "Slice AI | Trust & Support"
+    timestamp: false
+  moderation-log:
+    eyebrow: "REVIEW OPERATIONS"
+    title: "Review Queue"
+    description: "Links and notifications for review work. Final review authority remains in Slice."
+    color: staff
+    timestamp: false
   bot-log:
-    title: "System Alerts"
+    eyebrow: "SYSTEM HEALTH"
+    title: "Bot logs"
     description: |
-      **High-signal platform alerts only.**
-      Provider degradation, failed jobs, webhook exceptions, and protected configuration changes are investigated in Slice Platform Operations.
-    color: warning
-    footer: "Slice AI | Platform operations"
+      Important startup, command sync, worker, ticket, and setup-drift alerts appear here.
+
+      Healthy routine activity stays out of this channel.
+    color: staff
+    timestamp: false

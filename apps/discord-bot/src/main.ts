@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PrismaClient } from '../generated/prisma/index.js';
 import { accountStatusPayload, handleOnboardingCommand } from './commands/onboarding.js';
 import { ticketCommandInput } from './commands/tickets.js';
-import { handleSetup, handleSetupButton } from './commands/setup.js';
+import { handleSetup, handleSetupButton, handleSetupRefresh } from './commands/setup.js';
 import { loadConfig } from './config.js';
 import { createDiscordTicketAuthorization } from './discord-ticket-authorization.js';
 import { SliceEmbed } from './embeds/slice-embed.js';
@@ -27,7 +27,7 @@ import { MemberProgressionService } from './progression.js';
 import { handleProgressionCommand } from './commands/progression.js';
 import { handleCommunityCommand, pollPayload, suggestionPayload } from './commands/community.js';
 import { PrismaCommunityRepository } from './persistence/community-repository.js';
-import { CUSTOMER_NOTIFICATION_CATALOG, NotificationRoleReconciliationService, customerNotificationMenu, notificationMenu } from './notification-roles.js';
+import { CUSTOMER_NOTIFICATION_CATALOG, NotificationRoleReconciliationService, NotificationRoleUnavailableError, customerNotificationMenu, notificationMenu } from './notification-roles.js';
 import { handleMarketCommand } from './commands/market.js';
 import { SliceBackendClient } from './slice-backend-client.js';
 import { PrismaInvestorProfileRepository } from './persistence/investor-profile-repository.js';
@@ -43,6 +43,8 @@ import { SliceAdminRouteBuilder } from './admin-routes.js';
 import { discordCommandInventory } from './command-inventory.js';
 import { SliceCustomerRouteBuilder } from './customer-routes.js';
 import { mySliceActionsPayload, mySlicePayload } from './my-slice.js';
+import { DiscordHumanVerification } from './discord-human-verification.js';
+import { DiscordPaginator } from './paginator.js';
 
 const config = loadConfig();
 const logger = new Logger();
@@ -64,6 +66,8 @@ const provisioner = new SetupProvisioner(repository, join(process.cwd(), 'assets
 const links = new SliceWebsiteHandoffClient(config.SLICE_WEB_BASE_URL);
 const adminRoutes = new SliceAdminRouteBuilder(config.SLICE_WEB_BASE_URL);
 const customerRoutes = new SliceCustomerRouteBuilder(config.SLICE_WEB_BASE_URL);
+const humanVerification = new DiscordHumanVerification();
+const paginator = new DiscordPaginator();
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const categories = new Set(presentationConfig()['tickets.yml'].categories.map((category) => category.key));
 const messageSafetyWindow = new Map<string, { timestamps: number[]; messages: Array<{ content: string; at: number }> }>();
@@ -100,10 +104,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand() && ['warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory'].includes(interaction.commandName)) return void await handleModerationCommand(interaction, moderationForGuild(interaction.guild!), await moderationActor(interaction), (id, action) => moderationTarget(interaction.guild!, id, action));
     if (interaction.isChatInputCommand() && ['level', 'leaderboard', 'rep', 'reputation', 'achievements', 'daily'].includes(interaction.commandName)) return void await handleProgressionCommand(interaction, progression);
     if (interaction.isChatInputCommand() && ['notifications', 'suggest', 'suggestion', 'poll', 'birthday'].includes(interaction.commandName)) return void await handleCommunityCommand(interaction, community, config, communityChannel(interaction.guild!), async () => notificationResponse(interaction), refreshSuggestion);
-    if (interaction.isChatInputCommand() && ['card', 'search', 'value', 'price', 'history', 'top', 'portfolio', 'balance', 'transactions', 'watchlist', 'profile'].includes(interaction.commandName)) return void await handleMarketCommand(interaction, market, links, progression, investorProfiles);
+    if (interaction.isChatInputCommand() && ['card', 'search', 'value', 'price', 'history', 'top', 'asset', 'market', 'collector', 'vault', 'portfolio', 'balance', 'transactions', 'watchlist', 'profile'].includes(interaction.commandName)) return void await handleMarketCommand(interaction, market, links, progression, investorProfiles, paginator);
     if (interaction.isChatInputCommand() && interaction.commandName === 'pricealert') return void await handlePriceAlert(interaction, discordDeliveries);
     if (interaction.isChatInputCommand() && ['ask', 'help', 'summary', 'insights', 'trending', 'about', 'status'].includes(interaction.commandName)) return void await handleIntelligence(interaction, ai, market);
     if (interaction.isChatInputCommand() && ['invite', 'roadmap', 'announce', 'request', 'offer'].includes(interaction.commandName)) return void await handleGapSweep(interaction, repository, config.OFFICIAL_DISCORD_INVITE_URL);
+    if (interaction.isButton() && interaction.customId === 'slice:setup:refresh') { if (!interaction.guild) return; if (!interaction.memberPermissions?.has('Administrator')) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Administrator required', 'Only a Discord server administrator can review setup updates.')] }); return void await handleSetupRefresh(interaction, provisioner); }
+    if (interaction.isButton() && interaction.customId.startsWith('slice:page:')) return void await paginator.handle(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:setup:')) { if (!interaction.guild) return; await interaction.deferUpdate(); const result = await handleSetupButton(interaction.customId, interaction.user.id, interaction.guild.id, { apply: async () => provisioner.apply(interaction.guild!), reset: async () => provisioner.reset(interaction.guild!) }); return void await interaction.editReply({ embeds: [SliceEmbed.success(result.title, result.body)], components: [] }); }
     if (interaction.isButton() && interaction.customId === 'slice:ticket:open') return void await openTicketPicker(interaction);
     if (interaction.isButton() && interaction.customId === 'slice:ticket:mine') return void await listMyTickets(interaction);
@@ -118,6 +124,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:community:poll:')) return void await handlePollVote(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:staff:')) return void await handleStaffPanel(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:my-slice:')) return void await handleMySliceButton(interaction);
+    if (interaction.isButton() && interaction.customId.startsWith('slice:verify:human:')) return void await handleHumanVerification(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:onboarding:')) return void await handleOnboardingButton(interaction);
   } catch (error) {
     const ref = `SLC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -273,7 +280,7 @@ async function refreshTicketChannel(channel: unknown, ticket: NonNullable<Ticket
 
 function communityChannel(guild: Guild) { return async (key: string) => { const resource = await repository.getResource(guild.id, 'CHANNEL', key); const channel = resource ? await guild.channels.fetch(resource.discordId).catch(() => null) : null; return channel?.isTextBased() && 'send' in channel ? channel : null; }; }
 async function notificationResponse(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> { if (!interaction.guild || !config.NOTIFICATION_ROLES_ENABLED) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Notifications unavailable', 'Notification preferences are currently disabled.')] }); const member = await interaction.guild.members.fetch(interaction.user.id); await notificationRoles.reconcile(interaction.guild, member); const selected = await notificationRoles.selected(interaction.guild.id, interaction.user.id); const customer = await notificationRoles.customerSelected(interaction.guild.id, interaction.user.id); const customerLines = CUSTOMER_NOTIFICATION_CATALOG.map(([key, label, description]) => `• **${label}** — ${customer.includes(key) ? 'Enabled' : 'Disabled'}\n${description}`); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Your notification preferences', `${selected.length ? selected.map((key) => `• ${key.replace(/-/g, ' ')}`).join('\n') : 'No community notification roles selected.'}\n\n**Private Slice notifications**\n${customerLines.join('\n')}`)], components: [...notificationMenu(selected), ...customerNotificationMenu(customer)] }); }
-async function handleNotificationRoles(interaction: StringSelectMenuInteraction): Promise<void> { if (!interaction.guild || !config.NOTIFICATION_ROLES_ENABLED) return; const member = await interaction.guild.members.fetch(interaction.user.id); const selected = await notificationRoles.update(interaction.guild, member, new Set(interaction.values)); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('Notification roles updated', selected.length ? `Enabled: ${selected.map((key) => key.replace(/-/g, ' ')).join(', ')}.` : 'No notification categories selected.')] }); }
+async function handleNotificationRoles(interaction: StringSelectMenuInteraction): Promise<void> { if (!interaction.guild || !config.NOTIFICATION_ROLES_ENABLED) return; const member = await interaction.guild.members.fetch(interaction.user.id); try { const selected = await notificationRoles.update(interaction.guild, member, new Set(interaction.values)); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('Notification preferences updated', selected.length ? `Enabled: ${selected.map((key) => key.replace(/-/g, ' ')).join(', ')}.` : 'No notification categories selected.')] }); } catch (error) { if (error instanceof NotificationRoleUnavailableError) { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Role unavailable', error.message)] }); return; } throw error; } }
 async function handleCustomerNotifications(interaction: StringSelectMenuInteraction): Promise<void> { if (!interaction.guild || !config.NOTIFICATION_ROLES_ENABLED) return; const selected = await notificationRoles.updateCustomer(interaction.guild.id, interaction.user.id, new Set(interaction.values)); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('Private notification preferences updated', selected.length ? `Enabled: ${selected.map((key) => CUSTOMER_NOTIFICATION_CATALOG.find(([candidate]) => candidate === key)?.[1]).join(', ')}.` : 'All private Slice notification categories are disabled.')] }); }
 async function reconcileNotificationRoles(): Promise<void> { if (!config.NOTIFICATION_ROLES_ENABLED) return; for (const configRow of await repository.listGuildConfigs()) { const guild = await client.guilds.fetch(configRow.guildId).catch(() => null); if (!guild) continue; const userIds = new Set((await repository.listGuildNotificationPreferences(guild.id)).map((row) => row.discordUserId)); for (const userId of userIds) { const member = await guild.members.fetch(userId).catch(() => null); if (member) await reconcileNotificationMember(member); } } }
 async function reconcileNotificationMember(member: GuildMember): Promise<void> { if (config.NOTIFICATION_ROLES_ENABLED) await notificationRoles.reconcile(member.guild, member); }
@@ -284,6 +291,17 @@ async function handleStaffOperations(interaction: ChatInputCommandInteraction): 
 async function handleStaffPanel(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; await interaction.deferReply({ ephemeral: true }); const status = await market.getLinkStatus(interaction.user.id); if (!status.ok || !status.value.linked) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account', 'Connect the Slice account that holds your staff role to use operations shortcuts.')] }); if (action === 'ops') { const summary = status.value.user.roles.includes('ADMIN') ? await market.getAdminOpsSummary(interaction.user.id) : undefined; return void await interaction.editReply(staffOperationsPayload(status.value.user.roles, adminRoutes, summary)); } if (!isSliceStaff(status.value.user.roles)) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Staff access required', 'Your linked Slice account does not have staff operations access.')] }); await interaction.editReply(staffPanelPayload(action, adminRoutes)); }
 async function handleMySlice(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> { await interaction.deferReply({ ephemeral: true }); await interaction.editReply(mySlicePayload(await market.getMySliceSummary(interaction.user.id), customerRoutes)); }
 async function handleMySliceButton(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; if (action === 'notifications') return void await notificationResponse(interaction); await interaction.deferUpdate(); if (action === 'actions') return void await interaction.editReply(mySliceActionsPayload(await market.getCollectorActions(interaction.user.id), customerRoutes)); await interaction.editReply(mySlicePayload(await market.getMySliceSummary(interaction.user.id), customerRoutes)); }
+async function handleHumanVerification(interaction: ButtonInteraction): Promise<void> {
+  const [, , , nonce, selection] = interaction.customId.split(':');
+  if (!interaction.guild || !interaction.guildId || !nonce || !selection || !/^[1-9]$/.test(selection)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Verification unavailable', 'Start a new visual check from #🔐・verify.')] });
+  const result = humanVerification.complete(nonce, interaction.guildId, interaction.user.id, selection);
+  if (!result.ok) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning(result.reason === 'INCORRECT' ? 'That answer did not match' : 'Check expired', result.reason === 'INCORRECT' ? 'Try again. After three attempts, start a new visual check.' : 'Start a new visual check.')] });
+  const verified = await repository.getResource(interaction.guildId, 'ROLE', 'verified');
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  if (!verified || !member) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Verification setup unavailable', 'The verification role is not ready yet. Ask an administrator to run `/setup repair`.')] });
+  if (!member.roles.cache.has(verified.discordId)) await member.roles.add(verified.discordId, 'Discord human verification');
+  await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('You are verified', 'Welcome to Slice. The server is now available to you.')] });
+}
 async function handleOnboardingButton(interaction: ButtonInteraction): Promise<void> {
   const action = interaction.customId.split(':')[2];
   if (action === 'connect') {
@@ -324,32 +342,13 @@ async function handleOnboardingButton(interaction: ButtonInteraction): Promise<v
   if (action === 'verify') {
     const guildId = interaction.guildId;
     if (!guildId || !interaction.guild) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Verification unavailable', 'Verification is available inside the Slice server only.')] });
-    await interaction.deferReply({ ephemeral: true });
-    const status = await market.getLinkStatus(interaction.user.id);
-    if (!status.ok) {
-      await interaction.editReply({ embeds: [SliceEmbed.warning('Verification unavailable', status.message)] });
-      return;
-    }
-    if (!status.value.linked) {
-      const challenge = await market.createLinkChallenge({ discordUserId: interaction.user.id, discordUsername: interaction.user.username, discordDisplayName: interaction.user.globalName, guildId });
-      if (!challenge.ok) {
-        await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account first', challenge.message)] });
-        return;
-      }
-      await interaction.editReply({ embeds: [SliceEmbed.info('Connect your Slice account', 'Finish the secure connection on Slice, then return here and press Verify identity again.')] , components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setLabel('Connect account').setStyle(ButtonStyle.Link).setURL(challenge.value.challengeUrl))] });
-      return;
-    }
-    await syncLinkedAccountRoles(interaction, status.value.user.roles);
-    const verified = await repository.getResource(guildId, 'ROLE', 'verified');
-    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-    if (!verified || !member) {
-      await interaction.editReply({ embeds: [SliceEmbed.warning('Verification setup unavailable', 'The verification role is not ready yet. Ask an administrator to run `/setup repair`.')] });
-      return;
-    }
-    if (!member.roles.cache.has(verified.discordId)) await member.roles.add(verified.discordId, 'Slice account verification');
-    await interaction.editReply({ embeds: [SliceEmbed.success('You are verified', 'Welcome to Slice. The collector areas are now available to you.')] });
+    const challenge = await humanVerification.begin(guildId, interaction.user.id);
+    if (!challenge.ok) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Please wait before trying again', `Too many verification checks were started. Try again in about **${challenge.retryAfterSeconds} seconds**.`)] });
+    const choiceButtons = Array.from({ length: 9 }, (_, index) => new ButtonBuilder().setCustomId(`slice:verify:human:${challenge.nonce}:${index + 1}`).setLabel(String(index + 1)).setStyle(ButtonStyle.Secondary));
+    await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Complete the human check', 'Match the symbol in the reference tile on the left to one tile in the 3 × 3 grid. Then select its number: left to right, top to bottom.\n\nThis check protects Discord access only. It does not verify your identity or Slice account.')], files: [{ attachment: challenge.image, name: 'slice-human-check.png' }], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(choiceButtons.slice(0, 5)), new ActionRowBuilder<ButtonBuilder>().addComponents(choiceButtons.slice(5))] });
     return;
   }
+  if (action === 'why-verify') { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Why verify?', 'This short visual human check helps limit automated joins and spam. It grants only Discord server access; it does not link or verify your Slice account.')] }); return; }
   if (action === 'my-slice') return void await handleMySlice(interaction);
   const handoffs: Partial<Record<string, { destination: SliceDestination; title: string; description: string }>> = { verify: { destination: 'account', title: 'Verify on Slice', description: 'Identity and verification steps are handled only on the official Slice website.' }, 'my-slice': { destination: 'account', title: 'My Slice', description: 'Open Slice to view your account and linked services.' }, marketplace: { destination: 'marketplace', title: 'Marketplace', description: 'Open Slice for current listings and market activity.' }, portfolio: { destination: 'portfolio', title: 'Portfolio', description: 'Open Slice to view your private portfolio.' }, orders: { destination: 'orders', title: 'Orders', description: 'Open Slice to view your private order activity.' }, transactions: { destination: 'transactions', title: 'Transactions', description: 'Open Slice to view your private transaction activity.' }, 'collector-workspace': { destination: 'collector-workspace', title: 'Collector Workspace', description: 'Open Slice to view your collector workspace, if enabled for your account.' }, 'your-actions': { destination: 'your-actions', title: 'Your Actions', description: 'Open Slice to see the collector actions that currently need your attention.' }, membership: { destination: 'membership', title: 'Collector Membership', description: 'Open Slice to view membership and capacity information.' }, list: { destination: 'list', title: 'List an Asset', description: 'Open Slice to start a submission using the current review workflow.' }, 'admin-console': { destination: 'admin-console', title: 'Slice Admin Console', description: 'Open Slice to review authorized operational queues.' } };
   const handoff = handoffs[action];

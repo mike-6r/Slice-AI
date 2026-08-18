@@ -1,16 +1,19 @@
 categories:
-  - { key: account-issues, label: "Account & Access", emoji: "👤", description: "Login, profile, linking, or access help." }
+  - { key: account-issues, label: "Account", emoji: "🔐", description: "Access, linking, profile, or verification help." }
   - { key: investment-issues, label: "Marketplace Guidance", emoji: "📈", description: "Questions about public Slice marketplace information." }
-  - { key: withdrawal, label: "Withdrawal Help", emoji: "💸", description: "Withdrawal status or account-specific withdrawal help." }
+  - { key: withdrawal, label: "Payments & Wallet", emoji: "⚠️", description: "Account-specific payment or wallet support." }
   - { key: deposit, label: "Deposit Help", emoji: "💳", description: "Deposit status or account-specific deposit help." }
-  - { key: report-user, label: "Report a Member", emoji: "🛡️", description: "Report scams, spam, harassment, or unsafe conduct." }
+  - { key: report-user, label: "Report a User", emoji: "🛡️", description: "Report scams, spam, harassment, or unsafe conduct." }
   - { key: partnership, label: "Partnerships", emoji: "🤝", description: "Business, creator, seller, or brand partnership inquiries." }
-  - { key: general-support, label: "General Support", emoji: "🎫", description: "General help when no other category fits." }
-  - { key: seller-support, label: "Seller Support", emoji: "🏷️", description: "Seller onboarding, listing, or order questions." }
-  - { key: marketplace-issue, label: "Marketplace Issue", emoji: "🛒", description: "Listing, sale, watchlist, or marketplace display issues." }
-  - { key: technical-issue, label: "Technical Issue", emoji: "🧰", description: "Bot, Discord, command, or platform technical problems." }
+  - { key: general-support, label: "Other", emoji: "🎫", description: "General help when no other category fits." }
+  - { key: seller-support, label: "Collector Submission", emoji: "🗂️", description: "Submission, review, custody, or Collector support." }
+  - { key: marketplace-issue, label: "Orders & Marketplace", emoji: "📈", description: "Order, listing, availability, or marketplace display help." }
+  - { key: technical-issue, label: "Technical Issue", emoji: "⚙️", description: "Bot, Discord, command, or platform technical help." }
   - { key: verification-help, label: "Verification Help", emoji: "✅", description: "Safe guidance for official verification steps." }
   - { key: security-concern, label: "Security Concern", emoji: "🔒", description: "Urgent security, fraud, account, or impersonation concern." }
+support_panel:
+  placeholder: "Choose what you need help with"
+  categories: [account-issues, seller-support, marketplace-issue, withdrawal, technical-issue, report-user, general-support]
 timings:
   inactivity_warning_hours: 48
   inactivity_close_hours: 120
@@ -38,13 +41,12 @@ fields:
   no_subject: "No subject supplied"
 messages:
   lifecycle:
-    title: "Ticket {ticket_id}"
+    eyebrow: "SUPPORT REQUEST"
+    title: "We're on it."
     description: |
-      **Private Slice support request.**
-
-      A staff member will review the category, context, and latest activity here. Keep all account-specific details inside this private channel.
+      A member of the Slice team can respond here. Keep account-specific details inside this private channel.
     color: info
-    footer: "Slice Support | Never share passwords, private keys, banking passwords, API keys, or identity documents in Discord"
+    footer: "Slice • Never share passwords, private keys, banking passwords, API keys, or identity documents in Discord"
   opened:
     title: "Ticket Created"
     description: "Your private support channel is ready: <#{ticket_id}>"
