@@ -114,6 +114,26 @@ describe('DiscordLinkService', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
+  it('returns a Discord bot handoff when OAuth is unavailable but the bot link is configured', async () => {
+    const db = database();
+    const service = new DiscordLinkService(db as unknown as PrismaService, {
+      ...config,
+      discordBotServiceToken: 'b'.repeat(32),
+      discordBotGuildId: '1534870723276046496',
+    });
+
+    await expect(service.self('user')).resolves.toMatchObject({
+      connected: false,
+      configured: true,
+      connectionMode: 'bot',
+    });
+    await expect(service.begin(actor, 'request')).resolves.toEqual({
+      authorizationUrl: 'https://discord.com/channels/1534870723276046496',
+      mode: 'bot',
+    });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('persists only a hash of the short-lived state and requests the identify scope', async () => {
     const db = database();
     const service = new DiscordLinkService(db as unknown as PrismaService, {

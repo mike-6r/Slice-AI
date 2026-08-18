@@ -100,6 +100,7 @@ const configSchema = z.object({
   DISCORD_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
   DISCORD_OAUTH_REDIRECT_URI: z.string().url().optional(),
   DISCORD_BOT_SERVICE_TOKEN: z.string().min(32).optional(),
+  DISCORD_BOT_GUILD_ID: z.string().regex(/^\d+$/).optional(),
   // `provider` is accepted only as a backwards-compatible alias for `resend`.
   EMAIL_DELIVERY_MODE: z.enum(['local_test', 'resend', 'provider']).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
@@ -371,6 +372,7 @@ export type AppConfig = {
   discordOauthClientSecret?: string;
   discordOauthRedirectUri?: string;
   discordBotServiceToken?: string;
+  discordBotGuildId?: string;
   emailDeliveryMode: 'local_test' | 'resend';
   resendApiKey?: string;
   resendFromEmail?: string;
@@ -811,6 +813,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     discordOauthClientSecret: parsed.DISCORD_OAUTH_CLIENT_SECRET,
     discordOauthRedirectUri: parsed.DISCORD_OAUTH_REDIRECT_URI,
     discordBotServiceToken: parsed.DISCORD_BOT_SERVICE_TOKEN,
+    discordBotGuildId: parsed.DISCORD_BOT_GUILD_ID,
     emailDeliveryMode,
     resendApiKey: parsed.RESEND_API_KEY,
     resendFromEmail: parsed.RESEND_FROM_EMAIL,

@@ -292,7 +292,8 @@ export class DiscordLinkService {
     });
     return {
       connected: Boolean(link),
-      configured: this.isConfigured(),
+      configured: this.isConfigured() || this.isBotHandoffConfigured(),
+      connectionMode: this.isConfigured() ? ('oauth' as const) : this.isBotHandoffConfigured() ? ('bot' as const) : ('unavailable' as const),
       username: link?.username ?? null,
       displayName: link?.displayName ?? null,
       linkedAt: link?.linkedAt.toISOString() ?? null,
@@ -300,6 +301,13 @@ export class DiscordLinkService {
   }
 
   async begin(actor: Actor, requestId: string) {
+    if (!this.isConfigured()) {
+      if (!this.isBotHandoffConfigured()) this.requireConfiguration();
+      return {
+        authorizationUrl: `https://discord.com/channels/${this.config.discordBotGuildId}`,
+        mode: 'bot' as const,
+      };
+    }
     this.requireConfiguration();
     const rawState = randomBytes(32).toString('base64url');
     const stateHash = this.hash(rawState);
@@ -339,6 +347,7 @@ export class DiscordLinkService {
     });
     return {
       authorizationUrl: `https://discord.com/oauth2/authorize?${parameters.toString()}`,
+      mode: 'oauth' as const,
     };
   }
 
@@ -427,6 +436,10 @@ export class DiscordLinkService {
       this.config.discordOauthClientSecret &&
       this.config.discordOauthRedirectUri,
     );
+  }
+
+  private isBotHandoffConfigured() {
+    return Boolean(this.config.discordBotServiceToken && this.config.discordBotGuildId);
   }
 
   private requireConfiguration() {

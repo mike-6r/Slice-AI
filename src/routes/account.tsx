@@ -1065,6 +1065,7 @@ function orderSessions<T extends { currentSession: boolean; lastUsedAt: string }
 type DiscordLink = {
   connected: boolean;
   configured: boolean;
+  connectionMode?: "oauth" | "bot" | "unavailable";
   username: string | null;
   displayName: string | null;
   linkedAt: string | null;
@@ -1151,13 +1152,19 @@ function LinkedPanel({
           ) : (
             <button
               className="account-inline-button"
-              disabled={!discord.data?.configured}
+              disabled={!discord.data?.configured || connect.isPending}
               onClick={() => connect.mutate()}
             >
-              Connect
+              {discord.data?.connectionMode === "bot" ? "Open Discord" : "Connect"}
             </button>
           )}
         </div>
+        {discord.data?.connectionMode === "bot" && !discord.data.connected ? (
+          <small>
+            Open Discord, run <code>/account</code>, then choose <strong>Connect account</strong>.
+            You can return here after the secure link is complete.
+          </small>
+        ) : null}
         {botLinkPending ? <small>Connecting your Discord account securely…</small> : null}
         {botLinkError ? (
           <small className="account-form-error">
