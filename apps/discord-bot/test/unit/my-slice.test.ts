@@ -6,7 +6,9 @@ const routes = new SliceCustomerRouteBuilder('https://slice.example');
 
 describe('My Slice panel', () => {
   it('shows a credential-free connect state when no account is linked', () => {
-    expect(JSON.stringify(mySlicePayload({ ok: true, value: { linked: false } }, routes))).toContain('Connect Slice Account');
+    const payload = JSON.stringify(mySlicePayload({ ok: true, value: { linked: false } }, routes));
+    expect(payload).toContain('Connect Slice Account');
+    expect(payload).toContain('slice:onboarding:connect');
     expect(JSON.stringify(connectPayload())).not.toContain('Portfolio Value');
   });
 
@@ -23,6 +25,7 @@ describe('My Slice panel', () => {
     expect(rendered).toContain('GBP 1,234.56');
     expect(rendered).toContain('Open orders: **1**');
     expect(rendered).not.toContain('Admin');
+    expect(rendered).not.toContain('slice:onboarding:connect');
   });
 
   it('adds Collector usage and current authoritative actions without unsafe URLs', () => {

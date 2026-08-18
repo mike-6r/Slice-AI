@@ -42,7 +42,7 @@ import { isSliceStaff, staffOperationsPayload, staffPanelPayload } from './staff
 import { SliceAdminRouteBuilder } from './admin-routes.js';
 import { discordCommandInventory } from './command-inventory.js';
 import { SliceCustomerRouteBuilder } from './customer-routes.js';
-import { mySliceActionsPayload, mySlicePayload } from './my-slice.js';
+import { connectPayload, mySliceActionsPayload, mySlicePayload } from './my-slice.js';
 import { DiscordHumanVerification } from './discord-human-verification.js';
 import { DiscordPaginator } from './paginator.js';
 
@@ -289,8 +289,25 @@ async function handleSuggestionVote(interaction: ButtonInteraction): Promise<voi
 async function handlePollVote(interaction: StringSelectMenuInteraction): Promise<void> { const id = interaction.customId.split(':')[3]; const poll = id ? await community.pollVote(id, interaction.user.id, Number(interaction.values[0])) : null; if (!poll || poll.guildId !== interaction.guildId) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Poll unavailable', 'This poll is closed or unavailable.')] }); await interaction.update(pollPayload(poll, await community.pollCounts(poll.id, poll.options.length))); }
 async function handleStaffOperations(interaction: ChatInputCommandInteraction): Promise<void> { await interaction.deferReply({ ephemeral: true }); const status = await market.getLinkStatus(interaction.user.id); if (!status.ok || !status.value.linked) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account', 'Connect the Slice account that holds your staff role to use operations shortcuts.')] }); const summary = status.value.user.roles.includes('ADMIN') ? await market.getAdminOpsSummary(interaction.user.id) : undefined; await interaction.editReply(staffOperationsPayload(status.value.user.roles, adminRoutes, summary)); }
 async function handleStaffPanel(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; await interaction.deferReply({ ephemeral: true }); const status = await market.getLinkStatus(interaction.user.id); if (!status.ok || !status.value.linked) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Connect your Slice account', 'Connect the Slice account that holds your staff role to use operations shortcuts.')] }); if (action === 'ops') { const summary = status.value.user.roles.includes('ADMIN') ? await market.getAdminOpsSummary(interaction.user.id) : undefined; return void await interaction.editReply(staffOperationsPayload(status.value.user.roles, adminRoutes, summary)); } if (!isSliceStaff(status.value.user.roles)) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Staff access required', 'Your linked Slice account does not have staff operations access.')] }); await interaction.editReply(staffPanelPayload(action, adminRoutes)); }
-async function handleMySlice(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> { await interaction.deferReply({ ephemeral: true }); await interaction.editReply(mySlicePayload(await market.getMySliceSummary(interaction.user.id), customerRoutes)); }
-async function handleMySliceButton(interaction: ButtonInteraction): Promise<void> { const action = interaction.customId.split(':')[2]; if (action === 'notifications') return void await notificationResponse(interaction); await interaction.deferUpdate(); if (action === 'actions') return void await interaction.editReply(mySliceActionsPayload(await market.getCollectorActions(interaction.user.id), customerRoutes)); await interaction.editReply(mySlicePayload(await market.getMySliceSummary(interaction.user.id), customerRoutes)); }
+async function mySliceResponse(discordUserId: string) {
+  const status = await market.getLinkStatus(discordUserId);
+  if ((status.ok && !status.value.linked) || (!status.ok && status.code === 'ACCOUNT_NOT_LINKED')) return connectPayload();
+  if (!status.ok) return { embeds: [SliceEmbed.warning('My Slice unavailable', status.message)] };
+  return mySlicePayload(await market.getMySliceSummary(discordUserId), customerRoutes);
+}
+async function handleMySlice(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> { await interaction.deferReply({ ephemeral: true }); await interaction.editReply(await mySliceResponse(interaction.user.id)); }
+async function handleMySliceButton(interaction: ButtonInteraction): Promise<void> {
+  const action = interaction.customId.split(':')[2];
+  if (action === 'notifications') return void await notificationResponse(interaction);
+  await interaction.deferUpdate();
+  if (action === 'actions') {
+    const status = await market.getLinkStatus(interaction.user.id);
+    if ((status.ok && !status.value.linked) || (!status.ok && status.code === 'ACCOUNT_NOT_LINKED')) return void await interaction.editReply(connectPayload());
+    if (!status.ok) return void await interaction.editReply({ embeds: [SliceEmbed.warning('My Slice unavailable', status.message)] });
+    return void await interaction.editReply(mySliceActionsPayload(await market.getCollectorActions(interaction.user.id), customerRoutes));
+  }
+  await interaction.editReply(await mySliceResponse(interaction.user.id));
+}
 async function handleHumanVerification(interaction: ButtonInteraction): Promise<void> {
   const [, , , nonce, selection] = interaction.customId.split(':');
   if (!interaction.guild || !interaction.guildId || !nonce || !selection || !/^[1-9]$/.test(selection)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Verification unavailable', 'Start a new visual check from #🔐・verify.')] });

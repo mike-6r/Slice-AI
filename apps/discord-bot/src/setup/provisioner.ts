@@ -6,7 +6,7 @@ import { CATEGORY_DEFINITIONS, CHANNEL_DEFINITIONS, LEGACY_CATEGORY_NAMES, LEGAC
 import type { ManagedResource, ManagedResourceType, SetupRepository } from '../persistence/setup-repository.js';
 
 export type ReconciliationPlan = { missingRoles: number; missingCategories: number; missingChannels: number; renamed: number; moved: number; permissionDrift: number; roleDrift: number; separatorDrift: number; hierarchyDrift?: number; staleReferences: number; missingPanels: number; ambiguous: string[]; updateAvailable: boolean; artworkMissing: number };
-export type ResetPlan = { managedRoles: number; managedCategories: number; managedChannels: number; panels: number; ticketChannels: number; setupMetadata: boolean };
+export type ResetPlan = { managedRoles: number; managedCategories: number; managedChannels: number; panels: number; ticketChannels: number; setupMetadata: boolean; manuallyDiscoveredRoles: string[]; manuallyDiscoveredCategories: string[]; manuallyDiscoveredChannels: string[] };
 export type ResetResult = { deletedRoles: number; deletedCategories: number; deletedChannels: number; deletedPanels: number; deletedTicketChannels: number };
 export class AmbiguousManagedResourceError extends Error { constructor(readonly keys: string[]) { super(`Ambiguous Slice-managed resources: ${keys.join(', ')}`); } }
 export class RoleHierarchyError extends Error { constructor(readonly blockers: number) { super(`The SliceAI application role must be above all Slice-managed roles before setup can apply (${blockers} hierarchy blockers).`); } }
@@ -35,7 +35,7 @@ export class SetupProvisioner {
     return { created, updated, plan };
   }
   async status(guild: Guild): Promise<{ plan: ReconciliationPlan; version: number; configured: boolean }> { const config = await this.repository.getGuildConfig(guild.id); return { plan: await this.inspect(guild), version: config?.setupVersion ?? 0, configured: Boolean(config) }; }
-  async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); return { managedRoles: scan.roleIds.size, managedCategories: scan.categoryIds.size, managedChannels: scan.channelIds.size, panels: panels.length, ticketChannels: scan.ticketIds.size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length || scan.roleIds.size || scan.categoryIds.size || scan.channelIds.size || scan.ticketIds.size) }; }
+  async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); return { managedRoles: scan.roleIds.size, managedCategories: scan.categoryIds.size, managedChannels: scan.channelIds.size, panels: panels.length, ticketChannels: scan.ticketIds.size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length || scan.roleIds.size || scan.categoryIds.size || scan.channelIds.size || scan.ticketIds.size), manuallyDiscoveredRoles: [...scan.manualRoleIds].flatMap((id) => guild.roles.cache.get(id)?.name ?? []), manuallyDiscoveredCategories: [...scan.manualCategoryIds].flatMap((id) => guild.channels.cache.get(id)?.name ?? []), manuallyDiscoveredChannels: [...scan.manualChannelIds].flatMap((id) => guild.channels.cache.get(id)?.name ?? []) }; }
   async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0;
     for (const panel of panels) { const channel = await this.channel(guild, panel.channelId); if (channel?.isTextBased() && 'messages' in channel) { const message = await channel.messages.fetch(panel.messageId).catch(() => null); if (message) { await message.delete(); deletedPanels++; } } }
     for (const id of scan.ticketIds) if (await this.deleteChannel(guild, id)) deletedTicketChannels++;
@@ -116,7 +116,7 @@ export class SetupProvisioner {
     if (positions.length) await guild.channels.setPositions(positions).catch(() => undefined);
     const roles = (await Promise.all(ROLE_DEFINITIONS.map(async (spec) => this.repository.getResource(guild.id, 'ROLE', spec.key)))).flatMap((role) => role ? [role.discordId] : []); const top = Math.max(1, (guild.members.me?.roles.highest.position ?? guild.roles.cache.size) - 1); if (roles.length) await guild.roles.setPositions(roles.map((role, index) => ({ role, position: Math.max(1, top - index) }))).catch(() => undefined);
   }
-  private scanGuild(guild: Guild, resources: ManagedResource[]): { roleIds: Set<string>; categoryIds: Set<string>; channelIds: Set<string>; ticketIds: Set<string> } {
+  private scanGuild(guild: Guild, resources: ManagedResource[]): { roleIds: Set<string>; categoryIds: Set<string>; channelIds: Set<string>; ticketIds: Set<string>; manualRoleIds: Set<string>; manualCategoryIds: Set<string>; manualChannelIds: Set<string> } {
     const storedRoleIds = new Set(resources.filter((resource) => resource.resourceType === 'ROLE').map((resource) => resource.discordId));
     const storedCategoryIds = new Set(resources.filter((resource) => resource.resourceType === 'CATEGORY').map((resource) => resource.discordId));
     const storedChannelIds = new Set(resources.filter((resource) => resource.resourceType === 'CHANNEL').map((resource) => resource.discordId));
@@ -124,24 +124,30 @@ export class SetupProvisioner {
     for (const spec of CATEGORY_DEFINITIONS) { categoryNames.set(this.normalizedName(spec.name), spec.key); for (const alias of LEGACY_CATEGORY_NAMES[spec.key] ?? []) categoryNames.set(this.normalizedName(alias), spec.key); }
     const categories = guild.channels.cache.filter((channel) => channel.type === ChannelType.GuildCategory && (storedCategoryIds.has(channel.id) || categoryNames.has(this.normalizedName(channel.name))));
     const categoryIds = new Set(categories.keys());
+    const manualCategoryIds = new Set([...categoryIds].filter((id) => !storedCategoryIds.has(id)));
     const categoryKeyById = new Map<string, string>();
     for (const category of categories.values()) categoryKeyById.set(category.id, categoryNames.get(this.normalizedName(category.name)) ?? resources.find((resource) => resource.resourceType === 'CATEGORY' && resource.discordId === category.id)?.logicalKey ?? '');
     const knownChannels = new Map<string, string[]>();
     for (const spec of CHANNEL_DEFINITIONS) knownChannels.set(spec.key, [spec.name, ...(LEGACY_CHANNEL_NAMES[spec.key] ?? [])]);
     const knownMarkerKeys = new Set(CHANNEL_DEFINITIONS.map((spec) => spec.key));
     const channelIds = new Set<string>();
+    const manualChannelIds = new Set<string>();
     for (const channel of guild.channels.cache.values()) {
       if (channel.type !== ChannelType.GuildText) continue;
       const managedTopic = Boolean(channel.topic && channel.topic.startsWith('Slice AI managed channel • ') && knownMarkerKeys.has(channel.topic.slice('Slice AI managed channel • '.length)));
       const matchingSpec = [...knownChannels.entries()].find(([, names]) => names.includes(channel.name));
       const managedByLocation = Boolean(matchingSpec && categoryIds.has(channel.parentId ?? '') && categoryKeyById.get(channel.parentId ?? '') === CHANNEL_DEFINITIONS.find((spec) => spec.key === matchingSpec[0])?.category);
-      if (storedChannelIds.has(channel.id) || managedTopic || managedByLocation) channelIds.add(channel.id);
+      const insideManualSliceCategory = manualCategoryIds.has(channel.parentId ?? '');
+      if (storedChannelIds.has(channel.id) || managedTopic || managedByLocation || insideManualSliceCategory) channelIds.add(channel.id);
+      if (insideManualSliceCategory) manualChannelIds.add(channel.id);
     }
     const supportCategoryIds = new Set([...categoryKeyById.entries()].filter(([, key]) => key === 'support' || key === 'private-support').map(([id]) => id));
     const ticketIds = new Set(guild.channels.cache.filter((channel) => channel.type === ChannelType.GuildText && supportCategoryIds.has(channel.parentId ?? '') && channel.name.startsWith('ticket-')).keys());
-    for (const id of ticketIds) channelIds.delete(id);
-    const roleIds = new Set(guild.roles.cache.filter((role) => role.id !== guild.id && (storedRoleIds.has(role.id) || ROLE_DEFINITIONS.some((spec) => spec.name === role.name))).keys());
-    return { roleIds, categoryIds, channelIds, ticketIds };
+    for (const id of ticketIds) { channelIds.delete(id); manualChannelIds.delete(id); }
+    const legacyRoleNames = new Set([...ROLE_DEFINITIONS.map((spec) => spec.name), ...Object.values(LEGACY_ROLE_NAMES).flat()]);
+    const roleIds = new Set(guild.roles.cache.filter((role) => role.id !== guild.id && (storedRoleIds.has(role.id) || legacyRoleNames.has(role.name))).keys());
+    const manualRoleIds = new Set([...roleIds].filter((id) => !storedRoleIds.has(id)));
+    return { roleIds, categoryIds, channelIds, ticketIds, manualRoleIds, manualCategoryIds, manualChannelIds };
   }
   private normalizedName(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' '); }
   private async deleteChannel(guild: Guild, id: string): Promise<boolean> { const channel = await this.channel(guild, id); if (!channel) return false; await channel.delete('Slice setup reset'); return true; }

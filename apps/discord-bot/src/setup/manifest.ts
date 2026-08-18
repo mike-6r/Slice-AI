@@ -14,11 +14,14 @@ export const PANEL_CHANNELS = Object.keys(setup().panels).filter((key) => CHANNE
 
 export const LEGACY_ROLE_NAMES: Record<string, string[]> = {
   owner: ['Owner'],
-  administrator: ['Administrator'],
-  operations: ['Operations Lead'],
+  administrator: ['Administrator', 'Moderator'],
+  operations: ['Operations Lead', 'Operations'],
   support: ['Support Team'],
   verified: ['Verified Member'],
-  'slice-member': ['Slice Member'],
+  'slice-member': ['Slice Member', 'Beta Member'],
+  'rare-cards': ['Rare Cards'],
+  news: ['News'],
+  'market-summary': ['Market Summary'],
 };
 
 // These names were used by earlier Slice Discord setup versions and by the
