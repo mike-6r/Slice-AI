@@ -644,6 +644,66 @@ enum DiscordNewsDeliveryStatus {
   DELIVERY_UNCERTAIN
 }
 
+enum DiscordEmbedAuditAction {
+  DRAFT_CREATED
+  DRAFT_EDITED
+  DRAFT_CLONED
+  DRAFT_IMPORTED
+  DRAFT_EXPORTED
+  TARGET_CHANGED
+  DRAFT_DELETED
+  PUBLISHED
+  PUBLICATION_UPDATED
+  PUBLICATION_DELETED
+}
+
+enum DiscordAnnouncementScheduleType {
+  ONE_TIME
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM_WEEKDAYS
+}
+
+enum DiscordAnnouncementScheduleStatus {
+  SCHEDULED
+  PAUSED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  FAILED
+  BLOCKED
+}
+
+enum DiscordAnnouncementPayloadMode {
+  SNAPSHOT
+  LIVE_DRAFT
+}
+
+enum DiscordAnnouncementRunStatus {
+  PROCESSING
+  PUBLISHED
+  FAILED
+  BLOCKED
+  MISSED
+  UNKNOWN_DELIVERY_STATE
+  CANCELLED
+}
+
+enum DiscordAnnouncementScheduleAuditAction {
+  SCHEDULE_CREATED
+  SCHEDULE_UPDATED
+  SCHEDULE_PAUSED
+  SCHEDULE_RESUMED
+  SCHEDULE_CANCELLED
+  SCHEDULE_EXECUTION_STARTED
+  SCHEDULE_PUBLISHED
+  SCHEDULE_FAILED
+  SCHEDULE_BLOCKED
+  SCHEDULE_RETRY_REQUESTED
+  SCHEDULE_MANUAL_RUN
+}
+
 enum AssetPublicationStatus {
   BLOCKED
   READY
@@ -3242,6 +3302,127 @@ model DiscordNewsDelivery {
 
   @@unique([guildId, newsItemId])
   @@index([status, createdAt])
+}
+
+model DiscordEmbedDraft {
+  id String @id @default(cuid())
+  guildId String
+  creatorDiscordUserId String
+  name String
+  payload Json
+  linkButtons Json
+  targetChannelId String?
+  version Int @default(1)
+  lastPublishedAt DateTime?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  publications DiscordEmbedPublication[]
+  auditEvents DiscordEmbedAuditEvent[]
+  @@index([guildId, deletedAt, updatedAt])
+}
+model DiscordEmbedPublication {
+  id String @id @default(cuid())
+  draftId String
+  guildId String
+  channelId String
+  messageId String
+  publishedByDiscordUserId String
+  revisionUsed Int
+  publishedAt DateTime @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+  deletedByDiscordUserId String?
+  draft DiscordEmbedDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  auditEvents DiscordEmbedAuditEvent[]
+  @@unique([guildId, channelId, messageId])
+  @@index([draftId, publishedAt])
+}
+model DiscordEmbedAuditEvent {
+  id String @id @default(cuid())
+  guildId String
+  draftId String
+  publicationId String?
+  actorDiscordUserId String
+  action DiscordEmbedAuditAction
+  createdAt DateTime @default(now())
+  draft DiscordEmbedDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  publication DiscordEmbedPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  @@index([guildId, draftId, createdAt])
+}
+
+/// A bot-owned announcement intent. The local wall-clock definition is stored
+/// alongside the UTC due time so recurring schedules remain correct through DST.
+model DiscordAnnouncementSchedule {
+  id                     String                            @id @default(cuid())
+  guildId                String
+  draftId                String?
+  createdByDiscordUserId String
+  name                   String
+  scheduleType           DiscordAnnouncementScheduleType
+  timezone               String
+  localTime              String
+  localDate              String?
+  weekdays               Json?
+  dayOfMonth             Int?
+  payloadMode            DiscordAnnouncementPayloadMode    @default(SNAPSHOT)
+  payloadSnapshot        Json?
+  linkButtonsSnapshot    Json?
+  targetChannelId        String
+  status                 DiscordAnnouncementScheduleStatus @default(SCHEDULED)
+  nextRunAt              DateTime?
+  lastRunAt              DateTime?
+  processingStartedAt    DateTime?
+  leaseExpiresAt         DateTime?
+  workerToken            String?
+  pausedAt               DateTime?
+  cancelledAt            DateTime?
+  version                Int                               @default(1)
+  createdAt              DateTime                          @default(now())
+  updatedAt              DateTime                          @updatedAt
+  runs                   DiscordScheduledPublicationRun[]
+  auditEvents            DiscordAnnouncementScheduleAuditEvent[]
+
+  @@index([guildId, status, nextRunAt])
+  @@index([status, leaseExpiresAt])
+  @@index([draftId])
+}
+
+/// One durable run per scheduled occurrence. A send that may have reached
+/// Discord is never automatically re-sent; it remains reviewable instead.
+model DiscordScheduledPublicationRun {
+  id               String                       @id @default(cuid())
+  scheduleId       String
+  scheduledFor     DateTime
+  startedAt        DateTime                     @default(now())
+  finishedAt       DateTime?
+  status           DiscordAnnouncementRunStatus @default(PROCESSING)
+  publicationId    String?
+  discordChannelId String?
+  discordMessageId String?
+  errorCode        String?
+  errorSummary     String?
+  attemptCount     Int                          @default(1)
+  workerToken      String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  schedule         DiscordAnnouncementSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, scheduledFor])
+  @@index([scheduleId, createdAt])
+  @@index([status, createdAt])
+}
+
+model DiscordAnnouncementScheduleAuditEvent {
+  id                 String                                @id @default(cuid())
+  scheduleId         String
+  actorDiscordUserId String
+  action             DiscordAnnouncementScheduleAuditAction
+  details            Json?
+  createdAt          DateTime                              @default(now())
+  schedule           DiscordAnnouncementSchedule           @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
 }
 
 /// A first-unlock-only record for a public, non-financial community badge.

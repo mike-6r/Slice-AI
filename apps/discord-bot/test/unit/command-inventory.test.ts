@@ -4,9 +4,9 @@ import { discordCommandInventory } from '../../src/command-inventory.js';
 describe('Discord command inventory', () => {
   it('keeps runtime and deployment registration sourced from one complete inventory', () => {
     const names = discordCommandInventory.map((command) => command.toJSON().name);
-    expect(names).toEqual(expect.arrayContaining(['slice', 'warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory', 'ops', 'asset', 'market', 'collector', 'vault', 'giveaway', 'meme']));
+    expect(names).toEqual(expect.arrayContaining(['slice', 'warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory', 'ops', 'asset', 'market', 'collector', 'vault', 'giveaway', 'meme', 'embed', 'schedule']));
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toHaveLength(58);
+    expect(names).toHaveLength(60);
     for (const command of discordCommandInventory.map((entry) => entry.toJSON())) {
       for (const subcommand of command.options?.filter((option) => option.type === 1) ?? []) {
         const required = subcommand.options?.filter((option) => option.required) ?? [];

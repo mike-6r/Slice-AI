@@ -13,6 +13,8 @@ import { aboutCommand, askCommand, helpCommand, insightsCommand, statusCommand, 
 import { announceCommand, inviteCommand, offerCommand, requestCommand, roadmapCommand } from './commands/gap-sweep.js';
 import { opsCommand } from './staff-operations.js';
 import { sliceCommand } from './my-slice.js';
+import { embedCommand } from './commands/embed.js';
+import { scheduleCommand } from './commands/schedule.js';
 
 /** Single source of truth for runtime registration and deployment synchronization. */
 export const discordCommandInventory = [
@@ -23,4 +25,6 @@ export const discordCommandInventory = [
   cardCommand, searchCommand, valueCommand, priceCommand, historyCommand, topCommand, assetCommand, marketCommand, collectorCommand, vaultCommand, portfolioCommand, balanceCommand, transactionsCommand, watchlistCommand, profileCommand, priceAlertCommand,
   askCommand, helpCommand, summaryCommand, insightsCommand, trendingCommand, aboutCommand, statusCommand,
   inviteCommand, roadmapCommand, announceCommand, requestCommand, offerCommand,
+  embedCommand,
+  scheduleCommand,
 ];

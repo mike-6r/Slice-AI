@@ -54,6 +54,10 @@ const envSchema = z.object({
   NEWS_FEED_CONCURRENCY: z.coerce.number().int().min(1).max(6).default(3),
   NEWS_FEED_BOOTSTRAP_HOURS: z.coerce.number().int().min(1).max(72).default(24),
   NEWS_FEED_MENTION_OPT_IN_ROLE: z.coerce.boolean().default(false),
+  ANNOUNCEMENT_SCHEDULER_ENABLED: z.coerce.boolean().default(true),
+  ANNOUNCEMENT_SCHEDULER_SCAN_INTERVAL_MS: z.coerce.number().int().min(30_000).max(300_000).default(60_000),
+  ANNOUNCEMENT_SCHEDULER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(3),
+  SCHEDULE_MISSED_RUN_GRACE_MINUTES: z.coerce.number().int().min(30).max(120).default(60),
   HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3101),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 });
