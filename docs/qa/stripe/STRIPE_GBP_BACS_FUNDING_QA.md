@@ -2,7 +2,7 @@
 
 Run date: 2026-08-19  
 Decision: **UK/GBP-first; GBP ledger retained; Bacs Direct Debit selected**  
-Deployment: **PENDING local release gates**
+Deployment: **NOT PERFORMED — protected Stripe sandbox configuration absent**
 Sandbox execution: **BLOCKED until credentialed staging is prepared**
 
 ## 1. GBP Bacs Migration
@@ -193,12 +193,12 @@ passed. The existing frontend chunk-size advisory remains non-blocking.
 
 ## 22. Commit Hash
 
-**PENDING.** A provider-only commit will be created only after the local release
-gates pass. Unexpected unrelated files will not be included.
+**COMMITTED.** Provider-only commit: `4ad189b` (`fix: use hosted Stripe
+Checkout for GBP Bacs setup`). No unrelated worktree files were included.
 
 ## 23. Push Status
 
-**PENDING local release gates.**
+**PUSHED.** `origin/main` contains `4ad189b`.
 
 ## 24. Deployment
 
@@ -209,7 +209,7 @@ business, or provider state has been changed in this correction task.
 
 1. Provide Stripe sandbox `sk_test_`, `pk_test_`, and `whsec_` through the
    deployment-managed secret channel.
-2. Complete local tests/typechecks/lint/builds, then deploy a clean
+2. Complete protected staging secret preparation, then deploy a clean
    provider-only release containing the additive migration.
 3. Configure `PROVIDER_MODE=stripe_sandbox` and verify the single HTTPS webhook
    route with Stripe Bacs sandbox fixtures.
@@ -220,9 +220,10 @@ business, or provider state has been changed in this correction task.
 
 ## 26. Ready for Sandbox Deployment
 
-**NO.** The corrected local implementation is in progress through its release
-gates. Credentialed sandbox validation, deployment-managed secrets, webhook
-delivery, and release-gate review remain outstanding.
+**NO.** The corrected implementation is committed and pushed, but credentialed
+sandbox validation cannot start: the VPS remains `PROVIDER_MODE=local` and the
+protected Stripe secret, publishable-key, and webhook-secret variables are
+absent. No staging deployment or Stripe API/webhook call was made.
 
 ## Release Safety
 
