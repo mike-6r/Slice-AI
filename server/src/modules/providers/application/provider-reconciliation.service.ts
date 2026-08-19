@@ -49,7 +49,11 @@ export class ProviderReconciliationService {
         if (!issue.movementId) continue;
         const movement = movements.find((item) => item.id === issue.movementId)!;
         await db.providerIncident.create({ data: { id: randomUUID(), provider, severity: 'HIGH', code: issue.code, ownerUserId: actor.userId } });
-        await db.complianceHold.create({ data: { id: randomUUID(), userId: movement.userId, movementId: movement.id, scope: 'EXTERNAL_MOVEMENT', reasonCode: issue.code, source: 'PROVIDER_RECONCILIATION' } });
+        const existingHold = await db.complianceHold.findFirst({ where: { movementId: movement.id, scope: 'EXTERNAL_MOVEMENT', status: 'ACTIVE' } });
+        if (!existingHold) {
+          const hold = await db.complianceHold.create({ data: { id: randomUUID(), userId: movement.userId, movementId: movement.id, scope: 'EXTERNAL_MOVEMENT', reasonCode: issue.code, source: 'PROVIDER' } });
+          await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'COMPLIANCE_HOLD_CREATED', resourceType: 'compliance-hold', resourceId: hold.id, requestId, sessionId: null, result: 'SUCCESS', metadata: { source: 'PROVIDER', provider, scope: hold.scope, reasonCode: hold.reasonCode }, createdAt: new Date() });
+        }
       }
       await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'PROVIDER_RECONCILED', resourceType: 'provider-reconciliation', resourceId: run.id, requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { provider, status: run.status, mismatchCodes: codes }, createdAt: new Date() });
       return { id: run.id, provider, reconciled: run.status === 'RECONCILED', mismatchCodes: codes };

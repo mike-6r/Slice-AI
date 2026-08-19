@@ -14,6 +14,10 @@ export type TicketInput = {
   description: string;
   referenceId?: string;
   requestedUrgency?: string;
+  /** Immutable intake snapshot selected before the ticket is persisted. */
+  formVersionId?: string;
+  intakeResponses?: ReadonlyArray<{ fieldKey: string; fieldLabel: string; fieldType: string; value: string }>;
+  assignedTeamKey?: string;
 };
 export type CreatedTicket = {
   id: string;
@@ -29,6 +33,9 @@ export type CreatedTicket = {
 export type PersistedTicket = CreatedTicket & {
   creatorDiscordId: string;
   referenceId?: string;
+  formVersionId?: string;
+  intakeResponses?: ReadonlyArray<{ fieldKey: string; fieldLabel: string; fieldType: string; value: string }>;
+  assignedTeamKey?: string;
 };
 export type PermissionEntry = {
   id: string;
@@ -110,6 +117,9 @@ export class TicketCreationService {
       referenceId: input.referenceId
         ? sanitizeTicketText(input.referenceId)
         : undefined,
+      formVersionId: input.formVersionId,
+      intakeResponses: input.intakeResponses,
+      assignedTeamKey: input.assignedTeamKey,
     };
 
     // Persist before Discord provisioning. A Discord outage therefore preserves
@@ -129,6 +139,7 @@ export class TicketCreationService {
           persisted.creatorDiscordId,
           persisted.category,
           this.roles,
+          persisted.assignedTeamKey,
         ),
       });
     } catch (error) {
@@ -173,6 +184,7 @@ export async function permissionMatrix(
   creatorId: string,
   category: string,
   roles: TicketRoleResolver,
+  routedTeamKey?: string,
 ): Promise<PermissionEntry[]> {
   const entries: PermissionEntry[] = [
     { id: 'everyone', deny: ['ViewChannel'] },
@@ -181,7 +193,7 @@ export async function permissionMatrix(
       allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'],
     },
   ];
-  for (const key of staffRolesForCategory(category)) {
+  for (const key of new Set([...staffRolesForCategory(category), ...(routedTeamKey ? [routedTeamKey] : [])])) {
     const id = await roles.getRoleId(guildId, key);
     if (id)
       entries.push({

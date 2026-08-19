@@ -48,6 +48,7 @@ const connectedBanks: BankConnection[] = [
     accountType: "checking",
     currency: "GBP",
     status: "CONNECTED",
+    isDefault: true,
     updatedAt: "2026-08-09T00:00:00.000Z" as never,
   },
 ];
@@ -105,7 +106,7 @@ function renderWallet({
 describe("Document 016 wallet UI", () => {
   it("keeps external bank setup visibly deferred without fabricating a connection", () => {
     const html = renderWallet({ banks: [], movements: { items: [], nextCursor: null } });
-    expect(html).toContain("Bank connection setup coming soon");
+    expect(html).toContain("Set up a UK bank");
   });
 
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
@@ -137,7 +138,7 @@ describe("Document 016 wallet UI", () => {
     });
     expect(html).toContain("£0.00");
     expect(html).toContain("No bank connected");
-    expect(html).toContain("Bank connection setup coming soon");
+    expect(html).toContain("Set up a UK bank");
     expect(html).toContain("No movements yet");
     expect(html).toContain("Wallet insights unavailable");
     expect(html).toContain("No recent activity");

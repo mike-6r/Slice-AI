@@ -11,6 +11,9 @@ import { ProviderReconciliationService } from './application/provider-reconcilia
 import { ComplianceHoldService } from './application/compliance-hold.service';
 import { ProviderResilienceService } from './application/provider-resilience.service';
 import { BankConnectionService } from './application/external-provider-boundaries';
+import { StripeClientFactory } from './application/stripe-provider.client';
+import { StripeConnectPayoutService } from './application/stripe-connect-payout.service';
+import { StripeIdentityVerificationService } from './application/stripe-identity.service';
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
@@ -25,6 +28,9 @@ import { ProvidersController } from './http/providers.controller';
     ComplianceHoldService,
     ProviderResilienceService,
     BankConnectionService,
+    StripeClientFactory,
+    StripeConnectPayoutService,
+    StripeIdentityVerificationService,
   ],
   exports: [
     ProviderCryptoService,
@@ -35,6 +41,9 @@ import { ProvidersController } from './http/providers.controller';
     ComplianceHoldService,
     ProviderResilienceService,
     BankConnectionService,
+    StripeClientFactory,
+    StripeConnectPayoutService,
+    StripeIdentityVerificationService,
   ],
 })
 export class ProvidersModule {}

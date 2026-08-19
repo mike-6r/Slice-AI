@@ -38,7 +38,7 @@ export class TicketInteractionRouter {
     return { ok: true, changed: false, message: 'Ticket close is authorized.', ticket };
   }
 
-  async execute(action: TicketRouteAction, context: TicketRouteContext, options: { priority?: string; targetId?: string } = {}): Promise<TicketRouteResult> {
+  async execute(action: TicketRouteAction, context: TicketRouteContext, options: { priority?: string; targetId?: string; escalationTarget?: string; reason?: string } = {}): Promise<TicketRouteResult> {
     const authorized = action === 'close-confirm'
       ? await this.authorizeClose(context)
       : await this.authorize(context);
@@ -78,7 +78,7 @@ export class TicketInteractionRouter {
     }
   }
 
-  async executeForChannel(action: TicketRouteAction, context: Omit<TicketRouteContext, 'ticketId'>, options: { priority?: string; targetId?: string } = {}): Promise<TicketRouteResult> {
+  async executeForChannel(action: TicketRouteAction, context: Omit<TicketRouteContext, 'ticketId'>, options: { priority?: string; targetId?: string; escalationTarget?: string; reason?: string } = {}): Promise<TicketRouteResult> {
     if (!context.guildId || !context.channelId) return unavailable();
     const ticket = await this.tickets.findByChannel(context.guildId, context.channelId);
     return ticket ? this.execute(action, { ...context, ticketId: ticket.id }, options) : unavailable();

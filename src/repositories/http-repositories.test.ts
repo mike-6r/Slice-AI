@@ -303,13 +303,17 @@ describe("HTTP catalogue mapping", () => {
           accountType: "depository",
           currency: "GBP",
           status: "CONNECTED",
+          isDefault: true,
           updatedAt: "2026-08-08T00:00:00.000Z",
         },
       ],
     });
     const request = vi.fn().mockResolvedValue({
-      linkToken: "link-token-safe-to-render",
+      setupIntentId: "seti_test",
+      clientSecret: "bacs_client_secret",
+      publishableKey: "pk_test_slice",
       expiration: "2026-08-09T00:00:00.000Z",
+      paymentMethodType: "bacs_debit",
     });
     const repositories = createHttpRepositories({ get, request } as unknown as ApiClient);
     await expect(repositories.providers.listBankConnections()).resolves.toEqual([

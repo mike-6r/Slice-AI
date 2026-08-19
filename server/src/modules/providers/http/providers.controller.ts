@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { AccessTokenGuard, type AuthenticatedRequest } from '../../identity/auth/access-token.guard';
 import { ControlRateLimitService } from '../../identity/access/control-rate-limit.service';
@@ -8,16 +8,17 @@ import { ProviderWebhookService } from '../application/provider-webhook.service'
 import { ProviderReconciliationService } from '../application/provider-reconciliation.service';
 import { ComplianceHoldService } from '../application/compliance-hold.service';
 import { BankConnectionService } from '../application/external-provider-boundaries';
+import { StripeConnectPayoutService } from '../application/stripe-connect-payout.service';
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 
 const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destinationReference: z.string().min(1).max(256).optional(), destinationChain: z.string().min(1).max(32).optional() }).strict();
 const page = z.object({ cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const hold = z.object({ userId: z.string().min(1), scope: z.enum(['FUNDING', 'WITHDRAWAL', 'TRADING_ELIGIBILITY', 'EXTERNAL_MOVEMENT', 'ACCOUNT']), reasonCode: z.string().min(1).max(64) }).strict();
-const bankConnectionExchange = z.object({ publicToken: z.string().min(1).max(1024) }).strict();
+const bankConnectionComplete = z.object({ setupIntentId: z.string().min(1).max(256) }).strict();
 @Controller()
 export class ProvidersController {
-  constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly limiter: ControlRateLimitService) {}
+  constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly connectPayouts: StripeConnectPayoutService, private readonly limiter: ControlRateLimitService) {}
   @Post('compliance/verification-sessions') @UseGuards(AccessTokenGuard)
   async start(@Req() req: AuthenticatedRequest) { await this.limit(req); return this.compliance.start(req.actor!, req.requestId ?? 'unknown'); }
   @Get('me/compliance') @UseGuards(AccessTokenGuard)
@@ -29,14 +30,24 @@ export class ProvidersController {
   @Get('wallet/movements') @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) { const input = this.parse(page, query); return this.movements.list(req.actor!.userId, input.cursor, input.limit); }
   @Post('wallet/bank-link/token') @UseGuards(AccessTokenGuard)
-  async bankLinkToken(@Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.createLinkToken(req.actor!); }
-  @Post('wallet/bank-link/exchange') @UseGuards(AccessTokenGuard)
-  async bankLinkExchange(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
-    const input = this.parse(bankConnectionExchange, body);
-    return this.write(req, key, () => this.bankLinks.exchangePublicToken(req.actor!, input.publicToken, req.requestId ?? 'unknown', key!));
+  async bankLinkToken(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.bankLinks.createLinkToken(req.actor!, key!)); }
+  @Post('wallet/bank-link/complete') @UseGuards(AccessTokenGuard)
+  async bankLinkComplete(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
+    const input = this.parse(bankConnectionComplete, body);
+    return this.write(req, key, () => this.bankLinks.completeLink(req.actor!, input.setupIntentId, req.requestId ?? 'unknown', key!));
   }
   @Get('wallet/bank-accounts') @UseGuards(AccessTokenGuard)
   bankAccounts(@Req() req: AuthenticatedRequest) { return this.bankLinks.list(req.actor!.userId); }
+  @Delete('wallet/bank-accounts/:connectionId') @UseGuards(AccessTokenGuard)
+  async disconnectBank(@Param('connectionId') connectionId: string, @Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.disconnect(req.actor!, connectionId, req.requestId ?? 'unknown'); }
+  @Patch('wallet/bank-accounts/:connectionId/default') @UseGuards(AccessTokenGuard)
+  async defaultBank(@Param('connectionId') connectionId: string, @Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.setDefault(req.actor!, connectionId); }
+  @Get('wallet/payouts/connect') @UseGuards(AccessTokenGuard)
+  connectStatus(@Req() req: AuthenticatedRequest) { return this.connectPayouts.status(req.actor!); }
+  @Post('wallet/payouts/connect/onboarding') @UseGuards(AccessTokenGuard)
+  async connectOnboarding(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.connectPayouts.createOnboardingLink(req.actor!, req.requestId ?? 'unknown')); }
+  @Post('wallet/payouts/connect/refresh') @UseGuards(AccessTokenGuard)
+  async connectRefresh(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.connectPayouts.createOnboardingLink(req.actor!, req.requestId ?? 'unknown')); }
   @Post('providers/:provider/webhooks')
   webhook(@Param('provider') provider: string, @Req() req: AuthenticatedRequest & { rawBody?: Buffer; headers: Record<string, string | string[] | undefined> }) {
     if (!['LOCAL_TEST', 'STRIPE_SANDBOX', 'STRIPE_LIVE'].includes(provider)) throw new BadRequestException({ code: 'PROVIDER_UNSUPPORTED', message: 'Provider is not supported.' });
@@ -48,7 +59,7 @@ export class ProvidersController {
   @Post('admin/compliance/holds') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')
   async createHold(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(hold, body); return this.write(req, key, () => this.holds.create(req.actor!, { ...input, requestId: req.requestId ?? 'unknown' })); }
   @Post('admin/compliance/holds/:holdId/release') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('compliance.manage')
-  async releaseHold(@Param('holdId') holdId: string, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.holds.release(req.actor!, holdId)); }
+  async releaseHold(@Param('holdId') holdId: string, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.holds.release(req.actor!, holdId, req.requestId ?? 'unknown')); }
   private parse<T>(schema: z.ZodType<T>, value: unknown): T { const parsed = schema.safeParse(value); if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Request validation failed.' }); return parsed.data; }
   private async write(req: AuthenticatedRequest, key: string | undefined, action: () => Promise<unknown>) { if (!key || !/^[\x21-\x7e]{1,128}$/.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' }); await this.limit(req); return action(); }
   private limit(req: AuthenticatedRequest) { return this.limiter.enforce('providerMutation', req.ip ?? 'unknown', req.actor!.userId); }

@@ -41,6 +41,16 @@ describe('SliceBackendClient account linking', () => {
     expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/links/discord-user/my-slice');
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer service-secret' } });
   });
+
+  it('reads Collector Spotlight eligibility only through the protected bot projection', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ eligible: true, isPublic: true, linkedDiscordUserId: 'discord-owner', collector: { slug: 'public-collector', displayName: 'Public Collector', headline: null, specialism: 'Vintage', publishedListingCount: 2, email: 'private@example.test' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const result = await client().collectorSpotlightEligibility('public-collector');
+    expect(result).toMatchObject({ ok: true, value: { eligible: true, linkedDiscordUserId: 'discord-owner', collector: { slug: 'public-collector' } } });
+    expect(JSON.stringify(result)).not.toContain('private@example.test');
+    expect(fetch.mock.calls[0]?.[0].toString()).toContain('/discord/bot/collectors/public-collector/spotlight');
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer service-secret' } });
+  });
 });
 
 describe('SliceBackendClient public market and Collector reads', () => {

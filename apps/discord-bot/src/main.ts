@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Events, GatewayIntentBits, ModalBuilder, REST, Routes, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type ModalSubmitInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Events, GatewayIntentBits, ModalBuilder, PermissionFlagsBits, REST, Routes, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type ModalSubmitInteraction, type StringSelectMenuInteraction, type UserSelectMenuInteraction } from 'discord.js';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { PrismaClient } from '../generated/prisma/index.js';
@@ -12,12 +12,14 @@ import { Logger } from './logger.js';
 import { FAQ, SliceWebsiteHandoffClient, type SliceDestination } from './onboarding.js';
 import { PrismaSetupRepository } from './persistence/setup-repository.js';
 import { PrismaTicketRepository } from './persistence/ticket-repository.js';
+import { PrismaAdvancedTicketRepository, type TicketFormVersion } from './persistence/advanced-ticket-repository.js';
+import { INTAKE_SAFETY_WARNING, normalizedForm, type TicketIntakeField, validateAnswers } from './advanced-ticket-forms.js';
 import { SetupProvisioner } from './setup/provisioner.js';
 import { TicketCreationError, TicketCreationService } from './ticket-creation.js';
 import { createTicketDiscordBoundary, lockTicketChannel, refreshTicketMessage, type TicketControlMessage } from './ticket-discord.js';
 import { TicketLifecycleService } from './ticket-lifecycle.js';
 import { parseTicketControlId, ticketControlId, TicketInteractionRouter, type TicketRouteAction, type TicketRouteContext, type TicketRouteResult } from './ticket-routing.js';
-import { TicketTranscriptService, type TicketHistory } from './ticket-transcripts.js';
+import { StaffTicketTranscriptService, TicketTranscriptService, type TicketHistory } from './ticket-transcripts.js';
 import { handleModerationCommand } from './commands/moderation.js';
 import { DiscordModerationAuthorization, evaluateAutomod, ManualModerationService, ModerationService } from './moderation.js';
 import { PrismaModerationRepository } from './persistence/moderation-repository.js';
@@ -56,14 +58,19 @@ import { publishEmbed, publishableChannel } from './embed-publication.js';
 import { PrismaAnnouncementScheduleRepository } from './persistence/announcement-schedule-repository.js';
 import { handleScheduleButton, handleScheduleCommand, type ScheduleSessions } from './schedule-command-handler.js';
 import { parseWeekdays, validateTiming, type ScheduleTiming } from './announcement-schedule.js';
+import { DiscordAnalyticsService, type AnalyticsOutcome, type AnalyticsPeriod } from './analytics.js';
+import { PrismaSpotlightRepository } from './persistence/spotlight-repository.js';
+import { handleSpotlightCommand } from './spotlight-command-handler.js';
 
 const config = loadConfig();
 const logger = new Logger();
 const prisma = new PrismaClient({ datasources: { db: { url: config.DATABASE_URL } } });
 const repository = new PrismaSetupRepository(prisma);
 const tickets = new PrismaTicketRepository(prisma);
+const advancedTickets = new PrismaAdvancedTicketRepository(prisma);
 const lifecycle = new TicketLifecycleService(tickets);
 const transcripts = new TicketTranscriptService(tickets);
+const staffTranscripts = new StaffTicketTranscriptService(tickets);
 const moderationRepository = new PrismaModerationRepository(prisma);
 const progressionPresentation = presentationConfig()['progression.yml'];
 const progression = new MemberProgressionService(new PrismaProgressionRepository(prisma), { ...config, XP_MESSAGE_MIN: progressionPresentation.xp.minimum, XP_MESSAGE_MAX: progressionPresentation.xp.maximum, XP_COOLDOWN_SECONDS: progressionPresentation.xp.cooldown_seconds, XP_MIN_MESSAGE_LENGTH: progressionPresentation.xp.minimum_message_length, REPUTATION_COOLDOWN_HOURS: progressionPresentation.reputation.cooldown_hours, DAILY_XP_REWARD: progressionPresentation.daily.reward });
@@ -83,22 +90,29 @@ const giveaways = new PrismaGiveawayRepository(prisma);
 const memes = new PrismaMemeCompetitionRepository(prisma);
 const embeds = new PrismaEmbedRepository(prisma);
 const announcementSchedules = new PrismaAnnouncementScheduleRepository(prisma);
+const analytics = new DiscordAnalyticsService(prisma);
+const spotlights = new PrismaSpotlightRepository(prisma);
+const gatewayInstanceId = crypto.randomUUID();
 const embedSessions = new Map<string, { guildId: string; actorId: string; draftId: string; expiresAt: number }>();
 const scheduleSessions: ScheduleSessions = new Map();
+const ticketIntakeSessions = new Map<string, { guildId: string; actorId: string; category: string; form: TicketFormVersion; answers: Record<string, string>; expiresAt: number }>();
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const categories = new Set(presentationConfig()['tickets.yml'].categories.map((category) => category.key));
 const messageSafetyWindow = new Map<string, { timestamps: number[]; messages: Array<{ content: string; at: number }> }>();
 const health = createServer((request, response) => { const ok = request.url === '/health' || request.url === '/ready' && client.isReady(); response.writeHead(ok ? 200 : 503, { 'content-type': 'application/json' }); response.end(JSON.stringify({ status: ok ? 'ok' : 'not_ready' })); });
 
-client.once(Events.ClientReady, (ready) => { logger.info('discord.ready', { user: ready.user.tag }); void reconcileNotificationRoles(); const presence = ['the Slice Market', 'community discussions', 'Slice support']; let index = 0; ready.user.setPresence({ activities: [{ name: presence[index]!, type: ActivityType.Watching }], status: 'online' }); setInterval(() => { index = (index + 1) % presence.length; ready.user.setPresence({ activities: [{ name: presence[index]!, type: ActivityType.Watching }], status: 'online' }); }, 10 * 60_000); });
-client.on(Events.GuildMemberAdd, (member) => { void reconcileNotificationMember(member); });
+client.once(Events.ClientReady, (ready) => { logger.info('discord.ready', { user: ready.user.tag }); void analytics.capture(() => analytics.heartbeat({ workerName: 'slice-discord-gateway', instanceId: gatewayInstanceId, successfulScan: true })); void reconcileNotificationRoles(); const presence = ['the Slice Market', 'community discussions', 'Slice support']; let index = 0; ready.user.setPresence({ activities: [{ name: presence[index]!, type: ActivityType.Watching }], status: 'online' }); setInterval(() => { index = (index + 1) % presence.length; ready.user.setPresence({ activities: [{ name: presence[index]!, type: ActivityType.Watching }], status: 'online' }); }, 10 * 60_000); setInterval(() => void analytics.capture(() => analytics.heartbeat({ workerName: 'slice-discord-gateway', instanceId: gatewayInstanceId, successfulScan: true })), 60_000); });
+client.on(Events.GuildMemberAdd, (member) => { void reconcileNotificationMember(member); void analytics.capture(() => analytics.memberChange(member.guild.id, true)); });
+client.on(Events.GuildMemberRemove, (member) => { void analytics.capture(() => analytics.memberChange(member.guild.id, false)); });
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild || !message.guildId) return;
   const blocked = await isAutomodBlocked(message);
   const ticket = await tickets.findByChannel(message.guildId, message.channelId);
+  void analytics.capture(() => analytics.message({ guildId: message.guildId!, channelId: message.channelId, actorId: message.author.id, support: Boolean(ticket) }));
   if (ticket) {
     const actor = await createDiscordTicketAuthorization(message.guild, repository).actor(ticket, message.author.id);
     if (ticket.creatorId === message.author.id || actor.staff) await tickets.recordActivity(message.guildId, message.channelId);
+    if (actor.staff) await advancedTickets.markFirstStaffResponse(ticket.id, message.guildId, message.author.id).catch((error) => logger.warn('ticket.first_staff_response_failed', { ticketId: ticket.id, name: error instanceof Error ? error.name : 'unknown' }));
   }
   // This is deliberately last in the message pipeline: any future safety blocker
   // must set blocked before this community-only progression authority is reached.
@@ -111,6 +125,7 @@ client.on(Events.MessageCreate, async (message) => {
   if (result.unlocked.length && message.channel.isSendable()) { const template = presentationConfig()['progression.yml'].messages.achievement; await message.channel.send({ embeds: [SliceEmbed.info(renderTemplate(template.title, { count: result.unlocked.length }), renderTemplate(template.description, { user: message.author.id, count: result.unlocked.length }))] }); }
 });
 client.on(Events.InteractionCreate, async (interaction) => {
+  const startedAt = Date.now(); const command = interaction.isChatInputCommand() && interaction.guildId ? { guildId: interaction.guildId, actorId: interaction.user.id, commandName: interaction.commandName, subcommand: interaction.options.getSubcommand(false) ?? undefined } : null; const communityInteraction = !command && interaction.guildId && !interaction.user.bot ? { guildId: interaction.guildId, actorId: interaction.user.id } : null; let commandOutcome: AnalyticsOutcome = 'SUCCESS';
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === 'setup') return void await handleSetup(interaction, repository, provisioner);
     if (interaction.isChatInputCommand() && interaction.commandName === 'config') return void await handleConfigurationCommand(interaction);
@@ -118,13 +133,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand() && interaction.commandName === 'ops') return void await handleStaffOperations(interaction);
     if (interaction.isChatInputCommand() && ['account', 'roles', 'faq', 'support'].includes(interaction.commandName)) return void await handleOnboardingCommand(interaction, links, market);
     if (interaction.isChatInputCommand() && interaction.commandName === 'ticket') return void await handleTicketCommand(interaction);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'tickets') return void await handleTicketsOperations(interaction);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'ticket-config') return void await handleTicketConfig(interaction);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'analytics') return void await handleAnalytics(interaction);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'spotlight') return void await handleSpotlightCommand(interaction, spotlights, market, embeds, client);
     if (interaction.isChatInputCommand() && ['warn', 'note', 'timeout', 'untimeout', 'ban', 'unban', 'modcase', 'modhistory'].includes(interaction.commandName)) return void await handleModerationCommand(interaction, moderationForGuild(interaction.guild!), await moderationActor(interaction), (id, action) => moderationTarget(interaction.guild!, id, action));
     if (interaction.isChatInputCommand() && ['level', 'leaderboard', 'rep', 'reputation', 'achievements', 'daily'].includes(interaction.commandName)) return void await handleProgressionCommand(interaction, progression);
     if (interaction.isChatInputCommand() && ['notifications', 'suggest', 'suggestion', 'poll', 'birthday'].includes(interaction.commandName)) return void await handleCommunityCommand(interaction, community, config, communityChannel(interaction.guild!), async () => notificationResponse(interaction), refreshSuggestion);
     if (interaction.isChatInputCommand() && interaction.commandName === 'giveaway') return void await handleGiveawayCommand(interaction, giveaways, () => communityChannel(interaction.guild!)('general'), (giveaway) => publishGiveawayCompletion(client, giveaways, giveaway), (giveaway) => refreshGiveawayMessage(client, giveaway));
     if (interaction.isChatInputCommand() && interaction.commandName === 'meme') return void await handleMemeCommand(interaction, memes, config.MEME_COMPETITION_VOTE_EMOJI, async (competition, actorDiscordId, automatic) => { const result = await resolveMemeCompetition(client, memes, competition, actorDiscordId, automatic, config.MEME_COMPETITION_VOTE_EMOJI); if (result?.closedNow && !(await publishMemeResult(client, memes, result.competition, config.MEME_COMPETITION_VOTE_EMOJI))) logger.warn('meme.result_announcement_failed', { competitionId: result.competition.id }); return result; });
     if (interaction.isChatInputCommand() && interaction.commandName === 'embed') return void await handleEmbedCommand(interaction);
-    if (interaction.isChatInputCommand() && interaction.commandName === 'schedule') return void await handleScheduleCommand(interaction, announcementSchedules, embeds, scheduleSessions);
+    if (interaction.isChatInputCommand() && interaction.commandName === 'schedule') return void await handleScheduleCommand(interaction, announcementSchedules, embeds, scheduleSessions, paginator);
     if (interaction.isChatInputCommand() && ['card', 'search', 'value', 'price', 'history', 'top', 'asset', 'market', 'collector', 'vault', 'portfolio', 'balance', 'transactions', 'watchlist', 'profile'].includes(interaction.commandName)) return void await handleMarketCommand(interaction, market, links, progression, investorProfiles, paginator);
     if (interaction.isChatInputCommand() && interaction.commandName === 'pricealert') return void await handlePriceAlert(interaction, discordDeliveries, market);
     if (interaction.isChatInputCommand() && ['ask', 'help', 'summary', 'insights', 'trending', 'about', 'status'].includes(interaction.commandName)) return void await handleIntelligence(interaction, ai, market);
@@ -134,12 +153,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith('slice:setup:')) { if (!interaction.guild) return; await interaction.deferUpdate(); const result = await handleSetupButton(interaction.customId, interaction.user.id, interaction.guild.id, { apply: async () => provisioner.apply(interaction.guild!), reset: async () => provisioner.reset(interaction.guild!) }); return void await interaction.editReply({ embeds: [SliceEmbed.success(result.title, result.body)], components: [] }); }
     if (interaction.isButton() && interaction.customId === 'slice:ticket:open') return void await openTicketPicker(interaction);
     if (interaction.isButton() && interaction.customId === 'slice:ticket:mine') return void await listMyTickets(interaction);
+    if (interaction.isButton() && interaction.customId.startsWith('slice:ticket-config:')) return void await handleTicketConfigButton(interaction);
+    if (interaction.isButton() && interaction.customId.startsWith('slice:ticket:intake-next:')) return void await continueTicketIntake(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketButton(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:giveaway:')) return void await handleGiveawayButton(interaction, giveaways, (giveaway) => refreshGiveawayMessage(client, giveaway));
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:ticket:create') return void await handleTicketCreationCategory(interaction);
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:ticket-config:')) return void await handleTicketConfigSelect(interaction);
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:ticket:intake-choice:')) return void await handleTicketIntakeChoice(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketPriority(interaction);
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('slice:ticket:')) return void await handleTicketTransfer(interaction);
     if (interaction.isModalSubmit() && interaction.customId.startsWith('slice:ticket:intake:')) return void await handleTicketIntake(interaction);
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('slice:ticket-config:')) return void await handleTicketConfigModal(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:roles:notifications') return void await handleNotificationRoles(interaction);
     if (interaction.isStringSelectMenu() && interaction.customId === 'slice:notifications:customer') return void await handleCustomerNotifications(interaction);
     if (interaction.isButton() && interaction.customId.startsWith('slice:community:suggestion:')) return void await handleSuggestionVote(interaction);
@@ -152,18 +176,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith('slice:schedule:')) return void await handleScheduleButton(interaction, announcementSchedules, scheduleSessions);
     if (interaction.isModalSubmit() && interaction.customId.startsWith('slice:embed:')) return void await handleEmbedModal(interaction);
   } catch (error) {
+    commandOutcome = 'INTERNAL_ERROR';
     const ref = `SLC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     logger.error('interaction.failed', { reference: ref, name: error instanceof Error ? error.name : 'unknown', message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
     const payload = { ephemeral: true, embeds: [SliceEmbed.error('Interaction unavailable', `Reference: ${ref}\n\nSlice couldn't complete that request right now. Try again shortly.`)] };
     if (interaction.isRepliable()) await (interaction.replied || interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload));
+  } finally {
+    if (command) void analytics.capture(() => analytics.command({ ...command, outcome: commandOutcome, durationMs: Date.now() - startedAt }));
+    if (communityInteraction) void analytics.capture(() => analytics.communityInteraction(communityInteraction.guildId, communityInteraction.actorId));
   }
 });
 
 async function handleTicketCreationCategory(interaction: StringSelectMenuInteraction): Promise<void> {
   const category = interaction.values[0];
   if (!interaction.guildId || !categories.has(category)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Invalid ticket category', 'Choose a category from the Slice ticket panel.')] });
-  const modal = new ModalBuilder().setCustomId(`slice:ticket:intake:${category}`).setTitle('Create support ticket').addComponents(row('subject', 'Subject', TextInputStyle.Short, true, 120), row('description', 'Short description', TextInputStyle.Paragraph, true, 1800), row('reference', 'Optional safe reference ID', TextInputStyle.Short, false, 120));
-  await interaction.showModal(modal);
+  const form = await advancedTickets.activeForm(interaction.guildId, category, interaction.user.id);
+  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+  ticketIntakeSessions.set(id, { guildId: interaction.guildId, actorId: interaction.user.id, category, form, answers: {}, expiresAt: Date.now() + 15 * 60_000 });
+  await showTicketIntakeStep(interaction, id);
 }
 
 async function handleEmbedCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -208,16 +238,68 @@ async function listMyTickets(interaction: ButtonInteraction): Promise<void> {
 }
 
 async function handleTicketIntake(interaction: ModalSubmitInteraction): Promise<void> {
-  const category = interaction.customId.split(':')[3];
-  if (!interaction.guild || !interaction.guildId || !categories.has(category)) throw new TicketCreationError('Invalid ticket request.');
+  const id = interaction.customId.split(':')[3]; const session = intakeSession(id, interaction.guildId, interaction.user.id);
+  if (!session) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Intake expired', 'Start a new ticket from the support panel.')] });
+  for (const field of nextTextFields(session)) session.answers[field.key] = interaction.fields.getTextInputValue(field.key);
   await interaction.deferReply({ ephemeral: true });
-  const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'private-support');
-  if (!support) throw new TicketCreationError('Slice private support is not ready. Ask an administrator to run /setup repair.');
-  const existing = (await tickets.findActive(interaction.guildId, interaction.user.id)).find((ticket) => ticket.category === category);
-  if (existing?.channelId && !(await interaction.guild.channels.fetch(existing.channelId).catch(() => null))) await tickets.clearMissingChannel(existing.id, interaction.guildId, existing.channelId);
+  await continueTicketIntakeAfterReply(interaction, id, session);
+}
+
+async function continueTicketIntake(interaction: ButtonInteraction): Promise<void> {
+  const id = interaction.customId.split(':')[3]; const session = intakeSession(id, interaction.guildId, interaction.user.id);
+  if (!session) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Intake expired', 'Start a new ticket from the support panel.')] });
+  await showTicketIntakeStep(interaction, id);
+}
+
+async function handleTicketIntakeChoice(interaction: StringSelectMenuInteraction): Promise<void> {
+  const [, , , id, key] = interaction.customId.split(':'); const session = intakeSession(id, interaction.guildId, interaction.user.id);
+  const field = session && normalizedForm(session.form.fields).find((candidate) => candidate.key === key);
+  if (!session || !field) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Intake expired', 'Start a new ticket from the support panel.')] });
+  session.answers[key] = interaction.values[0] === '__skip__' ? '' : interaction.values[0]!;
+  await interaction.update({ embeds: [SliceEmbed.info('Answer saved', `${INTAKE_SAFETY_WARNING}\n\nContinue when you are ready.`)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`slice:ticket:intake-next:${id}`).setLabel('Continue').setStyle(ButtonStyle.Primary))] });
+}
+
+function intakeSession(id: string | undefined, guildId: string | null, actorId: string) {
+  const session = id ? ticketIntakeSessions.get(id) : undefined;
+  if (!session || session.guildId !== guildId || session.actorId !== actorId || session.expiresAt < Date.now()) { if (id) ticketIntakeSessions.delete(id); return null; }
+  return session;
+}
+
+function unansweredField(session: NonNullable<ReturnType<typeof intakeSession>>) { return normalizedForm(session.form.fields).find((field) => session.answers[field.key] === undefined); }
+function nextTextFields(session: NonNullable<ReturnType<typeof intakeSession>>) { const fields: TicketIntakeField[] = []; for (const field of normalizedForm(session.form.fields)) { if (session.answers[field.key] !== undefined) continue; if (field.type === 'SELECT' || field.type === 'BOOLEAN') break; fields.push(field); if (fields.length === 5) break; } return fields; }
+function textInput(field: TicketIntakeField) { const input = new TextInputBuilder().setCustomId(field.key).setLabel(field.label).setStyle(field.type === 'LONG_TEXT' ? TextInputStyle.Paragraph : TextInputStyle.Short).setRequired(field.required).setMaxLength(field.maxLength ?? 1800); if (field.minLength) input.setMinLength(field.minLength); if (field.placeholder) input.setPlaceholder(field.placeholder); return new ActionRowBuilder<TextInputBuilder>().addComponents(input); }
+
+async function showTicketIntakeStep(interaction: StringSelectMenuInteraction | ButtonInteraction, id: string): Promise<void> {
+  const session = intakeSession(id, interaction.guildId, interaction.user.id); if (!session) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('Intake expired', 'Start a new ticket from the support panel.')] });
+  const field = unansweredField(session);
+  if (!field) { await interaction.deferReply({ ephemeral: true }); return void await createTicketFromIntake(interaction, id, session); }
+  if (field.type === 'SELECT' || field.type === 'BOOLEAN') {
+    const options = field.type === 'BOOLEAN' ? [{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }] : (field.options ?? []).map((value) => ({ label: value, value })); if (!field.required) options.push({ label: 'Skip this question', value: '__skip__' });
+    const payload = { ephemeral: true, embeds: [SliceEmbed.info('Support intake', `${INTAKE_SAFETY_WARNING}\n\n**${field.label}**`)], components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(`slice:ticket:intake-choice:${id}:${field.key}`).setPlaceholder(field.placeholder ?? 'Choose an answer').setMinValues(field.required ? 1 : 0).setMaxValues(1).addOptions(options))] };
+    if (interaction.isButton()) await interaction.update({ embeds: payload.embeds, components: payload.components }); else await interaction.reply(payload); return;
+  }
+  const fields = nextTextFields(session); const modal = new ModalBuilder().setCustomId(`slice:ticket:intake:${id}`).setTitle('Support intake').addComponents(...fields.map(textInput));
+  await interaction.showModal(modal);
+}
+
+async function continueTicketIntakeAfterReply(interaction: ModalSubmitInteraction, id: string, session: NonNullable<ReturnType<typeof intakeSession>>): Promise<void> {
+  const result = validateAnswers(session.form.fields, session.answers);
+  const missing = normalizedForm(session.form.fields).find((field) => session.answers[field.key] === undefined);
+  if (result.errors.length && !missing) return void await interaction.editReply({ embeds: [SliceEmbed.error('Intake needs attention', result.errors[0]!) ] });
+  if (!missing) return void await createTicketFromIntake(interaction, id, session);
+  await interaction.editReply({ embeds: [SliceEmbed.info('Support intake', `${INTAKE_SAFETY_WARNING}\n\nContinue to answer the next question.`)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`slice:ticket:intake-next:${id}`).setLabel('Continue').setStyle(ButtonStyle.Primary))] });
+}
+
+async function createTicketFromIntake(interaction: { guild: Guild | null; guildId: string | null; user: { id: string }; editReply(payload: { embeds: ReturnType<typeof SliceEmbed.success>[] }): Promise<unknown> }, id: string, session: NonNullable<ReturnType<typeof intakeSession>>): Promise<void> {
+  const result = validateAnswers(session.form.fields, session.answers); if (result.errors.length) { await interaction.editReply({ embeds: [SliceEmbed.error('Intake needs attention', result.errors[0]!) ] }); return; }
+  if (!interaction.guild || !interaction.guildId) throw new TicketCreationError('Ticket creation is available inside the Slice server only.');
+  const support = await repository.getResource(interaction.guildId, 'CATEGORY', 'private-support'); if (!support) throw new TicketCreationError('Slice private support is not ready. Ask an administrator to run /setup repair.');
+  const existing = (await tickets.findActive(interaction.guildId, interaction.user.id)).find((ticket) => ticket.category === session.category); if (existing?.channelId && !(await interaction.guild.channels.fetch(existing.channelId).catch(() => null))) await tickets.clearMissingChannel(existing.id, interaction.guildId, existing.channelId);
+  const policy = await advancedTickets.policy(interaction.guildId, session.category);
+  const subjectAnswer = result.answers.find((answer) => answer.fieldKey === 'subject' || answer.fieldKey === 'issue' || answer.fieldKey === 'incident') ?? result.answers[0];
   const service = new TicketCreationService(tickets, createTicketDiscordBoundary(interaction.guild, support.discordId), { getRoleId: async (guildId, key) => (await repository.getResource(guildId, 'ROLE', key))?.discordId ?? null });
-  const ticket = await service.create({ guildId: interaction.guildId, creatorDiscordId: interaction.user.id, category, subject: interaction.fields.getTextInputValue('subject'), description: interaction.fields.getTextInputValue('description'), referenceId: interaction.fields.getTextInputValue('reference') || undefined });
-  await interaction.editReply({ embeds: [SliceEmbed.success('Ticket created', `Your private ticket is ready: <#${ticket.channelId}>`)] });
+  const ticket = await service.create({ guildId: interaction.guildId, creatorDiscordId: interaction.user.id, category: session.category, subject: subjectAnswer?.value.slice(0, 120) || 'Support request', description: result.answers.map((answer) => `${answer.fieldLabel}: ${answer.value}`).join('\n').slice(0, 1800), formVersionId: session.form.id, intakeResponses: result.answers, assignedTeamKey: policy?.routingRoleKey ?? undefined });
+  ticketIntakeSessions.delete(id); await interaction.editReply({ embeds: [SliceEmbed.success('Ticket created', `Your private ticket is ready: <#${ticket.channelId}>`)] });
 }
 
 async function handleTicketButton(interaction: ButtonInteraction): Promise<void> {
@@ -248,13 +330,101 @@ async function handleTicketTransfer(interaction: UserSelectMenuInteraction): Pro
 async function handleTicketCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guild) return void await interaction.reply(ticketError('Ticket controls are only available in a ticket channel.'));
   const router = ticketRouter(interaction.guild);
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'note' || subcommand === 'tag') {
+    const ticket = await tickets.findByChannel(interaction.guildId!, interaction.channelId!); if (!ticket) return void await interaction.reply(ticketError('This ticket control is unavailable.'));
+    const authorized = await router.authorize({ ...ticketContext(interaction), ticketId: ticket.id }); if (!authorized.ok) return void await interaction.reply(ticketError(authorized.message));
+    if (subcommand === 'note') { const noteId = await advancedTickets.addInternalNote(ticket.id, interaction.guildId!, interaction.user.id, interaction.options.getString('content', true)); return void await interaction.reply({ ephemeral: true, embeds: [noteId ? SliceEmbed.success('Internal note saved', 'The note is private to authorized support staff and the staff transcript.') : SliceEmbed.error('Note unavailable', 'This ticket is no longer available.')] }); }
+    const key = interaction.options.getString('key', true).toLowerCase(); const added = interaction.options.getString('action', true) === 'add' ? await advancedTickets.addTag(ticket.id, interaction.guildId!, interaction.user.id, key) : await advancedTickets.removeTag(ticket.id, interaction.guildId!, interaction.user.id, key); return void await interaction.reply({ ephemeral: true, embeds: [added ? SliceEmbed.success('Ticket tags updated', `#${key} was ${interaction.options.getString('action', true) === 'add' ? 'added to' : 'removed from'} this ticket.`) : SliceEmbed.warning('Tag unavailable', 'The tag is unavailable or was already in that state.')] });
+  }
   const input = ticketCommandInput(interaction);
   const context = ticketContext(interaction);
+  if (input.action === 'escalate') { const target = input.escalationTarget; if (!target || !(await repository.getResource(interaction.guildId!, 'ROLE', target))) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Escalation team unavailable', 'Choose an existing managed Slice staff role key.')] }); const ticket = await tickets.findByChannel(interaction.guildId!, interaction.channelId!); if (!ticket) return void await interaction.reply(ticketError('This ticket control is unavailable.')); const authorized = await router.authorize({ ...context, ticketId: ticket.id }); if (!authorized.ok) return void await interaction.reply(ticketError(authorized.message)); await advancedTickets.addInternalNote(ticket.id, interaction.guildId!, interaction.user.id, `Escalation to ${target}: ${input.reason ?? ''}`.slice(0, 1800)); }
   if (input.action === 'transcript') return void await handleTranscriptCommand(interaction, router, context);
   if (input.action === 'resolve-confirmation' || input.action === 'close-confirmation') {
     return void await openCommandConfirmation(interaction, router, context, input.action === 'resolve-confirmation' ? 'resolve' : 'close');
   }
   await executeTicketAction(interaction, router, context, input.action, input, true);
+}
+
+async function isTicketOperationsStaff(interaction: ChatInputCommandInteraction): Promise<boolean> {
+  if (!interaction.guild || !interaction.guildId) return false;
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null); if (!member) return false;
+  if (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+  const roleIds = new Set(member.roles.cache.keys());
+  const resources = await Promise.all(['owner', 'administrator', 'operations', 'support'].map((key) => repository.getResource(interaction.guildId!, 'ROLE', key)));
+  return resources.some((resource) => resource && roleIds.has(resource.discordId));
+}
+
+async function handleTicketsOperations(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.guildId || !(await isTicketOperationsStaff(interaction))) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Staff access required', 'Only authorized Slice support staff can view ticket operations.')] });
+  await interaction.deferReply({ ephemeral: true }); const sub = interaction.options.getSubcommand();
+  if (sub === 'queue') {
+    const filter = interaction.options.getString('filter', true) as 'OPEN' | 'UNASSIGNED' | 'MINE' | 'HIGH_PRIORITY' | 'SLA_RISK' | 'SLA_BREACHED' | 'CATEGORY' | 'ALL'; const rows = await advancedTickets.queue(interaction.guildId, filter, interaction.user.id, interaction.options.getString('category') ?? undefined, interaction.options.getString('status') ?? undefined, interaction.options.getUser('assignee')?.id);
+    const body = rows.length ? rows.map((ticket) => `\`${ticket.id.slice(0, 8)}\` · **${ticket.priority}** · ${ticket.category.replace(/-/g, ' ')} · ${ticket.status.replace(/_/g, ' ')}\n<@${ticket.creatorDiscordId}> · ${ticket.assignedStaffId ? `<@${ticket.assignedStaffId}>` : ticket.assignedTeamKey ? `Team: ${ticket.assignedTeamKey}` : 'Unassigned'} · ${ticket.tags.map((tag) => `#${tag.key}`).join(' ') || 'No tags'} · ${ticketSlaState(ticket)}`).join('\n\n') : 'No tickets match this queue.';
+    return void await interaction.editReply({ embeds: [SliceEmbed.info('Support queue', body.slice(0, 3900))] });
+  }
+  if (sub === 'search') {
+    const days = interaction.options.getInteger('created-within-days'); const rows = await advancedTickets.search(interaction.guildId, { reference: interaction.options.getString('reference') ?? undefined, creatorDiscordId: interaction.options.getUser('member')?.id, category: interaction.options.getString('category') ?? undefined, tag: interaction.options.getString('tag') ?? undefined, status: interaction.options.getString('status') ?? undefined, assignedStaffId: interaction.options.getUser('assignee')?.id, ...(days ? { createdSince: new Date(Date.now() - days * 86_400_000) } : {}) });
+    return void await interaction.editReply({ embeds: [SliceEmbed.info('Ticket search', rows.length ? rows.map((ticket) => `\`${ticket.id.slice(0, 8)}\` · **${ticket.category.replace(/-/g, ' ')}** · ${ticket.status} · ${ticket.priority} · <@${ticket.creatorDiscordId}>`).join('\n') : 'No tickets match that search.')] });
+  }
+  if (sub === 'view') {
+    const reference = interaction.options.getString('reference', true); const matches = await advancedTickets.search(interaction.guildId, { reference, limit: 2 }); const ticket = matches.length === 1 ? await advancedTickets.ticketDetail(matches[0]!.id, interaction.guildId) : null;
+    if (!ticket) return void await interaction.editReply({ embeds: [SliceEmbed.warning('Ticket unavailable', 'Use a unique ticket reference from the staff queue.')] });
+    const intake = ticket.intakeResponses.length ? ticket.intakeResponses.map((answer) => `• **${answer.fieldLabel}**: ${answer.value}`).join('\n') : 'No recorded intake answers.';
+    return void await interaction.editReply({ embeds: [SliceEmbed.info(`Ticket ${ticket.id.slice(0, 8)}`, `**${ticket.category.replace(/-/g, ' ')}** · ${ticket.status} · ${ticket.priority}\nRequester: <@${ticket.creatorDiscordId}>\nAssigned: ${ticket.assignedStaffId ? `<@${ticket.assignedStaffId}>` : 'Unassigned'}${ticket.assignedTeamKey ? ` · Team: ${ticket.assignedTeamKey}` : ''}\nSLA: ${ticketSlaState(ticket)}\nTags: ${ticket.tagAssignments.map((item) => `#${item.tag.key}`).join(' ') || 'None'}\nInternal notes: ${ticket.internalNotes.length}\n\n**Intake**\n${intake}`.slice(0, 3900))] });
+  }
+  const days = interaction.options.getString('period', true) === '30d' ? 30 : 7; const stats = await advancedTickets.stats(interaction.guildId, new Date(Date.now() - days * 86_400_000));
+  await interaction.editReply({ embeds: [SliceEmbed.info(`Support operations · ${days} days`, `Opened: **${stats.opened}**\nOpen backlog: **${stats.open}**\nUnassigned: **${stats.unassigned}**\nAverage first response: **${formatDuration(stats.averageFirstResponseMs)}**\nAverage resolution: **${formatDuration(stats.averageResolutionMs)}**\nFirst-response SLA met: **${stats.firstResponseMet}**\nResolution SLA met: **${stats.resolutionMet}**\n\nBy category: ${formatCounts(stats.byCategory)}\nBy priority: ${formatCounts(stats.byPriority)}`)] });
+}
+
+async function handleTicketConfig(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.guildId || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Manage Server required', 'Only Discord server managers can change support configuration.')] });
+  await interaction.deferReply({ ephemeral: true }); const sub = interaction.options.getSubcommand(); const category = interaction.options.getString('category');
+  if (category && !categories.has(category)) return void await interaction.editReply({ embeds: [SliceEmbed.error('Invalid category', 'Choose a configured Slice support category.')] });
+  if (sub === 'categories') { const lines = await Promise.all([...categories].sort().map(async (key) => { const policy = await advancedTickets.policy(interaction.guildId!, key); return `• **${key.replace(/-/g, ' ')}** — ${policy?.routingRoleKey ?? 'Default support routing'} · ${policy?.firstResponseMinutes ?? 240}m first response · ${policy?.resolutionMinutes ?? 2880}m resolution`; })); return void await interaction.editReply({ embeds: [SliceEmbed.info('Ticket category policies', lines.join('\n').slice(0, 3900))] }); }
+  if (sub === 'form') { const form = await advancedTickets.activeForm(interaction.guildId, category!, interaction.user.id); return void await interaction.editReply({ embeds: [SliceEmbed.info(`Intake form · ${category!.replace(/-/g, ' ')}`, `Version **${form.version}** · ${form.fields.length} configured questions\n\n${normalizedForm(form.fields).map((field) => `• \`${field.key}\` — **${field.label}** · ${field.type}${field.required ? ' · required' : ''}`).join('\n')}\n\n${INTAKE_SAFETY_WARNING}`)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`slice:ticket-config:form-add:${category}`).setLabel('Add question').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId(`slice:ticket-config:form-disable:${category}`).setLabel('Disable question').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`slice:ticket-config:form-reset:${category}`).setLabel('Restore default form').setStyle(ButtonStyle.Danger))] }); }
+  if (sub === 'form-edit' || sub === 'form-reorder') { const form = await advancedTickets.activeForm(interaction.guildId, category!, interaction.user.id); const key = interaction.options.getString('key', true); const index = form.fields.findIndex((field) => field.key === key); if (index < 0) return void await interaction.editReply({ embeds: [SliceEmbed.error('Question unavailable', 'That stable question key is not in the active form.')] }); let fields = [...form.fields]; if (sub === 'form-edit') { const current = fields[index]!; fields[index] = { ...current, label: interaction.options.getString('label', true).trim(), ...(interaction.options.getBoolean('required') === null ? {} : { required: interaction.options.getBoolean('required')! }) }; } else { const [field] = fields.splice(index, 1); fields.splice(Math.min(interaction.options.getInteger('position', true) - 1, fields.length), 0, field!); fields = fields.map((field, order) => ({ ...field, order: order + 1 })); } const version = await advancedTickets.createFormVersion(interaction.guildId, category!, fields, interaction.user.id); return void await interaction.editReply({ embeds: [SliceEmbed.success(sub === 'form-edit' ? 'Question updated' : 'Question reordered', `Form version **${version.version}** is active for new tickets; historic intake remains unchanged.`)] }); }
+  if (sub === 'routing') { const value = interaction.options.getString('team', true); const team = value === 'clear' ? null : value; if (team && !(await repository.getResource(interaction.guildId, 'ROLE', team))) return void await interaction.editReply({ embeds: [SliceEmbed.error('Managed role unavailable', 'Use an existing managed Slice role key, or `clear`.')] }); const policy = await advancedTickets.upsertPolicy(interaction.guildId, category!, { routingRoleKey: team }); return void await interaction.editReply({ embeds: [SliceEmbed.success('Routing updated', `${category!.replace(/-/g, ' ')} routes to ${policy.routingRoleKey ?? 'the default support team'}.`)] }); }
+  if (sub === 'sla') { const policy = await advancedTickets.upsertPolicy(interaction.guildId, category!, { firstResponseMinutes: interaction.options.getInteger('first-response-minutes', true), resolutionMinutes: interaction.options.getInteger('resolution-minutes', true) }); return void await interaction.editReply({ embeds: [SliceEmbed.success('SLA updated', `${category!.replace(/-/g, ' ')}: ${policy.firstResponseMinutes}m first response · ${policy.resolutionMinutes}m resolution.`)] }); }
+  if (sub === 'inactivity') { const warning = interaction.options.getInteger('warning-hours', true); const close = interaction.options.getInteger('close-hours', true); if (close < warning) return void await interaction.editReply({ embeds: [SliceEmbed.error('Invalid inactivity policy', 'Close-after must be at least as long as warning-after.')] }); const policy = await advancedTickets.upsertPolicy(interaction.guildId, category!, { inactivityWarningHours: warning, inactivityCloseHours: close, protectedFromAutoClose: interaction.options.getBoolean('protected') ?? false }); return void await interaction.editReply({ embeds: [SliceEmbed.success('Inactivity policy updated', `${category!.replace(/-/g, ' ')}: warning at ${policy.inactivityWarningHours}h · close at ${policy.inactivityCloseHours}h${policy.protectedFromAutoClose ? ' · protected from automatic close' : ''}.`)] }); }
+  const action = interaction.options.getString('action', true); const key = interaction.options.getString('key', true).toLowerCase(); if (!/^[a-z][a-z0-9-]{0,47}$/.test(key)) return void await interaction.editReply({ embeds: [SliceEmbed.error('Invalid tag key', 'Use 1–48 lowercase letters, numbers, and hyphens, beginning with a letter.')] }); if (action === 'DISABLE') { const changed = await advancedTickets.disableTag(interaction.guildId, key, interaction.user.id); return void await interaction.editReply({ embeds: [changed ? SliceEmbed.success('Tag disabled', `#${key} remains visible on historic tickets but cannot be added to new tickets.`) : SliceEmbed.warning('Tag unavailable', `#${key} is not an active tag.`)] }); } const label = interaction.options.getString('label'); if (!label || !label.trim() || label.length > 80) return void await interaction.editReply({ embeds: [SliceEmbed.error('Label required', 'Provide a tag label of up to 80 characters.')] }); if ((await advancedTickets.listTags(interaction.guildId)).filter((tag) => tag.enabled).length >= 50) return void await interaction.editReply({ embeds: [SliceEmbed.error('Tag limit reached', 'A guild may have up to 50 active support tags.')] }); await advancedTickets.upsertTag(interaction.guildId, key, label.trim(), interaction.user.id); await interaction.editReply({ embeds: [SliceEmbed.success('Tag saved', `#${key} is available to staff.`)] });
+}
+
+async function handleAnalytics(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.guild || !interaction.guildId || !(await isTicketOperationsStaff(interaction))) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Staff access required', 'Analytics are available only to authorized Slice staff.')] });
+  const subcommand = interaction.options.getSubcommand(); const period = (subcommand === 'health' ? '7d' : interaction.options.getString('period', true)) as AnalyticsPeriod;
+  if (subcommand === 'export' && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Manage Server required', 'Only server managers can export aggregate analytics.')] });
+  await interaction.deferReply({ ephemeral: true });
+  if (subcommand === 'health') { const workers = await analytics.health(); const health = workers.length ? workers.map((worker) => `• **${worker.workerName}** — ${worker.status} · <t:${Math.floor(worker.lastHeartbeatAt.getTime() / 1000)}:R>`).join('\n') : 'No durable worker heartbeat has been recorded yet.'; return void await interaction.editReply({ embeds: [SliceEmbed.info('Slice operations health', `Gateway: **${client.isReady() ? 'HEALTHY' : 'UNHEALTHY'}**\nDatabase: **HEALTHY** (analytics query succeeded)\n\n**Workers**\n${health}\n\nHealth data never includes URLs, credentials, or stack traces.`)] }); }
+  if (subcommand === 'export') { const rows = await analytics.exportRows(interaction.guildId, period); const header = 'day,messages,support_messages,joins,leaves,command_runs,command_successes,command_user_errors,command_denied,command_failures'; const csv = [header, ...rows.map((row) => [row.day.toISOString().slice(0, 10), row.messages, row.supportMessages, row.joins, row.leaves, row.commandRuns, row.commandSuccesses, row.commandUserErrors, row.commandDenied, row.commandFailures].join(','))].join('\n'); return void await interaction.editReply({ embeds: [SliceEmbed.success('Analytics export ready', `${rows.length} aggregate daily rows. This file contains no message content, command arguments, ticket content, or financial data.`)], files: [{ attachment: Buffer.from(csv, 'utf8'), name: `slice-analytics-${period}.csv` }] }); }
+  const data = await analytics.overview(interaction.guildId, period, interaction.guild.memberCount); const totals = data.totals; const trend = metricTrend(totals.messages ?? 0, data.priorTotals.messages ?? 0); const channels = data.channels.length ? data.channels.slice(0, 5).map((channel) => `• <#${channel.channelId}> — ${channel.messages} messages`).join('\n') : 'Message/channel collection begins after analytics deployment.'; const commands = data.commands.length ? data.commands.slice(0, 6).map((command) => `• **/${command.command}${command.subcommand ? ` ${command.subcommand}` : ''}** — ${command.runs}`).join('\n') : 'No command telemetry in this period.';
+  if (subcommand === 'engagement') return void await interaction.editReply({ embeds: [SliceEmbed.info(`Engagement · ${period}`, `Active members: **${data.activeMembers}**\nEligible community messages: **${totals.messages ?? 0}** (${trend})\nMessages per active member: **${data.activeMembers ? ((totals.messages ?? 0) / data.activeMembers).toFixed(1) : '—'}**\nActive channels: **${data.channels.length}**\nCommand runs: **${totals.commandRuns ?? 0}**\n\n**Busiest managed channels**\n${channels}\n\nActive member = a non-bot member who messaged, used a command, or performed a tracked community interaction during the period.`)] });
+  if (subcommand === 'community') return void await interaction.editReply({ embeds: [SliceEmbed.info(`Community activity · ${period}`, `Suggestions created: **${data.community.suggestions}**\nPolls created: **${data.community.polls}**\nGiveaways run: **${data.community.giveaways}**\nMeme competitions run: **${data.community.memes}**\n\nThese totals reuse bot-owned community records. They do not include financial, account, or investment data.`)] });
+  if (subcommand === 'support') return void await interaction.editReply({ embeds: [SliceEmbed.info(`Support operations · ${period}`, `Open backlog: **${data.support.open}**\nUnassigned: **${data.support.unassigned}**\nOpened: **${data.support.opened}**\nResolved: **${data.support.resolved}**\n\nBy status: ${formatCounts(data.support.byStatus)}`)] });
+  if (subcommand === 'commands') return void await interaction.editReply({ embeds: [SliceEmbed.info(`Command operations · ${period}`, `Runs: **${totals.commandRuns ?? 0}**\nSuccessful: **${totals.commandSuccesses ?? 0}**\nUser validation errors: **${totals.commandUserErrors ?? 0}**\nPermission denials: **${totals.commandDenied ?? 0}**\nInternal failures: **${totals.commandFailures ?? 0}**\n\n**Most used**\n${commands}`)] });
+  if (subcommand === 'publishing') return void await interaction.editReply({ embeds: [SliceEmbed.info(`Publishing operations · ${period}`, `Publications sent: **${data.publishing.publications}**\nScheduled runs: ${formatCounts(data.publishing.runs)}\n\nDiscord records establish delivery attempts, not impressions, click-through, conversion, or revenue.`)] });
+  await interaction.editReply({ embeds: [SliceEmbed.info(`Slice operations · ${period}`, `**Community**\nMembers: **${data.memberCount}** · Active: **${data.activeMembers}** · Messages: **${totals.messages ?? 0}**\nJoins: **${totals.joins ?? 0}** · Leaves: **${totals.leaves ?? 0}** · Commands: **${totals.commandRuns ?? 0}**\n\n**Support**\nOpen: **${data.support.open}** · Unassigned: **${data.support.unassigned}** · Resolved: **${data.support.resolved}**\n\n**Publishing**\nSent: **${data.publishing.publications}** · Scheduled: ${formatCounts(data.publishing.runs)}\n\n**Systems**\nGateway: **${client.isReady() ? 'HEALTHY' : 'UNHEALTHY'}** · Worker: use /analytics health for durable status.`)] });
+}
+function metricTrend(current: number, prior: number): string { if (!prior) return 'Prior-period data unavailable'; const percent = ((current - prior) / prior) * 100; return `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}% vs prior period`; }
+
+function ticketSlaState(ticket: { firstStaffResponseAt: Date | null; firstResponseDueAt: Date | null; resolutionDueAt: Date | null; createdAt?: Date; status?: string }): string { if (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED') return 'MET / recorded'; const now = Date.now(); if (!ticket.firstStaffResponseAt && ticket.firstResponseDueAt) { const riskAt = ticket.createdAt ? ticket.firstResponseDueAt.getTime() - (ticket.firstResponseDueAt.getTime() - ticket.createdAt.getTime()) * .25 : ticket.firstResponseDueAt.getTime(); return now > ticket.firstResponseDueAt.getTime() ? 'FIRST RESPONSE BREACHED' : now >= riskAt ? 'FIRST RESPONSE AT RISK' : 'ON TRACK'; } if (ticket.resolutionDueAt) return now > ticket.resolutionDueAt.getTime() ? 'RESOLUTION BREACHED' : 'ON TRACK'; return 'ON TRACK'; }
+function formatDuration(value: number | null): string { return value === null ? '—' : value < 3_600_000 ? `${Math.round(value / 60_000)}m` : `${(value / 3_600_000).toFixed(1)}h`; }
+function formatCounts(value: Record<string, number>): string { const entries = Object.entries(value); return entries.length ? entries.map(([key, count]) => `${key.replace(/-/g, ' ')} ${count}`).join(' · ') : 'None'; }
+
+async function canConfigureTickets(interaction: { guildId: string | null; memberPermissions: { has(permission: bigint): boolean } | null }): Promise<boolean> { return Boolean(interaction.guildId && interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)); }
+async function handleTicketConfigButton(interaction: ButtonInteraction): Promise<void> {
+  const [, , action, category] = interaction.customId.split(':'); if (!category || !categories.has(category) || !(await canConfigureTickets(interaction))) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Manage Server required', 'Only Discord server managers can change support configuration.')] });
+  if (action === 'form-add') { const modal = new ModalBuilder().setCustomId(`slice:ticket-config:form-save:${category}`).setTitle('Add intake question').addComponents(row('key', 'Stable key (lowercase-hyphen)', TextInputStyle.Short, true, 48), row('label', 'Question label', TextInputStyle.Short, true, 45), row('type', 'SHORT_TEXT, LONG_TEXT, SELECT, BOOLEAN, OPTIONAL_TEXT', TextInputStyle.Short, true, 20), row('required', 'Required? yes or no', TextInputStyle.Short, true, 3), row('options', 'Select options, comma-separated (if SELECT)', TextInputStyle.Paragraph, false, 500)); return void await interaction.showModal(modal); }
+  const form = await advancedTickets.activeForm(interaction.guildId!, category, interaction.user.id);
+  if (action === 'form-disable') { const fields = normalizedForm(form.fields); if (!fields.length) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('No active questions', 'This form has no enabled questions to disable.')] }); return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.info('Disable intake question', 'Disabled questions remain in prior version snapshots but are not asked on future tickets.')], components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(`slice:ticket-config:form-disable-select:${category}`).setPlaceholder('Choose a question').addOptions(fields.map((field) => ({ label: field.label, value: field.key }))))] }); }
+  if (action === 'form-reset') { const { DEFAULT_TICKET_FORMS } = await import('./advanced-ticket-forms.js'); const defaults = DEFAULT_TICKET_FORMS[category]; if (!defaults) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.warning('No default form', 'This category has no packaged default form.')] }); await advancedTickets.createFormVersion(interaction.guildId!, category, defaults, interaction.user.id); return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('Default form restored', 'New tickets use a fresh version of the packaged safe default form. Existing ticket snapshots were not changed.')] }); }
+}
+async function handleTicketConfigSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+  const [, , action, category] = interaction.customId.split(':'); if (action !== 'form-disable-select' || !category || !(await canConfigureTickets(interaction))) return; const form = await advancedTickets.activeForm(interaction.guildId!, category, interaction.user.id); const key = interaction.values[0]!; const fields = form.fields.map((field) => field.key === key ? { ...field, enabled: false } : field); if (!normalizedForm(fields).length) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('One question required', 'A ticket form must retain at least one enabled question.')] }); await advancedTickets.createFormVersion(interaction.guildId!, category, fields, interaction.user.id); await interaction.update({ embeds: [SliceEmbed.success('Question disabled', 'New tickets use the new form version. Existing ticket snapshots were not changed.')], components: [] });
+}
+async function handleTicketConfigModal(interaction: ModalSubmitInteraction): Promise<void> {
+  const [, , action, category] = interaction.customId.split(':'); if (action !== 'form-save' || !category || !(await canConfigureTickets(interaction))) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Manage Server required', 'Only Discord server managers can change support configuration.')] }); const type = interaction.fields.getTextInputValue('type').trim().toUpperCase(); if (!['SHORT_TEXT', 'LONG_TEXT', 'SELECT', 'BOOLEAN', 'OPTIONAL_TEXT'].includes(type)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Unsupported question type', 'Use SHORT_TEXT, LONG_TEXT, SELECT, BOOLEAN, or OPTIONAL_TEXT.')] }); const options = interaction.fields.getTextInputValue('options').split(',').map((value) => value.trim()).filter(Boolean); const form = await advancedTickets.activeForm(interaction.guildId!, category, interaction.user.id); const key = interaction.fields.getTextInputValue('key').trim(); if (form.fields.some((field) => field.key === key)) return void await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Duplicate key', 'Each question needs a unique stable key.')] }); const field: TicketIntakeField = { key, label: interaction.fields.getTextInputValue('label').trim(), type: type as TicketIntakeField['type'], required: interaction.fields.getTextInputValue('required').trim().toLowerCase() === 'yes', order: Math.max(0, ...form.fields.map((item) => item.order)) + 1, enabled: true, maxLength: type === 'LONG_TEXT' ? 1800 : 300, ...(type === 'SELECT' ? { options } : {}) }; try { const version = await advancedTickets.createFormVersion(interaction.guildId!, category, [...form.fields, field], interaction.user.id); await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.success('Question added', `Form version **${version.version}** is now active for new tickets.`)] }); } catch (error) { await interaction.reply({ ephemeral: true, embeds: [SliceEmbed.error('Question not saved', error instanceof Error ? error.message : 'The intake question is invalid.')] }); }
 }
 
 async function handleTranscriptCommand(interaction: ChatInputCommandInteraction, router: TicketInteractionRouter, context: TicketRouteContext): Promise<void> { const ticket = await tickets.findByChannel(context.guildId!, context.channelId!); if (!ticket) return void await interaction.reply(ticketError('This ticket control is unavailable.')); const authorized = await router.authorize({ ...context, ticketId: ticket.id }); if (!authorized.ok) return void await interaction.reply(ticketError(authorized.message)); await interaction.deferReply({ ephemeral: true }); try { await generateTranscript(interaction.guild!, ticket.id); await interaction.editReply({ embeds: [SliceEmbed.success('Transcript ready', 'The closed ticket transcript was generated or reused for staff audit.') ] }); } catch { await interaction.editReply(ticketError('Transcript generation could not be completed. The closed ticket remains authoritative.')); } }
@@ -295,12 +465,12 @@ async function openCommandConfirmation(interaction: ChatInputCommandInteraction,
 
 function confirmationPayload(action: 'resolve' | 'close', ticketId: string) { const confirm = `${action}-confirm` as 'resolve-confirm' | 'close-confirm'; return { ephemeral: true, embeds: [SliceEmbed.warning(`Confirm ticket ${action}`, `Confirm ${action.toUpperCase()} for this ticket. This does not delete the channel.`)], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(ticketControlId(confirm, ticketId)).setLabel(`Confirm ${action}`).setStyle(action === 'close' ? ButtonStyle.Danger : ButtonStyle.Success), new ButtonBuilder().setCustomId(ticketControlId('cancel', ticketId)).setLabel('Cancel').setStyle(ButtonStyle.Secondary))] }; }
 
-async function executeTicketAction(interaction: { guildId: string | null; channelId: string | null; user: { id: string }; deferReply(options: { ephemeral: true }): Promise<unknown>; editReply(payload: { embeds: ReturnType<typeof SliceEmbed.success>[] }): Promise<unknown>; channel?: unknown; guild?: Guild | null; message?: TicketControlMessage }, router: TicketInteractionRouter, context: TicketRouteContext, action: TicketRouteAction, options: { priority?: string; targetId?: string } = {}, refreshChannel = false): Promise<void> {
+async function executeTicketAction(interaction: { guildId: string | null; channelId: string | null; user: { id: string }; deferReply(options: { ephemeral: true }): Promise<unknown>; editReply(payload: { embeds: ReturnType<typeof SliceEmbed.success>[] }): Promise<unknown>; channel?: unknown; guild?: Guild | null; message?: TicketControlMessage }, router: TicketInteractionRouter, context: TicketRouteContext, action: TicketRouteAction, options: { priority?: string; targetId?: string; escalationTarget?: string; reason?: string } = {}, refreshChannel = false): Promise<void> {
   await interaction.deferReply({ ephemeral: true });
   const result = context.ticketId ? await router.execute(action, context, options) : await router.executeForChannel(action, context, options);
   if (!result.ok || !result.ticket) return void await interaction.editReply(ticketError(result.message));
   if (result.changed) {
-    if (result.escalationTarget) await applyEscalationPermission(interaction.channel, result.ticket.guildId, result.escalationTarget).catch((error) => logger.warn('ticket.escalation_permission_failed', { ticketId: result.ticket?.id, name: error instanceof Error ? error.name : 'unknown' }));
+    if (result.escalationTarget || options.escalationTarget) await applyEscalationPermission(interaction.channel, result.ticket.guildId, options.escalationTarget ?? result.escalationTarget!).catch((error) => logger.warn('ticket.escalation_permission_failed', { ticketId: result.ticket?.id, name: error instanceof Error ? error.name : 'unknown' }));
     try {
       if (interaction.message) await refreshTicketMessage(interaction.message, result.ticket);
       else if (refreshChannel) await refreshTicketChannel(interaction.channel, result.ticket);
@@ -312,7 +482,7 @@ async function executeTicketAction(interaction: { guildId: string | null; channe
   await interaction.editReply({ embeds: [SliceEmbed.success(result.changed ? 'Ticket updated' : 'No ticket change', result.message)] });
 }
 
-async function generateTranscript(guild: Guild, ticketId: string): Promise<void> { const history: TicketHistory = { read: async (ticket) => { const channel = await guild.channels.fetch(ticket.channelId); if (!channel?.isTextBased() || !('messages' in channel)) throw new Error('Ticket history unavailable.'); const messages = await channel.messages.fetch({ limit: 100 }); return { partial: messages.size === 100, messages: [...messages.values()].map((message) => ({ id: message.id, createdAt: message.createdAt, authorId: message.author.id, authorLabel: message.author.tag, content: message.content, bot: message.author.bot, attachments: [...message.attachments.values()].map((attachment) => ({ name: attachment.name ?? 'attachment', url: attachment.url })) })) }; } }; const result = await transcripts.generate(ticketId, guild.id, history); const log = await repository.getResource(guild.id, 'CHANNEL', 'support-log'); if (log && !result.reused) { const channel = await guild.channels.fetch(log.discordId).catch(() => null); if (channel?.isTextBased() && 'send' in channel) { await channel.send({ embeds: [SliceEmbed.info('Ticket transcript', `Ticket ${ticketId.slice(0, 8)} transcript: **${result.transcript.status}**.`)] }); await tickets.markTranscriptDelivered(ticketId, log.discordId); } } }
+async function generateTranscript(guild: Guild, ticketId: string): Promise<void> { const history: TicketHistory = { read: async (ticket) => { const channel = await guild.channels.fetch(ticket.channelId); if (!channel?.isTextBased() || !('messages' in channel)) throw new Error('Ticket history unavailable.'); const messages = await channel.messages.fetch({ limit: 100 }); return { partial: messages.size === 100, messages: [...messages.values()].map((message) => ({ id: message.id, createdAt: message.createdAt, authorId: message.author.id, authorLabel: message.author.tag, content: message.content, bot: message.author.bot, attachments: [...message.attachments.values()].map((attachment) => ({ name: attachment.name ?? 'attachment', url: attachment.url })) })) }; } }; const result = await transcripts.generate(ticketId, guild.id, history); await staffTranscripts.generate(ticketId, guild.id, history); const log = await repository.getResource(guild.id, 'CHANNEL', 'support-log'); if (log && !result.reused) { const channel = await guild.channels.fetch(log.discordId).catch(() => null); if (channel?.isTextBased() && 'send' in channel) { await channel.send({ embeds: [SliceEmbed.info('Ticket transcript', `Ticket ${ticketId.slice(0, 8)} customer-safe transcript: **${result.transcript.status}**. A separate staff-only transcript is retained.`)] }); await tickets.markTranscriptDelivered(ticketId, log.discordId); } } }
 
 async function applyEscalationPermission(channel: unknown, guildId: string, logicalRole: string): Promise<void> {
   const role = await repository.getResource(guildId, 'ROLE', logicalRole);

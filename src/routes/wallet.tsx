@@ -23,8 +23,9 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -33,6 +34,7 @@ import type {
   AccountCapability,
   ComplianceSession,
   ComplianceSummary,
+  ConnectPayoutSetup,
   PortfolioSummary,
   WalletMovementPage,
   WalletMovementType,
@@ -87,6 +89,17 @@ export function Wallet() {
     queryFn: services.providers.bankConnections,
     enabled: isAuthenticated,
   });
+  const currentUser = useQuery({
+    queryKey: queryKeys.user.current,
+    queryFn: services.repositories.users.getCurrentUser,
+    enabled: isAuthenticated,
+  });
+  const isCollector = currentUser.data?.roles.includes("COLLECTOR") ?? false;
+  const connectPayout = useQuery({
+    queryKey: queryKeys.providers.connectPayoutSetup,
+    queryFn: services.providers.connectPayoutSetup,
+    enabled: isAuthenticated && isCollector,
+  });
   const capabilities = useQuery({
     queryKey: queryKeys.account.capabilities,
     queryFn: services.account.capabilities,
@@ -97,6 +110,7 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.compliance });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
   };
   const verification = useMutation({
     mutationFn: services.providers.startCompliance,
@@ -143,6 +157,13 @@ export function Wallet() {
         <WalletKpis query={portfolio} />
         <section className="wallet-row wallet-row--primary" aria-label="Wallet access and actions">
           <ConnectedBankPanel query={banks} refreshWallet={refreshWallet} />
+          {isCollector ? (
+            <CollectorPayoutPanel
+              query={connectPayout}
+              refreshWallet={refreshWallet}
+              onCreate={services.providers.createConnectOnboarding}
+            />
+          ) : null}
           <MoveMoneyPanel
             action={action}
             setAction={setAction}
@@ -180,12 +201,65 @@ export function Wallet() {
   );
 }
 
+function CollectorPayoutPanel({
+  query,
+  refreshWallet,
+  onCreate,
+}: {
+  query: UseQueryResult<ConnectPayoutSetup>;
+  refreshWallet: () => void;
+  onCreate: () => Promise<ConnectPayoutSetup>;
+}) {
+  const onboarding = useMutation({
+    mutationFn: onCreate,
+    onSuccess: (result) => {
+      refreshWallet();
+      if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+    },
+    onError: () => toast.error("Payout setup could not be started."),
+  });
+  const status = query.data?.status ?? "NOT_STARTED";
+  const ready = status === "READY";
+  const title = ready
+    ? "Payouts ready"
+    : status === "NOT_STARTED"
+      ? "Set up collector payouts"
+      : "Finish payout setup";
+  const detail = ready
+    ? "Your collector proceeds can be withdrawn through your connected payout account."
+    : "Stripe securely collects the identity and bank details required to send collector proceeds. Slice never collects those details directly.";
+  return (
+    <WalletPanel title={title} icon={<ArrowUpFromLine />} className="wallet-panel--payouts">
+      <div className="wallet-panel__body">
+        <StatusPill status={status} />
+        <p className="mt-3 text-sm text-slate-600">{detail}</p>
+        {!ready ? (
+          <button
+            className="wallet-verify-button mt-4"
+            type="button"
+            onClick={() => onboarding.mutate()}
+            disabled={onboarding.isPending || query.isLoading}
+          >
+            {onboarding.isPending
+              ? "Opening secure setup…"
+              : status === "NOT_STARTED"
+                ? "Set up payouts"
+                : "Continue setup"}
+            <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
+        {query.isError ? <InlineError error={query.error} /> : null}
+      </div>
+    </WalletPanel>
+  );
+}
+
 function WalletHeading() {
   return (
     <header className="wallet-heading">
       <p className="page-kicker">Wallet</p>
       <h1>Cash and money movements</h1>
-      <p>Manage your cash, connect your bank, and track your wallet activity.</p>
+      <p>Manage your cash, set up secure GBP deposits, and track your wallet activity.</p>
     </header>
   );
 }
@@ -309,12 +383,16 @@ function ConnectedBankPanel({
         {!query.isLoading && !query.isError && query.data?.length ? (
           <ul className="wallet-banks">
             {query.data.map((connection) => (
-              <BankConnectionRow key={connection.id} connection={connection} />
+              <BankConnectionRow
+                key={connection.id}
+                connection={connection}
+                refreshWallet={refreshWallet}
+              />
             ))}
           </ul>
         ) : null}
         {!query.isLoading && !query.isError && !query.data?.length ? <BankEmpty /> : null}
-        <BankConnectionControl />
+        <BankConnectionControl refreshWallet={refreshWallet} />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />
@@ -339,7 +417,7 @@ function BankEmpty() {
     <div className="wallet-bank-empty">
       <div>
         <strong>No bank connected</strong>
-        <p>Connect your bank securely to add funds, withdraw, and manage your wallet.</p>
+        <p>Set up a UK bank mandate securely with Stripe Bacs Direct Debit before adding funds.</p>
         <span className="wallet-bank-empty__halo" aria-hidden="true">
           <Landmark />
           <i />
@@ -349,7 +427,27 @@ function BankEmpty() {
   );
 }
 
-function BankConnectionRow({ connection }: { connection: BankConnection }) {
+function BankConnectionRow({
+  connection,
+  refreshWallet,
+}: {
+  connection: BankConnection;
+  refreshWallet: () => void;
+}) {
+  const services = useAppServices();
+  const action = useMutation({
+    mutationFn: async (kind: "default" | "disconnect") => {
+      if (kind === "default") await services.providers.setDefaultBankConnection(connection.id);
+      else await services.providers.disconnectBankConnection(connection.id);
+    },
+    onSuccess: (_result, kind) => {
+      refreshWallet();
+      toast.success(
+        kind === "default" ? "Default funding account updated." : "Bank disconnected safely.",
+      );
+    },
+    onError: () => toast.error("Bank account action failed."),
+  });
   const label = connection.institutionName ?? connection.accountName ?? "Connected account";
   return (
     <li>
@@ -359,13 +457,33 @@ function BankConnectionRow({ connection }: { connection: BankConnection }) {
       <div>
         <strong>{label}</strong>
         <p>
-          {connection.accountType}
+          {connection.accountType === "bacs_debit" ? "UK bank account" : connection.accountType}
           {connection.accountMask ? ` · •••• ${connection.accountMask}` : ""}
         </p>
       </div>
       <aside>
         <StatusPill status={connection.status} />
-        <small>Bank connection</small>
+        <small>{connection.isDefault ? "Default funding account" : "Connected bank"}</small>
+        <div className="wallet-bank-actions">
+          {!connection.isDefault && connection.status === "CONNECTED" ? (
+            <button
+              type="button"
+              onClick={() => action.mutate("default")}
+              disabled={action.isPending}
+            >
+              Make default
+            </button>
+          ) : null}
+          {connection.status === "CONNECTED" ? (
+            <button
+              type="button"
+              onClick={() => action.mutate("disconnect")}
+              disabled={action.isPending}
+            >
+              Disconnect
+            </button>
+          ) : null}
+        </div>
       </aside>
     </li>
   );
@@ -400,14 +518,14 @@ function MoveMoneyPanel({
   const bankAvailable = Boolean(banks.data?.some((bank) => bank.status === "CONNECTED"));
   const capabilityBlocked = Boolean(capability && !capability.allowed);
   const domainBlocked =
-    !capabilityBlocked && (!providerReady || (action === "WITHDRAWAL" && !bankAvailable));
+    !capabilityBlocked && (!providerReady || (action === "DEPOSIT" && !bankAvailable));
   const disabledReason =
     capability && !capability.allowed
       ? "Complete account setup to continue."
       : !providerReady
         ? "Complete verification to continue."
-        : action === "WITHDRAWAL" && !bankAvailable
-          ? "Connect a bank before requesting a withdrawal."
+        : action === "DEPOSIT" && !bankAvailable
+          ? "Set up a UK bank mandate before requesting a deposit."
           : null;
   return (
     <WalletPanel title="Move money" icon={<ArrowDownToLine />} className="wallet-panel--move">
@@ -457,7 +575,10 @@ function MoveMoneyPanel({
               />
             </label>
           ) : (
-            <p>Deposit requests are confirmed before they affect your wallet balance.</p>
+            <p>
+              Bacs deposits remain pending until Stripe confirms settlement. They never add
+              provisional cash.
+            </p>
           )}
           <button type="submit" disabled={domainBlocked || movement.isPending}>
             {movement.isPending
@@ -521,9 +642,7 @@ function AccountStatusPanel({
                 icon={<Landmark />}
                 label="Bank connection"
                 detail={
-                  connected
-                    ? "Ready for supported withdrawals"
-                    : "Connect a bank to add or withdraw funds"
+                  connected ? "Ready for GBP deposits" : "Set up a UK bank mandate to add GBP funds"
                 }
                 status={connected ? "CONNECTED" : "NOT_CONNECTED"}
               />
@@ -784,14 +903,102 @@ function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPa
   );
 }
 
-function BankConnectionControl() {
+function BankConnectionControl({ refreshWallet }: { refreshWallet: () => void }) {
+  const services = useAppServices();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [setup, setSetup] = useState<{
+    setupIntentId: string;
+    stripe: Stripe;
+    elements: StripeElements;
+  } | null>(null);
+  const paymentElementRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!setup || !paymentElementRef.current) return;
+    const paymentElement = setup.elements.create("payment", {
+      layout: { type: "accordion", defaultCollapsed: false },
+    });
+    paymentElement.mount(paymentElementRef.current);
+    return () => paymentElement.destroy();
+  }, [setup]);
+
+  async function connect() {
+    setIsConnecting(true);
+    try {
+      const session = await services.providers.createBankLinkToken();
+      const stripe = await loadStripe(session.publishableKey);
+      if (!stripe) throw new Error("UK bank setup could not start.");
+      const elements = stripe.elements({ clientSecret: session.clientSecret });
+      setSetup({ setupIntentId: session.setupIntentId, stripe, elements });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bank connection failed.");
+    } finally {
+      setIsConnecting(false);
+    }
+  }
+
+  async function confirmSetup() {
+    if (!setup) return;
+    setIsConnecting(true);
+    try {
+      const result = await setup.stripe.confirmSetup({
+        elements: setup.elements,
+        confirmParams: { return_url: window.location.href },
+        redirect: "if_required",
+      });
+      if (result.error)
+        throw new Error(result.error.message ?? "The bank mandate could not be confirmed.");
+      if (!result.setupIntent || result.setupIntent.status !== "succeeded") {
+        throw new Error(
+          "The bank mandate is not ready yet. Please try again after authorization completes.",
+        );
+      }
+      await services.providers.completeBankLink({ setupIntentId: result.setupIntent.id });
+      setSetup(null);
+      refreshWallet();
+      toast.success("UK bank mandate saved securely.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bank mandate setup failed.");
+    } finally {
+      setIsConnecting(false);
+    }
+  }
+
   return (
     <div className="wallet-bank-connect">
-      <button type="button" disabled title="Bank connection setup is coming soon.">
-        <Landmark aria-hidden="true" />
-        Bank connection setup coming soon
-        <ArrowRight aria-hidden="true" />
-      </button>
+      {!setup ? (
+        <button type="button" onClick={() => void connect()} disabled={isConnecting}>
+          <Landmark aria-hidden="true" />
+          {isConnecting ? "Opening secure UK bank setup…" : "Set up a UK bank"}
+          <ArrowRight aria-hidden="true" />
+        </button>
+      ) : (
+        <form
+          className="wallet-bacs-setup"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void confirmSetup();
+          }}
+        >
+          <div>
+            <strong>Authorize Bacs Direct Debit</strong>
+            <p>
+              Stripe securely collects your bank details and mandate. Slice never receives your
+              account or sort code.
+            </p>
+          </div>
+          <div ref={paymentElementRef} />
+          <div className="wallet-bank-actions">
+            <button type="button" onClick={() => setSetup(null)} disabled={isConnecting}>
+              Cancel
+            </button>
+            <button type="submit" disabled={isConnecting}>
+              {isConnecting ? "Confirming securely…" : "Save UK bank mandate"}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -6,9 +6,9 @@ import { useSession } from "@/auth/use-session";
 import { formatOwnership, formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { assetShowcaseMedia } from "./demo-asset-media";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { marketCategoryPresentation, marketplaceEditorialTag } from "./marketplace-presentation";
+import { resolveMarketplaceMedia } from "./marketplace-layout";
 
 function gradePresentation(grade?: string) {
   if (!grade) return undefined;
@@ -36,10 +36,7 @@ function formatReferenceMoney(
 }
 
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
-  const approvedMedia = asset.media?.find((item) => item.alt.toLowerCase().includes("front"));
-  const media = approvedMedia
-    ? { src: approvedMedia.url, alt: approvedMedia.alt }
-    : assetShowcaseMedia(asset.slug);
+  const media = resolveMarketplaceMedia(asset);
   const category = marketCategoryPresentation(asset.category);
   const CategoryIcon = category.icon;
   const grade = gradePresentation(asset.grade);

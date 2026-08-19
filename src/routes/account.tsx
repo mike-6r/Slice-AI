@@ -23,7 +23,12 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import type { AccountCapability, BankConnection } from "@/domain";
+import type {
+  AccountCapability,
+  BankConnection,
+  ComplianceSummary,
+  ComplianceSession,
+} from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { CurrencySelector } from "@/currency/CurrencySelector";
 import type { SupportedCurrency } from "@/data/repositories";
@@ -87,6 +92,11 @@ export function AccountPageForTest() {
     queryFn: services.account.capabilities,
     enabled,
   });
+  const compliance = useQuery({
+    queryKey: queryKeys.providers.compliance,
+    queryFn: services.providers.compliance,
+    enabled,
+  });
   const sessions = useQuery({
     queryKey: queryKeys.account.sessions,
     queryFn: services.repositories.account.listSessions,
@@ -136,7 +146,10 @@ export function AccountPageForTest() {
     setConsumedChallenge(discordLink);
     void consumeDiscordLink.mutateAsync(discordLink).catch(() => undefined);
   }, [consumeDiscordLink, consumedChallenge, discordLink]);
-  const refresh = () => void client.invalidateQueries({ queryKey: ["account"] });
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["account"] });
+    void client.invalidateQueries({ queryKey: queryKeys.providers.compliance });
+  };
   const showAllSessions = sessionsView === "all";
 
   if (!isAuthenticated || (user.error instanceof ApiError && user.error.status === 401))
@@ -188,7 +201,7 @@ export function AccountPageForTest() {
                 icon={<Building2 />}
                 label="Linked accounts"
                 value={`${linkedCount} connected`}
-                detail={linkedCount ? "Discord and bank connections" : "No accounts connected"}
+                detail={linkedCount ? "Discord and funding accounts" : "No accounts connected"}
               />
             </section>
             <div className="account-center-grid">
@@ -200,6 +213,11 @@ export function AccountPageForTest() {
               />
               <SecurityPanel email={email} phone={phone} twoFactor={twoFactor} refresh={refresh} />
               <AccountAccessPanel query={capabilities} />
+              <IdentityVerificationPanel
+                query={compliance}
+                start={services.providers.startCompliance}
+                refresh={refresh}
+              />
               <SessionsPanel sessions={sessions} refresh={refresh} showAll={showAllSessions} />
               <LinkedPanel
                 banks={banks}
@@ -219,6 +237,92 @@ export function AccountPageForTest() {
       </div>
     </main>
   );
+}
+
+function IdentityVerificationPanel({
+  query,
+  start,
+  refresh,
+}: {
+  query: UseQueryResult<ComplianceSummary>;
+  start: () => Promise<ComplianceSession>;
+  refresh: () => void;
+}) {
+  const verification = useMutation({
+    mutationFn: start,
+    onSuccess: (session) => {
+      refresh();
+      if (session.sessionUrl) window.location.assign(session.sessionUrl);
+    },
+  });
+  const state = query.data?.identityState ?? legacyIdentityState(query.data?.status);
+  const label =
+    state === "VERIFIED"
+      ? "Verified"
+      : state === "PROCESSING"
+        ? "Processing"
+        : state === "REQUIRES_INPUT"
+          ? "Action required"
+          : state === "FAILED" || state === "CANCELED"
+            ? "Failed"
+            : "Not started";
+  const canStart = ["NOT_STARTED", "REQUIRES_INPUT", "FAILED", "CANCELED"].includes(state);
+  return (
+    <Panel
+      id="identity"
+      title="Identity verification"
+      detail="Verify your identity through our secure provider. Slice does not store your identity documents or selfie."
+      className="account-panel--identity"
+    >
+      <div className="account-security-row">
+        <span className="account-security-icon" aria-hidden="true">
+          <ShieldCheck />
+        </span>
+        <div>
+          <strong>{label}</strong>
+          <small>
+            {query.data?.provider === "STRIPE_SANDBOX"
+              ? "TEST verification environment"
+              : state === "VERIFIED"
+                ? "Identity confirmed"
+                : "Government ID and matching selfie"}
+          </small>
+        </div>
+        {state === "VERIFIED" ? (
+          <CheckCircle2 className="account-good-icon" aria-label="Verified" />
+        ) : null}
+        {canStart ? (
+          <button
+            type="button"
+            className="account-inline-button"
+            onClick={() => verification.mutate()}
+            disabled={verification.isPending}
+          >
+            {verification.isPending
+              ? "Opening…"
+              : state === "NOT_STARTED"
+                ? "Verify identity"
+                : "Continue"}
+          </button>
+        ) : null}
+      </div>
+      {verification.error ? (
+        <p className="account-form-error">
+          {errorCopy(verification.error, "Identity verification is currently unavailable.")}
+        </p>
+      ) : null}
+    </Panel>
+  );
+}
+
+function legacyIdentityState(
+  status: ComplianceSummary["status"] | undefined,
+): NonNullable<ComplianceSummary["identityState"]> {
+  if (status === "APPROVED") return "VERIFIED";
+  if (status === "REVIEW") return "PROCESSING";
+  if (status === "PENDING") return "REQUIRES_INPUT";
+  if (status === "REJECTED") return "FAILED";
+  return "NOT_STARTED";
 }
 
 function AccountAccessPanel({
@@ -1116,7 +1220,10 @@ function LinkedPanel({
               <Landmark aria-hidden="true" />
               <div>
                 <strong>{bank.institutionName ?? bank.accountName ?? "Connected bank"}</strong>
-                <small>{bank.accountMask ? `•••• ${bank.accountMask}` : bank.accountType}</small>
+                <small>
+                  {bank.accountType === "bacs_debit" ? "UK bank account" : bank.accountType}
+                  {bank.accountMask ? ` · •••• ${bank.accountMask}` : ""}
+                </small>
               </div>
               <Link to="/wallet" className="account-inline-button">
                 Manage
@@ -1126,9 +1233,9 @@ function LinkedPanel({
         </ul>
       ) : (
         <div className="account-empty">
-          <Building2 aria-hidden="true" /> No bank accounts connected.{" "}
+          <Building2 aria-hidden="true" /> No UK bank mandate set up.{" "}
           <Link to="/wallet" className="account-text-button">
-            Connect a bank in Wallet
+            Set it up in Wallet
           </Link>
         </div>
       )}

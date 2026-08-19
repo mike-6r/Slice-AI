@@ -40,6 +40,7 @@ import type {
   Money,
   ComplianceSession,
   ComplianceSummary,
+  ConnectPayoutSetup,
   TradingExecution,
   TradingExecutionPage,
   TradingOrderInput,
@@ -654,6 +655,19 @@ const mapCompliance = (raw: unknown): ComplianceSummary => {
     throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid compliance status from service.");
   return {
     status: value.status as ComplianceSummary["status"],
+    identityState: [
+      "NOT_STARTED",
+      "REQUIRES_INPUT",
+      "PROCESSING",
+      "VERIFIED",
+      "FAILED",
+      "CANCELED",
+    ].includes(String(value.identityState))
+      ? (value.identityState as ComplianceSummary["identityState"])
+      : undefined,
+    provider: ["LOCAL_TEST", "STRIPE_SANDBOX", "STRIPE_LIVE"].includes(String(value.provider))
+      ? (value.provider as ComplianceSummary["provider"])
+      : undefined,
     expiresAt: nullableString(value.expiresAt, "compliance.expiresAt") as ISODateTime | null,
     updatedAt: nullableString(value.updatedAt, "compliance.updatedAt") as ISODateTime | null,
     capability:
@@ -716,7 +730,40 @@ const mapBankConnection = (raw: unknown): import("@/domain").BankConnection => {
     accountType: stringField(value.accountType, "bankConnection.accountType"),
     currency: "GBP",
     status: value.status as import("@/domain").BankConnection["status"],
+    isDefault: Boolean(value.isDefault),
     updatedAt: stringField(value.updatedAt, "bankConnection.updatedAt") as ISODateTime,
+  };
+};
+const mapConnectPayoutSetup = (raw: unknown): ConnectPayoutSetup => {
+  const value = objectField(raw, "connect payout setup");
+  if (
+    !["NOT_STARTED", "ACTION_REQUIRED", "UNDER_REVIEW", "READY", "RESTRICTED", "DISABLED"].includes(
+      String(value.status),
+    )
+  )
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid connect payout status from service.");
+  const summary = value.requirementsSummary;
+  if (summary !== null && (typeof summary !== "object" || Array.isArray(summary)))
+    throw new ApiError(
+      "CLIENT_CONTRACT_ERROR",
+      "Invalid connect payout requirements from service.",
+    );
+  return {
+    status: value.status as ConnectPayoutSetup["status"],
+    requirementsSummary:
+      summary === null
+        ? null
+        : {
+            currentlyDueCount: Number((summary as Record<string, unknown>).currentlyDueCount ?? 0),
+            pastDueCount: Number((summary as Record<string, unknown>).pastDueCount ?? 0),
+            pendingVerificationCount: Number(
+              (summary as Record<string, unknown>).pendingVerificationCount ?? 0,
+            ),
+            hasValidationErrors: Boolean((summary as Record<string, unknown>).hasValidationErrors),
+            hasDisabledReason: Boolean((summary as Record<string, unknown>).hasDisabledReason),
+          },
+    onboardingUrl: nullableString(value.onboardingUrl, "connect.onboardingUrl"),
+    expiresAt: nullableString(value.expiresAt, "connect.expiresAt") as ISODateTime | null,
   };
 };
 const mapSubmission = (raw: unknown): AssetSubmission => {
@@ -2136,6 +2183,49 @@ const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
       username: nullableString(user.username, "compliance.user.username"),
     },
     providerStatus: stringField(value.providerStatus, "compliance.providerStatus"),
+    identity:
+      value.identity && typeof value.identity === "object"
+        ? (() => {
+            const identity = objectField(value.identity, "compliance.identity");
+            return {
+              state: stringField(identity.state, "compliance.identity.state"),
+              provider: stringField(identity.provider, "compliance.identity.provider"),
+              verifiedAt: nullableString(identity.verifiedAt, "compliance.identity.verifiedAt"),
+              safeFailureCode: nullableString(
+                identity.safeFailureCode,
+                "compliance.identity.safeFailureCode",
+              ),
+            };
+          })()
+        : undefined,
+    riskReview:
+      value.riskReview && typeof value.riskReview === "object"
+        ? (() => {
+            const riskReview = objectField(value.riskReview, "compliance.riskReview");
+            return {
+              status: stringField(riskReview.status, "compliance.riskReview.status"),
+              activeHoldCount: Number(riskReview.activeHoldCount ?? 0),
+            };
+          })()
+        : undefined,
+    connectPayoutReadiness: Array.isArray(value.connectPayoutReadiness)
+      ? value.connectPayoutReadiness.map((rawAccount) => {
+          const account = objectField(rawAccount, "compliance.connectPayoutReadiness");
+          return {
+            provider: stringField(account.provider, "connect.provider"),
+            environment: stringField(account.environment, "connect.environment"),
+            status: stringField(account.status, "connect.status"),
+            requirementsSummary: account.requirementsSummary ?? null,
+            detailsSubmitted: Boolean(account.detailsSubmitted),
+            payoutsEnabled: Boolean(account.payoutsEnabled),
+            transfersCapability: nullableString(
+              account.transfersCapability,
+              "connect.transfersCapability",
+            ),
+            lastSyncedAt: nullableString(account.lastSyncedAt, "connect.lastSyncedAt"),
+          };
+        })
+      : [],
     decisions: Array.isArray(value.decisions)
       ? value.decisions.map((rawDecision) => {
           const item = objectField(rawDecision, "compliance decision");
@@ -3529,6 +3619,16 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid compliance session from service.");
         return {
           status: value.status as ComplianceSession["status"],
+          identityState: [
+            "NOT_STARTED",
+            "REQUIRES_INPUT",
+            "PROCESSING",
+            "VERIFIED",
+            "FAILED",
+            "CANCELED",
+          ].includes(String(value.identityState))
+            ? (value.identityState as ComplianceSession["identityState"])
+            : undefined,
           provider: value.provider as ComplianceSession["provider"],
           sessionUrl: nullableString(value.sessionUrl, "compliance.sessionUrl"),
           capability:
@@ -3540,19 +3640,33 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async createBankLinkToken() {
         const value = objectField(
-          await client.request<unknown>("/wallet/bank-link/token", { method: "POST" }),
+          await client.request<unknown>("/wallet/bank-link/token", {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
           "bank connection token",
         );
         return {
-          linkToken: stringField(value.linkToken, "bankConnection.linkToken"),
+          setupIntentId: stringField(value.setupIntentId, "bankConnection.setupIntentId"),
+          clientSecret: stringField(value.clientSecret, "bankConnection.clientSecret"),
+          publishableKey: stringField(value.publishableKey, "bankConnection.publishableKey"),
           expiration: stringField(value.expiration, "bankConnection.expiration") as ISODateTime,
+          paymentMethodType:
+            value.paymentMethodType === "bacs_debit"
+              ? "bacs_debit"
+              : (() => {
+                  throw new ApiError(
+                    "CLIENT_CONTRACT_ERROR",
+                    "Unsupported bank funding method from service.",
+                  );
+                })(),
         };
       },
-      async exchangeBankLinkPublicToken(publicToken) {
+      async completeBankLink(input) {
         const value = objectField(
-          await client.request<unknown>("/wallet/bank-link/exchange", {
+          await client.request<unknown>("/wallet/bank-link/complete", {
             method: "POST",
-            body: { publicToken },
+            body: input,
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "bank connection exchange",
@@ -3572,6 +3686,43 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         if (!Array.isArray(value.items))
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid bank connections from service.");
         return value.items.map(mapBankConnection);
+      },
+      async disconnectBankConnection(id) {
+        const value = objectField(
+          await client.request<unknown>(`/wallet/bank-accounts/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+          }),
+          "bank disconnect",
+        );
+        return { disconnected: Boolean(value.disconnected), replayed: Boolean(value.replayed) };
+      },
+      async setDefaultBankConnection(id) {
+        const value = objectField(
+          await client.request<unknown>(`/wallet/bank-accounts/${encodeURIComponent(id)}/default`, {
+            method: "PATCH",
+          }),
+          "bank selection",
+        );
+        return { selected: Boolean(value.selected) };
+      },
+      async getConnectPayoutSetup() {
+        return mapConnectPayoutSetup(await client.get<unknown>("/wallet/payouts/connect"));
+      },
+      async createConnectOnboarding() {
+        return mapConnectPayoutSetup(
+          await client.request<unknown>("/wallet/payouts/connect/onboarding", {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+        );
+      },
+      async refreshConnectOnboarding() {
+        return mapConnectPayoutSetup(
+          await client.request<unknown>("/wallet/payouts/connect/refresh", {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+        );
       },
       async listMovements(input) {
         return mapMovementPage(await client.get<unknown>("/wallet/movements", input));

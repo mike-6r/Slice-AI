@@ -31,6 +31,7 @@ const banks: BankConnection[] = [
     accountType: "checking",
     currency: "GBP",
     status: "CONNECTED",
+    isDefault: true,
     updatedAt: "2026-08-09T00:00:00.000Z" as never,
   },
 ];
@@ -197,7 +198,7 @@ describe("account UI", () => {
   it("keeps the account shell visible when optional projections are unavailable", () => {
     const html = renderAccountWithOptionalPanelsUnavailable();
     expect(html).toContain("Account Center");
-    expect(html).toContain("No bank accounts connected");
+    expect(html).toContain("No UK bank mandate set up");
     expect(html).toContain("Not enabled");
     expect(html).toContain("Loading account data");
     expect(html).not.toContain("Account unavailable");

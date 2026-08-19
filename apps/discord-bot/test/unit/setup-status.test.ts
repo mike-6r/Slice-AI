@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { setupCommand, setupResetPreviewPayload, setupStatusPayload, setupUpdatePreviewPayload } from '../../src/commands/setup.js';
+import { handleSetupButton, setupCommand, setupResetPreviewPayload, setupStatusPayload, setupUpdatePreviewPayload } from '../../src/commands/setup.js';
 
 describe('setup status refresh', () => {
   it('registers a non-destructive refresh command', () => {
@@ -32,5 +32,14 @@ describe('setup status refresh', () => {
     expect(description).toContain('Moderator');
     expect(description).toContain('05 - SUPPORT');
     expect(payload.components[0]?.components[0]?.data.custom_id).toBe('slice:setup:reset:reset-nonce');
+  });
+
+  it('reports protected Discord community resources without failing a reset', async () => {
+    const preview = setupUpdatePreviewPayload({ missingRoles: 0, missingCategories: 0, missingChannels: 0, missingPanels: 0, renamed: 0, moved: 0, permissionDrift: 0, roleDrift: 0, separatorDrift: 0, staleReferences: 0, ambiguous: [], updateAvailable: false, artworkMissing: 0 }, 'guild-reset', 'admin-reset');
+    const applyId = preview.components[0]?.components[0]?.data.custom_id;
+    if (!applyId) throw new Error('reset test preview did not include an apply action');
+    const result = await handleSetupButton(applyId.replace(':apply:', ':reset:'), 'admin-reset', 'guild-reset', { apply: async () => ({ created: 0, updated: 0 }), reset: async () => ({ deletedRoles: 1, deletedCategories: 2, deletedChannels: 3, deletedPanels: 4, deletedTicketChannels: 5, skippedCommunityResources: 1 }) });
+    expect(result.title).toBe('Slice setup reset partially complete');
+    expect(result.body).toContain('protected **1** community-required resource');
   });
 });

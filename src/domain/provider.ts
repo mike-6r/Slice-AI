@@ -2,9 +2,13 @@ import type { ISODateTime } from "./common";
 
 /** Safe, user-facing projection of the provider-neutral Document 016 authority. */
 export type ComplianceState = "NOT_STARTED" | "PENDING" | "APPROVED" | "REVIEW" | "REJECTED";
+export type IdentityVerificationState =
+  "NOT_STARTED" | "REQUIRES_INPUT" | "PROCESSING" | "VERIFIED" | "FAILED" | "CANCELED";
 
 export interface ComplianceSummary {
   status: ComplianceState;
+  identityState?: IdentityVerificationState;
+  provider?: "LOCAL_TEST" | "STRIPE_SANDBOX" | "STRIPE_LIVE";
   expiresAt: ISODateTime | null;
   updatedAt: ISODateTime | null;
   capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
@@ -12,6 +16,7 @@ export interface ComplianceSummary {
 
 export interface ComplianceSession {
   status: ComplianceState;
+  identityState?: IdentityVerificationState;
   provider: "LOCAL_TEST" | "STRIPE_SANDBOX" | "STRIPE_LIVE";
   sessionUrl: string | null;
   capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
@@ -26,12 +31,31 @@ export interface BankConnection {
   accountType: string;
   currency: "GBP";
   status: "CONNECTED" | "DISCONNECTED" | "EXPIRED";
+  isDefault: boolean;
   updatedAt: ISODateTime;
 }
 
 export interface BankConnectionToken {
-  linkToken: string;
+  setupIntentId: string;
+  clientSecret: string;
+  publishableKey: string;
   expiration: ISODateTime;
+  paymentMethodType: "bacs_debit";
+}
+
+export type ConnectAccountStatus =
+  "NOT_STARTED" | "ACTION_REQUIRED" | "UNDER_REVIEW" | "READY" | "RESTRICTED" | "DISABLED";
+export interface ConnectPayoutSetup {
+  status: ConnectAccountStatus;
+  requirementsSummary: {
+    currentlyDueCount: number;
+    pastDueCount: number;
+    pendingVerificationCount: number;
+    hasValidationErrors: boolean;
+    hasDisabledReason: boolean;
+  } | null;
+  onboardingUrl: string | null;
+  expiresAt: ISODateTime | null;
 }
 
 export type WalletMovementType = "DEPOSIT" | "WITHDRAWAL";

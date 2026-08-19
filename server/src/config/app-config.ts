@@ -66,6 +66,9 @@ const configSchema = z.object({
   COOKIE_DOMAIN: z.string().min(1).optional(),
   PROVIDER_MODE: z.enum(['local', 'stripe_sandbox', 'stripe_live']).default('local'),
   STRIPE_LIVE_ENABLED: z.enum(['true', 'false']).default('false'),
+  // The active GBP customer-funding rail is deliberately narrow. A future
+  // USD/ACH rail must use a separate, explicitly approved product mode.
+  STRIPE_BANK_FUNDING_RAIL: z.enum(['bacs_debit']).default('bacs_debit'),
   PROVIDER_ENCRYPTION_KEY: z.string().min(32).optional(),
   STRIPE_SECRET_KEY: z.string().min(16).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
@@ -340,6 +343,7 @@ export type AppConfig = {
   /** @deprecated Test fixtures may still provide this historical flag. */
   providersProductionEnabled?: boolean;
   stripeLiveEnabled: boolean;
+  stripeBankFundingRail: 'bacs_debit';
   providerEncryptionKey?: string;
   stripeSecretKey?: string;
   stripePublishableKey?: string;
@@ -744,6 +748,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     cookieDomain: parsed.COOKIE_DOMAIN,
     providerMode: parsed.PROVIDER_MODE,
     stripeLiveEnabled,
+    stripeBankFundingRail: parsed.STRIPE_BANK_FUNDING_RAIL,
     providerEncryptionKey: parsed.PROVIDER_ENCRYPTION_KEY,
     stripeSecretKey: parsed.STRIPE_SECRET_KEY,
     stripePublishableKey: parsed.STRIPE_PUBLISHABLE_KEY,

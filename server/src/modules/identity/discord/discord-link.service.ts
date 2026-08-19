@@ -286,6 +286,26 @@ export class DiscordLinkService {
     return this.admin.operationsOverview(await this.botActor(discordUserId));
   }
 
+  /** Bot-service-only approval projection. It deliberately exposes the
+   * linked Discord identity only alongside a currently public Collector
+   * profile, so Discord can prove a spotlight request belongs to its owner. */
+  async botCollectorSpotlight(slug: string) {
+    const profile = await this.db.publicCollectorProfile.findUnique({
+      where: { slug: requiredText(slug, 'Collector slug') },
+      select: {
+        slug: true, headline: true, specialism: true, isPublic: true,
+        user: { select: { profile: { select: { displayName: true } }, discordAccountLink: { select: { discordUserId: true } }, _count: { select: { submissions: { where: { asset: { is: { status: 'PUBLISHED' } } } } } } } },
+      },
+    });
+    if (!profile || !profile.isPublic) return { eligible: false as const };
+    return {
+      eligible: Boolean(profile.user.discordAccountLink),
+      isPublic: true as const,
+      linkedDiscordUserId: profile.user.discordAccountLink?.discordUserId ?? null,
+      collector: { slug: profile.slug, headline: profile.headline, specialism: profile.specialism, displayName: profile.user.profile?.displayName ?? null, publishedListingCount: profile.user._count.submissions },
+    };
+  }
+
   async self(userId: string) {
     const link = await this.db.discordAccountLink.findUnique({
       where: { userId },

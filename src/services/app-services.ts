@@ -101,9 +101,16 @@ export class ProviderService {
   compliance = () => this.repositories.providers.getCompliance();
   startCompliance = () => this.repositories.providers.startCompliance();
   createBankLinkToken = () => this.repositories.providers.createBankLinkToken();
-  exchangeBankLinkPublicToken = (publicToken: string) =>
-    this.repositories.providers.exchangeBankLinkPublicToken(publicToken);
+  completeBankLink = (input: { setupIntentId: string }) =>
+    this.repositories.providers.completeBankLink(input);
   bankConnections = () => this.repositories.providers.listBankConnections();
+  disconnectBankConnection = (id: string) =>
+    this.repositories.providers.disconnectBankConnection(id);
+  setDefaultBankConnection = (id: string) =>
+    this.repositories.providers.setDefaultBankConnection(id);
+  connectPayoutSetup = () => this.repositories.providers.getConnectPayoutSetup();
+  createConnectOnboarding = () => this.repositories.providers.createConnectOnboarding();
+  refreshConnectOnboarding = () => this.repositories.providers.refreshConnectOnboarding();
   movements = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.providers.listMovements(input);
   createDeposit = (amountMinor: string) => this.repositories.providers.createDeposit(amountMinor);

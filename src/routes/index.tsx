@@ -682,19 +682,21 @@ function TradingEducation({ compact = false }: { compact?: boolean }) {
             </strong>
             <span>Ownership after purchase: {ownership}%</span>
           </div>
-          <ol className="approved-home__trade-flow">
-            <li className="is-current">Choose shares</li>
-            <li className={buyReviewed ? "is-current" : undefined}>Review</li>
-            <li>Own shares</li>
-          </ol>
-          <button
-            type="button"
-            className="approved-home__demo-action"
-            onClick={() => setBuyReviewed(true)}
-          >
-            {buyReviewed ? "Demo order reviewed" : "Buy shares — demo only"}
-            <ArrowRight aria-hidden="true" />
-          </button>
+          <div className="approved-home__trade-example-footer">
+            <ol className="approved-home__trade-flow">
+              <li className="is-current">Choose shares</li>
+              <li className={buyReviewed ? "is-current" : undefined}>Review</li>
+              <li>Own shares</li>
+            </ol>
+            <button
+              type="button"
+              className="approved-home__demo-action"
+              onClick={() => setBuyReviewed(true)}
+            >
+              {buyReviewed ? "Demo order reviewed" : "Buy shares — demo only"}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
         </article>
         <article className="approved-home__trade-example approved-home__trade-example--sell">
           <div className="approved-home__trade-example-heading">
@@ -715,19 +717,21 @@ function TradingEducation({ compact = false }: { compact?: boolean }) {
             <strong>Estimated proceeds: £50</strong>
             <span>Remaining position: 20 shares</span>
           </div>
-          <ol className="approved-home__trade-flow">
-            <li className="is-current">Choose shares</li>
-            <li className={sellReviewed ? "is-current" : undefined}>Review</li>
-            <li>Sell on marketplace</li>
-          </ol>
-          <button
-            type="button"
-            className="approved-home__demo-action approved-home__demo-action--secondary"
-            onClick={() => setSellReviewed(true)}
-          >
-            {sellReviewed ? "Demo sale reviewed" : "Sell shares — demo only"}
-            <ArrowRight aria-hidden="true" />
-          </button>
+          <div className="approved-home__trade-example-footer">
+            <ol className="approved-home__trade-flow">
+              <li className="is-current">Choose shares</li>
+              <li className={sellReviewed ? "is-current" : undefined}>Review</li>
+              <li>Sell on marketplace</li>
+            </ol>
+            <button
+              type="button"
+              className="approved-home__demo-action approved-home__demo-action--secondary"
+              onClick={() => setSellReviewed(true)}
+            >
+              {sellReviewed ? "Demo sale reviewed" : "Sell shares — demo only"}
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
         </article>
       </div>
       <p className="approved-home__trading-demo-note">

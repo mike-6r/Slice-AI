@@ -8,6 +8,7 @@ describe('loadAppConfig', () => {
       environment: 'test',
       host: '127.0.0.1',
       port: 3001,
+      stripeBankFundingRail: 'bacs_debit',
     });
   });
 
@@ -318,6 +319,10 @@ describe('loadAppConfig', () => {
     });
     expect(config.providerMode).toBe('stripe_sandbox');
     expect(config.stripeLiveEnabled).toBe(false);
+  });
+
+  it('rejects the retired US bank funding rail in the GBP product mode', () => {
+    expect(() => loadAppConfig({ ...unitTestEnvironment, STRIPE_BANK_FUNDING_RAIL: 'us_bank_account' })).toThrow();
   });
 
   it('rejects live enablement unless Stripe live mode is selected', () => {

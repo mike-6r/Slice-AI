@@ -3993,6 +3993,9 @@ function ComplianceWorkspace({
               label="Provider status"
               value={sentence(detail.providerStatus)}
             />
+            <AdminKpi icon={ShieldCheck} label="Identity" value={sentence(detail.identity?.state ?? detail.status)} />
+            <AdminKpi icon={AlertTriangle} label="Risk review" value={sentence(detail.riskReview?.status ?? "Not reported")} />
+            <AdminKpi icon={Users} label="Payout readiness" value={detail.connectPayoutReadiness?.[0] ? sentence(detail.connectPayoutReadiness[0].status) : "Not started"} />
             <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
             <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
             <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />

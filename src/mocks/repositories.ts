@@ -1005,19 +1005,50 @@ export const mockRepositories: AppRepositories = {
   // Explicit visual-development mode only. API mode always uses Document 016 endpoints.
   providers: {
     async getCompliance() {
-      return { status: "NOT_STARTED" as const, expiresAt: null, updatedAt: null };
+      return {
+        status: "NOT_STARTED" as const,
+        identityState: "NOT_STARTED" as const,
+        provider: "LOCAL_TEST" as const,
+        expiresAt: null,
+        updatedAt: null,
+      };
     },
     async startCompliance() {
-      return { status: "PENDING" as const, provider: "LOCAL_TEST" as const, sessionUrl: null };
+      return {
+        status: "PENDING" as const,
+        identityState: "REQUIRES_INPUT" as const,
+        provider: "LOCAL_TEST" as const,
+        sessionUrl: null,
+      };
     },
     async createBankLinkToken() {
       throw new Error("Bank connection setup is unavailable in explicit mock mode.");
     },
-    async exchangeBankLinkPublicToken() {
+    async completeBankLink() {
       throw new Error("Bank connection setup is unavailable in explicit mock mode.");
     },
     async listBankConnections() {
       return [];
+    },
+    async disconnectBankConnection() {
+      return { disconnected: true, replayed: false };
+    },
+    async setDefaultBankConnection() {
+      return { selected: true };
+    },
+    async getConnectPayoutSetup() {
+      return {
+        status: "NOT_STARTED" as const,
+        requirementsSummary: null,
+        onboardingUrl: null,
+        expiresAt: null,
+      };
+    },
+    async createConnectOnboarding() {
+      throw new Error("Connect payout setup is unavailable in explicit mock mode.");
+    },
+    async refreshConnectOnboarding() {
+      throw new Error("Connect payout setup is unavailable in explicit mock mode.");
     },
     async listMovements() {
       return { items: [], nextCursor: null };

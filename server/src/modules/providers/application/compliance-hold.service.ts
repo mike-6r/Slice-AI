@@ -14,17 +14,18 @@ export class ComplianceHoldService {
       const existing = await db.complianceHold.findFirst({ where: { userId: input.userId, scope: input.scope, status: 'ACTIVE' } });
       if (existing) throw new ConflictException({ code: 'COMPLIANCE_HOLD_ACTIVE', message: 'An active hold already exists.' });
       const hold = await db.complianceHold.create({ data: { id: randomUUID(), userId: input.userId, scope: input.scope, reasonCode: input.reasonCode, source: 'ADMIN' } });
-      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'COMPLIANCE_HOLD_CREATED', resourceType: 'compliance-hold', resourceId: hold.id, requestId: input.requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { scope: input.scope, reasonCode: input.reasonCode }, createdAt: new Date() });
+      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'COMPLIANCE_HOLD_CREATED', resourceType: 'compliance-hold', resourceId: hold.id, requestId: input.requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { source: 'ADMIN', scope: input.scope, reasonCode: input.reasonCode }, createdAt: new Date() });
       return { id: hold.id, status: hold.status, scope: hold.scope, createdAt: hold.createdAt.toISOString() };
     });
   }
-  async release(actor: Actor, holdId: string) {
+  async release(actor: Actor, holdId: string, requestId = 'unknown') {
     this.recentAuth.require(actor);
     return this.db.$transaction(async (db) => {
       const hold = await db.complianceHold.findUnique({ where: { id: holdId } });
       if (!hold) throw new NotFoundException({ code: 'COMPLIANCE_HOLD_NOT_FOUND', message: 'Compliance hold not found.' });
       if (hold.status !== 'ACTIVE') throw new ConflictException({ code: 'COMPLIANCE_HOLD_TERMINAL', message: 'Compliance hold is not active.' });
       const released = await db.complianceHold.update({ where: { id: holdId }, data: { status: 'RELEASED', releasedAt: new Date() } });
+      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'COMPLIANCE_HOLD_RELEASED', resourceType: 'compliance-hold', resourceId: released.id, requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { source: 'ADMIN', scope: released.scope, reasonCode: released.reasonCode }, createdAt: new Date() });
       return { id: released.id, status: released.status, scope: released.scope, releasedAt: released.releasedAt!.toISOString() };
     });
   }

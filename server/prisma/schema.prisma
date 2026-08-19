@@ -338,6 +338,30 @@ enum ProviderCode {
   LOCAL_TEST
 }
 
+enum ExternalProviderEnvironment {
+  SANDBOX
+  LIVE
+}
+
+enum ConnectAccountStatus {
+  NOT_STARTED
+  ACTION_REQUIRED
+  UNDER_REVIEW
+  READY
+  RESTRICTED
+  DISABLED
+}
+
+enum ConnectPayoutStatus {
+  CREATED
+  TRANSFERRED
+  PROCESSING
+  PAID
+  FAILED
+  CANCELED
+  MANUAL_REVIEW
+}
+
 enum ComplianceCaseType {
   KYC
   KYT
@@ -706,6 +730,19 @@ enum DiscordAnnouncementScheduleAuditAction {
   SCHEDULE_MANUAL_RUN
 }
 
+enum DiscordSpotlightKind {
+  COLLECTOR
+  COLLECTIBLE
+}
+
+enum DiscordSpotlightStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  CANCELLED
+  BLOCKED
+}
+
 enum AssetPublicationStatus {
   BLOCKED
   READY
@@ -744,8 +781,8 @@ model User {
   ownershipAccounts               OwnershipAccount[]                 @relation("OwnershipAccountUser")
   financialAccounts               FinancialAccount[]                 @relation("FinancialAccountUser")
   portfolioLots                   PortfolioLot[]
-  tradingOrders                   TradingOrder[]                 @relation("TradingOrderUser")
-  tradingOrdersActed              TradingOrder[]                 @relation("TradingOrderActor")
+  tradingOrders                   TradingOrder[]                     @relation("TradingOrderUser")
+  tradingOrdersActed              TradingOrder[]                     @relation("TradingOrderActor")
   followingCollectors             CollectorFollow[]                  @relation("CollectorFollower")
   followedByCollectors            CollectorFollow[]                  @relation("CollectorFollowed")
   discussionPosts                 DiscussionPost[]                   @relation("DiscussionAuthor")
@@ -759,6 +796,10 @@ model User {
   complianceCases                 ComplianceCase[]
   complianceDecisions             ComplianceDecision[]               @relation("ComplianceDecisionActor")
   externalFinancialAccounts       ExternalFinancialAccount[]
+  externalProviderCustomers       ExternalProviderCustomer[]
+  financialConnectionSessions     FinancialConnectionSession[]
+  bacsSetupSessions               BacsSetupSession[]
+  externalConnectAccounts         ExternalConnectAccount[]
   moneyMovements                  MoneyMovement[]
   complianceHolds                 ComplianceHold[]
   providerIncidents               ProviderIncident[]                 @relation("ProviderIncidentOwner")
@@ -774,9 +815,9 @@ model User {
   receiptConfirmations            IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
   portfolioSnapshots              PortfolioSnapshot[]
   controlledBetaBypasses          ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
-  initialOfferingsOriginated      InitialOffering[]                   @relation("InitialOfferingOriginator")
-  initialOfferingsBeneficiary     InitialOffering[]                   @relation("InitialOfferingBeneficiary")
-  initialOfferingInventories      InitialOfferingInventory[]          @relation("InitialOfferingInventoryBeneficiary")
+  initialOfferingsOriginated      InitialOffering[]                  @relation("InitialOfferingOriginator")
+  initialOfferingsBeneficiary     InitialOffering[]                  @relation("InitialOfferingBeneficiary")
+  initialOfferingInventories      InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
 
   @@index([accountStatus])
 }
@@ -1101,52 +1142,52 @@ model GradeScaleEntry {
 }
 
 model Asset {
-  id                     String                        @id @default(cuid())
-  publicId               String                        @unique
-  slug                   String                        @unique
-  categoryId             String
-  setId                  String?
-  title                  String
-  shortName              String?
-  year                   Int?
-  manufacturer           String?
-  edition                String?
-  cardNumber             String?
-  description            String?
-  gradeScaleEntryId      String?
-  certificationNumber    String?
-  status                 AssetCatalogueStatus          @default(DRAFT)
-  heroMediaId            String?
-  createdAt              DateTime                      @default(now())
-  updatedAt              DateTime                      @updatedAt
-  publishedAt            DateTime?
-  category               Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  collectibleSet         CollectibleSet?               @relation(fields: [setId], references: [id], onDelete: Restrict)
-  gradeScaleEntry        GradeScaleEntry?              @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
-  valuationPoints        AssetValuationPoint[]
-  marketSnapshots        AssetMarketSnapshot[]
-  marketProviderMappings MarketProviderMapping[]
-  marketObservations     MarketObservation[]
-  marketRefreshJobs      MarketRefreshJob[]
-  watchlistItems         WatchlistItem[]
-  vaultPublicEvents      VaultPublicEvent[]
-  submissions            AssetSubmission[]
-  valuationEvidence      ValuationEvidence[]
-  valuationDecisions     ValuationDecision[]
-  custodyRecord          VaultCustodyRecord?
-  custodyEvents          CustodyEvent[]
-  insuranceCoverage      InsuranceCoverage[]
-  publication            AssetPublication?
-  ownershipSupply        OwnershipAssetSupply?
-  ownershipSupplyPolicy  OwnershipSupplyPolicy?
-  portfolioLots          PortfolioLot[]
-  tradingMarket          TradingMarket?
-  tradingOrders          TradingOrder[]
-  tradingExecutions      TradingExecution[]
-  discussionPosts        DiscussionPost[]
-  saleProposals          SaleProposal[]
-  controlledBetaBypass   ControlledBetaPhysicalBypass?
-  initialOffering        InitialOffering?
+  id                       String                        @id @default(cuid())
+  publicId                 String                        @unique
+  slug                     String                        @unique
+  categoryId               String
+  setId                    String?
+  title                    String
+  shortName                String?
+  year                     Int?
+  manufacturer             String?
+  edition                  String?
+  cardNumber               String?
+  description              String?
+  gradeScaleEntryId        String?
+  certificationNumber      String?
+  status                   AssetCatalogueStatus          @default(DRAFT)
+  heroMediaId              String?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+  publishedAt              DateTime?
+  category                 Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet           CollectibleSet?               @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry          GradeScaleEntry?              @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  valuationPoints          AssetValuationPoint[]
+  marketSnapshots          AssetMarketSnapshot[]
+  marketProviderMappings   MarketProviderMapping[]
+  marketObservations       MarketObservation[]
+  marketRefreshJobs        MarketRefreshJob[]
+  watchlistItems           WatchlistItem[]
+  vaultPublicEvents        VaultPublicEvent[]
+  submissions              AssetSubmission[]
+  valuationEvidence        ValuationEvidence[]
+  valuationDecisions       ValuationDecision[]
+  custodyRecord            VaultCustodyRecord?
+  custodyEvents            CustodyEvent[]
+  insuranceCoverage        InsuranceCoverage[]
+  publication              AssetPublication?
+  ownershipSupply          OwnershipAssetSupply?
+  ownershipSupplyPolicy    OwnershipSupplyPolicy?
+  portfolioLots            PortfolioLot[]
+  tradingMarket            TradingMarket?
+  tradingOrders            TradingOrder[]
+  tradingExecutions        TradingExecution[]
+  discussionPosts          DiscussionPost[]
+  saleProposals            SaleProposal[]
+  controlledBetaBypass     ControlledBetaPhysicalBypass?
+  initialOffering          InitialOffering?
   initialOfferingInventory InitialOfferingInventory[]
 
   @@unique([gradeScaleEntryId, certificationNumber])
@@ -1382,18 +1423,18 @@ model ValuationEvidence {
 }
 
 model ValuationDecision {
-  id              String                  @id @default(cuid())
-  assetId         String
-  valueMinor      BigInt
-  currency        String
-  confidence      Int
-  methodologyCode String
-  decidedByUserId String
-  decidedAt       DateTime
-  status          ValuationDecisionStatus @default(ACTIVE)
-  createdAt       DateTime                @default(now())
-  asset           Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  decidedBy       User                    @relation("ValuationDecisionCreator", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  id               String                  @id @default(cuid())
+  assetId          String
+  valueMinor       BigInt
+  currency         String
+  confidence       Int
+  methodologyCode  String
+  decidedByUserId  String
+  decidedAt        DateTime
+  status           ValuationDecisionStatus @default(ACTIVE)
+  createdAt        DateTime                @default(now())
+  asset            Asset                   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  decidedBy        User                    @relation("ValuationDecisionCreator", fields: [decidedByUserId], references: [id], onDelete: Restrict)
   initialOfferings InitialOffering[]
 
   @@index([assetId, status, decidedAt, id])
@@ -1832,17 +1873,17 @@ model OwnershipAssetSupply {
 /// A ledger principal. Initial issuance creates a private system treasury only;
 /// no user allocation or public investor identity is created by this surface.
 model OwnershipAccount {
-  id                    String                 @id @default(cuid())
-  type                  OwnershipAccountType
-  userId                String?                @unique
-  status                OwnershipAccountStatus @default(ACTIVE)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  user                  User?                  @relation("OwnershipAccountUser", fields: [userId], references: [id], onDelete: Restrict)
-  positions             OwnershipPosition[]
-  debits                OwnershipLedgerEntry[] @relation("OwnershipLedgerDebit")
-  credits               OwnershipLedgerEntry[] @relation("OwnershipLedgerCredit")
-  proposalEligibilities ProposalEligibility[]
+  id                       String                    @id @default(cuid())
+  type                     OwnershipAccountType
+  userId                   String?                   @unique
+  status                   OwnershipAccountStatus    @default(ACTIVE)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  user                     User?                     @relation("OwnershipAccountUser", fields: [userId], references: [id], onDelete: Restrict)
+  positions                OwnershipPosition[]
+  debits                   OwnershipLedgerEntry[]    @relation("OwnershipLedgerDebit")
+  credits                  OwnershipLedgerEntry[]    @relation("OwnershipLedgerCredit")
+  proposalEligibilities    ProposalEligibility[]
   initialOfferingInventory InitialOfferingInventory?
 
   @@index([type, status, id])
@@ -1852,11 +1893,11 @@ model OwnershipAccount {
 /// as Slice Treasury. The ownership position remains the unit-level authority;
 /// this record provides the offering identity and an auditable inventory view.
 model InitialOffering {
-  id                         String                @id @default(cuid())
-  assetId                    String                @unique
+  id                         String                    @id @default(cuid())
+  assetId                    String                    @unique
   originatingCollectorUserId String
   beneficiaryUserId          String
-  ownershipSupplyPolicyId    String                @unique
+  ownershipSupplyPolicyId    String                    @unique
   valuationDecisionId        String
   currency                   String
   totalUnits                 BigInt
@@ -1865,20 +1906,20 @@ model InitialOffering {
   pricePerUnitMinor          BigInt
   grossOfferingMinor         BigInt
   feeScheduleVersion         String
-  feeBps                     Int                   @default(0)
-  status                     InitialOfferingStatus @default(AWAITING_APPROVAL)
+  feeBps                     Int                       @default(0)
+  status                     InitialOfferingStatus     @default(AWAITING_APPROVAL)
   approvedAt                 DateTime?
   openedAt                   DateTime?
   issuedAt                   DateTime?
   closedAt                   DateTime?
   changeRequestReason        String?
-  createdAt                  DateTime              @default(now())
-  updatedAt                  DateTime              @updatedAt
-  asset                      Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  originatingCollector       User                  @relation("InitialOfferingOriginator", fields: [originatingCollectorUserId], references: [id], onDelete: Restrict)
-  beneficiary                User                  @relation("InitialOfferingBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
-  ownershipSupplyPolicy      OwnershipSupplyPolicy @relation(fields: [ownershipSupplyPolicyId], references: [id], onDelete: Restrict)
-  valuationDecision          ValuationDecision     @relation(fields: [valuationDecisionId], references: [id], onDelete: Restrict)
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  asset                      Asset                     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  originatingCollector       User                      @relation("InitialOfferingOriginator", fields: [originatingCollectorUserId], references: [id], onDelete: Restrict)
+  beneficiary                User                      @relation("InitialOfferingBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
+  ownershipSupplyPolicy      OwnershipSupplyPolicy     @relation(fields: [ownershipSupplyPolicyId], references: [id], onDelete: Restrict)
+  valuationDecision          ValuationDecision         @relation(fields: [valuationDecisionId], references: [id], onDelete: Restrict)
   inventory                  InitialOfferingInventory?
   orders                     TradingOrder[]
   executions                 TradingExecution[]
@@ -1889,21 +1930,21 @@ model InitialOffering {
 }
 
 model InitialOfferingInventory {
-  id                String            @id @default(cuid())
-  offeringId        String            @unique
+  id                String           @id @default(cuid())
+  offeringId        String           @unique
   assetId           String
-  accountId         String            @unique
+  accountId         String           @unique
   beneficiaryUserId String
   offeredUnits      BigInt
   availableUnits    BigInt
-  reservedUnits     BigInt             @default(0)
-  settledUnits      BigInt             @default(0)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  offering          InitialOffering    @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  asset             Asset              @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  account           OwnershipAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  beneficiary       User               @relation("InitialOfferingInventoryBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
+  reservedUnits     BigInt           @default(0)
+  settledUnits      BigInt           @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  offering          InitialOffering  @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  asset             Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  account           OwnershipAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  beneficiary       User             @relation("InitialOfferingInventoryBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: Restrict)
 
   @@index([assetId, createdAt, id])
   @@index([beneficiaryUserId, createdAt, id])
@@ -2129,12 +2170,18 @@ model ComplianceCase {
   provider                    ProviderCode
   type                        ComplianceCaseType
   status                      ComplianceCaseStatus @default(NOT_STARTED)
+  identityState               String               @default("NOT_STARTED")
   providerReferenceCiphertext String?
   providerReferenceHash       String?
   encryptionKeyVersion        String?
   expiresAt                   DateTime?
   createdAt                   DateTime             @default(now())
   updatedAt                   DateTime             @updatedAt
+  identityRequestedAt         DateTime?
+  identityCompletedAt         DateTime?
+  identityVerifiedAt          DateTime?
+  identitySafeFailureCode     String?
+  identityLastProviderSync    DateTime?
   user                        User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   decisions                   ComplianceDecision[]
 
@@ -2159,6 +2206,54 @@ model ComplianceDecision {
   @@index([caseId, createdAt, id])
 }
 
+model ExternalProviderCustomer {
+  id                 String                      @id @default(cuid())
+  userId             String
+  provider           ProviderCode
+  environment        ExternalProviderEnvironment
+  externalCustomerId String
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+  user               User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, environment, userId])
+  @@unique([provider, environment, externalCustomerId])
+  @@index([userId, provider, environment])
+}
+
+model FinancialConnectionSession {
+  id                String                      @id @default(cuid())
+  userId            String
+  provider          ProviderCode
+  environment       ExternalProviderEnvironment
+  externalSessionId String
+  status            String                      @default("CREATED")
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  user              User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, environment, externalSessionId])
+  @@index([userId, provider, environment, status])
+}
+
+/// Provider-neutral record for a Stripe Bacs mandate setup attempt. This is
+/// separate from the retained Financial Connections history so the retired US
+/// funding flow cannot be mistaken for the active GBP rail.
+model BacsSetupSession {
+  id                    String                      @id @default(cuid())
+  userId                String
+  provider              ProviderCode
+  environment           ExternalProviderEnvironment
+  externalSetupIntentId String
+  status                String                      @default("CREATED")
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, environment, externalSetupIntentId])
+  @@index([userId, provider, environment, status])
+}
+
 model ExternalFinancialAccount {
   id                          String          @id @default(cuid())
   userId                      String
@@ -2170,12 +2265,16 @@ model ExternalFinancialAccount {
   itemReferenceHash           String?
   accessTokenCiphertext       String?
   accessTokenHash             String?
+  externalPaymentMethodId     String?
   institutionName             String?
   accountName                 String?
   accountMask                 String?
   currency                    String
   accountType                 String
   status                      String
+  ownershipStatus             String?
+  isDefault                   Boolean         @default(false)
+  lastSyncedAt                DateTime?
   createdAt                   DateTime        @default(now())
   updatedAt                   DateTime        @updatedAt
   user                        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -2184,6 +2283,30 @@ model ExternalFinancialAccount {
   @@unique([provider, providerReferenceHash])
   @@index([userId, provider, itemReferenceHash])
   @@index([userId, provider, status])
+}
+
+model ExternalConnectAccount {
+  id                          String                      @id @default(cuid())
+  userId                      String
+  provider                    ProviderCode
+  environment                 ExternalProviderEnvironment
+  externalAccountIdCiphertext String
+  externalAccountIdHash       String
+  encryptionKeyVersion        String
+  status                      ConnectAccountStatus        @default(NOT_STARTED)
+  requirementsSummary         Json?
+  detailsSubmitted            Boolean                     @default(false)
+  payoutsEnabled              Boolean                     @default(false)
+  transfersCapability         String?
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  lastSyncedAt                DateTime?
+  user                        User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  payouts                     ConnectPayout[]
+
+  @@unique([provider, environment, userId])
+  @@unique([provider, environment, externalAccountIdHash])
+  @@index([userId, provider, environment, status])
 }
 
 model MoneyMovement {
@@ -2211,6 +2334,7 @@ model MoneyMovement {
   externalAccount             ExternalFinancialAccount? @relation(fields: [externalAccountId], references: [id], onDelete: Restrict)
   cashAccount                 FinancialAccount          @relation("MovementCashAccount", fields: [cashAccountId], references: [id], onDelete: Restrict)
   ledgerTransaction           JournalTransaction?       @relation("MovementJournal", fields: [ledgerTransactionId], references: [id], onDelete: Restrict)
+  connectPayout               ConnectPayout?
   history                     MoneyMovementHistory[]
   holds                       ComplianceHold[]
 
@@ -2219,6 +2343,33 @@ model MoneyMovement {
   @@index([userId, createdAt, id])
   @@index([provider, status, updatedAt])
   @@index([status, createdAt, id])
+}
+
+model ConnectPayout {
+  id                           String                      @id @default(cuid())
+  movementId                   String                      @unique
+  connectAccountId             String
+  provider                     ProviderCode
+  environment                  ExternalProviderEnvironment
+  amountMinor                  BigInt
+  currency                     String
+  status                       ConnectPayoutStatus         @default(CREATED)
+  externalTransferIdCiphertext String?
+  externalTransferIdHash       String?
+  externalPayoutIdCiphertext   String?
+  externalPayoutIdHash         String?
+  encryptionKeyVersion         String?
+  failureCode                  String?
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  lastSyncedAt                 DateTime?
+  movement                     MoneyMovement               @relation(fields: [movementId], references: [id], onDelete: Restrict)
+  connectAccount               ExternalConnectAccount      @relation(fields: [connectAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, externalTransferIdHash])
+  @@unique([provider, externalPayoutIdHash])
+  @@index([connectAccountId, status, updatedAt])
+  @@index([provider, environment, status, updatedAt])
 }
 
 model MoneyMovementHistory {
@@ -2339,9 +2490,9 @@ model TradingOrder {
   userId                 String?
   principalType          TradingPrincipalType @default(USER)
   channel                TradingChannel       @default(SECONDARY_MARKET)
-  principalId             String
+  principalId            String
   initialOfferingId      String?
-  actorUserId             String?
+  actorUserId            String?
   assetId                String
   side                   TradingOrderSide
   type                   TradingOrderType     @default(LIMIT)
@@ -2384,31 +2535,31 @@ model TradingOrder {
 /// Append-only externally-safe execution record. Settlement is internal and
 /// atomic in Document 014; this record never carries financial account IDs.
 model TradingExecution {
-  id               String                           @id @default(cuid())
-  assetId          String
-  channel          TradingChannel                   @default(SECONDARY_MARKET)
+  id                String                           @id @default(cuid())
+  assetId           String
+  channel           TradingChannel                   @default(SECONDARY_MARKET)
   initialOfferingId String?
-  buyOrderId       String
-  sellOrderId      String
-  makerOrderId     String
-  takerOrderId     String
-  priceMinor       BigInt
-  units            BigInt
-  grossMinor       BigInt
-  buyerFeeMinor    BigInt                           @default(0)
-  sellerFeeMinor   BigInt                           @default(0)
-  marketSequence   BigInt
-  settlementStatus TradingExecutionSettlementStatus @default(SETTLED)
-  correlationId    String                           @unique
-  executedAt       DateTime                         @default(now())
-  settledAt        DateTime                         @default(now())
-  asset            Asset                            @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingExecution_asset_fkey")
-  market           TradingMarket                    @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingExecution_market_fkey")
-  buyOrder         TradingOrder                     @relation("ExecutionBuyOrder", fields: [buyOrderId], references: [id], onDelete: Restrict)
-  sellOrder        TradingOrder                     @relation("ExecutionSellOrder", fields: [sellOrderId], references: [id], onDelete: Restrict)
-  makerOrder       TradingOrder                     @relation("ExecutionMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
-  takerOrder       TradingOrder                     @relation("ExecutionTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
-  initialOffering  InitialOffering?                 @relation(fields: [initialOfferingId], references: [id], onDelete: Restrict)
+  buyOrderId        String
+  sellOrderId       String
+  makerOrderId      String
+  takerOrderId      String
+  priceMinor        BigInt
+  units             BigInt
+  grossMinor        BigInt
+  buyerFeeMinor     BigInt                           @default(0)
+  sellerFeeMinor    BigInt                           @default(0)
+  marketSequence    BigInt
+  settlementStatus  TradingExecutionSettlementStatus @default(SETTLED)
+  correlationId     String                           @unique
+  executedAt        DateTime                         @default(now())
+  settledAt         DateTime                         @default(now())
+  asset             Asset                            @relation(fields: [assetId], references: [id], onDelete: Restrict, map: "TradingExecution_asset_fkey")
+  market            TradingMarket                    @relation(fields: [assetId], references: [assetId], onDelete: Restrict, map: "TradingExecution_market_fkey")
+  buyOrder          TradingOrder                     @relation("ExecutionBuyOrder", fields: [buyOrderId], references: [id], onDelete: Restrict)
+  sellOrder         TradingOrder                     @relation("ExecutionSellOrder", fields: [sellOrderId], references: [id], onDelete: Restrict)
+  makerOrder        TradingOrder                     @relation("ExecutionMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
+  takerOrder        TradingOrder                     @relation("ExecutionTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
+  initialOffering   InitialOffering?                 @relation(fields: [initialOfferingId], references: [id], onDelete: Restrict)
 
   @@unique([assetId, marketSequence])
   @@index([assetId, executedAt, id])
@@ -2790,30 +2941,138 @@ model DiscordNotificationPreference {
 }
 
 model DiscordTicket {
-  id                 String                   @id @default(cuid())
-  guildId            String
-  creatorDiscordId   String
-  category           String
-  channelId          String?                  @unique
-  subject            String
-  safeSummary        String
-  safeReferenceId    String?
-  status             DiscordTicketStatus      @default(OPEN)
-  priority           DiscordTicketPriority    @default(NORMAL)
-  assignedStaffId    String?
-  lastActivityAt     DateTime                 @default(now())
-  inactivityWarnedAt DateTime?
-  resolvedAt         DateTime?
-  closedAt           DateTime?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  guild              DiscordGuildConfig       @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
-  events             DiscordTicketEvent[]
-  transcript         DiscordTicketTranscript?
+  id                           String                        @id @default(cuid())
+  guildId                      String
+  creatorDiscordId             String
+  category                     String
+  channelId                    String?                       @unique
+  subject                      String
+  safeSummary                  String
+  safeReferenceId              String?
+  status                       DiscordTicketStatus           @default(OPEN)
+  priority                     DiscordTicketPriority         @default(NORMAL)
+  assignedStaffId              String?
+  assignedTeamKey              String?
+  firstStaffResponseAt         DateTime?
+  firstResponseDueAt           DateTime?
+  resolutionDueAt              DateTime?
+  firstResponseRiskAlertedAt   DateTime?
+  firstResponseBreachAlertedAt DateTime?
+  resolutionRiskAlertedAt      DateTime?
+  resolutionBreachAlertedAt    DateTime?
+  protectedFromAutoClose       Boolean                       @default(false)
+  lastActivityAt               DateTime                      @default(now())
+  inactivityWarnedAt           DateTime?
+  resolvedAt                   DateTime?
+  closedAt                     DateTime?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  guild                        DiscordGuildConfig            @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  events                       DiscordTicketEvent[]
+  transcript                   DiscordTicketTranscript?
+  staffTranscript              DiscordTicketStaffTranscript?
+  formVersion                  DiscordTicketFormVersion?     @relation(fields: [formVersionId], references: [id], onDelete: SetNull)
+  formVersionId                String?
+  intakeResponses              DiscordTicketIntakeResponse[]
+  internalNotes                DiscordTicketInternalNote[]
+  tagAssignments               DiscordTicketTagAssignment[]
 
   @@index([guildId, creatorDiscordId, status])
   @@index([guildId, status, lastActivityAt])
   @@index([guildId, assignedStaffId, status])
+}
+
+/// Per-category operational policy. It controls support routing and timing,
+/// never customer permissions, financial workflows, or identity authority.
+model DiscordTicketCategoryPolicy {
+  id                     String                @id @default(cuid())
+  guildId                String
+  category               String
+  routingRoleKey         String?
+  defaultPriority        DiscordTicketPriority @default(NORMAL)
+  firstResponseMinutes   Int                   @default(240)
+  resolutionMinutes      Int                   @default(2880)
+  inactivityWarningHours Int                   @default(48)
+  inactivityCloseHours   Int                   @default(120)
+  protectedFromAutoClose Boolean               @default(false)
+  enabled                Boolean               @default(true)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@unique([guildId, category])
+  @@index([guildId, enabled])
+}
+
+/// Guild-scoped, versioned support intake schema. Existing tickets retain a
+/// relation to the exact version used at creation.
+model DiscordTicketFormVersion {
+  id        String          @id @default(cuid())
+  guildId   String
+  category  String
+  version   Int
+  fields    Json
+  active    Boolean         @default(true)
+  createdBy String?
+  createdAt DateTime        @default(now())
+  tickets   DiscordTicket[]
+
+  @@unique([guildId, category, version])
+  @@index([guildId, category, active])
+}
+
+/// Answers are private support data; field label and type are snapshotted so
+/// later form edits cannot change the meaning of historic tickets.
+model DiscordTicketIntakeResponse {
+  id         String        @id @default(cuid())
+  ticketId   String
+  fieldKey   String
+  fieldLabel String
+  fieldType  String
+  value      String
+  createdAt  DateTime      @default(now())
+  ticket     DiscordTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, fieldKey])
+  @@index([ticketId, createdAt])
+}
+
+model DiscordTicketInternalNote {
+  id                  String        @id @default(cuid())
+  ticketId            String
+  authorDiscordUserId String
+  content             String
+  referencedMessageId String?
+  createdAt           DateTime      @default(now())
+  ticket              DiscordTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model DiscordTicketTag {
+  id          String                       @id @default(cuid())
+  guildId     String
+  key         String
+  label       String
+  enabled     Boolean                      @default(true)
+  sortOrder   Int                          @default(0)
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
+  assignments DiscordTicketTagAssignment[]
+
+  @@unique([guildId, key])
+  @@index([guildId, enabled, sortOrder])
+}
+
+model DiscordTicketTagAssignment {
+  ticketId  String
+  tagId     String
+  addedBy   String
+  createdAt DateTime         @default(now())
+  ticket    DiscordTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag       DiscordTicketTag @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([ticketId, tagId])
+  @@index([tagId, createdAt])
 }
 
 model DiscordTicketEvent {
@@ -2840,6 +3099,105 @@ model DiscordTicketTranscript {
   createdAt         DateTime                      @default(now())
   updatedAt         DateTime                      @updatedAt
   ticket            DiscordTicket                 @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+/// Staff-only companion transcript. It is deliberately separate from the
+/// customer-safe transcript so private notes can never be delivered by reuse.
+model DiscordTicketStaffTranscript {
+  id            String                        @id @default(cuid())
+  ticketId      String                        @unique
+  status        DiscordTicketTranscriptStatus @default(COMPLETE)
+  content       String
+  messageCount  Int                           @default(0)
+  failureReason String?
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
+  ticket        DiscordTicket                 @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+/// Aggregate-only Discord operational telemetry. It intentionally excludes
+/// message content, ticket content, command arguments, and financial data.
+model DiscordAnalyticsDailyGuild {
+  id                String   @id @default(cuid())
+  guildId           String
+  day               DateTime
+  messages          Int      @default(0)
+  supportMessages   Int      @default(0)
+  joins             Int      @default(0)
+  leaves            Int      @default(0)
+  commandRuns       Int      @default(0)
+  commandSuccesses  Int      @default(0)
+  commandUserErrors Int      @default(0)
+  commandDenied     Int      @default(0)
+  commandFailures   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([guildId, day])
+  @@index([guildId, day])
+}
+
+model DiscordAnalyticsDailyChannel {
+  id        String   @id @default(cuid())
+  guildId   String
+  channelId String
+  day       DateTime
+  messages  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, channelId, day])
+  @@index([guildId, day, messages])
+}
+
+model DiscordAnalyticsDailyCommand {
+  id               String   @id @default(cuid())
+  guildId          String
+  day              DateTime
+  commandName      String
+  subcommand       String   @default("")
+  runs             Int      @default(0)
+  successes        Int      @default(0)
+  userErrors       Int      @default(0)
+  permissionDenied Int      @default(0)
+  internalErrors   Int      @default(0)
+  durationTotalMs  BigInt   @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([guildId, day, commandName, subcommand])
+  @@index([guildId, day, runs])
+}
+
+/// At most one daily row per guild/member. It supports accurate unique
+/// activity counts without becoming a message or behavior archive.
+model DiscordAnalyticsDailyMemberActivity {
+  id                   String   @id @default(cuid())
+  guildId              String
+  discordUserId        String
+  day                  DateTime
+  messaged             Boolean  @default(false)
+  usedCommand          Boolean  @default(false)
+  communityInteraction Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([guildId, discordUserId, day])
+  @@index([guildId, day])
+}
+
+model DiscordWorkerHeartbeat {
+  workerName           String    @id
+  instanceId           String
+  lastStartedAt        DateTime
+  lastHeartbeatAt      DateTime
+  lastSuccessfulScanAt DateTime?
+  lastErrorAt          DateTime?
+  status               String    @default("HEALTHY")
+  metadata             Json?
+  updatedAt            DateTime  @updatedAt
+
+  @@index([lastHeartbeatAt])
 }
 
 model DiscordModerationCase {
@@ -3004,27 +3362,27 @@ model DiscordCommunityScheduleState {
 /// Bot-owned community engagement state. A giveaway never represents a
 /// purchase, investment, wallet, balance, ownership, or product entitlement.
 model DiscordMemeCompetition {
-  id                              String                       @id @default(cuid())
-  guildId                         String
-  channelId                       String
-  periodKey                       String
-  announcementMessageId           String?                      @unique
-  startsAt                        DateTime
-  endsAt                          DateTime
-  status                          DiscordMemeCompetitionStatus @default(OPEN)
-  rewardXp                        Int
-  winnerDiscordUserId             String?
-  winningSubmissionId             String?
-  closingClaimedAt                DateTime?
-  closedAt                        DateTime?
-  awardedAt                       DateTime?
-  resultAnnouncedAt               DateTime?
-  resultAnnouncementClaimedAt     DateTime?
-  createdAt                       DateTime                     @default(now())
-  updatedAt                       DateTime                     @updatedAt
-  submissions                     DiscordMemeSubmission[]
-  award                           DiscordMemeAward?
-  auditEvents                     DiscordMemeCompetitionAuditEvent[]
+  id                          String                             @id @default(cuid())
+  guildId                     String
+  channelId                   String
+  periodKey                   String
+  announcementMessageId       String?                            @unique
+  startsAt                    DateTime
+  endsAt                      DateTime
+  status                      DiscordMemeCompetitionStatus       @default(OPEN)
+  rewardXp                    Int
+  winnerDiscordUserId         String?
+  winningSubmissionId         String?
+  closingClaimedAt            DateTime?
+  closedAt                    DateTime?
+  awardedAt                   DateTime?
+  resultAnnouncedAt           DateTime?
+  resultAnnouncementClaimedAt DateTime?
+  createdAt                   DateTime                           @default(now())
+  updatedAt                   DateTime                           @updatedAt
+  submissions                 DiscordMemeSubmission[]
+  award                       DiscordMemeAward?
+  auditEvents                 DiscordMemeCompetitionAuditEvent[]
 
   @@unique([guildId, periodKey])
   @@index([guildId, status, endsAt])
@@ -3033,17 +3391,17 @@ model DiscordMemeCompetition {
 
 /// A registered Discord message reference only. Meme media itself stays in Discord.
 model DiscordMemeSubmission {
-  id                  String                @id @default(cuid())
-  competitionId       String
-  guildId             String
-  channelId           String
-  messageId           String                @unique
-  discordUserId       String
-  submittedAt         DateTime              @default(now())
-  invalidatedAt       DateTime?
-  invalidReason       String?
-  finalVoteCount      Int?
-  competition         DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  id             String                 @id @default(cuid())
+  competitionId  String
+  guildId        String
+  channelId      String
+  messageId      String                 @unique
+  discordUserId  String
+  submittedAt    DateTime               @default(now())
+  invalidatedAt  DateTime?
+  invalidReason  String?
+  finalVoteCount Int?
+  competition    DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
   @@unique([competitionId, discordUserId])
   @@index([competitionId, invalidatedAt])
@@ -3052,41 +3410,41 @@ model DiscordMemeSubmission {
 
 /// One per competition is the durable exactly-once marker for existing bot XP.
 model DiscordMemeAward {
-  id                  String                @id @default(cuid())
-  competitionId       String                @unique
+  id                     String                 @id @default(cuid())
+  competitionId          String                 @unique
   recipientDiscordUserId String
-  xpAmount            Int
-  awardedAt           DateTime              @default(now())
-  competition         DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  xpAmount               Int
+  awardedAt              DateTime               @default(now())
+  competition            DiscordMemeCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
   @@index([recipientDiscordUserId, awardedAt])
 }
 
 /// Append-only operational audit for the weekly Discord meme lifecycle.
 model DiscordMemeCompetitionAuditEvent {
-  id                  String                         @id @default(cuid())
-  competitionId       String
-  action              DiscordMemeCompetitionAuditAction
-  actorDiscordId      String
-  details             Json?
-  createdAt           DateTime                       @default(now())
-  competition         DiscordMemeCompetition         @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  id             String                            @id @default(cuid())
+  competitionId  String
+  action         DiscordMemeCompetitionAuditAction
+  actorDiscordId String
+  details        Json?
+  createdAt      DateTime                          @default(now())
+  competition    DiscordMemeCompetition            @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
   @@index([competitionId, createdAt])
   @@index([action, createdAt])
 }
 
 model DiscordGiveaway {
-  id                              String               @id @default(cuid())
+  id                              String                      @id @default(cuid())
   guildId                         String
   channelId                       String?
-  messageId                       String?              @unique
+  messageId                       String?                     @unique
   createdByDiscordUserId          String
   title                           String
   description                     String?
-  startsAt                        DateTime             @default(now())
+  startsAt                        DateTime                    @default(now())
   endsAt                          DateTime
-  status                          DiscordGiveawayStatus @default(OPEN)
+  status                          DiscordGiveawayStatus       @default(OPEN)
   winnerCount                     Int
   endedAt                         DateTime?
   endedByDiscordUserId            String?
@@ -3094,8 +3452,8 @@ model DiscordGiveaway {
   cancelledByDiscordUserId        String?
   completionAnnouncedAt           DateTime?
   completionAnnouncementClaimedAt DateTime?
-  createdAt                       DateTime             @default(now())
-  updatedAt                       DateTime             @updatedAt
+  createdAt                       DateTime                    @default(now())
+  updatedAt                       DateTime                    @updatedAt
   entries                         DiscordGiveawayEntry[]
   winners                         DiscordGiveawayWinner[]
   auditEvents                     DiscordGiveawayAuditEvent[]
@@ -3132,13 +3490,13 @@ model DiscordGiveawayWinner {
 
 /// Append-only Discord operational audit trail for giveaway actions.
 model DiscordGiveawayAuditEvent {
-  id             String                    @id @default(cuid())
+  id             String                     @id @default(cuid())
   giveawayId     String
   action         DiscordGiveawayAuditAction
   actorDiscordId String
   details        Json?
-  createdAt      DateTime                  @default(now())
-  giveaway       DiscordGiveaway           @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                   @default(now())
+  giveaway       DiscordGiveaway            @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
 
   @@index([giveawayId, createdAt])
 }
@@ -3175,22 +3533,22 @@ model DiscordDeliveryReceipt {
 
 /// Discord-only alert preference. It cannot create orders or affect valuation.
 model DiscordPriceAlert {
-  id                 String                     @id @default(cuid())
+  id                 String                      @id @default(cuid())
   guildId            String
   discordUserId      String
   assetId            String
   condition          String
   thresholdMinor     BigInt
   currency           String?
-  enabled            Boolean                    @default(true)
+  enabled            Boolean                     @default(true)
   lastEvaluatedMinor BigInt?
   lastConditionMet   Boolean?
   lastObservedAt     DateTime?
   lastSource         String?
   lastDataStatus     String?
   lastTriggeredAt    DateTime?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
   deliveries         DiscordPriceAlertDelivery[]
 
   @@index([guildId, assetId, enabled])
@@ -3200,25 +3558,25 @@ model DiscordPriceAlert {
 /// Durable private-delivery claims for bot-owned threshold alerts. A claimed
 /// send is never automatically replayed after an uncertain Discord outcome.
 model DiscordPriceAlertDelivery {
-  id                String             @id @default(cuid())
-  alertId           String
-  idempotencyKey    String             @unique
-  assetTitle        String
-  observedMinor     BigInt
-  currency          String
-  source            String
-  dataStatus        String
-  observedAt        DateTime
-  status            String             @default("PENDING")
-  attempts          Int                @default(0)
-  claimedAt         DateTime?
-  deliveredAt       DateTime?
-  discordChannelId  String?
-  discordMessageId  String?
-  failureCode       String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  alert             DiscordPriceAlert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  id               String            @id @default(cuid())
+  alertId          String
+  idempotencyKey   String            @unique
+  assetTitle       String
+  observedMinor    BigInt
+  currency         String
+  source           String
+  dataStatus       String
+  observedAt       DateTime
+  status           String            @default("PENDING")
+  attempts         Int               @default(0)
+  claimedAt        DateTime?
+  deliveredAt      DateTime?
+  discordChannelId String?
+  discordMessageId String?
+  failureCode      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  alert            DiscordPriceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
   @@index([alertId, status])
@@ -3227,18 +3585,18 @@ model DiscordPriceAlertDelivery {
 /// One durable claim per guild and UTC digest period. It contains no market
 /// snapshot, only publication state and source metadata for idempotency.
 model DiscordMarketDigestRun {
-  id                String   @id @default(cuid())
-  guildId           String
-  periodKey         String
-  status            String   @default("PUBLISHING")
-  source            String
-  dataStatus        String
-  asOf              DateTime
-  channelId         String?
-  messageId         String?
-  failureCode       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id          String   @id @default(cuid())
+  guildId     String
+  periodKey   String
+  status      String   @default("PUBLISHING")
+  source      String
+  dataStatus  String
+  asOf        DateTime
+  channelId   String?
+  messageId   String?
+  failureCode String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([guildId, periodKey])
   @@index([status, createdAt])
@@ -3247,40 +3605,40 @@ model DiscordMarketDigestRun {
 /// Poll state for an explicitly configured trusted news source. No article
 /// body is retained, only conditional-request metadata and safe failure state.
 model DiscordNewsSourceState {
-  sourceId            String   @id
+  sourceId            String    @id
   lastPollAt          DateTime?
   lastSuccessAt       DateTime?
   etag                String?
   lastModified        String?
   nextPollAt          DateTime?
-  consecutiveFailures Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  consecutiveFailures Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 /// Metadata-only external-news record. `dedupKey` is stable across polling,
 /// restarts, and harmless feed title changes; copyrighted article bodies are
 /// intentionally never persisted.
 model DiscordNewsItem {
-  id               String                 @id @default(cuid())
+  id               String                @id @default(cuid())
   sourceId         String
-  dedupKey         String                 @unique
+  dedupKey         String                @unique
   externalId       String?
   canonicalUrl     String
   canonicalUrlHash String
   title            String
   publishedAt      DateTime
-  discoveredAt     DateTime               @default(now())
+  discoveredAt     DateTime              @default(now())
   category         DiscordNewsCategory
   priority         String
   summary          String
   contentHash      String
-  status           DiscordNewsItemStatus  @default(DISCOVERED)
+  status           DiscordNewsItemStatus @default(DISCOVERED)
   postedAt         DateTime?
   deliveries       DiscordNewsDelivery[]
 
-  @@index([sourceId, publishedAt])
   @@unique([sourceId, contentHash])
+  @@index([sourceId, publishedAt])
   @@index([status, discoveredAt])
   @@index([canonicalUrlHash])
 }
@@ -3288,75 +3646,80 @@ model DiscordNewsItem {
 /// One public Discord destination receipt per discovered news item. The
 /// unique key prevents a scheduler restart from reposting the same item.
 model DiscordNewsDelivery {
-  id              String                    @id @default(cuid())
-  guildId         String
-  channelId       String
-  newsItemId      String
-  status          DiscordNewsDeliveryStatus @default(PENDING)
-  attempts        Int                       @default(0)
-  claimedAt       DateTime?
-  deliveredAt     DateTime?
+  id               String                    @id @default(cuid())
+  guildId          String
+  channelId        String
+  newsItemId       String
+  status           DiscordNewsDeliveryStatus @default(PENDING)
+  attempts         Int                       @default(0)
+  claimedAt        DateTime?
+  deliveredAt      DateTime?
   discordMessageId String?
-  failureCode     String?
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  newsItem        DiscordNewsItem           @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+  failureCode      String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  newsItem         DiscordNewsItem           @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
 
   @@unique([guildId, newsItemId])
   @@index([status, createdAt])
 }
 
 model DiscordEmbedDraft {
-  id String @id @default(cuid())
-  guildId String
+  id                   String                    @id @default(cuid())
+  guildId              String
   creatorDiscordUserId String
-  name String
-  payload Json
-  linkButtons Json
-  targetChannelId String?
-  version Int @default(1)
-  lastPublishedAt DateTime?
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  publications DiscordEmbedPublication[]
-  auditEvents DiscordEmbedAuditEvent[]
+  name                 String
+  payload              Json
+  linkButtons          Json
+  targetChannelId      String?
+  version              Int                       @default(1)
+  lastPublishedAt      DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  publications         DiscordEmbedPublication[]
+  auditEvents          DiscordEmbedAuditEvent[]
+
   @@index([guildId, deletedAt, updatedAt])
 }
+
 model DiscordEmbedPublication {
-  id String @id @default(cuid())
-  draftId String
-  guildId String
-  channelId String
-  messageId String
+  id                       String                   @id @default(cuid())
+  draftId                  String
+  guildId                  String
+  channelId                String
+  messageId                String
   publishedByDiscordUserId String
-  revisionUsed Int
-  publishedAt DateTime @default(now())
-  updatedAt DateTime?
-  deletedAt DateTime?
-  deletedByDiscordUserId String?
-  draft DiscordEmbedDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  auditEvents DiscordEmbedAuditEvent[]
+  revisionUsed             Int
+  publishedAt              DateTime                 @default(now())
+  updatedAt                DateTime?
+  deletedAt                DateTime?
+  deletedByDiscordUserId   String?
+  draft                    DiscordEmbedDraft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  auditEvents              DiscordEmbedAuditEvent[]
+
   @@unique([guildId, channelId, messageId])
   @@index([draftId, publishedAt])
 }
+
 model DiscordEmbedAuditEvent {
-  id String @id @default(cuid())
-  guildId String
-  draftId String
-  publicationId String?
+  id                 String                   @id @default(cuid())
+  guildId            String
+  draftId            String
+  publicationId      String?
   actorDiscordUserId String
-  action DiscordEmbedAuditAction
-  createdAt DateTime @default(now())
-  draft DiscordEmbedDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  publication DiscordEmbedPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  action             DiscordEmbedAuditAction
+  createdAt          DateTime                 @default(now())
+  draft              DiscordEmbedDraft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  publication        DiscordEmbedPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+
   @@index([guildId, draftId, createdAt])
 }
 
 /// A bot-owned announcement intent. The local wall-clock definition is stored
 /// alongside the UTC due time so recurring schedules remain correct through DST.
 model DiscordAnnouncementSchedule {
-  id                     String                            @id @default(cuid())
+  id                     String                                  @id @default(cuid())
   guildId                String
   draftId                String?
   createdByDiscordUserId String
@@ -3367,11 +3730,11 @@ model DiscordAnnouncementSchedule {
   localDate              String?
   weekdays               Json?
   dayOfMonth             Int?
-  payloadMode            DiscordAnnouncementPayloadMode    @default(SNAPSHOT)
+  payloadMode            DiscordAnnouncementPayloadMode          @default(SNAPSHOT)
   payloadSnapshot        Json?
   linkButtonsSnapshot    Json?
   targetChannelId        String
-  status                 DiscordAnnouncementScheduleStatus @default(SCHEDULED)
+  status                 DiscordAnnouncementScheduleStatus       @default(SCHEDULED)
   nextRunAt              DateTime?
   lastRunAt              DateTime?
   processingStartedAt    DateTime?
@@ -3379,9 +3742,9 @@ model DiscordAnnouncementSchedule {
   workerToken            String?
   pausedAt               DateTime?
   cancelledAt            DateTime?
-  version                Int                               @default(1)
-  createdAt              DateTime                          @default(now())
-  updatedAt              DateTime                          @updatedAt
+  version                Int                                     @default(1)
+  createdAt              DateTime                                @default(now())
+  updatedAt              DateTime                                @updatedAt
   runs                   DiscordScheduledPublicationRun[]
   auditEvents            DiscordAnnouncementScheduleAuditEvent[]
 
@@ -3416,15 +3779,54 @@ model DiscordScheduledPublicationRun {
 }
 
 model DiscordAnnouncementScheduleAuditEvent {
-  id                 String                                @id @default(cuid())
+  id                 String                                 @id @default(cuid())
   scheduleId         String
   actorDiscordUserId String
   action             DiscordAnnouncementScheduleAuditAction
   details            Json?
-  createdAt          DateTime                              @default(now())
-  schedule           DiscordAnnouncementSchedule           @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                               @default(now())
+  schedule           DiscordAnnouncementSchedule            @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
 
   @@index([scheduleId, createdAt])
+}
+
+/// A public-only editorial spotlight. Source snapshots are refreshed before
+/// publication, and no private Collector, ownership, or financial fields are
+/// ever stored here.
+model DiscordSpotlight {
+  id                      String                       @id @default(cuid())
+  guildId                 String
+  kind                    DiscordSpotlightKind
+  sourceSlug              String
+  requesterDiscordUserId  String
+  approvedByDiscordUserId String?
+  status                  DiscordSpotlightStatus       @default(PENDING_APPROVAL)
+  editorialTitle          String?
+  editorialCopy           String?
+  targetChannelId         String?
+  embedDraftId            String?
+  sourceSnapshot          Json
+  publishedAt             DateTime?
+  blockedReason           String?
+  revision                Int                          @default(1)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  auditEvents             DiscordSpotlightAuditEvent[]
+
+  @@index([guildId, status, createdAt])
+  @@index([guildId, kind, sourceSlug, publishedAt])
+}
+
+model DiscordSpotlightAuditEvent {
+  id                 String           @id @default(cuid())
+  spotlightId        String
+  actorDiscordUserId String
+  action             String
+  details            Json?
+  createdAt          DateTime         @default(now())
+  spotlight          DiscordSpotlight @relation(fields: [spotlightId], references: [id], onDelete: Cascade)
+
+  @@index([spotlightId, createdAt])
 }
 
 /// A first-unlock-only record for a public, non-financial community badge.

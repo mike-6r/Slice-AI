@@ -121,6 +121,12 @@ export class DiscordLinkController {
     return this.links.botCollectorActions(discordUserId);
   }
 
+  @Get('discord/bot/collectors/:slug/spotlight')
+  @UseGuards(DiscordBotServiceGuard)
+  botCollectorSpotlight(@Param('slug') slug: string) {
+    return this.links.botCollectorSpotlight(slug);
+  }
+
   @Get('discord/bot/admin/operations/:discordUserId')
   @UseGuards(DiscordBotServiceGuard)
   botAdminOperations(@Param('discordUserId') discordUserId: string) {

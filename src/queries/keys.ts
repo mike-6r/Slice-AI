@@ -51,6 +51,7 @@ export const queryKeys = {
   providers: {
     compliance: ["providers", "compliance"] as const,
     bankConnections: ["providers", "bank-connections"] as const,
+    connectPayoutSetup: ["providers", "connect-payout-setup"] as const,
     movements: (cursor?: string) => ["providers", "movements", cursor ?? null] as const,
   },
   notifications: Object.assign((userId: string) => ["notifications", userId] as const, {

@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
@@ -23,8 +24,27 @@ import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { movementSettledEvent } from '../../outbox/domain/domain-event';
 import { accountAuthority } from '../../finance/domain/journal';
+import { BankConnectionService } from './external-provider-boundaries';
+import { ConnectPayoutExternalTransferError, StripeConnectPayoutService } from './stripe-connect-payout.service';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
+
+export function calculateWithdrawalVelocity(
+  movements: ReadonlyArray<{ amountMinor: bigint; createdAt: Date }>,
+  amount: bigint,
+  now = new Date(),
+) {
+  const since24h = now.getTime() - 86_400_000;
+  const since7d = now.getTime() - 7 * 86_400_000;
+  return {
+    total7d: movements
+      .filter((item) => item.createdAt.getTime() >= since7d)
+      .reduce((total, item) => total + item.amountMinor, amount),
+    total24h: movements
+      .filter((item) => item.createdAt.getTime() >= since24h)
+      .reduce((total, item) => total + item.amountMinor, amount),
+  };
+}
 
 /**
  * Provider-neutral external money lifecycle. An intent never changes spendable
@@ -42,6 +62,8 @@ export class WalletMovementService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly capabilities?: AccountCapabilityService,
+    @Optional() private readonly bankLinks?: BankConnectionService,
+    @Optional() private readonly connectPayouts?: StripeConnectPayoutService,
   ) {
     this.screening =
       config.providerMode === 'local'
@@ -90,7 +112,7 @@ export class WalletMovementService {
               screening.decision === 'MANUAL_REVIEW'
                 ? 'KYT_MANUAL_REVIEW'
                 : 'KYT_BLOCKED',
-            source: 'LOCAL_SCREENING',
+            source: 'SYSTEM',
           },
         });
         await createIdentityTransaction(db).audit.append({
@@ -104,6 +126,7 @@ export class WalletMovementService {
           sessionId: actor.sessionId as never,
           result: 'SUCCESS',
           metadata: {
+            source: 'SYSTEM',
             scope: 'WITHDRAWAL',
             reasonCode:
               screening.decision === 'MANUAL_REVIEW'
@@ -143,12 +166,10 @@ export class WalletMovementService {
     key: string,
   ) {
     const amountMinor = this.amount(amountText);
-    await this.compliance.requireApproved(
+    await this.compliance.requireIdentityApproved(
       actor.userId,
       type === 'WITHDRAWAL' ? ['WITHDRAWAL'] : ['FUNDING'],
     );
-    if (type === 'WITHDRAWAL')
-      await this.enforceWithdrawalLimits(actor.userId, amountMinor);
     const hash = this.crypto.hash(key);
     const existing = await this.db.moneyMovement.findUnique({
       where: {
@@ -161,7 +182,34 @@ export class WalletMovementService {
     });
     if (existing) return this.safe(existing, true);
 
-    const movement = await this.db.$transaction(async (db) => {
+    const movementResult = await this.db.$transaction(async (db) => {
+      // Serialize withdrawal intents per user before reading velocity totals.
+      // This prevents concurrent requests from both passing the same window
+      // without inventing a new threshold or risk score.
+      if (type === 'WITHDRAWAL') {
+        const existingBeforeLock = await db.moneyMovement.findUnique({
+          where: {
+            userId_type_idempotencyKeyHash: {
+              userId: actor.userId,
+              type,
+              idempotencyKeyHash: hash,
+            },
+          },
+        });
+        if (existingBeforeLock) return { movement: existingBeforeLock, reused: true };
+        await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`}))`;
+      }
+      const existingAfterLock = await db.moneyMovement.findUnique({
+        where: {
+          userId_type_idempotencyKeyHash: {
+            userId: actor.userId,
+            type,
+            idempotencyKeyHash: hash,
+          },
+        },
+      });
+      if (existingAfterLock) return { movement: existingAfterLock, reused: true };
+      if (type === 'WITHDRAWAL') await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
@@ -216,8 +264,10 @@ export class WalletMovementService {
           reasonCode: 'INTENT_CREATED',
         },
       });
-      return created;
+      return { movement: created, reused: false };
     });
+    const movement = movementResult.movement;
+    if (movementResult.reused) return this.safe(movement, true);
 
     if (type === 'WITHDRAWAL') {
       try {
@@ -280,12 +330,70 @@ export class WalletMovementService {
         createdAt: new Date(),
       });
     });
+    if (type === 'DEPOSIT' && this.config.providerMode !== 'local') {
+      if (!this.bankLinks) throw new ConflictException({ code: 'STRIPE_PROVIDER_UNAVAILABLE', message: 'Bank funding is not configured.' });
+      try {
+        const external = await this.bankLinks.createDepositPayment({ userId: actor.userId, movementId: movement.id, amountMinor: amountText });
+        const providerHash = this.crypto.hash(external.providerReference);
+        await this.db.$transaction(async (db) => {
+          const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
+          await db.moneyMovement.update({ where: { id: movement.id }, data: {
+            externalAccountId: external.externalAccountId,
+            status: external.status,
+            providerReferenceCiphertext: this.crypto.encrypt(external.providerReference, `movement:${movement.id}`),
+            providerReferenceHash: providerHash,
+            encryptionKeyVersion: this.crypto.keyVersion,
+            failureCode: external.failureCode ?? null,
+            version: { increment: 1 },
+          } });
+          await db.moneyMovementHistory.create({ data: { id: randomUUID(), movementId: movement.id, fromStatus: current.status, toStatus: external.status, reasonCode: 'STRIPE_PAYMENT_INTENT_CREATED' } });
+        });
+      } catch (error) {
+        await this.failFromProvider({ movementId: movement.id, reasonCode: error instanceof Error ? error.message.slice(0, 64) : 'STRIPE_PROVIDER_ERROR', requestId });
+        throw error;
+      }
+    }
+    if (type === 'WITHDRAWAL' && this.config.providerMode !== 'local') {
+      const cashAccount = await this.db.financialAccount.findUnique({ where: { id: movement.cashAccountId }, select: { code: true } });
+      if (cashAccount?.code !== 'COLLECTOR_PROCEEDS_AVAILABLE') {
+        await this.failFromProvider({ movementId: movement.id, reasonCode: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED', requestId });
+        throw new ConflictException({ code: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED', message: 'External withdrawals are currently available for collector proceeds only.' });
+      }
+      if (!this.connectPayouts) {
+        await this.failFromProvider({ movementId: movement.id, reasonCode: 'STRIPE_CONNECT_UNAVAILABLE', requestId });
+        throw new ConflictException({ code: 'STRIPE_CONNECT_UNAVAILABLE', message: 'Collector payouts are not configured.' });
+      }
+      try {
+        await this.connectPayouts.createPayout({ userId: actor.userId, movementId: movement.id, amountMinor: amountText });
+        await this.processingFromProvider({ movementId: movement.id, requestId });
+      } catch (error) {
+        if (error instanceof ConnectPayoutExternalTransferError) {
+          await this.holdFromProvider({ movementId: movement.id, reasonCode: 'STRIPE_PAYOUT_REQUIRES_REVIEW', requestId });
+        } else {
+          await this.failFromProvider({ movementId: movement.id, reasonCode: error instanceof Error ? error.message.slice(0, 64) : 'STRIPE_PAYOUT_FAILED', requestId });
+        }
+        throw error;
+      }
+    }
     return this.safe(
       await this.db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       }),
       false,
     );
+  }
+
+  async processingFromProvider(input: { movementId: string; requestId: string }) {
+    return this.db.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
+      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: input.movementId } });
+      if (['SETTLED', 'FAILED', 'CANCELLED', 'RETURNED', 'REVERSED', 'MANUAL_REVIEW', 'HELD'].includes(current.status)) return this.safe(current, true);
+      if (current.status === 'PROCESSING') return this.safe(current, true);
+      const updated = await db.moneyMovement.update({ where: { id: current.id }, data: { status: 'PROCESSING', version: { increment: 1 } } });
+      await db.moneyMovementHistory.create({ data: { id: randomUUID(), movementId: current.id, fromStatus: current.status, toStatus: 'PROCESSING', reasonCode: 'PROVIDER_PROCESSING' } });
+      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: current.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'PROCESSING' }, createdAt: new Date() });
+      return this.safe(updated, false);
+    });
   }
 
   /** Called only after verified, deduplicated provider confirmation. */
@@ -538,6 +646,7 @@ export class WalletMovementService {
       const current = await db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       });
+      if (['MANUAL_REVIEW', 'HELD'].includes(current.status)) return this.safe(current, true);
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
         data: {
@@ -546,16 +655,34 @@ export class WalletMovementService {
           version: { increment: 1 },
         },
       });
-      await db.complianceHold.create({
-        data: {
-          id: randomUUID(),
-          userId: updated.userId,
-          movementId: updated.id,
-          scope: 'EXTERNAL_MOVEMENT',
-          reasonCode: input.reasonCode,
-          source: 'PROVIDER_WEBHOOK',
-        },
+      const existingHold = await db.complianceHold.findFirst({
+        where: { movementId: updated.id, scope: 'EXTERNAL_MOVEMENT', status: 'ACTIVE' },
       });
+      if (!existingHold) {
+        const hold = await db.complianceHold.create({
+          data: {
+            id: randomUUID(),
+            userId: updated.userId,
+            movementId: updated.id,
+            scope: 'EXTERNAL_MOVEMENT',
+            reasonCode: input.reasonCode,
+            source: 'PROVIDER',
+          },
+        });
+        await createIdentityTransaction(db).audit.append({
+          id: randomUUID(),
+          actorUserId: null,
+          actorType: 'SYSTEM',
+          action: 'COMPLIANCE_HOLD_CREATED',
+          resourceType: 'compliance-hold',
+          resourceId: hold.id,
+          requestId: input.requestId,
+          sessionId: null,
+          result: 'SUCCESS',
+          metadata: { source: 'PROVIDER', scope: hold.scope, reasonCode: hold.reasonCode, provider: 'STRIPE' },
+          createdAt: new Date(),
+        });
+      }
       await db.moneyMovementHistory.create({
         data: {
           id: randomUUID(),
@@ -670,10 +797,10 @@ export class WalletMovementService {
         const available = authority - account.balance.reservedMinor;
         if (available < 0n) {
           await db.complianceHold.create({
-            data: { id: randomUUID(), userId: updated.userId, movementId: updated.id, scope: 'ACCOUNT', reasonCode: 'RETURNED_FUNDS_DEFICIT', source: 'PROVIDER_RETURN' },
+            data: { id: randomUUID(), userId: updated.userId, movementId: updated.id, scope: 'ACCOUNT', reasonCode: 'RETURNED_FUNDS_DEFICIT', source: 'PROVIDER' },
           });
           await createIdentityTransaction(db).audit.append({
-            id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_RETURN_DEFICIT_DETECTED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { availableMinor: available.toString(), reasonCode: input.reasonCode }, createdAt: new Date(),
+            id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_RETURN_DEFICIT_DETECTED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { source: 'PROVIDER', availableMinor: available.toString(), reasonCode: input.reasonCode }, createdAt: new Date(),
           });
         }
       }
@@ -857,16 +984,15 @@ export class WalletMovementService {
     return BigInt(value);
   }
 
-  private async enforceWithdrawalLimits(userId: string, amount: bigint) {
+  private async enforceWithdrawalLimits(db: Prisma.TransactionClient, userId: string, amount: bigint) {
     const per = BigInt(this.config.withdrawalLimitPerMovementMinor);
     if (amount > per)
       throw new ConflictException({
         code: 'MOVEMENT_LIMIT_EXCEEDED',
         message: 'Withdrawal exceeds the configured per-movement limit.',
       });
-    const since24h = new Date(Date.now() - 86_400_000);
     const since7d = new Date(Date.now() - 7 * 86_400_000);
-    const movements = await this.db.moneyMovement.findMany({
+    const movements = await db.moneyMovement.findMany({
       where: {
         userId,
         type: 'WITHDRAWAL',
@@ -883,13 +1009,7 @@ export class WalletMovementService {
       },
       select: { amountMinor: true, createdAt: true },
     });
-    const total7d = movements.reduce(
-      (total, item) => total + item.amountMinor,
-      amount,
-    );
-    const total24h = movements
-      .filter((item) => item.createdAt >= since24h)
-      .reduce((total, item) => total + item.amountMinor, amount);
+    const { total24h, total7d } = calculateWithdrawalVelocity(movements, amount);
     if (
       total24h > BigInt(this.config.withdrawalLimit24hMinor) ||
       total7d > BigInt(this.config.withdrawalLimit7dMinor)

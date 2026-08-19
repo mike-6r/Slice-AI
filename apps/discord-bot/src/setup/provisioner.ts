@@ -7,7 +7,7 @@ import type { ManagedResource, ManagedResourceType, SetupRepository } from '../p
 
 export type ReconciliationPlan = { missingRoles: number; missingCategories: number; missingChannels: number; renamed: number; moved: number; permissionDrift: number; roleDrift: number; separatorDrift: number; hierarchyDrift?: number; staleReferences: number; missingPanels: number; ambiguous: string[]; updateAvailable: boolean; artworkMissing: number };
 export type ResetPlan = { managedRoles: number; managedCategories: number; managedChannels: number; panels: number; ticketChannels: number; setupMetadata: boolean; manuallyDiscoveredRoles: string[]; manuallyDiscoveredCategories: string[]; manuallyDiscoveredChannels: string[] };
-export type ResetResult = { deletedRoles: number; deletedCategories: number; deletedChannels: number; deletedPanels: number; deletedTicketChannels: number };
+export type ResetResult = { deletedRoles: number; deletedCategories: number; deletedChannels: number; deletedPanels: number; deletedTicketChannels: number; skippedCommunityResources: number };
 export class AmbiguousManagedResourceError extends Error { constructor(readonly keys: string[]) { super(`Ambiguous Slice-managed resources: ${keys.join(', ')}`); } }
 export class RoleHierarchyError extends Error { constructor(readonly blockers: number) { super(`The SliceAI application role must be above all Slice-managed roles before setup can apply (${blockers} hierarchy blockers).`); } }
 export class SetupProvisioner {
@@ -36,14 +36,14 @@ export class SetupProvisioner {
   }
   async status(guild: Guild): Promise<{ plan: ReconciliationPlan; version: number; configured: boolean }> { const config = await this.repository.getGuildConfig(guild.id); return { plan: await this.inspect(guild), version: config?.setupVersion ?? 0, configured: Boolean(config) }; }
   async inspectReset(guild: Guild): Promise<ResetPlan> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); return { managedRoles: scan.roleIds.size, managedCategories: scan.categoryIds.size, managedChannels: scan.channelIds.size, panels: panels.length, ticketChannels: scan.ticketIds.size, setupMetadata: Boolean(await this.repository.getGuildConfig(guild.id) || resources.length || panels.length || scan.roleIds.size || scan.categoryIds.size || scan.channelIds.size || scan.ticketIds.size), manuallyDiscoveredRoles: [...scan.manualRoleIds].flatMap((id) => guild.roles.cache.get(id)?.name ?? []), manuallyDiscoveredCategories: [...scan.manualCategoryIds].flatMap((id) => guild.channels.cache.get(id)?.name ?? []), manuallyDiscoveredChannels: [...scan.manualChannelIds].flatMap((id) => guild.channels.cache.get(id)?.name ?? []) }; }
-  async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0;
+  async reset(guild: Guild): Promise<ResetResult> { await guild.roles.fetch(); await guild.channels.fetch(); const resources = await this.repository.listResources(guild.id); const panels = await this.repository.listPanels(guild.id); const scan = this.scanGuild(guild, resources); let deletedPanels = 0; let deletedTicketChannels = 0; let deletedChannels = 0; let deletedCategories = 0; let deletedRoles = 0; let skippedCommunityResources = 0;
     for (const panel of panels) { const channel = await this.channel(guild, panel.channelId); if (channel?.isTextBased() && 'messages' in channel) { const message = await channel.messages.fetch(panel.messageId).catch(() => null); if (message) { await message.delete(); deletedPanels++; } } }
-    for (const id of scan.ticketIds) if (await this.deleteChannel(guild, id)) deletedTicketChannels++;
-    for (const id of scan.channelIds) if (await this.deleteChannel(guild, id)) deletedChannels++;
-    for (const id of scan.categoryIds) if (await this.deleteChannel(guild, id)) deletedCategories++;
+    for (const id of scan.ticketIds) { const result = await this.deleteChannel(guild, id); if (result === 'DELETED') deletedTicketChannels++; if (result === 'COMMUNITY_REQUIRED') skippedCommunityResources++; }
+    for (const id of scan.channelIds) { const result = await this.deleteChannel(guild, id); if (result === 'DELETED') deletedChannels++; if (result === 'COMMUNITY_REQUIRED') skippedCommunityResources++; }
+    for (const id of scan.categoryIds) { const result = await this.deleteChannel(guild, id); if (result === 'DELETED') deletedCategories++; if (result === 'COMMUNITY_REQUIRED') skippedCommunityResources++; }
     for (const id of scan.roleIds) { const role = await this.role(guild, id); if (role && role.id !== guild.id) { await role.delete('Slice setup reset'); deletedRoles++; } }
-    await this.repository.resetGuildData(guild.id);
-    return { deletedRoles, deletedCategories, deletedChannels, deletedPanels, deletedTicketChannels };
+    if (skippedCommunityResources === 0) await this.repository.resetGuildData(guild.id);
+    return { deletedRoles, deletedCategories, deletedChannels, deletedPanels, deletedTicketChannels, skippedCommunityResources };
   }
   async startupAudit(guild: Guild): Promise<ReconciliationPlan> { return this.inspect(guild); }
   async generateArtwork(): Promise<void> { for (const [name, title] of [['welcome', 'Welcome to Slice'], ['verification', 'Your Slice account'], ['roles', 'Choose notifications'], ['my-slice', 'My Slice'], ['collector-workspace', 'Collector Workspace'], ['marketplace', 'Marketplace'], ['support', 'Support'], ['roadmap', 'Roadmap'], ['operations', 'Staff / Operations']] as const) await renderArtwork(this.artworkDir, name, title); }
@@ -150,7 +150,7 @@ export class SetupProvisioner {
     return { roleIds, categoryIds, channelIds, ticketIds, manualRoleIds, manualCategoryIds, manualChannelIds };
   }
   private normalizedName(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' '); }
-  private async deleteChannel(guild: Guild, id: string): Promise<boolean> { const channel = await this.channel(guild, id); if (!channel) return false; await channel.delete('Slice setup reset'); return true; }
+  private async deleteChannel(guild: Guild, id: string): Promise<'DELETED' | 'MISSING' | 'COMMUNITY_REQUIRED'> { const channel = await this.channel(guild, id); if (!channel) return 'MISSING'; try { await channel.delete('Slice setup reset'); return 'DELETED'; } catch (error) { if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 50074) return 'COMMUNITY_REQUIRED'; throw error; } }
   private staffRoleIds(guildId: string): Promise<string[]> { return Promise.all(['owner', 'administrator', 'operations', 'support', 'slice'].map((key) => this.repository.getResource(guildId, 'ROLE', key))).then((rows) => rows.flatMap((row) => row ? [row.discordId] : [])); }
   private async applyStaffPermissions(channel: GuildBasedChannel, guild: Guild, staff: boolean): Promise<void> {
     if (!staff || !('permissionOverwrites' in channel)) return;

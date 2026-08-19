@@ -9,12 +9,15 @@ import { ComplianceService } from './compliance.service';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { WalletMovementService } from './wallet-movement.service';
 import { providerUnavailable, type ActiveProviderCode } from './external-provider-boundaries';
+import { StripeClientFactory } from './stripe-provider.client';
+import { StripeConnectPayoutService } from './stripe-connect-payout.service';
 
 type Provider = ActiveProviderCode;
 
 /**
- * Raw-body inbox boundary: local mode uses the deterministic verifier. Stripe
- * verification is intentionally deferred until the Stripe integration phase.
+ * Raw-body inbox boundary: local mode uses the deterministic verifier and
+ * Stripe modes use the shared Stripe signature/livemode boundary. Identity,
+ * payment, and Connect events are dispatched internally from this inbox.
  */
 @Injectable()
 export class ProviderWebhookService {
@@ -24,6 +27,8 @@ export class ProviderWebhookService {
     private readonly compliance: ComplianceService,
     private readonly movements: WalletMovementService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly stripeFactory: StripeClientFactory,
+    private readonly connectPayouts: StripeConnectPayoutService,
   ) {}
 
   async receive(input: {
@@ -54,7 +59,7 @@ export class ProviderWebhookService {
       throw error;
     }
     try {
-      await this.process(input.provider, verified.eventType, verified.payload, verified.eventId, input.requestId);
+      await this.process(input.provider, verified.eventType, verified.payload, verified.eventId, verified.occurredAt, input.requestId);
       await this.db.webhookInbox.update({ where: { id: inboxId }, data: { status: 'PROCESSED', processedAt: new Date(), attempts: { increment: 1 } } });
     } catch (error) {
       const errorCode = error instanceof Error ? error.message.slice(0, 96) : 'WEBHOOK_PROCESSING_FAILED';
@@ -72,6 +77,20 @@ export class ProviderWebhookService {
   }
 
   private async verify(provider: Provider, rawBody: Buffer, headers: Record<string, string | string[] | undefined>) {
+    if (provider === 'STRIPE_SANDBOX' || provider === 'STRIPE_LIVE') {
+      if ((provider === 'STRIPE_SANDBOX') !== (this.config.providerMode === 'stripe_sandbox')) throw providerUnavailable(provider, 'Stripe webhook environment does not match the active provider mode.');
+      if (!this.config.stripeWebhookSecret) throw providerUnavailable(provider, 'Stripe webhook secret is not configured.');
+      const signature = headers['stripe-signature'];
+      if (!signature || Array.isArray(signature)) throw new BadRequestException({ code: 'STRIPE_SIGNATURE_REQUIRED', message: 'Stripe signature is required.' });
+      try {
+        const event = this.stripeFactory.get().webhooks.constructEvent(rawBody, signature, this.config.stripeWebhookSecret);
+        if (event.livemode !== (this.config.providerMode === 'stripe_live')) throw new BadRequestException({ code: 'STRIPE_LIVEMODE_MISMATCH', message: 'Stripe event belongs to another environment.' });
+        return { eventId: event.id, eventType: event.type, occurredAt: new Date(event.created * 1000), payload: { ...(event.data.object as unknown as Record<string, unknown>), __livemode: event.livemode } };
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        throw new BadRequestException({ code: 'STRIPE_SIGNATURE_INVALID', message: 'Stripe webhook signature is invalid.' });
+      }
+    }
     if (provider !== 'LOCAL_TEST' || this.config.providerMode !== 'local') {
       throw providerUnavailable(provider, 'External webhook verification is not enabled yet.');
     }
@@ -91,7 +110,11 @@ export class ProviderWebhookService {
     throw new BadRequestException({ code: 'WEBHOOK_SIGNATURE_INVALID', message: 'Webhook signature is invalid.' });
   }
 
-  private async process(provider: Provider, type: string, payload: Record<string, unknown>, eventId: string, requestId: string) {
+  private async process(provider: Provider, type: string, payload: Record<string, unknown>, eventId: string, occurredAt: Date, requestId: string) {
+    if (provider === 'STRIPE_SANDBOX' || provider === 'STRIPE_LIVE') {
+      await this.processStripeMovement(provider, type, payload, eventId, occurredAt, requestId);
+      return;
+    }
     if (type.startsWith('compliance.')) {
       const userId = this.text(payload.userId);
       const status = ({ 'compliance.approved': 'APPROVED', 'compliance.rejected': 'REJECTED', 'compliance.review': 'MANUAL_REVIEW' } as const)[type];
@@ -121,6 +144,61 @@ export class ProviderWebhookService {
     }
     // Unknown signed events stay durably recorded but never mutate authority.
     void provider;
+  }
+
+  private async processStripeMovement(provider: Provider, type: string, payload: Record<string, unknown>, eventId: string, occurredAt: Date, requestId: string) {
+    const connectEffect = await this.connectPayouts.processWebhook(provider as 'STRIPE_SANDBOX' | 'STRIPE_LIVE', type, payload);
+    if (connectEffect) {
+      if (connectEffect.action === 'PROCESSING') await this.movements.processingFromProvider({ movementId: connectEffect.movementId, requestId });
+      else if (connectEffect.action === 'COMPLETE' && connectEffect.providerReference) await this.movements.completeFromProvider({ movementId: connectEffect.movementId, providerReference: connectEffect.providerReference, providerEventId: eventId, requestId });
+      else if (connectEffect.action === 'FAIL') await this.movements.failFromProvider({ movementId: connectEffect.movementId, reasonCode: connectEffect.reasonCode ?? 'STRIPE_PAYOUT_FAILED', requestId });
+      else if (connectEffect.action === 'HOLD') await this.movements.holdFromProvider({ movementId: connectEffect.movementId, reasonCode: connectEffect.reasonCode ?? 'STRIPE_PAYOUT_REVIEW', requestId });
+      return;
+    }
+    if (type.startsWith('identity.verification_session.')) {
+      const providerReference = this.text(payload.id);
+      if (!providerReference) return;
+      const lastError = payload.last_error && typeof payload.last_error === 'object' ? (payload.last_error as Record<string, unknown>).code : null;
+      await this.compliance.ingestIdentityProviderEvent({ provider, providerReference, providerStatus: this.text(payload.status) ?? type.split('.').at(-1) ?? 'failed', failureCode: this.text(lastError), providerEventId: eventId, occurredAt, requestId });
+      return;
+    }
+    if (type === 'account.updated') return;
+    const isPaymentIntentEvent = type.startsWith('payment_intent.');
+    const isBacsReturnEvent = type === 'charge.dispute.created' || type === 'charge.dispute.funds_withdrawn' || type === 'charge.refunded';
+    if (!isPaymentIntentEvent && !isBacsReturnEvent) return;
+    const paymentIntentId = isPaymentIntentEvent ? this.text(payload.id) : this.providerObjectId(payload.payment_intent);
+    if (!paymentIntentId) return;
+    const metadata = (payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}) as Record<string, unknown>;
+    const movementId = this.text(metadata.slice_movement_id) ?? (await this.db.moneyMovement.findUnique({ where: { provider_providerReferenceHash: { provider, providerReferenceHash: this.crypto.hash(paymentIntentId) } }, select: { id: true } }))?.id;
+    if (!movementId) return;
+    const current = await this.db.moneyMovement.findUnique({ where: { id: movementId }, select: { status: true, provider: true } });
+    if (!current || current.provider !== provider) return;
+    if (['SETTLED', 'FAILED', 'CANCELLED', 'RETURNED', 'REVERSED', 'MANUAL_REVIEW', 'HELD'].includes(current.status)) return;
+    if (isBacsReturnEvent) {
+      const returnedAmount = typeof payload.amount === 'number'
+        ? payload.amount
+        : typeof payload.amount_refunded === 'number'
+          ? payload.amount_refunded
+          : null;
+      const movement = await this.db.moneyMovement.findUnique({ where: { id: movementId }, select: { amountMinor: true, currency: true } });
+      if (!movement || movement.currency !== 'GBP' || returnedAmount === null || BigInt(returnedAmount) !== movement.amountMinor) {
+        throw new BadRequestException({ code: 'STRIPE_RETURN_AMOUNT_MISMATCH', message: 'The provider return requires reconciliation review.' });
+      }
+      await this.movements.returnFromProvider({ movementId, reasonCode: `STRIPE_${type.replaceAll('.', '_').toUpperCase()}`, requestId });
+    } else if (type === 'payment_intent.processing' || type === 'payment_intent.requires_action') {
+      await this.movements.processingFromProvider({ movementId, requestId });
+    } else if (type === 'payment_intent.succeeded') {
+      await this.movements.completeFromProvider({ movementId, providerReference: paymentIntentId, providerEventId: eventId, requestId });
+    } else if (type === 'payment_intent.payment_failed') {
+      const error = payload.last_payment_error && typeof payload.last_payment_error === 'object' ? (payload.last_payment_error as Record<string, unknown>).code : undefined;
+      await this.movements.failFromProvider({ movementId, reasonCode: this.text(error) ?? 'STRIPE_PAYMENT_FAILED', requestId });
+    } else if (type === 'payment_intent.canceled') {
+      await this.movements.cancelFromProvider({ movementId, reasonCode: 'STRIPE_PAYMENT_CANCELED', requestId });
+    }
+  }
+
+  private providerObjectId(value: unknown) {
+    return typeof value === 'string' ? value : value && typeof value === 'object' ? this.text((value as Record<string, unknown>).id) : null;
   }
 
   private text(value: unknown) { return typeof value === 'string' && value.length > 0 ? value : null; }

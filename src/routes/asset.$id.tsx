@@ -12,9 +12,12 @@ import {
 import { useEffect, useState } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
-import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
+import {
+  effectiveCardFlipState,
+  resolveMarketplaceMedia,
+} from "@/components/marketplace/marketplace-layout";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -184,9 +187,7 @@ function AssetPage() {
       (item) => item !== approvedMedia && !item.alt.toLowerCase().includes("front"),
     ) ??
     imageMedia[1];
-  const media = approvedMedia
-    ? { src: approvedMedia.url, alt: approvedMedia.alt }
-    : assetShowcaseMedia(asset.slug);
+  const media = resolveMarketplaceMedia(asset);
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
   const lifecycle = asset.marketLifecycle;
   const initialOffering = asset.initialOffering;
@@ -965,7 +966,9 @@ function AssetShowcase({
   isUpdatingWatch: boolean;
   onToggleWatch: () => void;
 }) {
-  const [flipped, setFlipped] = useState(false);
+  const [manualFlip, setManualFlip] = useState<boolean | null>(null);
+  const [hoverFlip, setHoverFlip] = useState(false);
+  const flipped = effectiveCardFlipState(manualFlip, hoverFlip);
 
   return (
     <div className="asset-showcase">
@@ -1002,6 +1005,13 @@ function AssetShowcase({
       </span>
       <div
         className={`asset-card-stage${backMedia ? " has-back" : ""}${flipped ? " is-flipped" : ""}`}
+        onMouseEnter={() => {
+          if (backMedia) setHoverFlip(true);
+        }}
+        onMouseLeave={() => {
+          setHoverFlip(false);
+          setManualFlip(null);
+        }}
       >
         <div className="asset-card-flip__inner">
           <div className="asset-card-face asset-card-face--front" aria-hidden={flipped}>
@@ -1027,7 +1037,7 @@ function AssetShowcase({
             className="asset-card-flip-button"
             aria-pressed={flipped}
             aria-label={flipped ? "Show front of card" : "Show back of card"}
-            onClick={() => setFlipped((current) => !current)}
+            onClick={() => setManualFlip((current) => !effectiveCardFlipState(current, hoverFlip))}
           >
             <RotateCw aria-hidden="true" />
             {flipped ? "Show front" : "Flip card"}
@@ -1333,17 +1343,34 @@ function SimilarAssets({
   retry: () => void;
 }) {
   const similar = items.filter((item) => item.id !== currentId).slice(0, 6);
+  const similarKey = similar.map((item) => item.id).join("|");
+  const [start, setStart] = useState(0);
+  useEffect(() => setStart(0), [currentId, similarKey]);
+  const pageSize = 3;
+  const visibleSimilar = similar.slice(start, start + pageSize);
+  const canGoBack = start > 0;
+  const canGoForward = start + pageSize < similar.length;
   return (
     <section className="asset-similar-section">
       <header>
         <h2>Similar assets</h2>
         <div>
           <Link to="/marketplace">View market</Link>
-          <button type="button" aria-label="Previous similar assets">
-            <ArrowLeft />
+          <button
+            type="button"
+            aria-label="Previous similar assets"
+            disabled={!canGoBack}
+            onClick={() => setStart((current) => Math.max(0, current - pageSize))}
+          >
+            <ArrowLeft aria-hidden="true" />
           </button>
-          <button type="button" aria-label="Next similar assets">
-            <ChevronRight />
+          <button
+            type="button"
+            aria-label="Next similar assets"
+            disabled={!canGoForward}
+            onClick={() => setStart((current) => Math.min(current + pageSize, similar.length - 1))}
+          >
+            <ChevronRight aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -1354,9 +1381,9 @@ function SimilarAssets({
           Retry similar assets
         </button>
       ) : similar.length ? (
-        <div className={`asset-similar-grid${similar.length === 1 ? " is-single" : ""}`}>
-          {similar.map((item) => {
-            const media = assetShowcaseMedia(item.slug);
+        <div className={`asset-similar-grid${visibleSimilar.length === 1 ? " is-single" : ""}`}>
+          {visibleSimilar.map((item) => {
+            const media = resolveMarketplaceMedia(item);
             return (
               <Link
                 key={item.id}
@@ -1364,7 +1391,13 @@ function SimilarAssets({
                 params={{ id: item.slug }}
                 className="asset-similar-card"
               >
-                <div>{media ? <img src={media.src} alt="" /> : <span>Media unavailable</span>}</div>
+                <div className="asset-similar-card__media">
+                  {media ? (
+                    <img src={media.src} alt={media.alt} />
+                  ) : (
+                    <span className="asset-similar-card__placeholder">Image unavailable</span>
+                  )}
+                </div>
                 <section>
                   <h3>{item.title}</h3>
                   <p>{item.grade ?? marketCategoryPresentation(item.category).label}</p>

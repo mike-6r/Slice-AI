@@ -26,6 +26,7 @@ import type {
   ComplianceSummary,
   BankConnection,
   BankConnectionToken,
+  ConnectPayoutSetup,
   PriceAlert,
   PricePoint,
   SaleProposal,
@@ -311,6 +312,23 @@ export type AdminComplianceCase = {
 
 export type AdminComplianceDetail = AdminComplianceCase & {
   providerStatus: string;
+  identity?: {
+    state: string;
+    provider: string;
+    verifiedAt: string | null;
+    safeFailureCode: string | null;
+  };
+  riskReview?: { status: string; activeHoldCount: number };
+  connectPayoutReadiness?: Array<{
+    provider: string;
+    environment: string;
+    status: string;
+    requirementsSummary: unknown;
+    detailsSubmitted: boolean;
+    payoutsEnabled: boolean;
+    transfersCapability: string | null;
+    lastSyncedAt: string | null;
+  }>;
   decisions: Array<{
     status: string;
     reasonCode: string;
@@ -1082,7 +1100,12 @@ export type AdminCollectibleDetail = {
       reservedUnits: string;
       settledUnits: string;
     } | null;
-    proceeds: { postedMinor: string; reservedMinor: string; availableMinor: string; currency: string };
+    proceeds: {
+      postedMinor: string;
+      reservedMinor: string;
+      availableMinor: string;
+      currency: string;
+    };
     collector: { id: string; displayName: string; username: string | null };
     readiness: { custody: boolean; insurance: boolean; publication: boolean; market: boolean };
     valuation: { minor: string; currency: string; asOf: string } | null;
@@ -1166,7 +1189,16 @@ export type InitialOfferingProjection = {
 
 export type InitialOfferingPreview = Omit<
   InitialOfferingProjection,
-  "offeringId" | "assetId" | "status" | "changeRequestReason" | "approvedAt" | "openedAt" | "issuedAt" | "closedAt" | "inventory" | "proceeds"
+  | "offeringId"
+  | "assetId"
+  | "status"
+  | "changeRequestReason"
+  | "approvedAt"
+  | "openedAt"
+  | "issuedAt"
+  | "closedAt"
+  | "inventory"
+  | "proceeds"
 > & { valuationMinor: string; feePolicyStatus: string };
 
 export interface AdminRepository {
@@ -1371,10 +1403,16 @@ export interface CollectorWorkspaceRepository {
       occurredAt: string;
     }>;
   }>;
-  getInitialOfferingPreview(assetId: string, percentageBps: number): Promise<InitialOfferingPreview>;
+  getInitialOfferingPreview(
+    assetId: string,
+    percentageBps: number,
+  ): Promise<InitialOfferingPreview>;
   getInitialOffering(assetId: string): Promise<InitialOfferingProjection>;
   proposeInitialOffering(assetId: string, offeredUnits: string): Promise<InitialOfferingProjection>;
-  updateInitialOffering(offeringId: string, offeredUnits: string): Promise<InitialOfferingProjection>;
+  updateInitialOffering(
+    offeringId: string,
+    offeredUnits: string,
+  ): Promise<InitialOfferingProjection>;
   getRequests(): Promise<Array<CollectorWorkspaceRequest>>;
   getDocuments(): Promise<Array<CollectorWorkspaceDocument>>;
   search(query: string): Promise<{
@@ -1615,10 +1653,15 @@ export interface ProviderRepository {
   getCompliance(): Promise<ComplianceSummary>;
   startCompliance(): Promise<ComplianceSession>;
   createBankLinkToken(): Promise<BankConnectionToken>;
-  exchangeBankLinkPublicToken(
-    publicToken: string,
-  ): Promise<{ connections: BankConnection[]; replayed: boolean }>;
+  completeBankLink(input: {
+    setupIntentId: string;
+  }): Promise<{ connections: BankConnection[]; replayed: boolean }>;
   listBankConnections(): Promise<BankConnection[]>;
+  disconnectBankConnection(id: string): Promise<{ disconnected: boolean; replayed: boolean }>;
+  setDefaultBankConnection(id: string): Promise<{ selected: boolean }>;
+  getConnectPayoutSetup(): Promise<ConnectPayoutSetup>;
+  createConnectOnboarding(): Promise<ConnectPayoutSetup>;
+  refreshConnectOnboarding(): Promise<ConnectPayoutSetup>;
   listMovements(input?: { cursor?: string; limit?: number }): Promise<WalletMovementPage>;
   createDeposit(amountMinor: string): Promise<WalletMovementView>;
   createWithdrawal(input: {

@@ -35,8 +35,8 @@
     "beta:retire-fixtures": "ts-node src/scripts/retire-beta-fixtures.ts",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
-    "prisma:status": "prisma migrate status"
-    ,"storage:migrate-local": "ts-node src/scripts/storage-migrate-local.ts"
+    "prisma:status": "prisma migrate status",
+    "storage:migrate-local": "ts-node src/scripts/storage-migrate-local.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
@@ -57,6 +57,7 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^6.18.1",
     "rxjs": "^7.8.2",
+    "stripe": "22.5.0",
     "twilio": "^6.0.2",
     "zod": "^3.24.2"
   },
