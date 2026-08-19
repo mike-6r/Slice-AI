@@ -1021,7 +1021,7 @@ export const mockRepositories: AppRepositories = {
         sessionUrl: null,
       };
     },
-    async createBankLinkToken() {
+    async createBankLinkCheckout() {
       throw new Error("Bank connection setup is unavailable in explicit mock mode.");
     },
     async completeBankLink() {

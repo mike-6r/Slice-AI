@@ -3638,18 +3638,20 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
               : undefined,
         };
       },
-      async createBankLinkToken() {
+      async createBankLinkCheckout() {
         const value = objectField(
-          await client.request<unknown>("/wallet/bank-link/token", {
+          await client.request<unknown>("/wallet/bank-link/checkout", {
             method: "POST",
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
-          "bank connection token",
+          "bank connection checkout",
         );
         return {
-          setupIntentId: stringField(value.setupIntentId, "bankConnection.setupIntentId"),
-          clientSecret: stringField(value.clientSecret, "bankConnection.clientSecret"),
-          publishableKey: stringField(value.publishableKey, "bankConnection.publishableKey"),
+          checkoutSessionId: stringField(
+            value.checkoutSessionId,
+            "bankConnection.checkoutSessionId",
+          ),
+          checkoutUrl: stringField(value.checkoutUrl, "bankConnection.checkoutUrl"),
           expiration: stringField(value.expiration, "bankConnection.expiration") as ISODateTime,
           paymentMethodType:
             value.paymentMethodType === "bacs_debit"
@@ -3660,6 +3662,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                     "Unsupported bank funding method from service.",
                   );
                 })(),
+          replayed: typeof value.replayed === "boolean" ? value.replayed : false,
         };
       },
       async completeBankLink(input) {

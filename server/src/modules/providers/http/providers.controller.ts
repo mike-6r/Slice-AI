@@ -15,7 +15,7 @@ import { RequirePermission } from '../../identity/access/permission.decorator';
 const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destinationReference: z.string().min(1).max(256).optional(), destinationChain: z.string().min(1).max(32).optional() }).strict();
 const page = z.object({ cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const hold = z.object({ userId: z.string().min(1), scope: z.enum(['FUNDING', 'WITHDRAWAL', 'TRADING_ELIGIBILITY', 'EXTERNAL_MOVEMENT', 'ACCOUNT']), reasonCode: z.string().min(1).max(64) }).strict();
-const bankConnectionComplete = z.object({ setupIntentId: z.string().min(1).max(256) }).strict();
+const bankConnectionComplete = z.object({ checkoutSessionId: z.string().min(1).max(256) }).strict();
 @Controller()
 export class ProvidersController {
   constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly connectPayouts: StripeConnectPayoutService, private readonly limiter: ControlRateLimitService) {}
@@ -29,12 +29,12 @@ export class ProvidersController {
   async withdrawal(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(amount, body); return this.write(req, key, () => this.movements.createWithdrawal(req.actor!, input.amountMinor, req.requestId ?? 'unknown', key!, input.destinationReference, input.destinationChain)); }
   @Get('wallet/movements') @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) { const input = this.parse(page, query); return this.movements.list(req.actor!.userId, input.cursor, input.limit); }
-  @Post('wallet/bank-link/token') @UseGuards(AccessTokenGuard)
-  async bankLinkToken(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.bankLinks.createLinkToken(req.actor!, key!)); }
+  @Post('wallet/bank-link/checkout') @UseGuards(AccessTokenGuard)
+  async bankLinkCheckout(@Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.bankLinks.createLinkCheckout(req.actor!, key!)); }
   @Post('wallet/bank-link/complete') @UseGuards(AccessTokenGuard)
   async bankLinkComplete(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) {
     const input = this.parse(bankConnectionComplete, body);
-    return this.write(req, key, () => this.bankLinks.completeLink(req.actor!, input.setupIntentId, req.requestId ?? 'unknown', key!));
+    return this.write(req, key, () => this.bankLinks.completeLink(req.actor!, input.checkoutSessionId, req.requestId ?? 'unknown', key!));
   }
   @Get('wallet/bank-accounts') @UseGuards(AccessTokenGuard)
   bankAccounts(@Req() req: AuthenticatedRequest) { return this.bankLinks.list(req.actor!.userId); }

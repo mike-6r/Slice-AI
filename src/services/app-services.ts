@@ -100,8 +100,8 @@ export class ProviderService {
   constructor(private readonly repositories: AppRepositories) {}
   compliance = () => this.repositories.providers.getCompliance();
   startCompliance = () => this.repositories.providers.startCompliance();
-  createBankLinkToken = () => this.repositories.providers.createBankLinkToken();
-  completeBankLink = (input: { setupIntentId: string }) =>
+  createBankLinkCheckout = () => this.repositories.providers.createBankLinkCheckout();
+  completeBankLink = (input: { checkoutSessionId: string }) =>
     this.repositories.providers.completeBankLink(input);
   bankConnections = () => this.repositories.providers.listBankConnections();
   disconnectBankConnection = (id: string) =>

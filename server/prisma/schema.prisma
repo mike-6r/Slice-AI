@@ -2244,7 +2244,15 @@ model BacsSetupSession {
   userId                String
   provider              ProviderCode
   environment           ExternalProviderEnvironment
-  externalSetupIntentId String
+  /// Legacy raw reference retained only for additive compatibility. New code
+  /// must use the encrypted/hashed reference fields below.
+  externalSetupIntentId String?
+  externalCheckoutSessionReferenceCiphertext String?
+  externalCheckoutSessionReferenceHash       String? @unique
+  externalSetupIntentReferenceCiphertext     String?
+  externalSetupIntentReferenceHash           String? @unique
+  externalPaymentMethodReferenceCiphertext   String?
+  externalPaymentMethodReferenceHash         String? @unique
   status                String                      @default("CREATED")
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt

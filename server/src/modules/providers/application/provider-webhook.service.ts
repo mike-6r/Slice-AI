@@ -8,7 +8,7 @@ import { LocalWebhookVerifier } from './local-provider.adapters';
 import { ComplianceService } from './compliance.service';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { WalletMovementService } from './wallet-movement.service';
-import { providerUnavailable, type ActiveProviderCode } from './external-provider-boundaries';
+import { BankConnectionService, providerUnavailable, type ActiveProviderCode } from './external-provider-boundaries';
 import { StripeClientFactory } from './stripe-provider.client';
 import { StripeConnectPayoutService } from './stripe-connect-payout.service';
 
@@ -28,6 +28,7 @@ export class ProviderWebhookService {
     private readonly movements: WalletMovementService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly stripeFactory: StripeClientFactory,
+    private readonly bankLinks: BankConnectionService,
     private readonly connectPayouts: StripeConnectPayoutService,
   ) {}
 
@@ -155,6 +156,18 @@ export class ProviderWebhookService {
       else if (connectEffect.action === 'HOLD') await this.movements.holdFromProvider({ movementId: connectEffect.movementId, reasonCode: connectEffect.reasonCode ?? 'STRIPE_PAYOUT_REVIEW', requestId });
       return;
     }
+    if (type === 'checkout.session.completed') {
+      const checkoutSessionId = this.text(payload.id);
+      if (checkoutSessionId) await this.bankLinks.completeCheckoutSession(provider, checkoutSessionId);
+      return;
+    }
+    if (type.startsWith('setup_intent.')) {
+      const setupIntentId = this.text(payload.id);
+      const metadata = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata as Record<string, unknown> : {};
+      if (setupIntentId) await this.bankLinks.processSetupIntentEvent(provider, setupIntentId, this.text(payload.status) ?? type.split('.').at(-1) ?? 'processing', this.text(metadata.slice_bacs_setup_session_id) ?? undefined);
+      return;
+    }
+    if (type === 'mandate.updated') return;
     if (type.startsWith('identity.verification_session.')) {
       const providerReference = this.text(payload.id);
       if (!providerReference) return;

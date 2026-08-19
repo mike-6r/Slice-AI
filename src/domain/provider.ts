@@ -35,12 +35,12 @@ export interface BankConnection {
   updatedAt: ISODateTime;
 }
 
-export interface BankConnectionToken {
-  setupIntentId: string;
-  clientSecret: string;
-  publishableKey: string;
+export interface BankConnectionCheckoutSession {
+  checkoutSessionId: string;
+  checkoutUrl: string;
   expiration: ISODateTime;
   paymentMethodType: "bacs_debit";
+  replayed: boolean;
 }
 
 export type ConnectAccountStatus =

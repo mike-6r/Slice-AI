@@ -20,39 +20,49 @@ describe('Phase 4A external provider boundaries', () => {
       {} as never,
       {} as never,
       { get: () => { throw new Error('Stripe sandbox credentials are not configured.'); } } as never,
-      { providerMode: 'stripe_sandbox', stripeBankFundingRail: 'bacs_debit' } as never,
+      { providerMode: 'stripe_sandbox', stripeBankFundingRail: 'bacs_debit', appPublicUrl: 'https://staging.slicecollectable.com' } as never,
     );
-    await expect(service.createLinkToken({ userId: 'user-1' } as never, 'setup-key-1')).rejects.toMatchObject({
+    await expect(service.createLinkCheckout({ userId: 'user-1' } as never, 'setup-key-1')).rejects.toMatchObject({
       message: 'Stripe sandbox credentials are not configured.',
     });
     await expect(service.list('user-1')).resolves.toEqual({ items: [] });
   });
 
-  it('creates a GBP Bacs SetupIntent and never opens Financial Connections', async () => {
-    const setupIntents = { create: jest.fn().mockResolvedValue({ id: 'seti_test', client_secret: 'seti_secret', livemode: false }) };
-    const stripe = { setupIntents, financialConnections: { sessions: { create: jest.fn() } } };
+  it('creates a GBP Bacs Checkout setup session and never opens Financial Connections', async () => {
+    const checkoutSessions = { create: jest.fn().mockResolvedValue({ id: 'cs_test', url: 'https://checkout.stripe.com/c/pay/cs_test', mode: 'setup', status: 'open', livemode: false, customer: 'cus_test', expires_at: 1786233600 }) };
+    const stripe = { checkout: { sessions: checkoutSessions }, financialConnections: { sessions: { create: jest.fn() } } };
     const db = {
       externalProviderCustomer: {
         findUnique: jest.fn().mockResolvedValue({ provider: 'STRIPE_SANDBOX', environment: 'SANDBOX', externalCustomerId: 'cus_test' }),
       },
-      bacsSetupSession: { create: jest.fn() },
+      bacsSetupSession: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'bacs-session-1' }),
+        update: jest.fn(),
+      },
     };
+    const crypto = { encrypt: jest.fn().mockReturnValue('ciphertext'), hash: jest.fn().mockReturnValue('hash') };
     const service = new BankConnectionService(
       db as never,
-      {} as never,
-      { get: () => stripe, environment: () => 'SANDBOX', publishableKey: () => 'pk_test_slice' } as never,
-      { providerMode: 'stripe_sandbox', stripeBankFundingRail: 'bacs_debit' } as never,
+      crypto as never,
+      { get: () => stripe, environment: () => 'SANDBOX' } as never,
+      { providerMode: 'stripe_sandbox', stripeBankFundingRail: 'bacs_debit', appPublicUrl: 'https://staging.slicecollectable.com' } as never,
     );
 
-    await expect(service.createLinkToken({ userId: 'user-1' } as never, 'setup-key')).resolves.toMatchObject({
-      setupIntentId: 'seti_test',
+    await expect(service.createLinkCheckout({ userId: 'user-1' } as never, 'setup-key')).resolves.toMatchObject({
+      checkoutSessionId: 'cs_test',
+      checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test',
       paymentMethodType: 'bacs_debit',
     });
-    expect(setupIntents.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(checkoutSessions.create).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'setup',
       customer: 'cus_test',
       payment_method_types: ['bacs_debit'],
-      usage: 'off_session',
-    }), expect.objectContaining({ idempotencyKey: 'slice-bacs-setup:SANDBOX:setup-key' }));
+      success_url: expect.stringContaining('/wallet/bank/setup/success?session_id={CHECKOUT_SESSION_ID}'),
+      cancel_url: 'https://staging.slicecollectable.com/wallet',
+      metadata: expect.objectContaining({ slice_funding_rail: 'bacs_debit' }),
+      setup_intent_data: { metadata: expect.objectContaining({ slice_funding_rail: 'bacs_debit' }) },
+    }), expect.objectContaining({ idempotencyKey: expect.stringContaining('slice-bacs-checkout:SANDBOX:bacs-session-1:setup-key') }));
     expect(stripe.financialConnections.sessions.create).not.toHaveBeenCalled();
   });
 
@@ -64,7 +74,7 @@ describe('Phase 4A external provider boundaries', () => {
         findUnique: jest.fn().mockResolvedValue({ provider: 'STRIPE_SANDBOX', environment: 'SANDBOX', externalCustomerId: 'cus_test' }),
       },
       externalFinancialAccount: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'bank-1', externalPaymentMethodId: 'pm_bacs', currency: 'GBP', accountType: 'bacs_debit' }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'bank-1', externalPaymentMethodId: 'pm_bacs', providerReferenceCiphertext: null, currency: 'GBP', accountType: 'bacs_debit' }),
       },
     };
     const service = new BankConnectionService(

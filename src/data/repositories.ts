@@ -25,7 +25,7 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   BankConnection,
-  BankConnectionToken,
+  BankConnectionCheckoutSession,
   ConnectPayoutSetup,
   PriceAlert,
   PricePoint,
@@ -1652,9 +1652,9 @@ export interface WalletRepository {
 export interface ProviderRepository {
   getCompliance(): Promise<ComplianceSummary>;
   startCompliance(): Promise<ComplianceSession>;
-  createBankLinkToken(): Promise<BankConnectionToken>;
+  createBankLinkCheckout(): Promise<BankConnectionCheckoutSession>;
   completeBankLink(input: {
-    setupIntentId: string;
+    checkoutSessionId: string;
   }): Promise<{ connections: BankConnection[]; replayed: boolean }>;
   listBankConnections(): Promise<BankConnection[]>;
   disconnectBankConnection(id: string): Promise<{ disconnected: boolean; replayed: boolean }>;

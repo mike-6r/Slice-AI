@@ -2,15 +2,15 @@
 
 Run date: 2026-08-19  
 Decision: **UK/GBP-first; GBP ledger retained; Bacs Direct Debit selected**  
-Deployment: **NOT PERFORMED**  
+Deployment: **PENDING local release gates**
 Sandbox execution: **BLOCKED until credentialed staging is prepared**
 
 ## 1. GBP Bacs Migration
 
-**PARTIAL — local implementation complete; credentialed Stripe sandbox validation
-pending.** The active GBP customer-funding runtime now uses Stripe Bacs Direct
-Debit (`bacs_debit`). Existing GBP finance, ownership, offering, trading,
-collector-proceeds, withdrawal, and Connect economics were preserved.
+**PARTIAL — local implementation corrected; credentialed Stripe sandbox
+validation pending.** The active GBP customer-funding runtime now uses Stripe
+Bacs Direct Debit (`bacs_debit`). Existing GBP finance, ownership, offering,
+trading, collector-proceeds, withdrawal, and Connect economics were preserved.
 
 ## 2. Existing US Funding Path Findings
 
@@ -30,11 +30,15 @@ Financial Connections schema is historical compatibility only.
 ## 4. Bacs Payment-Method Architecture
 
 1. Slice creates/reuses its existing provider Customer mapping.
-2. Slice creates a Stripe SetupIntent restricted to `bacs_debit` and `usage:
-   off_session`, with a deterministic idempotency key.
-3. Stripe Payment Element collects the Bacs details and mandate in the browser.
-4. Slice verifies the completed SetupIntent belongs to the authenticated Slice
-   user and the current provider environment.
+2. Slice creates a Stripe Checkout Session in `mode: setup`, restricted to
+   `payment_method_types: ['bacs_debit']`, with the existing Customer and a
+   deterministic idempotency key.
+3. Stripe-hosted Checkout collects the Bacs details and mandate. Slice does
+   not render a Payment Element or receive bank details in the browser.
+4. The authenticated return page submits the Checkout Session ID to Slice.
+   Slice retrieves and verifies the Checkout Session, its SetupIntent, and the
+   customer-owned `bacs_debit` PaymentMethod in the active provider
+   environment.
 5. A later deposit reuses the saved Bacs PaymentMethod to create a GBP
    PaymentIntent with `payment_method_types: ['bacs_debit']`.
 
@@ -43,9 +47,13 @@ credentials, or raw mandate text.
 
 ## 5. Mandate Implementation
 
-The Wallet uses Stripe.js Elements and `confirmSetup({ redirect: 'if_required' })`.
-The backend accepts only the resulting SetupIntent ID, retrieves it from Stripe,
-requires `succeeded`, and requires a customer-owned `bacs_debit` PaymentMethod.
+The Wallet requests `/wallet/bank-link/checkout` and redirects to Stripe-hosted
+Checkout. The success route `/wallet/bank/setup/success` accepts only the
+returned Checkout Session ID. The backend retrieves the Checkout Session,
+requires `mode: setup`, `status: complete`, the active environment, the
+Slice-session metadata, and a customer-owned `bacs_debit` PaymentMethod from a
+succeeded SetupIntent. Browser completion, webhook completion, and retries all
+share the same idempotent projection path.
 
 ## 6. Customer Funding-Method Persistence
 
@@ -55,8 +63,11 @@ hashed PaymentMethod reference, safe account name if supplied, last four digits
 if supplied, `bacs_debit` type, GBP currency, status, default flag, and sync time.
 Legacy US rows remain intact but are excluded by the GBP Bacs runtime filter.
 
-An additive `BacsSetupSession` table records SetupIntent ownership and lifecycle.
-No deposit model or second webhook inbox was introduced.
+An additive `BacsSetupSession` table records encrypted/hashed Checkout Session,
+SetupIntent, and PaymentMethod references plus lifecycle. The legacy raw
+SetupIntent column remains nullable for additive migration compatibility; new
+rows do not populate raw provider IDs. No deposit model or second webhook inbox
+was introduced.
 
 ## 7. Deposit Lifecycle
 
@@ -77,6 +88,15 @@ The existing `POST /providers/:provider/webhooks` route and `WebhookInbox` are
 reused. Existing raw-body signature verification, livemode separation,
 deduplication, encrypted payload storage, and idempotent movement dispatch are
 preserved.
+
+The setup lifecycle is also handled through the same inbox:
+
+- `checkout.session.completed` → retrieve and complete the verified Bacs
+  Checkout setup;
+- `setup_intent.succeeded` and related setup events → advance or complete the
+  matching setup session safely;
+- `mandate.updated` → durable inbox acceptance with no unsafe direct ledger
+  mutation.
 
 The active payment lifecycle is:
 
@@ -140,17 +160,20 @@ legacy US row relabeling was performed.
 
 ## 17. Frontend Changes
 
-Wallet-only change: the former Financial Connections launcher was replaced by a
-Stripe Payment Element Bacs mandate setup flow. It displays real backend/provider
-state, supports cancel/confirm, masks safe account metadata, and does not create
-fake connected-bank or balance state. Markets, asset cards, collectible pages,
-homepage design, filtering, and Discord were not touched.
+Wallet-only change: the former Financial Connections launcher and unsupported
+client-side Payment Element setup were replaced by a Stripe-hosted Checkout
+Bacs mandate setup flow. The return page completes only the authoritative
+Checkout Session, displays real backend/provider state, masks safe account
+metadata, and does not create fake connected-bank or balance state. Markets,
+asset cards, collectible pages, homepage design, filtering, and Discord were not
+touched.
 
 ## 18. Unit Tests
 
-**PASS.** Focused backend provider/config tests: **39 tests**. Coverage includes
-typed Bacs rail selection, SetupIntent creation, no Financial Connections call,
-GBP Bacs PaymentIntent creation, legacy-row exclusion, and live/config safety.
+**PASS locally for the corrected path.** Focused coverage includes typed Bacs
+rail selection, Checkout setup-mode creation, explicit `bacs_debit` allowlisting,
+no Financial Connections call, GBP Bacs PaymentIntent creation, legacy-row
+exclusion, and live/config safety. Credentialed Stripe behavior remains pending.
 
 ## 19. Integration Tests
 
@@ -170,23 +193,24 @@ passed. The existing frontend chunk-size advisory remains non-blocking.
 
 ## 22. Commit Hash
 
-**NOT COMMITTED.** The repository contains unrelated existing worktree changes;
-no commit was created to avoid bundling unrelated product work.
+**PENDING.** A provider-only commit will be created only after the local release
+gates pass. Unexpected unrelated files will not be included.
 
 ## 23. Push Status
 
-**NOT PUSHED.**
+**PENDING local release gates.**
 
 ## 24. Deployment
 
 **NOT PERFORMED.** No VPS, staging, marketplace, homepage, static asset,
-business, or provider state was changed.
+business, or provider state has been changed in this correction task.
 
 ## 25. Remaining Blockers
 
 1. Provide Stripe sandbox `sk_test_`, `pk_test_`, and `whsec_` through the
    deployment-managed secret channel.
-2. Deploy a clean provider-only release containing the additive migration.
+2. Complete local tests/typechecks/lint/builds, then deploy a clean
+   provider-only release containing the additive migration.
 3. Configure `PROVIDER_MODE=stripe_sandbox` and verify the single HTTPS webhook
    route with Stripe Bacs sandbox fixtures.
 4. Execute disposable setup, mandate, deposit, processing, success, failure,
@@ -196,9 +220,9 @@ business, or provider state was changed.
 
 ## 26. Ready for Sandbox Deployment
 
-**NO.** Local implementation and regression are green, but credentialed sandbox
-validation, deployment-managed secrets, webhook delivery, and release-gate
-review remain outstanding.
+**NO.** The corrected local implementation is in progress through its release
+gates. Credentialed sandbox validation, deployment-managed secrets, webhook
+delivery, and release-gate review remain outstanding.
 
 ## Release Safety
 

@@ -23,9 +23,8 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -392,7 +391,7 @@ function ConnectedBankPanel({
           </ul>
         ) : null}
         {!query.isLoading && !query.isError && !query.data?.length ? <BankEmpty /> : null}
-        <BankConnectionControl refreshWallet={refreshWallet} />
+        <BankConnectionControl />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />
@@ -903,33 +902,15 @@ function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPa
   );
 }
 
-function BankConnectionControl({ refreshWallet }: { refreshWallet: () => void }) {
+function BankConnectionControl() {
   const services = useAppServices();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [setup, setSetup] = useState<{
-    setupIntentId: string;
-    stripe: Stripe;
-    elements: StripeElements;
-  } | null>(null);
-  const paymentElementRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!setup || !paymentElementRef.current) return;
-    const paymentElement = setup.elements.create("payment", {
-      layout: { type: "accordion", defaultCollapsed: false },
-    });
-    paymentElement.mount(paymentElementRef.current);
-    return () => paymentElement.destroy();
-  }, [setup]);
 
   async function connect() {
     setIsConnecting(true);
     try {
-      const session = await services.providers.createBankLinkToken();
-      const stripe = await loadStripe(session.publishableKey);
-      if (!stripe) throw new Error("UK bank setup could not start.");
-      const elements = stripe.elements({ clientSecret: session.clientSecret });
-      setSetup({ setupIntentId: session.setupIntentId, stripe, elements });
+      const session = await services.providers.createBankLinkCheckout();
+      window.location.assign(session.checkoutUrl);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bank connection failed.");
     } finally {
@@ -937,68 +918,17 @@ function BankConnectionControl({ refreshWallet }: { refreshWallet: () => void })
     }
   }
 
-  async function confirmSetup() {
-    if (!setup) return;
-    setIsConnecting(true);
-    try {
-      const result = await setup.stripe.confirmSetup({
-        elements: setup.elements,
-        confirmParams: { return_url: window.location.href },
-        redirect: "if_required",
-      });
-      if (result.error)
-        throw new Error(result.error.message ?? "The bank mandate could not be confirmed.");
-      if (!result.setupIntent || result.setupIntent.status !== "succeeded") {
-        throw new Error(
-          "The bank mandate is not ready yet. Please try again after authorization completes.",
-        );
-      }
-      await services.providers.completeBankLink({ setupIntentId: result.setupIntent.id });
-      setSetup(null);
-      refreshWallet();
-      toast.success("UK bank mandate saved securely.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Bank mandate setup failed.");
-    } finally {
-      setIsConnecting(false);
-    }
-  }
-
   return (
     <div className="wallet-bank-connect">
-      {!setup ? (
-        <button type="button" onClick={() => void connect()} disabled={isConnecting}>
-          <Landmark aria-hidden="true" />
-          {isConnecting ? "Opening secure UK bank setup…" : "Set up a UK bank"}
-          <ArrowRight aria-hidden="true" />
-        </button>
-      ) : (
-        <form
-          className="wallet-bacs-setup"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void confirmSetup();
-          }}
-        >
-          <div>
-            <strong>Authorize Bacs Direct Debit</strong>
-            <p>
-              Stripe securely collects your bank details and mandate. Slice never receives your
-              account or sort code.
-            </p>
-          </div>
-          <div ref={paymentElementRef} />
-          <div className="wallet-bank-actions">
-            <button type="button" onClick={() => setSetup(null)} disabled={isConnecting}>
-              Cancel
-            </button>
-            <button type="submit" disabled={isConnecting}>
-              {isConnecting ? "Confirming securely…" : "Save UK bank mandate"}
-              <ArrowRight aria-hidden="true" />
-            </button>
-          </div>
-        </form>
-      )}
+      <button type="button" onClick={() => void connect()} disabled={isConnecting}>
+        <Landmark aria-hidden="true" />
+        {isConnecting ? "Opening secure UK bank setup…" : "Set up a UK bank"}
+        <ArrowRight aria-hidden="true" />
+      </button>
+      <p className="wallet-bank-connect__note">
+        You’ll finish securely on Stripe’s hosted checkout. Slice never receives your account or
+        sort code.
+      </p>
     </div>
   );
 }

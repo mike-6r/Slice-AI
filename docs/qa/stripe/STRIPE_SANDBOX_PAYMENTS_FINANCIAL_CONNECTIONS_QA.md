@@ -1,8 +1,13 @@
 # Stripe Sandbox Payments + Financial Connections QA
 
+> Historical superseded record. The Financial Connections/US ACH bank-link
+> implementation described below is not the active GBP funding path. See
+> `STRIPE_GBP_BACS_FUNDING_QA.md` for the current Stripe-hosted Checkout
+> `bacs_debit` architecture.
+
 ## Final Status
 
-**Phase 4B: PARTIAL — implementation complete, release validation blocked.**
+**Phase 4B: SUPERSEDED — implementation retained for historical audit only.**
 
 The Stripe boundary, customer mapping, Financial Connections flow, safe bank projection, payment-intent lifecycle, signed webhook handling, idempotency, and frontend flow are implemented. A real Stripe sandbox E2E was not run because no sandbox credentials are configured in this workspace. The local Slice ledger remains GBP; Stripe Financial Connections ACH uses US bank accounts and must be validated against the product's supported currency/provider arrangement before release.
 
@@ -36,7 +41,10 @@ Added `ExternalProviderCustomer`, unique per Slice user, provider, and environme
 
 ## Financial Connections
 
-`POST /api/v1/wallet/bank-link/token` creates a Stripe Financial Connections Session for the mapped customer. `POST /api/v1/wallet/bank-link/complete` verifies the session/customer relationship and persists only accounts returned by that session. The frontend launches `stripe.collectFinancialConnectionsAccounts` with the returned client secret.
+The former `POST /api/v1/wallet/bank-link/token` Financial Connections route is
+not an active endpoint. The current GBP route is
+`POST /api/v1/wallet/bank-link/checkout`, which creates a Stripe-hosted Checkout
+Session in setup mode restricted to `bacs_debit`.
 
 ## Requested Permissions
 

@@ -309,17 +309,25 @@ describe("HTTP catalogue mapping", () => {
       ],
     });
     const request = vi.fn().mockResolvedValue({
-      setupIntentId: "seti_test",
-      clientSecret: "bacs_client_secret",
-      publishableKey: "pk_test_slice",
+      checkoutSessionId: "cs_test",
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test",
       expiration: "2026-08-09T00:00:00.000Z",
       paymentMethodType: "bacs_debit",
+      replayed: false,
     });
     const repositories = createHttpRepositories({ get, request } as unknown as ApiClient);
     await expect(repositories.providers.listBankConnections()).resolves.toEqual([
       expect.objectContaining({ institutionName: null, accountMask: "1234", status: "CONNECTED" }),
     ]);
-    await expect(repositories.providers.createBankLinkToken()).resolves.toBeDefined();
+    await expect(repositories.providers.createBankLinkCheckout()).resolves.toMatchObject({
+      checkoutSessionId: "cs_test",
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test",
+      replayed: false,
+    });
+    expect(request).toHaveBeenCalledWith(
+      "/wallet/bank-link/checkout",
+      expect.objectContaining({ method: "POST" }),
+    );
     expect(JSON.stringify(await repositories.providers.listBankConnections())).not.toMatch(
       /accessToken|providerReference|accountId|journal/i,
     );

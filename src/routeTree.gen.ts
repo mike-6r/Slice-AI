@@ -41,6 +41,7 @@ import { Route as SellIdRouteImport } from './routes/sell.$id'
 import { Route as SubmissionsIdRouteImport } from './routes/submissions.$id'
 import { Route as CollectorIdIndexRouteImport } from './routes/collector.$id.index'
 import { Route as CollectorIdAssetsRouteImport } from './routes/collector.$id.assets'
+import { Route as WalletBankSetupSuccessRouteImport } from './routes/wallet.bank.setup.success'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -202,6 +203,11 @@ const CollectorIdAssetsRoute = CollectorIdAssetsRouteImport.update({
   path: '/collector/$id/assets',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WalletBankSetupSuccessRoute = WalletBankSetupSuccessRouteImport.update({
+  id: '/bank/setup/success',
+  path: '/bank/setup/success',
+  getParentRoute: () => WalletRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -225,7 +231,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/wallet': typeof WalletRoute
+  '/wallet': typeof WalletRouteWithChildren
   '/watchlist': typeof WatchlistRoute
   '/allocate/$id': typeof AllocateIdRoute
   '/asset/$id': typeof AssetIdRoute
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
   '/collector/$id/': typeof CollectorIdIndexRoute
+  '/wallet/bank/setup/success': typeof WalletBankSetupSuccessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -259,7 +266,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/wallet': typeof WalletRoute
+  '/wallet': typeof WalletRouteWithChildren
   '/watchlist': typeof WatchlistRoute
   '/allocate/$id': typeof AllocateIdRoute
   '/asset/$id': typeof AssetIdRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
   '/collector/$id': typeof CollectorIdIndexRoute
+  '/wallet/bank/setup/success': typeof WalletBankSetupSuccessRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -294,7 +302,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/wallet': typeof WalletRoute
+  '/wallet': typeof WalletRouteWithChildren
   '/watchlist': typeof WatchlistRoute
   '/allocate/$id': typeof AllocateIdRoute
   '/asset/$id': typeof AssetIdRoute
@@ -305,6 +313,7 @@ export interface FileRoutesById {
   '/submissions/$id': typeof SubmissionsIdRoute
   '/collector/$id/assets': typeof CollectorIdAssetsRoute
   '/collector/$id/': typeof CollectorIdIndexRoute
+  '/wallet/bank/setup/success': typeof WalletBankSetupSuccessRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/submissions/$id'
     | '/collector/$id/assets'
     | '/collector/$id/'
+    | '/wallet/bank/setup/success'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/submissions/$id'
     | '/collector/$id/assets'
     | '/collector/$id'
+    | '/wallet/bank/setup/success'
   id:
     | '__root__'
     | '/'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/submissions/$id'
     | '/collector/$id/assets'
     | '/collector/$id/'
+    | '/wallet/bank/setup/success'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -433,7 +445,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
-  WalletRoute: typeof WalletRoute
+  WalletRoute: typeof WalletRouteWithChildren
   WatchlistRoute: typeof WatchlistRoute
   AllocateIdRoute: typeof AllocateIdRoute
   AssetIdRoute: typeof AssetIdRoute
@@ -672,8 +684,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CollectorIdAssetsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wallet/bank/setup/success': {
+      id: '/wallet/bank/setup/success'
+      path: '/bank/setup/success'
+      fullPath: '/wallet/bank/setup/success'
+      preLoaderRoute: typeof WalletBankSetupSuccessRouteImport
+      parentRoute: typeof WalletRoute
+    }
   }
 }
+
+interface WalletRouteChildren {
+  WalletBankSetupSuccessRoute: typeof WalletBankSetupSuccessRoute
+}
+
+const WalletRouteChildren: WalletRouteChildren = {
+  WalletBankSetupSuccessRoute: WalletBankSetupSuccessRoute,
+}
+
+const WalletRouteWithChildren =
+  WalletRoute._addFileChildren(WalletRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -697,7 +727,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
   VerifyEmailRoute: VerifyEmailRoute,
-  WalletRoute: WalletRoute,
+  WalletRoute: WalletRouteWithChildren,
   WatchlistRoute: WatchlistRoute,
   AllocateIdRoute: AllocateIdRoute,
   AssetIdRoute: AssetIdRoute,

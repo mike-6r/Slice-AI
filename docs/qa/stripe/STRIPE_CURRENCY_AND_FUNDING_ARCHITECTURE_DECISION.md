@@ -2,7 +2,7 @@
 
 Audit date: 2026-08-19  
 Decision status: **APPROVED — UK/GBP-FIRST**  
-Implementation status: **GBP Bacs rail implemented locally; sandbox validation pending**
+Implementation status: **GBP Bacs rail implemented locally with hosted Checkout setup; sandbox validation pending**
 
 ## Current State
 

@@ -297,7 +297,7 @@ describe('Document 014 trading HTTP contracts', () => {
     });
 
     const bankLink = await request(h.app.getHttpServer())
-      .post('/api/v1/wallet/bank-link/token')
+      .post('/api/v1/wallet/bank-link/checkout')
       .set('authorization', unverified.auth)
       .set('x-forwarded-for', unverified.clientIp);
     expect(bankLink.status).toBe(403);
