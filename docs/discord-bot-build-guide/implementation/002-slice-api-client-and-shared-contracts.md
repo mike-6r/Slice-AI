@@ -23,7 +23,7 @@
 Slice is a collectibles/marketplace platform with a TypeScript backend exposing a versioned HTTP API
 (`/v1/*`). The Slice Discord bot being planned in this build guide is a **companion client** to
 Slice: it never opens a direct connection to Slice's Postgres/Prisma layer, never duplicates Slice's
-business rules, and never becomes a second backend (`README.md` ground rules,
+business rules, and never becomes a second backend (`docs/qa/README.md` ground rules,
 `BOT_ARCHITECTURE.md` "Bot must never do"). Every one of the bot's reads and writes must go through
 Slice's real HTTP API. This document is the single place in the build guide where that HTTP
 integration is built: a typed client, its shared request/response contracts, its error-normalization

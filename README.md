@@ -69,7 +69,7 @@ highest-value assets, so adding a more valuable asset automatically promotes it 
 
 The API-backed showcase covers login/session recovery, marketplace and asset history, public order books/recent executions, backend-authoritative limit buy/sell submission and cancellation, portfolio/wallet projections, transaction history, durable notifications and best-effort authenticated SSE refresh. The browser only displays or submits inputs: balances, reservations, matching, settlement and fees remain backend authority. Discord account linking is also API-backed and optional: it uses a server-side OAuth `identify` flow when the server has the documented Discord credentials, otherwise the account screen presents an explicit unavailable state.
 
-The included local `server` browser QA seed is catalogue/notification-only. It is safe to use in development and is intentionally not a financial/trading fixture. See [SHOWCASE_DEMO.md](SHOWCASE_DEMO.md) for service startup, local seed behaviour and the demo path.
+The included local `server` browser QA seed is catalogue/notification-only. It is safe to use in development and is intentionally not a financial/trading fixture. See [SHOWCASE_DEMO.md](docs/product/SHOWCASE_DEMO.md) for service startup, local seed behaviour and the demo path.
 
 ## Testing and deployment
 

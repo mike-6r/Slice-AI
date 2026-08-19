@@ -29,7 +29,7 @@ Slice is a collectibles/marketplace platform with a TypeScript backend that rema
 source of truth for identity, permissions, and every product/financial concept the bot touches. The
 Discord bot is a companion client to Slice: it calls Slice's HTTP API, never queries Slice's
 Postgres/Prisma directly, never duplicates a Slice business rule, and never becomes a second backend
-(`README.md` ground rules; `BOT_ARCHITECTURE.md` "Bot must never do"). This document sits at
+(`docs/qa/README.md` ground rules; `BOT_ARCHITECTURE.md` "Bot must never do"). This document sits at
 Track A's midpoint in `IMPLEMENTATION_ORDER.md`: 004 defines the account-linking domain and the
 backend API shape, 005 builds the Discord-facing `/account link|unlink|status` commands that produce
 a linked `discordUserId ↔ userId` mapping, and this document (006) is the layer that turns that

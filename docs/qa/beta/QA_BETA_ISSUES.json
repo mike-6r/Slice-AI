@@ -53,10 +53,10 @@
     "externalGate2026_08_15": { "admin": "PARTIAL_PASS", "collector": "PARTIAL_PASS", "investor": "CREDENTIAL_REJECTED", "privateMedia": "NOT_EXECUTED", "intakePrivacy": "NOT_EXECUTED", "physicalLifecycle": "NOT_TOUCHED" }
   },
   "evidence": [
-    "QA_BETA_AUDIT.md",
+    "docs/qa/beta/QA_BETA_AUDIT.md",
     "public staging browser re-QA 2026-08-15",
     "VPS health/ready, environment and Prisma migration verification",
-    "QA_COLLECTOR_ADMIN_AUDIT.md",
-    "QA_COLLECTOR_ADMIN_ISSUES.json"
+    "docs/qa/beta/QA_COLLECTOR_ADMIN_AUDIT.md",
+    "docs/qa/beta/QA_COLLECTOR_ADMIN_ISSUES.json"
   ]
 }

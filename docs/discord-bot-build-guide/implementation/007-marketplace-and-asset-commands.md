@@ -21,7 +21,7 @@
 Slice is a collectibles/marketplace platform with a TypeScript backend; the Discord bot being built
 against it is a **companion client, never a second backend** — it calls Slice's HTTP API for every
 read and write, never queries Slice's Postgres/Prisma directly, and never duplicates a Slice
-business rule (`README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This document
+business rule (`docs/qa/README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This document
 sits in Track B of `IMPLEMENTATION_ORDER.md`'s parallelizable tracks — the "no Slice backend
 dependency beyond what's already VERIFIED" track alongside Document 008 (Collector and Vault
 commands) — and is one of only two Phase 1 command groups (with 008) that can close without
@@ -82,7 +82,7 @@ commands are wholly new product surface, not a migration.
 
 ## 6. Files to read before starting
 
-- `README.md`, `CURRENT_STATE.md`, `project-state.json` — ground truth and current state
+- `docs/qa/README.md`, `CURRENT_STATE.md`, `project-state.json` — ground truth and current state
 - `IMPLEMENTATION_ORDER.md`, `PROMPT_INDEX.md` — this document's place in the sequence
 - `implementation/002-slice-api-client-and-shared-contracts.md` (must be closed first) — the typed
   Slice API client this document's commands call

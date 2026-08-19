@@ -26,7 +26,7 @@ This commit does not claim a fresh browser walkthrough of every admin section or
 
 ## Accounts deep redesign — 2026-08-15
 
-The Accounts directory and User Detail routes now use the Account Control Center layout documented in `ADMIN_ACCOUNTS_DESIGN_QA.md`. Read projections and typed status/role commands remain server-authoritative. Fresh authenticated mutation, responsive, and IDOR evidence is still required before changing the overall Admin release gate.
+The Accounts directory and User Detail routes now use the Account Control Center layout documented in `docs/qa/admin/ADMIN_ACCOUNTS_DESIGN_QA.md`. Read projections and typed status/role commands remain server-authoritative. Fresh authenticated mutation, responsive, and IDOR evidence is still required before changing the overall Admin release gate.
 
 - Account status transitions are now exposed in the Account Detail `Roles & Access` tab through the existing protected `/admin/users/:id/status` command. The UI requires a reason, confirmation, pending state, and refreshes the authoritative projection after success.
 - Role grant/revoke actions are now exposed through the existing protected `/admin/users/:id/roles` commands. The UI confirms changes, uses idempotency keys, refreshes after success, deduplicates repeated semantic role chips, and leaves last-admin/self-lockout enforcement to the backend.
@@ -39,7 +39,7 @@ The controlled staging mutation walkthrough, including dedicated test identities
 
 Deployment was rechecked before QA: Git `main` and VPS are `7528bfb0e507e6696507af9bd47a7ba1620558b3`; `slice-api.service` and `slice-web.service` are active; `/health` and `/ready` return 200; PostgreSQL and Redis are up; Prisma reports 58 migrations and an up-to-date schema. The configured environment contains the expected Beta/storage/provider key names without exposing secret values.
 
-The route and control inventories are recorded in `ADMIN_ROUTE_INVENTORY.md` and `ADMIN_FUNCTION_INVENTORY.json`. Visible controls are classified as working, intentionally disabled with a reason, or implementation-only pending controlled staging retest. No contextless publish, valuation, receipt, adjustment, or order action was introduced.
+The route and control inventories are recorded in `docs/qa/admin/ADMIN_ROUTE_INVENTORY.md` and `docs/qa/admin/ADMIN_FUNCTION_INVENTORY.json`. Visible controls are classified as working, intentionally disabled with a reason, or implementation-only pending controlled staging retest. No contextless publish, valuation, receipt, adjustment, or order action was introduced.
 
 The fresh authenticated Admin browser session and full cross-section mutation/RBAC/IDOR/responsive/accessibility/request-health matrix were not executed in this pass because no controlled Admin browser credentials/session were available to the agent and high-risk mutations require an action-time controlled fixture. The unauthenticated staging route correctly presents “Admin Console sign-in required”. This is an explicit evidence gap, not a GO claim.
 
@@ -55,12 +55,12 @@ Phase 3 decision: **NO-GO for final Admin launch gate** until the authenticated 
 
 ## Review workstation redesign — 2026-08-15
 
-The Review Queue now uses a compact summary strip and single toolbar; queue rows lead with collectible identity and authorized front media. Submission Review now stays in the Admin Console shell and uses Review, Evidence, AI Review, Market and History tabs. Secure signed media is projected for reviewer evidence without provider calls on page load. See `ADMIN_REVIEW_DESIGN_QA.md` and `ADMIN_REVIEW_ISSUES.json` for the focused verification boundary; authenticated staging mutation and responsive evidence remain pending.
+The Review Queue now uses a compact summary strip and single toolbar; queue rows lead with collectible identity and authorized front media. Submission Review now stays in the Admin Console shell and uses Review, Evidence, AI Review, Market and History tabs. Secure signed media is projected for reviewer evidence without provider calls on page load. See `docs/qa/admin/ADMIN_REVIEW_DESIGN_QA.md` and `docs/qa/admin/ADMIN_REVIEW_ISSUES.json` for the focused verification boundary; authenticated staging mutation and responsive evidence remain pending.
 
 ## Asset Operations post-receipt workstation — 2026-08-15
 
-Asset Operations now uses a full-width lifecycle queue and collectible operation detail. The queue is receipt-gated, uses approved media, exposes server-authoritative readiness/blockers, and keeps lifecycle mutations behind existing protected commands. See `ADMIN_ASSET_OPS_DESIGN_QA.md` and `ADMIN_ASSET_OPS_ISSUES.json`; authenticated mutation, responsive and accessibility evidence remain pending.
+Asset Operations now uses a full-width lifecycle queue and collectible operation detail. The queue is receipt-gated, uses approved media, exposes server-authoritative readiness/blockers, and keeps lifecycle mutations behind existing protected commands. See `docs/qa/admin/ADMIN_ASSET_OPS_DESIGN_QA.md` and `docs/qa/admin/ADMIN_ASSET_OPS_ISSUES.json`; authenticated mutation, responsive and accessibility evidence remain pending.
 
 ## Memberships deep redesign — 2026-08-15
 
-Memberships now uses a compact full-width directory with status counts, operational filters, readable usage/capacity states, billing truth, Beta entitlement labeling, and an account-linked detail workspace. The API projection includes effective entitlements, warnings, over-limit state, and eligible provider actions. Provider-owned mutations remain explicitly unavailable while Beta billing is not configured. See `ADMIN_MEMBERSHIPS_DESIGN_QA.md`; authenticated staging, responsive, RBAC/IDOR, and provider mutation retests remain pending.
+Memberships now uses a compact full-width directory with status counts, operational filters, readable usage/capacity states, billing truth, Beta entitlement labeling, and an account-linked detail workspace. The API projection includes effective entitlements, warnings, over-limit state, and eligible provider actions. Provider-owned mutations remain explicitly unavailable while Beta billing is not configured. See `docs/qa/admin/ADMIN_MEMBERSHIPS_DESIGN_QA.md`; authenticated staging, responsive, RBAC/IDOR, and provider mutation retests remain pending.

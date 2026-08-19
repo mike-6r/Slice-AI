@@ -16,7 +16,7 @@
 
 Slice is a collectibles/marketplace platform with a TypeScript backend (`server/`) and frontend
 (`src/`); its own real, verified backend state — not its roadmap, not its frontend mocks — is the
-ground truth this entire bot build guide is built on (`README.md`). The Slice Discord bot being
+ground truth this entire bot build guide is built on (`docs/qa/README.md`). The Slice Discord bot being
 planned here is a **companion client** to Slice: it will call Slice's HTTP API for every read or
 write it ever needs, it will never query Slice's Postgres/Prisma database directly, it will never
 duplicate a Slice business rule, and it will never become a second backend
@@ -68,7 +68,7 @@ document neither reads nor writes any Slice product data.
 
 This build guide:
 
-- `README.md`, `CURRENT_STATE.md`, `project-state.json` — overall state and ground rules.
+- `docs/qa/README.md`, `CURRENT_STATE.md`, `project-state.json` — overall state and ground rules.
 - `IMPLEMENTATION_ORDER.md`, `PROMPT_INDEX.md` — this document's place in the dependency graph.
 - `IMPLEMENTATION_DOCUMENT_TEMPLATE.md` — the structure this document (and the completion report)
   must follow.
@@ -320,7 +320,7 @@ Proposed layout for the new repository (paths relative to its root):
 | `.env.example` | Documents every env var this document's config schema requires, with no real values |
 | `.gitignore` | Excludes `.env`, `.env.*.local`, build output, `node_modules` |
 | `.nvmrc` (or equivalent) | Pins Node.js version to match Slice `server/`'s |
-| `README.md` (new repo's own) | Companion-client framing, env var list, local run instructions |
+| `docs/qa/README.md` (new repo's own) | Companion-client framing, env var list, local run instructions |
 | `src/config/env.ts` | `zod` schema + loader for all environment variables (§7) |
 | `src/lib/logger.ts` | Structured JSON logger with sensitive-field redaction |
 | `src/lib/shutdown.ts` | Shared graceful-shutdown helper (registers SIGTERM/SIGINT, runs an ordered list of async cleanup callbacks) |
@@ -378,7 +378,7 @@ Proposed layout for the new repository (paths relative to its root):
 17. Write the unit tests from §21 and the integration tests from §22.
 18. Configure CI (provider confirmed in step 2) to run `lint`, `typecheck`, `test:unit`,
     `test:integration`, `build` on every push/PR.
-19. Write the new repository's own root `README.md` (companion-client framing, env var list
+19. Write the new repository's own root `docs/qa/README.md` (companion-client framing, env var list
     without real values, local run instructions for both processes).
 20. Run the full verification command set (§25) locally until green.
 21. Perform the manual QA checklist (§24) in a real, disposable dev Discord guild with a real dev

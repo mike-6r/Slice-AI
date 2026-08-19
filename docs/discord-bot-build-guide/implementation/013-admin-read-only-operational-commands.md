@@ -61,7 +61,7 @@ that foundation is real and working, not aspirational.
 
 ## 4. Old bot behavior migrated
 
-None — this document has no old-bot predecessor. `OLD_BOT_FEATURE_INVENTORY.md` and `README.md` are
+None — this document has no old-bot predecessor. `OLD_BOT_FEATURE_INVENTORY.md` and `docs/qa/README.md` are
 explicit that the old Python bot (Infria, a FiveM/GTA-roleplay-community bot, `discord.py==1.6.0`)
 has zero product overlap with Slice, and it never had anything resembling an admin-audit-lookup or
 account-status-history surface — those concepts don't exist in its domain at all. The closest
@@ -99,7 +99,7 @@ rule.
 
 ## 6. Files to read before starting
 
-- `README.md`, `CURRENT_STATE.md`, `project-state.json` (this build guide's own state)
+- `docs/qa/README.md`, `CURRENT_STATE.md`, `project-state.json` (this build guide's own state)
 - `BOT_PRODUCT_SPEC.md` §8 ("Admin operations — mostly read-only in the bot; mutations stay in the
   web admin panel") — the single clearest statement of this document's scope boundary
 - `BOT_ARCHITECTURE.md` (Slice API client, permission module, pagination components, structured

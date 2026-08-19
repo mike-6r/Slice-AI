@@ -25,7 +25,7 @@ Slice is a collectibles/marketplace platform with a TypeScript backend (`server/
 source of truth for users, assets, market data, collector profiles, and vault events. The Discord bot
 being built from this guide is a **companion client** to Slice: it calls Slice's HTTP API exclusively,
 never queries Slice's Postgres/Prisma directly, never duplicates a Slice business rule, and never
-becomes a second backend (`README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This
+becomes a second backend (`docs/qa/README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This
 document sits in Track B of `IMPLEMENTATION_ORDER.md` — it has no dependency on the account-linking
 work in Track A (Documents 004–006) because every command it delivers reads **public** Slice data. It
 runs in parallel with Document 007 (Marketplace and asset commands), both built directly on top of
@@ -48,7 +48,7 @@ None — this document has no old-bot predecessor. `OLD_BOT_FEATURE_INVENTORY.md
 `OLD_TO_NEW_MIGRATION_MATRIX.md` were reviewed specifically for anything resembling a public
 collector/investor-profile display or a vault/custody-activity feed. The old bot (Infria,
 `discord.py==1.6.0`) is an unrelated FiveM/GTA roleplay-community bot with zero product overlap with
-Slice (`README.md`, `OLD_BOT_FEATURE_INVENTORY.md` "Source and scope"). Its 31 inventoried features
+Slice (`docs/qa/README.md`, `OLD_BOT_FEATURE_INVENTORY.md` "Source and scope"). Its 31 inventoried features
 cover bootstrap, role management, announcements, suggestions, bug reports, help, gang/faction
 leaderboards and strikes, a Tebex store integration, DM-based anti-bot verification, tickets,
 moderation, auto-moderation, giveaways, a trailer/perk-submission workflow, and shared helper/error

@@ -1,0 +1,478 @@
+{
+  "title": "SLICE COLLECTOR OFFERING + MONEY FLOW AUDIT",
+  "auditStatus": "COMPLETE",
+  "scope": {
+    "mode": "read_only_static_architecture_audit",
+    "repository": "C:\\Users\\Aarons\\Documents\\Codex\\2026-08-05\\files-mentioned-by-the-user-you\\work\\slice-project",
+    "excluded": [
+      "staging and production mutations",
+      "new orders",
+      "new executions",
+      "provider calls",
+      "PriceCharting calls",
+      "Ximilar calls",
+      "migrations",
+      "UI implementation",
+      "deployment",
+      "Umbreon changes",
+      "Charizard changes"
+    ]
+  },
+  "repository": {
+    "head": "58d4b9d4e92f59f25bc41e7bc616eca10a3d8f81",
+    "branchState": "clean except pre-existing untracked docs/qa/screenshots/",
+    "auditArtifactsAreAuthorized": true
+  },
+  "domainMutations": 0,
+  "providerCalls": 0,
+  "deployment": "NONE",
+  "currentFlow": [
+    {
+      "step": 1,
+      "name": "Collector submission",
+      "authority": "server/src/modules/submissions/application/submission.service.ts",
+      "persistence": ["AssetSubmission", "SubmissionMedia", "SubmissionMarketResearch"],
+      "result": "ownerUserId identifies the collector submission owner"
+    },
+    {
+      "step": 2,
+      "name": "Review approval",
+      "authority": "SubmissionService.decide",
+      "persistence": ["VerificationReview", "AssetSubmission.status"],
+      "result": "approval does not create ownership or cash"
+    },
+    {
+      "step": 3,
+      "name": "Asset lifecycle",
+      "authority": "server/src/modules/lifecycle/application/lifecycle.service.ts",
+      "persistence": ["ValuationDecision", "VaultCustodyRecord", "AssetPublication"],
+      "result": "published, custody, valuation, and readiness are separate"
+    },
+    {
+      "step": 4,
+      "name": "Supply policy",
+      "authority": "server/src/modules/ownership/application/ownership-policy.service.ts and src/components/admin/AdminCollectibleDetail.tsx",
+      "persistence": ["OwnershipSupplyPolicy"],
+      "result": "admin configures total units, integer price, and currency remainder"
+    },
+    {
+      "step": 5,
+      "name": "Issuance",
+      "authority": "server/src/modules/ownership/application/ownership.service.ts",
+      "persistence": ["OwnershipAssetSupply", "OwnershipAccount", "OwnershipPosition", "OwnershipLedgerEntry"],
+      "result": "all units are credited to a per-asset TREASURY account"
+    },
+    {
+      "step": 6,
+      "name": "Treasury listing",
+      "authority": "server/src/modules/trading/application/trading.service.ts::placeTreasuryListing",
+      "persistence": ["TradingOrder", "OwnershipReservation"],
+      "result": "Treasury is the seller principal and price must equal the issued Slice price"
+    },
+    {
+      "step": 7,
+      "name": "Matching and settlement",
+      "authority": "TradingService.settleExecution",
+      "persistence": ["TradingExecution", "JournalTransaction", "JournalEntry", "AccountBalance", "OwnershipLedgerEntry", "PortfolioLot"],
+      "result": "ownership, cash, fee, lot, audit, and outbox work atomically"
+    }
+  ],
+  "ownershipAuthority": {
+    "afterIssuance": "per-asset OwnershipAccount with type TREASURY",
+    "collectorAssignedUnits": false,
+    "collectorRetainedOwnershipConcept": false,
+    "beneficialOriginatorField": false,
+    "initialOfferingInventory": false,
+    "evidence": "OwnershipService.issue creates the Treasury account, credits all issued units, and appends INITIAL_ISSUANCE. OwnershipAccount has no offering or beneficiary relation."
+  },
+  "umbreonState": {
+    "readOnly": true,
+    "preservedObservedState": {
+      "issuedUnits": "1000",
+      "treasurySettledUnitsAfterExistingExecution": "999",
+      "treasuryReservedUnits": "9",
+      "treasuryAvailableUnits": "990",
+      "existingExecution": "1 unit at £1.64",
+      "investorSettledUnits": "1"
+    },
+    "changedByAudit": false
+  },
+  "initialPurchase": {
+    "seller": "Treasury principal",
+    "ownershipPath": "Treasury OwnershipPosition to buyer OwnershipPosition through TRANSFER ledger entry",
+    "cashSellerAccount": "FinancialAccount ownerType PLATFORM, accountType LIABILITY, code STAGING_DEMO_TREASURY_PROCEEDS",
+    "collectorProceedsAccount": false,
+    "feeAccount": "FinancialAccount ownerType PLATFORM, accountType REVENUE, code TRADING_FEE_REVENUE",
+    "collectorCredited": false,
+    "distinguishedFromSecondary": false
+  },
+  "d13MoneyMovement": {
+    "models": ["FinancialAccount", "JournalTransaction", "JournalEntry", "AccountBalance", "CashReservation", "MoneyMovement"],
+    "customerCash": "USER-owned accounts such as CASH_AVAILABLE; available equals posted authority less reservedMinor",
+    "pendingCash": "MoneyMovement PENDING_PROVIDER plus reservation state, not a separate initial-offering account",
+    "platformRevenue": "PLATFORM/REVENUE/TRADING_FEE_REVENUE",
+    "treasuryCash": "PLATFORM/LIABILITY/STAGING_DEMO_TREASURY_PROCEEDS",
+    "externalClearing": "CLEARING/ASSET/EXTERNAL_GBP_CLEARING",
+    "sellerProceeds": "Generic user seller account for customer sellers; Treasury proceeds liability for Treasury sellers",
+    "suspense": "No dedicated initial-offering suspense authority found",
+    "settlement": "Trading settlement directly posts a balanced TRADE_SETTLEMENT journal inside the execution transaction",
+    "canSupportIntendedModel": "PARTIAL"
+  },
+  "fees": [
+    {
+      "name": "secondary buyer fee",
+      "status": "IMPLEMENTED",
+      "source": "TradingMarket makerFeeBps/takerFeeBps and TradingService.settleExecution",
+      "configuredDefaults": "maker 0 bps, taker 100 bps"
+    },
+    {
+      "name": "secondary seller fee",
+      "status": "IMPLEMENTED",
+      "source": "TradingService.settleExecution"
+    },
+    {
+      "name": "Slice trading fee revenue",
+      "status": "IMPLEMENTED_FOR_CURRENT_TRADING",
+      "source": "TRADING_FEE_REVENUE"
+    },
+    {
+      "name": "initial offering fee",
+      "status": "NOT_IMPLEMENTED"
+    },
+    {
+      "name": "collector proceeds fee",
+      "status": "NOT_IMPLEMENTED"
+    },
+    {
+      "name": "withdrawal fee",
+      "status": "NOT_IMPLEMENTED_AS_PRODUCT_FEE",
+      "workflow": "PARTIAL"
+    },
+    {
+      "name": "membership fee",
+      "status": "PARTIAL",
+      "reason": "plans have prices, but billing actions defer when provider is unavailable"
+    },
+    {
+      "name": "provider fee",
+      "status": "NOT_IMPLEMENTED"
+    },
+    {
+      "name": "community distribution fee",
+      "status": "SEPARATE_FEATURE",
+      "default": "0 bps unless configured"
+    }
+  ],
+  "collectorProceeds": {
+    "currentDestination": "platform Treasury proceeds liability",
+    "originatingCollectorCredited": false,
+    "collectorPayableAccount": false,
+    "required": "explicit collector proceeds/payable account and idempotent initial-offering settlement"
+  },
+  "retainedOwnership": {
+    "supported": false,
+    "currentRemainderMeaning": "integer currency remainder from floor price-per-unit calculation, not collector ownership",
+    "required": ["offered percentage", "offered units", "retained percentage", "retained units", "approved terms"]
+  },
+  "issuanceConfiguration": {
+    "totalSupply": {
+      "controller": "admin policy",
+      "source": "OwnershipSupplyPolicy.proposedUnits"
+    },
+    "pricePerUnit": {
+      "controller": "admin/system policy from authoritative valuation",
+      "source": "OwnershipSupplyPolicy.pricePerUnitMinor"
+    },
+    "valuation": {
+      "controller": "staff valuation authority",
+      "source": "ValuationDecision"
+    },
+    "treasuryAllocation": {
+      "controller": "system issuance service",
+      "source": "OwnershipService.issue",
+      "behavior": "all issued units"
+    },
+    "initialListedAmount": {
+      "controller": "admin Treasury listing operation",
+      "source": "TradingService.placeTreasuryListing"
+    },
+    "marketOpen": {
+      "controller": "market/trading operations",
+      "source": "TradingMarket.status and tradingEnabled"
+    },
+    "collectorInput": "no offering terms"
+  },
+  "conceptSeparation": {
+    "physicalOriginator": "submission owner only",
+    "canonicalAsset": true,
+    "issuedSupply": true,
+    "retainedCollectorOwnership": false,
+    "initialOfferingInventory": false,
+    "treasuryTechnicalInventory": true,
+    "secondaryOwnership": true,
+    "customerCash": true,
+    "collectorProceeds": false,
+    "sliceFeeRevenue": true,
+    "conflations": [
+      "initial collector-originated inventory and Treasury inventory",
+      "initial offering and secondary sale",
+      "integer price remainder and retained collector ownership"
+    ]
+  },
+  "adminIssuanceUi": {
+    "path": "src/components/admin/AdminCollectibleDetail.tsx",
+    "supports": [
+      "readiness blockers",
+      "total unit previews",
+      "integer price per unit",
+      "retained currency remainder",
+      "propose",
+      "approve",
+      "issue"
+    ],
+    "doesNotSupport": [
+      "collector offering percentage",
+      "collector retained units",
+      "collector net proceeds",
+      "initial offering terms"
+    ],
+    "treasuryAssumption": "backend issuance creates Treasury inventory; UI does not expose beneficial-owner distinction"
+  },
+  "collectorUi": {
+    "path": "src/routes/collector-workspace.tsx",
+    "identityAndEvidence": "IMPLEMENTED",
+    "marketResearch": "IMPLEMENTED_AS_REFERENCE",
+    "custodyAndIntake": "IMPLEMENTED_AS_WORKFLOW",
+    "percentageOffered": "NOT_IMPLEMENTED",
+    "unitsOffered": "NOT_IMPLEMENTED",
+    "percentageRetained": "NOT_IMPLEMENTED",
+    "desiredPrice": "NOT_IMPLEMENTED",
+    "minimumProceeds": "NOT_IMPLEMENTED",
+    "offeringTerms": "NOT_IMPLEMENTED"
+  },
+  "terminologyLeakage": [
+    {
+      "surface": "admin ownership detail",
+      "terms": ["Treasury inventory", "System treasury"],
+      "assessment": "appropriate internally but needs economic-owner annotation"
+    },
+    {
+      "surface": "admin finance reporting",
+      "terms": ["Slice Treasury"],
+      "assessment": "technical label only; can imply economic ownership"
+    },
+    {
+      "surface": "public market",
+      "terms": ["Buy a Slice", "availability"],
+      "assessment": "does not distinguish initial offering from secondary market"
+    },
+    {
+      "surface": "admin issuance preview",
+      "terms": ["retained remainder"],
+      "assessment": "ambiguous; means price remainder, not collector-retained units"
+    }
+  ],
+  "sellerLabels": {
+    "projection": "server/src/modules/admin/admin.service.ts and trading projections",
+    "treasuryLabel": "Slice Treasury",
+    "technicalCorrectness": "correct for current principalType TREASURY",
+    "economicRisk": "can imply Slice economically owns collector-originated inventory",
+    "requiredFutureLabels": ["Initial offering", "Collector-originated offering", "Secondary market seller"]
+  },
+  "initialVsSecondary": {
+    "dataModel": false,
+    "orders": false,
+    "executions": false,
+    "fees": false,
+    "ui": false,
+    "reporting": false,
+    "ledger": false,
+    "auditEvents": false,
+    "smallestCleanSeparation": "offering authority plus inventory/channel/beneficiary references routed through existing settlement primitives"
+  },
+  "providerAbstraction": {
+    "bridge": "adapter, transfer lookup, and webhook boundary; Beta/configuration gates external calls",
+    "plaid": "identity verification, bank-link, and webhook verification adapters",
+    "bankLinking": "present but provider/configuration gated",
+    "deposit": "movement intent and provider-confirmed journal lifecycle present; external rail not enabled in Beta",
+    "withdrawal": "movement intent, reservation, compliance, and webhook/lookup lifecycle present; Bridge withdrawal configuration required",
+    "providerWebhooks": "present with signature verification and idempotent inbox",
+    "customerVerification": "provider-neutral compliance/identity boundary present",
+    "providerSettlementForCollectorOffering": "NOT_IMPLEMENTED",
+    "providerFees": "NOT_IMPLEMENTED"
+  },
+  "realMoneyQuestion": {
+    "real500BalanceRepresentation": "D13 can represent a provider-confirmed posted USER cash balance with AccountBalance and provider-linked MoneyMovement; reservations reduce availability.",
+    "initial100PurchaseRepresentation": "D13 primitives can balance buyer debit, collector proceeds credit, and Slice fee credit, but the collector account and offering settlement template do not exist.",
+    "conceptualEquation": "buyer debit 100 = collector proceeds X + Slice fee Y",
+    "readiness": "PARTIAL"
+  },
+  "invariants": [
+    "no money created",
+    "no money destroyed except explicit fee or adjustment journal",
+    "debits equal credits",
+    "ownership supply constant",
+    "ownership transferred atomically",
+    "collector proceeds separated from Slice revenue",
+    "customer money separated from company money",
+    "Treasury cannot silently become economic owner",
+    "provider settlement authoritative for real cash",
+    "frontend never creates financial truth",
+    "initial offering and secondary market report separately"
+  ],
+  "policyReviewRequired": [
+    "fractional ownership structure",
+    "custody and beneficial ownership",
+    "securities/investment treatment",
+    "money transmission and customer funds/FBO structure",
+    "collector payout and tax treatment",
+    "redemption or buyout",
+    "physical asset sale/custody exit",
+    "voting and corporate actions"
+  ],
+  "currentVsIntended": [
+    {
+      "area": "collector offering percentage",
+      "current": "not captured",
+      "intended": "collector chooses percentage",
+      "gap": "no offering terms",
+      "risk": "economic intent cannot be enforced",
+      "priority": "P1"
+    },
+    {
+      "area": "retained ownership",
+      "current": "not captured",
+      "intended": "collector retains unsold units",
+      "gap": "no collector position",
+      "risk": "Treasury appears to own everything",
+      "priority": "P1"
+    },
+    {
+      "area": "Treasury",
+      "current": "all issuance units",
+      "intended": "technical inventory/clearing only",
+      "gap": "no beneficial-origin metadata",
+      "risk": "ownership confusion",
+      "priority": "P0"
+    },
+    {
+      "area": "initial proceeds",
+      "current": "platform Treasury liability",
+      "intended": "collector net proceeds",
+      "gap": "no collector proceeds account",
+      "risk": "wrong economic recipient",
+      "priority": "P0"
+    },
+    {
+      "area": "secondary trades",
+      "current": "atomic matcher works",
+      "intended": "unchanged",
+      "gap": "no channel metadata",
+      "risk": "rewrite or misreporting",
+      "priority": "P1"
+    },
+    {
+      "area": "provider settlement",
+      "current": "guarded partial adapter lifecycle",
+      "intended": "provider-authoritative payout",
+      "gap": "collector payout integration",
+      "risk": "real-money incompleteness",
+      "priority": "P0"
+    }
+  ],
+  "requiredChanges": {
+    "P0": [
+      "originator/beneficiary provenance",
+      "collector proceeds/payable account",
+      "balanced initial sale settlement",
+      "separation from platform revenue",
+      "provider-authoritative withdrawals"
+    ],
+    "P1": [
+      "offering terms",
+      "offered/retained allocation",
+      "initial offering inventory",
+      "offering channel/state",
+      "initial payout routing"
+    ],
+    "P2": [
+      "collector offering UI",
+      "customer-safe initial/secondary labels",
+      "net proceeds preview",
+      "terminology cleanup"
+    ],
+    "P3": [
+      "analytics",
+      "payout history",
+      "expiry tooling",
+      "future redemption/corporate actions after policy review"
+    ]
+  },
+  "recommendedArchitecture": {
+    "treasuryModel": "C",
+    "name": "Separate InitialOfferingInventory account/entity distinct from Treasury",
+    "principles": [
+      "immutable approved offering terms",
+      "explicit originator and beneficiary",
+      "retained units allocated explicitly",
+      "reuse D14 matcher",
+      "route initial proceeds to collector payable",
+      "leave secondary settlement unchanged"
+    ]
+  },
+  "treasuryOptions": {
+    "A": {
+      "summary": "Treasury technical holder with collector beneficial origin",
+      "compatibility": "HIGH",
+      "clarity": "MEDIUM",
+      "risk": "beneficiary metadata can be omitted or mislabeled"
+    },
+    "B": {
+      "summary": "Collector receives all units and sells directly",
+      "compatibility": "MEDIUM",
+      "clarity": "HIGH",
+      "risk": "changes seller permissions and current assumptions"
+    },
+    "C": {
+      "summary": "Separate InitialOfferingInventory distinct from Treasury",
+      "compatibility": "HIGH",
+      "clarity": "HIGH",
+      "risk": "one new explicit authority and routing branch",
+      "recommended": true
+    }
+  },
+  "collectorExperience": {
+    "choices": ["25%", "50%", "75%", "100%", "Custom"],
+    "preview": [
+      "whole collectible valuation",
+      "total units",
+      "percentage offered",
+      "units offered",
+      "percentage retained",
+      "units retained",
+      "starting price",
+      "estimated gross proceeds",
+      "estimated Slice fees",
+      "estimated net proceeds"
+    ]
+  },
+  "offeringStates": [
+    "DRAFT",
+    "AWAITING_APPROVAL",
+    "APPROVED",
+    "OPEN",
+    "PARTIALLY_FILLED",
+    "SOLD_OUT",
+    "PAUSED",
+    "CANCELLED",
+    "EXPIRED"
+  ],
+  "moneyFlowExamples": {
+    "deposit500": "Provider-confirmed deposit posts debit external clearing and credit customer CASH_AVAILABLE for the same amount.",
+    "initialPurchase100": "Buyer cash debit 100; collector proceeds credit X; Slice fee revenue credit Y; X + Y = 100; ownership moves from initial offering inventory to buyer.",
+    "secondaryPurchase100": "Existing D14 path: buyer debit gross plus buyer fee; customer seller credit gross less seller fee; Slice fee revenue receives fees; ownership transfers atomically.",
+    "collectorWithdrawal95": "Reserve 95 from posted collector proceeds, create provider movement, settle only after provider confirmation, consume reservation against external clearing journal.",
+    "sliceFeeSweep5": "Only by explicit approved policy: transfer 5 through a balanced journal from proceeds/clearing liability to Slice fee revenue."
+  },
+  "nextImplementationPhase": "P0/P1 accounting design: add immutable collector-originator and InitialOffering authorities, collector proceeds/payable accounts, and an idempotent initial-offering settlement template while keeping the existing secondary D14 matcher unchanged."
+}

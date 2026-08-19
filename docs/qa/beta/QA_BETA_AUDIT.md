@@ -107,7 +107,7 @@ The approved Charizard submission was checked read-only before any physical tran
 
 ## Collector + Admin panel regression audit — 2026-08-14
 
-The authenticated Collector/Admin browser pass is documented in `QA_COLLECTOR_ADMIN_AUDIT.md` with structured issues in `QA_COLLECTOR_ADMIN_ISSUES.json`.
+The authenticated Collector/Admin browser pass is documented in `docs/qa/beta/QA_COLLECTOR_ADMIN_AUDIT.md` with structured issues in `docs/qa/beta/QA_COLLECTOR_ADMIN_ISSUES.json`.
 
 - Collector workspace routes, empty states, subscription, profile and settings loaded without console errors.
 - `/list` Step 1 accepted an exact PriceCharting URL and populated the canonical card identity without saving a new draft.
@@ -146,7 +146,7 @@ This section is the current verification authority; earlier sections retain hist
 ## Admin Phase 3 final launch-gate boundary — 2026-08-15
 
 - Deployment rechecked at Git/VPS `7528bfb0e507e6696507af9bd47a7ba1620558b3`; API/web active; `/health` and `/ready` PASS; Prisma schema is current with 58 migrations.
-- `ADMIN_ROUTE_INVENTORY.md` and `ADMIN_FUNCTION_INVENTORY.json` classify the Admin route surface, backend authority, permissions, audit expectations, and intentionally disabled controls.
+- `docs/qa/admin/ADMIN_ROUTE_INVENTORY.md` and `docs/qa/admin/ADMIN_FUNCTION_INVENTORY.json` classify the Admin route surface, backend authority, permissions, audit expectations, and intentionally disabled controls.
 - The final fresh authenticated Admin browser pass was not executed because no controlled Admin browser session/credential was available in this pass. The unauthenticated route correctly showed the private-workspace sign-in state.
 - No admin mutation, physical intake event, Charizard progression, provider call, publication, issuance, funding, or order was created.
 
@@ -155,7 +155,7 @@ This section is the current verification authority; earlier sections retain hist
 ## Collector final QA gate — 2026-08-15
 
 - Deployment rechecked at Git/VPS `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce`; API/web active; `/health` and `/ready` PASS; Prisma schema current.
-- `COLLECTOR_ROUTE_INVENTORY.md` and `COLLECTOR_FUNCTION_INVENTORY.json` classify the Collector workspace/listing controls and backend authority.
+- `docs/qa/collector/COLLECTOR_ROUTE_INVENTORY.md` and `docs/qa/collector/COLLECTOR_FUNCTION_INVENTORY.json` classify the Collector workspace/listing controls and backend authority.
 - A fresh `/collector-workspace` browser tab reached the expected private-workspace sign-in boundary. No controlled Collector session was available, so no sensitive data or state-changing listing/media/shipment action was attempted.
 - Prior authenticated evidence remains available for the approved Charizard journey, `beta-test-uk-intake` selection, media safety/checksums, fixture cleanup and basic cross-user status checks. It does not replace the missing fresh Steps 1–6/privacy/responsive/accessibility/request-health pass.
 

@@ -382,8 +382,8 @@ This section is the current checklist authority and supersedes earlier pending-c
 ## Collector final QA gate — 2026-08-15
 
 - Deployment: `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce` on Git and VPS; API/web active; health/ready PASS; Prisma current.
-- Collector route inventory: **CREATED** (`COLLECTOR_ROUTE_INVENTORY.md`).
-- Collector function inventory: **CREATED** (`COLLECTOR_FUNCTION_INVENTORY.json`).
+- Collector route inventory: **CREATED** (`docs/qa/collector/COLLECTOR_ROUTE_INVENTORY.md`).
+- Collector function inventory: **CREATED** (`docs/qa/collector/COLLECTOR_FUNCTION_INVENTORY.json`).
 - Fresh authenticated Collector browser session: **NOT EXECUTED**; staging correctly displayed the private-workspace sign-in boundary.
 - Fresh listing Steps 1–6, media/privacy matrix, Ximilar, responsive/accessibility and request-health checks: **PENDING**.
 - Collector final decision: **NO-GO for External Invited Beta**; controlled internal Beta remains **GO with documented limitations**.
@@ -417,8 +417,8 @@ Controlled internal Beta: **GO with documented limitations**. External invited B
 ## Admin Phase 3 final launch gate — 2026-08-15
 
 - Deployment: `7528bfb0e507e6696507af9bd47a7ba1620558b3` on Git and VPS; API/web active; health/ready PASS; Prisma schema current.
-- Admin route inventory: **CREATED** (`ADMIN_ROUTE_INVENTORY.md`).
-- Admin function inventory: **CREATED** (`ADMIN_FUNCTION_INVENTORY.json`).
+- Admin route inventory: **CREATED** (`docs/qa/admin/ADMIN_ROUTE_INVENTORY.md`).
+- Admin function inventory: **CREATED** (`docs/qa/admin/ADMIN_FUNCTION_INVENTORY.json`).
 - Disabled controls now include an accessible reason (Export, Intake settings, Accept to intake, missing Collector workspace).
 - Fresh authenticated Admin browser pass: **NOT EXECUTED** in this pass because a controlled Admin browser session/credential was not available. No high-risk mutation was run.
 - Final Admin launch gate: **NO-GO pending authenticated route, mutation, RBAC/IDOR, responsive, accessibility and request-health evidence**.
@@ -428,9 +428,9 @@ Controlled internal Beta: **GO with documented limitations**. External invited B
 
 ## External Invited Beta Final Gate — 2026-08-15 (current)
 
-Release report: `EXTERNAL_BETA_RELEASE_READINESS.md`
+Release report: `docs/qa/beta/EXTERNAL_BETA_RELEASE_READINESS.md`
 
-Machine-readable gate: `EXTERNAL_BETA_RELEASE_GATE.json`
+Machine-readable gate: `docs/qa/beta/EXTERNAL_BETA_RELEASE_GATE.json`
 
 ### Deployment and public site
 

@@ -26,7 +26,7 @@
   "newBotTechnologyRecommendation": "TypeScript + discord.js",
   "documentsCreated": {
     "topLevel": [
-      "README.md", "CURRENT_STATE.md", "OLD_BOT_FEATURE_INVENTORY.md",
+      "docs/qa/README.md", "CURRENT_STATE.md", "OLD_BOT_FEATURE_INVENTORY.md",
       "OLD_TO_NEW_MIGRATION_MATRIX.md", "SLICE_FEATURE_COMPATIBILITY.md", "BOT_PRODUCT_SPEC.md",
       "BOT_ARCHITECTURE.md", "BOT_SECURITY_MODEL.md", "BOT_DATA_OWNERSHIP.md",
       "BOT_API_REQUIREMENTS.md", "COMMAND_CATALOGUE.md", "EVENT_AND_JOB_CATALOGUE.md",

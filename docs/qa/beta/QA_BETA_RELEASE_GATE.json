@@ -211,14 +211,14 @@
     { "summary": "Activated the verified release in the actual /opt/slice/app systemd working directory and retained /opt/slice/current." }
   ],
   "screenshots": [
-    "qa-screenshots/treasury-qa/umb-390x844.png",
-    "qa-screenshots/treasury-qa/umb-768x1024.png",
-    "qa-screenshots/treasury-qa/umb-1366x768.png",
-    "qa-screenshots/treasury-qa/umb-1920x1080.png",
-    "qa-screenshots/treasury-qa/umb-2560x1440.png",
-    "qa-screenshots/admin-market-1366-auth-final.png",
-    "qa-screenshots/admin-market-1920-auth-final.png",
-    "qa-screenshots/admin-market-2560-auth-final.png"
+    "docs/qa/screenshots/treasury-qa/umb-390x844.png",
+    "docs/qa/screenshots/treasury-qa/umb-768x1024.png",
+    "docs/qa/screenshots/treasury-qa/umb-1366x768.png",
+    "docs/qa/screenshots/treasury-qa/umb-1920x1080.png",
+    "docs/qa/screenshots/treasury-qa/umb-2560x1440.png",
+    "docs/qa/screenshots/admin-market-1366-auth-final.png",
+    "docs/qa/screenshots/admin-market-1920-auth-final.png",
+    "docs/qa/screenshots/admin-market-2560-auth-final.png"
   ],
   "finalBetaReadiness": "NO_GO",
   "nextAction": "Obtain authorized independent Investor/Staff/Reviewer sessions and complete the non-destructive privacy, RBAC/IDOR, responsive, and accessibility matrices without mutating Umbreon or Charizard."

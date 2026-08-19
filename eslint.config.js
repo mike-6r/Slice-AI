@@ -17,7 +17,6 @@ export default tseslint.config(
       "server/**",
       "apps/**",
       "docs/**",
-      "Slice AI/**",
       "**/dist/**",
     ],
   },

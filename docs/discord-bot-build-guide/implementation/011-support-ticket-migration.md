@@ -26,13 +26,13 @@
 Slice is a collectibles/marketplace platform with a TypeScript backend; the Discord bot being built
 from this guide is a **companion client** to Slice — it calls Slice's HTTP API for anything
 Slice-authoritative, never becomes a second backend, and never duplicates a Slice business rule
-(`README.md` ground rules, `BOT_ARCHITECTURE.md`). This document is one of three fully bot-owned,
+(`docs/qa/README.md` ground rules, `BOT_ARCHITECTURE.md`). This document is one of three fully bot-owned,
 Slice-independent tracks (`IMPLEMENTATION_ORDER.md` Track C: 011/012/014) that can proceed in
 parallel with the account-linking track once Documents 001–003 land. It rebuilds, as a native
 Discord.js v14 slash-command/component feature with its own persistence, the ticket system that
 existed in the old Python bot ("Infria," `discord.py 1.6.0`) as `cogs/Tickets.py` — an unrelated
 FiveM/GTA roleplay community bot reviewed solely as a source of reusable Discord-infrastructure
-patterns, never as a Slice feature blueprint (`README.md`, `OLD_BOT_FEATURE_INVENTORY.md`). Slice
+patterns, never as a Slice feature blueprint (`docs/qa/README.md`, `OLD_BOT_FEATURE_INVENTORY.md`). Slice
 itself has no ticketing concept anywhere in its backend documents; this document introduces none on
 Slice's side and requires no Slice API work to close.
 
@@ -117,7 +117,7 @@ content unless the user themselves shares it in the ticket conversation.
 
 ## 6. Files to read before starting
 
-- `README.md`, `CURRENT_STATE.md` — overall guide state and ground rules.
+- `docs/qa/README.md`, `CURRENT_STATE.md` — overall guide state and ground rules.
 - `OLD_BOT_FEATURE_INVENTORY.md` rows 8, 16, 17 — old ticket behavior and its problems (source of
   truth for what must change).
 - `OLD_TO_NEW_MIGRATION_MATRIX.md` M1, M6, M7 — the authoritative rewrite spec, error-handling

@@ -42,6 +42,6 @@
     "Statuses marked IMPLEMENTED_NOT_BROWSER_RETESTED are not claimed as final staging proof.",
     "No shipment, receipt, valuation, custody, publication, issuance, funding, adjustment, or order was created for the controlled Charizard.",
     "Frontend lint retains the repository-wide CRLF/Prettier baseline failure; touched-file typechecks and production builds pass.",
-    "Review Queue and Submission Review redesign is recorded in ADMIN_REVIEW_DESIGN_QA.md; authenticated mutation and responsive evidence remains pending."
+    "Review Queue and Submission Review redesign is recorded in docs/qa/admin/ADMIN_REVIEW_DESIGN_QA.md; authenticated mutation and responsive evidence remains pending."
   ]
 }

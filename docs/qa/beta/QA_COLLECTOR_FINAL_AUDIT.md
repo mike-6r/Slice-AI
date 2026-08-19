@@ -16,7 +16,7 @@
 
 A fresh staging browser tab was opened at `/collector-workspace`. After session restoration it showed the expected private-workspace sign-in boundary. No controlled Collector credentials/session were available in this pass, so no password, media, tracking number, or other sensitive data was entered and no state-changing workflow was attempted.
 
-Prior authenticated evidence remains in `QA_COLLECTOR_ADMIN_AUDIT.md`: Collector workspace navigation, the approved Charizard journey, destination selection, media safety/checksums, fixture cleanup, and cross-user submission status checks were previously exercised. This pass does not represent those older checks as a fresh final browser run.
+Prior authenticated evidence remains in `docs/qa/beta/QA_COLLECTOR_ADMIN_AUDIT.md`: Collector workspace navigation, the approved Charizard journey, destination selection, media safety/checksums, fixture cleanup, and cross-user submission status checks were previously exercised. This pass does not represent those older checks as a fresh final browser run.
 
 ## Current controlled Charizard safety
 
@@ -34,4 +34,4 @@ Fresh update: the verified controlled Collector account authenticated successful
 
 The open gate is missing fresh authenticated proof for the full six-step listing flow, fresh front/back upload, cross-user private-media/address privacy, optional Ximilar behavior, mobile/accessibility, request-health and duplicate-request checks. No new Blocker/Critical code defect was established in this pass, and no real-world event was fabricated.
 
-See `COLLECTOR_ROUTE_INVENTORY.md` and `COLLECTOR_FUNCTION_INVENTORY.json` for the implementation/control map.
+See `docs/qa/collector/COLLECTOR_ROUTE_INVENTORY.md` and `docs/qa/collector/COLLECTOR_FUNCTION_INVENTORY.json` for the implementation/control map.

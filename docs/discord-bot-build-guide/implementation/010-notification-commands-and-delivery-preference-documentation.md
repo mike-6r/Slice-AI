@@ -26,7 +26,7 @@
 Slice is a collectibles/marketplace platform with a TypeScript backend (`server/`); the Discord bot
 being built from this guide is a **companion client** to Slice — it calls Slice's HTTP API for every
 read and write, never queries Slice's Postgres/Prisma directly, and never duplicates a Slice business
-rule (`README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This document is
+rule (`docs/qa/README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do"). This document is
 Implementation Document 010 of 18 (`IMPLEMENTATION_ORDER.md`, `PROMPT_INDEX.md`), on Track A
 (account-linking-dependent commands: 004 → 005 → 006 → 009 → 010 → 013). It delivers the four
 `/notifications` slash commands — all pull-based, on-demand reads/mutations against Slice's existing,
@@ -161,7 +161,7 @@ notifications, collectors, vault) is being designed fresh").
   a workaround (e.g., a bot-side polling loop that DMs on any new item) because that would silently
   duplicate Slice's future outbox-consumer responsibility with a different, non-idempotent, non-Doc-
   017-compliant mechanism — exactly the kind of "second backend" behavior the bot must never exhibit
-  (`README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do").
+  (`docs/qa/README.md` ground rules, `BOT_ARCHITECTURE.md` "Bot must never do").
 - A user-facing "notification preferences" or "delivery channel" command/setting of any kind. There
   is nothing for such a command to configure yet: Slice's `NotificationPreference` model has no
   Discord-addressable channel, so a bot-side preferences UI would either do nothing or silently
@@ -181,7 +181,7 @@ notifications, collectors, vault) is being designed fresh").
   Document 014 (community/engagement features), and PHASE-GATED for the *delivery* half for the same
   Doc 017 reason as this document's §8. This document does not touch Discord role assignment.
 - Any change to Slice's `Notification` or `NotificationPreference` Prisma models, migrations, or API
-  surface. Per this build guide's scope boundaries (`README.md`), no Slice source is modified by any
+  surface. Per this build guide's scope boundaries (`docs/qa/README.md`), no Slice source is modified by any
   document in this guide, including this one.
 - Notification creation/authoring. The bot never creates a `Notification` on a user's behalf; it only
   reads and marks-read notifications Slice itself already created.

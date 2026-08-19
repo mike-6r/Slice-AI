@@ -21,4 +21,4 @@ Generated 2026-08-15 against deployed commit `e6acfdaddd95e01b52011fbb6e7eecd743
 
 ## Final QA boundary
 
-The current deployment was health-checked, but the required fresh authenticated Collector session was unavailable to the agent. The staging route therefore showed the expected sign-in boundary and no mutations were attempted. Prior authenticated evidence is retained in `QA_COLLECTOR_ADMIN_AUDIT.md`; this pass does not upgrade that evidence to a final External Invited Beta GO.
+The current deployment was health-checked, but the required fresh authenticated Collector session was unavailable to the agent. The staging route therefore showed the expected sign-in boundary and no mutations were attempted. Prior authenticated evidence is retained in `docs/qa/beta/QA_COLLECTOR_ADMIN_AUDIT.md`; this pass does not upgrade that evidence to a final External Invited Beta GO.

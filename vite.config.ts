@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       // Backend specs run through server/package.json; root Vitest is frontend-only.
-      exclude: ["server/**", "apps/**", "Slice AI/**", "node_modules/**", "dist/**"],
+      exclude: ["server/**", "apps/**", "node_modules/**", "dist/**"],
     },
   };
 });

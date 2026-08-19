@@ -76,7 +76,7 @@ Admin decision: **NO-GO for external invited beta** while `ADMIN-COL-001` remain
 
 ## Issues
 
-See `QA_COLLECTOR_ADMIN_ISSUES.json` for structured reproduction details. The contained Collector CTA regression was fixed in this pass. The Admin Collectibles/Asset Operations route collision is the top remaining functional issue.
+See `docs/qa/beta/QA_COLLECTOR_ADMIN_ISSUES.json` for structured reproduction details. The contained Collector CTA regression was fixed in this pass. The Admin Collectibles/Asset Operations route collision is the top remaining functional issue.
 
 ## Latest authenticated Collector/Admin + intake verification — 2026-08-15
 
@@ -153,7 +153,7 @@ Decision: Collector and Admin are **GO for controlled internal Beta**. Security 
 Fresh external-gate evidence: the verified controlled Collector workspace authenticated successfully and all seven workspace tabs loaded without console errors. The approved Charizard read-only view and Media tab showed existing SAFE front/back evidence and no physical lifecycle progression. `/list` Steps 1–6, fresh media replacement, signed-media/intake privacy, staff matrix, responsive/accessibility and request-health checks remain open; the Investor credential supplied for this run was rejected.
 
 - Deployment rechecked at Git/VPS `e6acfdaddd95e01b52011fbb6e7eecd7432f51ce`; API/web active; `/health` and `/ready` PASS; Prisma is current.
-- `COLLECTOR_ROUTE_INVENTORY.md`, `COLLECTOR_FUNCTION_INVENTORY.json`, `QA_COLLECTOR_FINAL_AUDIT.md`, and `QA_COLLECTOR_FINAL_ISSUES.json` are the current Collector QA artifacts.
+- `docs/qa/collector/COLLECTOR_ROUTE_INVENTORY.md`, `docs/qa/collector/COLLECTOR_FUNCTION_INVENTORY.json`, `docs/qa/beta/QA_COLLECTOR_FINAL_AUDIT.md`, and `docs/qa/beta/QA_COLLECTOR_FINAL_ISSUES.json` are the current Collector QA artifacts.
 - A fresh browser tab reached `/collector-workspace` and correctly rendered the private-workspace sign-in boundary. No controlled Collector credentials were available in this pass, so no sensitive data or mutation was entered.
 - Prior authenticated evidence remains valid as historical evidence for workspace navigation, approved Charizard state, destination selection, media safety/checksums, fixture cleanup and basic RBAC checks; it is not upgraded to fresh full six-step listing proof.
 

@@ -102,7 +102,7 @@ Controlled Charizard `054e7773-87ad-4b5e-9701-916a3aa5144d` remains the approved
 
 ## Responsive and accessibility evidence
 
-Existing captured evidence is retained under `qa-screenshots/`:
+Existing captured evidence is retained under `docs/qa/screenshots/`:
 
 - Public Umbreon: 390, 768, 1366, 1920, 2560 widths.
 - Admin Treasury/market: 1366, 1920, 2560 and prior 768 evidence.
@@ -140,14 +140,14 @@ Because three P1 release-evidence gates remain open, the final classification is
 
 The following existing captures are referenced as visual evidence and contain no credentials:
 
-- `qa-screenshots/treasury-qa/umb-390x844.png`
-- `qa-screenshots/treasury-qa/umb-768x1024.png`
-- `qa-screenshots/treasury-qa/umb-1366x768.png`
-- `qa-screenshots/treasury-qa/umb-1920x1080.png`
-- `qa-screenshots/treasury-qa/umb-2560x1440.png`
-- `qa-screenshots/admin-market-1366-auth-final.png`
-- `qa-screenshots/admin-market-1920-auth-final.png`
-- `qa-screenshots/admin-market-2560-auth-final.png`
+- `docs/qa/screenshots/treasury-qa/umb-390x844.png`
+- `docs/qa/screenshots/treasury-qa/umb-768x1024.png`
+- `docs/qa/screenshots/treasury-qa/umb-1366x768.png`
+- `docs/qa/screenshots/treasury-qa/umb-1920x1080.png`
+- `docs/qa/screenshots/treasury-qa/umb-2560x1440.png`
+- `docs/qa/screenshots/admin-market-1366-auth-final.png`
+- `docs/qa/screenshots/admin-market-1920-auth-final.png`
+- `docs/qa/screenshots/admin-market-2560-auth-final.png`
 
 ## Final classification
 
@@ -168,7 +168,7 @@ This is an additive record of the latest non-destructive browser attempt. It doe
 - The staging UI observed in this session still corresponds to deployed source `6ce3210` (including the older More/Vault Live navigation). Local commit `ba20ad8` removes those customer surfaces but was not deployed in this session.
 - Public DOM checks covered `/`, `/marketplace`, the public Umbreon asset, `/collectors`, and `/vault-live` at 390×844, 768×1024, 1366×768, 1920×1080, and 2560×1440. No document overflow or broken images were observed. The 390px marketplace quick-filter rail is horizontally scrollable; its buttons are not all visible at once.
 - Public console errors/warnings observed: `0`.
-- Fresh screenshot capture was attempted but blocked by the browser CDP `Page.captureScreenshot` timeout. Existing `qa-screenshots/` evidence was preserved.
+- Fresh screenshot capture was attempted but blocked by the browser CDP `Page.captureScreenshot` timeout. Existing `docs/qa/screenshots/` evidence was preserved.
 - The available authenticated browser profile was `Slice Demo Collector`, not an independent Investor, Staff, or Reviewer session.
 - Protected-route traversal reached the session-expired boundary (“Your session has expired” / “Sign in again”). No login retry, credential entry, or state-changing action was attempted.
 - Fresh Investor, Staff, Reviewer, private-media, intake-address, and IDOR matrices were not executed. Unexpected HTTP status and provider-call counts were not independently verifiable from the available browser surface; no provider errors or provider logs appeared in the public console.

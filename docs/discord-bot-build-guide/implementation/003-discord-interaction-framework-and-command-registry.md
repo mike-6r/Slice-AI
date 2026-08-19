@@ -106,7 +106,7 @@ document — it is recorded here only to confirm no Slice feature claim is being
 
 ## 6. Files to read before starting
 
-- `README.md`, `CURRENT_STATE.md`, `project-state.json` — build-guide status and ground rules.
+- `docs/qa/README.md`, `CURRENT_STATE.md`, `project-state.json` — build-guide status and ground rules.
 - `IMPLEMENTATION_DOCUMENT_TEMPLATE.md` — the structure this document (and every implementer
   following it) must obey.
 - `IMPLEMENTATION_ORDER.md`, `PROMPT_INDEX.md` — this document's place in the 18-document sequence
