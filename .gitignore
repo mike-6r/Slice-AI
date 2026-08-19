@@ -41,6 +41,11 @@ playwright-report/
 test-results/
 tmp/
 temp/
+*.tar.gz
+*.zip
+*.stdout.log
+*.stderr.log
+.vite-dev.log
 *.sqlite
 *.sqlite3
 *.db

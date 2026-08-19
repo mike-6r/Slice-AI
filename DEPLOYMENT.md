@@ -58,3 +58,11 @@ curl --fail http://127.0.0.1:3101/ready
 Use only forward Prisma migrations. Application rollback is a source-release
 rollback only when it remains compatible with the already-applied database
 schema; database rollback requires a separately reviewed recovery procedure.
+
+## Source-to-VPS workflow
+
+The repository and GitHub commit are the source of truth. Commit the intended
+source changes, push the commit to `main`, and deploy that commit into a new
+server-side release directory. Do not create local `.tar.gz` or `.zip`
+release bundles, copy local `dist` or `node_modules`, or deploy an uncommitted
+working tree. Keep provider credentials in the protected VPS environment only.
