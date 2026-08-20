@@ -32,6 +32,9 @@ npx prisma migrate deploy
 npm run build
 
 ln -sfn "${release_dir}" /opt/slice/current
+# Staging systemd units run from /opt/slice/app. Keep both release pointers
+# aligned so a successful build actually activates the release being checked.
+ln -sfn "${release_dir}" /opt/slice/app
 systemctl restart slice-api.service slice-web.service
 
 curl --fail --silent --show-error http://127.0.0.1:3101/health >/dev/null

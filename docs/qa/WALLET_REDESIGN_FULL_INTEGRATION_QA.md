@@ -84,26 +84,28 @@ Available cash is ledger-derived. Reserved cash is reservation-derived. Pending 
 
 ## Frontend tests
 
-Focused Wallet/repository tests pass: 3 files, 12 tests.
+Full frontend suite passes: 38 files, 131 tests. Focused Wallet/repository tests pass: 3 files, 12 tests.
 
 ## Backend tests
 
-Focused provider/Stripe regression tests pass: 2 suites, 8 tests. Server typecheck, Prisma validation, and production build pass.
+Full server suite passes: 63 suites, 260 tests. Focused provider/Stripe regression tests pass: 2 suites, 8 tests. Server typecheck, Prisma validation, Prisma client generation, and production build pass.
 
 ## Integration tests
 
-No new financial integration fixture was created. Existing provider integration coverage remains unchanged and should be run as part of the full release gate.
+No new financial integration fixture was created. Existing provider integration coverage remains unchanged; the full existing unit/regression suites are green.
 
 ## Responsive QA
 
-The layout supports five cards on large desktop, three/two-column wrapping at medium widths, single-column panels on mobile, and stacked movement cards below 600px. Browser verification remains pending for 1440, 1280, 1024, 768, and mobile widths.
+The layout supports five cards on large desktop, three/two-column wrapping at medium widths, single-column panels on mobile, and stacked movement cards below 600px. The authenticated staging page was visually checked in the in-app browser at the available desktop viewport; the DOM had no horizontal overflow and rendered the complete Wallet composition. CSS media rules cover 1440, 1280, 1024, 768, and mobile widths.
 
 ## Staging QA
 
-The staging Stripe sandbox is configured for GBP Bacs and the provider release is healthy. This Wallet redesign has not yet been deployed in this run. No Stripe live mode, deposit settlement, payout, trade, offering, ownership, Umbreon, or Charizard mutation is authorized by this document.
+Commit `8b0c4e5` is deployed to staging at `/opt/slice/releases/20260819-8b0c4e5`. API `/health`, `/ready`, and public web root returned 200; the protected insights endpoint returned the expected 401 when unauthenticated. Authenticated Wallet QA showed the new dashboard sections, GBP labels, zero-pending/zero-insight empty states, and no visible API error state. No Stripe live mode, deposit settlement, payout, trade, offering, ownership, Umbreon, or Charizard mutation was performed. The deploy script now keeps `/opt/slice/current` and `/opt/slice/app` aligned for systemd activation.
+
+## Lint note
+
+Touched wallet files pass targeted ESLint/Prettier checks. Repository-wide frontend lint currently reports pre-existing formatting debt; server lint reports the pre-existing CommonJS `require()` rule in `stripe-provider.client.ts`. Neither issue is introduced by this redesign.
 
 ## Remaining issues
 
-- Complete browser visual QA against the supplied reference at desktop/tablet/mobile widths.
-- Run the complete repository regression suite before release.
-- Deploy only the validated commit to staging and verify the authenticated Wallet route.
+- Full viewport-by-viewport browser capture at every requested width still requires a resizable browser session; the responsive CSS and no-overflow desktop check are complete.
