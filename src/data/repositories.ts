@@ -21,6 +21,7 @@ import type {
   PortfolioSummary,
   PortfolioPerformance,
   PortfolioPerformanceRange,
+  WalletInsights,
   PortfolioTransactionPage,
   ComplianceSession,
   ComplianceSummary,
@@ -1375,6 +1376,7 @@ export interface PortfolioRepository {
   getLots(): Promise<PortfolioLot[]>;
   getTransactions(input?: { cursor?: string; limit?: number }): Promise<PortfolioTransactionPage>;
   getPerformance(range?: PortfolioPerformanceRange): Promise<PortfolioPerformance>;
+  getWalletInsights(): Promise<WalletInsights>;
 }
 
 export interface CollectorRepository {

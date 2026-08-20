@@ -615,6 +615,16 @@ export const mockRepositories: AppRepositories = {
         freshness: "UNAVAILABLE",
       };
     },
+    async getWalletInsights() {
+      return {
+        period: "month" as const,
+        currency: "GBP" as const,
+        totalDepositsMinor: "0",
+        totalWithdrawalsMinor: "0",
+        netMovementMinor: "0",
+        previousPeriod: null,
+      };
+    },
   },
   collectors: {
     async listCollectors() {

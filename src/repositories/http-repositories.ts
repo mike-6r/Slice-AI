@@ -681,6 +681,7 @@ const mapMovement = (raw: unknown): WalletMovementView => {
   if (
     (value.type !== "DEPOSIT" && value.type !== "WITHDRAWAL") ||
     ![
+      "CREATED",
       "PENDING_PROVIDER",
       "PROCESSING",
       "SETTLED",
@@ -704,6 +705,12 @@ const mapMovement = (raw: unknown): WalletMovementView => {
     createdAt: stringField(value.createdAt, "movement.createdAt") as ISODateTime,
     updatedAt: stringField(value.updatedAt, "movement.updatedAt") as ISODateTime,
     replayed: value.replayed,
+    ...(value.sourceLabel === undefined
+      ? {}
+      : { sourceLabel: nullableString(value.sourceLabel, "movement.sourceLabel") }),
+    ...(value.reference === undefined
+      ? {}
+      : { reference: nullableString(value.reference, "movement.reference") }),
   };
 };
 const mapMovementPage = (raw: unknown): WalletMovementPage => {

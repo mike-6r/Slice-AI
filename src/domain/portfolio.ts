@@ -10,11 +10,26 @@ export interface PortfolioCashSummary {
   reservedMinor: GbpMinorUnits;
   availableMinor: GbpMinorUnits;
   pendingMinor?: GbpMinorUnits;
+  pendingDepositCount?: number;
   pendingWithdrawalMinor?: GbpMinorUnits;
+  pendingWithdrawalCount?: number;
   orderReservedMinor?: GbpMinorUnits;
   withdrawalReservedMinor?: GbpMinorUnits;
   collectorProceedsMinor?: GbpMinorUnits;
   collectorProceedsReservedMinor?: GbpMinorUnits;
+}
+
+export interface WalletInsights {
+  period: "month";
+  currency: "GBP";
+  totalDepositsMinor: GbpMinorUnits;
+  totalWithdrawalsMinor: GbpMinorUnits;
+  netMovementMinor: GbpMinorUnits;
+  previousPeriod: {
+    totalDepositsMinor: GbpMinorUnits;
+    totalWithdrawalsMinor: GbpMinorUnits;
+    netMovementMinor: GbpMinorUnits;
+  } | null;
 }
 
 export interface PortfolioHolding {

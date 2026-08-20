@@ -60,6 +60,7 @@ export interface ConnectPayoutSetup {
 
 export type WalletMovementType = "DEPOSIT" | "WITHDRAWAL";
 export type WalletMovementStatus =
+  | "CREATED"
   | "PENDING_PROVIDER"
   | "PROCESSING"
   | "SETTLED"
@@ -79,6 +80,8 @@ export interface WalletMovementView {
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   replayed: boolean;
+  sourceLabel?: string | null;
+  reference?: string | null;
 }
 
 export interface WalletMovementPage {

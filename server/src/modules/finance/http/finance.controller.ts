@@ -69,6 +69,14 @@ export class FinanceController {
     );
   }
 
+  @Get('me/wallet/insights')
+  @UseGuards(AccessTokenGuard)
+  insights(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = z.object({ period: z.literal('month').default('month') }).strict().safeParse(query);
+    if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Request validation failed.' });
+    return this.ledger.walletInsightsForUser(req.actor!.userId);
+  }
+
   @Get('me/portfolio')
   @UseGuards(AccessTokenGuard)
   portfolioSummary(@Req() req: AuthenticatedRequest) {

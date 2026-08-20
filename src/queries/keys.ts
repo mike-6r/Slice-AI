@@ -21,6 +21,7 @@ export const queryKeys = {
   },
   portfolio: {
     summary: ["portfolio", "summary"] as const,
+    insights: ["portfolio", "insights"] as const,
     holdings: ["portfolio", "holdings"] as const,
     lots: ["portfolio", "lots"] as const,
     transactions: (cursor?: string) => ["portfolio", "transactions", cursor ?? null] as const,

@@ -111,16 +111,15 @@ describe("Document 016 wallet UI", () => {
 
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
     const html = renderWallet();
-    expect(html).toContain("Cash and money movements");
+    expect(html).toContain("<h1>Wallet</h1>");
     expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(5);
     expect(html).toContain("£125.00");
     expect(html).toContain("Safe Bank");
     expect(html).toContain("•••• 1234");
     expect(html).toContain("Movement history");
     expect(html).toContain("Wallet insights");
-    expect(html).toContain("Recent wallet activity");
-    expect(html).toContain("Total deposited");
-    expect(html).toContain("Net cash flow");
+    expect(html).toContain("Settlement timeline");
+    expect(html).toContain("Total wallet balance");
     expect(html).not.toContain("bank-private");
     expect(html).not.toContain("movement-private");
     expect(html).not.toMatch(/accessToken|itemId|provider payload|journal|reservation/i);
@@ -140,8 +139,7 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("No bank connected");
     expect(html).toContain("Set up a UK bank");
     expect(html).toContain("No movements yet");
-    expect(html).toContain("Wallet insights unavailable");
-    expect(html).toContain("No recent activity");
+    expect(html).toContain("Wallet insights");
     expect(html).toContain("Not Started");
     expect(html).not.toMatch(/operational|certified|insured|your funds protected/i);
   });

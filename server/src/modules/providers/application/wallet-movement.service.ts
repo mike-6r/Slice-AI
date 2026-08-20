@@ -965,6 +965,7 @@ export class WalletMovementService {
   async list(userId: string, cursor?: string, limit = 20) {
     const rows = await this.db.moneyMovement.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
+      include: { externalAccount: { select: { institutionName: true, accountName: true, accountMask: true, accountType: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -1114,6 +1115,8 @@ export class WalletMovementService {
       status: string;
       createdAt: Date;
       updatedAt: Date;
+      externalAccount?: { institutionName: string | null; accountName: string | null; accountMask: string | null; accountType: string } | null;
+      failureCode?: string | null;
     },
     replayed: boolean,
   ) {
@@ -1126,6 +1129,10 @@ export class WalletMovementService {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       replayed,
+      sourceLabel: item.externalAccount
+        ? `${item.externalAccount.institutionName ?? item.externalAccount.accountName ?? (item.externalAccount.accountType === 'bacs_debit' ? 'UK bank account' : 'Connected account')}${item.externalAccount.accountMask ? ` · •••• ${item.externalAccount.accountMask}` : ''}`
+        : item.type === 'WITHDRAWAL' ? 'GBP wallet → payout destination' : 'GBP wallet',
+      reference: `WLT-${item.id.slice(0, 8).toUpperCase()}`,
     };
   }
 }

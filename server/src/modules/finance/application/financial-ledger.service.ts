@@ -196,12 +196,12 @@ export class FinancialLedgerService {
           })
         : Promise.resolve([]),
     ]);
-    const pendingMinor = pendingMovements
+    const pendingDeposits = pendingMovements.filter((movement) => movement.type === 'DEPOSIT');
+    const pendingWithdrawals = pendingMovements.filter((movement) => movement.type === 'WITHDRAWAL');
+    const pendingMinor = pendingDeposits
       .filter((movement) => movement.type === 'DEPOSIT')
       .reduce((total, movement) => total + movement.amountMinor, 0n);
-    const pendingWithdrawalMinor = pendingMovements
-      .filter((movement) => movement.type === 'WITHDRAWAL')
-      .reduce((total, movement) => total + movement.amountMinor, 0n);
+    const pendingWithdrawalMinor = pendingWithdrawals.reduce((total, movement) => total + movement.amountMinor, 0n);
     const orderReservedMinor = reservations
       .filter((reservation) => reservation.purposeType === 'TRADING_ORDER')
       .reduce((total, reservation) => total + reservation.amountMinor, 0n);
@@ -216,7 +216,9 @@ export class FinancialLedgerService {
     return {
       currency: 'GBP',
       pendingMinor: pendingMinor.toString(),
+      pendingDepositCount: pendingDeposits.length,
       pendingWithdrawalMinor: pendingWithdrawalMinor.toString(),
+      pendingWithdrawalCount: pendingWithdrawals.length,
       orderReservedMinor: orderReservedMinor.toString(),
       withdrawalReservedMinor: withdrawalReservedMinor.toString(),
       collectorProceedsMinor: collectorProceedsMinor.toString(),
@@ -237,6 +239,35 @@ export class FinancialLedgerService {
         };
       }),
     };
+  }
+
+  async walletInsightsForUser(userId: string, now = new Date()) {
+    const currentStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const previousStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const rows = await this.db.moneyMovement.findMany({
+      where: {
+        userId,
+        status: 'SETTLED',
+        currency: 'GBP',
+        settledAt: { gte: previousStart, lt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)) },
+      },
+      select: { type: true, amountMinor: true, settledAt: true },
+    });
+    const summarize = (from: Date, to: Date) => {
+      const deposits = rows.filter((row) => row.type === 'DEPOSIT' && row.settledAt && row.settledAt >= from && row.settledAt < to)
+        .reduce((total, row) => total + row.amountMinor, 0n);
+      const withdrawals = rows.filter((row) => row.type === 'WITHDRAWAL' && row.settledAt && row.settledAt >= from && row.settledAt < to)
+        .reduce((total, row) => total + row.amountMinor, 0n);
+      return {
+        totalDepositsMinor: deposits.toString(),
+        totalWithdrawalsMinor: withdrawals.toString(),
+        netMovementMinor: (deposits - withdrawals).toString(),
+      };
+    };
+    const current = summarize(currentStart, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)));
+    const previous = summarize(previousStart, currentStart);
+    const previousHasData = previous.totalDepositsMinor !== '0' || previous.totalWithdrawalsMinor !== '0';
+    return { period: 'month' as const, currency: 'GBP' as const, ...current, previousPeriod: previousHasData ? previous : null };
   }
 
   async transactionsForUser(userId: string, cursor?: string, limit = 20) {

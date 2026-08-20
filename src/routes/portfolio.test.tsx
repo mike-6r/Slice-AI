@@ -96,6 +96,14 @@ function renderPortfolio() {
         direction: "NEUTRAL" as const,
         freshness: "UNAVAILABLE",
       }),
+      getWalletInsights: async () => ({
+        period: "month" as const,
+        currency: "GBP" as const,
+        totalDepositsMinor: "0",
+        totalWithdrawalsMinor: "0",
+        netMovementMinor: "0",
+        previousPeriod: null,
+      }),
     },
   };
   return renderToStaticMarkup(

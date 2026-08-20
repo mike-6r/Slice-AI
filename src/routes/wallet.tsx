@@ -48,7 +48,6 @@ import {
   filterWalletMovements,
   formatWalletMoney,
   parseWalletGbp,
-  settledMovementFlow,
   walletAccessPresentation,
   type WalletMovementFilter,
 } from "./-wallet-presentation";
@@ -106,6 +105,7 @@ export function Wallet() {
   });
   const refreshWallet = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.summary });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.insights });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.compliance });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
@@ -156,13 +156,6 @@ export function Wallet() {
         <WalletKpis query={portfolio} />
         <section className="wallet-row wallet-row--primary" aria-label="Wallet access and actions">
           <ConnectedBankPanel query={banks} refreshWallet={refreshWallet} />
-          {isCollector ? (
-            <CollectorPayoutPanel
-              query={connectPayout}
-              refreshWallet={refreshWallet}
-              onCreate={services.providers.createConnectOnboarding}
-            />
-          ) : null}
           <MoveMoneyPanel
             action={action}
             setAction={setAction}
@@ -179,7 +172,15 @@ export function Wallet() {
             )}
             onCapabilityRequired={setCapabilityDialog}
           />
-          <AccountStatusPanel query={compliance} banks={banks} verification={verification} />
+          <AccountStatusPanel
+            query={compliance}
+            banks={banks}
+            capabilities={capabilities.data?.capabilities}
+            verification={verification}
+            connectPayout={connectPayout}
+            isCollector={isCollector}
+            onCreateConnect={services.providers.createConnectOnboarding}
+          />
         </section>
         <section
           className="wallet-row wallet-row--history"
@@ -187,8 +188,13 @@ export function Wallet() {
         >
           <MovementsPanel query={movements} filter={movementFilter} setFilter={setMovementFilter} />
           <div className="wallet-side-stack">
-            <WalletInsightsPanel query={movements} />
-            <WalletActivityPanel query={movements} />
+            <SettlementTimelinePanel
+              portfolio={portfolio}
+              compliance={compliance}
+              banks={banks}
+              movements={movements}
+            />
+            <WalletInsightsPanel />
           </div>
         </section>
         <CapabilityRequiredDialog
@@ -257,8 +263,8 @@ function WalletHeading() {
   return (
     <header className="wallet-heading">
       <p className="page-kicker">Wallet</p>
-      <h1>Cash and money movements</h1>
-      <p>Manage your cash, set up secure GBP deposits, and track your wallet activity.</p>
+      <h1>Wallet</h1>
+      <p>Cash, funding, verification, and money movement infrastructure.</p>
     </header>
   );
 }
@@ -284,40 +290,33 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         icon={WalletCards}
         label="Available cash"
         value={formatWalletMoney(cash.availableMinor)}
-        detail="Available to invest"
+        detail="Ready to invest"
+      />
+      <WalletKpi
+        icon={ArrowDownToLine}
+        label="Pending deposits"
+        value={formatWalletMoney(cash.pendingMinor ?? "0")}
+        detail={countDetail(cash.pendingDepositCount, "deposit", "processing")}
+      />
+      <WalletKpi
+        icon={ArrowUpFromLine}
+        label="Pending withdrawals"
+        value={formatWalletMoney(cash.pendingWithdrawalMinor ?? "0")}
+        detail={countDetail(cash.pendingWithdrawalCount, "withdrawal", "pending")}
       />
       <WalletKpi
         icon={LockKeyhole}
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
-        detail={`${formatWalletMoney(cash.orderReservedMinor ?? "0")} orders · ${formatWalletMoney(cash.withdrawalReservedMinor ?? "0")} withdrawals`}
+        detail="Reserved for orders"
       />
       <WalletKpi
         icon={Layers3}
-        label="Total cash"
+        label="Total wallet balance"
         value={formatWalletMoney(cash.totalMinor)}
-        detail="Available + reserved"
+        detail="Across all cash states"
+        featured
       />
-      <WalletKpi
-        icon={BanknoteArrowDown}
-        label="Pending deposits"
-        value={formatWalletMoney(cash.pendingMinor ?? "0")}
-        detail="Not available to spend yet"
-      />
-      <WalletKpi
-        icon={Clock3}
-        label="Pending withdrawals"
-        value={formatWalletMoney(cash.pendingWithdrawalMinor ?? "0")}
-        detail="Reserved until provider result"
-      />
-      {(cash.collectorProceedsMinor ?? "0") !== "0" ? (
-        <WalletKpi
-          icon={BanknoteArrowDown}
-          label="Collector proceeds"
-          value={formatWalletMoney(cash.collectorProceedsMinor ?? "0")}
-          detail={`${formatWalletMoney(cash.collectorProceedsReservedMinor ?? "0")} reserved`}
-        />
-      ) : null}
     </section>
   );
 }
@@ -327,14 +326,16 @@ function WalletKpi({
   label,
   value,
   detail,
+  featured = false,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
   detail: string;
+  featured?: boolean;
 }) {
   return (
-    <article className="wallet-kpi">
+    <article className={`wallet-kpi${featured ? " wallet-kpi--featured" : ""}`}>
       <KpiIconTile icon={icon} />
       <div>
         <p>{label}</p>
@@ -343,6 +344,11 @@ function WalletKpi({
       </div>
     </article>
   );
+}
+
+function countDetail(count: number | undefined, singular: string, fallback: string) {
+  if (count === undefined) return fallback;
+  return `${count} ${singular}${count === 1 ? "" : "s"} ${fallback}`;
 }
 
 function WalletKpiSkeletons() {
@@ -606,14 +612,35 @@ function MoveMoneyPanel({
 function AccountStatusPanel({
   query,
   banks,
+  capabilities,
   verification,
+  connectPayout,
+  isCollector,
+  onCreateConnect,
 }: {
   query: UseQueryResult<ComplianceSummary>;
   banks: UseQueryResult<BankConnection[]>;
+  capabilities?: AccountCapability[];
   verification: UseMutationResult<ComplianceSession, Error, void>;
+  connectPayout: UseQueryResult<ConnectPayoutSetup>;
+  isCollector: boolean;
+  onCreateConnect: () => Promise<ConnectPayoutSetup>;
 }) {
   const connected = banks.data?.some((bank) => bank.status === "CONNECTED") ?? false;
-  const access = walletAccessPresentation(query.data?.status, connected);
+  const capabilityAccess = capabilities?.filter(
+    (item) => item.capability === "DEPOSIT_FUNDS" || item.capability === "WITHDRAW_FUNDS",
+  );
+  const access = capabilityAccess?.length
+    ? capabilityAccess.some((item) => !item.allowed)
+      ? {
+          status: "RESTRICTED",
+          detail: "Complete the required account steps before moving money",
+        }
+      : {
+          status: "AVAILABLE",
+          detail: "Deposit and withdrawal requests are available",
+        }
+    : walletAccessPresentation(query.data?.status, connected);
   return (
     <WalletPanel
       title="Verification & account status"
@@ -651,6 +678,24 @@ function AccountStatusPanel({
                 detail={access.detail}
                 status={access.status}
               />
+              <StatusRow
+                icon={<ArrowUpFromLine />}
+                label="Payout readiness"
+                detail={
+                  isCollector
+                    ? connectPayout.isLoading
+                      ? "Loading payout status"
+                      : payoutDetail(connectPayout.data?.status)
+                    : "Available for collector accounts"
+                }
+                status={
+                  isCollector
+                    ? connectPayout.isLoading
+                      ? "LOADING"
+                      : (connectPayout.data?.status ?? "UNAVAILABLE")
+                    : "NOT_REQUIRED"
+                }
+              />
             </dl>
             {query.data.status !== "APPROVED" ? (
               <button
@@ -665,6 +710,20 @@ function AccountStatusPanel({
               </button>
             ) : null}
             {verification.error ? <InlineError error={verification.error} /> : null}
+            {isCollector && connectPayout.data && connectPayout.data.status !== "READY" ? (
+              <button
+                type="button"
+                className="wallet-verify-button wallet-verify-button--secondary"
+                disabled={connectPayout.isFetching}
+                onClick={() => {
+                  void onCreateConnect().then(() => void connectPayout.refetch());
+                }}
+              >
+                <ArrowUpFromLine aria-hidden="true" />
+                {connectPayout.isFetching ? "Refreshing payout setup…" : "Continue payout setup"}
+                <ArrowRight aria-hidden="true" />
+              </button>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -710,6 +769,7 @@ function MovementsPanel({
   setFilter: (value: WalletMovementFilter) => void;
 }) {
   const items = filterWalletMovements(query.data?.items ?? [], filter);
+  const [selected, setSelected] = useState<WalletMovementView | null>(null);
   return (
     <WalletPanel
       title="Movement history"
@@ -752,15 +812,17 @@ function MovementsPanel({
             <table className="wallet-table">
               <thead>
                 <tr>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Amount</th>
                   <th>Date</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Source / destination</th>
+                  <th>Reference</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <MovementRow key={item.id} item={item} />
+                  <MovementRow key={item.id} item={item} onSelect={setSelected} />
                 ))}
               </tbody>
             </table>
@@ -779,13 +841,21 @@ function MovementsPanel({
           />
         ) : null}
       </div>
+      {selected ? <MovementDetail item={selected} onClose={() => setSelected(null)} /> : null}
     </WalletPanel>
   );
 }
 
-function MovementRow({ item }: { item: WalletMovementView }) {
+function MovementRow({
+  item,
+  onSelect,
+}: {
+  item: WalletMovementView;
+  onSelect: (item: WalletMovementView) => void;
+}) {
   return (
-    <tr>
+    <tr className="wallet-movement-row" onClick={() => onSelect(item)}>
+      <td>{formatDate(item.createdAt)}</td>
       <td>
         <span className={`wallet-movement-icon is-${item.type.toLowerCase()}`}>
           {item.type === "DEPOSIT" ? (
@@ -796,46 +866,193 @@ function MovementRow({ item }: { item: WalletMovementView }) {
         </span>
         {item.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
       </td>
-      <td>
-        <StatusPill status={item.status} />
-      </td>
       <td className={item.type === "DEPOSIT" ? "is-credit" : "is-debit"}>
         {item.type === "DEPOSIT" ? "+" : "-"}
         {formatWalletMoney(item.amountMinor)}
       </td>
-      <td>{formatDate(item.createdAt)}</td>
+      <td>{item.sourceLabel ?? "GBP wallet"}</td>
+      <td>
+        <button type="button" className="wallet-reference" onClick={() => onSelect(item)}>
+          {item.reference ?? `WLT-${item.id.slice(0, 8).toUpperCase()}`}
+        </button>
+      </td>
+      <td>
+        <StatusPill status={item.status} />
+      </td>
     </tr>
   );
 }
 
-function WalletInsightsPanel({ query }: { query: UseQueryResult<WalletMovementPage> }) {
-  const flow = query.data ? settledMovementFlow(query.data.items) : null;
-  const net = flow ? BigInt(flow.inflowMinor) - BigInt(flow.outflowMinor) : null;
+function WalletInsightsPanel() {
+  const services = useAppServices();
+  const insights = useQuery({
+    queryKey: queryKeys.portfolio.insights,
+    queryFn: services.portfolio.walletInsights,
+  });
   return (
     <WalletPanel title="Wallet insights" icon={<Layers3 />} className="wallet-panel--insights">
       {" "}
       <div className="wallet-panel__body">
-        {query.isLoading ? <RowsSkeleton rows={2} /> : null}
-        {query.isError ? (
+        {insights.isLoading ? <RowsSkeleton rows={2} /> : null}
+        {insights.isError ? (
           <PanelError
             message="Unable to load wallet insights."
-            retry={() => void query.refetch()}
+            retry={() => void insights.refetch()}
           />
         ) : null}
-        {!query.isLoading && !query.isError && flow ? (
+        {!insights.isLoading && !insights.isError && insights.data ? (
           <dl className="wallet-insight-summary">
-            <Insight label="Total deposited" value={formatWalletMoney(flow.inflowMinor)} />
-            <Insight label="Total withdrawn" value={formatWalletMoney(flow.outflowMinor)} />
-            <Insight label="Net cash flow" value={formatWalletMoney(net!.toString())} />
+            <Insight
+              label="Total deposits"
+              value={formatWalletMoney(insights.data.totalDepositsMinor)}
+            />
+            <Insight
+              label="Total withdrawals"
+              value={formatWalletMoney(insights.data.totalWithdrawalsMinor)}
+            />
+            <Insight
+              label="Net movement"
+              value={formatWalletMoney(insights.data.netMovementMinor)}
+            />
           </dl>
         ) : null}
-        {!query.isLoading && !query.isError && !flow ? (
+        {!insights.isLoading && !insights.isError && !insights.data ? (
           <PanelEmpty
             icon={<Layers3 />}
             title="Wallet insights unavailable"
             detail="Settled money movements are needed to show wallet insights."
           />
         ) : null}
+      </div>
+    </WalletPanel>
+  );
+}
+
+function MovementDetail({ item, onClose }: { item: WalletMovementView; onClose: () => void }) {
+  return (
+    <div className="wallet-detail-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="wallet-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="movement-detail-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="wallet-detail__head">
+          <div>
+            <p className="page-kicker">Movement detail</p>
+            <h3 id="movement-detail-title">{item.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}</h3>
+          </div>
+          <button type="button" aria-label="Close movement detail" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <dl className="wallet-detail__grid">
+          <div>
+            <dt>Amount</dt>
+            <dd>
+              {item.type === "DEPOSIT" ? "+" : "−"}
+              {formatWalletMoney(item.amountMinor)}
+            </dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>
+              <StatusPill status={item.status} />
+            </dd>
+          </div>
+          <div>
+            <dt>Reference</dt>
+            <dd>{item.reference ?? `WLT-${item.id.slice(0, 8).toUpperCase()}`}</dd>
+          </div>
+          <div>
+            <dt>Requested</dt>
+            <dd>{formatDate(item.createdAt)}</dd>
+          </div>
+          <div>
+            <dt>Source / destination</dt>
+            <dd>{item.sourceLabel ?? "GBP wallet"}</dd>
+          </div>
+          <div>
+            <dt>Currency</dt>
+            <dd>GBP</dd>
+          </div>
+        </dl>
+        <p className="wallet-detail__note">
+          Provider updates are verified before Slice changes wallet balances.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function SettlementTimelinePanel({
+  portfolio,
+  compliance,
+  banks,
+  movements,
+}: {
+  portfolio: UseQueryResult<PortfolioSummary>;
+  compliance: UseQueryResult<ComplianceSummary>;
+  banks: UseQueryResult<BankConnection[]>;
+  movements: UseQueryResult<WalletMovementPage>;
+}) {
+  const latestDeposit = movements.data?.items.find((item) => item.type === "DEPOSIT");
+  const cashAvailable =
+    portfolio.data?.cash.availableMinor !== undefined &&
+    BigInt(portfolio.data.cash.availableMinor) > 0n;
+  const steps = [
+    {
+      label: "Setup bank",
+      state: banks.data?.some((bank) => bank.status === "CONNECTED") ? "complete" : "next",
+    },
+    {
+      label: "Verify identity",
+      state:
+        compliance.data?.status === "APPROVED"
+          ? "complete"
+          : compliance.data?.status === "PENDING"
+            ? "active"
+            : "next",
+    },
+    {
+      label: "Deposit pending",
+      state:
+        latestDeposit?.status === "SETTLED"
+          ? "complete"
+          : latestDeposit &&
+              ["CREATED", "PENDING_PROVIDER", "PROCESSING", "MANUAL_REVIEW", "HELD"].includes(
+                latestDeposit.status,
+              )
+            ? "active"
+            : "next",
+    },
+    { label: "Funds available", state: cashAvailable ? "complete" : "next" },
+    {
+      label: "Invest / withdraw",
+      state: cashAvailable && compliance.data?.status === "APPROVED" ? "next" : "next",
+    },
+  ] as const;
+  return (
+    <WalletPanel
+      title="Settlement timeline"
+      icon={<CalendarClock />}
+      className="wallet-panel--timeline"
+    >
+      <div className="wallet-timeline" aria-label="Wallet settlement timeline">
+        {steps.map((step, index) => (
+          <div key={step.label} className={`wallet-timeline__step is-${step.state}`}>
+            <span>{index + 1}</span>
+            <strong>{step.label}</strong>
+            <small>
+              {step.state === "complete"
+                ? "Complete"
+                : step.state === "active"
+                  ? "In progress"
+                  : "Next"}
+            </small>
+          </div>
+        ))}
       </div>
     </WalletPanel>
   );
@@ -964,6 +1181,7 @@ function WalletPanel({
 function StatusPill({ status }: { status: string }) {
   const isGood = ["APPROVED", "CONNECTED", "SETTLED", "AVAILABLE"].includes(status);
   const isAttention = [
+    "CREATED",
     "PENDING",
     "PROCESSING",
     "HELD",
@@ -1066,7 +1284,32 @@ function complianceDetail(status: string) {
     )[status] ?? "Verification status unavailable"
   );
 }
+
+function payoutDetail(status: string | undefined) {
+  return (
+    (
+      {
+        NOT_STARTED: "Connect a payout account to receive collector proceeds",
+        ACTION_REQUIRED: "Finish the required payout account steps",
+        UNDER_REVIEW: "Stripe is reviewing your payout account",
+        READY: "Collector proceeds can be paid out",
+        RESTRICTED: "Payouts are restricted until account requirements are resolved",
+        DISABLED: "Payouts are disabled for this account",
+      } as Record<string, string>
+    )[status ?? "NOT_STARTED"] ?? "Payout status unavailable"
+  );
+}
 function friendlyStatus(status: string) {
+  const labels: Record<string, string> = {
+    CREATED: "Pending",
+    PENDING_PROVIDER: "Pending settlement",
+    PROCESSING: "Processing",
+    SETTLED: "Completed",
+    CANCELLED: "Canceled",
+    MANUAL_REVIEW: "Needs review",
+    REVERSED: "Reversed",
+  };
+  if (labels[status]) return labels[status];
   return status
     .toLowerCase()
     .replaceAll("_", " ")

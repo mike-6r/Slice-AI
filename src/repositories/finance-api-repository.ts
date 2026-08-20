@@ -9,6 +9,7 @@ import type {
   PortfolioPerformanceRange,
   PortfolioTransaction,
   PortfolioValuationStatus,
+  WalletInsights,
 } from "@/domain";
 import type { ApiClient } from "@/api/http-client";
 
@@ -28,6 +29,11 @@ const minor = (value: unknown, field: string): GbpMinorUnits => {
     throw new Error(`Invalid GBP minor-unit field: ${field}.`);
   return value;
 };
+const count = (value: unknown, field: string) => {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+    throw new Error(`Invalid wallet count field: ${field}.`);
+  return value;
+};
 const units = (value: unknown, field: string) => {
   if (typeof value !== "string" || !/^\d+$/.test(value))
     throw new Error(`Invalid ownership-unit field: ${field}.`);
@@ -42,6 +48,29 @@ const valuation = (value: unknown): PortfolioValuationStatus =>
       : "UNAVAILABLE";
 const sumMinor = (values: string[]) =>
   values.reduce((total, value) => total + BigInt(value), 0n).toString();
+
+const mapWalletInsights = (raw: unknown): WalletInsights => {
+  const body = object(raw);
+  const previous = body.previousPeriod;
+  if (body.period !== "month" || body.currency !== "GBP")
+    throw new Error("Invalid wallet insights response.");
+  const mapPeriod = (value: unknown, field: string) => {
+    const period = object(value);
+    return {
+      totalDepositsMinor: minor(period.totalDepositsMinor, `${field}.totalDepositsMinor`),
+      totalWithdrawalsMinor: minor(period.totalWithdrawalsMinor, `${field}.totalWithdrawalsMinor`),
+      netMovementMinor: minor(period.netMovementMinor, `${field}.netMovementMinor`),
+    };
+  };
+  return {
+    period: "month",
+    currency: "GBP",
+    totalDepositsMinor: minor(body.totalDepositsMinor, "insights.totalDepositsMinor"),
+    totalWithdrawalsMinor: minor(body.totalWithdrawalsMinor, "insights.totalWithdrawalsMinor"),
+    netMovementMinor: minor(body.netMovementMinor, "insights.netMovementMinor"),
+    previousPeriod: previous === null ? null : mapPeriod(previous, "insights.previousPeriod"),
+  };
+};
 
 export const mapCash = (raw: unknown): PortfolioCashSummary => {
   const body = object(raw);
@@ -65,6 +94,17 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
           pendingWithdrawalMinor: minor(
             body.pendingWithdrawalMinor,
             "wallet.pendingWithdrawalMinor",
+          ),
+        }
+      : {}),
+    ...(body.pendingDepositCount !== undefined
+      ? { pendingDepositCount: count(body.pendingDepositCount, "wallet.pendingDepositCount") }
+      : {}),
+    ...(body.pendingWithdrawalCount !== undefined
+      ? {
+          pendingWithdrawalCount: count(
+            body.pendingWithdrawalCount,
+            "wallet.pendingWithdrawalCount",
           ),
         }
       : {}),
@@ -259,5 +299,8 @@ export const createFinanceApiRepository = (client: ApiClient): PortfolioReposito
   },
   async getPerformance(range = "1M") {
     return mapPerformance(await client.get<unknown>("/me/portfolio/performance", { range }));
+  },
+  async getWalletInsights() {
+    return mapWalletInsights(await client.get<unknown>("/me/wallet/insights", { period: "month" }));
   },
 });
