@@ -37,8 +37,16 @@ ln -sfn "${release_dir}" /opt/slice/current
 ln -sfn "${release_dir}" /opt/slice/app
 systemctl restart slice-api.service slice-web.service
 
-curl --fail --silent --show-error http://127.0.0.1:3101/health >/dev/null
-curl --fail --silent --show-error http://127.0.0.1:3101/ready >/dev/null
-curl --fail --silent --show-error http://127.0.0.1:3102/ >/dev/null
+for attempt in {1..15}; do
+  if curl --fail --silent --show-error http://127.0.0.1:3101/health >/dev/null \
+    && curl --fail --silent --show-error http://127.0.0.1:3101/ready >/dev/null \
+    && curl --fail --silent --show-error http://127.0.0.1:3102/ >/dev/null; then
+    echo "Slice staging health checks passed on attempt ${attempt}."
+    echo "Slice staging release activated: ${release_dir}"
+    exit 0
+  fi
+  sleep 2
+done
 
-echo "Slice staging release activated: ${release_dir}"
+echo "Slice staging services did not become healthy within 30 seconds." >&2
+exit 1
