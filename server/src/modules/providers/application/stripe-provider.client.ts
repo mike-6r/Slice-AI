@@ -1,5 +1,8 @@
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import Stripe from 'stripe';
+// Stripe v22 exposes a CommonJS export. Use the assignment import so the
+// production CommonJS build instantiates the SDK correctly as well as the
+// TypeScript test runtime.
+import Stripe = require('stripe');
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 
 /** Pin the SDK/API pair so a deployment does not silently change provider semantics. */
