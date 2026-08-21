@@ -266,7 +266,10 @@ function IdentityVerificationPanel({
           : state === "FAILED" || state === "CANCELED"
             ? "Failed"
             : "Not started";
-  const canStart = ["NOT_STARTED", "REQUIRES_INPUT", "FAILED", "CANCELED"].includes(state);
+  const canStart =
+    ["NOT_STARTED", "REQUIRES_INPUT", "FAILED", "CANCELED"].includes(state) &&
+    query.data?.capability !== "NOT_CONFIGURED" &&
+    query.data?.capability !== "NOT_REQUIRED_IN_CURRENT_BETA";
   return (
     <Panel
       id="identity"

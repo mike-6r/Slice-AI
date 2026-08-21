@@ -29,13 +29,22 @@ export class ComplianceService {
         : stripeIdentity ?? new UnavailableExternalIdentityProvider(providerCode(config.providerMode));
   }
   async start(actor: Actor, requestId: string) {
-    if (this.config.isBeta) {
+    if (this.config.isBeta && !this.config.stripeIdentityEnabled) {
       return {
         status: 'NOT_STARTED' as const,
         identityState: 'NOT_STARTED' as const,
         provider: providerCode(this.config.providerMode),
         sessionUrl: null,
         capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
+      };
+    }
+    if (this.config.providerMode !== 'local' && !this.config.stripeIdentityEnabled) {
+      return {
+        status: 'NOT_STARTED' as const,
+        identityState: 'NOT_STARTED' as const,
+        provider: providerCode(this.config.providerMode),
+        sessionUrl: null,
+        capability: 'NOT_CONFIGURED' as const,
       };
     }
     const existing = await this.db.complianceCase.findUnique({
@@ -163,13 +172,23 @@ export class ComplianceService {
     });
   }
   async self(userId: string) {
-    if (this.config.isBeta) {
+    if (this.config.isBeta && !this.config.stripeIdentityEnabled) {
       return {
         status: 'NOT_STARTED' as const,
         identityState: 'NOT_STARTED' as const,
         expiresAt: null,
         updatedAt: null,
         capability: 'NOT_REQUIRED_IN_CURRENT_BETA' as const,
+      };
+    }
+    if (this.config.providerMode !== 'local' && !this.config.stripeIdentityEnabled) {
+      return {
+        status: 'NOT_STARTED' as const,
+        identityState: 'NOT_STARTED' as const,
+        provider: providerCode(this.config.providerMode),
+        expiresAt: null,
+        updatedAt: null,
+        capability: 'NOT_CONFIGURED' as const,
       };
     }
     const item = await this.db.complianceCase.findUnique({

@@ -116,6 +116,10 @@ export function Wallet() {
     mutationFn: services.providers.startCompliance,
     onSuccess: (result) => {
       refreshWallet();
+      if (result.sessionUrl) {
+        window.location.assign(result.sessionUrl);
+        return;
+      }
       toast.success(
         result.status === "PENDING" ? "Verification started." : "Verification status updated.",
       );
@@ -722,7 +726,9 @@ function AccountStatusPanel({
                 }
               />
             </dl>
-            {query.data.status !== "APPROVED" ? (
+            {query.data.status !== "APPROVED" &&
+            query.data.capability !== "NOT_CONFIGURED" &&
+            query.data.capability !== "NOT_REQUIRED_IN_CURRENT_BETA" ? (
               <button
                 type="button"
                 className="wallet-verify-button"

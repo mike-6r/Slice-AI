@@ -23,6 +23,7 @@ export class StripeIdentityVerificationService implements IdentityVerificationPr
       client_reference_id: input.userId,
       provided_details: { email: user.email },
       options: { document: { require_live_capture: true, require_matching_selfie: true } },
+      return_url: `${this.config.appPublicUrl.replace(/\/$/, '')}/account?verification=complete`,
       metadata: { slice_user_id: input.userId, slice_environment: this.stripeFactory.environment() },
     }, { idempotencyKey: input.idempotencyKey ?? `slice-identity-session:${this.stripeFactory.environment()}:${input.userId}:${input.requestId}` });
     this.assertMode(session.livemode);

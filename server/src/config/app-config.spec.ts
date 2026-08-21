@@ -321,6 +321,23 @@ describe('loadAppConfig', () => {
     expect(config.stripeLiveEnabled).toBe(false);
   });
 
+  it('requires an explicit Stripe provider and test secret for Identity sandbox enablement', () => {
+    expect(() => loadAppConfig({ ...unitTestEnvironment, STRIPE_IDENTITY_ENABLED: 'true' })).toThrow(
+      'STRIPE_IDENTITY_ENABLED requires a Stripe provider mode.',
+    );
+    expect(() => loadAppConfig({
+      ...unitTestEnvironment,
+      PROVIDER_MODE: 'stripe_sandbox',
+      STRIPE_IDENTITY_ENABLED: 'true',
+    })).toThrow('Stripe Identity sandbox requires a test-mode secret key.');
+    expect(loadAppConfig({
+      ...unitTestEnvironment,
+      PROVIDER_MODE: 'stripe_sandbox',
+      STRIPE_IDENTITY_ENABLED: 'true',
+      STRIPE_SECRET_KEY: 'sk_test_' + 'a'.repeat(32),
+    }).stripeIdentityEnabled).toBe(true);
+  });
+
   it('rejects the retired US bank funding rail in the GBP product mode', () => {
     expect(() => loadAppConfig({ ...unitTestEnvironment, STRIPE_BANK_FUNDING_RAIL: 'us_bank_account' })).toThrow();
   });

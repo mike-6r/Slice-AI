@@ -66,6 +66,10 @@ const configSchema = z.object({
   COOKIE_DOMAIN: z.string().min(1).optional(),
   PROVIDER_MODE: z.enum(['local', 'stripe_sandbox', 'stripe_live']).default('local'),
   STRIPE_LIVE_ENABLED: z.enum(['true', 'false']).default('false'),
+  // Identity verification is an explicit product/provider opt-in. This lets
+  // beta deployments use Stripe Identity sandbox without enabling it on every
+  // environment that happens to have Stripe credentials.
+  STRIPE_IDENTITY_ENABLED: z.enum(['true', 'false']).default('false'),
   // The active GBP customer-funding rail is deliberately narrow. A future
   // USD/ACH rail must use a separate, explicitly approved product mode.
   STRIPE_BANK_FUNDING_RAIL: z.enum(['bacs_debit']).default('bacs_debit'),
@@ -340,6 +344,7 @@ export type AppConfig = {
   cookieSecure: boolean;
   cookieDomain?: string;
   providerMode: 'local' | 'stripe_sandbox' | 'stripe_live';
+  stripeIdentityEnabled?: boolean;
   /** @deprecated Test fixtures may still provide this historical flag. */
   providersProductionEnabled?: boolean;
   stripeLiveEnabled: boolean;
@@ -653,6 +658,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     }
   }
   const stripeLiveEnabled = parsed.STRIPE_LIVE_ENABLED === 'true';
+  const stripeIdentityEnabled = parsed.STRIPE_IDENTITY_ENABLED === 'true';
   const operationalFeatureDefault = parsed.NODE_ENV !== 'production';
   const localSubmissionStorageEnabled =
     parsed.LOCAL_SUBMISSION_STORAGE_ENABLED === 'true' ||
@@ -670,6 +676,16 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
   }
   if (stripeLiveEnabled && parsed.PROVIDER_MODE !== 'stripe_live') {
     throw new Error('STRIPE_LIVE_ENABLED requires PROVIDER_MODE=stripe_live.');
+  }
+  if (stripeIdentityEnabled && parsed.PROVIDER_MODE === 'local') {
+    throw new Error('STRIPE_IDENTITY_ENABLED requires a Stripe provider mode.');
+  }
+  if (
+    stripeIdentityEnabled &&
+    parsed.PROVIDER_MODE === 'stripe_sandbox' &&
+    (!parsed.STRIPE_SECRET_KEY || !parsed.STRIPE_SECRET_KEY.startsWith('sk_test_'))
+  ) {
+    throw new Error('Stripe Identity sandbox requires a test-mode secret key.');
   }
   if (parsed.PROVIDER_MODE === 'stripe_live' && !stripeLiveEnabled) {
     throw new Error(
@@ -747,6 +763,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       : parsed.NODE_ENV === 'production' || isBeta,
     cookieDomain: parsed.COOKIE_DOMAIN,
     providerMode: parsed.PROVIDER_MODE,
+    stripeIdentityEnabled,
     stripeLiveEnabled,
     stripeBankFundingRail: parsed.STRIPE_BANK_FUNDING_RAIL,
     providerEncryptionKey: parsed.PROVIDER_ENCRYPTION_KEY,
