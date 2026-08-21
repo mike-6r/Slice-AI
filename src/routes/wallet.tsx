@@ -35,6 +35,7 @@ import type {
   ComplianceSummary,
   ConnectPayoutSetup,
   PortfolioSummary,
+  WalletInsights,
   WalletMovementPage,
   WalletMovementType,
   WalletMovementView,
@@ -397,7 +398,9 @@ function ConnectedBankPanel({
           </ul>
         ) : null}
         {!query.isLoading && !query.isError && !query.data?.length ? <BankEmpty /> : null}
-        <BankConnectionControl />
+        <BankConnectionControl
+          hasConnected={Boolean(query.data?.some((bank) => bank.status === "CONNECTED"))}
+        />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />
@@ -420,13 +423,12 @@ function ConnectedBankPanel({
 function BankEmpty() {
   return (
     <div className="wallet-bank-empty">
+      <span className="wallet-bank-empty__icon" aria-hidden="true">
+        <Landmark />
+      </span>
       <div>
         <strong>No bank connected</strong>
         <p>Set up a UK bank mandate securely with Stripe Bacs Direct Debit before adding funds.</p>
-        <span className="wallet-bank-empty__halo" aria-hidden="true">
-          <Landmark />
-          <i />
-        </span>
       </div>
     </div>
   );
@@ -455,7 +457,7 @@ function BankConnectionRow({
   });
   const label = connection.institutionName ?? connection.accountName ?? "Connected account";
   return (
-    <li>
+    <li className="wallet-bank-card">
       <span className="wallet-bank-icon">
         <Landmark aria-hidden="true" />
       </span>
@@ -490,6 +492,13 @@ function BankConnectionRow({
           ) : null}
         </div>
       </aside>
+      <div className="wallet-bank-card__meta">
+        <span>
+          <BadgeCheck aria-hidden="true" />
+          {connection.accountName ?? "Account holder"}
+        </span>
+        <span>Funding via Bacs Direct Debit · Managed securely by Stripe</span>
+      </div>
     </li>
   );
 }
@@ -532,6 +541,12 @@ function MoveMoneyPanel({
         : action === "DEPOSIT" && !bankAvailable
           ? "Set up a UK bank mandate before requesting a deposit."
           : null;
+  const fundingBank =
+    banks.data?.find((bank) => bank.status === "CONNECTED" && bank.isDefault) ??
+    banks.data?.find((bank) => bank.status === "CONNECTED");
+  const fundingBankLabel = fundingBank
+    ? `${fundingBank.institutionName ?? fundingBank.accountName ?? "Connected bank"}${fundingBank.accountMask ? ` · •••• ${fundingBank.accountMask}` : ""}`
+    : "Connect a UK bank first";
   return (
     <WalletPanel title="Move money" icon={<ArrowDownToLine />} className="wallet-panel--move">
       <div className="wallet-panel__body">
@@ -561,6 +576,16 @@ function MoveMoneyPanel({
             movement.mutate();
           }}
         >
+          {action === "DEPOSIT" ? (
+            <div className={`wallet-funding-selector${fundingBank ? " is-ready" : ""}`}>
+              <span className="wallet-funding-selector__label">From</span>
+              <span className="wallet-funding-selector__value">
+                <Landmark aria-hidden="true" />
+                {fundingBankLabel}
+              </span>
+              {fundingBank ? <ArrowRight aria-hidden="true" /> : null}
+            </div>
+          ) : null}
           <label>
             Amount (GBP)
             <input
@@ -900,7 +925,10 @@ function WalletInsightsPanel() {
             retry={() => void insights.refetch()}
           />
         ) : null}
-        {!insights.isLoading && !insights.isError && insights.data ? (
+        {!insights.isLoading &&
+        !insights.isError &&
+        insights.data &&
+        hasSettledWalletData(insights.data) ? (
           <dl className="wallet-insight-summary">
             <Insight
               label="Total deposits"
@@ -916,11 +944,14 @@ function WalletInsightsPanel() {
             />
           </dl>
         ) : null}
-        {!insights.isLoading && !insights.isError && !insights.data ? (
+        {!insights.isLoading &&
+        !insights.isError &&
+        insights.data &&
+        !hasSettledWalletData(insights.data) ? (
           <PanelEmpty
             icon={<Layers3 />}
-            title="Wallet insights unavailable"
-            detail="Settled money movements are needed to show wallet insights."
+            title="No settled movement data yet"
+            detail="Settled deposits and withdrawals will appear here month by month."
           />
         ) : null}
       </div>
@@ -1068,6 +1099,15 @@ function Insight({ label, value }: { label: string; value: string }) {
   );
 }
 
+function hasSettledWalletData(insights: WalletInsights) {
+  return (
+    insights.totalDepositsMinor !== "0" ||
+    insights.totalWithdrawalsMinor !== "0" ||
+    insights.netMovementMinor !== "0" ||
+    insights.previousPeriod !== null
+  );
+}
+
 function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPage> }) {
   const items = query.data?.items.slice(0, 3) ?? [];
   return (
@@ -1119,7 +1159,7 @@ function WalletActivityPanel({ query }: { query: UseQueryResult<WalletMovementPa
   );
 }
 
-function BankConnectionControl() {
+function BankConnectionControl({ hasConnected }: { hasConnected: boolean }) {
   const services = useAppServices();
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -1139,12 +1179,17 @@ function BankConnectionControl() {
     <div className="wallet-bank-connect">
       <button type="button" onClick={() => void connect()} disabled={isConnecting}>
         <Landmark aria-hidden="true" />
-        {isConnecting ? "Opening secure UK bank setup…" : "Set up a UK bank"}
+        {isConnecting
+          ? "Opening secure UK bank setup…"
+          : hasConnected
+            ? "Add another bank"
+            : "Set up a UK bank"}
         <ArrowRight aria-hidden="true" />
       </button>
       <p className="wallet-bank-connect__note">
-        You’ll finish securely on Stripe’s hosted checkout. Slice never receives your account or
-        sort code.
+        {hasConnected
+          ? "Bank details are securely managed by Stripe."
+          : "You’ll finish securely on Stripe’s hosted checkout. Slice never receives your account or sort code."}
       </p>
     </div>
   );
