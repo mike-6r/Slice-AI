@@ -2,9 +2,9 @@
 
 ## Executive Result
 
-**FAIL — NOT READY for owner sign-off.**
+**FAIL — NOT READY for owner sign-off.** The focused release-gate retest closed the homepage and automated-environment blockers, but the Collector browser role retest remains pending.
 
-The public site, current Investor session, read-only marketplace/detail surfaces, health checks, and automated unit/frontend build gates were exercised. Destructive/economic QA was stopped before purchase or lifecycle mutation because the dedicated Collector QA account has active `ASSET_REVIEWER` assignments. That is a Critical authorization configuration defect. The local database-backed integration/E2E harness is also unavailable, and the responsive viewport control did not apply in the connected browser.
+The public site, current Investor session, read-only marketplace/detail surfaces, health checks, and automated release gates were exercised. Destructive/economic QA remains stopped before purchase or lifecycle mutation. The dedicated Collector’s supported API/session/IDOR cleanup is complete, but its fresh browser wrong-role retest still needs an authenticated browser session. Responsive viewport evidence also remains pending.
 
 ## Environment
 
@@ -12,8 +12,8 @@ The public site, current Investor session, read-only marketplace/detail surfaces
 - QA date: 2026-08-21
 - Repository: `C:\Users\Aarons\Documents\Codex\2026-08-05\files-mentioned-by-the-user-you\work\slice-project`
 - Branch: `main`
-- Source HEAD: `06e7071` (`docs: record identity verification smoke QA`)
-- Active VPS release: `/opt/slice/releases/20260820-a850c59`
+- Source HEAD: `b26e407` (`fix: reconcile beta release runtime contracts`)
+- Active VPS release: `/opt/slice/releases/20260821-b26e407`
 - `/opt/slice/current` and `/opt/slice/app`: same release
 - `PROVIDER_MODE=stripe_sandbox`
 - `STRIPE_IDENTITY_ENABLED=true`
@@ -31,13 +31,13 @@ The public site, current Investor session, read-only marketplace/detail surfaces
 | Prisma generate | PASS |
 | Backend typecheck | PASS |
 | Backend production build | PASS |
-| Backend unit tests | PASS — 63 suites / 262 tests |
+| Backend unit tests | PASS — 63 suites / 263 tests |
 | Frontend typecheck | PASS |
-| Frontend tests | PASS — 38 files / 131 tests |
+| Frontend tests | PASS — 38 files / 132 tests |
 | Frontend production client + SSR build | PASS |
 | Frontend lint | FAIL — existing repository-wide Prettier failure, 4,890 errors |
-| Backend integration tests | BLOCKED — no local PostgreSQL/Redis at `127.0.0.1` |
-| Backend E2E tests | BLOCKED — no local PostgreSQL/Redis and obsolete local `PROVIDER_MODE=sandbox` |
+| Backend integration tests | PASS — 34 suites / 124 tests |
+| Backend E2E tests | PASS — 32 suites / 102 tests; clean process exit |
 
 ## Accounts Used
 
@@ -59,9 +59,9 @@ Read-only database inspection showed:
 
 | Result | Count |
 |---|---:|
-| PASS | 41 |
-| FAIL | 3 |
-| BLOCKED | 22 |
+| PASS | 44 |
+| FAIL | 1 |
+| BLOCKED | 21 |
 | N/A | 4 |
 | Critical open bugs | 1 |
 | High open bugs | 1 |
@@ -99,7 +99,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 - `QA-021` PASS — Slice Grade rendered as advisory and separate from collector condition; estimated grade 4 / Very Good and component scores were visible.
 - `QA-022` PASS — Slice Grade evidence lightbox opened the enlarged front overview image and exposed an accessible close control; no state changed.
 - `QA-023` PASS — public Collector directory safely showed the current empty public state.
-- `QA-024` FAIL — homepage Umbreon card uses stale/misleading `Grade pending` and availability terminology; see `SLICE-001`.
+- `QA-024` PASS — deployed homepage Umbreon card uses the shared authoritative projection: `Raw / Ungraded`, `Condition: Mint`, card number, Slice valuation and reference context; misleading legacy labels are absent.
 - `QA-025` PASS — current public detail showed no fake 24-hour movement; it showed no market-history data where history was unavailable.
 - `QA-026` PASS — public detail showed explicit reference-only market-data language and PriceCharting asking-price context.
 
@@ -114,8 +114,8 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 ### 4. Collector, submission, media, Admin and lifecycle
 
-- `QA-033` FAIL — read-only role inventory shows `demo-collector@slicecollectable.com` has active `USER`, duplicate `COLLECTOR`, and duplicate `ASSET_REVIEWER` assignments; see `SLICE-002`.
-- `QA-034` BLOCKED — fresh Collector login/workspace matrix was stopped pending supported role cleanup and independent-session confirmation.
+- `QA-033` PASS — supported cleanup leaves `demo-collector@slicecollectable.com` with active `USER + COLLECTOR`; unwanted assignments remain revoked and audited.
+- `QA-034` BLOCKED — fresh Collector browser login/workspace wrong-role UI retest is awaiting an authenticated browser session.
 - `QA-035` BLOCKED — new disposable listing and card-identification workflow was not started.
 - `QA-036` BLOCKED — upload, replace/remove, invalid-file and pre-publication private-media matrix was not started.
 - `QA-037` PASS — existing public Umbreon Slice Grade is displayed as advisory, not as an official grade; fresh provider analysis was not triggered.
@@ -130,7 +130,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 - `QA-044` PASS — logged-out protected API baseline returned 401.
 - `QA-045` PASS — Investor UI direct routes to Collector workspace/Admin were denied safely.
-- `QA-046` BLOCKED — fresh Collector wrong-role API matrix is blocked by `SLICE-002`; do not infer authorization from hidden buttons.
+- `QA-046` BLOCKED — fresh Collector API denial passed, but browser UI wrong-role retest remains pending; do not infer authorization from hidden buttons.
 - `QA-047` BLOCKED — cross-Collector private submission/media matrix was not run.
 - `QA-048` BLOCKED — logout Account A → login Account B cache-isolation matrix was not run.
 - `QA-049` PASS — no credentials, provider secrets or private account payloads were written to QA artifacts; no direct DB mutation was used.
@@ -158,37 +158,35 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 ### 8. Automated QA and regression
 
-- `QA-065` PASS — backend unit suite: 63 suites / 262 tests.
-- `QA-066` PASS — frontend suite: 38 files / 131 tests.
+- `QA-065` PASS — backend unit suite: 63 suites / 263 tests.
+- `QA-066` PASS — frontend suite: 38 files / 132 tests.
 - `QA-067` PASS — Prisma validation/generation, backend typecheck/build, frontend typecheck/build passed.
 - `QA-068` FAIL — frontend lint is red with 4,890 repository-wide Prettier errors; see `SLICE-003` as related release evidence.
-- `QA-069` BLOCKED — DB-backed integration/E2E suites could not start locally due missing PostgreSQL/Redis and obsolete local provider-mode configuration; see `SLICE-003`.
+- `QA-069` PASS — isolated PostgreSQL/Redis runner with `PROVIDER_MODE=local` completed cleanly: integration 34/34 suites and 124/124 tests; E2E 32/32 suites and 102/102 tests, with clean process exit.
 - `QA-070` N/A — no QA code fix was made during this pass, so a fix-specific regression retest is not applicable.
 
 ## Bugs Found
 
-- `SLICE-001` Medium — homepage market-card terminology mismatch — Open.
+- `SLICE-001` Medium — homepage market-card terminology mismatch — Closed after deployed staging retest.
 - `SLICE-002` Critical — dedicated Collector has active staff-reviewer assignments — Open.
-- `SLICE-003` High — local integration/E2E environment unavailable — Open.
+- `SLICE-003` High — local integration/E2E environment unavailable — Closed after isolated green-gate retest.
 
 Full bug templates are in `docs/qa/bugs/`.
 
 ## Bugs Fixed
 
-None during this pass. No silent fixes or staging mutations were made.
+Source, test-contract and isolated-runner changes were committed as `b26e407` and deployed. No staging economic or lifecycle mutation was made.
 
 ## Outstanding Issues
 
-1. Resolve `SLICE-002` only through the supported Admin role-revoke path, then re-run Collector/Admin/API IDOR tests. Do not use direct DB surgery.
-2. Fix and retest the homepage projection labels in `SLICE-001` against authoritative fields.
-3. Make the local integration/E2E harness use an isolated PostgreSQL/Redis service and a supported provider-mode value.
-4. Complete fresh disposable Collector → Admin → Marketplace → Investor lifecycle only after the permission gate is green.
-5. Capture responsive evidence using a viewport-capable browser and execute Edge before external Beta sign-off.
+1. Complete the fresh Collector browser wrong-role/navigation retest for `SLICE-002`; do not use direct DB surgery.
+2. Complete fresh disposable Collector → Admin → Marketplace → Investor lifecycle only after the permission gate is green.
+3. Capture responsive evidence using a viewport-capable browser and execute Edge before external Beta sign-off.
 
 ## Final Sign-Off
 
 - [ ] No open Critical bugs — **NO** (`SLICE-002` open)
-- [ ] No core High bugs — **NO** (`SLICE-003` blocks integration evidence)
+- [x] No core High bugs — **YES** (`SLICE-003` closed; responsive/Edge evidence remains a general sign-off item)
 - [x] Public website smoke
 - [ ] Investor core purchase journey
 - [ ] Collector core journey
@@ -224,8 +222,8 @@ No live Stripe mode, real money, physical shipment, custody, offering, ownership
 
 This is a focused follow-up to the three owner-authorized blockers; it is not a replacement for the full owner QA above.
 
-- `SLICE-002`: **focused API/session/IDOR retest passed**. Collector A now has exactly `USER + COLLECTOR`; three unwanted historical assignments remain revoked and audited. A fresh Collector session reached Collector Workspace (200), while Admin, user-management, review, finance-admin and audit-admin endpoints returned 403. Collector A could not read Collector B’s private submission (404). Browser UI retest and deployment remain pending.
-- `SLICE-003`: **infrastructure restored, release gate still open**. The isolated test runner applies 79 migrations to a separate `slice_test` database and uses isolated Redis with `PROVIDER_MODE=local`. Integration executed 34 suites / 124 tests (24 suites passed, 10 failed; 96 passed, 28 failed). E2E executed 32 suites / 102 tests (18 suites passed, 14 failed; 54 passed, 48 failed). Remaining failures are application/test-contract drift and are documented in the bug report.
-- `SLICE-001`: **fixed in source, staging retest pending deployment**. Homepage live cards now reuse the authoritative marketplace card projection; focused tests reject `Grade pending`, `No 24h move`, and `Availability not published` for raw/pre-market data.
+- `SLICE-002`: **focused API/session/IDOR retest passed**. Collector A now has exactly `USER + COLLECTOR`; three unwanted historical assignments remain revoked and audited. A fresh Collector session reached Collector Workspace (200), while Admin, user-management, review, finance-admin and audit-admin endpoints returned 403. Collector A could not read Collector B’s private submission (404). Browser wrong-role UI retest remains pending.
+- `SLICE-003`: **closed**. The isolated test runner applies 79 migrations to a separate `slice_test` database and uses isolated Redis with `PROVIDER_MODE=local`. Integration completed 34/34 suites and 124/124 tests; E2E completed 32/32 suites and 102/102 tests with a clean process exit.
+- `SLICE-001`: **closed after deployment**. Homepage live cards now reuse the authoritative marketplace card projection; deployed browser evidence shows correct raw/condition/card-number/valuation terminology and no misleading legacy labels. Public Umbreon detail remained consistent.
 - Automated follow-up: frontend 38 files / 132 tests passed; backend unit 63 suites / 263 tests passed; Prisma validation, backend/frontend typechecks, backend build, and frontend client/SSR build passed. The touched backend TypeScript files pass lint; repository-wide frontend Prettier debt remains separate.
-- No source deployment was made because the integration/E2E release gate is not green. No economic, ownership, trading, Stripe, Umbreon, Charizard, ledger, or financial state was changed.
+- No economic, ownership, trading, Stripe, Umbreon, Charizard, ledger, or financial state was changed.

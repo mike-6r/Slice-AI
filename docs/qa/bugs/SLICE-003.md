@@ -47,4 +47,11 @@ Additional Notes:
 - Staging `/health` and `/ready` remained healthy. No staging database or production database was used for automated tests.
 
 Status:  
-Open — infrastructure restored, application/test-contract failures remain
+Closed — isolated integration/E2E release gate green on 2026-08-21
+
+Closure evidence:
+
+- Integration: 34 suites / 124 tests passed.
+- E2E: 32 suites / 102 tests passed with clean process exit and no open-handle warning.
+- The isolated runner uses PostgreSQL/Redis test services, 79 migrations and `PROVIDER_MODE=local`.
+- Repository-wide Prettier debt remains separate from the integration/E2E environment issue.

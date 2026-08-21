@@ -46,4 +46,9 @@ Additional Notes:
 - Focused tests pass for the Collector fixture role boundary. No lifecycle, ownership, trading, ledger, Stripe, Umbreon, or Charizard data was changed.
 
 Status:  
-Open — focused API/session/IDOR retest passed; browser wrong-role UI retest and deployment remain pending
+Open — focused API/session/IDOR retest passed; browser wrong-role UI retest remains pending
+
+Deployment status:
+
+- Commit `b26e407` is deployed at `/opt/slice/releases/20260821-b26e407`.
+- The remaining evidence item is a fresh authenticated Collector browser session to verify hidden/denied staff navigation and direct UI routes.

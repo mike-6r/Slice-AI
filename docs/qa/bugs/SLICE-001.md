@@ -44,11 +44,11 @@ Additional Notes:
 This is a truth/terminology mismatch, not a fabricated financial effect. No state was changed while reproducing it.
 
 Status:  
-Open — fixed in source, staging retest pending deployment
+Closed — deployed and verified on staging 2026-08-21
 
 Remediation (2026-08-21):
 
 - Root cause: the homepage used a separate hand-built card projection instead of the shared authoritative marketplace projection.
 - Fix: homepage live cards now render the shared `MarketAssetCard` from `toMarketplaceAsset`, preserving backend currency, lifecycle, raw/condition, valuation, reference, ownership, and trading semantics without asset-specific values.
 - Focused evidence: `src/components/marketplace/MarketAssetCard.test.tsx` now covers raw/pre-market terminology and rejects the misleading labels. Frontend typecheck, 38 test files / 132 tests, client/SSR build all pass.
-- Status remains open until the deployed staging homepage is retested.
+- Staging retest on release `/opt/slice/releases/20260821-b26e407` passed. The homepage Umbreon card now shows `Raw / Ungraded`, `Condition: Mint`, `Evolving Skies · 215/203`, `Slice valuation`, and `Market reference: $2,152 USD`; the public detail remained consistent. `Grade pending`, fake movement, and unpublished-availability labels were absent.

@@ -5,9 +5,9 @@
   "result": "FAIL",
   "testedBy": "Automated/technical QA by Codex",
   "release": {
-    "sourceCommit": "06e7071",
-    "activeVpsRelease": "/opt/slice/releases/20260820-a850c59",
-    "currentSymlink": "/opt/slice/releases/20260820-a850c59",
+    "sourceCommit": "b26e407",
+    "activeVpsRelease": "/opt/slice/releases/20260821-b26e407",
+    "currentSymlink": "/opt/slice/releases/20260821-b26e407",
     "providerMode": "stripe_sandbox",
     "stripeLiveEnabled": false,
     "stripeIdentityEnabled": true,
@@ -15,11 +15,11 @@
     "readiness": 200,
     "migrations": "79 found; database schema up to date"
   },
-  "counts": { "PASS": 42, "FAIL": 3, "BLOCKED": 21, "N/A": 4, "total": 70 },
+  "counts": { "PASS": 44, "FAIL": 1, "BLOCKED": 21, "N/A": 4, "total": 70 },
   "bugs": [
-    { "id": "SLICE-001", "severity": "Medium", "status": "Open" },
+    { "id": "SLICE-001", "severity": "Medium", "status": "Closed" },
     { "id": "SLICE-002", "severity": "Critical", "status": "Open" },
-    { "id": "SLICE-003", "severity": "High", "status": "Open" }
+    { "id": "SLICE-003", "severity": "High", "status": "Closed" }
   ],
   "protectedState": {
     "umbreon": { "published": true, "custody": "NONE", "supply": "ACTIVE", "issuedUnits": 1000, "market": "OPEN", "tradingEnabled": true, "executions": 1, "orders": 4 },
@@ -30,7 +30,7 @@
     "economicMutationCount": 0
   },
   "testCases": [
-    {"id":"QA-001","section":"Pre-flight","name":"Repository and release identified","status":"PASS","severity":null,"expected":"Known clean branch, release, and recent commits","actual":"main, HEAD 06e7071, active release a850c59","evidence":"git status/log; VPS release inspection","bugId":null,"retestStatus":"PASS"},
+    {"id":"QA-001","section":"Pre-flight","name":"Repository and release identified","status":"PASS","severity":null,"expected":"Known clean branch, release, and recent commits","actual":"main, HEAD b26e407, active release 20260821-b26e407","evidence":"git status/log; VPS release inspection","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-002","section":"Pre-flight","name":"Provider and live-mode flags","status":"PASS","severity":null,"expected":"Sandbox only; live disabled","actual":"stripe_sandbox; STRIPE_LIVE_ENABLED=false","evidence":"/etc/slice/slice.env presence-only inspection","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-003","section":"Pre-flight","name":"Migration and readiness","status":"PASS","severity":null,"expected":"Migrations current; dependencies ready","actual":"79 migrations up to date; PostgreSQL and Redis ready","evidence":"Prisma migrate status; /ready","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-004","section":"Public Website","name":"Homepage","status":"PASS","severity":null,"expected":"Homepage loads with Beta communication","actual":"Homepage loaded; no console errors","evidence":"Browser public smoke","bugId":null,"retestStatus":"PASS"},
@@ -53,7 +53,7 @@
     {"id":"QA-021","section":"Marketplace","name":"Slice Grade advisory separation","status":"PASS","severity":null,"expected":"AI advisory separate from condition/official grade","actual":"Slice Grade 4 Very Good and component scores shown separately","evidence":"Public detail DOM","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-022","section":"Marketplace","name":"Slice Grade enlarged evidence","status":"PASS","severity":null,"expected":"Evidence images open larger with accessible close","actual":"Front overview lightbox opened and close control present","evidence":"Browser interaction","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-023","section":"Collector Profiles","name":"Public directory","status":"PASS","severity":null,"expected":"Only published public profiles","actual":"Empty public state rendered","evidence":"Public route/API","bugId":null,"retestStatus":"PASS"},
-    {"id":"QA-024","section":"Marketplace","name":"Homepage card terminology","status":"FAIL","severity":"Medium","expected":"Authoritative raw/condition/market labels","actual":"Source fixed to shared authoritative marketplace projection; staging retest is pending deployment","evidence":"Focused MarketAssetCard test; docs/qa/bugs/SLICE-001.md","bugId":"SLICE-001","retestStatus":"PASS_SOURCE_PENDING_STAGING"},
+    {"id":"QA-024","section":"Marketplace","name":"Homepage card terminology","status":"PASS","severity":null,"expected":"Authoritative raw/condition/market labels","actual":"Deployed homepage shows Raw / Ungraded, Condition: Mint, Evolving Skies · 215/203, Slice valuation and market reference; misleading legacy labels are absent","evidence":"Staging browser DOM and screenshot on release b26e407; docs/qa/bugs/SLICE-001.md","bugId":"SLICE-001","retestStatus":"PASS"},
     {"id":"QA-025","section":"Marketplace","name":"Fake movement suppression","status":"PASS","severity":null,"expected":"No fake 24h movement without history","actual":"No market history yet / no trading history yet shown","evidence":"Public detail DOM","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-026","section":"Marketplace","name":"Reference data disclosure","status":"PASS","severity":null,"expected":"Reference-only market context explicit","actual":"Reference-only language and PriceCharting asking-price context shown","evidence":"Public detail DOM","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-027","section":"Investor Purchase","name":"Disposable purchase fixture","status":"BLOCKED","severity":"Critical","expected":"Isolated fixture before economic QA","actual":"Stopped before fixture creation because role isolation failed","evidence":"Owner critical-bug stop rule","bugId":"SLICE-002","retestStatus":"NOT_RUN"},
@@ -63,7 +63,7 @@
     {"id":"QA-031","section":"Trading","name":"Selling validation","status":"BLOCKED","severity":"High","expected":"Safe sell validation and reconciliation","actual":"Not started","evidence":"Economic mutation stop","bugId":"SLICE-002","retestStatus":"NOT_RUN"},
     {"id":"QA-032","section":"Concurrency","name":"Double purchase/final availability race","status":"BLOCKED","severity":"Critical","expected":"No oversell or duplicate debit","actual":"Requires isolated DB-backed fixture/services","evidence":"Integration environment unavailable","bugId":"SLICE-003","retestStatus":"NOT_RUN"},
     {"id":"QA-033","section":"Permissions","name":"Collector active role isolation","status":"PASS","severity":"Critical","expected":"Dedicated Collector has USER + COLLECTOR and no staff authority","actual":"Supported cleanup leaves USER + COLLECTOR; unwanted assignments remain revoked and audited","evidence":"Admin revoke responses, read-only history, audit query; docs/qa/bugs/SLICE-002.md","bugId":"SLICE-002","retestStatus":"PASS_FOCUSED_API_SESSION"},
-    {"id":"QA-034","section":"Collector Dashboard","name":"Fresh Collector workspace","status":"BLOCKED","severity":"Critical","expected":"Fresh Collector role/session matrix","actual":"Stopped pending supported role cleanup","evidence":"SLICE-002","bugId":"SLICE-002","retestStatus":"NOT_RUN"},
+    {"id":"QA-034","section":"Collector Dashboard","name":"Fresh Collector workspace","status":"BLOCKED","severity":"Critical","expected":"Fresh Collector role/session matrix","actual":"Supported API/session matrix passed; browser wrong-role UI retest awaits authenticated browser session","evidence":"SLICE-002; browser login confirmation pending","bugId":"SLICE-002","retestStatus":"API_PASS_UI_PENDING"},
     {"id":"QA-035","section":"Submission","name":"Disposable card identification","status":"BLOCKED","severity":"High","expected":"New submission identification and fallback","actual":"Not started","evidence":"Collector gate blocked","bugId":"SLICE-002","retestStatus":"NOT_RUN"},
     {"id":"QA-036","section":"Photo Upload","name":"Upload/private-media matrix","status":"BLOCKED","severity":"Critical","expected":"Upload, replace/remove, invalid file and prepublication privacy","actual":"Not started","evidence":"Collector gate blocked","bugId":"SLICE-002","retestStatus":"NOT_RUN"},
     {"id":"QA-037","section":"AI Review","name":"Persisted advisory result","status":"PASS","severity":null,"expected":"Existing advisory result not official grade","actual":"Public Slice Grade shown as advisory","evidence":"Umbreon detail DOM","bugId":null,"retestStatus":"PASS"},
@@ -98,7 +98,7 @@
     {"id":"QA-066","section":"Automated QA","name":"Frontend tests","status":"PASS","severity":null,"expected":"Frontend tests green","actual":"38 files / 132 tests passed","evidence":"npm test -- --run","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-067","section":"Automated QA","name":"Typechecks/builds/Prisma","status":"PASS","severity":null,"expected":"Build and static checks green","actual":"Prisma validate/generate, backend typecheck/build, frontend typecheck/build passed","evidence":"npm scripts","bugId":null,"retestStatus":"PASS"},
     {"id":"QA-068","section":"Automated QA","name":"Frontend lint","status":"FAIL","severity":"High","expected":"Lint clean","actual":"4,890 pre-existing repository-wide Prettier errors; touched backend TypeScript files pass lint and no unrelated reformat was applied","evidence":"npm run lint; touched-file lint; docs/qa/bugs/SLICE-003.md","bugId":"SLICE-003","retestStatus":"CLASSIFIED_PRE_EXISTING_DEBT"},
-    {"id":"QA-069","section":"Automated QA","name":"Integration/E2E suites","status":"FAIL","severity":"High","expected":"DB-backed suites execute green","actual":"Isolated PostgreSQL/Redis and PROVIDER_MODE=local now execute the suites, but integration is 24/34 suites (96/124 tests) and E2E is 18/32 suites (54/102 tests); remaining application/test-contract failures are documented in SLICE-003","evidence":"server/compose.test.yaml; server/scripts/run-test-suite.mjs; npm run test:integration; npm run test:e2e","bugId":"SLICE-003","retestStatus":"EXECUTED_NOT_GREEN"},
+    {"id":"QA-069","section":"Automated QA","name":"Integration/E2E suites","status":"PASS","severity":null,"expected":"DB-backed suites execute green","actual":"Integration 34/34 suites and 124/124 tests passed; E2E 32/32 suites and 102/102 tests passed with clean process exit","evidence":"server/compose.test.yaml; server/scripts/run-test-suite.mjs; npm run test:integration; npm run test:e2e","bugId":"SLICE-003","retestStatus":"PASS"},
     {"id":"QA-070","section":"Regression","name":"Fix-specific retest","status":"N/A","severity":null,"expected":"Retest QA fixes made during pass","actual":"No QA code fix made during pass","evidence":"git status clean before report artifacts","bugId":null,"retestStatus":"N/A"}
   ]
 }
