@@ -727,6 +727,7 @@ function AccountStatusPanel({
               />
             </dl>
             {query.data.status !== "APPROVED" &&
+            query.data.status !== "REVIEW" &&
             query.data.capability !== "NOT_CONFIGURED" &&
             query.data.capability !== "NOT_REQUIRED_IN_CURRENT_BETA" ? (
               <button
@@ -736,7 +737,13 @@ function AccountStatusPanel({
                 onClick={() => verification.mutate()}
               >
                 <ShieldCheck aria-hidden="true" />
-                {verification.isPending ? "Starting verification…" : "Start verification"}
+                {verification.isPending
+                  ? "Opening verification…"
+                  : query.data.status === "PENDING"
+                    ? "Continue verification"
+                    : query.data.status === "REJECTED"
+                      ? "Try verification again"
+                      : "Start verification"}
                 <ArrowRight aria-hidden="true" />
               </button>
             ) : null}
