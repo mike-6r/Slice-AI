@@ -2,15 +2,17 @@
 
 ## 1. Phase 4D status
 
-Implemented locally behind the existing Slice compliance authority. Stripe Identity sandbox execution remains blocked until Stripe test credentials and a disposable test flow are supplied. Live verification remains disabled.
+Implemented behind the existing Slice compliance authority with an explicit
+`STRIPE_IDENTITY_ENABLED` provider opt-in. Live verification remains disabled.
 
 ### Credentialed staging gate update — 2026-08-19
 
-Read-only VPS inspection confirmed the active staging release is the prior
-local-provider release and that `/etc/slice/slice.env` has no Stripe secret,
-publishable-key, or webhook-secret variables. The staging site remains healthy,
-but was not switched to `stripe_sandbox`; no VerificationSession, hosted flow,
-webhook registration, or compliance mutation was performed.
+Credentialed staging smoke QA on 2026-08-20 confirmed the active release
+`/opt/slice/releases/20260820-a850c59` runs with `PROVIDER_MODE=stripe_sandbox`,
+`STRIPE_IDENTITY_ENABLED=true`, and `STRIPE_LIVE_ENABLED=false`. The Wallet
+button opened Stripe's hosted test page and the returned Slice state was
+`PENDING`. The hosted test outcome and real webhook completion path remain
+unrun in this pass.
 
 ## 2. Identity architecture
 
@@ -79,7 +81,11 @@ Stripe Identity verifies a Slice user. Stripe Connect handles connected-account 
 
 ## 12. Customer UI
 
-Account settings now includes Identity verification with Not started, Action required, Processing, Verified, and Failed presentations. Retry/continue is available for valid terminal/input states. Stripe sandbox is visibly labeled as a TEST verification environment.
+Account settings and Wallet include Identity verification with Not started,
+Action required, Processing, Verified, and Failed presentations. Retry/continue
+is available for valid terminal/input states. Wallet and Account redirect to
+the provider's hosted session URL, and Stripe sandbox is visibly labeled as a
+TEST verification environment.
 
 ## 13. Admin UI
 
@@ -91,17 +97,20 @@ The deterministic `LOCAL_TEST` identity adapter remains active in local mode. Ex
 
 ## 15. Sandbox E2E
 
-**BLOCKED.** No Stripe sandbox secret, publishable key, or webhook secret is configured in this workspace. Therefore no real VerificationSession, hosted flow, Stripe test input, webhook delivery, or sandbox completion was performed.
+**PARTIAL.** A credentialed staging hosted-session smoke test passed. The full
+test outcome, webhook delivery/signature verification, and mapped terminal
+Slice state were not completed in this pass.
 
 ## 16. Automated/full QA
 
 - Stripe Identity mapping/safe-failure tests: PASS
+- Stripe Identity configuration/return-url tests: PASS
 - Stripe factory and external boundary tests: PASS
 - Frontend Account/Wallet/repository tests: PASS
 - Server typecheck: PASS
 - Frontend typecheck: PASS
-- Full server suite: PASS — 61 suites, 254 tests
-- Full frontend suite: PASS — 36 files, 126 tests
+- Full server suite: PASS — 63 suites, 262 tests
+- Full frontend suite: PASS — 38 files, 131 tests
 - Production server/frontend builds: PASS
 - Server lint and touched-frontend lint: PASS
 - Prisma validation/generation: PASS
@@ -109,14 +118,15 @@ The deterministic `LOCAL_TEST` identity adapter remains active in local mode. Ex
 
 ## 17. Commit/push/deployment
 
-No commit, push, VPS deployment, live verification, or staging business
-mutation was performed. The handoff requires sandbox QA to be green before
-release activity.
+Code is pushed at `a850c59` and deployed to staging at
+`/opt/slice/releases/20260820-a850c59`. One intended Stripe sandbox
+VerificationSession was created by the authenticated Wallet smoke test; no
+money, bank, ownership, offering, trading, or payout state was created.
 
 ## 18. Remaining blockers
 
-1. Stripe sandbox credentials and a disposable test flow are required.
-2. Webhook delivery/signature verification must be exercised with real sandbox events.
+1. Complete a disposable Stripe Identity sandbox test outcome.
+2. Exercise webhook delivery/signature verification with the configured endpoint.
 3. Stripe Identity product configuration must confirm matching selfie support for the selected account/country.
 4. Credentialed tests must confirm retries, duplicate events, stale events, failed/canceled states, and backend gating.
 
