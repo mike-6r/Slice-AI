@@ -94,13 +94,30 @@ Full server suite passes: 63 suites, 260 tests. Focused provider/Stripe regressi
 
 No new financial integration fixture was created. Existing provider integration coverage remains unchanged; the full existing unit/regression suites are green.
 
+## Visual Reconstruction Pass
+
+The first visual pass was functionally complete but visually failed the supplied reference: the page title was oversized, the middle row was forced into tall equal-height cards, the empty bank state created a large hole, status rows read like nested admin settings, movement history had too much empty table space, and the settlement timeline was too small to carry useful information.
+
+The reconstruction pass corrected the hierarchy without changing the data authorities or creating fixtures:
+
+- compact five-card summary row with a restrained emphasis on Total wallet balance;
+- content-sized Connected bank, Move money, and Verification panels with reference-like proportions;
+- contextual no-bank state and a compact funding selector driven by the existing bank-account projection;
+- border-light status rows, denser movement-history empty state, and a larger horizontal settlement rail;
+- intentional compact Wallet insights empty state for accounts with no settled movement data;
+- controlled Slice heading scale, tighter surfaces, subtle teal atmosphere, and mobile two-column summary cards with stacked primary panels.
+
+Authenticated staging captures were reviewed at 1920×1080, 1440×900, 1280×800, and 390×844. The rendered page had no horizontal overflow and browser error/warning logs were empty. At desktop widths, the header, five-card summary, complete primary row, movement history, timeline, and the beginning of insights are visible with substantially less dead space than the failed pass. At 390px, summary cards use a compact two-column grid and the primary modules stack without clipping.
+
+The staging account has no connected bank and no settled movement history, so the connected-account row, movement table, and populated insights metrics could not be visually exercised without creating financial/provider state. Those states remain API-driven and were intentionally not fabricated. The footer remains below the dashboard on smaller viewports, which is expected for the full authenticated page.
+
 ## Responsive QA
 
 The layout supports five cards on large desktop, three/two-column wrapping at medium widths, single-column panels on mobile, and stacked movement cards below 600px. The authenticated staging page was visually checked in the in-app browser at the available desktop viewport; the DOM had no horizontal overflow and rendered the complete Wallet composition. CSS media rules cover 1440, 1280, 1024, 768, and mobile widths.
 
 ## Staging QA
 
-Commit `8b0c4e5` is deployed to staging at `/opt/slice/releases/20260819-8b0c4e5`. API `/health`, `/ready`, and public web root returned 200; the protected insights endpoint returned the expected 401 when unauthenticated. Authenticated Wallet QA showed the new dashboard sections, GBP labels, zero-pending/zero-insight empty states, and no visible API error state. No Stripe live mode, deposit settlement, payout, trade, offering, ownership, Umbreon, or Charizard mutation was performed. The deploy script now keeps `/opt/slice/current` and `/opt/slice/app` aligned for systemd activation.
+UI commit `94bd844` is deployed to staging at `/opt/slice/releases/20260820-94bd844`. API `/health`, `/ready`, and public web root returned 200; the protected insights endpoint returned the expected 401 when unauthenticated. Authenticated Wallet QA showed the new dashboard sections, GBP labels, zero-pending/zero-insight empty states, and no visible API error state. No Stripe live mode, deposit settlement, payout, trade, offering, ownership, Umbreon, or Charizard mutation was performed. The deploy script keeps `/opt/slice/current` and `/opt/slice/app` aligned for systemd activation.
 
 ## Lint note
 
@@ -108,4 +125,4 @@ Touched wallet files pass targeted ESLint/Prettier checks. Repository-wide front
 
 ## Remaining issues
 
-- Full viewport-by-viewport browser capture at every requested width still requires a resizable browser session; the responsive CSS and no-overflow desktop check are complete.
+- Populated connected-bank, movement-history, and settled-insights states still require an existing authorized account with those states for visual exercise; no provider or financial mutation was performed just to produce screenshots.
