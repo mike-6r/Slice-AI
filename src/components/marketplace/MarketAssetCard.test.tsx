@@ -40,6 +40,41 @@ const asset: MarketplaceAsset = {
   tradingHasExecutionHistory: false,
 };
 
+const rawPreMarketAsset: MarketplaceAsset = {
+  ...asset,
+  title: "Raw Umbreon",
+  conditionLabel: "Mint",
+  estimatedMarketValueMinor: 222500,
+  marketReference: { amountMinor: 222500, currency: "USD" },
+  availabilityBps: undefined,
+  ownersCount: undefined,
+  ownershipStatus: "PUBLISHED",
+  tradingStatus: "CLOSED",
+  tradingEnabled: false,
+  tradingHasExecutionHistory: false,
+  marketLifecycle: {
+    phase: "ISSUANCE_PENDING",
+    badge: "Pre-market",
+    headline: "Ownership is being prepared",
+    statusPill: "Not yet issued",
+    explanation: "Ownership is being prepared.",
+    tradeabilityMessage:
+      "Ownership is being prepared. Trading will open once issuance is complete.",
+    canBuy: false,
+    canSell: false,
+    currentStep: 2,
+    nextAction: "Complete issuance",
+    blockingDependency: "Issuance",
+    steps: [],
+    admin: {
+      publicState: "Not yet issued",
+      internalState: "ISSUANCE_PENDING",
+      nextAction: "Complete issuance",
+      blockingDependency: "Issuance",
+    },
+  },
+};
+
 describe("MarketAssetCard layout contracts", () => {
   it("keeps projected media and the action in compact cards", () => {
     const html = renderToStaticMarkup(<MarketAssetCard asset={asset} compact />);
@@ -58,5 +93,21 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("market-detailed-identity");
     expect(html).toContain("View Asset");
     expect(html).toContain("market-card-cta");
+  });
+
+  it("uses truthful raw and pre-market language without fake movement", () => {
+    const html = renderToStaticMarkup(<MarketAssetCard asset={rawPreMarketAsset} />);
+
+    expect(html).toContain("Raw / Ungraded");
+    expect(html).toContain("Condition: Mint");
+    expect(html).toContain("Slice valuation");
+    expect(html).toContain("Market reference: $2,225 USD");
+    expect(html).toContain("Not yet issued");
+    expect(html).toContain(
+      "Ownership is being prepared. Trading will open once issuance is complete.",
+    );
+    expect(html).not.toContain("Grade pending");
+    expect(html).not.toContain("No 24h move");
+    expect(html).not.toContain("Availability not published");
   });
 });

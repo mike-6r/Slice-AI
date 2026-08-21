@@ -1,10 +1,11 @@
-import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Actor } from '../../identity/auth/auth.service';
+import { AccountCapabilityService } from '../../identity/access/account-capability.service';
 import type { IdentityVerificationProvider } from '../domain/provider.types';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { StripeClientFactory } from './stripe-provider.client';
@@ -32,9 +33,11 @@ export class BankConnectionService {
     private readonly crypto: ProviderCryptoService,
     private readonly stripeFactory: StripeClientFactory,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() private readonly capabilities?: AccountCapabilityService,
   ) {}
 
   async createLinkCheckout(actor: Actor, idempotencyKey: string) {
+    await this.capabilities?.require(actor, 'LINK_BANK');
     if (this.config.stripeBankFundingRail !== 'bacs_debit') {
       throw this.domainError('GBP_FUNDING_RAIL_UNSUPPORTED', 'The configured GBP funding rail is not supported.');
     }

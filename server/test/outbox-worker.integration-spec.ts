@@ -28,7 +28,10 @@ const event = (suffix: string, eventType = 'trade.completed', schemaVersion = 1)
     : { reference: suffix },
 });
 
-const append = async (suffix: string, type?: string, version?: number) => db.$transaction((tx) => writer.append(tx, event(suffix, type, version)));
+const append = async (suffix: string, type?: string, version?: number) => db.$transaction(async (tx) => {
+  const row = await writer.append(tx, event(suffix, type, version));
+  return tx.outboxEvent.update({ where: { id: row.id }, data: { availableAt: time } });
+});
 const worker = (
   registry = new OutboxHandlerRegistry(),
   workerId = 'worker-a',

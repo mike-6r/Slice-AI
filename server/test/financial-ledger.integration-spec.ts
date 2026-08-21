@@ -188,7 +188,9 @@ describe('Document 013 PostgreSQL finance authority', () => {
       collectorProceedsMinor: '0',
       collectorProceedsReservedMinor: '0',
       orderReservedMinor: '0',
+      pendingDepositCount: 0,
       pendingMinor: '0',
+      pendingWithdrawalCount: 0,
       pendingWithdrawalMinor: '0',
       withdrawalReservedMinor: '0',
     });

@@ -64,7 +64,7 @@ export async function signup(
       email: `${h.runId}-${label}@example.test`,
       password: 'a sufficiently strong password',
       displayName: label,
-      username: `qa_${label.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}_${offset}`,
+      username: `qa_${label.replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(-23)}_${offset}`,
     });
   expect(response.status).toBe(201);
   return {

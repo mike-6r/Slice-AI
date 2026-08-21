@@ -173,6 +173,7 @@ describe('phone verification HTTP E2E', () => {
           email: `${run}-provider-unavailable@example.test`,
           password,
           displayName: 'Unavailable provider user',
+          username: `qa_provider_${run.replace(/[^a-z0-9]/gi, '').slice(-16)}`,
         });
       const response = await request(unavailable.getHttpServer())
         .post('/api/v1/me/phone-verification/send')
@@ -199,6 +200,7 @@ describe('phone verification HTTP E2E', () => {
         email: `${run}-${label}@example.test`,
         password,
         displayName: `User ${label}`,
+        username: `qa_${label}`,
       });
   }
   function auth(user: { body: { accessToken: string } }, ip: string) {

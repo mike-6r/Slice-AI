@@ -45,12 +45,13 @@ describe('customer account preferences and activity HTTP E2E', () => {
     await expect(request(app.getHttpServer()).get('/api/v1/me/preferences').set(headers)).resolves.toMatchObject({ status: 200, body: { timezone: 'Europe/London', locale: 'en-GB' } });
     const patch = await request(app.getHttpServer()).patch('/api/v1/me/preferences').set(headers).set('idempotency-key', `${runId}-preferences-patch`).set('x-forwarded-for', '198.51.100.122').send({ timezone: 'America/New_York', locale: 'en-US' });
     expect(patch.status).toBe(200);
-    expect(patch.body).toEqual({ timezone: 'America/New_York', locale: 'en-US' });
+    expect(patch.body).toEqual({ timezone: 'America/New_York', locale: 'en-US', preferredCurrency: 'GBP' });
     const invalid = await request(app.getHttpServer()).patch('/api/v1/me/preferences').set(headers).set('idempotency-key', `${runId}-preferences-invalid`).set('x-forwarded-for', '198.51.100.123').send({ timezone: 'not/a-timezone' });
     expect(invalid.status).toBe(400);
     expect(invalid.body.error.code).toBe('VALIDATION_FAILED');
     const unsupported = await request(app.getHttpServer()).patch('/api/v1/me/preferences').set(headers).set('idempotency-key', `${runId}-preferences-unsupported`).set('x-forwarded-for', '198.51.100.124').send({ preferredCurrency: 'USD' });
-    expect(unsupported.status).toBe(400);
+    expect(unsupported.status).toBe(200);
+    expect(unsupported.body.preferredCurrency).toBe('USD');
   });
 
   it('projects customer-safe, paginated activity while excluding internal audit events', async () => {
@@ -83,6 +84,6 @@ describe('customer account preferences and activity HTTP E2E', () => {
   });
 
   function signup(label: string, ip: string) {
-    return request(app.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${runId}-${label}-signup`).set('x-forwarded-for', ip).send({ email: `${runId}-${label}@example.test`, password, displayName: `User ${label}` });
+    return request(app.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${runId}-${label}-signup`).set('x-forwarded-for', ip).send({ email: `${runId}-${label}@example.test`, password, displayName: `User ${label}`, username: `qa_${label}` });
   }
 });

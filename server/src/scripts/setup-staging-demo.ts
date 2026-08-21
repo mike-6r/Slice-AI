@@ -19,8 +19,9 @@ type DemoDefinition = (typeof demoAccounts)[keyof typeof demoAccounts];
  * records. It deliberately does not alter passwords of an existing account,
  * grant privileged financial, vault, or compliance roles, directly credit
  * balances, or create external-provider records. The collector showcase may
- * additionally receive COLLECTOR and ASSET_REVIEWER through its own bounded
- * setup script for the collector workspace and review fixture.
+ * additionally receive COLLECTOR through its own bounded setup script. Staff
+ * review fixtures are provisioned separately and never share the Collector
+ * identity.
  */
 export async function runStagingDemoSetup() {
   assertStagingDemoSafety();
@@ -96,7 +97,6 @@ export async function runStagingDemoSetup() {
           collector: [
             'USER',
             'COLLECTOR (only when collector fixture is enabled)',
-            'ASSET_REVIEWER (only when collector fixture is enabled)',
           ],
         },
         note: 'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. No passwords, privileged financial/vault/compliance roles, or external-provider records were written.',
@@ -369,8 +369,7 @@ async function assertDemoRoleBoundary(
     (entry) =>
       entry.role !== 'USER' &&
       !(
-        entry.userId === collectorUserId &&
-        ['COLLECTOR', 'ASSET_REVIEWER'].includes(entry.role)
+        entry.userId === collectorUserId && entry.role === 'COLLECTOR'
       ),
   );
   if (invalid) {

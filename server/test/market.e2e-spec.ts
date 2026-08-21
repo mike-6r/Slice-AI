@@ -113,9 +113,8 @@ describe('market HTTP E2E', () => {
       dataStatus: 'DEMO',
       estimatedMarketValue: { minor: '2458000', currency: 'GBP' },
     });
-    expect(JSON.stringify(list.body)).not.toMatch(
-      /"price"|unitPrice|ownership/i,
-    );
+    expect(list.body.items[0].ownership).toBeNull();
+    expect(JSON.stringify(list.body)).not.toMatch(/"price"|unitPrice/i);
     expect(
       (
         await request(app.getHttpServer())

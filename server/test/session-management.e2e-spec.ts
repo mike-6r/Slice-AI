@@ -177,7 +177,7 @@ describe('customer session management HTTP E2E', () => {
       .post('/api/v1/auth/signup')
       .set('idempotency-key', key)
       .set('x-forwarded-for', ip)
-      .send({ email, password, displayName });
+      .send({ email, password, displayName, username: `qa_${displayName.replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 24)}` });
   }
   function login(email: string, ip: string) {
     return request(app.getHttpServer())

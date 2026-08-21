@@ -59,14 +59,14 @@ describe('signup CAPTCHA and consent HTTP E2E', () => {
     const previous = process.env.CAPTCHA_PROVIDER; const previousSecret = process.env.CAPTCHA_SECRET_KEY; const previousTurnstileSecret = process.env.TURNSTILE_SECRET_KEY; process.env.CAPTCHA_PROVIDER = 'cloudflare_turnstile'; delete process.env.CAPTCHA_SECRET_KEY; delete process.env.TURNSTILE_SECRET_KEY;
     const unavailable = (await createApp(AppModule)) as INestApplication; await unavailable.init();
     try {
-      const response = await request(unavailable.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${run}-provider`).set('x-forwarded-for', '198.51.100.241').send({ email: `${run}-provider@example.test`, password, displayName: 'Provider unavailable', captchaToken: `local-test:${run}-provider-proof`, consent });
+      const response = await request(unavailable.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${run}-provider`).set('x-forwarded-for', '198.51.100.241').send({ email: `${run}-provider@example.test`, password, displayName: 'Provider unavailable', username: 'qa_provider_unavailable', captchaToken: `local-test:${run}-provider-proof`, consent });
       expectError(response, 503, 'CAPTCHA_UNAVAILABLE');
       await expect(db.user.count({ where: { normalizedEmail: `${run}-provider@example.test` } })).resolves.toBe(0);
     } finally { await unavailable.close(); process.env.CAPTCHA_PROVIDER = previous; if (previousSecret === undefined) delete process.env.CAPTCHA_SECRET_KEY; else process.env.CAPTCHA_SECRET_KEY = previousSecret; if (previousTurnstileSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY; else process.env.TURNSTILE_SECRET_KEY = previousTurnstileSecret; }
   });
 
   function signup({ email, key, token, consentValue = consent }: { email: string; key: string; token?: string; consentValue?: typeof consent | null }) {
-    return request(app.getHttpServer()).post('/api/v1/auth/signup').set('x-forwarded-for', `198.51.100.${Math.floor(Math.random() * 100)}`).set('idempotency-key', key).send({ email, password, displayName: 'Signup consent user', ...(token ? { captchaToken: token } : {}), ...(consentValue ? { consent: consentValue } : {}) });
+    return request(app.getHttpServer()).post('/api/v1/auth/signup').set('x-forwarded-for', `198.51.100.${Math.floor(Math.random() * 100)}`).set('idempotency-key', key).send({ email, password, displayName: 'Signup consent user', username: `qa_${email.split('@')[0].replace(/[^a-z0-9_]/gi, '_').slice(-24)}`, ...(token ? { captchaToken: token } : {}), ...(consentValue ? { consent: consentValue } : {}) });
   }
 });
 

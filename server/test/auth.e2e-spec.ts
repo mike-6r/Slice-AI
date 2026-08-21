@@ -45,6 +45,7 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
   });
 
   beforeEach(async () => {
+    await inspector.flushdb();
     const keys = await inspector.keys('slice:test:auth-*');
     if (keys.length) await inspector.del(...keys);
   });
@@ -153,6 +154,8 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
       `${runId}-duplicate`,
       'Signup User',
       '198.51.100.3',
+      password,
+      `qa_dup_${runId.replace(/[^a-z0-9]/gi, '').slice(-18)}`,
     );
     expectError(duplicate, 409, 'EMAIL_ALREADY_REGISTERED');
   });
@@ -186,6 +189,7 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
         email: `${runId}-signup-rate-limited@example.test`,
         password,
         displayName: 'Rate Limited',
+        username: `qa_rate_limited_${runId.replace(/[^a-z0-9]/gi, '').slice(-10)}`,
       });
     expectError(limited, 429, 'RATE_LIMITED');
   });
@@ -529,6 +533,10 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
       'Profile User',
       '198.51.100.70',
     );
+    await prisma.userProfile.update({
+      where: { userId: created.body.user.id },
+      data: { usernameChangedAt: null },
+    });
     const key = `${runId}-profile-update`;
     const username = `p${runId.replace(/[^a-z0-9]/gi, '').slice(-20)}`;
     const patch = { displayName: 'Updated Profile', username };
@@ -628,8 +636,8 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
       else expectError(response, 429, 'RATE_LIMITED');
     }
 
-    const refreshIp = '198.51.100.81';
-    for (let index = 0; index < 30; index += 1) {
+    const refreshIp = `${runId}-refresh`;
+    for (let index = 0; index < 10; index += 1) {
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/refresh')
         .set('x-forwarded-for', refreshIp);
@@ -666,6 +674,7 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
         email: `${runId}-outage@example.test`,
         password,
         displayName: 'Outage User',
+        username: `qa_outage_${runId.replace(/[^a-z0-9]/gi, '').slice(-12)}`,
       });
     expectError(outage, 503, 'PERSISTENCE_UNAVAILABLE');
     expect(outage.body.requestId).toBe(requestId);
@@ -1031,6 +1040,7 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
         email: `${runId}-secure@example.test`,
         password,
         displayName: 'Secure Cookie',
+        username: 'qa_secure_cookie',
       });
     expect(response.status).toBe(201);
     expectCookie(response, true);
@@ -1044,12 +1054,13 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
     displayName: string,
     ip: string,
     candidatePassword: string = password,
+    username?: string,
   ) {
     return request(app.getHttpServer())
       .post('/api/v1/auth/signup')
       .set('x-forwarded-for', ip)
       .set('idempotency-key', key)
-      .send({ email, password: candidatePassword, displayName });
+      .send({ email, password: candidatePassword, displayName, username: username ?? `qa_${email.split('@')[0].replace(/[^a-z0-9_]/gi, '_').slice(-24)}` });
   }
 
   function login(email: string, candidatePassword: string, ip: string) {

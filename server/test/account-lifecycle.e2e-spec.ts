@@ -82,7 +82,7 @@ describe('customer data export and account lifecycle HTTP E2E', () => {
     await expect(prisma.user.findUniqueOrThrow({ where: { id: active.body.user.id } })).resolves.toMatchObject({ accountStatus: 'DEACTIVATED' });
   });
 
-  function signup(label: string, ip: string) { return request(app.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${run}-${label}-signup`).set('x-forwarded-for', ip).send({ email: `${run}-${label}@example.test`, password, displayName: `User ${label}` }); }
+  function signup(label: string, ip: string) { return request(app.getHttpServer()).post('/api/v1/auth/signup').set('idempotency-key', `${run}-${label}-signup`).set('x-forwarded-for', ip).send({ email: `${run}-${label}@example.test`, password, displayName: `User ${label}`, username: `qa_${label.replace(/[^a-z0-9_]/gi, '_')}` }); }
   async function expectRefreshFailure(cookie: string) { const response = await request(app.getHttpServer()).post('/api/v1/auth/refresh').set('cookie', cookie); expect(response.status).toBe(401); }
 });
 

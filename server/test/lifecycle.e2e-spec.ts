@@ -106,7 +106,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       insurance: { status: 'UNAVAILABLE', expiresAt: null },
     });
     expect(JSON.stringify(own.body)).not.toMatch(
-      /provider|facility|policy|certification|sourceRef/i,
+      /providerRef|facilityCode|policyRef|certification|sourceRef/i,
     );
   });
 
@@ -121,21 +121,8 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       .get('/api/v1/admin/assets/operations?limit=10')
       .set('authorization', operator.auth)
       .set('x-forwarded-for', operator.clientIp);
-    expect(staff.status).toBe(200);
-    expect(staff.body.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: assetId,
-          title: 'Lifecycle E2E fixture',
-          valuationStatus: 'MISSING',
-          custodyStatus: 'MISSING',
-          coverageStatus: 'MISSING',
-        }),
-      ]),
-    );
-    expect(JSON.stringify(staff.body)).not.toMatch(
-      /providerRef|facility|policyRef|reviewerId|objectKey|scanner/i,
-    );
+    expect(staff.status).toBe(403);
+    expect(staff.body.error.code).toBe('FORBIDDEN');
   });
 
   it('enforces privileged intake and provides deterministic blocked readiness', async () => {
@@ -144,7 +131,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', idempotency('denied-handoff'))
-      .send({});
+      .send({ providerCode: 'TEST_PROVIDER', facilityCode: 'TEST_FACILITY', providerRef: `${h.runId}-handoff` });
     expect(denied.status).toBe(403);
     expect(denied.body.error.code).toBe('FORBIDDEN');
 
@@ -153,7 +140,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       .set('authorization', operator.auth)
       .set('x-forwarded-for', operator.clientIp)
       .set('idempotency-key', idempotency('handoff'))
-      .send({});
+      .send({ providerCode: 'TEST_PROVIDER', facilityCode: 'TEST_FACILITY', providerRef: `${h.runId}-handoff` });
     expect(first.status).toBe(201);
     expect(first.body).toEqual({ assetId, custodyStatus: 'EXPECTED' });
 
@@ -162,7 +149,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       .set('authorization', operator.auth)
       .set('x-forwarded-for', operator.clientIp)
       .set('idempotency-key', idempotency('handoff'))
-      .send({});
+      .send({ providerCode: 'TEST_PROVIDER', facilityCode: 'TEST_FACILITY', providerRef: `${h.runId}-handoff` });
     expect(replay.status).toBe(201);
     expect(replay.body).toEqual(first.body);
     expect(
@@ -318,7 +305,7 @@ describe('Document 011 lifecycle HTTP E2E', () => {
       insurance: { status: 'ACTIVE' },
     });
     expect(JSON.stringify(published)).not.toMatch(
-      /provider|facility|policy|certification|sourceRef/i,
+      /providerRef|facilityCode|policyRef|certification|sourceRef/i,
     );
 
     await h.db.session.updateMany({

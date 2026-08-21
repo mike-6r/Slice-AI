@@ -57,7 +57,7 @@ describe('Document 010 submission transition HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', `${h.runId}-${suffix}-draft`)
-      .send({ categoryId, declaredMetadata: { name: suffix } });
+      .send({ categoryId, declaredMetadata: { name: suffix, termsAcknowledged: true } });
     expect(draft.status).toBe(201);
     const id = draft.body.id as string;
     await h.db.submissionMedia.createMany({
@@ -106,7 +106,7 @@ describe('Document 010 submission transition HTTP E2E', () => {
       .send({
         categoryId,
         version: changes.body.version,
-        declaredMetadata: { name: 'resubmitted' },
+        declaredMetadata: { name: 'resubmitted', termsAcknowledged: true },
       });
     expect(edit.status).toBe(200);
     const resubmit = await request(h.app.getHttpServer())
@@ -155,8 +155,10 @@ describe('Document 010 submission transition HTTP E2E', () => {
       }),
     ).toBe(1);
     expect(
-      await h.db.notification.count({
-        where: { userId: owner.id, resourceId: first.id },
+      await h.db.outboxEvent.count({
+        where: {
+          eventType: { in: ['submission.changesrequested', 'submission.approved'] },
+        },
       }),
     ).toBe(2);
     const conflict = await request(h.app.getHttpServer())
@@ -188,7 +190,7 @@ describe('Document 010 submission transition HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', `${h.runId}-cancel-draft`)
-      .send({ categoryId });
+      .send({ categoryId, declaredMetadata: { name: 'self-submission', termsAcknowledged: true } });
     const cancel = await request(h.app.getHttpServer())
       .post(`/api/v1/submissions/${draft.body.id}/cancel`)
       .set('authorization', owner.auth)
@@ -237,7 +239,7 @@ describe('Document 010 submission transition HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', `${h.runId}-self-draft`)
-      .send({ categoryId });
+      .send({ categoryId, declaredMetadata: { name: 'self-submission', termsAcknowledged: true } });
     expect(ownDraft.status).toBe(201);
     await h.db.submissionMedia.createMany({
       data: ['front', 'back'].map((slot) => ({

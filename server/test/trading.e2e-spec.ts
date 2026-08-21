@@ -299,7 +299,8 @@ describe('Document 014 trading HTTP contracts', () => {
     const bankLink = await request(h.app.getHttpServer())
       .post('/api/v1/wallet/bank-link/checkout')
       .set('authorization', unverified.auth)
-      .set('x-forwarded-for', unverified.clientIp);
+      .set('x-forwarded-for', unverified.clientIp)
+      .set('idempotency-key', `${h.runId}-unverified-bank-link`);
     expect(bankLink.status).toBe(403);
     expect(bankLink.body.error).toMatchObject({
       code: 'EMAIL_VERIFICATION_REQUIRED',

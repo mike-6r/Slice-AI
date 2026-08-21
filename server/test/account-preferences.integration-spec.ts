@@ -34,9 +34,9 @@ describe('account preferences and customer activity with PostgreSQL', () => {
     const b = await auth.signup({ email: `${runId}-b@example.test`, password: 'a sufficiently strong password', displayName: 'User B' }, 'request-b', `${runId}-b-signup`);
     const actorA = await auth.actor(a.accessToken);
     const actorB = await auth.actor(b.accessToken);
-    await expect(preferences.get(actorA)).resolves.toEqual({ timezone: 'Europe/London', locale: 'en-GB' });
-    await expect(preferences.update(actorA, { timezone: 'America/New_York' }, '198.51.100.1', 'request-update', `${runId}-prefs-a`)).resolves.toEqual({ timezone: 'America/New_York', locale: 'en-GB' });
-    await expect(preferences.get(actorB)).resolves.toEqual({ timezone: 'Europe/London', locale: 'en-GB' });
+    await expect(preferences.get(actorA)).resolves.toEqual({ timezone: 'Europe/London', locale: 'en-GB', preferredCurrency: 'GBP' });
+    await expect(preferences.update(actorA, { timezone: 'America/New_York' }, '198.51.100.1', 'request-update', `${runId}-prefs-a`)).resolves.toEqual({ timezone: 'America/New_York', locale: 'en-GB', preferredCurrency: 'GBP' });
+    await expect(preferences.get(actorB)).resolves.toEqual({ timezone: 'Europe/London', locale: 'en-GB', preferredCurrency: 'GBP' });
     await expect(prisma.auditEvent.count({ where: { actorUserId: a.user.id, action: 'ACCOUNT_PREFERENCES_UPDATED' } })).resolves.toBe(1);
   });
 

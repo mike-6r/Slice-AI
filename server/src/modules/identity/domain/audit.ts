@@ -168,7 +168,9 @@ const metadataKeys: Record<string, readonly string[]> = {
   WALLET_MOVEMENT_UPDATED: ['status', 'reasonCode'],
   PROVIDER_WEBHOOK_ACCEPTED: ['provider', 'eventType'],
   PROVIDER_RECONCILED: ['provider', 'status', 'mismatchCodes'],
-  COMPLIANCE_HOLD_CREATED: ['scope', 'reasonCode'],
+  COMPLIANCE_HOLD_CREATED: ['source', 'provider', 'scope', 'reasonCode'],
+  COMPLIANCE_HOLD_RELEASED: ['source', 'scope', 'reasonCode'],
+  WALLET_RETURN_DEFICIT_DETECTED: ['source', 'availableMinor', 'reasonCode'],
   OUTBOX_EVENT_REQUEUED: ['eventId', 'previousStatus', 'resultingStatus'],
   NOTIFICATION_DELIVERY_REQUEUED: [
     'deliveryId',

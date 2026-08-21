@@ -20,11 +20,14 @@ const repo = new OutboxWorkerRepository(db as never);
 let now = new Date('2000-01-01T00:00:00.000Z');
 const config: OutboxWorkerConfig = { outboxWorkerEnabled: false, outboxWorkerId: undefined, outboxPollIntervalMs: 1000, outboxBatchSize: 1, outboxLeaseMs: 1000, outboxMaxAttempts: 5, outboxRetryBaseMs: 100, outboxRetryMaxMs: 1000 };
 
-const appendTrade = (suffix: string) => db.$transaction((tx) => writer.append(tx, createDomainEvent({
+const appendTrade = (suffix: string) => db.$transaction(async (tx) => {
+  const row = await writer.append(tx, createDomainEvent({
   eventId: `${run}-${suffix}`, eventType: 'trade.completed', schemaVersion: 1, occurredAt: new Date('1999-01-01T00:00:00.000Z'),
   aggregate: { type: 'execution', id: `${run}-${suffix}` },
   payload: { executionId: `${run}-${suffix}`, assetId: `${run}-asset`, units: '2', priceMinor: '250', grossMinor: '500', currency: 'GBP' },
-})));
+  }));
+  return tx.outboxEvent.update({ where: { id: row.id }, data: { availableAt: now } });
+});
 
 describe('Document 017 phase 3 notification delivery routing', () => {
   beforeAll(async () => { await db.$connect(); });

@@ -97,6 +97,7 @@ describe('catalogue HTTP E2E', () => {
         email: `${runId}@example.test`,
         password,
         displayName: 'Catalogue Admin',
+        username: 'qa_catalogue_admin',
       });
     expect(signup.status).toBe(201);
     userId = signup.body.user.id;

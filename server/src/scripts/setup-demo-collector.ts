@@ -33,6 +33,9 @@ import {
 } from './staging-demo-safety';
 import { collectorPlanRegistry, planJson } from '../modules/collector-workspace/collector-entitlements';
 
+/** Roles owned by the dedicated Collector fixture. Review authority is separate. */
+export const COLLECTOR_FIXTURE_ROLES = ['COLLECTOR'] as const;
+
 type DemoAsset = Readonly<{
   key: string;
   title: string;
@@ -926,7 +929,9 @@ async function ensureCollectorRoles(
   admin: Actor,
   userId: string,
 ) {
-  for (const role of ['COLLECTOR', 'ASSET_REVIEWER'] as const) {
+  // A Collector fixture must never receive staff-review authority. Review
+  // fixtures are provisioned separately by seed-browser-qa.ts.
+  for (const role of COLLECTOR_FIXTURE_ROLES) {
     const current = await db.roleAssignment.findFirst({
       where: {
         userId,

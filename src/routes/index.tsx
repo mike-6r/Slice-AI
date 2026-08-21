@@ -15,12 +15,9 @@ import { useState, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
 import { isBetaEnvironment } from "@/config/environment";
-import { useCurrency } from "@/currency/CurrencyProvider";
 import { useTrendingAssets } from "@/queries/hooks";
-import type { Asset } from "@/domain";
-import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
-import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
-import { formatPercent } from "@/lib/format";
+import { MarketAssetCard } from "@/components/marketplace/MarketAssetCard";
+import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
@@ -87,7 +84,6 @@ const howSliceWorks = [
 ] as const;
 
 function HomePage() {
-  useCurrency();
   const { isAuthenticated } = useSession();
   const trending = useTrendingAssets();
 
@@ -308,82 +304,12 @@ function MarketPulseState({ kind }: { kind: "loading" | "empty" }) {
   );
 }
 
-function LiveAssetCards({ assets }: { assets: Asset[] }) {
-  const { formatMoney } = useCurrency();
-
+function LiveAssetCards({ assets }: { assets: import("@/domain").Asset[] }) {
   return (
     <div className="approved-home__trending" data-testid="homepage-trending-assets">
-      {assets.map((asset) => {
-        const media =
-          asset.media.find((media) => media.kind === "image" && /\bfront\b/i.test(media.alt)) ??
-          (asset.slug ? assetShowcaseMedia(asset.slug) : undefined) ??
-          asset.media.find((media) => media.kind === "image");
-        const imageUrl = media ? ("url" in media ? media.url : media.src) : undefined;
-        const category = marketCategoryPresentation(asset.details.category);
-        const marketValue = asset.market?.estimatedMarketValue;
-        const change = asset.market?.change24hBps;
-        const availability = asset.market?.availabilityBps;
-        const dataStatus = asset.market?.dataStatus;
-        const statusLabel =
-          dataStatus === "LIVE"
-            ? "Live market"
-            : dataStatus === "DELAYED"
-              ? "Data delayed"
-              : dataStatus === "UNAVAILABLE"
-                ? "Market unavailable"
-                : "Market status pending";
-
-        return (
-          <Link
-            key={asset.id}
-            to="/asset/$id"
-            params={{ id: asset.slug ?? asset.id }}
-            className="approved-home__asset-card approved-home__asset-card--live"
-          >
-            <div className="approved-home__asset-media">
-              {imageUrl ? (
-                <img src={imageUrl} alt={media?.alt ?? asset.details.title} loading="lazy" />
-              ) : (
-                <div className="approved-home__asset-media-pending">Market image pending</div>
-              )}
-              <span className="approved-home__asset-category">{category.label}</span>
-              <span className="approved-home__asset-grade">
-                {asset.grade ? `${asset.grade.company} ${asset.grade.label}` : "Grade pending"}
-              </span>
-              <Bookmark aria-hidden="true" />
-            </div>
-            <div className="approved-home__asset-body">
-              <strong>{asset.details.title}</strong>
-              <small className="approved-home__market-status">{statusLabel}</small>
-              <div className="approved-home__asset-price">
-                <div>
-                  <small>Market value</small>
-                  <b>
-                    {marketValue
-                      ? formatMoney(marketValue.amount, marketValue.currency)
-                      : "Value pending"}
-                  </b>
-                </div>
-                <span className={change !== undefined && change >= 0 ? "is-up" : undefined}>
-                  {change !== undefined ? formatPercent(change / 100) : "No 24h move"}
-                </span>
-              </div>
-              <div className="approved-home__availability">
-                {availability !== undefined ? (
-                  <span>
-                    <i style={{ width: `${Math.min(100, Math.max(0, availability / 100))}%` }} />
-                  </span>
-                ) : null}
-                <small>
-                  {availability !== undefined
-                    ? `${(availability / 100).toFixed(1)}% available`
-                    : "Availability not published"}
-                </small>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+      {assets.map((asset) => (
+        <MarketAssetCard key={asset.id} asset={toMarketplaceAsset(asset)} compact />
+      ))}
     </div>
   );
 }

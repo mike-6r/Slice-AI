@@ -46,6 +46,7 @@ describe('watchlist HTTP E2E', () => {
         email: `${id}@example.test`,
         password: 'a sufficiently strong password',
         displayName: 'Watcher',
+        username: 'qa_watcher',
       });
     expect(signup.status).toBe(201);
     userId = signup.body.user.id;

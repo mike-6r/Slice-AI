@@ -84,7 +84,7 @@ describe('auth abuse Redis integration', () => {
   it.each([
     ['signup', 5, true],
     ['login', 10, true],
-    ['refresh', 30, false],
+    ['refresh', 120, false],
     ['logout-all', 5, true],
     ['profile', 5, true],
   ] as const)(

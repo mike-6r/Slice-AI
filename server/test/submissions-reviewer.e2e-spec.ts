@@ -49,7 +49,7 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', `${h.runId}-draft`)
-      .send({ categoryId });
+      .send({ categoryId, declaredMetadata: { name: 'Review fixture', termsAcknowledged: true } });
     expect(draft.status).toBe(201);
     expect(draft.body.id).toBeDefined();
     id = draft.body.id;
@@ -111,8 +111,8 @@ describe('Document 010 reviewer HTTP E2E', () => {
     expect(changes.status).toBe(201);
     expect(JSON.stringify(changes.body)).not.toContain('private reviewer note');
     expect(
-      await h.db.notification.count({
-        where: { userId: owner.id, resourceId: id },
+      await h.db.outboxEvent.count({
+        where: { eventType: 'submission.changesrequested', actorUserId: owner.id },
       }),
     ).toBe(1);
     expect(

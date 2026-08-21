@@ -182,7 +182,9 @@ describe('Document 013 financial self-read HTTP contracts', () => {
       expect(response.status).toBe(200);
     expect(wallet.body).toEqual({
       currency: 'GBP',
+      pendingDepositCount: 0,
       pendingMinor: '0',
+      pendingWithdrawalCount: 0,
       pendingWithdrawalMinor: '0',
       orderReservedMinor: '0',
       withdrawalReservedMinor: '0',
