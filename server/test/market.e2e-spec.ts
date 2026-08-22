@@ -112,6 +112,7 @@ describe('market HTTP E2E', () => {
       slug: `${runId}-asset`,
       dataStatus: 'DEMO',
       estimatedMarketValue: { minor: '2458000', currency: 'GBP' },
+      activeListings: { count: 0, availableUnits: '0' },
     });
     expect(list.body.items[0].ownership).toBeNull();
     expect(JSON.stringify(list.body)).not.toMatch(/"price"|unitPrice/i);

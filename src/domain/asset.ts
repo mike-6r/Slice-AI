@@ -197,6 +197,9 @@ export interface Asset {
     availabilityBps?: BasisPoints;
     /** Public aggregate owner count from the market snapshot. */
     ownersCount?: number;
+    /** Current Slice sell-side availability, separate from external observations. */
+    activeListingsCount?: number;
+    availableListingUnits?: string;
     hasTradingHistory?: boolean;
     /** Source-labelled external observations. Never a Slice ownership offer. */
     reference?: {

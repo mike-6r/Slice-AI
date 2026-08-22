@@ -108,6 +108,14 @@ export class MarketService {
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
+        tradingOrders: {
+          where: {
+            side: 'SELL',
+            channel: 'SECONDARY_MARKET',
+            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+          },
+          select: { remainingUnits: true },
+        },
         _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
           ...this.publicMarketSnapshotFilter(),
@@ -276,6 +284,14 @@ export class MarketService {
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
+        tradingOrders: {
+          where: {
+            side: 'SELL',
+            channel: 'SECONDARY_MARKET',
+            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+          },
+          select: { remainingUnits: true },
+        },
         _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
           ...this.publicMarketSnapshotFilter(),
@@ -407,6 +423,14 @@ export class MarketService {
             tradingMarket: {
               select: { status: true, tradingEnabled: true },
             },
+            tradingOrders: {
+              where: {
+                side: 'SELL',
+                channel: 'SECONDARY_MARKET',
+                status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+              },
+              select: { remainingUnits: true },
+            },
             publication: { select: { status: true, publishedAt: true } },
             custodyRecord: { select: { status: true, updatedAt: true } },
             _count: { select: { tradingExecutions: true } },
@@ -517,6 +541,14 @@ export class MarketService {
         custodyRecord: { select: { status: true, updatedAt: true } },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
+        },
+        tradingOrders: {
+          where: {
+            side: 'SELL',
+            channel: 'SECONDARY_MARKET',
+            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+          },
+          select: { remainingUnits: true },
         },
         _count: { select: { tradingExecutions: true } },
         marketSnapshots: {
@@ -691,6 +723,7 @@ type PublicAssetRow = {
     } | null;
   } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
+  tradingOrders?: Array<{ remainingUnits: bigint }>;
   _count?: { tradingExecutions: number };
   marketSnapshots: Array<{
     estimatedMarketValueMinor: bigint;
@@ -751,6 +784,7 @@ type PublicAssetRow = {
 };
 async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
+  const activeSellOrders = asset.tradingOrders ?? [];
   const sliceValuation = selectAuthoritativeSliceValuation(
     asset.valuationDecisions,
   );
@@ -878,6 +912,12 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           hasExecutionHistory: (asset._count?.tradingExecutions ?? 0) > 0,
         }
       : null,
+    activeListings: {
+      count: activeSellOrders.length,
+      availableUnits: activeSellOrders
+        .reduce((total, order) => total + order.remainingUnits, 0n)
+        .toString(),
+    },
     marketLifecycle: deriveMarketLifecycle({
       published: asset.publication?.status === 'PUBLISHED',
       publicationStatus: asset.publication?.status,

@@ -103,6 +103,7 @@ type MarketAssetDto = {
   change24hBps: number | null;
   availabilityBps: number | null;
   ownersCount?: number | null;
+  activeListings?: { count: number; availableUnits: string } | null;
   confidence: number | null;
   source: string | null;
   markSource?: string | null;
@@ -280,6 +281,8 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
         ? undefined
         : basisPoints(value.availabilityBps),
     ownersCount: value.ownersCount ?? undefined,
+    activeListingsCount: value.activeListings?.count ?? 0,
+    availableListingUnits: value.activeListings?.availableUnits ?? "0",
     hasTradingHistory: value.trading?.hasExecutionHistory ?? false,
     reference: value.marketReference
       ? {

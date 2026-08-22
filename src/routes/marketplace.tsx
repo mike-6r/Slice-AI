@@ -2,7 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { MarketAssetGrid } from "@/components/marketplace/MarketAssetGrid";
+import { MarketAssetGrid, MarketAssetGridSkeleton } from "@/components/marketplace/MarketAssetGrid";
 import {
   MarketFilterPanel,
   MobileFilterDrawer,
@@ -161,10 +161,7 @@ function Marketplace() {
             onQueryChange={setQuery}
           />
           {result.isLoading ? (
-            <div className="markets-empty-state">
-              <h2>Loading the catalogue&hellip;</h2>
-              <p>Fetching published assets from Slice.</p>
-            </div>
+            <MarketAssetGridSkeleton view={view} />
           ) : result.isError ? (
             <div className="markets-empty-state">
               <h2>Markets are unavailable</h2>

@@ -26,11 +26,15 @@ export type MarketplaceAsset = {
   confidence?: number;
   availabilityBps?: number;
   ownersCount?: number;
+  activeListingsCount?: number;
+  availableListingUnits?: string;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
   change24hBps?: number;
   marketReference?: {
     amountMinor: number;
     currency: SupportedCurrency;
+    source?: string;
+    context?: string;
   };
   media?: Array<{ url: string; alt: string }>;
   sliceGrade?: SliceGrade;
@@ -80,6 +84,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   confidence: asset.market?.confidence ?? asset.confidence,
   availabilityBps: asset.market?.availabilityBps,
   ownersCount: asset.market?.ownersCount,
+  activeListingsCount: asset.market?.activeListingsCount ?? 0,
+  availableListingUnits: asset.market?.availableListingUnits ?? "0",
   dataStatus: asset.market?.dataStatus,
   change24hBps: asset.market?.change24hBps,
   marketReference: (() => {
@@ -89,6 +95,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
       return {
         amountMinor: direct.amount.amount,
         currency: direct.amount.currency,
+        source: direct.source,
+        context: direct.externalReference,
       };
     }
     const guide = asset.marketSummary?.priceGuides;
@@ -99,6 +107,8 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
     return {
       amountMinor,
       currency: guide.currency as SupportedCurrency,
+      source: asset.market?.source ?? "External reference",
+      context: "Price guide",
     };
   })(),
   media: asset.media

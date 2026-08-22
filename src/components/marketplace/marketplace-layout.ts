@@ -3,6 +3,19 @@ import type { MarketplaceAsset } from "./market-api-presentation";
 
 export type MarketplaceMedia = { src: string; alt: string };
 
+export function resolveMarketplaceMediaGallery(
+  asset: Pick<MarketplaceAsset, "media" | "slug">,
+): MarketplaceMedia[] {
+  const usableMedia = asset.media?.filter((item) => item.url.trim().length > 0) ?? [];
+  const ordered = [
+    ...usableMedia.filter((item) => item.alt.toLowerCase().includes("front")),
+    ...usableMedia.filter((item) => !item.alt.toLowerCase().includes("front")),
+  ].map((item) => ({ src: item.url, alt: item.alt }));
+  if (ordered.length > 0) return ordered;
+  const fallback = assetShowcaseMedia(asset.slug);
+  return fallback ? [fallback] : [];
+}
+
 /**
  * Resolve public media in authority order. Live asset media wins over the
  * exact staged showcase fallback; unknown assets intentionally remain without
@@ -11,10 +24,7 @@ export type MarketplaceMedia = { src: string; alt: string };
 export function resolveMarketplaceMedia(
   asset: Pick<MarketplaceAsset, "media" | "slug">,
 ): MarketplaceMedia | undefined {
-  const usableMedia = asset.media?.filter((item) => item.url.trim().length > 0);
-  const front = usableMedia?.find((item) => item.alt.toLowerCase().includes("front"));
-  const first = front ?? usableMedia?.[0];
-  return first ? { src: first.url, alt: first.alt } : assetShowcaseMedia(asset.slug);
+  return resolveMarketplaceMediaGallery(asset)[0];
 }
 
 /**

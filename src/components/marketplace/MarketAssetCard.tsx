@@ -1,20 +1,14 @@
-import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bookmark, TrendingDown, TrendingUp } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Bookmark, Info } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "@/auth/use-session";
-import { formatOwnership, formatPercent } from "@/lib/format";
+import { formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
-import { marketCategoryPresentation, marketplaceEditorialTag } from "./marketplace-presentation";
-import { resolveMarketplaceMedia } from "./marketplace-layout";
-
-function gradePresentation(grade?: string) {
-  if (!grade) return undefined;
-  const [company, score, ...label] = grade.split(/\s+/);
-  return { company, score: score ?? "", label: label.join(" ") };
-}
+import { marketplaceEditorialTag } from "./marketplace-presentation";
+import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marketplace-layout";
 
 function formatReferenceMoney(
   amountMinor: number,
@@ -31,92 +25,195 @@ function formatReferenceMoney(
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amountMinor / 100);
 }
 
+function marketStatusPresentation(asset: MarketplaceAsset) {
+  if (asset.marketLifecycle) {
+    return {
+      label: asset.marketLifecycle.phase === "LIVE" ? "Market Open" : asset.marketLifecycle.badge,
+      detail:
+        asset.marketLifecycle.phase === "LIVE"
+          ? "Trading enabled"
+          : asset.marketLifecycle.statusPill,
+      isOpen: asset.marketLifecycle.phase === "LIVE",
+    };
+  }
+  if (asset.tradingStatus === "OPEN" && asset.tradingEnabled !== false) {
+    return { label: "Market Open", detail: "Trading enabled", isOpen: true };
+  }
+  if (asset.tradingStatus === "HALTED") {
+    return { label: "Market Halted", detail: "Trading paused", isOpen: false };
+  }
+  if (asset.tradingStatus === "CLOSED") {
+    return { label: "Market Closed", detail: "Trading unavailable", isOpen: false };
+  }
+  return { label: "Unavailable", detail: "Market state unavailable", isOpen: false };
+}
+
+function officialGradeLabel(asset: MarketplaceAsset) {
+  if (!asset.grade) return "Raw / Ungraded";
+  return asset.grade.replaceAll(" · ", " ");
+}
+
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
-  const media = resolveMarketplaceMedia(asset);
-  const category = marketCategoryPresentation(asset.category);
-  const CategoryIcon = category.icon;
-  const grade = gradePresentation(asset.grade);
-  const lifecycle = asset.marketLifecycle;
-  const preMarket = lifecycle
-    ? lifecycle.phase !== "LIVE"
-    : asset.ownershipStatus
-      ? asset.ownershipStatus !== "ACTIVE" ||
-        asset.tradingStatus !== "OPEN" ||
-        asset.tradingEnabled === false
-      : asset.availabilityBps === undefined;
+  const gallery = resolveMarketplaceMediaGallery(asset);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const media = gallery[activeIndex] ?? gallery[0] ?? resolveMarketplaceMedia(asset);
+  const status = marketStatusPresentation(asset);
+
   return (
-    <div
-      className="market-card-media profile-raw-card lighting-graphite"
-      aria-label={media ? `${asset.title} media` : `${asset.title} media unavailable`}
-    >
-      <span className="market-card-glow" aria-hidden="true" />
-      {media ? (
-        <img className="market-card-media-image" src={media.src} alt={media.alt} />
-      ) : (
-        <span className="market-card-media-placeholder">Media unavailable</span>
-      )}
-      <span className="market-card-sheen" aria-hidden="true" />
-      {lifecycle && lifecycle.phase !== "UNPUBLISHED" ? (
-        <span className="market-state-badge">{lifecycle.badge}</span>
-      ) : preMarket ? (
-        <span className="market-state-badge">Pre-market</span>
-      ) : null}
-      <span className="market-category-chip">
-        <CategoryIcon aria-hidden="true" />
-        <span>{category.label}</span>
+    <div className="market-card-hero">
+      <div className="market-card-media">
+        <span className="market-card-glow" aria-hidden="true" />
+        <Link
+          to="/asset/$id"
+          params={{ id: asset.slug }}
+          className="market-card-media-link"
+          aria-label={`View ${asset.title}`}
+        >
+          {media ? (
+            <img className="market-card-media-image" src={media.src} alt={media.alt} />
+          ) : (
+            <span className="market-card-media-placeholder">Image unavailable</span>
+          )}
+        </Link>
+        <span className="market-card-vignette" aria-hidden="true" />
+      </div>
+      <span className={`market-card-status${status.isOpen ? " is-open" : ""}`}>
+        <span aria-hidden="true" />
+        {status.label}
       </span>
-      {grade && (
-        <span className="market-grade-badge" title={asset.grade}>
-          <span>{grade.company}</span>
-          <strong>{grade.score}</strong>
-        </span>
-      )}
+      {gallery.length > 1 ? (
+        <div className="market-card-gallery-dots" aria-label={`${asset.title} image gallery`}>
+          {gallery.map((item, index) => (
+            <button
+              key={`${item.src}-${index}`}
+              type="button"
+              className={index === activeIndex ? "is-active" : ""}
+              aria-label={`Show ${item.alt}`}
+              aria-current={index === activeIndex ? "true" : undefined}
+              onClick={() => setActiveIndex(index)}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function MarketValue({ asset }: { asset: MarketplaceAsset }) {
+function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
-  const change =
-    !asset.tradingHasExecutionHistory || asset.change24hBps === undefined
-      ? undefined
-      : asset.change24hBps / 100;
-  const TrendIcon = (change ?? 0) >= 0 ? TrendingUp : TrendingDown;
+  const valuation = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
+  const valuationCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
+  const valuationLabel =
+    asset.sliceValuationAmountMinor !== undefined ? "Slice valuation" : "Estimated value";
+
   return (
-    <div className="market-card-value">
-      <div>
-        <span className="market-card-value-label">Slice valuation</span>
+    <section className="market-card-valuation" aria-label="Valuation">
+      <div className="market-card-valuation-primary">
+        <span className="market-card-label">{valuationLabel}</span>
         <strong>
-          {asset.estimatedMarketValueMinor === undefined
-            ? "Unavailable"
-            : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
+          {valuation !== undefined && valuationCurrency
+            ? formatMoney(valuation, valuationCurrency)
+            : "Unavailable"}
         </strong>
       </div>
-      {change !== undefined && (
-        <span className={change >= 0 ? "is-positive" : "is-negative"}>
-          <TrendIcon aria-hidden="true" />
-          {formatPercent(change)} <small>(24h)</small>
-        </span>
-      )}
+      <div className="market-card-reference">
+        <span className="market-card-label">Market reference</span>
+        {asset.marketReference ? (
+          <>
+            <strong>
+              {formatReferenceMoney(
+                asset.marketReference.amountMinor,
+                asset.marketReference.currency,
+              )}
+              <span
+                className="market-card-info"
+                tabIndex={0}
+                role="img"
+                aria-label="External market reference, informational only"
+                title="External market reference, informational only"
+              >
+                <Info aria-hidden="true" />
+              </span>
+            </strong>
+            <small>
+              {asset.marketReference.source ?? "External reference"}
+              {asset.marketReference.context ? ` · ${asset.marketReference.context}` : ""}
+            </small>
+          </>
+        ) : (
+          <strong className="market-card-reference-unavailable">Unavailable</strong>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MarketAvailability({ asset }: { asset: MarketplaceAsset }) {
+  const status = marketStatusPresentation(asset);
+  const listings = asset.activeListingsCount ?? 0;
+  const units = asset.availableListingUnits ?? "0";
+  const hasUnits = units !== "0";
+
+  return (
+    <section className="market-card-market-grid" aria-label="Market availability">
+      <div>
+        <span className="market-card-label">Market status</span>
+        <strong>{status.label}</strong>
+        <small>{status.detail}</small>
+      </div>
+      <div>
+        <span className="market-card-label">Active listings</span>
+        <strong>{listings > 0 ? `${listings} active listings` : "No active listings"}</strong>
+        <small>
+          {hasUnits ? `${units} Slices currently offered` : "Nothing currently offered"}
+        </small>
+      </div>
+    </section>
+  );
+}
+
+function OwnershipPrompt({ asset }: { asset: MarketplaceAsset }) {
+  const hasListings = (asset.activeListingsCount ?? 0) > 0;
+  return (
+    <div className="market-card-ownership">
+      <span className="market-card-ownership-icon" aria-hidden="true">
+        ◇
+      </span>
+      <span>
+        <strong>{hasListings ? "Own available Slices" : "Own in Slices"}</strong>
+        <small>Fractional ownership of this collectible</small>
+      </span>
+      <ArrowRight aria-hidden="true" />
     </div>
   );
 }
 
-function initialOfferingAvailability(asset: MarketplaceAsset) {
-  const offering = asset.initialOffering;
-  if (!offering || !["OPEN", "PARTIALLY_FILLED"].includes(offering.status) || !offering.inventory)
-    return undefined;
-  try {
-    const total = BigInt(offering.totalUnits);
-    if (total <= 0n) return undefined;
-    return Number(((BigInt(offering.inventory.availableUnits) + BigInt(offering.inventory.reservedUnits)) * 10_000n) / total) / 100;
-  } catch {
-    return undefined;
-  }
+export function MarketAssetCardSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <article
+      className={`market-investment-card market-investment-card--skeleton${compact ? " is-compact" : ""}`}
+      aria-label="Loading collectible"
+      aria-busy="true"
+    >
+      <div className="market-card-skeleton-media" />
+      <div className="market-card-body">
+        <span className="market-card-skeleton-line is-title" />
+        <span className="market-card-skeleton-line is-identity" />
+        <div className="market-card-skeleton-pills">
+          <span />
+          <span />
+        </div>
+        <div className="market-card-skeleton-value" />
+        <div className="market-card-skeleton-market" />
+        {!compact ? <div className="market-card-skeleton-ownership" /> : null}
+        <div className="market-card-skeleton-cta" />
+      </div>
+    </article>
+  );
 }
 
 export function MarketAssetCard({
@@ -128,35 +225,65 @@ export function MarketAssetCard({
 }) {
   const services = useAppServices();
   const client = useQueryClient();
+  const navigate = useNavigate();
   const { isAuthenticated } = useSession();
-  const [saved, setSaved] = useState(false);
+  const watchlist = useQuery({
+    queryKey: ["watchlist", "current"],
+    queryFn: () => services.ownership.watchlist("current" as never),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+  const saved = watchlist.data?.assetIds.includes(asset.id as never) ?? false;
   const bookmark = useMutation({
     mutationFn: () => services.ownership.toggleWatchlist("current" as never, asset.id as never),
-    onSuccess: (watchlist) => {
-      setSaved(watchlist.assetIds.includes(asset.id as never));
-      void client.invalidateQueries({ queryKey: ["watchlist", "current"] });
+    onMutate: async () => {
+      await client.cancelQueries({ queryKey: ["watchlist", "current"] });
+      const previous = client.getQueryData<typeof watchlist.data>(["watchlist", "current"]);
+      if (previous) {
+        client.setQueryData(["watchlist", "current"], {
+          ...previous,
+          assetIds: saved
+            ? previous.assetIds.filter((id) => id !== asset.id)
+            : [...previous.assetIds, asset.id],
+        });
+      }
+      return { previous };
     },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) client.setQueryData(["watchlist", "current"], context.previous);
+    },
+    onSuccess: (next) => client.setQueryData(["watchlist", "current"], next),
+    onSettled: () => void client.invalidateQueries({ queryKey: ["watchlist", "current"] }),
   });
   const editorial = marketplaceEditorialTag(asset);
-  const availability = asset.availabilityBps;
-  const initialAvailability = initialOfferingAvailability(asset);
-  const initialOfferingOpen = ["OPEN", "PARTIALLY_FILLED"].includes(asset.initialOffering?.status ?? "");
-  const lifecycle = asset.marketLifecycle;
-  const preMarket = lifecycle
-    ? lifecycle.phase !== "LIVE"
-    : asset.ownershipStatus
-      ? asset.ownershipStatus !== "ACTIVE" ||
-        asset.tradingStatus !== "OPEN" ||
-        asset.tradingEnabled === false
-      : availability === undefined;
-  const availabilityWidth = Math.min(100, Math.max(0, (availability ?? 0) / 100));
+
   return (
     <article
-      className={`market-investment-card market-investment-card--${editorial.tone} ${compact ? "is-compact" : ""}`}
+      className={`market-investment-card market-investment-card--${editorial.tone}${compact ? " is-compact" : ""}`}
     >
-      <Link to="/asset/$id" params={{ id: asset.slug }} tabIndex={-1}>
+      <div className="market-card-visual-wrap">
         <AssetVisual asset={asset} />
-      </Link>
+        <button
+          type="button"
+          className={`market-bookmark${saved ? " is-saved" : ""}`}
+          aria-label={
+            isAuthenticated
+              ? `${saved ? "Remove" : "Add"} ${asset.title} ${saved ? "from" : "to"} watchlist`
+              : `Sign in to add ${asset.title} to your watchlist`
+          }
+          aria-pressed={saved}
+          disabled={bookmark.isPending}
+          onClick={() => {
+            if (!isAuthenticated) {
+              void navigate({ to: "/login", search: { returnTo: `/asset/${asset.slug}` } });
+              return;
+            }
+            bookmark.mutate();
+          }}
+        >
+          <Bookmark aria-hidden="true" />
+        </button>
+      </div>
       <div className="market-card-body">
         <div className="market-card-heading">
           <h2>
@@ -164,110 +291,25 @@ export function MarketAssetCard({
               {asset.title}
             </Link>
           </h2>
-          <button
-            type="button"
-            className="market-bookmark"
-            aria-label={
-              isAuthenticated
-                ? `${saved ? "Remove" : "Add"} ${asset.title} ${saved ? "from" : "to"} watchlist`
-                : `Sign in to add ${asset.title} to your watchlist`
-            }
-            aria-pressed={saved}
-            disabled={!isAuthenticated || bookmark.isPending}
-            onClick={() => bookmark.mutate()}
-          >
-            <Bookmark aria-hidden="true" />
-          </button>
+          {asset.setName || asset.cardNumber ? (
+            <p className="market-card-identity-line">
+              {[asset.setName, asset.cardNumber ? `#${asset.cardNumber}` : undefined]
+                .filter(Boolean)
+                .join(" • ")}
+            </p>
+          ) : null}
         </div>
-        <p className="market-card-grade">
-          {asset.setName ?? "Collectible"}
-          {asset.cardNumber ? <> &middot; {asset.cardNumber}</> : null}
-        </p>
-        <div className="market-card-condition">
-          <span>{asset.grade ?? "Raw / Ungraded"}</span>
-          {asset.conditionLabel ? <span>Condition: {asset.conditionLabel}</span> : null}
+        <div className="market-card-condition" aria-label="Condition and grading">
+          <span>{officialGradeLabel(asset)}</span>
+          {asset.conditionLabel ? (
+            <span aria-label={`Condition: ${asset.conditionLabel}`}>{asset.conditionLabel}</span>
+          ) : null}
         </div>
-        {asset.initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(asset.initialOffering.status) ? (
-          <p className="market-card-channel">Initial offering · ownership offered by the collector</p>
-        ) : null}
-        <MarketValue asset={asset} />
-        {asset.marketReference ? (
-          <p className="market-card-reference">
-            Market reference: {formatReferenceMoney(
-              asset.marketReference.amountMinor,
-              asset.marketReference.currency,
-            )} {asset.marketReference.currency}
-          </p>
-        ) : null}
-        {!compact && (
-          <>
-            <dl className="market-card-metrics">
-              <div>
-                <dt>Availability</dt>
-                <dd>
-                  {preMarket
-                    ? lifecycle?.phase === "ISSUANCE_PENDING"
-                      ? "Issued"
-                      : lifecycle?.phase === "READY_FOR_ISSUANCE"
-                        ? "Ready to issue"
-                        : lifecycle?.phase === "SUPPLY_APPROVAL_REQUIRED"
-                          ? "Supply approval"
-                          : "Not yet issued"
-                    : initialOfferingOpen && initialAvailability !== undefined
-                      ? formatOwnership(initialAvailability)
-                      : availability === undefined || availability === 0
-                      ? "No listings"
-                      : formatOwnership((availability ?? 0) / 100)}
-                </dd>
-              </div>
-              <div>
-                <dt>Owners</dt>
-                <dd>{asset.ownersCount?.toLocaleString("en-GB") ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Trading</dt>
-                  <dd>
-                    {preMarket
-                      ? lifecycle?.statusPill ?? "Not yet available"
-                    : initialOfferingOpen
-                      ? "Initial offering"
-                      : availability === 0
-                        ? "Awaiting listings"
-                        : "Available"}
-                  </dd>
-              </div>
-            </dl>
-            <div
-              className={`market-ownership${preMarket ? " is-pending" : ""}`}
-              aria-label="Market availability"
-            >
-              {preMarket ? (
-                <div className="market-availability-note">
-                  <span aria-hidden="true" />
-                  <small>
-                    {lifecycle?.tradeabilityMessage ??
-                      "Ownership is being prepared. Trading will open once issuance is complete."}
-                  </small>
-                </div>
-              ) : (
-                <>
-                  <span>
-                    <span style={{ width: `${availabilityWidth}%` }} />
-                  </span>
-                  <small>
-                      {initialOfferingOpen && initialAvailability !== undefined
-                        ? `${formatOwnership(initialAvailability)} available in initial offering`
-                        : availability === undefined || availability === 0
-                      ? "Market open · awaiting listings"
-                      : `${formatOwnership((availability ?? 0) / 100)} available to own`}
-                  </small>
-                </>
-              )}
-            </div>
-          </>
-        )}
+        <ValuationBlock asset={asset} />
+        {!compact ? <MarketAvailability asset={asset} /> : null}
+        {!compact ? <OwnershipPrompt asset={asset} /> : null}
         <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
-          View details <ArrowRight aria-hidden="true" />
+          View collectible <ArrowRight aria-hidden="true" />
         </Link>
       </div>
     </article>
@@ -281,9 +323,7 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
   const hasLifecycleMovement = asset.tradingHasExecutionHistory && asset.change24hBps !== undefined;
   return (
     <article className="market-detailed-row">
-      <Link to="/asset/$id" params={{ id: asset.slug }}>
-        <AssetVisual asset={asset} />
-      </Link>
+      <AssetVisual asset={asset} />
       <div className="market-detailed-identity">
         <span className={`market-status-badge is-${editorial.tone}`}>
           {lifecycle?.badge ?? editorial.label}
@@ -293,15 +333,17 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
             {asset.title}
           </Link>
         </h2>
-        <p>{asset.grade ?? "Raw / Ungraded"}</p>
+        <p>{officialGradeLabel(asset)}</p>
       </div>
       <dl>
         <div>
           <dt>Slice valuation</dt>
           <dd>
-            {asset.estimatedMarketValueMinor === undefined
-              ? "Unavailable"
-              : formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)}
+            {asset.sliceValuationAmountMinor !== undefined && asset.sliceValuationCurrency
+              ? formatMoney(asset.sliceValuationAmountMinor, asset.sliceValuationCurrency)
+              : asset.estimatedMarketValueMinor !== undefined && asset.estimatedMarketValueCurrency
+                ? formatMoney(asset.estimatedMarketValueMinor, asset.estimatedMarketValueCurrency)
+                : "Unavailable"}
           </dd>
         </div>
         <div>
@@ -313,14 +355,8 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
           </dd>
         </div>
         <div>
-          <dt>Available</dt>
-          <dd>
-            {lifecycle && lifecycle.phase !== "LIVE"
-              ? lifecycle.statusPill
-              : asset.availabilityBps === undefined
-                ? "Unavailable"
-              : formatOwnership(asset.availabilityBps / 100)}
-          </dd>
+          <dt>Active listings</dt>
+          <dd>{asset.activeListingsCount ?? 0}</dd>
         </div>
         <div>
           <dt>Owners</dt>
@@ -328,7 +364,7 @@ export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
         </div>
       </dl>
       <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">
-        View Asset <ArrowRight aria-hidden="true" />
+        View collectible <ArrowRight aria-hidden="true" />
       </Link>
     </article>
   );

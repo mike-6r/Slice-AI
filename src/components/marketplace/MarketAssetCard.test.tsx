@@ -7,8 +7,10 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, className }: { children: ReactNode; className?: string }) => (
     <a className={className}>{children}</a>
   ),
+  useNavigate: () => vi.fn(),
 }));
 vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: undefined, isLoading: false }),
   useMutation: () => ({ isPending: false, mutate: vi.fn() }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
@@ -38,6 +40,8 @@ const asset: MarketplaceAsset = {
   tradingStatus: "OPEN",
   tradingEnabled: true,
   tradingHasExecutionHistory: false,
+  activeListingsCount: 0,
+  availableListingUnits: "0",
 };
 
 const rawPreMarketAsset: MarketplaceAsset = {
@@ -45,6 +49,8 @@ const rawPreMarketAsset: MarketplaceAsset = {
   title: "Raw Umbreon",
   conditionLabel: "Mint",
   estimatedMarketValueMinor: 222500,
+  sliceValuationAmountMinor: 222500,
+  sliceValuationCurrency: "GBP",
   marketReference: { amountMinor: 222500, currency: "USD" },
   availabilityBps: undefined,
   ownersCount: undefined,
@@ -82,7 +88,7 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("is-compact");
     expect(html).toContain("https://cdn.example/front.webp");
     expect(html).toContain("market-card-cta");
-    expect(html).toContain("View details");
+    expect(html).toContain("View collectible");
     expect(html).not.toContain("Media unavailable");
   });
 
@@ -91,7 +97,7 @@ describe("MarketAssetCard layout contracts", () => {
 
     expect(html).toContain('class="market-detailed-row"');
     expect(html).toContain("market-detailed-identity");
-    expect(html).toContain("View Asset");
+    expect(html).toContain("View collectible");
     expect(html).toContain("market-card-cta");
   });
 
@@ -101,13 +107,29 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("Raw / Ungraded");
     expect(html).toContain("Condition: Mint");
     expect(html).toContain("Slice valuation");
-    expect(html).toContain("Market reference: $2,225 USD");
+    expect(html).toContain("$2,225");
+    expect(html).toContain("Market reference");
+    expect(html).toContain("No active listings");
     expect(html).toContain("Not yet issued");
-    expect(html).toContain(
-      "Ownership is being prepared. Trading will open once issuance is complete.",
-    );
+    expect(html).toContain("Not yet issued");
     expect(html).not.toContain("Grade pending");
     expect(html).not.toContain("No 24h move");
     expect(html).not.toContain("Availability not published");
+  });
+
+  it("uses authoritative listing state instead of snapshot availability", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{
+          ...asset,
+          activeListingsCount: 3,
+          availableListingUnits: "12",
+        }}
+      />,
+    );
+
+    expect(html).toContain("3 active listings");
+    expect(html).toContain("12 Slices currently offered");
+    expect(html).not.toContain("Buy & sell anytime");
   });
 });
