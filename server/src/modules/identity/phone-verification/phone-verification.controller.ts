@@ -1,10 +1,10 @@
-import { BadRequestException, Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { AccessTokenGuard, type AuthenticatedRequest } from '../auth/access-token.guard';
 import { PhoneVerificationService } from './phone-verification.service';
 
 const sendSchema = z.object({ phone: z.string().trim().min(3).max(32) }).strict();
-const confirmSchema = sendSchema.extend({ code: z.string().regex(/^\d{6}$/) }).strict();
+const confirmSchema = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
 @Controller()
 export class PhoneVerificationController {
   constructor(private readonly phone: PhoneVerificationService) {}
@@ -17,7 +17,11 @@ export class PhoneVerificationController {
   @Post('me/phone-verification/confirm') @UseGuards(AccessTokenGuard)
   confirm(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = parse(confirmSchema, body);
-    return this.phone.confirm(request.actor!, input.phone, input.code, request.ip ?? 'unknown', request.requestId ?? 'unknown');
+    return this.phone.confirm(request.actor!, input.code, request.ip ?? 'unknown', request.requestId ?? 'unknown');
+  }
+  @Delete('me/phone-verification') @UseGuards(AccessTokenGuard)
+  remove(@Req() request: AuthenticatedRequest) {
+    return this.phone.remove(request.actor!, request.ip ?? 'unknown', request.requestId ?? 'unknown');
   }
 }
 function parse<T>(schema: z.ZodType<T>, body: unknown) {

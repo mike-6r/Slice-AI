@@ -147,7 +147,7 @@ function OnboardingPage() {
     },
   });
   const phoneConfirm = useMutation({
-    mutationFn: () => repositories.account.confirmPhoneVerification(phoneNumber, phoneCode),
+    mutationFn: () => repositories.account.confirmPhoneVerification(phoneCode),
     onSuccess: async () => {
       await refresh();
       setStage("security");

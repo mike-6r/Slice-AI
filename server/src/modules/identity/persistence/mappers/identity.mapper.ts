@@ -18,6 +18,7 @@ export type PersistedIdentityUser = {
   phoneE164?: string | null;
   phoneVerifiedAt?: Date | null;
   twoFactor?: { enabledAt: Date | null } | null;
+  smsTwoFactor?: { enabledAt: Date | null } | null;
   accountStatus: string;
   createdAt: Date;
   updatedAt: Date;
@@ -97,7 +98,13 @@ export function mapIdentityUser(record: PersistedIdentityUser): IdentityUser {
     emailVerifiedAt: record.emailVerifiedAt,
     phoneE164: record.phoneE164 ?? null,
     phoneVerifiedAt: record.phoneVerifiedAt ?? null,
-    twoFactorEnabledAt: record.twoFactor?.enabledAt ?? null,
+    twoFactorEnabledAt:
+      record.twoFactor?.enabledAt ?? record.smsTwoFactor?.enabledAt ?? null,
+    twoFactorMethod: record.twoFactor?.enabledAt
+      ? 'TOTP'
+      : record.smsTwoFactor?.enabledAt
+        ? 'SMS'
+        : null,
     accountStatus: asAccountStatus(record.accountStatus),
     createdAt: asDate(record.createdAt, 'createdAt'),
     updatedAt: asDate(record.updatedAt, 'updatedAt'),
@@ -116,6 +123,7 @@ export function toPublicIdentityUser(
     emailVerificationStatus: user.emailVerifiedAt ? 'VERIFIED' : 'UNVERIFIED',
     twoFactorEnabled: Boolean(user.twoFactorEnabledAt),
     twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
+    twoFactorMethod: user.twoFactorMethod ?? null,
     accountStatus: user.accountStatus,
     profile: user.profile,
     roles: assignedRoles.map(asRole),

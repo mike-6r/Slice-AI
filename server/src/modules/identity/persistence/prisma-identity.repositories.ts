@@ -43,6 +43,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
 const userInclude = {
   profile: true,
   twoFactor: { select: { enabledAt: true } },
+  smsTwoFactor: { select: { enabledAt: true } },
 } satisfies Prisma.UserInclude;
 
 class UserAdapter implements UserRepository {

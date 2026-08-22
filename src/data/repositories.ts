@@ -1795,17 +1795,27 @@ export interface AccountRepository {
   confirmEmailVerification(token: string): Promise<{ verified: boolean; verifiedAt: string }>;
   getPhoneVerification(): Promise<{
     phone: string | null;
+    pendingPhone?: string | null;
     verified: boolean;
     verifiedAt: string | null;
+    canResend?: boolean;
+    resendAvailableAt: string | null;
   }>;
   sendPhoneVerification(
     phone: string,
   ): Promise<{ alreadyVerified: boolean; resendAvailableAt: string | null }>;
   confirmPhoneVerification(
-    phone: string,
     code: string,
   ): Promise<{ verified: boolean; verifiedAt: string; phone: string }>;
-  getTwoFactor(): Promise<{ enabled: boolean; enabledAt: string | null }>;
+  removePhoneVerification(): Promise<{ removed: boolean }>;
+  getTwoFactor(): Promise<{
+    enabled: boolean;
+    enabledAt: string | null;
+    method?: "TOTP" | "SMS" | null;
+    methods?: Array<"TOTP" | "SMS">;
+    phoneVerified?: boolean;
+    phone?: string | null;
+  }>;
   beginTwoFactorEnrollment(): Promise<{
     issuer: string;
     accountLabel: string;
@@ -1813,8 +1823,17 @@ export interface AccountRepository {
     otpauthUri: string;
   }>;
   confirmTwoFactorEnrollment(code: string): Promise<{ recoveryCodes: string[] }>;
+  beginSmsTwoFactorEnrollment(): Promise<{
+    phone: string;
+    resendAvailableAt: string;
+  }>;
+  confirmSmsTwoFactorEnrollment(code: string): Promise<{ recoveryCodes: string[] }>;
   regenerateRecoveryCodes(): Promise<{ recoveryCodes: string[] }>;
-  disableTwoFactor(input: { code?: string; recoveryCode?: string }): Promise<{ disabled: boolean }>;
+  disableTwoFactor(input: {
+    method?: "TOTP" | "SMS";
+    code?: string;
+    recoveryCode?: string;
+  }): Promise<{ disabled: boolean }>;
   listSessions(): Promise<{
     sessions: Array<{
       reference: string;

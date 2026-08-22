@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { IdentityPersistenceModule } from '../persistence/identity-persistence.module';
 import { AccessTokenGuard } from './access-token.guard';
 import { AuthController } from './auth.controller';
@@ -20,8 +20,13 @@ import { CustomerActivityService } from './customer-activity.service';
 import { AccountLifecycleService } from './account-lifecycle.service';
 import { CaptchaModule } from '../captcha/captcha.module';
 import { SignupConsentService } from './signup-consent.service';
+import { PhoneVerificationModule } from '../phone-verification/phone-verification.module';
 @Module({
-  imports: [IdentityPersistenceModule, CaptchaModule],
+  imports: [
+    IdentityPersistenceModule,
+    CaptchaModule,
+    forwardRef(() => PhoneVerificationModule),
+  ],
   controllers: [AuthController, TwoFactorController],
   providers: [
     AuthService,
@@ -46,6 +51,7 @@ import { SignupConsentService } from './signup-consent.service';
     AccessTokenGuard,
     IdempotencyCoordinator,
     AuthAbuseService,
+    RecentAuthService,
   ],
 })
 export class AuthModule {}

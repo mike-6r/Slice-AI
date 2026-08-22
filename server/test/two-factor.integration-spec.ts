@@ -8,6 +8,7 @@ import {
   generateTotpForTest,
   TwoFactorService,
 } from '../src/modules/identity/two-factor/two-factor.service';
+import { LocalTestPhoneDelivery } from '../src/modules/identity/phone-verification/phone-verification.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl)
@@ -22,7 +23,13 @@ const config = {
   twoFactorChallengeTtlSeconds: 300,
   twoFactorIssuer: 'Slice',
   recentAuthWindowSeconds: 300,
+  phoneVerificationEnabled: true,
+  phoneDeliveryMode: 'local_test',
+  phoneVerificationTtlSeconds: 600,
+  phoneVerificationResendSeconds: 60,
+  phoneVerificationMaxAttempts: 5,
 } as AppConfig;
+const delivery = new LocalTestPhoneDelivery();
 const service = new TwoFactorService(
   Object.assign(db, {
     withTransaction: <T>(work: (tx: never) => Promise<T>) =>
@@ -32,6 +39,7 @@ const service = new TwoFactorService(
   new TwoFactorCryptoService(config),
   { enforce: jest.fn().mockResolvedValue(undefined) } as never,
   new RecentAuthService(config),
+  delivery,
 );
 
 describe('two-factor PostgreSQL authority', () => {
@@ -43,13 +51,15 @@ describe('two-factor PostgreSQL authority', () => {
     await db.$disconnect();
   });
 
-  async function fixture(label: string) {
+  async function fixture(label: string, verifiedPhone?: string) {
     const user = await db.user.create({
       data: {
         email: `${runId}-${label}@example.test`,
         normalizedEmail: `${runId}-${label}@example.test`,
         passwordHash: 'test-password-hash',
         accountStatus: 'ACTIVE',
+        phoneE164: verifiedPhone,
+        phoneVerifiedAt: verifiedPhone ? new Date() : null,
       },
     });
     userIds.push(user.id);
@@ -199,6 +209,54 @@ describe('two-factor PostgreSQL authority', () => {
         },
       }),
     ).toBe(1);
+  });
+
+  it('enrolls SMS MFA only for a verified phone and withholds login completion until the SMS check', async () => {
+    const phone = '+12025550103';
+    const { user, actor } = await fixture('sms', phone);
+    const started = await service.beginSmsEnrollment(
+      actor,
+      '198.51.100.10',
+      `${runId}-sms-enroll`,
+    );
+    expect(started.phone).toContain('0103');
+    await expect(
+      service.confirmSmsEnrollment(
+        actor,
+        delivery.codeForTest(user.id, phone)!,
+        '198.51.100.11',
+        `${runId}-sms-confirm`,
+      ),
+    ).resolves.toMatchObject({ recoveryCodes: expect.any(Array) });
+    await expect(
+      db.userSmsTwoFactor.findUniqueOrThrow({ where: { userId: user.id } }),
+    ).resolves.toMatchObject({ phoneE164: phone, enabledAt: expect.any(Date) });
+
+    const challenge = await service.createLoginChallenge(
+      user.id,
+      `${runId}-sms-login`,
+      '198.51.100.12',
+    );
+    expect(challenge).toMatchObject({
+      requiresTwoFactor: true,
+      method: 'SMS',
+      phone: expect.stringContaining('0103'),
+    });
+    const smsCode = delivery.codeForTest(user.id, phone)!;
+    await expect(
+      service.verifyLoginChallenge(
+        { challenge: challenge!.challenge, code: '000000' },
+        '198.51.100.13',
+        `${runId}-sms-invalid`,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      service.verifyLoginChallenge(
+        { challenge: challenge!.challenge, code: smsCode },
+        '198.51.100.13',
+        `${runId}-sms-success`,
+      ),
+    ).resolves.toBe(user.id);
   });
 });
 

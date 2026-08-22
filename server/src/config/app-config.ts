@@ -105,19 +105,20 @@ const configSchema = z.object({
     .min(300)
     .max(86_400)
     .default(3_600),
-  PHONE_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('true'),
+  // SMS verification is opt-in outside tests. Missing provider credentials must
+  // never accidentally enable an external delivery path in staging/production.
+  PHONE_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
   // `provider` is accepted only as a backwards-compatible alias for `twilio_verify`.
-  PHONE_DELIVERY_MODE: z
-    .enum(['local_test', 'twilio_sms', 'twilio_verify', 'provider'])
-    .optional(),
+  // Programmable Messaging is deliberately not a supported OTP transport.
+  PHONE_DELIVERY_MODE: z.enum(['local_test', 'twilio_verify', 'provider']).optional(),
   TWILIO_ACCOUNT_SID: z.string().trim().min(1).optional(),
-  TWILIO_AUTH_TOKEN: z.string().trim().min(1).optional(),
-  TWILIO_FROM_NUMBER: z
-    .string()
-    .trim()
-    .regex(/^\+[1-9]\d{7,14}$/)
-    .optional(),
+  TWILIO_API_KEY: z.string().trim().min(1).optional(),
+  TWILIO_API_SECRET: z.string().trim().min(1).optional(),
   TWILIO_VERIFY_SERVICE_SID: z.string().trim().min(1).optional(),
+  // Legacy name is parsed only so older test fixtures can be migrated without
+  // leaking it into the provider adapter. Production requires API key auth.
+  TWILIO_AUTH_TOKEN: z.string().trim().min(1).optional(),
+  TWILIO_SMS_ENABLED: z.enum(['true', 'false']).optional(),
   PHONE_VERIFICATION_TTL_SECONDS: z.coerce
     .number()
     .int()
@@ -371,10 +372,10 @@ export type AppConfig = {
   appPublicUrl: string;
   emailVerificationTtlSeconds: number;
   phoneVerificationEnabled: boolean;
-  phoneDeliveryMode: 'local_test' | 'twilio_sms' | 'twilio_verify';
+  phoneDeliveryMode: 'local_test' | 'twilio_verify';
   twilioAccountSid?: string;
-  twilioAuthToken?: string;
-  twilioFromNumber?: string;
+  twilioApiKey?: string;
+  twilioApiSecret?: string;
   twilioVerifyServiceSid?: string;
   phoneVerificationTtlSeconds: number;
   phoneVerificationResendSeconds: number;
@@ -588,6 +589,12 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     phoneDeliveryModeRaw === 'provider'
       ? 'twilio_verify'
       : phoneDeliveryModeRaw;
+  const twilioSmsEnabled =
+    parsed.TWILIO_SMS_ENABLED !== undefined
+      ? parsed.TWILIO_SMS_ENABLED === 'true'
+      : parsed.NODE_ENV === 'test'
+        ? parsed.PHONE_VERIFICATION_ENABLED === 'true'
+        : false;
   const appPublicUrl =
     parsed.APP_PUBLIC_URL ??
     (parsed.NODE_ENV === 'production' ? undefined : 'http://127.0.0.1:5173');
@@ -607,23 +614,16 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
       'RESEND_API_KEY and RESEND_FROM_EMAIL are required for Resend in production.',
     );
   if (
-    parsed.NODE_ENV === 'production' &&
+    (parsed.NODE_ENV === 'production' || isBeta) &&
+    twilioSmsEnabled &&
     phoneDeliveryMode === 'twilio_verify' &&
     (!parsed.TWILIO_ACCOUNT_SID ||
-      !parsed.TWILIO_AUTH_TOKEN ||
+      !parsed.TWILIO_API_KEY ||
+      !parsed.TWILIO_API_SECRET ||
       !parsed.TWILIO_VERIFY_SERVICE_SID)
   )
     throw new Error(
-      'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_VERIFY_SERVICE_SID are required for Twilio Verify in production.',
-    );
-  if (
-    phoneDeliveryMode === 'twilio_sms' &&
-    (!parsed.TWILIO_ACCOUNT_SID ||
-      !parsed.TWILIO_AUTH_TOKEN ||
-      !parsed.TWILIO_FROM_NUMBER)
-  )
-    throw new Error(
-      'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER are required for Twilio SMS.',
+      'TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET, and TWILIO_VERIFY_SERVICE_SID are required when Twilio SMS is enabled.',
     );
   if (parsed.NODE_ENV === 'production' && parsed.RESEND_TEST_RECIPIENT_OVERRIDE)
     throw new Error(
@@ -790,11 +790,11 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
         : parsed.RESEND_TEST_RECIPIENT_OVERRIDE,
     appPublicUrl: appPublicUrl.replace(/\/$/, ''),
     emailVerificationTtlSeconds: parsed.EMAIL_VERIFICATION_TTL_SECONDS,
-    phoneVerificationEnabled: parsed.PHONE_VERIFICATION_ENABLED === 'true',
+    phoneVerificationEnabled: twilioSmsEnabled,
     phoneDeliveryMode,
     twilioAccountSid: parsed.TWILIO_ACCOUNT_SID,
-    twilioAuthToken: parsed.TWILIO_AUTH_TOKEN,
-    twilioFromNumber: parsed.TWILIO_FROM_NUMBER,
+    twilioApiKey: parsed.TWILIO_API_KEY,
+    twilioApiSecret: parsed.TWILIO_API_SECRET,
     twilioVerifyServiceSid: parsed.TWILIO_VERIFY_SERVICE_SID,
     phoneVerificationTtlSeconds: parsed.PHONE_VERIFICATION_TTL_SECONDS,
     phoneVerificationResendSeconds: parsed.PHONE_VERIFICATION_RESEND_SECONDS,

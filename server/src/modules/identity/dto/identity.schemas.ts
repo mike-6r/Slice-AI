@@ -81,8 +81,12 @@ export const twoFactorChallengeSchema = z
   .refine((value) => Boolean(value.code) !== Boolean(value.recoveryCode), {
     message: 'Provide exactly one verification method.',
   });
+export const twoFactorResendSchema = z
+  .object({ challenge: z.string().min(40).max(256) })
+  .strict();
 export const twoFactorDisableSchema = z
   .object({
+    method: z.enum(['TOTP', 'SMS']).optional(),
     code: z
       .string()
       .regex(/^\d{6}$/)
@@ -90,9 +94,12 @@ export const twoFactorDisableSchema = z
     recoveryCode: z.string().min(12).max(64).optional(),
   })
   .strict()
-  .refine((value) => Boolean(value.code) !== Boolean(value.recoveryCode), {
-    message: 'Provide exactly one verification method.',
-  });
+  .refine(
+    (value) =>
+      value.method === 'SMS' ||
+      Boolean(value.code) !== Boolean(value.recoveryCode),
+    { message: 'Provide a current authenticator or recovery code.' },
+  );
 export const refreshSchema = z
   .object({ refreshToken: z.string().min(32).max(2048) })
   .strict();

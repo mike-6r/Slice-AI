@@ -105,7 +105,7 @@ export class AccountLifecycleService {
 
   private async safeExport(db: Db, userId: string) {
     const [user, notificationPreferences, discord, banks, sessions, lots, positions, orders, movements, votes, submissions] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true, twoFactor: { select: { enabledAt: true } } } }),
+      db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true, twoFactor: { select: { enabledAt: true } }, smsTwoFactor: { select: { enabledAt: true } } } }),
       db.notificationPreference.findMany({ where: { userId }, select: { channel: true, topic: true, enabled: true, updatedAt: true } }),
       db.discordAccountLink.findUnique({ where: { userId }, select: { username: true, displayName: true, linkedAt: true } }),
       db.externalFinancialAccount.findMany({ where: { userId }, select: { institutionName: true, accountName: true, accountMask: true, currency: true, accountType: true, status: true, updatedAt: true } }),
@@ -120,7 +120,7 @@ export class AccountLifecycleService {
     return {
       account: { email: user.email, accountStatus: user.accountStatus, emailVerifiedAt: iso(user.emailVerifiedAt), createdAt: user.createdAt.toISOString(), profile: user.profile ? { displayName: user.profile.displayName, publicUsername: user.profile.publicUsername, avatarReference: user.profile.avatarReference, countryCode: user.profile.countryCode } : null },
       preferences: { timezone: user.profile?.timezone ?? 'Europe/London', locale: user.profile?.locale ?? 'en-GB', notificationPreferences: notificationPreferences.map((item) => ({ ...item, updatedAt: item.updatedAt.toISOString() })) },
-      security: { twoFactorEnabled: Boolean(user.twoFactor?.enabledAt), sessions: sessions.map((item) => ({ reference: item.publicId, issuedAt: item.issuedAt.toISOString(), lastUsedAt: item.lastActivityAt.toISOString(), expiresAt: item.expiresAt.toISOString(), revokedAt: iso(item.revokedAt), deviceLabel: safeDeviceLabel(item.userAgent) })) },
+      security: { twoFactorEnabled: Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt), sessions: sessions.map((item) => ({ reference: item.publicId, issuedAt: item.issuedAt.toISOString(), lastUsedAt: item.lastActivityAt.toISOString(), expiresAt: item.expiresAt.toISOString(), revokedAt: iso(item.revokedAt), deviceLabel: safeDeviceLabel(item.userAgent) })) },
       linkedAccounts: { discord: discord ? { username: discord.username, displayName: discord.displayName, linkedAt: discord.linkedAt.toISOString() } : null, banks: banks.map((item) => ({ ...item, updatedAt: item.updatedAt.toISOString() })) },
       portfolio: { holdings: positions.map((item) => ({ asset: item.supply.asset, settledUnits: item.settledUnits.toString(), reservedUnits: item.reservedUnits.toString() })), lots: lots.map((item) => ({ asset: item.asset, acquiredUnits: item.acquiredUnits.toString(), remainingUnits: item.remainingUnits.toString(), totalCostMinor: item.totalCostMinor.toString(), currency: item.currency, acquiredAt: item.acquiredAt.toISOString() })) },
       trading: { orders: orders.map((item) => ({ asset: item.asset, side: item.side, type: item.type, status: item.status, limitPriceMinor: item.limitPriceMinor.toString(), originalUnits: item.originalUnits.toString(), remainingUnits: item.remainingUnits.toString(), filledUnits: item.filledUnits.toString(), createdAt: item.createdAt.toISOString() })) },

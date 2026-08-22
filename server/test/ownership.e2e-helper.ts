@@ -1,4 +1,5 @@
 import * as request from 'supertest';
+import type { Response } from 'superagent';
 import {
   bootSubmissionHarness,
   closeSubmissionHarness,
@@ -123,7 +124,7 @@ export async function bootOwnershipHarness(
   return { ...h, categoryId, owner, admin, assetId, slug };
 }
 
-export async function issue(h: OwnershipHarness, key = 'issue') {
+export async function issue(h: OwnershipHarness, key = 'issue'): Promise<Response> {
   const response = await request(h.app.getHttpServer())
     .post(`/api/v1/admin/assets/${h.assetId}/ownership/issue`)
     .set('authorization', h.admin.auth)

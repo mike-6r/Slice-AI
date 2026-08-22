@@ -3394,11 +3394,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           specialties?: string[];
           nextCursor: string | null;
           pagination?: CollectorDirectoryPage["pagination"];
-        }>(
-          "/collectors",
-          query,
-          signal,
-        );
+        }>("/collectors", query, signal);
         return mapCollectorPage(body);
       },
       async getCollector(id) {
@@ -4122,8 +4118,17 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         );
         return {
           phone: nullableString(value.phone, "phoneVerification.phone"),
+          pendingPhone: nullableString(value.pendingPhone, "phoneVerification.pendingPhone"),
           verified: booleanField(value.verified, "phoneVerification.verified"),
           verifiedAt: nullableString(value.verifiedAt, "phoneVerification.verifiedAt"),
+          canResend:
+            value.canResend === undefined
+              ? undefined
+              : booleanField(value.canResend, "phoneVerification.canResend"),
+          resendAvailableAt: nullableString(
+            value.resendAvailableAt,
+            "phoneVerification.resendAvailableAt",
+          ),
         };
       },
       async sendPhoneVerification(phone) {
@@ -4142,11 +4147,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           ),
         };
       },
-      async confirmPhoneVerification(phone, code) {
+      async confirmPhoneVerification(code) {
         const value = objectField(
           await client.request<unknown>("/me/phone-verification/confirm", {
             method: "POST",
-            body: { phone, code },
+            body: { code },
           }),
           "phone verification confirmation",
         );
@@ -4156,11 +4161,32 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           phone: stringField(value.phone, "phoneVerification.phone"),
         };
       },
+      async removePhoneVerification() {
+        const value = objectField(
+          await client.request<unknown>("/me/phone-verification", { method: "DELETE" }),
+          "phone verification removal",
+        );
+        return { removed: booleanField(value.removed, "phoneVerification.removed") };
+      },
       async getTwoFactor() {
         const value = objectField(await client.get<unknown>("/me/2fa/status"), "two-factor status");
         return {
           enabled: booleanField(value.enabled, "twoFactor.enabled"),
           enabledAt: nullableString(value.enabledAt, "twoFactor.enabledAt"),
+          method:
+            value.method === null || value.method === undefined
+              ? null
+              : (stringField(value.method, "twoFactor.method") as "TOTP" | "SMS"),
+          methods: Array.isArray(value.methods)
+            ? value.methods.map(
+                (method) => stringField(method, "twoFactor.methods") as "TOTP" | "SMS",
+              )
+            : undefined,
+          phoneVerified:
+            value.phoneVerified === undefined
+              ? undefined
+              : booleanField(value.phoneVerified, "twoFactor.phoneVerified"),
+          phone: nullableString(value.phone, "twoFactor.phone"),
         };
       },
       async beginTwoFactorEnrollment() {
@@ -4179,6 +4205,23 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const value = objectField(
           await client.request<unknown>("/me/2fa/confirm", { method: "POST", body: { code } }),
           "two-factor confirmation",
+        );
+        return { recoveryCodes: stringArrayField(value.recoveryCodes, "twoFactor.recoveryCodes") };
+      },
+      async beginSmsTwoFactorEnrollment() {
+        const value = objectField(
+          await client.request<unknown>("/me/2fa/sms/enroll", { method: "POST" }),
+          "SMS two-factor enrollment",
+        );
+        return {
+          phone: stringField(value.phone, "twoFactor.phone"),
+          resendAvailableAt: stringField(value.resendAvailableAt, "twoFactor.resendAvailableAt"),
+        };
+      },
+      async confirmSmsTwoFactorEnrollment(code) {
+        const value = objectField(
+          await client.request<unknown>("/me/2fa/sms/confirm", { method: "POST", body: { code } }),
+          "SMS two-factor confirmation",
         );
         return { recoveryCodes: stringArrayField(value.recoveryCodes, "twoFactor.recoveryCodes") };
       },

@@ -5,7 +5,8 @@ import { TwilioVerifyPhoneDelivery } from './twilio-verify-phone-delivery';
 describe('TwilioVerifyPhoneDelivery', () => {
   const config = {
     twilioAccountSid: 'ACtest',
-    twilioAuthToken: 'test-token',
+    twilioApiKey: 'SKtest',
+    twilioApiSecret: 'test-secret',
     twilioVerifyServiceSid: 'VAverify',
   } as AppConfig;
 
@@ -36,10 +37,10 @@ describe('TwilioVerifyPhoneDelivery', () => {
     await delivery.deliver({
       userId: 'user_123',
       phoneE164: '+447700900123',
-      code: 'ignored-by-managed-provider',
+      purpose: 'PHONE',
     });
     await expect(
-      delivery.verify({ phoneE164: '+447700900123', code: '123456' }),
+      delivery.verify({ userId: 'user_123', phoneE164: '+447700900123', code: '123456', purpose: 'PHONE' }),
     ).resolves.toBe(true);
 
     expect(twilio.services).toHaveBeenCalledWith('VAverify');
@@ -61,7 +62,7 @@ describe('TwilioVerifyPhoneDelivery', () => {
       .mockReturnValue(twilio.value as never);
 
     await expect(
-      delivery.verify({ phoneE164: '+447700900123', code: '000000' }),
+      delivery.verify({ userId: 'user_123', phoneE164: '+447700900123', code: '000000', purpose: 'PHONE' }),
     ).resolves.toBe(false);
 
     const failedStart = client('canceled', 'approved');
@@ -72,7 +73,7 @@ describe('TwilioVerifyPhoneDelivery', () => {
       delivery.deliver({
         userId: 'user_123',
         phoneE164: '+447700900123',
-        code: 'ignored-by-managed-provider',
+        purpose: 'PHONE',
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
@@ -86,7 +87,7 @@ describe('TwilioVerifyPhoneDelivery', () => {
       delivery.deliver({
         userId: 'user_123',
         phoneE164: '+447700900123',
-        code: 'ignored-by-managed-provider',
+        purpose: 'PHONE',
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });

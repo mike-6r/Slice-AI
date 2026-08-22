@@ -642,11 +642,20 @@ function SecurityPanel({
   phone: ReturnType<
     typeof useQuery<{ phone: string | null; verified: boolean; verifiedAt: string | null }>
   >;
-  twoFactor: ReturnType<typeof useQuery<{ enabled: boolean; enabledAt: string | null }>>;
+  twoFactor: ReturnType<
+    typeof useQuery<{
+      enabled: boolean;
+      enabledAt: string | null;
+      method?: "TOTP" | "SMS" | null;
+      methods?: Array<"TOTP" | "SMS">;
+    }>
+  >;
   refresh: () => void;
 }) {
   const { repositories } = useAppServices();
-  const [mode, setMode] = useState<"password" | "phone" | "twofactor" | "codes" | null>(null);
+  const [mode, setMode] = useState<
+    "password" | "phone" | "twofactor" | "sms-twofactor" | "codes" | null
+  >(null);
   const sendEmail = useMutation({
     mutationFn: repositories.account.sendEmailVerification,
     onSuccess: refresh,
@@ -685,11 +694,26 @@ function SecurityPanel({
         <SecurityRow
           icon={<ShieldCheck />}
           label="Two-factor authentication"
-          value={twoFactor.data?.enabled ? "Authenticator app enabled" : "Not enabled"}
+          value={
+            twoFactor.data?.enabled
+              ? `${twoFactor.data.method === "SMS" ? "SMS" : "Authenticator app"} enabled`
+              : "Not enabled"
+          }
           action={twoFactor.data?.enabled ? "Manage" : "Enable"}
           onClick={() => setMode("twofactor")}
           good={twoFactor.data?.enabled}
         />
+        {phone.data?.verified &&
+        !twoFactor.data?.methods?.includes("SMS") &&
+        twoFactor.data?.method !== "SMS" ? (
+          <SecurityRow
+            icon={<MessageCircle />}
+            label="SMS sign-in codes"
+            value="Optional extra protection using your verified phone"
+            action="Enable"
+            onClick={() => setMode("sms-twofactor")}
+          />
+        ) : null}
         <SecurityRow
           icon={<KeyRound />}
           label="Recovery codes"
@@ -704,13 +728,23 @@ function SecurityPanel({
         </p>
       ) : null}
       {mode === "password" ? <PasswordDialog close={() => setMode(null)} /> : null}
-      {mode === "phone" ? <PhoneDialog close={() => setMode(null)} refresh={refresh} /> : null}
+      {mode === "phone" ? (
+        <PhoneDialog
+          close={() => setMode(null)}
+          refresh={refresh}
+          verified={Boolean(phone.data?.verified)}
+        />
+      ) : null}
       {mode === "twofactor" ? (
         <TwoFactorDialog
           enabled={Boolean(twoFactor.data?.enabled)}
+          method={twoFactor.data?.method ?? null}
           close={() => setMode(null)}
           refresh={refresh}
         />
+      ) : null}
+      {mode === "sms-twofactor" ? (
+        <SmsTwoFactorDialog close={() => setMode(null)} refresh={refresh} />
       ) : null}
       {mode === "codes" ? <RecoveryDialog close={() => setMode(null)} /> : null}
     </Panel>
@@ -811,22 +845,50 @@ function PasswordDialog({ close }: { close: () => void }) {
     </Dialog>
   );
 }
-function PhoneDialog({ close, refresh }: { close: () => void; refresh: () => void }) {
+function PhoneDialog({
+  close,
+  refresh,
+  verified,
+}: {
+  close: () => void;
+  refresh: () => void;
+  verified: boolean;
+}) {
   const { repositories } = useAppServices();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
+  const [resendAt, setResendAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const send = useMutation({
     mutationFn: repositories.account.sendPhoneVerification,
-    onSuccess: () => setSent(true),
+    onSuccess: (result) => {
+      setSent(true);
+      setResendAt(result.resendAvailableAt);
+    },
   });
   const confirm = useMutation({
-    mutationFn: () => repositories.account.confirmPhoneVerification(phone, code),
+    mutationFn: () => repositories.account.confirmPhoneVerification(code),
     onSuccess: () => {
       refresh();
       close();
     },
   });
+  const remove = useMutation({
+    mutationFn: repositories.account.removePhoneVerification,
+    onSuccess: () => {
+      refresh();
+      close();
+    },
+  });
+  useEffect(() => {
+    if (!resendAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAt]);
+  const resendSeconds = resendAt
+    ? Math.max(0, Math.ceil((new Date(resendAt).getTime() - now) / 1000))
+    : 0;
   return (
     <Dialog title="Verify phone number" close={close}>
       <form
@@ -855,7 +917,7 @@ function PhoneDialog({ close, refresh }: { close: () => void; refresh: () => voi
               inputMode="numeric"
               pattern="[0-9]{6}"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               required
             />
           </label>
@@ -868,6 +930,16 @@ function PhoneDialog({ close, refresh }: { close: () => void; refresh: () => voi
             )}
           </p>
         ) : null}
+        {verified ? (
+          <button
+            type="button"
+            className="account-danger-button"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate()}
+          >
+            {remove.isPending ? "Removing…" : "Remove verified phone"}
+          </button>
+        ) : null}
         <button className="account-primary" disabled={send.isPending || confirm.isPending}>
           {sent
             ? confirm.isPending
@@ -878,20 +950,28 @@ function PhoneDialog({ close, refresh }: { close: () => void; refresh: () => voi
               : "Send code"}
         </button>
         {sent ? (
-          <button type="button" className="account-text-button" onClick={() => send.mutate(phone)}>
-            Resend code
+          <button
+            type="button"
+            className="account-text-button"
+            disabled={resendSeconds > 0 || send.isPending}
+            onClick={() => send.mutate(phone)}
+          >
+            {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}
           </button>
         ) : null}
+        {remove.error ? <p className="account-form-error">{errorCopy(remove.error)}</p> : null}
       </form>
     </Dialog>
   );
 }
 function TwoFactorDialog({
   enabled,
+  method,
   close,
   refresh,
 }: {
   enabled: boolean;
+  method: "TOTP" | "SMS" | null;
   close: () => void;
   refresh: () => void;
 }) {
@@ -916,7 +996,8 @@ function TwoFactorDialog({
     },
   });
   const disable = useMutation({
-    mutationFn: () => repositories.account.disableTwoFactor({ code }),
+    mutationFn: (input: { method?: "TOTP" | "SMS"; code?: string }) =>
+      repositories.account.disableTwoFactor(input),
     onSuccess: () => {
       refresh();
       close();
@@ -946,6 +1027,26 @@ function TwoFactorDialog({
         </button>
       </Dialog>
     );
+  if (enabled && method === "SMS")
+    return (
+      <Dialog title="Disable SMS two-factor authentication" close={close}>
+        <div className="account-dialog-form">
+          <p className="account-dialog-note">
+            Your recent sign-in is required to change this security setting. SMS sign-in codes will
+            stop after you disable this method.
+          </p>
+          {disable.error ? <p className="account-form-error">{errorCopy(disable.error)}</p> : null}
+          <button
+            type="button"
+            className="account-danger-button"
+            disabled={disable.isPending}
+            onClick={() => disable.mutate({ method: "SMS" })}
+          >
+            {disable.isPending ? "Disabling…" : "Disable SMS two-factor"}
+          </button>
+        </div>
+      </Dialog>
+    );
   if (enabled)
     return (
       <Dialog title="Disable two-factor authentication" close={close}>
@@ -953,11 +1054,11 @@ function TwoFactorDialog({
           className="account-dialog-form"
           onSubmit={(e) => {
             e.preventDefault();
-            disable.mutate();
+            disable.mutate({ method: "TOTP", code });
           }}
         >
           <p className="account-dialog-note">
-            Enter a current authenticator code to disable two-factor authentication.
+            Enter a current authenticator code to disable the authenticator-app method.
           </p>
           <label>
             Authenticator code
@@ -965,7 +1066,7 @@ function TwoFactorDialog({
               inputMode="numeric"
               pattern="[0-9]{6}"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               required
             />
           </label>
@@ -1011,13 +1112,132 @@ function TwoFactorDialog({
               inputMode="numeric"
               pattern="[0-9]{6}"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               required
             />
           </label>
           {confirm.error ? <p className="account-form-error">{errorCopy(confirm.error)}</p> : null}
           <button className="account-primary" disabled={confirm.isPending}>
             Confirm and enable
+          </button>
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: () => void }) {
+  const { repositories } = useAppServices();
+  const [enrollment, setEnrollment] = useState<{ phone: string; resendAvailableAt: string } | null>(
+    null,
+  );
+  const [code, setCode] = useState("");
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const begin = useMutation({
+    mutationFn: repositories.account.beginSmsTwoFactorEnrollment,
+    onSuccess: setEnrollment,
+  });
+  const resend = useMutation({
+    mutationFn: repositories.account.beginSmsTwoFactorEnrollment,
+    onSuccess: setEnrollment,
+  });
+  const confirm = useMutation({
+    mutationFn: () => repositories.account.confirmSmsTwoFactorEnrollment(code),
+    onSuccess: ({ recoveryCodes }) => {
+      setRecovery(recoveryCodes.length ? recoveryCodes : null);
+      refresh();
+      if (!recoveryCodes.length) close();
+    },
+  });
+  useEffect(() => {
+    if (!enrollment) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [enrollment]);
+  const resendSeconds = enrollment
+    ? Math.max(0, Math.ceil((new Date(enrollment.resendAvailableAt).getTime() - now) / 1000))
+    : 0;
+  if (recovery)
+    return (
+      <Dialog
+        title="Save recovery codes"
+        close={() => {
+          setRecovery(null);
+          close();
+        }}
+      >
+        <p className="account-dialog-note">
+          These codes are shown once. Store them somewhere safe before continuing.
+        </p>
+        <pre className="account-recovery-codes">{recovery.join("\n")}</pre>
+        <button
+          className="account-primary"
+          onClick={() => {
+            setRecovery(null);
+            close();
+          }}
+        >
+          I saved these codes
+        </button>
+      </Dialog>
+    );
+  return (
+    <Dialog title="Enable SMS sign-in codes" close={close}>
+      {!enrollment ? (
+        <>
+          <p className="account-dialog-note">
+            Slice will send a one-time code to your verified phone. SMS two-factor authentication is
+            separate from phone verification.
+          </p>
+          <button
+            className="account-primary"
+            onClick={() => begin.mutate()}
+            disabled={begin.isPending}
+          >
+            {begin.isPending ? "Sending code…" : "Send SMS code"}
+          </button>
+          {begin.error ? <p className="account-form-error">{errorCopy(begin.error)}</p> : null}
+        </>
+      ) : (
+        <form
+          className="account-dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirm.mutate();
+          }}
+        >
+          <p className="account-dialog-note">
+            Code sent to {enrollment.phone}. Enter it to enable SMS sign-in codes.
+          </p>
+          <label>
+            Six-digit code
+            <input
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+            />
+          </label>
+          {confirm.error || resend.error ? (
+            <p className="account-form-error">{errorCopy(confirm.error ?? resend.error!)}</p>
+          ) : null}
+          <button className="account-primary" disabled={confirm.isPending || code.length !== 6}>
+            {confirm.isPending ? "Confirming…" : "Enable SMS two-factor"}
+          </button>
+          <button
+            type="button"
+            className="account-text-button"
+            disabled={resendSeconds > 0 || resend.isPending}
+            onClick={() => resend.mutate()}
+          >
+            {resendSeconds > 0
+              ? `Resend in ${resendSeconds}s`
+              : resend.isPending
+                ? "Sending…"
+                : "Resend code"}
           </button>
         </form>
       )}

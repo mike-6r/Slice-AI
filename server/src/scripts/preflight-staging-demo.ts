@@ -82,8 +82,9 @@ async function main() {
             mode: config.phoneDeliveryMode,
             configured: Boolean(
               config.twilioAccountSid &&
-              config.twilioAuthToken &&
-              (config.twilioFromNumber || config.twilioVerifyServiceSid),
+              config.twilioApiKey &&
+              config.twilioApiSecret &&
+              config.twilioVerifyServiceSid,
             ),
           },
           providers: {

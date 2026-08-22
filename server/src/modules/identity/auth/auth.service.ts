@@ -241,11 +241,13 @@ export class AuthService {
     input: { email: string; password: string },
     requestId: string,
     sessionContext: SessionContext = {},
+    requestIp = 'unknown',
   ): Promise<AuthResult | TwoFactorLoginChallenge> {
     const user = await this.authenticatePassword(input);
     const challenge = await this.twoFactor?.createLoginChallenge(
       user.id,
       requestId,
+      requestIp,
     );
     if (challenge) return challenge;
     return this.issueLogin(user, requestId, sessionContext);
@@ -879,11 +881,12 @@ export class AuthService {
       emailVerified: Boolean(user.emailVerifiedAt),
       emailVerificationStatus: user.emailVerifiedAt ? 'VERIFIED' : 'UNVERIFIED',
       emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
-      phone: user.phoneE164 ?? null,
+      phone: user.phoneE164 ? maskPhone(user.phoneE164) : null,
       phoneVerified: Boolean(user.phoneVerifiedAt),
       phoneVerifiedAt: user.phoneVerifiedAt?.toISOString() ?? null,
       twoFactorEnabled: Boolean(user.twoFactorEnabledAt),
       twoFactorEnabledAt: user.twoFactorEnabledAt?.toISOString() ?? null,
+      twoFactorMethod: user.twoFactorMethod ?? null,
       profile: user.profile
         ? {
             displayName: user.profile.displayName,
@@ -936,4 +939,8 @@ export class AuthService {
       message: 'Authentication is required.',
     });
   }
+}
+
+function maskPhone(phone: string) {
+  return `${phone.slice(0, Math.min(3, phone.length - 4))}${'•'.repeat(Math.max(0, phone.length - 7))}${phone.slice(-4)}`;
 }

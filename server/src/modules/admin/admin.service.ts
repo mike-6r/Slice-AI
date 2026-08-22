@@ -2978,6 +2978,7 @@ export class AdminService {
           select: { username: true, displayName: true, linkedAt: true },
         },
         twoFactor: { select: { enabledAt: true } },
+        smsTwoFactor: { select: { enabledAt: true } },
         roleAssignments: {
           where: { revokedAt: null },
           select: {
@@ -3206,7 +3207,7 @@ export class AdminService {
           }
         : null,
       identity: {
-        phone: user.phoneE164,
+        phone: user.phoneE164 ? maskPhoneForAdmin(user.phoneE164) : null,
         country: user.profile?.countryCode ?? null,
         discord: {
           connected: Boolean(user.discordAccountLink),
@@ -3214,7 +3215,7 @@ export class AdminService {
           displayName: user.discordAccountLink?.displayName ?? null,
           linkedAt: user.discordAccountLink?.linkedAt.toISOString() ?? null,
         },
-        twoFactorEnabled: Boolean(user.twoFactor?.enabledAt),
+        twoFactorEnabled: Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt),
       },
       complianceSummary: {
         kycStatus: kycCase?.status ?? 'UNKNOWN',
@@ -4540,4 +4541,8 @@ function mismatchCodes(value: unknown): string[] {
         .filter((code): code is string => typeof code === 'string')
         .slice(0, 20)
     : [];
+}
+
+function maskPhoneForAdmin(phone: string) {
+  return `${phone.slice(0, Math.min(3, phone.length - 4))}${'•'.repeat(Math.max(0, phone.length - 7))}${phone.slice(-4)}`;
 }

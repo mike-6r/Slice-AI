@@ -88,6 +88,7 @@ export class AccountCapabilityService {
         emailVerifiedAt: true,
         phoneVerifiedAt: true,
         twoFactor: { select: { enabledAt: true } },
+        smsTwoFactor: { select: { enabledAt: true } },
         complianceCases: {
           select: { status: true },
           orderBy: { updatedAt: 'desc' },
@@ -210,7 +211,7 @@ export class AccountCapabilityService {
           'PHONE_VERIFICATION_REQUIRED',
           requirements,
         );
-      const twoFactor = Boolean(user.twoFactor?.enabledAt);
+      const twoFactor = Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt);
       needs('TWO_FACTOR_AUTHENTICATION', twoFactor);
       if (!twoFactor)
         return this.denied(capability, 'TWO_FACTOR_REQUIRED', requirements);

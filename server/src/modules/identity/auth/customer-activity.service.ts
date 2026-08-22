@@ -32,6 +32,13 @@ const customerActions = [
   'PHONE_VERIFICATION_RESENT',
   'PHONE_VERIFIED',
   'PHONE_CHANGED',
+  'PHONE_REMOVED',
+  'TWO_FACTOR_SMS_ENROLLMENT_STARTED',
+  'TWO_FACTOR_SMS_ENABLED',
+  'TWO_FACTOR_SMS_DISABLED',
+  'TWO_FACTOR_SMS_CHALLENGE_SENT',
+  'TWO_FACTOR_SMS_CHALLENGE_SUCCEEDED',
+  'TWO_FACTOR_SMS_CHALLENGE_FAILED',
 ] as const;
 
 type CustomerAction = (typeof customerActions)[number];
@@ -112,6 +119,13 @@ function activityCopy(action: CustomerAction) {
     case 'PHONE_VERIFICATION_RESENT': return { type: 'PHONE_VERIFICATION_REQUESTED', title: 'Phone verification requested', description: 'A phone verification code was requested.' };
     case 'PHONE_VERIFIED': return { type: 'PHONE_VERIFIED', title: 'Phone verified', description: 'Your phone number was verified.' };
     case 'PHONE_CHANGED': return { type: 'PHONE_CHANGED', title: 'Phone changed', description: 'Your verified phone number was changed.' };
+    case 'PHONE_REMOVED': return { type: 'PHONE_REMOVED', title: 'Phone removed', description: 'Your verified phone number was removed.' };
+    case 'TWO_FACTOR_SMS_ENROLLMENT_STARTED': return { type: 'TWO_FACTOR_ENROLLMENT_STARTED', title: 'SMS two-factor setup started', description: 'An SMS security code was requested.' };
+    case 'TWO_FACTOR_SMS_ENABLED': return { type: 'TWO_FACTOR_ENABLED', title: 'SMS two-factor authentication enabled', description: 'SMS two-factor authentication was enabled.' };
+    case 'TWO_FACTOR_SMS_DISABLED': return { type: 'TWO_FACTOR_DISABLED', title: 'SMS two-factor authentication disabled', description: 'SMS two-factor authentication was disabled.' };
+    case 'TWO_FACTOR_SMS_CHALLENGE_SENT': return { type: 'TWO_FACTOR_CHALLENGE_SENT', title: 'SMS sign-in code sent', description: 'A sign-in code was sent to your verified phone.' };
+    case 'TWO_FACTOR_SMS_CHALLENGE_SUCCEEDED': return { type: 'TWO_FACTOR_CHALLENGE_SUCCEEDED', title: 'SMS sign-in verified', description: 'Your SMS sign-in challenge was completed.' };
+    case 'TWO_FACTOR_SMS_CHALLENGE_FAILED': return { type: 'TWO_FACTOR_CHALLENGE_FAILED', title: 'SMS sign-in challenge failed', description: 'An SMS sign-in challenge was not accepted.' };
   }
 }
 

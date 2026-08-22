@@ -55,9 +55,16 @@ export class AuthAbuseService {
       | 'deletion-cancel'
       | 'phone-send'
       | 'phone-confirm'
+      | 'phone-remove'
+      | 'two-factor-sms-enroll'
+      | 'two-factor-sms-confirm'
+      | 'two-factor-sms-login-send'
+      | 'two-factor-sms-login-check'
+      | 'two-factor-sms-login-resend'
       | 'notification-preferences',
     ip: string,
     accountHint?: string,
+    phoneHint?: string,
   ) {
     const limit =
       operation === 'login'
@@ -74,6 +81,8 @@ export class AuthAbuseService {
     const keys = [this.cache.key(`auth-${operation}-ip`, hash(ip))];
     if (accountHint)
       keys.push(this.cache.key(`auth-${operation}-account`, hash(accountHint)));
+    if (phoneHint)
+      keys.push(this.cache.key(`auth-${operation}-phone`, hash(phoneHint)));
     try {
       for (const key of keys) {
         const counter = await this.cache.incrementWithTtl(key, ttlSeconds);

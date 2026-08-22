@@ -6,36 +6,70 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import * as argon2 from 'argon2';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthAbuseService } from '../auth/auth-abuse.service';
+import { RecentAuthService } from '../access/recent-auth.service';
 import type { Actor } from '../auth/auth.service';
 
+/** Twilio Verify is the OTP authority outside the local test adapter. */
 export type PhoneVerificationDelivery = {
-  readonly managesVerification?: boolean;
+  readonly managesVerification: true;
   deliver(input: {
     userId: string;
     phoneE164: string;
-    code: string;
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
   }): Promise<void>;
-  verify?(input: { phoneE164: string; code: string }): Promise<boolean>;
+  verify(input: {
+    userId: string;
+    phoneE164: string;
+    code: string;
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+  }): Promise<boolean>;
 };
 export const PHONE_VERIFICATION_DELIVERY = Symbol(
   'PHONE_VERIFICATION_DELIVERY',
 );
 
+/** Local-only provider seam for isolated automated tests. */
 @Injectable()
 export class LocalTestPhoneDelivery implements PhoneVerificationDelivery {
+  readonly managesVerification = true;
   private readonly codes = new Map<string, string>();
-  async deliver(input: { userId: string; phoneE164: string; code: string }) {
-    this.codes.set(`${input.userId}:${input.phoneE164}`, input.code);
+
+  async deliver(input: {
+    userId: string;
+    phoneE164: string;
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+  }) {
+    this.codes.set(
+      this.key(input),
+      randomInt(0, 1_000_000).toString().padStart(6, '0'),
+    );
   }
-  /** Test-only seam; never exposed by HTTP and not wired in production. */
-  codeForTest(userId: string, phoneE164: string) {
-    return this.codes.get(`${userId}:${phoneE164}`);
+
+  async verify(input: {
+    userId: string;
+    phoneE164: string;
+    code: string;
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+  }) {
+    return this.codes.get(this.key(input)) === input.code;
+  }
+
+  /** Test-only seam; never exposed by HTTP and never wired in production. */
+  codeForTest(
+    userId: string,
+    phoneE164: string,
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' = 'PHONE',
+  ) {
+    return this.codes.get(this.key({ userId, phoneE164, purpose }));
+  }
+
+  private key(input: { userId: string; phoneE164: string; purpose: string }) {
+    return `${input.userId}:${input.purpose}:${input.phoneE164}`;
   }
 }
 
@@ -47,6 +81,7 @@ export class PhoneVerificationService {
     private readonly abuse: AuthAbuseService,
     @Inject(PHONE_VERIFICATION_DELIVERY)
     private readonly delivery: PhoneVerificationDelivery,
+    private readonly recentAuth?: RecentAuthService,
   ) {}
 
   async status(actor: Actor) {
@@ -59,57 +94,60 @@ export class PhoneVerificationService {
         userId: actor.userId,
         consumedAt: null,
         supersededAt: null,
+        deliveryStatus: 'SENT',
         expiresAt: { gt: new Date() },
       },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
+      select: { phoneE164: true, createdAt: true },
     });
+    const resendAvailableAt = active
+      ? new Date(
+          active.createdAt.getTime() +
+            this.config.phoneVerificationResendSeconds * 1000,
+        )
+      : null;
     return {
-      phonePresent: Boolean(user.phoneE164),
       phone: user.phoneE164 ? maskPhone(user.phoneE164) : null,
+      pendingPhone: active ? maskPhone(active.phoneE164) : null,
+      phonePresent: Boolean(user.phoneE164),
       verified: Boolean(user.phoneVerifiedAt),
       verifiedAt: user.phoneVerifiedAt?.toISOString() ?? null,
-      canResend:
-        !active ||
-        active.createdAt.getTime() +
-          this.config.phoneVerificationResendSeconds * 1000 <=
-          Date.now(),
-      resendAvailableAt: active
-        ? new Date(
-            active.createdAt.getTime() +
-              this.config.phoneVerificationResendSeconds * 1000,
-          ).toISOString()
-        : null,
+      canResend: !resendAvailableAt || resendAvailableAt <= new Date(),
+      resendAvailableAt: resendAvailableAt?.toISOString() ?? null,
     };
   }
 
   async send(actor: Actor, rawPhone: string, ip: string, requestId: string) {
-    if (this.config.isBeta)
-      throw new ServiceUnavailableException({
-        code: 'BETA_DISABLED',
-        message: 'Phone verification is not enabled during the current Beta.',
-      });
+    this.requireEnabled();
     const phoneE164 = normalizePhone(rawPhone);
-    await this.abuse.enforce('phone-send', ip, `${actor.userId}:${phoneE164}`);
-    this.requireDelivery();
+    await this.abuse.enforce('phone-send', ip, actor.userId, phoneE164);
     const now = new Date();
-    const code = generateOtp();
-    const codeHash = await argon2.hash(code, { type: argon2.argon2id });
     const outcome = await this.db.withTransaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.userId} FOR UPDATE`;
       const user = await tx.user.findUniqueOrThrow({
         where: { id: actor.userId },
-        select: { accountStatus: true, phoneE164: true, phoneVerifiedAt: true },
+        select: {
+          accountStatus: true,
+          phoneE164: true,
+          phoneVerifiedAt: true,
+          smsTwoFactor: { select: { enabledAt: true } },
+        },
       });
       this.assertMutable(user.accountStatus);
       if (user.phoneE164 === phoneE164 && user.phoneVerifiedAt)
         return { kind: 'verified' as const };
+      if (user.smsTwoFactor?.enabledAt && user.phoneE164 !== phoneE164)
+        throw new ConflictException({
+          code: 'PHONE_REQUIRED_FOR_SMS_MFA',
+          message: 'Disable SMS two-factor authentication before changing this phone number.',
+        });
       const latest = await tx.phoneVerificationChallenge.findFirst({
         where: {
           userId: actor.userId,
           phoneE164,
           consumedAt: null,
           supersededAt: null,
+          deliveryStatus: 'SENT',
         },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
@@ -125,15 +163,18 @@ export class PhoneVerificationService {
         where: { userId: actor.userId, consumedAt: null, supersededAt: null },
         data: { supersededAt: now },
       });
-      await tx.phoneVerificationChallenge.create({
+      const challenge = await tx.phoneVerificationChallenge.create({
         data: {
           userId: actor.userId,
           phoneE164,
-          codeHash,
+          // Twilio Verify owns OTP generation and validation.
+          codeHash: null,
+          deliveryStatus: 'PENDING',
           expiresAt: new Date(
             now.getTime() + this.config.phoneVerificationTtlSeconds * 1000,
           ),
         },
+        select: { id: true },
       });
       await this.audit(
         tx,
@@ -143,7 +184,7 @@ export class PhoneVerificationService {
         now,
         { phoneLastFour: lastFour(phoneE164) },
       );
-      return { kind: 'created' as const };
+      return { kind: 'created' as const, challengeId: challenge.id };
     });
     if (outcome.kind === 'verified')
       return { alreadyVerified: true, resendAvailableAt: null };
@@ -153,7 +194,28 @@ export class PhoneVerificationService {
         message: 'A verification code was recently sent.',
         details: { resendAvailableAt: outcome.resendAt.toISOString() },
       });
-    await this.delivery.deliver({ userId: actor.userId, phoneE164, code });
+    try {
+      await this.delivery.deliver({
+        userId: actor.userId,
+        phoneE164,
+        purpose: 'PHONE',
+      });
+      await this.db.phoneVerificationChallenge.updateMany({
+        where: { id: outcome.challengeId, deliveryStatus: 'PENDING' },
+        data: { deliveryStatus: 'SENT', deliveredAt: new Date() },
+      });
+    } catch (error) {
+      const failedAt = new Date();
+      await this.db.phoneVerificationChallenge.updateMany({
+        where: { id: outcome.challengeId, deliveryStatus: 'PENDING' },
+        data: {
+          deliveryStatus: 'FAILED',
+          deliveryFailedAt: failedAt,
+          supersededAt: failedAt,
+        },
+      });
+      throw error;
+    }
     return {
       alreadyVerified: false,
       resendAvailableAt: new Date(
@@ -162,49 +224,62 @@ export class PhoneVerificationService {
     };
   }
 
-  async confirm(
-    actor: Actor,
-    rawPhone: string,
-    code: string,
-    ip: string,
-    requestId: string,
-  ) {
-    const phoneE164 = normalizePhone(rawPhone);
-    await this.abuse.enforce('phone-confirm', ip, actor.userId);
+  /** The phone is resolved from Slice's pending challenge; the client sends
+   * only the code and cannot switch the verification target during checking. */
+  async confirm(actor: Actor, code: string, ip: string, requestId: string) {
+    this.requireEnabled();
+    const pending = await this.db.phoneVerificationChallenge.findFirst({
+      where: {
+        userId: actor.userId,
+        consumedAt: null,
+        supersededAt: null,
+        deliveryStatus: 'SENT',
+        expiresAt: { gt: new Date() },
+        attemptCount: { lt: this.config.phoneVerificationMaxAttempts },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, phoneE164: true },
+    });
+    if (!pending) throw this.invalid();
+    await this.abuse.enforce('phone-confirm', ip, actor.userId, pending.phoneE164);
+    const providerApproved = await this.delivery.verify({
+      userId: actor.userId,
+      phoneE164: pending.phoneE164,
+      code,
+      purpose: 'PHONE',
+    });
     const now = new Date();
     try {
-      const providerApproved = this.delivery.managesVerification
-        ? await this.delivery.verify?.({ phoneE164, code })
-        : undefined;
-      if (this.delivery.managesVerification && providerApproved !== true)
-        throw this.invalid();
-      const result = await this.db.withTransaction(async (tx) => {
+      return await this.db.withTransaction(async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.userId} FOR UPDATE`;
         const user = await tx.user.findUniqueOrThrow({
           where: { id: actor.userId },
-          select: { accountStatus: true, phoneE164: true },
+          select: {
+            accountStatus: true,
+            phoneE164: true,
+            smsTwoFactor: { select: { enabledAt: true } },
+          },
         });
         this.assertMutable(user.accountStatus);
-        const challenge = await tx.phoneVerificationChallenge.findFirst({
-          where: {
-            userId: actor.userId,
-            phoneE164,
-            consumedAt: null,
-            supersededAt: null,
-          },
-          orderBy: { createdAt: 'desc' },
+        const challenge = await tx.phoneVerificationChallenge.findUnique({
+          where: { id: pending.id },
         });
         if (
           !challenge ||
+          challenge.phoneE164 !== pending.phoneE164 ||
+          challenge.deliveryStatus !== 'SENT' ||
+          challenge.consumedAt ||
+          challenge.supersededAt ||
           challenge.expiresAt <= now ||
           challenge.attemptCount >= this.config.phoneVerificationMaxAttempts
         )
           throw this.invalid();
-        // Twilio Verify is the one OTP authority in managed-provider mode.
-        const valid = this.delivery.managesVerification
-          ? providerApproved === true
-          : await argon2.verify(challenge.codeHash, code);
-        if (!valid) {
+        if (user.smsTwoFactor?.enabledAt && user.phoneE164 !== pending.phoneE164)
+          throw new ConflictException({
+            code: 'PHONE_REQUIRED_FOR_SMS_MFA',
+            message: 'Disable SMS two-factor authentication before changing this phone number.',
+          });
+        if (!providerApproved) {
           const exhausted =
             challenge.attemptCount + 1 >=
             this.config.phoneVerificationMaxAttempts;
@@ -222,15 +297,16 @@ export class PhoneVerificationService {
             id: challenge.id,
             consumedAt: null,
             supersededAt: null,
+            deliveryStatus: 'SENT',
             expiresAt: { gt: now },
           },
           data: { consumedAt: now },
         });
         if (consumed.count !== 1) throw this.invalid();
-        const changed = Boolean(user.phoneE164 && user.phoneE164 !== phoneE164);
+        const changed = Boolean(user.phoneE164 && user.phoneE164 !== pending.phoneE164);
         await tx.user.update({
           where: { id: actor.userId },
-          data: { phoneE164, phoneVerifiedAt: now },
+          data: { phoneE164: pending.phoneE164, phoneVerifiedAt: now },
         });
         await tx.phoneVerificationChallenge.updateMany({
           where: {
@@ -247,15 +323,14 @@ export class PhoneVerificationService {
           changed ? 'PHONE_CHANGED' : 'PHONE_VERIFIED',
           requestId,
           now,
-          { phoneLastFour: lastFour(phoneE164) },
+          { phoneLastFour: lastFour(pending.phoneE164) },
         );
         return {
           verified: true,
           verifiedAt: now.toISOString(),
-          phone: maskPhone(phoneE164),
+          phone: maskPhone(pending.phoneE164),
         };
       });
-      return result;
     } catch (error) {
       if (isPrismaUnique(error))
         throw new ConflictException({
@@ -266,38 +341,82 @@ export class PhoneVerificationService {
     }
   }
 
-  private assertMutable(status: string) {
+  async remove(actor: Actor, ip: string, requestId: string) {
+    this.requireEnabled();
+    if (!this.recentAuth)
+      throw new ServiceUnavailableException({
+        code: 'RECENT_AUTH_UNAVAILABLE',
+        message: 'Recent authentication is required for this action.',
+      });
+    this.recentAuth.require(actor);
+    await this.abuse.enforce('phone-remove', ip, actor.userId);
+    const now = new Date();
+    const removed = await this.db.withTransaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.userId} FOR UPDATE`;
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: actor.userId },
+        select: {
+          phoneE164: true,
+          phoneVerifiedAt: true,
+          smsTwoFactor: { select: { enabledAt: true } },
+        },
+      });
+      if (user.smsTwoFactor?.enabledAt)
+        throw new ConflictException({
+          code: 'PHONE_REQUIRED_FOR_SMS_MFA',
+          message: 'Disable SMS two-factor authentication before removing this phone.',
+        });
+      if (!user.phoneE164) return false;
+      await tx.user.update({
+        where: { id: actor.userId },
+        data: { phoneE164: null, phoneVerifiedAt: null },
+      });
+      await tx.phoneVerificationChallenge.updateMany({
+        where: { userId: actor.userId, consumedAt: null, supersededAt: null },
+        data: { supersededAt: now },
+      });
+      await tx.userSmsTwoFactor.deleteMany({
+        where: { userId: actor.userId, enabledAt: null },
+      });
+      await this.audit(tx, actor, 'PHONE_REMOVED', requestId, now, {
+        phoneLastFour: lastFour(user.phoneE164),
+      });
+      return Boolean(user.phoneVerifiedAt);
+    });
+    return { removed };
+  }
+
+  private requireEnabled() {
+    if (!this.config.phoneVerificationEnabled)
+      throw new ServiceUnavailableException({
+        code: 'PHONE_DELIVERY_UNAVAILABLE',
+        message: 'SMS verification is currently unavailable.',
+      });
     if (
-      !this.config.phoneVerificationEnabled ||
-      ['DEACTIVATED', 'CLOSED'].includes(status)
+      this.config.phoneDeliveryMode === 'local_test' &&
+      this.config.environment === 'production'
     )
+      throw new ServiceUnavailableException({
+        code: 'PHONE_DELIVERY_UNAVAILABLE',
+        message: 'SMS verification is currently unavailable.',
+      });
+  }
+
+  private assertMutable(status: string) {
+    if (['DEACTIVATED', 'CLOSED'].includes(status))
       throw new ConflictException({
         code: 'ACCOUNT_CONTACT_UPDATE_UNAVAILABLE',
         message: 'Phone verification is unavailable for this account.',
       });
   }
-  private requireDelivery() {
-    if (
-      this.config.phoneDeliveryMode === 'twilio_verify' ||
-      this.config.phoneDeliveryMode === 'twilio_sms'
-    )
-      return;
-    if (
-      this.config.phoneDeliveryMode === 'local_test' &&
-      this.config.environment !== 'production'
-    )
-      return;
-    throw new ServiceUnavailableException({
-      code: 'PHONE_DELIVERY_UNAVAILABLE',
-      message: 'Phone verification delivery is unavailable.',
-    });
-  }
+
   private invalid() {
     return new UnauthorizedException({
       code: 'PHONE_VERIFICATION_INVALID',
       message: 'This verification code is invalid or has expired.',
     });
   }
+
   private audit(
     tx: Prisma.TransactionClient,
     actor: Actor,
@@ -333,15 +452,15 @@ export function normalizePhone(value: string) {
     });
   return parsed.number;
 }
-export function generateOtp() {
-  return randomInt(0, 1_000_000).toString().padStart(6, '0');
-}
-function maskPhone(phone: string) {
+
+export function maskPhone(phone: string) {
   return `${phone.slice(0, Math.min(3, phone.length - 4))}${'•'.repeat(Math.max(0, phone.length - 7))}${phone.slice(-4)}`;
 }
+
 function lastFour(phone: string) {
   return phone.slice(-4);
 }
+
 function isPrismaUnique(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&

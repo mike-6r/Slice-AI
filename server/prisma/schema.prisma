@@ -59,6 +59,17 @@ enum AuditResult {
   FAILURE
 }
 
+enum PhoneVerificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum TwoFactorMethod {
+  TOTP
+  SMS
+}
+
 enum IdempotencyStatus {
   PROCESSING
   COMPLETED
@@ -808,6 +819,8 @@ model User {
   emailVerificationTokens         EmailVerificationToken[]
   phoneVerificationChallenges     PhoneVerificationChallenge[]
   twoFactor                       UserTwoFactor?
+  smsTwoFactor                    UserSmsTwoFactor?
+  twoFactorRecoveryCodes          TwoFactorRecoveryCode[]
   twoFactorLoginChallenges        TwoFactorLoginChallenge[]
   deletionRequests                AccountDeletionRequest[]
   consentAcceptances              ConsentAcceptance[]
@@ -880,7 +893,11 @@ model PhoneVerificationChallenge {
   id           String    @id @default(cuid())
   userId       String
   phoneE164    String
-  codeHash     String
+  /// Legacy hashes are nullable and unused. New challenges never persist OTPs.
+  codeHash     String?
+  deliveryStatus PhoneVerificationDeliveryStatus @default(PENDING)
+  deliveredAt  DateTime?
+  deliveryFailedAt DateTime?
   expiresAt    DateTime
   consumedAt   DateTime?
   supersededAt DateTime?
@@ -890,6 +907,7 @@ model PhoneVerificationChallenge {
 
   @@index([userId, phoneE164, createdAt])
   @@index([userId, consumedAt, supersededAt, expiresAt])
+  @@index([userId, deliveryStatus, createdAt])
 }
 
 /// Slice-owned TOTP authority. The secret is AES-GCM encrypted and is only
@@ -901,7 +919,19 @@ model UserTwoFactor {
   enrollmentStartedAt DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  recoveryCodes       TwoFactorRecoveryCode[]
+
+  @@index([enabledAt])
+}
+
+/// Slice-owned SMS MFA method. Twilio Verify owns the OTP; this row owns only
+/// the explicit enrollment and enabled state bound to a verified phone.
+model UserSmsTwoFactor {
+  userId              String   @id
+  phoneE164           String
+  enabledAt           DateTime?
+  enrollmentStartedAt DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([enabledAt])
 }
@@ -914,7 +944,7 @@ model TwoFactorRecoveryCode {
   codeHash   String        @unique
   consumedAt DateTime?
   createdAt  DateTime      @default(now())
-  twoFactor  UserTwoFactor @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, consumedAt])
 }
@@ -925,8 +955,12 @@ model TwoFactorLoginChallenge {
   id         String    @id @default(cuid())
   userId     String
   tokenHash  String    @unique
+  method     TwoFactorMethod @default(TOTP)
+  phoneE164  String?
   expiresAt  DateTime
   consumedAt DateTime?
+  attemptCount Int      @default(0)
+  lastSentAt DateTime?
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 

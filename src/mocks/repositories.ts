@@ -1236,16 +1236,33 @@ export const mockRepositories: AppRepositories = {
       return { verified: true, verifiedAt: new Date().toISOString() };
     },
     async getPhoneVerification() {
-      return { phone: null, verified: false, verifiedAt: null };
+      return {
+        phone: null,
+        pendingPhone: null,
+        verified: false,
+        verifiedAt: null,
+        canResend: true,
+        resendAvailableAt: null,
+      };
     },
     async sendPhoneVerification() {
       return { alreadyVerified: false, resendAvailableAt: null };
     },
-    async confirmPhoneVerification(_phone: string, _code: string) {
+    async confirmPhoneVerification(_code: string) {
       return { verified: true, verifiedAt: new Date().toISOString(), phone: "••••" };
     },
+    async removePhoneVerification() {
+      return { removed: true };
+    },
     async getTwoFactor() {
-      return { enabled: false, enabledAt: null };
+      return {
+        enabled: false,
+        enabledAt: null,
+        method: null,
+        methods: [],
+        phoneVerified: false,
+        phone: null,
+      };
     },
     async beginTwoFactorEnrollment() {
       throw new ApiError(
@@ -1257,6 +1274,18 @@ export const mockRepositories: AppRepositories = {
       throw new ApiError(
         "FEATURE_UNAVAILABLE",
         "Two-factor enrollment requires the authoritative API.",
+      );
+    },
+    async beginSmsTwoFactorEnrollment() {
+      throw new ApiError(
+        "FEATURE_UNAVAILABLE",
+        "SMS two-factor enrollment requires the authoritative API.",
+      );
+    },
+    async confirmSmsTwoFactorEnrollment() {
+      throw new ApiError(
+        "FEATURE_UNAVAILABLE",
+        "SMS two-factor confirmation requires the authoritative API.",
       );
     },
     async regenerateRecoveryCodes() {

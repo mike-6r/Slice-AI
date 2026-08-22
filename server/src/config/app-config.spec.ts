@@ -120,6 +120,7 @@ describe('loadAppConfig', () => {
       APP_PUBLIC_URL: 'https://app.slice.example',
       EMAIL_DELIVERY_MODE: 'resend' as const,
       PHONE_DELIVERY_MODE: 'twilio_verify' as const,
+      TWILIO_SMS_ENABLED: 'true' as const,
     };
     expect(() => loadAppConfig(production)).toThrow(
       'RESEND_API_KEY and RESEND_FROM_EMAIL',
@@ -131,7 +132,7 @@ describe('loadAppConfig', () => {
         RESEND_FROM_EMAIL: 'verify@slice.example',
       }),
     ).toThrow(
-      'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_VERIFY_SERVICE_SID',
+      'TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET, and TWILIO_VERIFY_SERVICE_SID',
     );
     expect(
       loadAppConfig({
@@ -139,7 +140,8 @@ describe('loadAppConfig', () => {
         RESEND_API_KEY: 'resend-test-key',
         RESEND_FROM_EMAIL: 'verify@slice.example',
         TWILIO_ACCOUNT_SID: 'ACtest',
-        TWILIO_AUTH_TOKEN: 'twilio-test-token',
+        TWILIO_API_KEY: 'SKtest',
+        TWILIO_API_SECRET: 'twilio-test-secret',
         TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       }),
     ).toMatchObject({
@@ -148,24 +150,10 @@ describe('loadAppConfig', () => {
     });
   });
 
-  it('accepts Twilio SMS without a Verify Service SID but requires an E.164 sender', () => {
-    const sms = {
-      NODE_ENV: 'test' as const,
-      PHONE_DELIVERY_MODE: 'twilio_sms' as const,
-      TWILIO_ACCOUNT_SID: 'ACtest',
-      TWILIO_AUTH_TOKEN: 'twilio-test-token',
-    };
-    expect(() => loadAppConfig(sms)).toThrow('TWILIO_FROM_NUMBER');
+  it('uses the provider-neutral feature flag to keep SMS fail-closed', () => {
     expect(
-      loadAppConfig({ ...sms, TWILIO_FROM_NUMBER: '+447700900000' }),
-    ).toMatchObject({
-      phoneDeliveryMode: 'twilio_sms',
-      twilioFromNumber: '+447700900000',
-      twilioVerifyServiceSid: undefined,
-    });
-    expect(() =>
-      loadAppConfig({ ...sms, TWILIO_FROM_NUMBER: 'not-an-e164-sender' }),
-    ).toThrow();
+      loadAppConfig({ NODE_ENV: 'test', TWILIO_SMS_ENABLED: 'false' }),
+    ).toMatchObject({ phoneVerificationEnabled: false, phoneDeliveryMode: 'local_test' });
   });
 
   it('rejects insecure production cookies and accepts the secure production default', () => {
@@ -183,7 +171,8 @@ describe('loadAppConfig', () => {
       RESEND_API_KEY: 'resend-test-key',
       RESEND_FROM_EMAIL: 'verify@slice.example',
       TWILIO_ACCOUNT_SID: 'ACtest',
-      TWILIO_AUTH_TOKEN: 'twilio-test-token',
+      TWILIO_API_KEY: 'SKtest',
+      TWILIO_API_SECRET: 'twilio-test-secret',
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
     };
@@ -210,7 +199,8 @@ describe('loadAppConfig', () => {
       RESEND_API_KEY: 'resend-test-key',
       RESEND_FROM_EMAIL: 'verify@slice.example',
       TWILIO_ACCOUNT_SID: 'ACtest',
-      TWILIO_AUTH_TOKEN: 'twilio-test-token',
+      TWILIO_API_KEY: 'SKtest',
+      TWILIO_API_SECRET: 'twilio-test-secret',
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
     };
@@ -263,7 +253,8 @@ describe('loadAppConfig', () => {
       RESEND_API_KEY: 'resend-test-key',
       RESEND_FROM_EMAIL: 'verify@slice.example',
       TWILIO_ACCOUNT_SID: 'ACtest',
-      TWILIO_AUTH_TOKEN: 'twilio-test-token',
+      TWILIO_API_KEY: 'SKtest',
+      TWILIO_API_SECRET: 'twilio-test-secret',
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
       PROVIDER_MODE: 'stripe_live',
@@ -295,7 +286,8 @@ describe('loadAppConfig', () => {
       RESEND_API_KEY: 'resend-test-key',
       RESEND_FROM_EMAIL: 'verify@slice.example',
       TWILIO_ACCOUNT_SID: 'ACtest',
-      TWILIO_AUTH_TOKEN: 'twilio-test-token',
+      TWILIO_API_KEY: 'SKtest',
+      TWILIO_API_SECRET: 'twilio-test-secret',
       TWILIO_VERIFY_SERVICE_SID: 'VAverify',
       CAPTCHA_ENABLED: 'false' as const,
       COOKIE_SECURE: 'true' as const,

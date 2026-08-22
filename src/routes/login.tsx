@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ApiClient, ApiError } from "@/api/http-client";
 import { safeReturnIntent } from "@/auth/return-intent";
@@ -24,11 +24,22 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [showRecovery, setShowRecovery] = useState(false);
   const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<"TOTP" | "SMS" | null>(null);
+  const [resendAvailableAt, setResendAvailableAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const valid = /.+@.+\..+/.test(email) && password.length > 0;
+  useEffect(() => {
+    if (!resendAvailableAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAvailableAt]);
+  const resendSeconds = resendAvailableAt
+    ? Math.max(0, Math.ceil((new Date(resendAvailableAt).getTime() - now) / 1000))
+    : 0;
   return (
     <div className="auth-shell">
       <section className="auth-intro self-center">
@@ -61,13 +72,22 @@ function LoginPage() {
             try {
               const result = await new ApiClient().request<
                 | { accessToken: string }
-                | { requiresTwoFactor: true; challenge: string; expiresAt: string }
+                | {
+                    requiresTwoFactor: true;
+                    challenge: string;
+                    method: "TOTP" | "SMS";
+                    phone: string | null;
+                    expiresAt: string;
+                    resendAvailableAt: string | null;
+                  }
               >("/auth/login", {
                 method: "POST",
                 body: { email, password },
               });
               if ("requiresTwoFactor" in result) {
                 setTwoFactorChallenge(result.challenge);
+                setTwoFactorMethod(result.method);
+                setResendAvailableAt(result.resendAvailableAt);
                 return;
               }
               session.set(result.accessToken);
@@ -167,18 +187,32 @@ function LoginPage() {
               }
             }}
           >
-            <h3 className="font-semibold">Two-factor authentication</h3>
+            <h3 className="font-semibold">
+              {twoFactorMethod === "SMS" ? "Enter your SMS code" : "Two-factor authentication"}
+            </h3>
             <p className="text-sm text-subtle">
-              Enter a code from your authenticator app or a saved recovery code.
+              {twoFactorMethod === "SMS"
+                ? "Slice sent a one-time code to your verified phone."
+                : "Enter a code from your authenticator app or a saved recovery code."}
             </p>
             <label className="form-field text-sm font-medium">
-              {useRecoveryCode ? "Recovery code" : "Authenticator code"}
+              {useRecoveryCode
+                ? "Recovery code"
+                : twoFactorMethod === "SMS"
+                  ? "SMS code"
+                  : "Authenticator code"}
               <input
                 type="text"
                 inputMode={useRecoveryCode ? "text" : "numeric"}
                 autoComplete="one-time-code"
                 value={twoFactorCode}
-                onChange={(event) => setTwoFactorCode(event.target.value)}
+                onChange={(event) =>
+                  setTwoFactorCode(
+                    useRecoveryCode
+                      ? event.target.value
+                      : event.target.value.replace(/\D/g, "").slice(0, 6),
+                  )
+                }
                 className="form-control mt-2"
                 required
               />
@@ -193,6 +227,33 @@ function LoginPage() {
             >
               {useRecoveryCode ? "Use an authenticator code" : "Use a recovery code"}
             </button>
+            {twoFactorMethod === "SMS" && !useRecoveryCode ? (
+              <button
+                type="button"
+                className="text-sm text-accent hover:underline disabled:opacity-50"
+                disabled={resendSeconds > 0 || submitting}
+                onClick={async () => {
+                  try {
+                    const result = await new ApiClient().request<{ resendAvailableAt: string }>(
+                      "/auth/2fa/resend",
+                      {
+                        method: "POST",
+                        body: { challenge: twoFactorChallenge },
+                      },
+                    );
+                    setResendAvailableAt(result.resendAvailableAt);
+                  } catch (reason) {
+                    setError(
+                      reason instanceof ApiError
+                        ? reason.message
+                        : "Unable to resend the SMS code.",
+                    );
+                  }
+                }}
+              >
+                {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend SMS code"}
+              </button>
+            ) : null}
             <button
               disabled={!twoFactorCode || submitting}
               className="primary-action w-full rounded-md px-4 py-3 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-40"

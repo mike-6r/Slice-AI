@@ -47,6 +47,26 @@ export class TwoFactorController {
     );
   }
 
+  @Post('sms/enroll')
+  smsEnroll(@Req() request: AuthenticatedRequest) {
+    return this.twoFactor.beginSmsEnrollment(
+      request.actor!,
+      request.ip ?? 'unknown',
+      request.requestId ?? 'unknown',
+    );
+  }
+
+  @Post('sms/confirm')
+  smsConfirm(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = parse(twoFactorCodeSchema, body);
+    return this.twoFactor.confirmSmsEnrollment(
+      request.actor!,
+      input.code,
+      request.ip ?? 'unknown',
+      request.requestId ?? 'unknown',
+    );
+  }
+
   @Post('recovery-codes/regenerate')
   regenerate(@Req() request: AuthenticatedRequest) {
     return this.twoFactor.regenerateRecoveryCodes(

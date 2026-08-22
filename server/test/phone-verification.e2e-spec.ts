@@ -74,12 +74,12 @@ describe('phone verification HTTP E2E', () => {
     const wrong = await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(headers)
-      .send({ phone, code: '000000' });
+      .send({ code: '000000' });
     expect(wrong.status).toBe(401);
     const confirmed = await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(headers)
-      .send({ phone, code });
+      .send({ code });
     expect(confirmed.status).toBe(201);
     expect(confirmed.body).toMatchObject({
       verified: true,
@@ -89,14 +89,14 @@ describe('phone verification HTTP E2E', () => {
       .get('/api/v1/me')
       .set(headers);
     expect(me.body).toMatchObject({
-      phone,
+      phone: expect.stringMatching(/0103$/),
       phoneVerified: true,
       phoneVerifiedAt: expect.any(String),
     });
     const replay = await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(headers)
-      .send({ phone, code });
+      .send({ code });
     expect(replay.status).toBe(401);
   });
   it('keeps the verified phone authoritative until a new challenge is confirmed', async () => {
@@ -111,10 +111,7 @@ describe('phone verification HTTP E2E', () => {
     await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(headers)
-      .send({
-        phone: oldPhone,
-        code: delivery.codeForTest(user.body.user.id, oldPhone),
-      });
+      .send({ code: delivery.codeForTest(user.body.user.id, oldPhone) });
     await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/send')
       .set(headers)
@@ -122,18 +119,15 @@ describe('phone verification HTTP E2E', () => {
     expect(
       (await request(app.getHttpServer()).get('/api/v1/me').set(headers)).body
         .phone,
-    ).toBe(oldPhone);
+    ).toMatch(/0104$/);
     await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(headers)
-      .send({
-        phone: newPhone,
-        code: delivery.codeForTest(user.body.user.id, newPhone),
-      });
+      .send({ code: delivery.codeForTest(user.body.user.id, newPhone) });
     expect(
       (await request(app.getHttpServer()).get('/api/v1/me').set(headers)).body
         .phone,
-    ).toBe(newPhone);
+    ).toMatch(/0105$/);
   });
   it('keeps phone challenges isolated between users', async () => {
     const alice = await signup('alice', ip('signup-alice'));
@@ -149,7 +143,7 @@ describe('phone verification HTTP E2E', () => {
     const crossUser = await request(app.getHttpServer())
       .post('/api/v1/me/phone-verification/confirm')
       .set(bobHeaders)
-      .send({ phone, code: aliceCode });
+      .send({ code: aliceCode });
     expect(crossUser.status).toBe(401);
     expect(
       (

@@ -30,6 +30,7 @@ import {
   signupSchema,
   usernameAvailabilitySchema,
   twoFactorChallengeSchema,
+  twoFactorResendSchema,
 } from '../dto/identity.schemas';
 import {
   AccessTokenGuard,
@@ -141,6 +142,7 @@ export class AuthController {
       input,
       request.requestId ?? 'unknown',
       sessionContext(request),
+      request.ip ?? 'unknown',
     );
     if ('requiresTwoFactor' in result && result.requiresTwoFactor)
       return result;
@@ -164,6 +166,17 @@ export class AuthController {
         sessionContext(request),
       ),
       response,
+    );
+  }
+  @Post('auth/2fa/resend') @HttpCode(200) async resendTwoFactorLogin(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = parse(twoFactorResendSchema, body);
+    return this.twoFactor.resendLoginChallenge(
+      input.challenge,
+      request.ip ?? 'unknown',
+      request.requestId ?? 'unknown',
     );
   }
   @Post('auth/refresh') @HttpCode(200) async refresh(

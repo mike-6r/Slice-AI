@@ -110,6 +110,7 @@ export interface IdentityUser {
   phoneE164?: string | null;
   phoneVerifiedAt?: Date | null;
   twoFactorEnabledAt?: Date | null;
+  twoFactorMethod?: 'TOTP' | 'SMS' | null;
   accountStatus: AccountStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -123,6 +124,7 @@ export interface PublicIdentityUser {
   emailVerificationStatus: EmailVerificationStatus;
   twoFactorEnabled: boolean;
   twoFactorEnabledAt: Date | null;
+  twoFactorMethod: 'TOTP' | 'SMS' | null;
   accountStatus: AccountStatus;
   profile: IdentityProfile | null;
   roles: Role[];
