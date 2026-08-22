@@ -80,7 +80,7 @@ const membershipsQuery = z
     q: z.string().trim().max(120).optional(),
     plan: z.enum(['STARTER', 'PRO', 'ELITE']).optional(),
     status: z
-      .enum(['ACTIVE', 'PAST_DUE', 'CANCELLED', 'CANCEL_AT_PERIOD_END', 'TRIALING', 'EXPIRED'])
+      .enum(['INCOMPLETE', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'CANCEL_AT_PERIOD_END', 'TRIALING', 'SUSPENDED', 'EXPIRED'])
       .optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),

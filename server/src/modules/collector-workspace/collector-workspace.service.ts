@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -12,11 +13,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { OutboxWriter } from '../outbox/application/outbox-writer.service';
 import { customerResourceEvent, eventType } from '../outbox/domain/domain-event';
-import {
-  collectorPlanRegistry,
-  collectorUsageFor,
-  planJson,
-} from './collector-entitlements';
+import { collectorUsageFor } from './collector-entitlements';
+import { CollectorMembershipService } from '../providers/application/collector-membership.service';
 
 const pipeline = [
   'DRAFT',
@@ -134,6 +132,7 @@ export class CollectorWorkspaceService {
     private readonly db: PrismaService,
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
+    @Optional() private readonly membership?: CollectorMembershipService,
   ) {}
 
   async overview(userId: string) {
@@ -239,11 +238,11 @@ export class CollectorWorkspaceService {
   }
 
   async subscription(userId: string) {
-    await this.ensurePlans();
+    if (this.membership) return this.membership.projection(userId);
     const [plans, current] = await Promise.all([
       this.db.collectorPlan.findMany({
         where: { active: true },
-        orderBy: { monthlyPriceMinor: 'asc' },
+        orderBy: [{ sortOrder: 'asc' }, { monthlyPriceMinor: 'asc' }],
       }),
       this.db.collectorSubscription.findFirst({
         where: {
@@ -295,10 +294,10 @@ export class CollectorWorkspaceService {
   }
 
   async plans() {
-    await this.ensurePlans();
+    if (this.membership) return this.membership.plans();
     const plans = await this.db.collectorPlan.findMany({
       where: { active: true },
-      orderBy: { monthlyPriceMinor: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { monthlyPriceMinor: 'asc' }],
     });
     return plans.map((plan) => ({
       id: plan.code,
@@ -316,10 +315,16 @@ export class CollectorWorkspaceService {
     userId: string,
     action: 'CHECKOUT' | 'PORTAL' | 'CHANGE_PLAN' | 'CANCEL' | 'RESUME',
     planCode?: string,
-  ): Promise<never> {
-    // No billing provider is configured in this environment. Keeping these
-    // commands backend-owned prevents the UI from ever fabricating payment or
-    // subscription state; a provider webhook must be the source of truth.
+    idempotencyKey?: string,
+  ): Promise<unknown> {
+    if (this.membership) {
+      return this.membership.action(
+        userId,
+        action,
+        planCode as 'STARTER' | 'PRO' | 'ELITE' | undefined,
+        idempotencyKey ?? '',
+      );
+    }
     void userId;
     void planCode;
     throw new ServiceUnavailableException({
@@ -633,25 +638,6 @@ export class CollectorWorkspaceService {
           'Only your current editable draft can be deleted. Refresh and try again.',
       });
     return { submissionId, deleted: true };
-  }
-
-  private async ensurePlans() {
-    for (const config of collectorPlanRegistry)
-      await this.db.collectorPlan.upsert({
-        where: { code: config.code },
-        create: {
-          code: config.code,
-          displayName: config.displayName,
-          monthlyPriceMinor: config.monthlyPriceMinor,
-          entitlements: planJson(config.entitlements),
-        },
-        update: {
-          displayName: config.displayName,
-          monthlyPriceMinor: config.monthlyPriceMinor,
-          entitlements: planJson(config.entitlements),
-          active: true,
-        },
-      });
   }
 
   private async usageFor(

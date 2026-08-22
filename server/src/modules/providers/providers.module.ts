@@ -14,6 +14,7 @@ import { BankConnectionService } from './application/external-provider-boundarie
 import { StripeClientFactory } from './application/stripe-provider.client';
 import { StripeConnectPayoutService } from './application/stripe-connect-payout.service';
 import { StripeIdentityVerificationService } from './application/stripe-identity.service';
+import { CollectorMembershipService } from './application/collector-membership.service';
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { ProvidersController } from './http/providers.controller';
     StripeClientFactory,
     StripeConnectPayoutService,
     StripeIdentityVerificationService,
+    CollectorMembershipService,
   ],
   exports: [
     ProviderCryptoService,
@@ -44,6 +46,7 @@ import { ProvidersController } from './http/providers.controller';
     StripeClientFactory,
     StripeConnectPayoutService,
     StripeIdentityVerificationService,
+    CollectorMembershipService,
   ],
 })
 export class ProvidersModule {}

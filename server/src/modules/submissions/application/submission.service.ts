@@ -95,7 +95,6 @@ export class SubmissionService {
     key: string,
   ) {
     await this.capabilities?.require(actor, 'LIST_ASSET');
-    await this.assertCollectorCapacity(actor);
     return this.mutate(
       actor,
       'submission.create',
@@ -105,6 +104,11 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
+        // Serialize capacity checks per collector inside the write transaction.
+        // This prevents two concurrent creates from both observing the same
+        // remaining slot and exceeding the authoritative plan limit.
+        await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`collector-capacity:${actor.userId}`}))`;
+        await this.assertCollectorCapacity(actor, db);
         assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
         const submission = await db.assetSubmission.create({
@@ -170,10 +174,10 @@ export class SubmissionService {
     );
   }
 
-  private async assertCollectorCapacity(actor: Actor) {
+  private async assertCollectorCapacity(actor: Actor, db: Db) {
     if (!actor.roles.includes('COLLECTOR') || actor.roles.includes('ADMIN'))
       return;
-    const subscription = await this.prisma.collectorSubscription.findFirst({
+    const subscription = await db.collectorSubscription.findFirst({
       where: {
         userId: actor.userId,
         status: { in: ['TRIALING', 'ACTIVE', 'CANCEL_AT_PERIOD_END'] },
@@ -190,7 +194,7 @@ export class SubmissionService {
     }
     const entitlements = subscription.plan.entitlements;
     const usage = await collectorUsageFor(
-      this.prisma,
+      db,
       actor.userId,
       entitlements,
     );

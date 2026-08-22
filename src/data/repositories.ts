@@ -1442,7 +1442,7 @@ export interface CollectorWorkspaceRepository {
   subscriptionAction(
     action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME",
     planCode?: "STARTER" | "PRO" | "ELITE",
-  ): Promise<never>;
+  ): Promise<CollectorMembershipActionResult>;
   listVaults(): Promise<CollectorVaultProjection[]>;
   selectVault(submissionId: string, vaultId: string): Promise<unknown>;
   addShipment(
@@ -1460,19 +1460,30 @@ export type CollectorSubscriptionProjection = {
     id: string;
     code: "STARTER" | "PRO" | "ELITE";
     displayName: string;
+    description: string;
     status: string;
+    currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
     entitlements: Record<string, unknown>;
     provider: string | null;
+    paymentMethod: {
+      brand: string;
+      last4: string;
+      expiryMonth?: number;
+      expiryYear?: number;
+    } | null;
   } | null;
   plans: Array<{
     code: "STARTER" | "PRO" | "ELITE";
     displayName: string;
+    description: string;
     monthlyPriceMinor: string;
     currency: string;
+    billingInterval: string;
     entitlements: Record<string, unknown>;
     recommended: boolean;
+    availability: string;
   }>;
   usage: {
     activeCollectibles: number;
@@ -1503,9 +1514,21 @@ export type CollectorSubscriptionProjection = {
   };
 };
 
+export type CollectorMembershipActionResult = {
+  action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
+  status: "REDIRECT" | "PROCESSING" | "COMPLETED";
+  checkoutUrl?: string;
+  portalUrl?: string;
+  planCode?: "STARTER" | "PRO" | "ELITE";
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+};
+
 export type CollectorPlanProjection = {
   id: "STARTER" | "PRO" | "ELITE";
+  code: "STARTER" | "PRO" | "ELITE";
   displayName: string;
+  description: string;
   monthlyPriceMinor: string;
   currency: string;
   billingInterval: string;

@@ -3505,9 +3505,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           CANCEL: "cancel",
           RESUME: "resume",
         } as const;
-        return client.request<never>(`/collector-workspace/subscription/${paths[action]}`, {
+        return client.request<import("@/data/repositories").CollectorMembershipActionResult>(`/collector-workspace/subscription/${paths[action]}`, {
           method: "POST",
           body: planCode ? { planCode } : undefined,
+          headers: { "Idempotency-Key": crypto.randomUUID() },
         });
       },
       async listVaults() {

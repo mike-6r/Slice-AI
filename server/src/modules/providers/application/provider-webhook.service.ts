@@ -11,6 +11,7 @@ import { WalletMovementService } from './wallet-movement.service';
 import { BankConnectionService, providerUnavailable, type ActiveProviderCode } from './external-provider-boundaries';
 import { StripeClientFactory } from './stripe-provider.client';
 import { StripeConnectPayoutService } from './stripe-connect-payout.service';
+import { CollectorMembershipService } from './collector-membership.service';
 
 type Provider = ActiveProviderCode;
 
@@ -30,6 +31,7 @@ export class ProviderWebhookService {
     private readonly stripeFactory: StripeClientFactory,
     private readonly bankLinks: BankConnectionService,
     private readonly connectPayouts: StripeConnectPayoutService,
+    private readonly memberships: CollectorMembershipService,
   ) {}
 
   async receive(input: {
@@ -148,6 +150,14 @@ export class ProviderWebhookService {
   }
 
   private async processStripeMovement(provider: Provider, type: string, payload: Record<string, unknown>, eventId: string, occurredAt: Date, requestId: string) {
+    if (type === 'checkout.session.completed' && payload.mode === 'subscription') {
+      await this.memberships.handleWebhook(type, payload, eventId, occurredAt);
+      return;
+    }
+    if (type.startsWith('customer.subscription.') || type === 'invoice.paid' || type === 'invoice.payment_failed' || type === 'invoice.payment_action_required') {
+      await this.memberships.handleWebhook(type, payload, eventId, occurredAt);
+      return;
+    }
     const connectEffect = await this.connectPayouts.processWebhook(provider as 'STRIPE_SANDBOX' | 'STRIPE_LIVE', type, payload);
     if (connectEffect) {
       if (connectEffect.action === 'PROCESSING') await this.movements.processingFromProvider({ movementId: connectEffect.movementId, requestId });

@@ -77,6 +77,9 @@ const configSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(16).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(16).optional(),
+  STRIPE_MEMBERSHIP_STARTER_PRICE_ID: z.string().trim().min(1).optional(),
+  STRIPE_MEMBERSHIP_PRO_PRICE_ID: z.string().trim().min(1).optional(),
+  STRIPE_MEMBERSHIP_ELITE_PRICE_ID: z.string().trim().min(1).optional(),
   XIMILAR_API_TOKEN: z.string().min(1).optional(),
   XIMILAR_ENABLED: z.enum(['true', 'false']).default('false'),
   XIMILAR_CARD_GRADING_ENABLED: z.enum(['true', 'false']).default('false'),
@@ -368,6 +371,9 @@ export type AppConfig = {
   stripeSecretKey?: string;
   stripePublishableKey?: string;
   stripeWebhookSecret?: string;
+  stripeMembershipStarterPriceId?: string;
+  stripeMembershipProPriceId?: string;
+  stripeMembershipElitePriceId?: string;
   ximilarApiToken?: string;
   ximilarEnabled?: boolean;
   ximilarCardGradingEnabled?: boolean;
@@ -795,6 +801,9 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     stripeSecretKey: parsed.STRIPE_SECRET_KEY,
     stripePublishableKey: parsed.STRIPE_PUBLISHABLE_KEY,
     stripeWebhookSecret: parsed.STRIPE_WEBHOOK_SECRET,
+    stripeMembershipStarterPriceId: parsed.STRIPE_MEMBERSHIP_STARTER_PRICE_ID,
+    stripeMembershipProPriceId: parsed.STRIPE_MEMBERSHIP_PRO_PRICE_ID,
+    stripeMembershipElitePriceId: parsed.STRIPE_MEMBERSHIP_ELITE_PRICE_ID,
     ximilarApiToken: parsed.XIMILAR_API_TOKEN,
     ximilarEnabled: parsed.XIMILAR_ENABLED === 'true',
     ximilarCardGradingEnabled: parsed.XIMILAR_CARD_GRADING_ENABLED === 'true',

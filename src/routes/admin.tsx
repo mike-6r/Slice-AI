@@ -284,11 +284,13 @@ function AdminConsole() {
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const membershipStatus = [
+    "INCOMPLETE",
     "ACTIVE",
     "PAST_DUE",
     "CANCELLED",
     "CANCEL_AT_PERIOD_END",
     "TRIALING",
+    "SUSPENDED",
     "EXPIRED",
   ].includes(reviewStatus ?? "")
     ? reviewStatus
@@ -2744,7 +2746,7 @@ function AccountsWorkspace({
                   <strong>More filters</strong>
                   <span>Refine the directory without leaving the table.</span>
                 </div>
-                <AdminSelect label="Billing status" value={draftFilters.membershipStatus} onChange={(value) => updateDraft("membershipStatus", value)} options={[["", "Billing: All"], ["ACTIVE", "Active"], ["TRIALING", "Trialing"], ["PAST_DUE", "Past due"], ["CANCEL_AT_PERIOD_END", "Canceling"], ["EXPIRED", "Expired"]]} />
+                <AdminSelect label="Billing status" value={draftFilters.membershipStatus} onChange={(value) => updateDraft("membershipStatus", value)} options={[["", "Billing: All"], ["INCOMPLETE", "Payment setup"], ["ACTIVE", "Active"], ["TRIALING", "Trialing"], ["PAST_DUE", "Past due"], ["SUSPENDED", "Suspended"], ["CANCEL_AT_PERIOD_END", "Canceling"], ["EXPIRED", "Expired"]]} />
                 <AdminSelect label="Last active" value={draftFilters.lastActiveWindow} onChange={(value) => updateDraft("lastActiveWindow", value)} options={[["", "Last active: Any time"], ["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["inactive", "Inactive 30+ days"]]} />
                 <div className="admin-date-range">
                   <input aria-label="Joined from" type="date" value={draftFilters.joinedFrom} onChange={(event) => updateDraft("joinedFrom", event.target.value)} />

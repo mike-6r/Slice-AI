@@ -2529,7 +2529,7 @@ export class AdminService {
       this.db.collectorSubscription.findMany({
         where: {
           ...baseWhere,
-          status: { notIn: ['CANCELLED', 'EXPIRED'] },
+          status: { in: ['ACTIVE', 'TRIALING', 'CANCEL_AT_PERIOD_END'] },
         },
         select: { plan: { select: { code: true } } },
       }),
@@ -2558,10 +2558,12 @@ export class AdminService {
     );
     const statusOverview = {
       ACTIVE: 0,
+      INCOMPLETE: 0,
       PAST_DUE: 0,
       CANCELLED: 0,
       CANCEL_AT_PERIOD_END: 0,
       TRIALING: 0,
+      SUSPENDED: 0,
       EXPIRED: 0,
     } as Record<string, number>;
     for (const row of statusRows) statusOverview[row.status] = row._count._all;
@@ -2598,7 +2600,15 @@ export class AdminService {
       if (monthlyPercent !== null && monthlyPercent >= 80) warnings.push('Monthly submission allowance is at least 80% used.');
       if (concurrentAtLimit) warnings.push('Concurrent intake capacity is currently full.');
       const providerConfigured = Boolean(item.provider && item.provider !== 'STAGING_DEMO');
-      const billingState = item.status === 'PAST_DUE' ? 'PAST_DUE' : providerConfigured ? 'CURRENT' : 'DISABLED';
+      const billingState = item.status === 'PAST_DUE'
+        ? 'PAST_DUE'
+        : item.status === 'SUSPENDED'
+          ? 'SUSPENDED'
+          : item.status === 'INCOMPLETE'
+            ? 'PENDING'
+            : providerConfigured
+              ? 'CURRENT'
+              : 'DISABLED';
       return {
         id: item.id,
         collector: {
@@ -2612,7 +2622,7 @@ export class AdminService {
           planName: item.plan.displayName,
           status: item.status,
           source: item.provider === 'STAGING_DEMO' ? 'STAGING_DEMO' : item.provider ? 'PROVIDER' : 'MANUAL',
-          currentPeriodStart: null,
+          currentPeriodStart: item.currentPeriodStart?.toISOString() ?? null,
           currentPeriodEnd: item.currentPeriodEnd?.toISOString() ?? null,
           cancelAtPeriodEnd: item.cancelAtPeriodEnd,
           trialEnd: null,

@@ -517,11 +517,13 @@ enum CollectorPlanCode {
 }
 
 enum CollectorSubscriptionStatus {
+  INCOMPLETE
   TRIALING
   ACTIVE
   PAST_DUE
   CANCEL_AT_PERIOD_END
   CANCELLED
+  SUSPENDED
   EXPIRED
 }
 
@@ -1680,8 +1682,11 @@ model CollectorPlan {
   id                String                  @id @default(cuid())
   code              CollectorPlanCode       @unique
   displayName       String
+  description       String                  @default("")
   monthlyPriceMinor BigInt
   currency          String                  @default("GBP")
+  billingInterval   String                  @default("month")
+  sortOrder         Int                     @default(0)
   entitlements      Json
   active            Boolean                 @default(true)
   createdAt         DateTime                @default(now())
@@ -1690,20 +1695,48 @@ model CollectorPlan {
 }
 
 model CollectorSubscription {
-  id                     String                      @id @default(cuid())
-  userId                 String
-  planId                 String
-  status                 CollectorSubscriptionStatus @default(ACTIVE)
-  provider               String?
-  providerSubscriptionId String?                     @unique
-  currentPeriodEnd       DateTime?
-  cancelAtPeriodEnd      Boolean                     @default(false)
-  createdAt              DateTime                    @default(now())
-  updatedAt              DateTime                    @updatedAt
-  user                   User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  plan                   CollectorPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  id                         String                      @id @default(cuid())
+  userId                     String
+  planId                     String
+  status                     CollectorSubscriptionStatus @default(INCOMPLETE)
+  provider                   String?
+  providerCustomerId         String?
+  providerSubscriptionId     String?                     @unique
+  providerCheckoutSessionId  String?                     @unique
+  providerPriceId            String?
+  currentPeriodStart         DateTime?
+  currentPeriodEnd           DateTime?
+  cancelAtPeriodEnd          Boolean                     @default(false)
+  paymentMethodBrand         String?
+  paymentMethodLast4         String?
+  paymentMethodExpMonth      Int?
+  paymentMethodExpYear       Int?
+  lastProviderEventCreatedAt DateTime?
+  lastProviderEventIdHash    String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan                       CollectorPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  statusHistory              CollectorSubscriptionStatusHistory[]
 
   @@index([userId, status, updatedAt])
+  @@index([provider, providerCustomerId])
+  @@index([lastProviderEventCreatedAt])
+}
+
+model CollectorSubscriptionStatusHistory {
+  id                  String                      @id @default(cuid())
+  subscriptionId      String
+  fromStatus          CollectorSubscriptionStatus?
+  toStatus            CollectorSubscriptionStatus
+  source              String
+  providerEventIdHash String?
+  reason              String?
+  createdAt           DateTime                    @default(now())
+  subscription        CollectorSubscription       @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt, id])
+  @@index([providerEventIdHash])
 }
 
 /// Customer-safe intake destinations. Facility/security metadata is kept out

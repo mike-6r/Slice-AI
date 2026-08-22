@@ -5,20 +5,24 @@ import "@/styles/admin-memberships.css";
 
 const tabs = [
   ["", "All"],
+  ["INCOMPLETE", "Payment setup"],
   ["ACTIVE", "Active"],
   ["PAST_DUE", "Past due"],
   ["TRIALING", "Trialing"],
   ["CANCEL_AT_PERIOD_END", "Cancelling"],
   ["CANCELLED", "Cancelled"],
+  ["SUSPENDED", "Suspended"],
   ["EXPIRED", "Expired"],
 ] as const;
 const statusLabel = (status: string) =>
   ({
+    INCOMPLETE: "Payment setup",
     ACTIVE: "Active",
     PAST_DUE: "Past due",
     CANCEL_AT_PERIOD_END: "Cancelling",
     CANCELLED: "Cancelled",
     TRIALING: "Trialing",
+    SUSPENDED: "Suspended",
     EXPIRED: "Expired",
   })[status] ?? status.replaceAll("_", " ");
 const planLabel = (code: string) =>
@@ -196,7 +200,9 @@ export function AdminMemberships({
           >
             <option value="">Billing: All</option>
             <option value="CURRENT">Current</option>
+            <option value="PENDING">Payment setup</option>
             <option value="PAST_DUE">Past due</option>
+            <option value="SUSPENDED">Suspended</option>
             <option value="DISABLED">Not configured</option>
           </select>
           <select

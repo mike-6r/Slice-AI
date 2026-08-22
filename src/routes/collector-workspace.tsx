@@ -163,8 +163,13 @@ function CollectorWorkspace() {
       action: "CHECKOUT" | "PORTAL" | "CHANGE_PLAN" | "CANCEL" | "RESUME";
       planCode?: "STARTER" | "PRO" | "ELITE";
     }) => repositories.collectorWorkspace.subscriptionAction(action, planCode),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["collector-workspace", "subscription"] }),
+    onSuccess: (result) => {
+      if (result.checkoutUrl || result.portalUrl) {
+        window.location.assign(result.checkoutUrl ?? result.portalUrl!);
+        return;
+      }
+      void client.invalidateQueries({ queryKey: ["collector-workspace", "subscription"] });
+    },
   });
   const deleteDraft = useMutation({
     mutationFn: ({ id, version }: { id: string; version: number }) =>
@@ -1600,6 +1605,7 @@ function SubscriptionPage({
   const activePlan = current
     ? (data.plans.find((plan) => plan.code === current.code) ?? null)
     : null;
+  const firstAvailablePlan = data.plans.find((plan) => plan.availability === "AVAILABLE") ?? null;
   return (
     <WorkspacePage
       title="Collector Membership"
@@ -1639,8 +1645,8 @@ function SubscriptionPage({
             {!current ? (
               <button
                 className="collector-button collector-button--primary"
-                onClick={() => action({ action: "CHECKOUT", planCode: "PRO" })}
-                disabled={actionPending}
+                onClick={() => firstAvailablePlan && action({ action: "CHECKOUT", planCode: firstAvailablePlan.code })}
+                disabled={actionPending || !firstAvailablePlan || !data.billing.configured}
               >
                 Choose a plan <ArrowRight aria-hidden="true" />
               </button>
@@ -1739,6 +1745,11 @@ function BillingDetails({
   actionPending: boolean;
 }) {
   const current = data.current;
+  const canManage = Boolean(
+    data.billing.configured &&
+      current &&
+      ["TRIALING", "ACTIVE", "CANCEL_AT_PERIOD_END"].includes(current.status),
+  );
   return (
     <article className="collector-panel collector-membership-billing">
       <PanelHeader title="Billing & plan details" />
@@ -1758,7 +1769,9 @@ function BillingDetails({
           <dd>
             {data.billing.paymentMethod
               ? `${data.billing.paymentMethod.brand} **** ${data.billing.paymentMethod.last4}`
-              : "Managed securely by Slice billing"}
+              : current
+                ? "Manage securely in Stripe"
+                : "Added securely during checkout"}
           </dd>
         </div>
       </dl>
@@ -1767,7 +1780,7 @@ function BillingDetails({
         <button
           className="collector-button"
           onClick={() => action({ action: "PORTAL" })}
-          disabled={actionPending || !data.billing.configured}
+          disabled={actionPending || !canManage}
         >
           Manage billing <ArrowRight aria-hidden="true" />
         </button>
@@ -1779,14 +1792,14 @@ function BillingDetails({
               planCode: current?.code === "STARTER" ? "PRO" : "ELITE",
             })
           }
-          disabled={actionPending || !data.billing.configured}
+          disabled={actionPending || !canManage}
         >
           Change plan <ArrowRight aria-hidden="true" />
         </button>
         <button
           className="collector-button"
           onClick={() => action({ action: current?.cancelAtPeriodEnd ? "RESUME" : "CANCEL" })}
-          disabled={actionPending || !data.billing.configured}
+          disabled={actionPending || !canManage}
         >
           {current?.cancelAtPeriodEnd ? "Resume membership" : "Cancel at period end"}{" "}
           <ArrowRight aria-hidden="true" />
@@ -1794,7 +1807,7 @@ function BillingDetails({
       </div>
       {!data.billing.configured ? (
         <small className="collector-membership-billing-note">
-          Billing actions will be available when hosted membership billing is connected.
+          Hosted Stripe billing is not configured for this environment.
         </small>
       ) : null}
     </article>
@@ -1816,6 +1829,8 @@ function PlanCard({
   actionPending: boolean;
 }) {
   const isCurrent = current?.code === plan.code;
+  const unavailable = plan.availability !== "AVAILABLE";
+  const changePlan = Boolean(current && !isCurrent);
   return (
     <article className={`collector-plan-card ${isCurrent ? "is-current" : ""}`}>
       <div className="collector-plan-card__heading">
@@ -1832,13 +1847,15 @@ function PlanCard({
       </ul>
       <button
         className={`collector-button ${isCurrent ? "collector-button--primary" : ""}`}
-        disabled={isCurrent || actionPending}
-        onClick={() => action({ action: "CHECKOUT", planCode: plan.code })}
+        disabled={isCurrent || unavailable || actionPending}
+        onClick={() => action({ action: changePlan ? "CHANGE_PLAN" : "CHECKOUT", planCode: plan.code })}
       >
         {isCurrent
-          ? "Current plan"
-          : plan.code === "ELITE"
-            ? "Upgrade"
+          ? current?.status === "INCOMPLETE" ? "Processing" : "Current plan"
+          : unavailable
+            ? "Unavailable"
+            : changePlan
+            ? "Change plan"
             : `Choose ${plan.displayName.replace("Collector ", "")}`}{" "}
         <ArrowRight aria-hidden="true" />
       </button>
@@ -2058,6 +2075,10 @@ function subscriptionStatus(status: string, cancelAtPeriodEnd: boolean) {
   if (status === "PAST_DUE") return "Payment issue";
   if (status === "TRIALING") return "Trial active";
   if (status === "ACTIVE") return "Active";
+  if (status === "INCOMPLETE") return "Payment setup in progress";
+  if (status === "SUSPENDED") return "Membership suspended";
+  if (status === "CANCELLED") return "Membership ended";
+  if (status === "EXPIRED") return "Membership expired";
   return "Membership paused";
 }
 

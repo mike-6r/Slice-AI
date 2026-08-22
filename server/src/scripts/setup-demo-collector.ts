@@ -31,7 +31,6 @@ import {
   demoAccounts,
   requiredSecret,
 } from './staging-demo-safety';
-import { collectorPlanRegistry, planJson } from '../modules/collector-workspace/collector-entitlements';
 
 /** Roles owned by the dedicated Collector fixture. Review authority is separate. */
 export const COLLECTOR_FIXTURE_ROLES = ['COLLECTOR'] as const;
@@ -629,7 +628,7 @@ export async function runCollectorDemoSetup() {
     );
     await ensureCollectorRoles(access, db, admin, collector.userId);
     await ensureCollectorRoles(access, db, admin, collectorB.userId);
-    await ensureCollectorEntitlementsAndVaults(db, collector.userId);
+    await ensureCollectorEntitlementsAndVaults(db);
     const collectorReviewer = await loginActor(auth, demoAccounts.collector);
     await archiveRetiredDemoAssets(db);
     await archiveRetiredDemoSubmissions(db, collector.userId);
@@ -820,14 +819,17 @@ async function loginActor(
   return auth.actor(session.accessToken);
 }
 
-async function ensureCollectorEntitlementsAndVaults(db: PrismaService, userId: string) {
-  const planIds = new Map<string, string>();
-  for (const config of collectorPlanRegistry) {
-    const plan = await db.collectorPlan.upsert({ where: { code: config.code }, create: { code: config.code, displayName: config.displayName, monthlyPriceMinor: config.monthlyPriceMinor, entitlements: planJson(config.entitlements) }, update: { displayName: config.displayName, monthlyPriceMinor: config.monthlyPriceMinor, entitlements: planJson(config.entitlements), active: true } });
-    planIds.set(config.code, plan.id);
+async function ensureCollectorEntitlementsAndVaults(db: PrismaService) {
+  const plans = await db.collectorPlan.findMany({
+    where: { code: { in: ['STARTER', 'PRO', 'ELITE'] }, active: true },
+    select: { code: true },
+  });
+  if (plans.length !== 3) {
+    throw new Error('Collector membership plans are missing. Apply the membership migration before running the demo setup.');
   }
-  const current = await db.collectorSubscription.findFirst({ where: { userId }, orderBy: { updatedAt: 'desc' } });
-  if (!current) await db.collectorSubscription.create({ data: { userId, planId: planIds.get('PRO')!, status: 'ACTIVE', provider: 'STAGING_DEMO', currentPeriodEnd: new Date(Date.now() + 30 * 86400000) } });
+  // Membership plans are migration-owned and membership state is Stripe-owned.
+  // This fixture may provision vault reference data, but it must never create
+  // or reactivate a fake paid subscription.
   const destinations = [
     ['Slice London Vault', 'London', 'GB', 'Ship using a tracked service. Include the intake reference on the outer packaging.', 'Slice Collectable\nIntake team\nLondon, United Kingdom'],
     ['Slice US East Intake', 'US East', 'US', 'Use protective packaging and a tracked service. Include the intake reference with your shipment.', 'Slice Collectable\nUS East Intake\nUnited States'],

@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -97,7 +98,11 @@ export class CollectorWorkspaceController {
   }
 
   @Post('subscription/checkout')
-  checkout(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+  checkout(
+    @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = z
       .object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) })
       .strict()
@@ -106,19 +111,29 @@ export class CollectorWorkspaceController {
       this.collectorId(request),
       'CHECKOUT',
       input.planCode,
+      idempotencyKey,
     );
   }
 
   @Post('subscription/portal')
-  billingPortal(@Req() request: AuthenticatedRequest) {
+  billingPortal(
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.workspace.subscriptionAction(
       this.collectorId(request),
       'PORTAL',
+      undefined,
+      idempotencyKey,
     );
   }
 
   @Post('subscription/change-plan')
-  changePlan(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+  changePlan(
+    @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = z
       .object({ planCode: z.enum(['STARTER', 'PRO', 'ELITE']) })
       .strict()
@@ -127,22 +142,33 @@ export class CollectorWorkspaceController {
       this.collectorId(request),
       'CHANGE_PLAN',
       input.planCode,
+      idempotencyKey,
     );
   }
 
   @Post('subscription/cancel')
-  cancelSubscription(@Req() request: AuthenticatedRequest) {
+  cancelSubscription(
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.workspace.subscriptionAction(
       this.collectorId(request),
       'CANCEL',
+      undefined,
+      idempotencyKey,
     );
   }
 
   @Post('subscription/resume')
-  resumeSubscription(@Req() request: AuthenticatedRequest) {
+  resumeSubscription(
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.workspace.subscriptionAction(
       this.collectorId(request),
       'RESUME',
+      undefined,
+      idempotencyKey,
     );
   }
 

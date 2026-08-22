@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -13,6 +14,7 @@ import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
 import { MarketProviderRegistry } from '../market/market-provider.registry';
 import type { MarketIdentity, ProviderObservation } from '../market/market-provider.ports';
+import { CollectorMembershipService } from '../providers/application/collector-membership.service';
 
 export type MarketResearchInput = {
   categoryId: string;
@@ -67,9 +69,13 @@ export class CollectibleMarketResearchService {
     private readonly db: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly providers: MarketProviderRegistry,
+    @Optional() private readonly membership?: CollectorMembershipService,
   ) {}
 
   async research(actor: Actor, input: MarketResearchInput, requestId: string) {
+    if (actor.roles.includes('COLLECTOR') && !actor.roles.includes('ADMIN')) {
+      await this.membership?.assertMarketResearchAccess(actor.userId);
+    }
     const identity = canonicalIdentity(input);
     const identityHash = hashIdentity(identity);
     if (!input.refresh) {
