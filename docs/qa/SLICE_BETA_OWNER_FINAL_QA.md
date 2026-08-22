@@ -64,8 +64,8 @@ Read-only database inspection showed:
 | BLOCKED | 16 |
 | N/A | 4 |
 | Critical open bugs | 0 |
-| High open bugs | 1 |
-| Medium open bugs | 1 |
+| High open bugs | 0 |
+| Medium open bugs | 0 |
 
 ## QA Case Results
 
