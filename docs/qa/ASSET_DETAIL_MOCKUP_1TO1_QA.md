@@ -66,34 +66,58 @@ No new provider, valuation, AI, ownership, or trading authority was introduced.
 
 ## Browser QA record
 
-To be completed against the deployed staging release:
+Deployed release: `/opt/slice/releases/20260822-asset-detail-a5d8d82`<br>
+Browser session: guest/read-only staging session
 
 | Check | Result |
 | --- | --- |
-| Marketplace → asset navigation | PENDING |
-| Public asset detail loads | PENDING |
-| Hero composition and page width | PENDING |
-| Ownership & Trading rail | PENDING |
-| Buy / Sell workflow links | PENDING |
-| Ownership reconciliation display | PENDING |
-| New to Slice strip and education link | PENDING |
-| Real history / empty-history state | PENDING |
-| Slice Grade collapsed evidence and lightbox | PENDING |
-| External reference disclaimer | PENDING |
-| Similar Collectibles rail | PENDING |
-| 390×844 | PENDING |
-| 768×1024 | PENDING |
-| 1366×768 | PENDING |
-| 1920×1080 | PENDING |
-| 2560×1440 | PENDING |
-| Keyboard focus and accessible names | PENDING |
-| Console errors/warnings | PENDING |
-| Unexpected 401/403/429/500 | PENDING |
-| Duplicate provider calls | PENDING |
-| PriceCharting/Ximilar calls on render | PENDING |
+| Marketplace → asset navigation | PASS — marketplace and Umbreon detail both loaded |
+| Public asset detail loads | PASS — identity, media, valuation, market and lower panels rendered |
+| Hero composition and page width | PASS — three-column desktop hero and stacked responsive workspace |
+| Ownership & Trading rail | PASS — market state, price, supply, actions, position, order book and trades rendered |
+| Buy / Sell workflow links | PASS — Buy is linked to `/buy/:slug`; Sell is gated for unauthenticated users |
+| Ownership reconciliation display | PASS — real supply/availability shown; absent breakdown projection is omitted rather than invented |
+| New to Slice strip and education link | PASS — four real explanatory steps and `/how-it-works` link |
+| Real history / empty-history state | PASS — zero-point history renders the truthful empty state and no movement percentage |
+| Slice Grade collapsed evidence and lightbox | PASS — collapsed by default; four evidence images open in the existing accessible lightbox |
+| External reference disclaimer | PASS — reference-only copy shown; source amount is `$2,151.75 USD` |
+| Similar Collectibles rail | PASS — real marketplace projection rendered with disabled arrows when there is no overflow |
+| 390×844 | PASS — no horizontal overflow; captured screenshot |
+| 768×1024 | PASS — no horizontal overflow |
+| 1366×768 | PASS — no horizontal overflow |
+| 1920×1080 | PASS — no horizontal overflow |
+| 2560×1440 | PASS — no horizontal overflow |
+| Keyboard focus and accessible names | PASS — skip link, named controls, labelled media, regions, and keyboard focus verified |
+| Console errors/warnings | PASS — browser error/warning log empty |
+| Unexpected 401/403/429/500 | PASS — none observed; expected guest position lookup returned 404 `POSITION_NOT_FOUND` |
+| Duplicate provider calls | PASS — no direct provider endpoint calls observed |
+| PriceCharting/Ximilar calls on render | PASS — 0 direct provider calls; persisted backend projection used |
 | Mutation count | 0 |
+
+### Browser data snapshot
+
+The deployed Umbreon projection remained truthful to staging data during this pass:
+
+- Slice valuation: `£1,647.17` from the authoritative GBP projection.
+- External reference: `$2,151.75 USD` from the authoritative PriceCharting reference; it is not
+  presented as a Slice order or completed-sale record.
+- Ownership: `1,000` total units, `1,000` issued, `9` available; market `OPEN`.
+- History: zero real points, so the page displays `No market history yet` and
+  `No trading history yet`.
+- Slice Grade: `4 — Very Good`, with the real centering/corners/edges/surface evidence.
+- The guest session has no settled position, so Buy remains available and Sell is correctly
+  gated with a plain-language explanation.
+
+The API client now uses `cache: "no-store"` for JSON and stream reads. This prevents a browser
+revalidation `304` from being treated as an asset-load failure when the proxy does not provide a
+body for the revalidated response.
+
+The browser QA service captured the requested mobile viewport. Desktop/tablet screenshot capture
+timed out in the browser service, but DOM geometry checks passed at all requested widths. The
+mobile capture is stored at `docs/qa/screenshots/asset-detail-390-staging-final.png`.
 
 ## Final status
 
-Implementation and automated QA are complete. Deployment/browser results must be recorded
-above before calling the visual release gate complete.
+Visual release gate: PASS with truthful data-state qualifications above. The composition is
+deployed and the browser QA is complete; no domain state or provider operation was created by
+this pass.
