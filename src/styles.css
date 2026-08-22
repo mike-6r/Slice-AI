@@ -31992,6 +31992,10 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 /* Asset detail true 1:1 reconstruction. This is the final route-scoped
    composition: a compact hero, a single ownership rail, and a measured lower
    information row. All values remain projections from the asset APIs. */
+body:has(.asset-detail-page) .main-navigation > div.hidden {
+  display: none;
+}
+
 .asset-detail-page .asset-redesign {
   width: min(calc(100% - clamp(2rem, 4vw, 5rem)), 110rem);
   max-width: 110rem;
