@@ -31943,3 +31943,48 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   }
 }
+
+/* Marketplace card overflow guardrails. The card with the longest valuation
+   and listing copy must be allowed to grow to its content instead of shrinking
+   a grid track and letting the lower action stack clip into it. */
+.markets-page .market-asset-grid {
+  grid-auto-rows: minmax(min-content, 1fr);
+}
+
+.markets-page .market-investment-card,
+.markets-page .market-card-body,
+.markets-page .market-card-heading,
+.markets-page .market-card-valuation,
+.markets-page .market-card-market-grid,
+.markets-page .market-card-ownership {
+  min-width: 0;
+}
+
+.markets-page .market-investment-card {
+  min-height: min-content;
+}
+
+.markets-page .market-card-body {
+  min-height: min-content;
+}
+
+.markets-page .market-card-valuation > div,
+.markets-page .market-card-market-grid > div,
+.markets-page .market-card-ownership > span {
+  min-width: 0;
+}
+
+.markets-page .market-card-market-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.markets-page .market-card-market-grid strong,
+.markets-page .market-card-market-grid small,
+.markets-page .market-card-reference small,
+.markets-page .market-card-ownership strong,
+.markets-page .market-card-ownership small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
