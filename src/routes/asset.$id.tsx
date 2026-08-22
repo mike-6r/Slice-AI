@@ -191,11 +191,6 @@ function AssetPage() {
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
   const lifecycle = asset.marketLifecycle;
   const initialOffering = asset.initialOffering;
-  const initialOfferingOpen = Boolean(
-    initialOffering &&
-    ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status) &&
-    initialOffering.inventory,
-  );
   const history = historyQuery.data ?? [];
   const currentValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
   const currentValueCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
@@ -221,25 +216,8 @@ function AssetPage() {
   const notYetTradeable = lifecycle
     ? lifecycle.phase !== "LIVE"
     : !issuanceQuery.isLoading && issuanceQuery.data === null;
-  const liveWithoutListings = lifecycle?.phase === "LIVE" && availableSlices === 0;
-  const availableOwnershipLabel = notYetTradeable
-    ? (lifecycle?.statusPill ?? "Not yet available")
-    : liveWithoutListings
-      ? "No listings"
-      : !ownershipSummaryQuery.data
-        ? formatAvailability(null)
-        : formatAvailability(ownershipSummaryQuery.data.availableOwnershipPercent);
-  const slicePriceLabel = notYetTradeable
-    ? "Not yet available"
-    : slicePriceMinor === undefined
-      ? "Not available"
-      : formatPricePerUnit(slicePriceMinor, "GBP");
-  const issuanceLabel = notYetTradeable
-    ? "Not issued yet"
-    : issuedSlices === undefined
-      ? "Unavailable"
-      : issuedSlices.toLocaleString();
   const hasTradingHistory = (tradesQuery.data?.length ?? 0) > 0;
+  const historyCurrency = history[0]?.value.currency ?? currentValueCurrency;
   const marketMoveLabel = notYetTradeable
     ? "Not available yet"
     : hasTradingHistory && asset.change24hBps !== undefined
@@ -371,116 +349,50 @@ function AssetPage() {
               />
             )}
           </section>
-        </section>
-
-        {initialOfferingOpen && initialOffering?.inventory ? (
-          <section className="asset-initial-offering" aria-labelledby="initial-offering-title">
-            <div>
-              <p className="asset-section-label">Initial offering</p>
-              <h2 id="initial-offering-title">Own a portion of this collectible</h2>
-              <p>
-                The collector is offering a defined portion of this real collectible. Slice keeps
-                the ownership record clear from your first purchase.
-              </p>
+          <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
+            <div className="asset-section-heading">
+              <div>
+                <p className="asset-section-label">New to Slice?</p>
+                <h2 id="how-it-works-title">Ownership, in plain English</h2>
+              </div>
+              <InfoTip
+                label="What is a Slice?"
+                text="A Slice is a digital ownership unit linked to a real collectible held through Slice’s custody process."
+              />
             </div>
-            <dl>
+            <p className="asset-section-intro">
+              You do not need to buy the whole collectible. Slice lets you own a clearly defined
+              portion and track it in your Portfolio.
+            </p>
+            <div className="asset-how-it-works__grid">
               <div>
-                <dt>Starting price</dt>
-                <dd>
-                  {formatPricePerUnit(
-                    Number(initialOffering.pricePerUnitMinor),
-                    initialOffering.currency,
-                  )}
-                </dd>
-                <small>per Slice</small>
+                <b>1</b>
+                <h3>Slice secures the collectible</h3>
+                <p>The physical item is checked and placed into the required custody process.</p>
               </div>
               <div>
-                <dt>Available ownership</dt>
-                <dd>{formatAvailability(initialOfferingAvailabilityBps(initialOffering) / 100)}</dd>
+                <b>2</b>
+                <h3>Ownership units are issued</h3>
+                <p>The collectible is divided into units with a clear supply and price.</p>
               </div>
               <div>
-                <dt>Collector retained</dt>
-                <dd>
-                  {formatOfferingPercentage(
-                    initialOffering.retainedUnits,
-                    initialOffering.totalUnits,
-                  )}
-                </dd>
-                <small>remains in their portfolio</small>
+                <b>3</b>
+                <h3>Buy your position</h3>
+                <p>Choose the number of ownership units that fits you.</p>
               </div>
-            </dl>
+              <div>
+                <b>4</b>
+                <h3>Track &amp; sell later</h3>
+                <p>Follow your position in Portfolio and sell when the market is live.</p>
+              </div>
+            </div>
+            <Link className="asset-how-it-works__link" to="/how-it-works">
+              Learn how Slice works <ArrowRight aria-hidden="true" />
+            </Link>
           </section>
-        ) : null}
-
-        <section className="asset-value-overview" aria-labelledby="asset-overview-title">
-          <div className="asset-section-heading">
-            <div>
-              <p className="asset-section-label">At a glance</p>
-              <h2 id="asset-overview-title">What this asset is worth today</h2>
-            </div>
-            <InfoTip
-              label="About these values"
-              text="The Slice valuation is staff-approved and remains separate from external market references. A Slice price appears after supply is approved and ownership units are issued."
-            />
-          </div>
-          <div className="asset-value-grid">
-            <Stat
-              label="Whole collectible value"
-              value={
-                currentValue === undefined
-                  ? "Unavailable"
-                  : formatCurrency(currentValue, { currency: currentValueCurrency })
-              }
-            />
-            <Stat label="Price per Slice" value={slicePriceLabel} />
-            <Stat label="Ownership availability" value={availableOwnershipLabel} />
-            <Stat
-              label="Last valuation"
-              value={sliceValuationAt ? formatDate(sliceValuationAt) : "Unavailable"}
-            />
-          </div>
         </section>
 
-        <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
-          <div className="asset-section-heading">
-            <div>
-              <p className="asset-section-label">New to Slice?</p>
-              <h2 id="how-it-works-title">Ownership, in plain English</h2>
-            </div>
-            <InfoTip
-              label="What is a Slice?"
-              text="A Slice is a digital ownership unit linked to a real collectible held through Slice’s custody process."
-            />
-          </div>
-          <p className="asset-section-intro">
-            You do not need to buy the whole card. When this market is ready, you will be able to
-            buy a small, clearly defined portion.
-          </p>
-          <div className="asset-how-it-works__grid">
-            <div>
-              <b>1</b>
-              <h3>Slice secures the collectible</h3>
-              <p>The physical item is checked and placed into the required custody process.</p>
-            </div>
-            <div>
-              <b>2</b>
-              <h3>Ownership units are issued</h3>
-              <p>The whole collectible is divided into units with a clear supply and price.</p>
-            </div>
-            <div>
-              <b>3</b>
-              <h3>Buy your position</h3>
-              <p>Choose the number of ownership units that fits you.</p>
-            </div>
-            <div>
-              <b>4</b>
-              <h3>Track &amp; sell later</h3>
-              <p>Follow your position in Portfolio and sell when the market is live.</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="asset-redesign-grid">
+        <section className="asset-detail-lower-grid">
           <section className="asset-price-panel" aria-labelledby="history-title">
             <header>
               <div>
@@ -528,12 +440,18 @@ function AssetPage() {
             <div className="asset-chart-stats">
               <Stat
                 label="Starting value"
-                value={history[0] ? formatCurrency(history[0].value.amount) : "Not available"}
+                value={
+                  history[0]
+                    ? formatCurrency(history[0].value.amount, { currency: historyCurrency })
+                    : "Not available"
+                }
               />
               <Stat
                 label="Latest value"
                 value={
-                  history.at(-1) ? formatCurrency(history.at(-1)!.value.amount) : "Not available"
+                  history.at(-1)
+                    ? formatCurrency(history.at(-1)!.value.amount, { currency: historyCurrency })
+                    : "Not available"
                 }
               />
               <Stat
@@ -575,82 +493,48 @@ function AssetPage() {
               <strong className="is-positive">Published</strong>
             </div>
           </section>
-        </section>
 
-        {!asset.grade ? (
-          asset.sliceGrade ? (
-            <SliceGradePanel grade={asset.sliceGrade} />
-          ) : (
-            <SliceGradeEmptyPanel />
-          )
-        ) : null}
+          {!asset.grade ? (
+            asset.sliceGrade ? (
+              <SliceGradePanel grade={asset.sliceGrade} />
+            ) : (
+              <SliceGradeEmptyPanel />
+            )
+          ) : null}
 
-        <section className="asset-redesign-grid asset-redesign-grid--lower">
-          <section
-            className="asset-ownership-panel asset-ownership-panel--simple"
-            aria-labelledby="availability-title"
-          >
-            <div className="asset-section-label">Ownership status</div>
-            <h2 id="availability-title">When can I own a Slice?</h2>
-            <div className="asset-availability-box">
-              <span className="asset-availability-icon">○</span>
-              <div>
-                <strong>
-                  {notYetTradeable
-                    ? "Not yet available"
-                    : (availableSlices ?? 0) > 0
-                      ? "Available to trade"
-                      : "Market open · awaiting listings"}
-                </strong>
-                <p>
-                  {notYetTradeable
-                    ? "There are no ownership units to buy today. This is different from sold out—the market has not opened."
-                    : (availableSlices ?? 0) > 0
-                      ? "Ownership units are available through the live market."
-                      : "The market is open, but no ownership units are currently listed. Place a limit order or check back when a collector lists units."}
-                </p>
-              </div>
-            </div>
-            <div className="asset-ownership-facts">
-              <Stat label="Total issuance" value={issuanceLabel} />
-              <Stat label="Available ownership" value={availableOwnershipLabel} />
-              <Stat
-                label="Current owners"
-                value={asset.ownersCount === undefined ? "Unavailable" : String(asset.ownersCount)}
-              />
-            </div>
-          </section>
-          <section className="asset-details-panel" aria-labelledby="reference-data-title">
-            <div className="asset-section-label">Reference only</div>
-            <h2 id="reference-data-title">Market data explained</h2>
+          <section className="asset-external-panel" aria-labelledby="reference-data-title">
+            <div className="asset-section-label">External reference</div>
+            <h2 id="reference-data-title">Market reference</h2>
             <p className="asset-panel-helper">
-              Third-party sales and listings help explain the collectible’s reference value. They do
-              not set an executable Slice order price.
+              Informational only. This reference does not represent an executable Slice order.
             </p>
-            <div>
-              <span>Publication</span>
-              <strong>Published</strong>
-            </div>
-            <div>
-              <span>Slice valuation</span>
-              <strong>
-                {currentValue === undefined
-                  ? "Unavailable"
-                  : formatCurrency(currentValue, { currency: currentValueCurrency })}
-              </strong>
-            </div>
-            <ExternalReference
-              label="Current listing (asking price)"
-              observation={assetQuery.data.market?.reference?.currentListing}
-            />
-            <ExternalReference
-              label="Recent completed sale"
-              observation={assetQuery.data.market?.reference?.recentCompletedSale}
-            />
-            <div>
-              <span>Updated</span>
-              <strong>{marketReferenceAt ? formatDate(marketReferenceAt) : "Unavailable"}</strong>
-            </div>
+            {asset.marketReference ? (
+              <div className="asset-external-panel__value">
+                <span>{asset.marketReference.source ?? "External market"}</span>
+                <strong>
+                  {formatCurrency(asset.marketReference.amountMinor, {
+                    currency: asset.marketReference.currency,
+                  })}
+                </strong>
+                <small>{asset.marketReference.context ?? "Observed reference"}</small>
+              </div>
+            ) : (
+              <div className="asset-external-panel__empty">No external reference available.</div>
+            )}
+            <dl className="asset-external-panel__meta">
+              <div>
+                <dt>Updated</dt>
+                <dd>{marketReferenceAt ? formatDate(marketReferenceAt) : "Unavailable"}</dd>
+              </div>
+              <div>
+                <dt>Slice valuation</dt>
+                <dd>
+                  {currentValue === undefined
+                    ? "Unavailable"
+                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
+                </dd>
+              </div>
+            </dl>
           </section>
         </section>
 
@@ -816,6 +700,7 @@ function ExternalReference({
 
 function SliceGradePanel({ grade }: { grade: SliceGrade }) {
   const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const score = (value: number | null) =>
     value === null ? "—" : Number(value.toFixed(1)).toString();
   const evidence = grade.visualizations.filter((item) => item.url);
@@ -882,43 +767,62 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           </div>
         </div>
       </div>
-      <div className="asset-slice-grade-panel__evidence">
-        <div className="asset-slice-grade-panel__evidence-heading">
-          <div>
-            <strong>Image evidence</strong>
-            <span>Areas used to form the estimate</span>
-          </div>
-          {grade.analyzedAt ? <small>Analyzed {formatDate(grade.analyzedAt)}</small> : null}
-        </div>
-        {evidence.length ? (
-          <div className="asset-slice-grade-panel__images">
-            {evidence.map((item, index) => (
-              <figure key={`${item.side}-${item.type}-${index}`}>
-                <button
-                  type="button"
-                  className="asset-slice-grade-panel__image-button"
-                  aria-label={`View ${item.side === "FRONT" ? "front" : "back"} card ${item.type} evidence larger`}
-                  onClick={() => setSelectedEvidence(index)}
-                >
-                  <img
-                    src={item.url ?? undefined}
-                    alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
-                  />
-                  <span aria-hidden="true">View larger</span>
-                </button>
-                <figcaption>
-                  {item.side === "FRONT" ? "Front" : "Back"} ·{" "}
-                  {item.type === "centering" ? "Centering" : "Overview"}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        ) : (
-          <p className="asset-slice-grade-panel__empty">
-            Image evidence is not available for this estimate.
-          </p>
-        )}
-      </div>
+      {evidence.length ? (
+        <>
+          <button
+            type="button"
+            className="asset-slice-grade-panel__evidence-toggle"
+            aria-expanded={evidenceOpen}
+            onClick={() => setEvidenceOpen((current) => !current)}
+          >
+            <span>
+              <strong>{evidenceOpen ? "Hide grading evidence" : "View grading evidence"}</strong>
+              <small>
+                {grade.analyzedAt
+                  ? `Analysed ${formatDate(grade.analyzedAt)}`
+                  : "Supporting images"}
+              </small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </button>
+          {evidenceOpen ? (
+            <div className="asset-slice-grade-panel__evidence">
+              <div className="asset-slice-grade-panel__evidence-heading">
+                <div>
+                  <strong>Image evidence</strong>
+                  <span>Areas used to form the estimate</span>
+                </div>
+              </div>
+              <div className="asset-slice-grade-panel__images">
+                {evidence.map((item, index) => (
+                  <figure key={`${item.side}-${item.type}-${index}`}>
+                    <button
+                      type="button"
+                      className="asset-slice-grade-panel__image-button"
+                      aria-label={`View ${item.side === "FRONT" ? "front" : "back"} card ${item.type} evidence larger`}
+                      onClick={() => setSelectedEvidence(index)}
+                    >
+                      <img
+                        src={item.url ?? undefined}
+                        alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
+                      />
+                      <span aria-hidden="true">View larger</span>
+                    </button>
+                    <figcaption>
+                      {item.side === "FRONT" ? "Front" : "Back"} ·{" "}
+                      {item.type === "centering" ? "Centering" : "Overview"}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="asset-slice-grade-panel__empty">
+          Image evidence is not available for this estimate.
+        </p>
+      )}
       {grade.warnings.length ? (
         <p className="asset-slice-grade-panel__note">Review note: {grade.warnings[0]}</p>
       ) : null}
@@ -1230,6 +1134,46 @@ function TradingPanel({
           ? `${formatAvailability(ownershipSummary.availableOwnershipPercent)} of the issued supply is currently listed.`
           : "Availability will appear after ownership is issued."}
       </p>
+      <div className="asset-order-actions">
+        {marketOpen && hasAvailable ? (
+          <Link to="/buy/$id" params={{ id }} className="is-buy">
+            <span>
+              <strong>Buy Slices</strong>
+              <small>Choose how many you want</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : (
+          <div className="is-buy is-disabled" aria-disabled="true">
+            <span>
+              <strong>Buying unavailable</strong>
+              <small>
+                {marketOpen ? "No Slices are currently listed" : "The market is not open yet"}
+              </small>
+            </span>
+          </div>
+        )}
+        {canSell ? (
+          <Link to="/sell/$id" params={{ id }} className="is-sell">
+            <span>
+              <strong>Sell Slices</strong>
+              <small>Manage settled units</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : (
+          <div className="is-sell is-disabled" aria-disabled="true">
+            <span>
+              <strong>Sell Slices</strong>
+              <small>
+                {isAuthenticated
+                  ? "Available after you own settled units"
+                  : "Sign in to manage settled units"}
+              </small>
+            </span>
+          </div>
+        )}
+      </div>
       {breakdown ? (
         <div className="asset-ownership-breakdown" aria-label="Ownership breakdown">
           <div className="asset-ownership-breakdown__bar" aria-hidden="true">
@@ -1295,61 +1239,22 @@ function TradingPanel({
               <span>Price</span>
               <span>Orders</span>
             </div>
-            <OrderRows rows={asks} kind="ask" />
+            <OrderRows rows={asks} kind="ask" currency={currency} />
             <div className="asset-spread-row">
               <span>Spread</span>
               <strong>
                 {bids[0] && asks[0]
                   ? formatCurrency(
                       Math.max(asks[0].pricePerUnit.amount - bids[0].pricePerUnit.amount, 0),
+                      { currency },
                     )
                   : "Unavailable"}
               </strong>
             </div>
-            <OrderRows rows={bids} kind="bid" />
+            <OrderRows rows={bids} kind="bid" currency={currency} />
           </details>
         </>
       )}
-      <div className="asset-order-actions">
-        {marketOpen && hasAvailable ? (
-          <Link to="/buy/$id" params={{ id }} className="is-buy">
-            <span>
-              <strong>Buy Slices</strong>
-              <small>Choose how many you want</small>
-            </span>
-            <ArrowRight aria-hidden="true" />
-          </Link>
-        ) : (
-          <div className="is-buy is-disabled" aria-disabled="true">
-            <span>
-              <strong>Buying unavailable</strong>
-              <small>
-                {marketOpen ? "No Slices are currently listed" : "The market is not open yet"}
-              </small>
-            </span>
-          </div>
-        )}
-        {canSell ? (
-          <Link to="/sell/$id" params={{ id }} className="is-sell">
-            <span>
-              <strong>Sell a Slice</strong>
-              <small>Manage settled units</small>
-            </span>
-            <ArrowRight aria-hidden="true" />
-          </Link>
-        ) : (
-          <div className="is-sell is-disabled" aria-disabled="true">
-            <span>
-              <strong>Sell a Slice</strong>
-              <small>
-                {isAuthenticated
-                  ? "Available after you own settled units"
-                  : "Sign in to manage settled units"}
-              </small>
-            </span>
-          </div>
-        )}
-      </div>
       <RecentTrades
         trades={trades}
         isLoading={tradesLoading}
@@ -1364,9 +1269,11 @@ function TradingPanel({
 function OrderRows({
   rows,
   kind,
+  currency,
 }: {
   rows: Array<{ pricePerUnit: { amount: number }; units: number; orderCount: number }>;
   kind: "ask" | "bid";
+  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   return (
     <ul className={`asset-order-rows is-${kind}`}>
@@ -1375,7 +1282,7 @@ function OrderRows({
           <li key={`${kind}-${row.pricePerUnit.amount}-${row.units}`}>
             <span>{kind === "ask" ? "Ask" : "Bid"}</span>
             <strong>{row.units}</strong>
-            <em>{formatCurrency(row.pricePerUnit.amount)}</em>
+            <em>{formatCurrency(row.pricePerUnit.amount, { currency })}</em>
             <small>{row.orderCount}</small>
           </li>
         ))
