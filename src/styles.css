@@ -31693,3 +31693,232 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     white-space: nowrap;
   }
 }
+
+/* ================================================================
+   Marketplace grid and card correction — final route-scoped layer
+
+   Keep the catalogue readable when it contains two assets as well as when it
+   grows into a full market. Cards have a predictable width, while the grid
+   adds columns only when the results column can support them.
+   ================================================================ */
+.markets-page .markets-shell {
+  width: min(calc(100% - clamp(2rem, 6vw, 6rem)), 110rem);
+  max-width: 110rem;
+}
+
+.markets-page .markets-workspace {
+  grid-template-columns: minmax(11.25rem, 15rem) minmax(0, 1fr);
+  gap: clamp(1.25rem, 2.2vw, 2.5rem);
+}
+
+.markets-page .markets-results {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.markets-page .market-asset-grid {
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 21.25rem));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+  justify-content: start;
+  gap: clamp(1rem, 1.6vw, 1.5rem);
+}
+
+.markets-page .market-asset-grid.is-compact {
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 17.5rem));
+}
+
+.markets-page .market-investment-card {
+  min-width: 0;
+  min-height: 0;
+  transform: none;
+}
+
+.markets-page .market-investment-card:hover,
+.markets-page .market-investment-card:focus-within {
+  transform: translateY(-3px);
+}
+
+.markets-page .market-investment-card:focus-within:not(:hover) {
+  transform: none;
+}
+
+.markets-page .market-card-media {
+  height: clamp(238px, 15vw, 270px);
+  aspect-ratio: auto;
+}
+
+.markets-page .market-card-media .market-card-media-image {
+  padding: 0.4rem 0.8rem 0.5rem;
+  object-fit: contain;
+}
+
+.markets-page .market-card-body {
+  padding: 0.95rem 1rem 1rem;
+}
+
+.markets-page .market-card-heading {
+  display: block;
+  min-height: 4.15rem;
+}
+
+.markets-page .market-card-body h2 {
+  display: -webkit-box;
+  min-height: 2.3em;
+  max-height: 2.3em;
+  overflow: hidden;
+  font-size: clamp(1.15rem, 1.35vw, 1.45rem);
+  line-height: 1.15;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.markets-page .market-card-identity-line {
+  min-height: 1.15rem;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markets-page .market-card-condition {
+  min-height: 1.95rem;
+  margin-top: 0.45rem;
+  gap: 0.35rem 0.55rem;
+}
+
+.markets-page .market-card-condition span {
+  min-height: 1.8rem;
+  padding-inline: 0.62rem;
+  font-size: 0.68rem;
+}
+
+.markets-page .market-card-valuation {
+  min-height: 0;
+  margin-top: 0.7rem;
+  gap: 0.8rem;
+  padding-block: 0.72rem;
+}
+
+.markets-page .market-card-valuation strong {
+  font-size: clamp(1.5rem, 2.1vw, 1.9rem);
+}
+
+.markets-page .market-card-reference {
+  padding-left: 0.8rem;
+}
+
+.markets-page .market-card-reference strong {
+  font-size: clamp(0.98rem, 1.25vw, 1.15rem);
+}
+
+.markets-page .market-card-market-grid {
+  min-height: 0;
+  gap: 0.8rem;
+  padding-block: 0.72rem;
+}
+
+.markets-page .market-card-market-grid > div + div {
+  padding-left: 0.8rem;
+}
+
+.markets-page .market-card-market-grid strong {
+  font-size: 0.78rem;
+}
+
+.markets-page .market-card-market-grid small,
+.markets-page .market-card-reference small {
+  font-size: 0.6rem;
+}
+
+.markets-page .market-card-ownership {
+  min-height: 3.45rem;
+  gap: 0.55rem;
+  padding: 0.52rem 0.62rem;
+}
+
+.markets-page .market-card-ownership-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1rem;
+}
+
+.markets-page .market-card-ownership strong {
+  font-size: 0.74rem;
+}
+
+.markets-page .market-card-ownership small {
+  margin-top: 0.18rem;
+  font-size: 0.58rem;
+}
+
+.markets-page .market-card-cta {
+  min-height: 2.45rem;
+  margin-top: auto;
+  border-radius: 0.62rem;
+  font-size: 0.7rem;
+}
+
+.markets-page .market-pagination {
+  justify-content: flex-start;
+  margin-top: 1.25rem;
+  padding: 0.85rem 0 0.25rem;
+  border-top: 1px solid rgba(139, 168, 178, 0.1);
+}
+
+.markets-page .market-investment-card.is-compact .market-card-media {
+  height: clamp(188px, 13vw, 220px);
+}
+
+.markets-page .market-investment-card.is-compact .market-card-body {
+  padding: 0.8rem 0.85rem 0.85rem;
+}
+
+.markets-page .market-investment-card.is-compact .market-card-heading {
+  min-height: 3.5rem;
+}
+
+.markets-page .market-investment-card.is-compact .market-card-body h2 {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 1099px) {
+  .markets-page .markets-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 560px) and (max-width: 1099px) {
+  .markets-page .market-asset-grid,
+  .markets-page .market-asset-grid.is-compact {
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 21.25rem));
+  }
+}
+
+@media (max-width: 799px) {
+  .markets-page .market-card-media {
+    height: 260px;
+  }
+}
+
+@media (max-width: 559px) {
+  .markets-page .markets-shell {
+    width: calc(100% - 1.25rem);
+    max-width: none;
+  }
+
+  .markets-page .market-asset-grid,
+  .markets-page .market-asset-grid.is-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .markets-page .market-card-media,
+  .markets-page .market-investment-card.is-compact .market-card-media {
+    height: min(76vw, 310px);
+  }
+
+  .markets-page .market-card-valuation {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  }
+}

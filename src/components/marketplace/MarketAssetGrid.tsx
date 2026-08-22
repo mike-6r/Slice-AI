@@ -18,7 +18,11 @@ export function MarketAssetGrid({
       </div>
     );
   return (
-    <div className={`market-asset-grid ${view === "compact" ? "is-compact" : ""}`}>
+    <div
+      className={["market-asset-grid", view === "compact" ? "is-compact" : null]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {assets.map((asset) => (
         <MarketAssetCard key={asset.id} asset={asset} compact={view === "compact"} />
       ))}
@@ -44,7 +48,9 @@ export function MarketAssetGridSkeleton({
   }
   return (
     <div
-      className={`market-asset-grid ${view === "compact" ? "is-compact" : ""}`}
+      className={["market-asset-grid", view === "compact" ? "is-compact" : null]
+        .filter(Boolean)
+        .join(" ")}
       aria-label="Loading market catalogue"
       aria-busy="true"
     >
