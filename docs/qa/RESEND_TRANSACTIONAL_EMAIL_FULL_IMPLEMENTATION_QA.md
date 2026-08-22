@@ -1,6 +1,6 @@
 # Resend Transactional Email — Full Implementation QA
 
-Status: implementation complete; staging provider verification is pending the staging Resend configuration and a real recipient test.
+Status: implementation complete and deployed to staging release `20260822-f1e709a`; real provider verification is pending staging Resend configuration and a real recipient test.
 
 ## Scope
 
@@ -80,13 +80,24 @@ Completed locally:
 
 - API typecheck: PASS
 - API build: PASS
-- API unit suite: PASS — 259 tests across 62 suites
-- Resend/config/email verification focused suite: PASS — 40 tests
+- API unit suite: PASS — 261 tests across 63 suites
+- Resend/config/email verification focused suite: PASS — 42 tests across 4 suites
 - Prisma schema validation: PASS
 - Frontend typecheck: PASS
 - Frontend production build: PASS
 - Frontend validation test: PASS — 6 tests
 - Nest runtime/module bootstrap: PASS with `PROVIDER_MODE=local`; new routes were mapped successfully. Local PostgreSQL/Redis were unavailable, so dependency health workers logged their expected unavailable warnings.
+
+Deployed staging verification:
+
+- Git commit: `f1e709a`
+- Active release: `/opt/slice/releases/20260822-f1e709a`
+- API and web services: active
+- `/health`: PASS
+- `/ready`: PASS — PostgreSQL and Redis up
+- Public `/` and `/login`: HTTP 200
+- `EMAIL_DELIVERY_MODE`: `local_test`
+- `RESEND_API_KEY`: absent; no real provider send was attempted
 
 New API routes:
 
