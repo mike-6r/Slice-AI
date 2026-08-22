@@ -651,7 +651,21 @@ export const mockRepositories: AppRepositories = {
       return (await this.listCollectors()).find((collector) => collector.userId === id) ?? null;
     },
     async listPublicCollectors() {
-      return { items: await this.listCollectors(), nextCursor: null };
+      const items = await this.listCollectors();
+      return {
+        items,
+        featured: [],
+        specialties: [],
+        nextCursor: null,
+        pagination: {
+          page: 1,
+          pageSize: items.length,
+          total: items.length,
+          totalPages: items.length ? 1 : 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      };
     },
     async followCollector(id) {
       followed.add(id);

@@ -1,20 +1,18 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { Archive, Search, Sparkles, Tags, UserRoundCheck } from "lucide-react";
-import { useMemo, useState } from "react";
-import {
-  CollectorCard,
-  CollectorDiscoveryPanel,
-  FeaturedCollector,
-} from "@/components/collectors/public-collector-ui";
-import { collectorSpecialties } from "@/components/collectors/collector-specialties";
-import { KpiIconTile } from "@/components/ui/KpiIconTile";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, ArrowRight, ChevronDown, Search, SlidersHorizontal, UsersRound } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { CollectorCard, FeaturedCollector } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import type { CollectorDirectorySort } from "@/domain";
 
-export const Route = createFileRoute("/collectors")({
-  head: () => ({ meta: [{ title: "Collectors | Slice" }] }),
-  component: CollectorsPage,
-});
+const PAGE_SIZE = 12;
+export type CollectorSearch = {
+  q?: string;
+  specialty?: string;
+  sort?: CollectorDirectorySort;
+  page?: number;
+};
 
 export function CollectorSearch({
   query,
@@ -38,169 +36,218 @@ export function CollectorSearch({
   );
 }
 
+export const Route = createFileRoute("/collectors")({
+  validateSearch: (search: Record<string, unknown>): CollectorSearch => ({
+    ...(typeof search.q === "string" && search.q.trim() ? { q: search.q.trim().slice(0, 120) } : {}),
+    ...(typeof search.specialty === "string" && search.specialty.trim()
+      ? { specialty: search.specialty.trim().slice(0, 80) }
+      : {}),
+    sort: ["featured", "recent", "name"].includes(String(search.sort))
+      ? (String(search.sort) as CollectorDirectorySort)
+      : "featured",
+    page: Math.max(1, Math.min(10_000, Number(search.page ?? 1) || 1)),
+  }),
+  head: () => ({
+    meta: [
+      { title: "Collectors | Slice" },
+      { name: "description", content: "Explore public collector profiles and the catalogues they choose to share." },
+    ],
+  }),
+  component: CollectorsPage,
+});
+
 function CollectorsPage() {
   const services = useAppServices();
-  const [query, setQuery] = useState("");
-  const [specialty, setSpecialty] = useState("All collectors");
-  const result = useInfiniteQuery({
-    queryKey: ["collectors"],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) =>
+  const navigate = useNavigate({ from: "/collectors" });
+  const search = Route.useSearch();
+  const sort = search.sort ?? "featured";
+  const currentPage = search.page ?? 1;
+  const [query, setQuery] = useState(search.q ?? "");
+
+  useEffect(() => setQuery(search.q ?? ""), [search.q]);
+
+  const result = useQuery({
+    queryKey: ["collectors", search.q ?? "", search.specialty ?? "", sort, currentPage],
+    queryFn: () =>
       services.repositories.collectors.listPublicCollectors({
-        cursor: pageParam,
-        limit: 24,
-        signal,
+        q: search.q,
+        specialty: search.specialty,
+        sort,
+        page: currentPage,
+        pageSize: PAGE_SIZE,
       }),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    staleTime: 30_000,
   });
-  const allCollectors = useMemo(
-    () => result.data?.pages.flatMap((page) => page.items) ?? [],
-    [result.data],
-  );
-  const specialties = useMemo(
-    () =>
-      [...new Set(allCollectors.flatMap(collectorSpecialties))].sort((left, right) =>
-        left.localeCompare(right),
-      ),
-    [allCollectors],
-  );
-  const collectors = useMemo(
-    () =>
-      allCollectors.filter(
-        (collector) =>
-          `${collector.displayName} ${collector.handle} ${collector.focus}`
-            .toLowerCase()
-            .includes(query.trim().toLowerCase()) &&
-          (specialty === "All collectors" || collectorSpecialties(collector).includes(specialty)),
-      ),
-    [allCollectors, query, specialty],
-  );
-  const featured =
-    collectors.find((collector) => collector.handle === "slice-demo-collector") ?? collectors[0];
-  const publishedCount = allCollectors.reduce(
-    (count, collector) => count + (collector.publishedListingCount ?? 0),
-    0,
-  );
-  const categoryCount = new Set(
-    allCollectors.flatMap((collector) =>
-      (collector.publishedListings ?? []).map((listing) => listing.category),
-    ),
-  ).size;
+
+  const data = result.data;
+  const specialties = data?.specialties ?? [];
+  const page = data?.pagination;
+  const hasFilters = Boolean(search.q || search.specialty);
+  const featured = data?.featured ?? [];
+
+  const setSearch = (next: Partial<CollectorSearch>) => {
+    void navigate({
+      search: {
+        q: next.q ?? search.q,
+        specialty: next.specialty ?? search.specialty,
+        sort: next.sort ?? sort,
+        page: next.page ?? 1,
+      },
+      replace: true,
+    });
+  };
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearch({ q: query.trim() || undefined });
+  };
 
   return (
     <div className="collectors-page">
-      <section className="collectors-shell collectors-hero">
+      <section className="collectors-shell collectors-hero collectors-hero--directory">
         <div className="collectors-hero-copy">
-          <p className="collectors-kicker">Collectors</p>
-          <h1>
-            Expertise you
-            <br />
-            can inspect.
-          </h1>
+          <p className="collectors-kicker">The Slice community</p>
+          <h1>Collectors worth knowing.</h1>
           <p>
-            Only collectors who choose to publish a profile are shown. Public profiles highlight
-            collectible expertise and published marketplace activity.
+            Discover people who choose to share their collecting focus and published catalogue with
+            the Slice community.
           </p>
+          <div className="collectors-hero-note">
+            <UsersRound aria-hidden="true" />
+            <span>Public profiles only. Private collections stay private.</span>
+          </div>
         </div>
-        <div className="collectors-hero-metrics">
-          <article className="collectors-metric-card is-emerald">
-            <KpiIconTile icon={UserRoundCheck} />
-            <div className="collectors-metric-content">
-              <span className="collectors-metric-label">Visible public profiles</span>
-              <strong>{allCollectors.length}</strong>
-            </div>
-          </article>
-          <article className="collectors-metric-card is-violet">
-            <KpiIconTile icon={Archive} />
-            <div className="collectors-metric-content">
-              <span className="collectors-metric-label">Published collectibles</span>
-              <strong>{publishedCount}</strong>
-            </div>
-          </article>
-          <article className="collectors-metric-card is-amber">
-            <KpiIconTile icon={Tags} />
-            <div className="collectors-metric-content">
-              <span className="collectors-metric-label">Categories represented</span>
-              <strong>{categoryCount}</strong>
-            </div>
-          </article>
+        <div className="collectors-hero-aside" aria-label="Collector directory summary">
+          <span className="collectors-hero-aside__eyebrow">A better way to explore</span>
+          <strong>Find the next point of view for your collection.</strong>
+          <span>Search by name or specialty, then open a profile to see the published assets behind it.</span>
         </div>
       </section>
-      <section className="collectors-shell collectors-filter-bar">
-        <CollectorSearch query={query} onQueryChange={setQuery} />
-        {specialties.length > 0 && (
+
+      {featured.length > 0 && !hasFilters && (
+        <section className="collectors-shell collectors-featured-section" aria-labelledby="featured-heading">
+          <div className="collectors-section-heading">
+            <div>
+              <p className="collectors-kicker">Community highlights</p>
+              <h2 id="featured-heading">Featured collectors</h2>
+            </div>
+            <span>Selected from public profiles</span>
+          </div>
+          <div className="collectors-featured-grid">
+            {featured.map((collector) => (
+              <FeaturedCollector key={collector.userId} collector={collector} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="collectors-shell collectors-directory" aria-labelledby="directory-heading">
+        <div className="collectors-directory-toolbar">
+          <form className="collectors-directory-search" onSubmit={submitSearch}>
+            <Search aria-hidden="true" />
+            <label className="sr-only" htmlFor="collector-search">Search public collectors</label>
+            <input
+              id="collector-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search collectors by name or specialty"
+            />
+            <button type="submit">Search</button>
+          </form>
+          <label className="collectors-select-control">
+            <span>Sort</span>
+            <select
+              aria-label="Sort public collectors"
+              value={sort}
+              onChange={(event) => setSearch({ sort: event.target.value as CollectorDirectorySort })}
+            >
+              <option value="featured">Featured first</option>
+              <option value="recent">Recently published</option>
+              <option value="name">Name A–Z</option>
+            </select>
+            <ChevronDown aria-hidden="true" />
+          </label>
+        </div>
+
+        <div className="collectors-directory-filter-row">
+          <div className="collectors-filter-heading">
+            <SlidersHorizontal aria-hidden="true" />
+            <span>Specialty</span>
+          </div>
           <div className="collectors-filter-list" aria-label="Filter collectors by specialty">
-            {["All collectors", ...specialties].map((item) => (
+            <button
+              type="button"
+              className={!search.specialty ? "is-active" : undefined}
+              onClick={() => setSearch({ specialty: undefined })}
+            >
+              All specialties
+            </button>
+            {specialties.map((specialty) => (
               <button
-                key={item}
+                key={specialty}
                 type="button"
-                className={specialty === item ? "is-active" : undefined}
-                onClick={() => setSpecialty(item)}
+                className={search.specialty === specialty ? "is-active" : undefined}
+                onClick={() => setSearch({ specialty: specialty === search.specialty ? undefined : specialty })}
               >
-                {item}
+                {specialty}
               </button>
             ))}
           </div>
-        )}
-      </section>
-      {result.isLoading ? (
-        <section className="collectors-shell collectors-empty-state">
-          <Sparkles aria-hidden="true" />
-          <h2>Loading public collectors</h2>
-        </section>
-      ) : result.isError ? (
-        <section className="collectors-shell collectors-empty-state">
-          <Archive aria-hidden="true" />
-          <h2>Collectors are unavailable.</h2>
-          <button type="button" onClick={() => void result.refetch()}>
-            Retry
-          </button>
-        </section>
-      ) : featured ? (
-        <section className="collectors-shell collectors-spotlight">
-          <FeaturedCollector collector={featured} />
-          <CollectorDiscoveryPanel collectors={collectors} />
-        </section>
-      ) : null}
-      <section className="collectors-shell collectors-directory">
+        </div>
+
         <div className="collectors-directory-heading">
           <div>
-            <p className="collectors-kicker">Public collectors</p>
-            <h2>Collectors sharing their catalogue.</h2>
+            <p className="collectors-kicker">Public directory</p>
+            <h2 id="directory-heading">Meet the collectors.</h2>
           </div>
-          <span>
-            {collectors.length} matching profile{collectors.length === 1 ? "" : "s"}
-          </span>
+          <span>{page ? `${page.total} public profile${page.total === 1 ? "" : "s"}` : "Loading profiles"}</span>
         </div>
-        {!result.isLoading &&
-          !result.isError &&
-          (collectors.length ? (
-            <div
-              className={`collectors-directory-grid${collectors.length <= 2 ? " is-compact-directory" : ""}`}
-            >
-              {collectors.map((collector, index) => (
-                <CollectorCard key={collector.userId} collector={collector} toneIndex={index} />
-              ))}
-            </div>
-          ) : (
-            <div className="collectors-empty-state">
-              <Archive aria-hidden="true" />
-              <h2>No collectors found</h2>
-              <p>Try another search or specialty.</p>
-            </div>
-          ))}
+
+        {result.isPending ? (
+          <div className="collectors-empty-state collectors-loading-state" role="status">
+            <span className="collectors-loading-orb" aria-hidden="true" />
+            <h3>Loading public collectors</h3>
+            <p>Bringing together profiles that are ready to be shared.</p>
+          </div>
+        ) : result.isError ? (
+          <div className="collectors-empty-state" role="alert">
+            <BoxIcon />
+            <h3>Collectors are unavailable.</h3>
+            <p>We could not load the public directory right now.</p>
+            <button type="button" onClick={() => void result.refetch()}>Try again</button>
+          </div>
+        ) : data?.items.length ? (
+          <div className="collectors-directory-grid">
+            {data.items.map((collector, index) => (
+              <CollectorCard key={collector.userId} collector={collector} toneIndex={index} />
+            ))}
+          </div>
+        ) : (
+          <div className="collectors-empty-state">
+            <Search aria-hidden="true" />
+            <h3>{hasFilters ? "No collectors match those filters." : "No public collectors yet."}</h3>
+            <p>{hasFilters ? "Try a different name or specialty." : "Public profiles will appear here as collectors choose to share them."}</p>
+            {hasFilters && <button type="button" onClick={() => setSearch({ q: undefined, specialty: undefined })}>Clear filters</button>}
+          </div>
+        )}
+
+        {page && page.totalPages > 1 && (
+          <nav className="collectors-pagination" aria-label="Collectors pagination">
+            <button type="button" disabled={!page.hasPreviousPage} onClick={() => setSearch({ page: currentPage - 1 })}>
+              <ArrowLeft aria-hidden="true" /> Previous
+            </button>
+            <span>Page {page.page} of {page.totalPages}</span>
+            <button type="button" disabled={!page.hasNextPage} onClick={() => setSearch({ page: currentPage + 1 })}>
+              Next <ArrowRight aria-hidden="true" />
+            </button>
+          </nav>
+        )}
       </section>
-      {result.hasNextPage && (
-        <section className="collectors-shell pb-8">
-          <button
-            type="button"
-            disabled={result.isFetchingNextPage}
-            onClick={() => void result.fetchNextPage()}
-          >
-            {result.isFetchingNextPage ? "Loading…" : "Load more public collectors"}
-          </button>
-        </section>
-      )}
     </div>
   );
+}
+
+function BoxIcon() {
+  return <UsersRound aria-hidden="true" />;
 }

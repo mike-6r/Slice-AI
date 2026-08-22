@@ -74,6 +74,7 @@ const catalogueQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
+const collectorFeature = z.object({ featured: z.boolean() }).strict();
 const membershipsQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
@@ -196,6 +197,22 @@ export class AdminController {
   collectibles(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(catalogueQuery, query);
     return this.admin.catalogueAssets(request.actor!, input);
+  }
+
+  @Post('collectors/:slug/featured')
+  @RequirePermission('catalogue.manage')
+  featureCollector(
+    @Param('slug') slug: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = this.parse(collectorFeature, body);
+    return this.admin.setCollectorFeatured(
+      request.actor!,
+      slug,
+      input.featured,
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Get('intake')

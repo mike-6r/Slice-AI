@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, BadgeCheck, Box, Sparkles } from "lucide-react";
 import type { CollectorProfile, CollectorPublishedListing } from "@/domain";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { collectorCategoryLabel, collectorSpecialties } from "./collector-specialties";
 
 export function CollectorAvatar({
@@ -20,16 +19,18 @@ export function CollectorAvatar({
     .join("")
     .toUpperCase();
   return (
-    <span className={`collector-avatar${featured ? " is-featured" : ""}`}>{initials || "S"}</span>
+    <span className={`collector-avatar${featured ? " is-featured" : ""}`} aria-hidden="true">
+      {initials || "S"}
+    </span>
   );
 }
 
-function AssetMedia({ listing }: { listing: CollectorPublishedListing }) {
-  const media = assetShowcaseMedia(listing.slug);
+function AssetMedia({ listing, compact = false }: { listing: CollectorPublishedListing; compact?: boolean }) {
+  const media = listing.media?.find((item) => item.slot.toLowerCase() === "front") ?? listing.media?.[0];
   return media ? (
-    <img src={media.src} alt={media.alt} />
+    <img src={media.url} alt={media.alt} loading="lazy" />
   ) : (
-    <Box aria-label="Public media unavailable" />
+    <Box aria-label={compact ? "Published media unavailable" : "No published media"} />
   );
 }
 
@@ -50,13 +51,12 @@ export function CollectorAssetPreview({
     >
       {compact ? (
         <>
-          <AssetMedia listing={listing} />
+          <AssetMedia listing={listing} compact />
           <span>{collectorCategoryLabel(listing.category)}</span>
         </>
       ) : (
         <>
           <div className="featured-holding-media">
-            <span className="featured-holding-light" aria-hidden="true" />
             <AssetMedia listing={listing} />
           </div>
           <div className="featured-holding-copy">
@@ -65,10 +65,13 @@ export function CollectorAssetPreview({
             <div>
               <strong>
                 {listing.estimatedMarketValue
-                  ? formatMoney(listing.estimatedMarketValue.amount)
+                  ? formatMoney(
+                      listing.estimatedMarketValue.amount,
+                      listing.estimatedMarketValue.currency,
+                    )
                   : "Value unavailable"}
               </strong>
-              <span>{listing.dataStatus ?? "Public"}</span>
+              <span>{listing.dataStatus === "LIVE" ? "Valuation" : "Public listing"}</span>
             </div>
           </div>
         </>
@@ -80,15 +83,15 @@ export function CollectorAssetPreview({
 export function FeaturedCollector({ collector }: { collector: CollectorProfile }) {
   const listings = collector.publishedListings ?? [];
   const specialties = collectorSpecialties(collector);
-  const categoryCount = new Set(listings.map((listing) => listing.category)).size;
+  const count = collector.publishedListingCount ?? listings.length;
   return (
-    <article className="featured-collector-card">
-      <span className="featured-collector-glow" aria-hidden="true" />
-      <header className="featured-collector-header">
-        <p className="collectors-kicker">
+    <article className="featured-collector-card collectors-featured-card">
+      <div className="collectors-featured-card__topline">
+        <span className="collectors-status-pill">
           <Sparkles aria-hidden="true" /> Featured collector
-        </p>
-      </header>
+        </span>
+        <span className="collectors-featured-card__index">Public profile</span>
+      </div>
       <div className="featured-collector-identity">
         <CollectorAvatar collector={collector} featured />
         <div className="featured-collector-identity__copy">
@@ -97,105 +100,83 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
             <BadgeCheck aria-label="Public collector" />
           </h2>
           <strong>@{collector.handle}</strong>
-          <p>Authenticated collectibles</p>
+          <p>{collector.focus || "Collector sharing a public catalogue."}</p>
         </div>
       </div>
       {specialties.length > 0 && (
         <div className="collector-specialty-chips" aria-label="Collector specialities">
-          {specialties.map((item) => (
+          {specialties.slice(0, 4).map((item) => (
             <span key={item}>{item}</span>
           ))}
         </div>
       )}
       <dl className="featured-collector-stats has-3-stats">
         <div>
-          <dt>Published collectibles</dt>
-          <dd>{collector.publishedListingCount ?? listings.length}</dd>
+          <dt>Published catalogue</dt>
+          <dd>{count}</dd>
         </div>
         <div>
-          <dt>Categories represented</dt>
-          <dd>{categoryCount || "\u2014"}</dd>
+          <dt>Joined</dt>
+          <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
         </div>
         <div>
-          <dt>Public profile</dt>
-          <dd className="is-positive">Active</dd>
+          <dt>Visibility</dt>
+          <dd className="is-positive">Public</dd>
         </div>
       </dl>
-      {listings.length > 0 && (
+      {listings.length > 0 ? (
         <div className="featured-holdings">
-          <h3>Published collectibles</h3>
+          <div className="collectors-section-label-row">
+            <h3>From the catalogue</h3>
+            <span>{listings.length > 3 ? `+${listings.length - 3} more` : "Published assets"}</span>
+          </div>
           <div className="featured-holdings-grid">
             {listings.slice(0, 3).map((listing) => (
               <CollectorAssetPreview key={listing.assetId} listing={listing} />
             ))}
           </div>
         </div>
-      )}
-      {listings.length === 0 && (
+      ) : (
         <div className="featured-collector-empty-preview">
           <Box aria-hidden="true" />
           <div>
-            <strong>Public catalogue in progress</strong>
-            <p>This collector has not published a catalogue listing yet.</p>
+            <strong>Catalogue in progress</strong>
+            <p>This collector has chosen to share their profile before publishing an asset.</p>
           </div>
         </div>
       )}
       <Link to="/collector/$id" params={{ id: collector.handle }} className="featured-assets-link">
-        View public profile <ArrowRight aria-hidden="true" />
+        View collector profile <ArrowRight aria-hidden="true" />
       </Link>
     </article>
   );
 }
 
 export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorProfile[] }) {
-  const specialties = [...new Set(collectors.flatMap(collectorSpecialties))].slice(0, 6);
-  const allListings = collectors.flatMap((collector) => collector.publishedListings ?? []);
-  const listings = allListings.slice(0, 3);
-
+  const listings = collectors.flatMap((collector) => collector.publishedListings ?? []).slice(0, 4);
   return (
-    <aside className="collector-discovery-panel">
-      <header>
-        <div>
-          <p className="collectors-kicker">Discovery</p>
-          <h2>Collectible expertise.</h2>
-        </div>
-        <Sparkles aria-hidden="true" />
-      </header>
-      {specialties.length > 0 && (
-        <div className="collector-discovery-specialties" aria-label="Public collector specialties">
-          {specialties.map((specialty) => (
-            <span key={specialty}>{specialty}</span>
-          ))}
-        </div>
-      )}
-      {listings.length > 0 && (
-        <div className="collector-discovery-assets" aria-label="Published collectible previews">
-          {listings.map((listing) => (
-            <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
-          ))}
-        </div>
-      )}
+    <aside className="collector-discovery-panel collectors-directory-note">
+      <div className="collectors-directory-note__icon" aria-hidden="true">
+        <BadgeCheck />
+      </div>
+      <p className="collectors-kicker">Public by choice</p>
+      <h2>See the people behind the collections.</h2>
+      <p>
+        Every profile here is published by its owner. Explore their public catalogue and the
+        categories they know best.
+      </p>
       <dl className="collector-discovery-summary">
         <div>
-          <dt>Public profiles</dt>
+          <dt>Profiles shown</dt>
           <dd>{collectors.length}</dd>
         </div>
         <div>
-          <dt>Published collectibles</dt>
-          <dd>{allListings.length}</dd>
+          <dt>Assets shared</dt>
+          <dd>{listings.length ? "Real" : "—"}</dd>
         </div>
       </dl>
-      {specialties.length === 0 && listings.length === 0 && (
-        <div className="collector-discovery-empty">
-          <Sparkles aria-hidden="true" />
-          <div>
-            <strong>Profiles are growing</strong>
-            <p>Collector catalogues appear here when owners choose to publish them.</p>
-          </div>
-        </div>
-      )}
       <Link to="/marketplace" className="featured-assets-link">
-        Browse published collectibles <ArrowRight aria-hidden="true" />
+        Browse the marketplace <ArrowRight aria-hidden="true" />
       </Link>
     </aside>
   );
@@ -210,13 +191,12 @@ export function CollectorCard({
 }) {
   const listings = collector.publishedListings ?? [];
   const specialties = collectorSpecialties(collector);
-  const categoryCount = new Set(listings.map((listing) => listing.category)).size;
   const count = collector.publishedListingCount ?? listings.length;
   return (
     <article className={`collector-profile-card is-tone-${toneIndex % 4}`}>
       <header>
         <CollectorAvatar collector={collector} />
-        <div>
+        <div className="collector-card-identity">
           <Link to="/collector/$id" params={{ id: collector.handle }}>
             {collector.displayName}
           </Link>
@@ -227,8 +207,10 @@ export function CollectorCard({
         </span>
       </header>
       <div className="collector-profile-copy">
-        <strong>Public collector profile</strong>
-        <p>{specialties.length ? specialties.join(" \u00b7 ") : collector.focus}</p>
+        <strong>{collector.focus || "Public collector profile"}</strong>
+        <p>
+          {specialties.length > 0 ? specialties.slice(0, 3).join(" · ") : "Published catalogue"}
+        </p>
       </div>
       <dl className="collector-profile-stats">
         <div>
@@ -236,40 +218,25 @@ export function CollectorCard({
           <dd>{count}</dd>
         </div>
         <div>
-          <dt>Categories</dt>
-          <dd>{categoryCount || "\u2014"}</dd>
-        </div>
-        <div>
-          <dt>Status</dt>
-          <dd className="is-positive">Public</dd>
+          <dt>Since</dt>
+          <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
         </div>
       </dl>
-      {listings.length ? (
-        <div
-          className="collector-mini-strip"
-          aria-label={`${collector.displayName} published collectibles`}
-        >
+      {listings.length > 0 ? (
+        <div className="collector-mini-strip" aria-label={`${collector.displayName} published collectibles`}>
           {listings.slice(0, 3).map((listing) => (
             <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
           ))}
           {count > 3 && (
-            <Link
-              to="/collector/$id/assets"
-              params={{ id: collector.handle }}
-              className="collector-more-assets"
-            >
+            <Link to="/collector/$id/assets" params={{ id: collector.handle }} className="collector-more-assets">
               +{count - 3}
             </Link>
           )}
         </div>
       ) : (
-        <p className="collector-card-empty">No published collectibles yet.</p>
+        <p className="collector-card-empty">No published assets yet.</p>
       )}
-      <Link
-        to="/collector/$id"
-        params={{ id: collector.handle }}
-        className="collector-card-profile-link"
-      >
+      <Link to="/collector/$id" params={{ id: collector.handle }} className="collector-card-profile-link">
         View profile <ArrowRight aria-hidden="true" />
       </Link>
     </article>
@@ -278,22 +245,17 @@ export function CollectorCard({
 
 export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublishedListing }) {
   const { formatMoney } = useCurrency();
-  const media = assetShowcaseMedia(listing.slug);
   return (
     <Link to="/asset/$id" params={{ id: listing.slug }} className="public-collector-asset-card">
       <div className="public-collector-asset-media">
-        {media ? (
-          <img src={media.src} alt={media.alt} />
-        ) : (
-          <Box aria-label="Public media unavailable" />
-        )}
+        <AssetMedia listing={listing} />
       </div>
       <div>
         <p>{collectorCategoryLabel(listing.category)}</p>
         <h3>{listing.title}</h3>
         <strong>
           {listing.estimatedMarketValue
-            ? formatMoney(listing.estimatedMarketValue.amount)
+            ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
             : "Value unavailable"}
         </strong>
       </div>

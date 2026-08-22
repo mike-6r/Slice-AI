@@ -21,50 +21,136 @@ import {
 import { IdempotencyCoordinator } from '../identity/auth/idempotency-coordinator';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { publicBetaAssetWhere } from '../../config/beta-policy';
+import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../submissions/ports/submission-storage.ports';
 @Controller()
 export class ReadsController {
   constructor(
     private readonly db: PrismaService,
     private readonly idempotency: IdempotencyCoordinator,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
   @Get('collectors') async collectors(
-    @Query('cursor') cursor?: string,
+    @Query('cursor') _cursor?: string,
     @Query('limit') limit?: string,
+    @Query('q') query?: string,
+    @Query('specialty') specialty?: string,
+    @Query('sort') sort?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    const before = parseCursor(cursor, 'collectors');
-    const pageSize = parseLimit(limit);
-    const rows = await this.db.publicCollectorProfile.findMany({
-      where: {
-        isPublic: true,
-        ...(this.config.isBeta
-          ? { slug: { not: { startsWith: 'slice-demo-' } } }
-          : {}),
-        ...(before
-          ? {
-              OR: [
-                { createdAt: { lt: before.createdAt } },
-                { createdAt: before.createdAt, userId: { lt: before.id } },
-              ],
-            }
-          : {}),
-      },
-      include: publicCollectorInclude,
-      orderBy: [{ createdAt: 'desc' }, { userId: 'desc' }],
-      take: pageSize + 1,
-    });
+    const size = parseCollectorPageSize(pageSize ?? limit);
+    const currentPage = parseCollectorPage(page);
+    const order = parseCollectorSort(sort);
+    const publicWhere: Prisma.PublicCollectorProfileWhereInput = {
+      isPublic: true,
+      ...(this.config.isBeta
+        ? { slug: { not: { startsWith: 'slice-demo-' } } }
+        : {}),
+    };
+    const baseWhere: Prisma.PublicCollectorProfileWhereInput = {
+      ...publicWhere,
+      ...(query?.trim()
+        ? {
+            OR: [
+              { slug: { contains: query.trim(), mode: 'insensitive' } },
+              { headline: { contains: query.trim(), mode: 'insensitive' } },
+              { specialism: { contains: query.trim(), mode: 'insensitive' } },
+              {
+                user: {
+                  is: {
+                    profile: {
+                      is: {
+                        displayName: {
+                          contains: query.trim(),
+                          mode: 'insensitive',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(specialty && specialty.trim() && specialty !== 'All specialties'
+        ? {
+            specialism: {
+              contains: specialty.trim(),
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+    };
+    const orderBy: Prisma.PublicCollectorProfileOrderByWithRelationInput[] =
+      order === 'name'
+        ? [{ slug: 'asc' }, { userId: 'asc' }]
+        : order === 'recent'
+          ? [{ createdAt: 'desc' }, { userId: 'desc' }]
+          : [
+              { isFeatured: 'desc' },
+              { createdAt: 'desc' },
+              { userId: 'desc' },
+            ];
+    const [total, rows, featuredRows, specialtyRows] = await Promise.all([
+      this.db.publicCollectorProfile.count({ where: baseWhere }),
+      this.db.publicCollectorProfile.findMany({
+        where: baseWhere,
+        include: publicCollectorInclude,
+        orderBy,
+        skip: (currentPage - 1) * size,
+        take: size,
+      }),
+      this.db.publicCollectorProfile.findMany({
+        where: { ...publicWhere, isFeatured: true },
+        include: publicCollectorInclude,
+        orderBy: [
+          { featuredAt: 'desc' },
+          { createdAt: 'desc' },
+          { userId: 'desc' },
+        ],
+        take: 3,
+      }),
+      this.db.publicCollectorProfile.findMany({
+        where: publicWhere,
+        select: { specialism: true },
+        distinct: ['specialism'],
+      }),
+    ]);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / size);
     return {
-      items: rows
-        .slice(0, pageSize)
-        .map((row) => publicCollectorView(row, this.config.isBeta === true)),
-      nextCursor:
-        rows.length > pageSize
-          ? makeCursor(
-              'collectors',
-              rows[pageSize - 1]!.createdAt,
-              rows[pageSize - 1]!.userId,
-            )
-          : null,
+      items: await Promise.all(
+        rows.map((row) =>
+          publicCollectorView(row, this.config.isBeta === true, this.storage),
+        ),
+      ),
+      featured: await Promise.all(
+        featuredRows.map((row) =>
+          publicCollectorView(row, this.config.isBeta === true, this.storage),
+        ),
+      ),
+      specialties: [
+        ...new Set(
+          specialtyRows.flatMap((row) =>
+            (row.specialism ?? '')
+              .split('·')
+              .map((value) => value.trim())
+              .filter(Boolean),
+          ),
+        ),
+      ].sort((left, right) => left.localeCompare(right)),
+      nextCursor: null,
+      pagination: {
+        page: currentPage,
+        pageSize: size,
+        total,
+        totalPages,
+        hasNextPage: currentPage < totalPages,
+        hasPreviousPage: currentPage > 1,
+      },
     };
   }
   @Get('collectors/:slug') async collector(@Param('slug') slug: string) {
@@ -78,7 +164,7 @@ export class ReadsController {
       include: publicCollectorInclude,
     });
     return x
-      ? publicCollectorView(x, this.config.isBeta === true)
+      ? await publicCollectorView(x, this.config.isBeta === true, this.storage)
       : { error: 'COLLECTOR_NOT_FOUND' };
   }
   @Get('vault/events') async vault(
@@ -428,6 +514,7 @@ const publicCollectorInclude = {
         select: {
           submissions: {
             where: {
+              status: 'APPROVED',
               asset: {
                 is: {
                   status: 'PUBLISHED',
@@ -439,6 +526,7 @@ const publicCollectorInclude = {
       },
       submissions: {
         where: {
+          status: 'APPROVED',
           asset: {
             is: {
               status: 'PUBLISHED',
@@ -461,6 +549,11 @@ const publicCollectorInclude = {
               },
             },
           },
+          media: {
+            where: { status: 'SAFE', deletedAt: null },
+            orderBy: { slot: 'asc' },
+            select: { id: true, slot: true, objectKey: true },
+          },
         },
         orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
         take: 8,
@@ -469,15 +562,20 @@ const publicCollectorInclude = {
   },
 } satisfies Prisma.PublicCollectorProfileInclude;
 
-function publicCollectorView(
+async function publicCollectorView(
   x: {
     slug: string;
     headline: string | null;
     specialism: string | null;
+    isFeatured: boolean;
+    featuredAt: Date | null;
+    publishedAt: Date | null;
+    createdAt: Date;
     user: {
       profile: { displayName: string } | null;
       _count: { submissions: number };
       submissions: Array<{
+        media: Array<{ id: string; slot: string; objectKey: string }>;
         asset: {
           publicId: string;
           slug: string;
@@ -494,33 +592,53 @@ function publicCollectorView(
     };
   },
   isBeta = false,
+  storage: ObjectStoragePort,
 ) {
-  const listings = x.user.submissions.flatMap((submission) => {
+  const listings = await Promise.all(x.user.submissions.flatMap((submission) => {
     const asset = submission.asset;
     if (!asset || (isBeta && asset.slug.startsWith('slice-demo-'))) return [];
     const market = asset.marketSnapshots[0] ?? null;
-    return [
-      {
+    return [{
+      submission,
+      asset,
+      market,
+    }];
+  }).map(async ({ submission, asset, market }) => ({
         publicId: asset.publicId,
         slug: asset.slug,
         title: asset.title,
         category: asset.category.name,
+        media: (
+          await Promise.all(
+            submission.media.map(async (media) => ({
+              id: media.id,
+              slot: media.slot,
+              url: await storage
+                .createPrivateDownloadUrl(
+                  media.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
+                .catch(() => null),
+              alt: `${asset.title} ${media.slot.toLowerCase()} approved media`,
+            })),
+          )
+        ).filter((media): media is { id: string; slot: string; url: string; alt: string } => Boolean(media.url)),
         market: market
           ? {
               estimatedValueMinor: market.estimatedMarketValueMinor.toString(),
-              currency: 'GBP',
+              currency: market.currency,
               asOf: market.asOf.toISOString(),
               dataStatus: market.status,
             }
           : null,
-      },
-    ];
-  });
+      })));
   return {
     slug: x.slug,
     headline: x.headline,
     specialism: x.specialism,
     displayName: x.user.profile?.displayName ?? null,
+    publicSince: (x.publishedAt ?? x.createdAt).toISOString(),
+    isFeatured: x.isFeatured,
     publishedListingCount: isBeta ? listings.length : x.user._count.submissions,
     publishedListings: listings,
   };
@@ -652,4 +770,35 @@ function parseLimit(value: string | undefined) {
       message: 'Request validation failed.',
     });
   return parsed;
+}
+
+function parseCollectorPage(value: string | undefined) {
+  if (value === undefined) return 1;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10_000)
+    throw new BadRequestException({
+      code: 'VALIDATION_FAILED',
+      message: 'Request validation failed.',
+    });
+  return parsed;
+}
+
+function parseCollectorPageSize(value: string | undefined) {
+  if (value === undefined) return 12;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 48)
+    throw new BadRequestException({
+      code: 'VALIDATION_FAILED',
+      message: 'Request validation failed.',
+    });
+  return parsed;
+}
+
+function parseCollectorSort(value: string | undefined) {
+  if (value === undefined || value === '') return 'featured' as const;
+  if (value === 'featured' || value === 'recent' || value === 'name') return value;
+  throw new BadRequestException({
+    code: 'VALIDATION_FAILED',
+    message: 'Request validation failed.',
+  });
 }

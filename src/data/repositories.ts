@@ -2,6 +2,8 @@ import type {
   Asset,
   AssetId,
   CollectorProfile,
+  CollectorDirectoryPage,
+  CollectorDirectorySort,
   DiscussionMessage,
   MarketSummary,
   Notification,
@@ -1384,8 +1386,13 @@ export interface CollectorRepository {
   listPublicCollectors(input?: {
     cursor?: string;
     limit?: number;
+    q?: string;
+    specialty?: string;
+    sort?: CollectorDirectorySort;
+    page?: number;
+    pageSize?: number;
     signal?: AbortSignal;
-  }): Promise<{ items: CollectorProfile[]; nextCursor: string | null }>;
+  }): Promise<CollectorDirectoryPage>;
   getCollector(id: UserId): Promise<CollectorProfile | null>;
   followCollector(id: UserId): Promise<void>;
   unfollowCollector(id: UserId): Promise<void>;

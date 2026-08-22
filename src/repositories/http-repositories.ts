@@ -35,6 +35,7 @@ import type {
   AssetId,
   SliceGrade,
   CollectorProfile,
+  CollectorDirectoryPage,
   GradingCompany,
   ISODateTime,
   Money,
@@ -159,15 +160,18 @@ type CollectorDto = {
   headline: string | null;
   specialism: string | null;
   displayName: string | null;
+  publicSince?: string | null;
+  isFeatured?: boolean;
   publishedListingCount?: number;
   publishedListings?: Array<{
     publicId: string;
     slug: string;
     title: string;
     category: string;
+    media?: Array<{ id: string; slot: string; url: string; alt: string }>;
     market: {
       estimatedValueMinor: string;
-      currency: "GBP";
+      currency: "GBP" | "USD" | "EUR" | "CAD";
       asOf: string;
       dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
     } | null;
@@ -179,18 +183,42 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
   displayName: value.displayName ?? value.slug,
   focus: value.specialism ?? value.headline ?? "Collector profile",
   category: "mixed",
+  publicSince: value.publicSince ?? undefined,
+  isFeatured: value.isFeatured === true,
   publishedListingCount: value.publishedListingCount ?? 0,
   publishedListings: (value.publishedListings ?? []).map((listing) => ({
     assetId: listing.publicId as AssetId,
     slug: listing.slug,
     title: listing.title,
     category: listing.category,
+    media: listing.media,
     estimatedMarketValue: listing.market
       ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
       : undefined,
     asOf: listing.market?.asOf,
     dataStatus: listing.market?.dataStatus,
   })),
+});
+
+const mapCollectorPage = (value: {
+  items: CollectorDto[];
+  featured?: CollectorDto[];
+  specialties?: string[];
+  nextCursor: string | null;
+  pagination?: CollectorDirectoryPage["pagination"];
+}): CollectorDirectoryPage => ({
+  items: value.items.map(mapCollector),
+  featured: (value.featured ?? []).map(mapCollector),
+  specialties: value.specialties ?? [],
+  nextCursor: value.nextCursor,
+  pagination: value.pagination ?? {
+    page: 1,
+    pageSize: value.items.length,
+    total: value.items.length,
+    totalPages: value.items.length ? 1 : 0,
+    hasNextPage: Boolean(value.nextCursor),
+    hasPreviousPage: false,
+  },
 });
 
 const safeMinor = (value: string): Money["amount"] => {
@@ -3360,12 +3388,18 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async listPublicCollectors(input) {
         const { signal, ...query } = input ?? {};
-        const body = await client.get<{ items: CollectorDto[]; nextCursor: string | null }>(
+        const body = await client.get<{
+          items: CollectorDto[];
+          featured?: CollectorDto[];
+          specialties?: string[];
+          nextCursor: string | null;
+          pagination?: CollectorDirectoryPage["pagination"];
+        }>(
           "/collectors",
           query,
           signal,
         );
-        return { items: body.items.map(mapCollector), nextCursor: body.nextCursor };
+        return mapCollectorPage(body);
       },
       async getCollector(id) {
         const value = await client.get<CollectorDto | { error: string }>(`/collectors/${id}`);

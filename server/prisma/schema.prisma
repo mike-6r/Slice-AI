@@ -1202,6 +1202,8 @@ model PublicCollectorProfile {
   headline    String?
   specialism  String?
   isPublic    Boolean   @default(false)
+  isFeatured  Boolean   @default(false)
+  featuredAt  DateTime?
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1209,6 +1211,7 @@ model PublicCollectorProfile {
 
   @@index([isPublic, slug])
   @@index([isPublic, createdAt, userId])
+  @@index([isPublic, isFeatured, featuredAt, createdAt, userId])
 }
 
 model WatchlistItem {

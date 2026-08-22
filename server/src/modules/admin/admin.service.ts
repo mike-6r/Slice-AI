@@ -166,6 +166,50 @@ export class AdminService {
     private readonly ownershipPolicy: OwnershipPolicyService,
   ) {}
 
+  async setCollectorFeatured(
+    actor: Actor,
+    slug: string,
+    featured: boolean,
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'catalogue.manage');
+    const profile = await this.db.publicCollectorProfile.findUnique({
+      where: { slug },
+      select: { userId: true, slug: true, isPublic: true },
+    });
+    if (!profile || !profile.isPublic)
+      throw new NotFoundException({
+        code: 'COLLECTOR_NOT_FOUND',
+        message: 'Public collector profile not found.',
+      });
+    const updated = await this.db.publicCollectorProfile.update({
+      where: { slug },
+      data: {
+        isFeatured: featured,
+        featuredAt: featured ? new Date() : null,
+      },
+      select: { slug: true, isFeatured: true, featuredAt: true },
+    });
+    await this.db.auditEvent.create({
+      data: {
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: featured ? 'COLLECTOR_FEATURED' : 'COLLECTOR_UNFEATURED',
+        resourceType: 'public-collector-profile',
+        resourceId: profile.userId,
+        requestId,
+        sessionId: actor.sessionId as never,
+        result: 'SUCCESS',
+        metadata: { slug, featured },
+      },
+    });
+    return {
+      slug: updated.slug,
+      isFeatured: updated.isFeatured,
+      featuredAt: updated.featuredAt?.toISOString() ?? null,
+    };
+  }
+
   async overview(actor: Actor) {
     await this.authorization.authorize(actor, 'admin.console.read');
     const [
