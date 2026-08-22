@@ -18,6 +18,7 @@ import {
   effectiveCardFlipState,
   resolveMarketplaceMedia,
 } from "@/components/marketplace/marketplace-layout";
+import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -25,6 +26,7 @@ import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
 import type { MarketLifecycleProjection, SliceGrade } from "@/domain";
+import type { SupportedCurrency } from "@/data/repositories";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -33,6 +35,13 @@ export const Route = createFileRoute("/asset/$id")({
 
 const PERIODS = ["24H", "7D", "30D", "90D", "1Y", "ALL"] as const;
 const currentUser = "current" as never;
+
+function formatSourceReference(
+  valueInMinorUnits: number | string | bigint,
+  currency: SupportedCurrency,
+) {
+  return `${formatAuthoritativeMoney(valueInMinorUnits, currency, currency, null)} ${currency}`;
+}
 
 function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecycleProjection }) {
   if (!lifecycle) {
@@ -315,9 +324,10 @@ function AssetPage() {
                 <span className="asset-section-label">External reference</span>
                 <strong>
                   {asset.marketReference
-                    ? formatCurrency(asset.marketReference.amountMinor, {
-                        currency: asset.marketReference.currency,
-                      })
+                    ? formatSourceReference(
+                        asset.marketReference.amountMinor,
+                        asset.marketReference.currency,
+                      )
                     : "Unavailable"}
                 </strong>
                 <small>{asset.marketReference?.source ?? "No external reference"}</small>
@@ -512,9 +522,10 @@ function AssetPage() {
               <div className="asset-external-panel__value">
                 <span>{asset.marketReference.source ?? "External market"}</span>
                 <strong>
-                  {formatCurrency(asset.marketReference.amountMinor, {
-                    currency: asset.marketReference.currency,
-                  })}
+                  {formatSourceReference(
+                    asset.marketReference.amountMinor,
+                    asset.marketReference.currency,
+                  )}
                 </strong>
                 <small>{asset.marketReference.context ?? "Observed reference"}</small>
               </div>
