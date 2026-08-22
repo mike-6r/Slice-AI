@@ -674,6 +674,10 @@ const mapTradingPage = (raw: unknown): TradingOrderPage => {
   return {
     items: value.items.map(mapTradingOrder),
     nextCursor: nullableString(value.nextCursor, "orders.nextCursor"),
+    ...(typeof value.page === "number" ? { page: value.page } : {}),
+    ...(typeof value.pageSize === "number" ? { pageSize: value.pageSize } : {}),
+    ...(typeof value.total === "number" ? { total: value.total } : {}),
+    ...(typeof value.totalPages === "number" ? { totalPages: value.totalPages } : {}),
   };
 };
 const mapExecutionPage = (raw: unknown): TradingExecutionPage => {

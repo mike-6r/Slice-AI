@@ -168,6 +168,10 @@ export interface TradingOrderView {
 export interface TradingOrderPage {
   items: TradingOrderView[];
   nextCursor: string | null;
+  page?: number;
+  pageSize?: number;
+  total?: number;
+  totalPages?: number;
 }
 export interface TradingExecution {
   executionId: string;

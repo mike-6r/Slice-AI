@@ -315,7 +315,7 @@ async function main() {
     const safeLots = await portfolio.lotsForUser(userId);
     const safeHistory = await ledger.transactionsForUser(userId, undefined, 1);
     assert(
-      safePortfolio.valuationStatus === 'AVAILABLE',
+      safePortfolio.valuationStatus === 'FULL',
       'portfolio valuation was not available for marked asset.',
     );
     assert(

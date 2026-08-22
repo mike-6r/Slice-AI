@@ -13,6 +13,8 @@ import type {
   TradingExecutionPage,
   TradingOrderInput,
   TradingOrderPage,
+  TradingOrderSide,
+  TradingOrderStatus,
   TradingOrderPreview,
   OwnershipOrderPreview,
   OwnershipPreviewInput,
@@ -76,6 +78,8 @@ export interface AssetRepository {
     sort?: "estimatedMarketValue" | "change24h" | "title";
     cursor?: string;
     limit?: number;
+    page?: number;
+    pageSize?: number;
     signal?: AbortSignal;
   }): Promise<{ items: Asset[]; hasMore: boolean; nextCursor: string | null }>;
   getAssetById(id: AssetId): Promise<Asset | null>;
@@ -1375,6 +1379,13 @@ export interface MarketRepository {
 export interface PortfolioRepository {
   getPortfolio(): Promise<PortfolioSummary>;
   getHoldings(): Promise<PortfolioHolding[]>;
+  getHoldingsPage?(input?: {
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    category?: string;
+    sort?: import("@/domain").PortfolioHoldingSort;
+  }): Promise<import("@/domain").PortfolioHoldingPage>;
   getLots(): Promise<PortfolioLot[]>;
   getTransactions(input?: { cursor?: string; limit?: number }): Promise<PortfolioTransactionPage>;
   getPerformance(range?: PortfolioPerformanceRange): Promise<PortfolioPerformance>;
@@ -1604,7 +1615,17 @@ export interface TradingRepository {
   getOwnershipMarketSummary(assetSlug: string): Promise<OwnershipMarketSummary>;
   placeOrder(input: TradingOrderInput): Promise<TradingOrderView>;
   cancelOrder(orderId: string): Promise<TradingOrderView>;
-  listOwnOrders(input?: { cursor?: string; limit?: number }): Promise<TradingOrderPage>;
+  listOwnOrders(input?: {
+    cursor?: string;
+    limit?: number;
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    side?: TradingOrderSide;
+    status?: TradingOrderStatus;
+    assetClass?: string;
+    from?: string;
+  }): Promise<TradingOrderPage>;
   listOwnExecutions(input?: { cursor?: string; limit?: number }): Promise<TradingExecutionPage>;
   // Explicit mock-mode compatibility for unrelated legacy routes only.
   previewBuyOrder(assetId: AssetId, units: number): Promise<OrderPreview>;

@@ -599,6 +599,11 @@ export const mockRepositories: AppRepositories = {
     async getHoldings() {
       return [];
     },
+    async getHoldingsPage(input) {
+      const page = input?.page ?? 1;
+      const pageSize = input?.pageSize ?? 10;
+      return { items: [], page, pageSize, total: 0, totalPages: 0 };
+    },
     async getLots() {
       return [];
     },

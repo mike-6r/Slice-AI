@@ -3,6 +3,7 @@ import type {
   GbpMinorUnits,
   PortfolioCashSummary,
   PortfolioHolding,
+  PortfolioHoldingPage,
   PortfolioLot,
   PortfolioSummary,
   PortfolioPerformance,
@@ -286,6 +287,17 @@ export const createFinanceApiRepository = (client: ApiClient): PortfolioReposito
     const body = await client.get<unknown>("/me/portfolio/assets");
     if (!Array.isArray(body)) throw new Error("Invalid holdings response.");
     return body.map(mapHolding);
+  },
+  async getHoldingsPage(input) {
+    const body = object(await client.get<unknown>("/me/portfolio/assets/page", input));
+    if (!Array.isArray(body.items)) throw new Error("Invalid paginated holdings response.");
+    return {
+      items: body.items.map(mapHolding),
+      page: count(body.page, "holdings.page"),
+      pageSize: count(body.pageSize, "holdings.pageSize"),
+      total: count(body.total, "holdings.total"),
+      totalPages: count(body.totalPages, "holdings.totalPages"),
+    } satisfies PortfolioHoldingPage;
   },
   async getLots() {
     const body = await client.get<unknown>("/me/portfolio/lots");

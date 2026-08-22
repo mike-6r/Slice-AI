@@ -61,6 +61,16 @@ export interface PortfolioHolding {
   lastSuccessfulRefreshAt?: ISODateTime | null;
 }
 
+export type PortfolioHoldingSort = "VALUE_DESC" | "OWNERSHIP_DESC" | "TITLE_ASC";
+
+export interface PortfolioHoldingPage {
+  items: PortfolioHolding[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface PortfolioLot {
   assetSlug: string | null;
   assetTitle: string | null;

@@ -865,23 +865,73 @@ export class TradingService {
     return { executions };
   }
 
-  async ownOrders(userId: string, cursor?: string, limit = 20) {
+  async ownOrders(
+    userId: string,
+    cursor?: string,
+    limit = 20,
+    input: {
+      q?: string;
+      page?: number;
+      pageSize?: number;
+      side?: 'BUY' | 'SELL';
+      status?: 'OPEN' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED' | 'REJECTED' | 'EXPIRED';
+      assetClass?: string;
+      from?: string;
+    } = {},
+  ) {
+    const query = input.q?.trim();
+    const assetFilters: Prisma.AssetWhereInput[] = [
+      { status: 'PUBLISHED' },
+    ];
+    if (query) {
+      assetFilters.push({
+        OR: [
+          { title: { contains: query, mode: 'insensitive' } },
+          { slug: { contains: query, mode: 'insensitive' } },
+          { category: { name: { contains: query, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    if (input.assetClass) {
+      assetFilters.push({
+        category: { name: { equals: input.assetClass, mode: 'insensitive' } },
+      });
+    }
+    const where: Prisma.TradingOrderWhereInput = {
+      userId,
+      asset: { AND: assetFilters },
+      ...(input.side ? { side: input.side } : {}),
+      ...(input.status
+        ? input.status === 'OPEN'
+          ? { status: { in: ['OPEN', 'PARTIALLY_FILLED'] as TradingOrderStatus[] } }
+          : { status: input.status }
+        : {}),
+      ...(input.from ? { createdAt: { gte: new Date(input.from) } } : {}),
+      ...(!input.page && cursor ? { id: { lt: cursor } } : {}),
+    };
+    const paged = Boolean(input.page);
+    const pageSize = Math.min(Math.max(input.pageSize ?? limit, 1), 50);
     const rows = await this.db.tradingOrder.findMany({
       // Archived assets remain in the audit ledger, but are no longer part of
       // a customer's active catalogue or current Orders workspace.
-      where: {
-        userId,
-        asset: { status: 'PUBLISHED' },
-        ...(cursor ? { id: { lt: cursor } } : {}),
-      },
+      where,
       include: { asset: { select: { slug: true, ownershipSupply: { select: { totalUnits: true } } } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
+      ...(paged ? { skip: ((input.page ?? 1) - 1) * pageSize, take: pageSize } : { take: limit + 1 }),
     });
+    const total = paged ? await this.db.tradingOrder.count({ where }) : null;
     const page = rows.slice(0, limit);
     return {
       items: page.map((row) => this.publicOrder(row, this.publicAssetSlug(row.asset.slug), row.asset.ownershipSupply?.totalUnits)),
-      nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+      nextCursor: paged ? null : rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+      ...(paged
+        ? {
+            page: input.page,
+            pageSize,
+            total: total ?? 0,
+            totalPages: total ? Math.ceil(total / pageSize) : 0,
+          }
+        : {}),
     };
   }
 

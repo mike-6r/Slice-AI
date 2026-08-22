@@ -54,7 +54,7 @@ export class PortfolioQueryService {
         (holding) => holding.estimatedValueMinor === null,
       )
         ? 'PARTIAL'
-        : 'AVAILABLE',
+        : 'FULL',
       investedCostMinor: investedCostMinor?.toString() ?? null,
       unrealisedPnlMinor: unrealisedPnlMinor?.toString() ?? null,
       unrealisedPnlPercent:
@@ -243,6 +243,46 @@ export class PortfolioQueryService {
     });
   }
 
+  async holdingsPageForUser(
+    userId: string,
+    input: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      category?: string;
+      sort?: 'VALUE_DESC' | 'OWNERSHIP_DESC' | 'TITLE_ASC';
+    } = {},
+  ) {
+    const all = await this.holdingsForUser(userId);
+    const query = input.q?.trim().toLowerCase();
+    const category = input.category?.trim().toLowerCase();
+    const filtered = all.filter((holding) => {
+      const matchesQuery = !query || [holding.title, holding.category, holding.grade, holding.slug]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query);
+      const matchesCategory = !category || holding.category?.toLowerCase() === category;
+      return matchesQuery && matchesCategory;
+    });
+    const sorted = [...filtered].sort((left, right) => {
+      if (input.sort === 'VALUE_DESC') return compareMinor(right.estimatedValueMinor, left.estimatedValueMinor) || titleCompare(left.title, right.title);
+      if (input.sort === 'OWNERSHIP_DESC') return compareOwnership(left, right) || titleCompare(left.title, right.title);
+      return titleCompare(left.title, right.title) || left.assetId.localeCompare(right.assetId);
+    });
+    const pageSize = Math.min(Math.max(input.pageSize ?? 10, 1), 50);
+    const total = sorted.length;
+    const totalPages = total ? Math.ceil(total / pageSize) : 0;
+    const page = Math.min(Math.max(input.page ?? 1, 1), Math.max(totalPages, 1));
+    return {
+      items: sorted.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
+  }
+
   async lotsForUser(userId: string) {
     const lots = await this.db.portfolioLot.findMany({
       where: {
@@ -265,6 +305,25 @@ export class PortfolioQueryService {
       status: lot.status,
     }));
   }
+}
+
+function titleCompare(left: string | null, right: string | null) {
+  return (left ?? 'Collectible').localeCompare(right ?? 'Collectible');
+}
+
+function compareMinor(left: string | null, right: string | null) {
+  if (left === null && right === null) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  const a = BigInt(left);
+  const b = BigInt(right);
+  return a === b ? 0 : a > b ? 1 : -1;
+}
+
+function compareOwnership(left: { userOwnershipPercent?: string | null }, right: { userOwnershipPercent?: string | null }) {
+  const a = left.userOwnershipPercent ? Number(left.userOwnershipPercent) : -1;
+  const b = right.userOwnershipPercent ? Number(right.userOwnershipPercent) : -1;
+  return a === b ? 0 : a > b ? -1 : 1;
 }
 
 function formatMoneyPercent(value: bigint, basis: bigint) {

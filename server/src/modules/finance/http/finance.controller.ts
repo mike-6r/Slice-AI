@@ -35,6 +35,13 @@ const reversalBody = z
   })
   .strict();
 const performanceQuery = z.object({ range: z.enum(['1D', '1W', '1M', '3M', '1Y', 'ALL']).default('1M') }).strict();
+const holdingsPageQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(10),
+  q: z.string().trim().max(120).optional(),
+  category: z.string().trim().max(120).optional(),
+  sort: z.enum(['VALUE_DESC', 'OWNERSHIP_DESC', 'TITLE_ASC']).default('TITLE_ASC'),
+}).strict();
 
 @Controller()
 export class FinanceController {
@@ -87,6 +94,18 @@ export class FinanceController {
   @UseGuards(AccessTokenGuard)
   holdings(@Req() req: AuthenticatedRequest) {
     return this.portfolio.holdingsForUser(req.actor!.userId);
+  }
+
+  @Get('me/portfolio/assets/page')
+  @UseGuards(AccessTokenGuard)
+  holdingsPage(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
+    const parsed = holdingsPageQuery.safeParse(query);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+      });
+    return this.portfolio.holdingsPageForUser(req.actor!.userId, parsed.data);
   }
 
   @Get('me/portfolio/performance')

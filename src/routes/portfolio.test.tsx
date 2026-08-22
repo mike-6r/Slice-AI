@@ -14,8 +14,14 @@ import type {
 } from "@/domain";
 
 vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => () => ({}),
+  createFileRoute: () => () => {
+    const route = () => ({});
+    route.useSearch = () => ({});
+    route.fullPath = "/portfolio";
+    return route;
+  },
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  useNavigate: () => () => undefined,
 }));
 
 import { Portfolio } from "./portfolio";

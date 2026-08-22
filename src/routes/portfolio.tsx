@@ -28,11 +28,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
-import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type {
   Asset,
   PortfolioHolding,
+  PortfolioHoldingPage,
   PortfolioSummary,
   PortfolioPerformance,
   PortfolioPerformanceRange,
@@ -40,6 +40,7 @@ import type {
   TradingExecution,
   TradingExecutionPage,
   TradingOrderPage,
+  TradingOrderStatus,
   TradingOrderView,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -75,7 +76,7 @@ export const Route = createFileRoute("/portfolio")({
     tab: ["overview", "holdings", "orders", "activity"].includes(String(search.tab))
       ? (String(search.tab) as PortfolioTab)
       : "overview",
-    activityType: ["all", "trading", "cash", "ownership", "distributions"].includes(
+    activityType: ["all", "trading", "cash", "ownership", "distributions", "account"].includes(
       String(search.activityType),
     )
       ? (String(search.activityType) as ActivityFilter)
@@ -87,13 +88,25 @@ export const Route = createFileRoute("/portfolio")({
     activityPageSize: [10, 25, 50].includes(Number(search.activityPageSize))
       ? Number(search.activityPageSize)
       : 10,
+    holdingsSearch: typeof search.holdingsSearch === "string" ? search.holdingsSearch : undefined,
+    holdingsCategory:
+      typeof search.holdingsCategory === "string" ? search.holdingsCategory : undefined,
+    holdingsSort: ["VALUE_DESC", "OWNERSHIP_DESC", "TITLE_ASC"].includes(
+      String(search.holdingsSort),
+    )
+      ? (String(search.holdingsSort) as PortfolioSearch["holdingsSort"])
+      : "TITLE_ASC",
+    holdingsPage: Math.max(1, Number(search.holdingsPage ?? 1)),
+    holdingsPageSize: [10, 25, 50].includes(Number(search.holdingsPageSize))
+      ? Number(search.holdingsPageSize)
+      : 10,
   }),
   component: Portfolio,
 });
 
 type HoldingFilter = "ALL" | string;
 type PortfolioTab = "overview" | "holdings" | "orders" | "activity";
-type ActivityFilter = "all" | "trading" | "cash" | "ownership" | "distributions";
+type ActivityFilter = "all" | "trading" | "cash" | "ownership" | "distributions" | "account";
 type ActivityRange = "7d" | "30d" | "90d" | "all";
 type PortfolioSearch = {
   tab?: PortfolioTab;
@@ -101,6 +114,11 @@ type PortfolioSearch = {
   activityRange?: ActivityRange;
   activityPage?: number;
   activityPageSize?: number;
+  holdingsSearch?: string;
+  holdingsCategory?: string;
+  holdingsSort?: "VALUE_DESC" | "OWNERSHIP_DESC" | "TITLE_ASC";
+  holdingsPage?: number;
+  holdingsPageSize?: number;
 };
 
 function activityQueryRetry(failureCount: number, error: unknown) {
@@ -120,11 +138,14 @@ export function Portfolio() {
   const { isAuthenticated } = useSession();
   const queryClient = useQueryClient();
   const tab = usePortfolioTab();
-  const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>("ALL");
-  const [holdingSearch, setHoldingSearch] = useState("");
+  const routeSearch = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const holdingFilter: HoldingFilter = routeSearch.holdingsCategory ?? "ALL";
+  const holdingSearch = routeSearch.holdingsSearch ?? "";
+  const holdingSort = routeSearch.holdingsSort ?? "TITLE_ASC";
   const [holdingView, setHoldingView] = useState<"list" | "grid">("list");
-  const [holdingPage, setHoldingPage] = useState(1);
-  const [holdingPageSize, setHoldingPageSize] = useState(10);
+  const holdingPage = routeSearch.holdingsPage ?? 1;
+  const holdingPageSize = routeSearch.holdingsPageSize ?? 10;
   const [performanceRange, setPerformanceRange] = useState<PortfolioPerformanceRange>("1M");
   const summary = useQuery({
     queryKey: queryKeys.portfolio.summary,
@@ -135,6 +156,27 @@ export function Portfolio() {
     queryKey: queryKeys.portfolio.holdings,
     queryFn: services.portfolio.holdings,
     enabled: isAuthenticated,
+  });
+  const holdingsPage = useQuery({
+    queryKey: [
+      "portfolio",
+      "holdings-page",
+      holdingPage,
+      holdingPageSize,
+      holdingSearch,
+      holdingFilter,
+      holdingSort,
+    ],
+    queryFn: () =>
+      services.portfolio.holdingsPage({
+        page: holdingPage,
+        pageSize: holdingPageSize,
+        q: holdingSearch || undefined,
+        category: holdingFilter === "ALL" ? undefined : holdingFilter,
+        sort: holdingSort,
+      }),
+    enabled: isAuthenticated && tab === "holdings",
+    placeholderData: (previous) => previous,
   });
   const transactions = useQuery({
     queryKey: queryKeys.portfolio.transactions(),
@@ -182,31 +224,11 @@ export function Portfolio() {
     queryFn: () => services.portfolio.performance(performanceRange),
     enabled: isAuthenticated,
   });
-  // Showcase fixtures are published for Market/Vault discovery, but they are
-  // not customer portfolio positions. Keep the wallet balance while keeping
-  // those seeded records out of the beta portfolio projection.
-  const displayHoldings = useMemo(
-    () => (holdings.data ?? []).filter((holding) => !isShowcaseAssetSlug(holding.slug)),
-    [holdings.data],
-  );
-  const displaySummary = useMemo(
-    () => (summary.data ? portfolioSummaryWithoutShowcase(summary.data, displayHoldings) : null),
-    [displayHoldings, summary.data],
-  );
-  const displayHoldingsQuery = useMemo(
-    () =>
-      holdings.data
-        ? ({ ...holdings, data: displayHoldings } as UseQueryResult<PortfolioHolding[]>)
-        : holdings,
-    [displayHoldings, holdings],
-  );
-  const displaySummaryQuery = useMemo(
-    () =>
-      displaySummary
-        ? ({ ...summary, data: displaySummary } as UseQueryResult<PortfolioSummary>)
-        : summary,
-    [displaySummary, summary],
-  );
+  // Portfolio rows are a backend-owned projection. Do not hide or rewrite
+  // published positions in the browser based on fixture slugs or media.
+  const displayHoldings = useMemo(() => holdings.data ?? [], [holdings.data]);
+  const displaySummaryQuery = summary;
+  const displayHoldingsQuery = holdings;
   const previousTab = useRef(tab);
   useEffect(() => {
     if (previousTab.current === tab) return;
@@ -224,29 +246,7 @@ export function Portfolio() {
       ),
     [displayHoldings],
   );
-  const visibleHoldings = useMemo(
-    () =>
-      holdingFilter === "ALL"
-        ? displayHoldings
-        : displayHoldings.filter((holding) => holding.category === holdingFilter),
-    [displayHoldings, holdingFilter],
-  );
-  const searchedHoldings = useMemo(() => {
-    const normalized = holdingSearch.trim().toLowerCase();
-    if (!normalized) return visibleHoldings ?? [];
-    return (visibleHoldings ?? []).filter((holding) =>
-      [holding.title, holding.category, holding.grade, holding.slug]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
-    );
-  }, [holdingSearch, visibleHoldings]);
-  const holdingPageCount = Math.max(1, Math.ceil(searchedHoldings.length / holdingPageSize));
-  const pagedHoldings = searchedHoldings.slice(
-    (holdingPage - 1) * holdingPageSize,
-    holdingPage * holdingPageSize,
-  );
+  const visibleHoldings = displayHoldings;
   const authRequired =
     (!isAuthenticated && !summary.data) ||
     (summary.error instanceof ApiError && summary.error.status === 401);
@@ -262,14 +262,35 @@ export function Portfolio() {
           tab={tab}
           holdingSearch={holdingSearch}
           holdingFilter={holdingFilter}
+          holdingSort={holdingSort}
           categories={categories}
           onHoldingSearchChange={(value) => {
-            setHoldingSearch(value);
-            setHoldingPage(1);
+            void navigate({
+              search: (current) => ({
+                ...current,
+                tab,
+                holdingsSearch: value || undefined,
+                holdingsPage: 1,
+              }),
+              replace: true,
+            });
           }}
           onHoldingFilterChange={(value) => {
-            setHoldingFilter(value);
-            setHoldingPage(1);
+            void navigate({
+              search: (current) => ({
+                ...current,
+                tab,
+                holdingsCategory: value === "ALL" ? undefined : value,
+                holdingsPage: 1,
+              }),
+              replace: true,
+            });
+          }}
+          onHoldingSortChange={(value) => {
+            void navigate({
+              search: (current) => ({ ...current, tab, holdingsSort: value, holdingsPage: 1 }),
+              replace: true,
+            });
           }}
         />
         <PortfolioTabs active={tab} />
@@ -286,7 +307,16 @@ export function Portfolio() {
                 query={displayHoldingsQuery}
                 categories={categories}
                 filter={holdingFilter}
-                onFilterChange={setHoldingFilter}
+                onFilterChange={(value) =>
+                  void navigate({
+                    search: (current) => ({
+                      ...current,
+                      tab: "overview",
+                      holdingsCategory: value === "ALL" ? undefined : value,
+                    }),
+                    replace: true,
+                  })
+                }
                 visibleHoldings={visibleHoldings?.slice(0, 5)}
                 compact
               />
@@ -310,19 +340,32 @@ export function Portfolio() {
         ) : tab === "holdings" ? (
           <HoldingsExperience
             summary={displaySummaryQuery}
-            query={displayHoldingsQuery}
-            holdings={pagedHoldings}
-            totalMatches={searchedHoldings.length}
+            query={holdingsPage}
+            holdings={holdingsPage.data?.items ?? []}
+            totalMatches={holdingsPage.data?.total ?? 0}
+            totalHoldings={displaySummaryQuery.data?.holdings.length ?? displayHoldings.length}
             view={holdingView}
             onViewChange={setHoldingView}
             page={holdingPage}
-            pageCount={holdingPageCount}
+            pageCount={holdingsPage.data?.totalPages ?? 0}
             pageSize={holdingPageSize}
-            onPageChange={setHoldingPage}
-            onPageSizeChange={(value) => {
-              setHoldingPageSize(value);
-              setHoldingPage(1);
-            }}
+            onPageChange={(value) =>
+              void navigate({
+                search: (current) => ({ ...current, tab: "holdings", holdingsPage: value }),
+                replace: true,
+              })
+            }
+            onPageSizeChange={(value) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  tab: "holdings",
+                  holdingsPageSize: value,
+                  holdingsPage: 1,
+                }),
+                replace: true,
+              })
+            }
           />
         ) : tab === "orders" ? (
           <PortfolioOrdersExperience
@@ -370,14 +413,34 @@ function PortfolioTabs({ active }: { active: PortfolioTab }) {
           to="/portfolio"
           search={
             tab === "activity"
-              ? { tab }
-              : {
+              ? {
                   tab,
-                  activityType: undefined,
-                  activityRange: undefined,
-                  activityPage: undefined,
-                  activityPageSize: undefined,
+                  holdingsSearch: undefined,
+                  holdingsCategory: undefined,
+                  holdingsSort: undefined,
+                  holdingsPage: undefined,
+                  holdingsPageSize: undefined,
                 }
+              : tab === "holdings"
+                ? {
+                    tab,
+                    activityType: undefined,
+                    activityRange: undefined,
+                    activityPage: undefined,
+                    activityPageSize: undefined,
+                  }
+                : {
+                    tab,
+                    activityType: undefined,
+                    activityRange: undefined,
+                    activityPage: undefined,
+                    activityPageSize: undefined,
+                    holdingsSearch: undefined,
+                    holdingsCategory: undefined,
+                    holdingsSort: undefined,
+                    holdingsPage: undefined,
+                    holdingsPageSize: undefined,
+                  }
           }
           className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
             active === tab
@@ -416,18 +479,54 @@ function PortfolioOrdersExperience({
   const [pageSize, setPageSize] = useState(5);
   const [selectedOrder, setSelectedOrder] = useState<TradingOrderView | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const orderFrom = useMemo(
+    () =>
+      dateRange === "all"
+        ? undefined
+        : new Date(Date.now() - Number(dateRange) * 86_400_000).toISOString(),
+    [dateRange],
+  );
+  const serverStatus: TradingOrderStatus | undefined =
+    status !== "ALL"
+      ? (status as TradingOrderStatus)
+      : tab === "OPEN" || tab === "FILLED" || tab === "CANCELLED"
+        ? tab
+        : undefined;
+  const serverOrders = useQuery({
+    queryKey: [
+      "portfolio",
+      "orders",
+      search,
+      side,
+      assetClass,
+      orderFrom,
+      serverStatus,
+      page,
+      pageSize,
+    ],
+    queryFn: () =>
+      services.trading.orders({
+        limit: 100,
+        page,
+        pageSize,
+        q: search.trim() || undefined,
+        side: side === "ALL" ? undefined : side,
+        status: serverStatus,
+        assetClass: assetClass === "ALL" ? undefined : assetClass,
+        from: orderFrom,
+      }),
+    enabled: true,
+  });
   const cancellation = useMutation({
     mutationFn: services.trading.cancelOrder,
     onSuccess: () => {
       setConfirmCancel(false);
       setSelectedOrder(null);
       onRefresh();
+      void serverOrders.refetch();
     },
   });
-  const allOrders = useMemo(
-    () => (query.data?.items ?? []).filter((order) => !isShowcaseAssetSlug(order.assetSlug)),
-    [query.data?.items],
-  );
+  const allOrders = useMemo(() => serverOrders.data?.items ?? [], [serverOrders.data?.items]);
   const holdingByAsset = useMemo(
     () => new Map(holdings.map((holding) => [holding.assetId, holding])),
     [holdings],
@@ -478,8 +577,11 @@ function PortfolioOrdersExperience({
     status,
     tab,
   ]);
-  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
-  const visibleOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize);
+  const pageCount =
+    serverOrders.data?.totalPages ?? Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const visibleOrders = serverOrders.data?.page
+    ? filteredOrders
+    : filteredOrders.slice((page - 1) * pageSize, page * pageSize);
   const categories = Array.from(
     new Set(
       allOrders
@@ -636,12 +738,12 @@ function PortfolioOrdersExperience({
             </select>
           </label>
         </div>
-        {query.isLoading ? (
+        {serverOrders.isLoading ? (
           <RowsSkeleton rows={5} />
-        ) : query.isError ? (
+        ) : serverOrders.isError ? (
           <PanelError
             message="Your orders are temporarily unavailable."
-            retry={() => void query.refetch()}
+            retry={() => void serverOrders.refetch()}
           />
         ) : !visibleOrders.length ? (
           <div className="portfolio-orders-empty">
@@ -662,7 +764,7 @@ function PortfolioOrdersExperience({
                     <th>Side</th>
                     <th>Type</th>
                     <th>Ownership</th>
-                    <th>Ownership units</th>
+                    <th>Slices</th>
                     <th>Price per Slice</th>
                     <th>Limit Price</th>
                     <th>Filled</th>
@@ -699,7 +801,7 @@ function PortfolioOrdersExperience({
               page={page}
               pageCount={pageCount}
               pageSize={pageSize}
-              total={filteredOrders.length}
+              total={serverOrders.data?.total ?? filteredOrders.length}
               onPageChange={setPage}
               onPageSizeChange={(value) => {
                 setPageSize(value);
@@ -885,7 +987,7 @@ function OrderMobileCard({
           </dd>
         </div>
         <div>
-          <dt>Ownership units</dt>
+          <dt>Slices</dt>
           <dd>{order.originalUnits}</dd>
         </div>
         <div>
@@ -1042,7 +1144,7 @@ function OrderDetailDialog({
             </dd>
           </div>
           <div>
-            <dt>Ownership units</dt>
+            <dt>Slices</dt>
             <dd>
               {order.filledUnits} filled · {order.remainingUnits} remaining of {order.originalUnits}
             </dd>
@@ -1111,12 +1213,12 @@ function OrderAssetIdentity({
   asset?: Asset;
 }) {
   const slug = holding?.slug ?? order.assetSlug;
-  const media = slug ? assetShowcaseMedia(slug) : undefined;
+  const media = asset?.media.find((item) => item.kind === "image");
   const title = asset?.details.title ?? holding?.title ?? "Collectible";
   const content = (
     <>
       <span className="portfolio-order-asset__icon" aria-hidden="true">
-        {media ? <img src={media.src} alt="" /> : <Landmark />}
+        {media ? <img src={media.url} alt="" /> : <Landmark />}
       </span>
       <span className="portfolio-order-asset__copy">
         <strong>{title}</strong>
@@ -1185,9 +1287,7 @@ function RecentOrdersPanel({
   holdings: PortfolioHolding[];
 }) {
   const holdingByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
-  const items = (query.data?.items ?? [])
-    .filter((order) => !isShowcaseAssetSlug(order.assetSlug))
-    .slice(0, 4);
+  const items = (query.data?.items ?? []).slice(0, 4);
   return (
     <PortfolioPanel
       title="Recent orders"
@@ -1242,17 +1342,21 @@ function PortfolioHeading({
   tab,
   holdingSearch,
   holdingFilter,
+  holdingSort,
   categories,
   onHoldingSearchChange,
   onHoldingFilterChange,
+  onHoldingSortChange,
 }: {
   query: UseQueryResult<PortfolioSummary>;
   tab: PortfolioTab;
   holdingSearch: string;
   holdingFilter: HoldingFilter;
+  holdingSort: "VALUE_DESC" | "OWNERSHIP_DESC" | "TITLE_ASC";
   categories: string[];
   onHoldingSearchChange: (value: string) => void;
   onHoldingFilterChange: (value: HoldingFilter) => void;
+  onHoldingSortChange: (value: "VALUE_DESC" | "OWNERSHIP_DESC" | "TITLE_ASC") => void;
 }) {
   const markedAt = query.data ? latestPortfolioMarkAt(query.data) : null;
   const holdingsCount = query.data?.holdings.length ?? 0;
@@ -1311,6 +1415,21 @@ function PortfolioHeading({
                   {category}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="portfolio-holdings-filter">
+            <span className="sr-only">Sort holdings</span>
+            <select
+              value={holdingSort}
+              onChange={(event) =>
+                onHoldingSortChange(
+                  event.target.value as "VALUE_DESC" | "OWNERSHIP_DESC" | "TITLE_ASC",
+                )
+              }
+            >
+              <option value="TITLE_ASC">Sort: A–Z</option>
+              <option value="VALUE_DESC">Sort: Current value</option>
+              <option value="OWNERSHIP_DESC">Sort: Ownership</option>
             </select>
           </label>
         </div>
@@ -1762,6 +1881,7 @@ function HoldingsExperience({
   query,
   holdings,
   totalMatches,
+  totalHoldings,
   view,
   onViewChange,
   page,
@@ -1771,9 +1891,10 @@ function HoldingsExperience({
   onPageSizeChange,
 }: {
   summary: UseQueryResult<PortfolioSummary>;
-  query: UseQueryResult<PortfolioHolding[]>;
+  query: UseQueryResult<PortfolioHoldingPage>;
   holdings: PortfolioHolding[];
   totalMatches: number;
+  totalHoldings: number;
   view: "list" | "grid";
   onViewChange: (view: "list" | "grid") => void;
   page: number;
@@ -1783,6 +1904,7 @@ function HoldingsExperience({
   onPageSizeChange: (pageSize: number) => void;
 }) {
   const hasSearchResults = totalMatches > 0;
+  const hasAnyHoldings = totalHoldings > 0;
   return (
     <PortfolioPanel
       title="Your holdings"
@@ -1817,7 +1939,7 @@ function HoldingsExperience({
           message="Your holdings are temporarily unavailable."
           retry={() => void query.refetch()}
         />
-      ) : !query.data?.length ? (
+      ) : !hasAnyHoldings ? (
         <PortfolioEmptyState
           className="portfolio-empty-state--holdings-page"
           icon={<Landmark aria-hidden="true" />}
@@ -1879,7 +2001,6 @@ function HoldingsExperience({
 
 function HoldingCard({ holding }: { holding: PortfolioHolding }) {
   const valuation = deriveHoldingValuation(holding);
-  const media = holding.slug ? assetShowcaseMedia(holding.slug) : undefined;
   const currentSlicePrice =
     holding.estimatedValueMinor && BigInt(holding.ownedUnits) > 0n
       ? (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString()
@@ -1887,7 +2008,9 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
   return (
     <article className="portfolio-holding-card">
       <div className="portfolio-holding-card__media">
-        <span aria-hidden="true">{media ? <img src={media.src} alt="" /> : <Landmark />}</span>
+        <span aria-hidden="true">
+          <Landmark />
+        </span>
       </div>
       <div className="portfolio-holding-card__body">
         <h3>{holdingDisplayLabel(holding)}</h3>
@@ -2142,7 +2265,9 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
               ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
               : "Ownership unavailable"}
           </strong>
-          <small>{holding.ownedUnits} ownership units</small>
+          <small>
+            {holding.ownedUnits} {holding.ownedUnits === "1" ? "Slice" : "Slices"}
+          </small>
         </span>
       </td>
       <td data-label="Available to sell">
@@ -2153,8 +2278,9 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
               : "Unavailable"}
           </strong>
           <small>
-            {holding.availableToSellUnits ?? holding.availableUnits} ownership units available to
-            sell
+            {holding.availableToSellUnits ?? holding.availableUnits}{" "}
+            {(holding.availableToSellUnits ?? holding.availableUnits) === "1" ? "Slice" : "Slices"}{" "}
+            available to sell
             {holding.availableToBuyPercent !== null && holding.availableToBuyPercent !== undefined
               ? ` · ${holding.availableToBuyPercent}% available to buy`
               : ""}
@@ -2205,11 +2331,10 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
 }
 
 function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
-  const media = holding.slug ? assetShowcaseMedia(holding.slug) : undefined;
   return (
     <>
       <span className="portfolio-asset__icon" aria-hidden="true">
-        {media ? <img src={media.src} alt="" /> : <Landmark />}
+        <Landmark />
       </span>
       <span className="portfolio-asset__copy">
         <strong title={holdingDisplayLabel(holding)}>{holdingDisplayLabel(holding)}</strong>
@@ -2286,10 +2411,8 @@ function PortfolioActivityExperience({
       buildPortfolioActivityEvents(
         accountActivity.data?.items ?? [],
         transactions.data?.items ?? [],
-        (orders.data?.items ?? []).filter((order) => !isShowcaseAssetSlug(order.assetSlug)),
-        (executions.data?.items ?? []).filter(
-          (execution) => !isShowcaseAssetSlug(execution.assetSlug),
-        ),
+        orders.data?.items ?? [],
+        executions.data?.items ?? [],
         assets,
         holdings,
       ),
@@ -2306,22 +2429,24 @@ function PortfolioActivityExperience({
     const cutoff = range === "all" ? null : Date.now() - Number(range.slice(0, -1)) * 86_400_000;
     return allEvents.filter((event) => {
       const inCategory =
-        filter === "all" ||
+        (filter === "all" && event.category !== "ACCOUNT") ||
         (filter === "trading" && event.category === "TRADING") ||
         (filter === "cash" && event.category === "CASH") ||
         (filter === "ownership" && event.category === "OWNERSHIP") ||
-        (filter === "distributions" && event.category === "DISTRIBUTIONS");
+        (filter === "distributions" && event.category === "DISTRIBUTIONS") ||
+        (filter === "account" && event.category === "ACCOUNT");
       return inCategory && (cutoff === null || new Date(event.occurredAt).getTime() >= cutoff);
     });
   }, [allEvents, filter, range]);
   const pageCount = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
   const visibleEvents = filteredEvents.slice((page - 1) * pageSize, page * pageSize);
   const hasDistributionEvents = allEvents.some((event) => event.category === "DISTRIBUTIONS");
-  const failed = accountActivity.isError || transactions.isError;
+  const failed = accountActivity.isError && transactions.isError && executions.isError;
   // Activity is usable as soon as the two account-history sources resolve. Do
   // not replace real rows with a skeleton while optional trading lookups
   // refresh in the background.
-  const loading = !failed && (accountActivity.isLoading || transactions.isLoading);
+  const loading =
+    !failed && accountActivity.isLoading && transactions.isLoading && executions.isLoading;
   const updateSearch = (patch: Partial<PortfolioSearch>) => {
     void navigate({
       search: (current) => ({ ...current, tab: "activity", ...patch }),
@@ -2337,7 +2462,9 @@ function PortfolioActivityExperience({
           ? "You don't have any ownership changes in this period."
           : filter === "distributions"
             ? "You don't have any distributions in this period."
-            : "Your account activity will appear here.";
+            : filter === "account"
+              ? "You don't have any account activity in this period."
+              : "Your account activity will appear here.";
 
   return (
     <PortfolioPanel
@@ -2352,6 +2479,7 @@ function PortfolioActivityExperience({
                 ["trading", "Trading"],
                 ["cash", "Cash"],
                 ["ownership", "Ownership"],
+                ["account", "Account"],
                 ...(hasDistributionEvents ? [["distributions", "Distributions"]] : []),
               ] as Array<[ActivityFilter, string]>
             ).map(([value, label]) => (
@@ -2481,7 +2609,11 @@ function ActivityEventRow({ event, onOpen }: { event: ActivityEvent; onOpen: () 
           <span className="portfolio-activity-event__cash-detail">
             <strong>{event.secondary[0] ?? "Account activity"}</strong>
             <small>
-              {event.reference ? `Reference: ${event.reference}` : "Customer account event"}
+              {event.category === "ACCOUNT"
+                ? "Security history"
+                : event.reference
+                  ? `Reference: ${event.reference}`
+                  : "Customer account event"}
             </small>
           </span>
         )}
@@ -2659,7 +2791,7 @@ function buildPortfolioActivityEvents(
       tone: isBuy ? "credit" : "debit",
       primary: ownership ? `${isBuy ? "+" : "-"}${ownership}%` : `${execution.units} units`,
       secondary: [
-        `${execution.units} ownership units ${isBuy ? "acquired" : "sold"}`,
+        `${execution.units} ${execution.units === "1" ? "Slice" : "Slices"} ${isBuy ? "acquired" : "sold"}`,
         formatPortfolioMoney(gross),
       ],
       moneyMinor: gross,
@@ -2696,7 +2828,7 @@ function buildPortfolioActivityEvents(
       tone: "neutral",
       primary: ownership ? `${ownership}% order cancelled` : "Order cancelled",
       secondary: [
-        `${order.originalUnits} ownership units`,
+        `${order.originalUnits} ${order.originalUnits === "1" ? "Slice" : "Slices"}`,
         `${formatPortfolioMoney(order.limitPriceMinor)} limit per Slice`,
       ],
       asset,
@@ -2790,10 +2922,7 @@ function activityAsset(
 ): ActivityEvent["asset"] {
   if (!asset && !holding) return undefined;
   const slug = asset?.slug ?? holding?.slug ?? null;
-  const media =
-    asset?.media.find((item) => item.kind === "image")?.url ??
-    (slug ? assetShowcaseMedia(slug)?.src : undefined) ??
-    null;
+  const media = asset?.media.find((item) => item.kind === "image")?.url ?? null;
   return {
     slug,
     title: asset?.details.title ?? holding?.title ?? "Collectible",
@@ -2920,11 +3049,11 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
       ) : query.data?.length ? (
         <ul className="portfolio-market-watch">
           {query.data.slice(0, 3).map((asset) => {
-            const media = asset.slug ? assetShowcaseMedia(asset.slug) : undefined;
+            const media = asset.media.find((item) => item.kind === "image");
             return (
               <li key={asset.id}>
                 <span className="portfolio-market-watch__thumb" aria-hidden="true">
-                  {media ? <img src={media.src} alt="" /> : <Eye />}
+                  {media ? <img src={media.url} alt="" /> : <Eye />}
                 </span>
                 <span className="portfolio-market-watch__copy">
                   <strong>{asset.details.title}</strong>
@@ -3063,48 +3192,6 @@ function PortfolioAccessRequired() {
       </section>
     </main>
   );
-}
-
-function isShowcaseAssetSlug(slug: string | null | undefined) {
-  return typeof slug === "string" && slug.startsWith("slice-demo-");
-}
-
-function portfolioSummaryWithoutShowcase(
-  summary: PortfolioSummary,
-  holdings: PortfolioHolding[],
-): PortfolioSummary {
-  const hasCompleteMarks =
-    holdings.length > 0 && holdings.every((holding) => holding.estimatedValueMinor !== null);
-  const estimatedHoldingsValueMinor = hasCompleteMarks
-    ? holdings
-        .reduce((total, holding) => total + BigInt(holding.estimatedValueMinor!), 0n)
-        .toString()
-    : null;
-  const hasCompleteCostBasis =
-    holdings.length > 0 && holdings.every((holding) => holding.costBasisMinor !== null);
-  const investedCostMinor = hasCompleteCostBasis
-    ? holdings.reduce((total, holding) => total + BigInt(holding.costBasisMinor!), 0n).toString()
-    : null;
-  const unrealisedPnlMinor =
-    estimatedHoldingsValueMinor !== null && investedCostMinor !== null
-      ? (BigInt(estimatedHoldingsValueMinor) - BigInt(investedCostMinor)).toString()
-      : null;
-  return {
-    ...summary,
-    holdings,
-    estimatedHoldingsValueMinor,
-    estimatedPortfolioValueMinor:
-      estimatedHoldingsValueMinor === null
-        ? null
-        : (BigInt(summary.cash.totalMinor) + BigInt(estimatedHoldingsValueMinor)).toString(),
-    valuationStatus: hasCompleteMarks ? "FULL" : holdings.length ? "PARTIAL" : "UNAVAILABLE",
-    investedCostMinor,
-    unrealisedPnlMinor,
-    unrealisedPnlPercent:
-      unrealisedPnlMinor !== null && investedCostMinor !== null
-        ? percentageOf(unrealisedPnlMinor, investedCostMinor)
-        : null,
-  };
 }
 
 const ALLOCATION_COLOURS = ["#23d9b4", "#8a64e9", "#f4bc28", "#3d7fe6", "#8791a1"];

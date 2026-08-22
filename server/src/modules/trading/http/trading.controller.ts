@@ -54,6 +54,13 @@ const page = z
   .object({
     cursor: z.string().min(1).max(128).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(50).optional(),
+    q: z.string().trim().max(120).optional(),
+    side: z.enum(['BUY', 'SELL']).optional(),
+    status: z.enum(['OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED']).optional(),
+    assetClass: z.string().trim().max(120).optional(),
+    from: z.string().datetime().optional(),
   })
   .strict();
 const executionPage = z
@@ -141,7 +148,7 @@ export class TradingController {
   @UseGuards(AccessTokenGuard)
   ownOrders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const input = this.parse(page, query);
-    return this.trading.ownOrders(req.actor!.userId, input.cursor, input.limit);
+    return this.trading.ownOrders(req.actor!.userId, input.cursor, input.limit, input);
   }
 
   @Get('trading/executions')

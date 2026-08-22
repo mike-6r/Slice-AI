@@ -31401,3 +31401,267 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     transform: none;
   }
 }
+
+/* Portfolio area rebuild: one spacious, customer-readable financial workspace. */
+.portfolio-page.portfolio-page--approved .portfolio-shell {
+  width: min(calc(100% - 4rem), 100rem);
+  padding-block: clamp(2rem, 4vw, 3.75rem) 5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, auto);
+  align-items: end;
+  gap: 2.5rem;
+  padding-bottom: 1.75rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+  font-size: clamp(3rem, 5vw, 5.6rem);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading > div > p:last-child {
+  max-width: 46rem;
+  font-size: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpis,
+.portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+  grid-template-columns: minmax(1.35fr, 1.45fr) repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child {
+  border-color: rgba(35, 217, 180, 0.38);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(35, 217, 180, 0.14), transparent 42%),
+    linear-gradient(135deg, rgba(17, 39, 40, 0.96), rgba(12, 20, 26, 0.96));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-summary-kpi {
+  min-height: 8rem;
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content strong {
+  font-size: clamp(1.45rem, 2.4vw, 2.15rem);
+  letter-spacing: -0.045em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.72fr);
+  grid-template-rows: minmax(23rem, auto) minmax(15rem, auto);
+  gap: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+  grid-row: 1 / span 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--hero-performance {
+  min-height: 23rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--allocation {
+  min-height: 15rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(18rem, 0.85fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.14);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__head {
+  min-height: 4.15rem;
+  padding: 1.15rem 1.35rem 0.85rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__body {
+  padding: 0 1.35rem 1.35rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-hero {
+  min-height: 18rem;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.62fr);
+  gap: 1.25rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart {
+  min-height: 13rem;
+  padding-top: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart svg {
+  height: 10.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table {
+  font-size: 0.84rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated th,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table th {
+  padding-block: 1rem;
+  color: #8fa3ae;
+  font-size: 0.66rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table td {
+  padding-block: 1.1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated .portfolio-asset__icon {
+  width: 4.4rem;
+  height: 6rem;
+  flex-basis: 4.4rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__quantity strong {
+  font-size: 0.95rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__quantity small {
+  max-width: 13rem;
+  line-height: 1.35;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-table {
+  min-width: 68rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-event {
+  min-height: 6.25rem;
+  border-bottom-color: rgba(137, 164, 176, 0.1);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-event:hover,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event:focus-visible {
+  background: rgba(35, 217, 180, 0.045);
+}
+
+@media (max-width: 1180px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell { width: min(calc(100% - 3rem), 90rem); }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .portfolio-page.portfolio-page--approved .portfolio-heading {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+    grid-row: auto;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom > .portfolio-panel--market-watch {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell {
+    width: calc(100% - 1.25rem);
+    padding-block: 1.35rem 2.75rem;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+    font-size: clamp(2.75rem, 15vw, 4.25rem);
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-summary-kpi:first-child,
+  .portfolio-page.portfolio-page--approved .portfolio-summary-kpi:last-child,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom > .portfolio-panel--market-watch {
+    grid-column: auto;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-hero {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart {
+    min-height: 10rem;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart svg {
+    height: 8rem;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-table {
+    overflow: visible;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-table__head {
+    display: none;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    padding: 1rem 0;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__activity,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__asset,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__badge,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__amount,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__date {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__activity { grid-column: 1 / -1; }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__asset { min-width: 0; }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__date { text-align: right; }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__chevron {
+    display: none;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__summary strong,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__summary small,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__asset strong,
+  .portfolio-page.portfolio-page--approved .portfolio-activity-event__asset small {
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-page.portfolio-page--approved * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .portfolio-page.portfolio-page--approved .portfolio-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    overflow: hidden;
+    gap: .15rem;
+  }
+  .portfolio-page.portfolio-page--approved .portfolio-tabs a {
+    min-width: 0;
+    padding-inline: .25rem;
+    font-size: .72rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+}

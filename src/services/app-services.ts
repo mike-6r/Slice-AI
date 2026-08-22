@@ -11,6 +11,8 @@ export class AssetService {
     sort?: "estimatedMarketValue" | "change24h" | "title";
     cursor?: string;
     limit?: number;
+    page?: number;
+    pageSize?: number;
     signal?: AbortSignal;
   }) => this.repositories.assets.listAssets(input);
   get = (id: import("@/domain").AssetId) => this.repositories.assets.getAssetById(id);
@@ -34,6 +36,20 @@ export class PortfolioService {
   constructor(private readonly repositories: AppRepositories) {}
   portfolio = () => this.repositories.portfolio.getPortfolio();
   holdings = () => this.repositories.portfolio.getHoldings();
+  holdingsPage = async (input?: {
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    category?: string;
+    sort?: import("@/domain").PortfolioHoldingSort;
+  }) => {
+    if (this.repositories.portfolio.getHoldingsPage)
+      return this.repositories.portfolio.getHoldingsPage(input);
+    const items = await this.repositories.portfolio.getHoldings();
+    const page = input?.page ?? 1;
+    const pageSize = input?.pageSize ?? 10;
+    return { items, page, pageSize, total: items.length, totalPages: items.length ? 1 : 0 };
+  };
   lots = () => this.repositories.portfolio.getLots();
   transactions = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.portfolio.getTransactions(input);
@@ -53,8 +69,17 @@ export class TradingService {
   placeOrder = (input: import("@/domain").TradingOrderInput) =>
     this.repositories.trading.placeOrder(input);
   cancelOrder = (orderId: string) => this.repositories.trading.cancelOrder(orderId);
-  orders = (input?: { cursor?: string; limit?: number }) =>
-    this.repositories.trading.listOwnOrders(input);
+  orders = (input?: {
+    cursor?: string;
+    limit?: number;
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    side?: import("@/domain").TradingOrderSide;
+    status?: import("@/domain").TradingOrderStatus;
+    assetClass?: string;
+    from?: string;
+  }) => this.repositories.trading.listOwnOrders(input);
   executions = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.trading.listOwnExecutions(input);
   previewBuy = (assetId: import("@/domain").AssetId, units: number) =>
