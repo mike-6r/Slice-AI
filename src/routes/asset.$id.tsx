@@ -20,7 +20,11 @@ import {
 } from "@/components/marketplace/marketplace-layout";
 import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
-import { formatAvailability, formatPricePerUnit } from "@/lib/market-presentation";
+import {
+  formatAvailability,
+  formatMinorAmount,
+  formatPricePerUnit,
+} from "@/lib/market-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
@@ -539,14 +543,6 @@ function AssetPage() {
               <div>
                 <dt>Updated</dt>
                 <dd>{marketReferenceAt ? formatDate(marketReferenceAt) : "Unavailable"}</dd>
-              </div>
-              <div>
-                <dt>Slice valuation</dt>
-                <dd>
-                  {currentValue === undefined
-                    ? "Unavailable"
-                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
-                </dd>
               </div>
             </dl>
           </section>
@@ -1209,15 +1205,28 @@ function TradingPanel({
           <div className="asset-ownership-breakdown__legend">
             <span>
               <i className="is-retained" /> Collector retained{" "}
-              <strong>{breakdown.collectorRetainedSlices}</strong>
+              <strong>
+                {Number(breakdown.collectorRetainedSlices).toLocaleString()}{" "}
+                <small>
+                  {formatAllocationPercent(breakdown.collectorRetainedSlices, issuedShares)}
+                </small>
+              </strong>
             </span>
             <span>
               <i className="is-owned" /> Investor owned{" "}
-              <strong>{breakdown.investorOwnedSlices}</strong>
+              <strong>
+                {Number(breakdown.investorOwnedSlices).toLocaleString()}{" "}
+                <small>
+                  {formatAllocationPercent(breakdown.investorOwnedSlices, issuedShares)}
+                </small>
+              </strong>
             </span>
             <span>
               <i className="is-available" /> Available{" "}
-              <strong>{availableShares?.toLocaleString() ?? "—"}</strong>
+              <strong>
+                {availableShares?.toLocaleString() ?? "—"}{" "}
+                <small>{formatAllocationPercent(availableShares, issuedShares)}</small>
+              </strong>
             </span>
           </div>
         </div>
@@ -1342,23 +1351,40 @@ function RecentTrades({
           Retry executions
         </button>
       ) : (
-        <ul className="asset-recent-trades__table" aria-label="Recent trades">
-          {trades.length ? (
-            trades.slice(0, 7).map((trade) => (
-              <li key={trade.id}>
-                <span>{formatDate(trade.executedAt)}</span>
-                <strong>{trade.units.toLocaleString()} Slices</strong>
-                <em className="is-up">{formatPricePerUnit(trade.pricePerUnit.amount, currency)}</em>
+        <>
+          <div className="asset-recent-trades__head" aria-hidden="true">
+            <span>Date</span>
+            <span>Side</span>
+            <span>Slices</span>
+            <span>Price / Slice</span>
+            <span>Total</span>
+          </div>
+          <ul className="asset-recent-trades__table" aria-label="Recent trades">
+            {trades.length ? (
+              trades.slice(0, 7).map((trade) => (
+                <li key={trade.id}>
+                  <span>{formatDate(trade.executedAt)}</span>
+                  <span className="asset-recent-trades__side" aria-label="Trade side unavailable">
+                    —
+                  </span>
+                  <strong>{Number(trade.units).toLocaleString()} Slices</strong>
+                  <em className="is-up">
+                    {formatPricePerUnit(trade.pricePerUnit.amount, currency)}
+                  </em>
+                  <em>{formatTradeTotal(trade.units, trade.pricePerUnit.amount, currency)}</em>
+                </li>
+              ))
+            ) : (
+              <li>
+                <span>No public executions yet.</span>
+                <span>—</span>
+                <strong>—</strong>
+                <em>—</em>
+                <em>—</em>
               </li>
-            ))
-          ) : (
-            <li>
-              <span>No public executions yet.</span>
-              <strong>—</strong>
-              <em>—</em>
-            </li>
-          )}
-        </ul>
+            )}
+          </ul>
+        </>
       )}
     </section>
   );
@@ -1545,6 +1571,30 @@ function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
   const wholePercent = percentageBasisPoints / 100n;
   const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
   return `${wholePercent}.${fractionalPercent}% ownership`;
+}
+
+function formatAllocationPercent(value: string | number | undefined, total: number | undefined) {
+  if (value === undefined || total === undefined || total <= 0) return "—";
+  try {
+    const amount = BigInt(value);
+    const basisPoints = (amount * 10_000n) / BigInt(total);
+    return `${basisPoints / 100n}.${(basisPoints % 100n).toString().padStart(2, "0")}%`;
+  } catch {
+    return "—";
+  }
+}
+
+function formatTradeTotal(
+  units: string | number,
+  priceMinor: number,
+  currency: "GBP" | "USD" | "CAD" | "EUR",
+) {
+  try {
+    const totalMinor = BigInt(units) * BigInt(priceMinor);
+    return formatMinorAmount(totalMinor, currency);
+  } catch {
+    return "Unavailable";
+  }
 }
 
 function percentOf(value: string | number | undefined, total: number | undefined) {
