@@ -71,7 +71,7 @@ STRIPE_MEMBERSHIP_ELITE_PRICE_ID=price_...
 
 Price IDs must reference recurring monthly GBP Prices created in the intended Stripe Sandbox. The application does not create Products or Prices and does not guess or convert currencies. Checkout verifies mode, customer, and livemode before returning a redirect.
 
-The staging VPS was audited before implementation verification. It was still `PROVIDER_MODE=local` and did not contain the three membership Price ID variables. Therefore the real Stripe Sandbox flow is intentionally unavailable until those operator-owned settings are configured. This is a release blocker, not a frontend fallback.
+The staging VPS is now running with effective `PROVIDER_MODE=stripe_sandbox` and `STRIPE_LIVE_ENABLED=false`, but it does not contain the three membership Price ID variables. Therefore the real Stripe Sandbox flow is intentionally unavailable until those operator-owned settings are configured. This is a release blocker, not a frontend fallback.
 
 ## 5. Server enforcement
 
@@ -142,3 +142,17 @@ After operator configuration, run only with disposable Collector credentials and
 **Financial/economic mutation:** NONE.
 
 The final release decision must be updated only after the controlled Sandbox E2E matrix above is executed and the persisted subscription, status history, audit events, and unchanged financial/economic state are verified.
+
+## 11. Staging deployment verification — 2026-08-22
+
+- Commit: `2560900` — `Implement Collector membership Stripe billing`
+- Active release: `/opt/slice/releases/20260822-2560900`
+- `/opt/slice/current` and `/opt/slice/app`: both point to the active release
+- API and web services: active
+- `/health`: PASS
+- `/ready`: PASS — PostgreSQL and Redis up
+- Persisted plans: STARTER/PRO/ELITE, GBP, £900/£1900/£4900 minor units
+- Existing membership projection after migration: `INCOMPLETE` only; no fake active membership remains
+- Stripe live mode: disabled
+- Membership Price IDs: all three absent; Checkout/Portal E2E intentionally not run
+- Browser visual QA: BLOCKED — the available browser surface did not expose a controllable staging tab in this run; no login, Checkout, Portal, or mutation was attempted
