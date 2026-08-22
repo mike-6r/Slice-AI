@@ -160,6 +160,7 @@ type CollectorDto = {
   headline: string | null;
   specialism: string | null;
   displayName: string | null;
+  avatarReference?: string | null;
   publicSince?: string | null;
   isFeatured?: boolean;
   publishedListingCount?: number;
@@ -181,6 +182,7 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
   userId: value.slug as UserId,
   handle: value.slug,
   displayName: value.displayName ?? value.slug,
+  avatarUrl: value.avatarReference ?? null,
   focus: value.specialism ?? value.headline ?? "Collector profile",
   category: "mixed",
   publicSince: value.publicSince ?? undefined,
@@ -1466,7 +1468,19 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
           const subscription = collector.subscription
             ? objectField(collector.subscription, "admin user subscription")
             : null;
+          const publicDirectory = collector.publicDirectory
+            ? objectField(collector.publicDirectory, "admin user collector directory")
+            : null;
           return {
+            publicDirectory: publicDirectory
+              ? {
+                  slug: stringField(publicDirectory.slug, "admin user collector directory.slug"),
+                  isPublic: Boolean(publicDirectory.isPublic),
+                  isFeatured: Boolean(publicDirectory.isFeatured),
+                  featuredAt: nullableString(publicDirectory.featuredAt, "admin user collector directory.featuredAt"),
+                  publishedAt: nullableString(publicDirectory.publishedAt, "admin user collector directory.publishedAt"),
+                }
+              : null,
             subscription: subscription
               ? {
                   plan: stringField(subscription.plan, "admin user subscription.plan"),
@@ -2763,6 +2777,21 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         assignmentId,
         userId: id,
         revoked: true,
+      };
+    },
+    async setCollectorFeatured(slug, featured) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/collectors/${encodeURIComponent(slug)}/featured`, {
+          method: "POST",
+          body: { featured },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "collector featured state",
+      );
+      return {
+        slug: stringField(value.slug, "collector featured.slug"),
+        isFeatured: Boolean(value.isFeatured),
+        featuredAt: nullableString(value.featuredAt, "collector featured.featuredAt"),
       };
     },
     async listComplianceCases(input) {

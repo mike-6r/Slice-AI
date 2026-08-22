@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Archive, ArrowLeft, BadgeCheck, Sparkles } from "lucide-react";
+import { Archive, ArrowLeft, Sparkles } from "lucide-react";
 import {
   CollectorAvatar,
   CollectorAssetPreview,
@@ -36,7 +36,7 @@ function CollectorPage() {
     return (
       <section className="page-shell py-12">
         <h1>Profile not found</h1>
-        <p>This collector is private or unavailable.</p>
+        <p>This Collector is no longer active or is unavailable.</p>
         <Link to="/collectors">Browse public collectors</Link>
       </section>
     );
@@ -56,9 +56,7 @@ function CollectorPage() {
               <div className="public-collector-identity">
                 <CollectorAvatar collector={collector} featured />
                 <div>
-                  <span>
-                    <BadgeCheck aria-hidden="true" /> Public collector
-                  </span>
+                  <span>Active Collector</span>
                   <h1>{collector.displayName}</h1>
                   <p>@{collector.handle}</p>
                 </div>
@@ -81,8 +79,8 @@ function CollectorPage() {
                   <dd>{categoryCount || "\u2014"}</dd>
                 </div>
                 <div>
-                  <dt>Profile visibility</dt>
-                  <dd className="is-positive">Public</dd>
+                  <dt>Directory status</dt>
+                  <dd className="is-positive">Active</dd>
                 </div>
               </dl>
             </div>

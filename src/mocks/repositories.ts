@@ -261,6 +261,9 @@ export const mockRepositories: AppRepositories = {
     async revokeUserRole() {
       throw new Error("Role changes require the API service.");
     },
+    async setCollectorFeatured() {
+      throw new Error("Collector featuring requires the API service.");
+    },
     async listComplianceCases() {
       return { items: [] };
     },

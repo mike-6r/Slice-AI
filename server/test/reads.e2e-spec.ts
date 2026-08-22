@@ -61,7 +61,39 @@ describe('Document 008 public read HTTP contracts', () => {
         email: `${id}-pub2@example.test`,
         normalizedEmail: `${id}-pub2@example.test`,
         passwordHash: 'x',
+        accountStatus: 'ACTIVE',
         profile: { create: { displayName: 'Public Two' } },
+      },
+    });
+    await db.user.updateMany({
+      where: { id: { in: [pub.id, priv.id] } },
+      data: { accountStatus: 'ACTIVE' },
+    });
+    const noProfile = await db.user.create({
+      data: {
+        id: `${id}-no-profile`,
+        email: `${id}-no-profile@example.test`,
+        normalizedEmail: `${id}-no-profile@example.test`,
+        passwordHash: 'x',
+        accountStatus: 'ACTIVE',
+      },
+    });
+    const revoked = await db.user.create({
+      data: {
+        id: `${id}-revoked`,
+        email: `${id}-revoked@example.test`,
+        normalizedEmail: `${id}-revoked@example.test`,
+        passwordHash: 'x',
+        accountStatus: 'ACTIVE',
+      },
+    });
+    const suspended = await db.user.create({
+      data: {
+        id: `${id}-suspended`,
+        email: `${id}-suspended@example.test`,
+        normalizedEmail: `${id}-suspended@example.test`,
+        passwordHash: 'x',
+        accountStatus: 'SUSPENDED',
       },
     });
     await db.publicCollectorProfile.createMany({
@@ -69,6 +101,22 @@ describe('Document 008 public read HTTP contracts', () => {
         { userId: pub.id, slug: `${id}-public`, isPublic: true },
         { userId: pub2.id, slug: `${id}-public-2`, isPublic: true },
         { userId: priv.id, slug: `${id}-private`, isPublic: false },
+      ],
+    });
+    await db.roleAssignment.createMany({
+      data: [pub.id, pub2.id, noProfile.id].map((userId) => ({
+        userId,
+        role: 'COLLECTOR',
+      })),
+    });
+    await db.roleAssignment.createMany({
+      data: [
+        {
+          userId: revoked.id,
+          role: 'COLLECTOR',
+          revokedAt: new Date(),
+        },
+        { userId: suspended.id, role: 'COLLECTOR' },
       ],
     });
     await db.assetSubmission.create({
@@ -130,15 +178,21 @@ describe('Document 008 public read HTTP contracts', () => {
     await db.category.delete({ where: { id: `${id}-cat` } });
     await app.close();
   });
-  it('paginates collectors and vault events with scoped cursors', async () => {
+  it('paginates collectors with stable page state and keeps vault cursors scoped', async () => {
     const collectors = await request(app.getHttpServer()).get(
-      '/api/v1/collectors?limit=1',
+      '/api/v1/collectors?page=1&pageSize=1',
     );
     expect(collectors.status).toBe(200);
     expect(collectors.body.items).toHaveLength(1);
-    expect(collectors.body.nextCursor).toEqual(expect.any(String));
+    expect(collectors.body.pagination).toMatchObject({
+      page: 1,
+      pageSize: 1,
+      total: 3,
+      totalPages: 3,
+      hasNextPage: true,
+    });
     const collectorsNext = await request(app.getHttpServer()).get(
-      `/api/v1/collectors?limit=1&cursor=${encodeURIComponent(collectors.body.nextCursor)}`,
+      '/api/v1/collectors?page=2&pageSize=1',
     );
     expect(collectorsNext.status).toBe(200);
     expect(collectorsNext.body.items[0]?.slug).not.toBe(
@@ -147,14 +201,7 @@ describe('Document 008 public read HTTP contracts', () => {
     expect(
       (
         await request(app.getHttpServer()).get(
-          '/api/v1/collectors?cursor=not-a-cursor',
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await request(app.getHttpServer()).get(
-          `/api/v1/vault/events?cursor=${encodeURIComponent(collectors.body.nextCursor)}`,
+          '/api/v1/vault/events?cursor=not-a-cursor',
         )
       ).status,
     ).toBe(400);
@@ -173,7 +220,7 @@ describe('Document 008 public read HTTP contracts', () => {
         .status,
     ).toBe(400);
   });
-  it('exposes only opted-in collectors and safe vault projections', async () => {
+  it('projects active Collectors and keeps the public payload safe', async () => {
     const list = await request(app.getHttpServer()).get('/api/v1/collectors');
     expect(list.status).toBe(200);
     expect(list.body.items).toEqual(
@@ -203,10 +250,21 @@ describe('Document 008 public read HTTP contracts', () => {
       `${id}-pub@example.test`,
     );
     expect(JSON.stringify(publicProfile)).not.toContain('ownerUserId');
+    const fallback = list.body.items.find(
+      (item: { slug: string }) => item.slug === `collector-${id}-no-profile`,
+    );
+    expect(fallback).toMatchObject({
+      displayName: 'Collector',
+      publishedListingCount: 0,
+      publishedListings: [],
+      isFeatured: false,
+    });
+    expect(JSON.stringify(list.body)).not.toContain(`${id}-revoked`);
+    expect(JSON.stringify(list.body)).not.toContain(`${id}-suspended`);
     const detail = await request(app.getHttpServer()).get(
       `/api/v1/collectors/${id}-private`,
     );
-    expect(detail.body).not.toHaveProperty('email');
+    expect(detail.body).toEqual({ error: 'COLLECTOR_NOT_FOUND' });
     const vault = await request(app.getHttpServer()).get(
       '/api/v1/vault/events',
     );

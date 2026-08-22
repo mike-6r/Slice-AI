@@ -50,7 +50,7 @@ export const Route = createFileRoute("/collectors")({
   head: () => ({
     meta: [
       { title: "Collectors | Slice" },
-      { name: "description", content: "Explore public collector profiles and the catalogues they choose to share." },
+      { name: "description", content: "Explore active Collectors and the published collectibles they showcase on Slice." },
     ],
   }),
   component: CollectorsPage,
@@ -109,12 +109,11 @@ function CollectorsPage() {
           <p className="collectors-kicker">The Slice community</p>
           <h1>Collectors worth knowing.</h1>
           <p>
-            Discover people who choose to share their collecting focus and published catalogue with
-            the Slice community.
+            Discover active Collectors and the published collectibles they choose to showcase on Slice.
           </p>
           <div className="collectors-hero-note">
             <UsersRound aria-hidden="true" />
-            <span>Public profiles only. Private collections stay private.</span>
+            <span>Active Collector accounts only. Private collection data stays private.</span>
           </div>
         </div>
         <div className="collectors-hero-aside" aria-label="Collector directory summary">
@@ -131,7 +130,7 @@ function CollectorsPage() {
               <p className="collectors-kicker">Community highlights</p>
               <h2 id="featured-heading">Featured collectors</h2>
             </div>
-            <span>Selected from public profiles</span>
+            <span>Selected from active Collectors</span>
           </div>
           <div className="collectors-featured-grid">
             {featured.map((collector) => (
@@ -201,7 +200,7 @@ function CollectorsPage() {
             <p className="collectors-kicker">Public directory</p>
             <h2 id="directory-heading">Meet the collectors.</h2>
           </div>
-          <span>{page ? `${page.total} public profile${page.total === 1 ? "" : "s"}` : "Loading profiles"}</span>
+          <span>{page ? `${page.total} active Collector${page.total === 1 ? "" : "s"}` : "Loading collectors"}</span>
         </div>
 
         {result.isPending ? (
@@ -226,8 +225,8 @@ function CollectorsPage() {
         ) : (
           <div className="collectors-empty-state">
             <Search aria-hidden="true" />
-            <h3>{hasFilters ? "No collectors match those filters." : "No public collectors yet."}</h3>
-            <p>{hasFilters ? "Try a different name or specialty." : "Public profiles will appear here as collectors choose to share them."}</p>
+            <h3>{hasFilters ? "No collectors match those filters." : "No active Collectors yet."}</h3>
+            <p>{hasFilters ? "Try a different name or specialty." : "Active Collector accounts will appear here with their published collectibles."}</p>
             {hasFilters && <button type="button" onClick={() => setSearch({ q: undefined, specialty: undefined })}>Clear filters</button>}
           </div>
         )}

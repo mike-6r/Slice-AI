@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, BadgeCheck, Box, Sparkles } from "lucide-react";
+import { ArrowRight, Box, Sparkles, UsersRound } from "lucide-react";
 import type { CollectorProfile, CollectorPublishedListing } from "@/domain";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { collectorCategoryLabel, collectorSpecialties } from "./collector-specialties";
@@ -20,7 +20,7 @@ export function CollectorAvatar({
     .toUpperCase();
   return (
     <span className={`collector-avatar${featured ? " is-featured" : ""}`} aria-hidden="true">
-      {initials || "S"}
+      {collector.avatarUrl ? <img src={collector.avatarUrl} alt="" /> : initials || "S"}
     </span>
   );
 }
@@ -90,17 +90,16 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
         <span className="collectors-status-pill">
           <Sparkles aria-hidden="true" /> Featured collector
         </span>
-        <span className="collectors-featured-card__index">Public profile</span>
+        <span className="collectors-featured-card__index">Collector profile</span>
       </div>
       <div className="featured-collector-identity">
         <CollectorAvatar collector={collector} featured />
         <div className="featured-collector-identity__copy">
           <h2>
             <span>{collector.displayName}</span>
-            <BadgeCheck aria-label="Public collector" />
           </h2>
           <strong>@{collector.handle}</strong>
-          <p>{collector.focus || "Collector sharing a public catalogue."}</p>
+          <p>{collector.focus || "Collector profile"}</p>
         </div>
       </div>
       {specialties.length > 0 && (
@@ -120,8 +119,8 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           <dd>{collector.publicSince ? new Date(collector.publicSince).getFullYear() : "—"}</dd>
         </div>
         <div>
-          <dt>Visibility</dt>
-          <dd className="is-positive">Public</dd>
+          <dt>Directory status</dt>
+          <dd className="is-positive">Active</dd>
         </div>
       </dl>
       {listings.length > 0 ? (
@@ -141,7 +140,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
           <Box aria-hidden="true" />
           <div>
             <strong>Catalogue in progress</strong>
-            <p>This collector has chosen to share their profile before publishing an asset.</p>
+            <p>This Collector has not published any collectibles yet.</p>
           </div>
         </div>
       )}
@@ -157,13 +156,13 @@ export function CollectorDiscoveryPanel({ collectors }: { collectors: CollectorP
   return (
     <aside className="collector-discovery-panel collectors-directory-note">
       <div className="collectors-directory-note__icon" aria-hidden="true">
-        <BadgeCheck />
+        <UsersRound />
       </div>
-      <p className="collectors-kicker">Public by choice</p>
+      <p className="collectors-kicker">Collector directory</p>
       <h2>See the people behind the collections.</h2>
       <p>
-        Every profile here is published by its owner. Explore their public catalogue and the
-        categories they know best.
+        Explore active Collector accounts, their published catalogue, and the categories they know
+        best.
       </p>
       <dl className="collector-discovery-summary">
         <div>
@@ -203,7 +202,7 @@ export function CollectorCard({
           <small>@{collector.handle}</small>
         </div>
         <span className="collector-public-status">
-          <BadgeCheck aria-hidden="true" /> Public
+          <UsersRound aria-hidden="true" /> Active Collector
         </span>
       </header>
       <div className="collector-profile-copy">

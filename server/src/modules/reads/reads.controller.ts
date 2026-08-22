@@ -45,77 +45,110 @@ export class ReadsController {
     const size = parseCollectorPageSize(pageSize ?? limit);
     const currentPage = parseCollectorPage(page);
     const order = parseCollectorSort(sort);
-    const publicWhere: Prisma.PublicCollectorProfileWhereInput = {
-      isPublic: true,
-      ...(this.config.isBeta
-        ? { slug: { not: { startsWith: 'slice-demo-' } } }
-        : {}),
+    const publicWhere: Prisma.UserWhereInput = {
+      accountStatus: 'ACTIVE',
+      roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
     };
-    const baseWhere: Prisma.PublicCollectorProfileWhereInput = {
+    const nonDemoWhere: Prisma.UserWhereInput = this.config.isBeta
+      ? {
+          AND: [
+            {
+              OR: [
+                { publicCollectorProfile: null },
+                {
+                  publicCollectorProfile: {
+                    is: { slug: { not: { startsWith: 'slice-demo-' } } },
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      : {};
+    const baseWhere: Prisma.UserWhereInput = {
       ...publicWhere,
+      ...nonDemoWhere,
       ...(query?.trim()
         ? {
             OR: [
-              { slug: { contains: query.trim(), mode: 'insensitive' } },
-              { headline: { contains: query.trim(), mode: 'insensitive' } },
-              { specialism: { contains: query.trim(), mode: 'insensitive' } },
               {
-                user: {
+                publicCollectorProfile: {
                   is: {
-                    profile: {
-                      is: {
-                        displayName: {
-                          contains: query.trim(),
-                          mode: 'insensitive',
-                        },
-                      },
-                    },
+                    OR: [
+                      { slug: { contains: query.trim(), mode: 'insensitive' } },
+                      { headline: { contains: query.trim(), mode: 'insensitive' } },
+                      { specialism: { contains: query.trim(), mode: 'insensitive' } },
+                    ],
                   },
                 },
               },
+              {
+                profile: {
+                  is: {
+                    OR: [
+                      { displayName: { contains: query.trim(), mode: 'insensitive' } },
+                      { publicUsername: { contains: query.trim(), mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+              { id: { contains: query.trim(), mode: 'insensitive' } },
             ],
           }
         : {}),
       ...(specialty && specialty.trim() && specialty !== 'All specialties'
         ? {
-            specialism: {
-              contains: specialty.trim(),
-              mode: 'insensitive',
+            publicCollectorProfile: {
+              is: {
+                specialism: {
+                  contains: specialty.trim(),
+                  mode: 'insensitive',
+                },
+              },
             },
           }
         : {}),
     };
-    const orderBy: Prisma.PublicCollectorProfileOrderByWithRelationInput[] =
+    const orderBy: Prisma.UserOrderByWithRelationInput[] =
       order === 'name'
-        ? [{ slug: 'asc' }, { userId: 'asc' }]
+        ? [{ profile: { displayName: 'asc' } }, { id: 'asc' }]
         : order === 'recent'
-          ? [{ createdAt: 'desc' }, { userId: 'desc' }]
-          : [
-              { isFeatured: 'desc' },
+          ? [
+              { publicCollectorProfile: { publishedAt: 'desc' } },
               { createdAt: 'desc' },
-              { userId: 'desc' },
+              { id: 'desc' },
+            ]
+          : [
+              { publicCollectorProfile: { isFeatured: 'desc' } },
+              { publicCollectorProfile: { featuredAt: 'desc' } },
+              { createdAt: 'desc' },
+              { id: 'desc' },
             ];
     const [total, rows, featuredRows, specialtyRows] = await Promise.all([
-      this.db.publicCollectorProfile.count({ where: baseWhere }),
-      this.db.publicCollectorProfile.findMany({
+      this.db.user.count({ where: baseWhere }),
+      this.db.user.findMany({
         where: baseWhere,
-        include: publicCollectorInclude,
+        include: publicCollectorUserInclude,
         orderBy,
         skip: (currentPage - 1) * size,
         take: size,
       }),
-      this.db.publicCollectorProfile.findMany({
-        where: { ...publicWhere, isFeatured: true },
-        include: publicCollectorInclude,
+      this.db.user.findMany({
+        where: {
+          ...publicWhere,
+          ...nonDemoWhere,
+          publicCollectorProfile: { is: { isFeatured: true } },
+        },
+        include: publicCollectorUserInclude,
         orderBy: [
-          { featuredAt: 'desc' },
+          { publicCollectorProfile: { featuredAt: 'desc' } },
           { createdAt: 'desc' },
-          { userId: 'desc' },
+          { id: 'desc' },
         ],
         take: 3,
       }),
       this.db.publicCollectorProfile.findMany({
-        where: publicWhere,
+        where: { user: { ...publicWhere, ...nonDemoWhere }, specialism: { not: null } },
         select: { specialism: true },
         distinct: ['specialism'],
       }),
@@ -154,14 +187,37 @@ export class ReadsController {
     };
   }
   @Get('collectors/:slug') async collector(@Param('slug') slug: string) {
-    const x = await this.db.publicCollectorProfile.findFirst({
+    const fallbackUserId = slug.startsWith('collector-')
+      ? slug.slice('collector-'.length)
+      : null;
+    const x = await this.db.user.findFirst({
       where: {
-        slug: this.config.isBeta
-          ? { equals: slug, not: { startsWith: 'slice-demo-' } }
-          : slug,
-        isPublic: true,
+        accountStatus: 'ACTIVE',
+        roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
+        AND: [
+          {
+            OR: [
+              { publicCollectorProfile: { is: { slug } } },
+              ...(fallbackUserId ? [{ id: fallbackUserId }] : []),
+            ],
+          },
+          ...(this.config.isBeta
+            ? [
+                {
+                  OR: [
+                    { publicCollectorProfile: null },
+                    {
+                      publicCollectorProfile: {
+                        is: { slug: { not: { startsWith: 'slice-demo-' } } },
+                      },
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
-      include: publicCollectorInclude,
+      include: publicCollectorUserInclude,
     });
     return x
       ? await publicCollectorView(x, this.config.isBeta === true, this.storage)
@@ -506,10 +562,25 @@ export class ReadsController {
   }
 }
 
-const publicCollectorInclude = {
-  user: {
-    include: {
-      profile: true,
+const publicCollectorUserInclude = {
+  profile: {
+    select: {
+      displayName: true,
+      publicUsername: true,
+      avatarReference: true,
+    },
+  },
+  publicCollectorProfile: {
+    select: {
+      slug: true,
+      headline: true,
+      specialism: true,
+      isFeatured: true,
+      featuredAt: true,
+      publishedAt: true,
+      createdAt: true,
+    },
+  },
       _count: {
         select: {
           submissions: {
@@ -558,43 +629,47 @@ const publicCollectorInclude = {
         orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
         take: 8,
       },
-    },
-  },
-} satisfies Prisma.PublicCollectorProfileInclude;
+} satisfies Prisma.UserInclude;
 
 async function publicCollectorView(
   x: {
-    slug: string;
-    headline: string | null;
-    specialism: string | null;
-    isFeatured: boolean;
-    featuredAt: Date | null;
-    publishedAt: Date | null;
+    id: string;
     createdAt: Date;
-    user: {
-      profile: { displayName: string } | null;
-      _count: { submissions: number };
-      submissions: Array<{
-        media: Array<{ id: string; slot: string; objectKey: string }>;
-        asset: {
-          publicId: string;
-          slug: string;
-          title: string;
-          category: { name: string };
-          marketSnapshots: Array<{
-            estimatedMarketValueMinor: bigint;
-            currency: string;
-            asOf: Date;
-            status: string;
-          }>;
-        } | null;
-      }>;
-    };
+    profile: {
+      displayName: string;
+      publicUsername: string | null;
+      avatarReference: string | null;
+    } | null;
+    publicCollectorProfile: {
+      slug: string;
+      headline: string | null;
+      specialism: string | null;
+      isFeatured: boolean;
+      featuredAt: Date | null;
+      publishedAt: Date | null;
+      createdAt: Date;
+    } | null;
+    _count: { submissions: number };
+    submissions: Array<{
+      media: Array<{ id: string; slot: string; objectKey: string }>;
+      asset: {
+        publicId: string;
+        slug: string;
+        title: string;
+        category: { name: string };
+        marketSnapshots: Array<{
+          estimatedMarketValueMinor: bigint;
+          currency: string;
+          asOf: Date;
+          status: string;
+        }>;
+      } | null;
+    }>;
   },
   isBeta = false,
   storage: ObjectStoragePort,
 ) {
-  const listings = await Promise.all(x.user.submissions.flatMap((submission) => {
+  const listings = await Promise.all(x.submissions.flatMap((submission) => {
     const asset = submission.asset;
     if (!asset || (isBeta && asset.slug.startsWith('slice-demo-'))) return [];
     const market = asset.marketSnapshots[0] ?? null;
@@ -632,14 +707,16 @@ async function publicCollectorView(
             }
           : null,
       })));
+  const profile = x.publicCollectorProfile;
   return {
-    slug: x.slug,
-    headline: x.headline,
-    specialism: x.specialism,
-    displayName: x.user.profile?.displayName ?? null,
-    publicSince: (x.publishedAt ?? x.createdAt).toISOString(),
-    isFeatured: x.isFeatured,
-    publishedListingCount: isBeta ? listings.length : x.user._count.submissions,
+    slug: profile?.slug ?? `collector-${x.id}`,
+    headline: profile?.headline ?? null,
+    specialism: profile?.specialism ?? null,
+    displayName: x.profile?.displayName ?? 'Collector',
+    avatarReference: x.profile?.avatarReference ?? null,
+    publicSince: (profile?.publishedAt ?? profile?.createdAt ?? x.createdAt).toISOString(),
+    isFeatured: profile?.isFeatured ?? false,
+    publishedListingCount: isBeta ? listings.length : x._count.submissions,
     publishedListings: listings,
   };
 }

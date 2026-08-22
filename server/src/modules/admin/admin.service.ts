@@ -175,33 +175,59 @@ export class AdminService {
     await this.authorization.authorize(actor, 'catalogue.manage');
     const profile = await this.db.publicCollectorProfile.findUnique({
       where: { slug },
-      select: { userId: true, slug: true, isPublic: true },
+      select: {
+        userId: true,
+        slug: true,
+        isFeatured: true,
+        featuredAt: true,
+        user: {
+          select: {
+            accountStatus: true,
+            roleAssignments: {
+              where: { role: 'COLLECTOR', revokedAt: null },
+              select: { id: true },
+            },
+          },
+        },
+      },
     });
-    if (!profile || !profile.isPublic)
+    if (
+      !profile ||
+      profile.user.accountStatus !== 'ACTIVE' ||
+      profile.user.roleAssignments.length === 0
+    )
       throw new NotFoundException({
         code: 'COLLECTOR_NOT_FOUND',
-        message: 'Public collector profile not found.',
+        message: 'Active Collector profile not found.',
       });
-    const updated = await this.db.publicCollectorProfile.update({
-      where: { slug },
-      data: {
-        isFeatured: featured,
-        featuredAt: featured ? new Date() : null,
-      },
-      select: { slug: true, isFeatured: true, featuredAt: true },
-    });
-    await this.db.auditEvent.create({
-      data: {
-        actorUserId: actor.userId,
-        actorType: 'USER',
-        action: featured ? 'COLLECTOR_FEATURED' : 'COLLECTOR_UNFEATURED',
-        resourceType: 'public-collector-profile',
-        resourceId: profile.userId,
-        requestId,
-        sessionId: actor.sessionId as never,
-        result: 'SUCCESS',
-        metadata: { slug, featured },
-      },
+    const updated = await this.db.$transaction(async (tx) => {
+      const nextFeaturedAt = featured ? new Date() : null;
+      const updatedProfile = await tx.publicCollectorProfile.update({
+        where: { slug },
+        data: { isFeatured: featured, featuredAt: nextFeaturedAt },
+        select: { slug: true, isFeatured: true, featuredAt: true },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorUserId: actor.userId,
+          actorType: 'USER',
+          action: featured ? 'COLLECTOR_FEATURED' : 'COLLECTOR_UNFEATURED',
+          resourceType: 'public-collector-profile',
+          resourceId: profile.userId,
+          requestId,
+          sessionId: actor.sessionId as never,
+          result: 'SUCCESS',
+          metadata: {
+            targetUserId: profile.userId,
+            slug,
+            previousFeatured: profile.isFeatured,
+            previousFeaturedAt: profile.featuredAt?.toISOString() ?? null,
+            newFeatured: updatedProfile.isFeatured,
+            newFeaturedAt: updatedProfile.featuredAt?.toISOString() ?? null,
+          },
+        },
+      });
+      return updatedProfile;
     });
     return {
       slug: updated.slug,
@@ -3030,6 +3056,15 @@ export class AdminService {
             plan: { select: { code: true, displayName: true } },
           },
         },
+        publicCollectorProfile: {
+          select: {
+            slug: true,
+            isPublic: true,
+            isFeatured: true,
+            featuredAt: true,
+            publishedAt: true,
+          },
+        },
       },
     });
     if (!user)
@@ -3202,6 +3237,15 @@ export class AdminService {
       counts: user._count,
       collector: collectorEnabled
         ? {
+            publicDirectory: user.publicCollectorProfile
+              ? {
+                  slug: user.publicCollectorProfile.slug,
+                  isPublic: user.publicCollectorProfile.isPublic,
+                  isFeatured: user.publicCollectorProfile.isFeatured,
+                  featuredAt: user.publicCollectorProfile.featuredAt?.toISOString() ?? null,
+                  publishedAt: user.publicCollectorProfile.publishedAt?.toISOString() ?? null,
+                }
+              : null,
             subscription: user.collectorSubscriptions[0]
               ? {
                   plan: user.collectorSubscriptions[0].plan.displayName,

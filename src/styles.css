@@ -31774,6 +31774,13 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   -webkit-line-clamp: 2;
 }
 
+.collector-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .markets-page .market-card-identity-line {
   min-height: 1.15rem;
   margin-top: 0.35rem;

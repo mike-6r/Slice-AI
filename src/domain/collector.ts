@@ -28,6 +28,7 @@ export interface CollectorProfile {
   userId: UserId;
   handle: string;
   displayName: string;
+  avatarUrl?: string | null;
   focus: string;
   category: CollectorCategory;
   publicSince?: string;

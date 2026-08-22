@@ -3296,39 +3296,42 @@ function UserDetailExperience({
       );
     if (activeTab === "Collector")
       return (
-        <section className="admin-panel">
-          <AdminPanelHeading title="Collector Workspace" />
-          {user.collectorOverview ? (
-            <>
-              <DetailRow
-                label="Membership"
-                value={
-                  user.collector?.subscription
-                    ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}`
-                    : "No Collector membership"
-                }
+        <div className="admin-detail-overview-grid">
+          <section className="admin-panel">
+            <AdminPanelHeading title="Collector Workspace" />
+            {user.collectorOverview ? (
+              <>
+                <DetailRow
+                  label="Membership"
+                  value={
+                    user.collector?.subscription
+                      ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}`
+                      : "No Collector membership"
+                  }
+                />
+                <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
+                <DetailRow
+                  label="Active intake"
+                  value={String(user.collectorOverview.activeIntakes)}
+                />
+                <div className="admin-detail-assets">
+                  {user.collectorOverview.assets.map((asset) => (
+                    <div className="admin-detail-asset" key={asset.id}>
+                      <strong>{asset.title}</strong>
+                      <small>{asset.units} units</small>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <AdminEmpty
+                detail="This user does not currently have Collector access."
+                icon={Archive}
               />
-              <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
-              <DetailRow
-                label="Active intake"
-                value={String(user.collectorOverview.activeIntakes)}
-              />
-              <div className="admin-detail-assets">
-                {user.collectorOverview.assets.map((asset) => (
-                  <div className="admin-detail-asset" key={asset.id}>
-                    <strong>{asset.title}</strong>
-                    <small>{asset.units} units</small>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <AdminEmpty
-              detail="This user does not currently have Collector access."
-              icon={Archive}
-            />
-          )}
-        </section>
+            )}
+          </section>
+          <CollectorDirectoryManagement user={user} retry={retry} />
+        </div>
       );
     if (activeTab === "Finance")
       return (
@@ -3486,6 +3489,61 @@ const adminAssignableRoles = [
   ["FINANCE_OPERATOR", "Finance operator"],
   ["ADMIN", "Administrator"],
 ] as const;
+
+function CollectorDirectoryManagement({
+  user,
+  retry,
+}: {
+  user: AdminUserDetail;
+  retry: () => void;
+}) {
+  const services = useAppServices();
+  const currentUser = useQuery({
+    queryKey: queryKeys.user.current,
+    queryFn: () => services.repositories.users.getCurrentUser(),
+    staleTime: 60_000,
+  });
+  const directory = user.collector?.publicDirectory ?? null;
+  const canManage = currentUser.data?.roles.includes("ADMIN") ?? false;
+  const feature = useMutation({
+    mutationFn: (featured: boolean) =>
+      services.repositories.admin.setCollectorFeatured(directory!.slug, featured),
+    onSuccess: retry,
+  });
+  return (
+    <section className="admin-panel">
+      <AdminPanelHeading title="Collectors directory" />
+      {directory ? (
+        <>
+          <DetailRow label="Directory profile" value={directory.slug} />
+          <DetailRow label="Published profile" value={directory.isPublic ? "Available" : "Not marked public"} />
+          <DetailRow label="Featured status" value={directory.isFeatured ? "Featured" : "Not featured"} />
+          {canManage ? (
+            <button
+              type="button"
+              className="admin-detail-action"
+              disabled={feature.isPending}
+              onClick={() => {
+                const next = !directory.isFeatured;
+                if (window.confirm(`${next ? "Feature" : "Remove"} ${user.displayName} in the public Collector directory? This change is audited.`)) {
+                  feature.mutate(next);
+                }
+              }}
+            >
+              {feature.isPending ? "Saving…" : directory.isFeatured ? "Remove from featured" : "Feature Collector"}
+            </button>
+          ) : (
+            <p className="admin-safe-note">Only Administrators can change featured placement.</p>
+          )}
+          {feature.isError ? <p className="admin-safe-note" role="alert">Featured placement was not saved. No directory state was changed.</p> : null}
+        </>
+      ) : (
+        <AdminEmpty detail="This Collector has no public directory profile yet. Create the profile from the Collector workspace before featuring it." icon={Users} />
+      )}
+      <p className="admin-safe-note">Featured placement changes presentation only. It does not change Collector roles, submissions, ownership, pricing, or trading.</p>
+    </section>
+  );
+}
 
 function UserRoleManagement({
   user,

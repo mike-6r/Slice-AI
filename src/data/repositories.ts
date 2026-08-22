@@ -246,6 +246,13 @@ export type AdminUserDetail = AdminUserSummary & {
     auditEvents: number;
   };
   collector: {
+    publicDirectory: {
+      slug: string;
+      isPublic: boolean;
+      isFeatured: boolean;
+      featuredAt: string | null;
+      publishedAt: string | null;
+    } | null;
     subscription: {
       plan: string;
       status: string;
@@ -1297,6 +1304,10 @@ export interface AdminRepository {
     id: string,
     assignmentId: string,
   ): Promise<{ assignmentId: string; userId: string; revoked: boolean }>;
+  setCollectorFeatured(
+    slug: string,
+    featured: boolean,
+  ): Promise<{ slug: string; isFeatured: boolean; featuredAt: string | null }>;
   listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
   getFinanceSummary(): Promise<AdminFinanceSummary>;
   getFinanceDashboard(): Promise<AdminFinanceDashboard>;
