@@ -434,7 +434,20 @@ export class OwnershipOperationsService {
         code: 'ASSET_NOT_FOUND',
         message: 'Resource not found.',
       });
-    return this.ownPosition(actor, asset.id);
+    const account = await this.db.ownershipAccount.findUnique({
+      where: { userId: actor.userId },
+    });
+    if (!account) return null;
+    const position = await this.db.ownershipPosition.findUnique({
+      where: { assetId_accountId: { assetId: asset.id, accountId: account.id } },
+    });
+    if (!position) return null;
+    return {
+      assetId: asset.id,
+      settledUnits: position.settledUnits.toString(),
+      reservedUnits: position.reservedUnits.toString(),
+      availableUnits: (position.settledUnits - position.reservedUnits).toString(),
+    };
   }
 
   private async mutate<T extends Record<string, unknown>>(

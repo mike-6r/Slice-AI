@@ -133,7 +133,10 @@ function AssetPage() {
   });
   const ownPositionQuery = useQuery({
     queryKey: ["ownership", "position", id],
-    enabled: isAuthenticated && Boolean(assetQuery.data),
+    // A published asset can exist before ownership is issued. Avoid asking
+    // the account-position endpoint for that pre-issuance state; there is no
+    // position to read yet and the public issuance projection is authoritative.
+    enabled: isAuthenticated && Boolean(assetQuery.data) && Boolean(issuanceQuery.data),
     queryFn: () => services.ownership.ownMarketPosition(id),
   });
   const similarQuery = useQuery({
