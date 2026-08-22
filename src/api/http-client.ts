@@ -22,8 +22,7 @@ type QueryValue = string | number | boolean | undefined | null;
 // from trying to refresh against the end user's own localhost.
 const configuredApiOrigin = import.meta.env.VITE_API_BASE_URL?.trim();
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-export const API_ORIGIN =
-  configuredApiOrigin || browserApiOrigin || "http://127.0.0.1:3001";
+export const API_ORIGIN = configuredApiOrigin || browserApiOrigin || "http://127.0.0.1:3001";
 
 const parseBody = async (response: Response): Promise<unknown> => {
   const text = await response.text();
@@ -76,6 +75,7 @@ export class ApiClient {
     try {
       response = await fetch(url, {
         method: options.method ?? "GET",
+        cache: "no-store",
         credentials: "include",
         signal: options.signal,
         headers: {
@@ -141,6 +141,7 @@ export class ApiClient {
     let response: Response;
     try {
       response = await fetch(new URL(`/api/v1${path}`, this.origin), {
+        cache: "no-store",
         headers: {
           Accept: "text/event-stream",
           ...(session.token() ? { Authorization: `Bearer ${session.token()}` } : {}),
