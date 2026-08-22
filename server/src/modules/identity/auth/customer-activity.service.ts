@@ -11,6 +11,8 @@ const customerActions = [
   'AUTH_SIGNUP_SUCCEEDED',
   'AUTH_LOGIN_SUCCEEDED',
   'AUTH_PASSWORD_CHANGED',
+  'PASSWORD_RESET_REQUESTED',
+  'PASSWORD_RESET_COMPLETED',
   'EMAIL_VERIFICATION_SENT',
   'EMAIL_VERIFICATION_RESENT',
   'EMAIL_VERIFIED',
@@ -98,6 +100,8 @@ function activityCopy(action: CustomerAction) {
     case 'AUTH_SIGNUP_SUCCEEDED': return { type: 'ACCOUNT_CREATED', title: 'Account created', description: 'Your Slice account was created.' };
     case 'AUTH_LOGIN_SUCCEEDED': return { type: 'LOGIN', title: 'Signed in', description: 'You signed in to your account.' };
     case 'AUTH_PASSWORD_CHANGED': return { type: 'PASSWORD_CHANGED', title: 'Password changed', description: 'Your account password was changed.' };
+    case 'PASSWORD_RESET_REQUESTED': return { type: 'PASSWORD_RESET_REQUESTED', title: 'Password reset requested', description: 'A password reset was requested for your account.' };
+    case 'PASSWORD_RESET_COMPLETED': return { type: 'PASSWORD_CHANGED', title: 'Password changed', description: 'Your account password was changed.' };
     case 'EMAIL_VERIFICATION_SENT':
     case 'EMAIL_VERIFICATION_RESENT': return { type: 'EMAIL_VERIFICATION_REQUESTED', title: 'Verification email sent', description: 'A verification email was requested for your account.' };
     case 'EMAIL_VERIFIED': return { type: 'EMAIL_VERIFIED', title: 'Email verified', description: 'Your email address was verified.' };

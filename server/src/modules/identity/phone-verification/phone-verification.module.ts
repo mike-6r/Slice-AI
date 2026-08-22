@@ -8,9 +8,10 @@ import {
   PhoneVerificationService,
 } from './phone-verification.service';
 import { TwilioVerifyPhoneDelivery } from './twilio-verify-phone-delivery';
+import { EmailDeliveryModule } from '../email-delivery/email-delivery.module';
 
 @Module({
-  imports: [forwardRef(() => AuthModule)],
+  imports: [forwardRef(() => AuthModule), EmailDeliveryModule],
   controllers: [PhoneVerificationController],
   providers: [
     PhoneVerificationService,

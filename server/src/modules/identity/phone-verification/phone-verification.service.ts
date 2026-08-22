@@ -13,6 +13,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { AuthAbuseService } from '../auth/auth-abuse.service';
 import { RecentAuthService } from '../access/recent-auth.service';
 import type { Actor } from '../auth/auth.service';
+import { TransactionalEmailService } from '../email-delivery/transactional-email.service';
 
 /** Twilio Verify is the OTP authority outside the local test adapter. */
 export type PhoneVerificationDelivery = {
@@ -82,6 +83,7 @@ export class PhoneVerificationService {
     @Inject(PHONE_VERIFICATION_DELIVERY)
     private readonly delivery: PhoneVerificationDelivery,
     private readonly recentAuth?: RecentAuthService,
+    private readonly transactionalEmail?: TransactionalEmailService,
   ) {}
 
   async status(actor: Actor) {
@@ -250,7 +252,7 @@ export class PhoneVerificationService {
     });
     const now = new Date();
     try {
-      return await this.db.withTransaction(async (tx) => {
+      const result = await this.db.withTransaction(async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.userId} FOR UPDATE`;
         const user = await tx.user.findUniqueOrThrow({
           where: { id: actor.userId },
@@ -331,6 +333,12 @@ export class PhoneVerificationService {
           phone: maskPhone(pending.phoneE164),
         };
       });
+      void this.transactionalEmail?.safeSecurityNotification({
+        userId: actor.userId,
+        event: 'PHONE_CHANGED',
+        idempotencyKey: `security-phone-verified:${actor.userId}:${result.verifiedAt}`,
+      });
+      return result;
     } catch (error) {
       if (isPrismaUnique(error))
         throw new ConflictException({
@@ -383,6 +391,12 @@ export class PhoneVerificationService {
       });
       return Boolean(user.phoneVerifiedAt);
     });
+    if (removed)
+      void this.transactionalEmail?.safeSecurityNotification({
+        userId: actor.userId,
+        event: 'PHONE_REMOVED',
+        idempotencyKey: `security-phone-removed:${actor.userId}:${now.toISOString()}`,
+      });
     return { removed };
   }
 

@@ -23,6 +23,9 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoverySubmitted, setRecoverySubmitted] = useState(false);
+  const [recoverySubmitting, setRecoverySubmitting] = useState(false);
   const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
   const [twoFactorMethod, setTwoFactorMethod] = useState<"TOTP" | "SMS" | null>(null);
   const [resendAvailableAt, setResendAvailableAt] = useState<string | null>(null);
@@ -32,6 +35,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const valid = /.+@.+\..+/.test(email) && password.length > 0;
+  const recoveryValid = /.+@.+\..+/.test(recoveryEmail);
   useEffect(() => {
     if (!resendAvailableAt) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -120,7 +124,11 @@ function LoginPage() {
               </label>
               <button
                 type="button"
-                onClick={() => setShowRecovery((value) => !value)}
+                onClick={() => {
+                  setShowRecovery((value) => !value);
+                  setRecoveryEmail(email);
+                  setRecoverySubmitted(false);
+                }}
                 className="text-sm text-accent hover:underline"
               >
                 Forgot password?
@@ -139,10 +147,57 @@ function LoginPage() {
           {showRecovery && (
             <div
               role="status"
-              className="rounded-md border border-sky/20 bg-sky/5 p-3 text-sm text-subtle"
+              className="space-y-3 rounded-md border border-sky/20 bg-sky/5 p-4 text-sm text-subtle"
             >
-              Account recovery will connect to email and identity-verification services in a future
-              phase.
+              <div>
+                <p className="font-semibold text-foreground">Reset your password</p>
+                <p className="mt-1 leading-5">
+                  Enter your email and we&apos;ll send a reset link if the account is eligible.
+                </p>
+              </div>
+              <input
+                type="email"
+                autoComplete="email"
+                value={recoveryEmail}
+                onChange={(event) => {
+                  setRecoveryEmail(event.target.value);
+                  setRecoverySubmitted(false);
+                }}
+                placeholder="you@example.com"
+                aria-label="Recovery email address"
+                className="form-control"
+              />
+              <button
+                type="button"
+                disabled={!recoveryValid || recoverySubmitting}
+                className="secondary-action w-full rounded-md px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={async () => {
+                  setRecoverySubmitting(true);
+                  setError(null);
+                  try {
+                    await new ApiClient().request("/auth/password-reset/request", {
+                      method: "POST",
+                      body: { email: recoveryEmail },
+                    });
+                    setRecoverySubmitted(true);
+                  } catch (reason) {
+                    setError(
+                      reason instanceof ApiError
+                        ? reason.message
+                        : "Unable to request a password reset.",
+                    );
+                  } finally {
+                    setRecoverySubmitting(false);
+                  }
+                }}
+              >
+                {recoverySubmitting ? "Sending…" : "Send reset link"}
+              </button>
+              {recoverySubmitted ? (
+                <p className="text-xs leading-5 text-accent" aria-live="polite">
+                  If an eligible account exists, reset instructions are on the way.
+                </p>
+              ) : null}
             </div>
           )}
           {error && (

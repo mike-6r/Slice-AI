@@ -65,6 +65,12 @@ export const passwordChangeSchema = z
     newPassword: password,
   })
   .strict();
+export const passwordResetRequestSchema = z
+  .object({ email: z.string().email().transform(normalizeEmail) })
+  .strict();
+export const passwordResetConfirmSchema = z
+  .object({ token: z.string().min(40).max(256), newPassword: password })
+  .strict();
 export const twoFactorCodeSchema = z
   .object({ code: z.string().regex(/^\d{6}$/) })
   .strict();

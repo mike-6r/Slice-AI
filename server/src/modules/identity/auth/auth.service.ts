@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   Optional,
+  forwardRef,
   UnauthorizedException,
   ForbiddenException,
   ConflictException,
@@ -41,6 +42,8 @@ import {
   SignupConsentService,
   type SignupConsentInput,
 } from './signup-consent.service';
+import { EmailVerificationService } from '../email-verification/email-verification.service';
+import { TransactionalEmailService } from '../email-delivery/transactional-email.service';
 
 export type AuthResult = {
   user: ReturnType<AuthService['publicUser']>;
@@ -99,6 +102,10 @@ export class AuthService {
     @Inject(CAPTCHA_VERIFIER)
     private readonly captcha?: CaptchaVerifier,
     @Optional() private readonly signupConsent?: SignupConsentService,
+    @Optional()
+    @Inject(forwardRef(() => EmailVerificationService))
+    private readonly emailVerification?: EmailVerificationService,
+    @Optional() private readonly transactionalEmail?: TransactionalEmailService,
   ) {}
 
   async onModuleInit() {
@@ -202,6 +209,11 @@ export class AuthService {
           requestId,
           sessionContext,
         );
+      void this.emailVerification?.sendForNewAccount({
+        userId,
+        email: input.email,
+        requestId,
+      }).catch(() => undefined);
       return {
         user: outcome.value.user,
         ...(await this.transientCredentials(
@@ -589,6 +601,11 @@ export class AuthService {
         };
       },
     );
+    await this.transactionalEmail?.safeSecurityNotification({
+      userId: actor.userId,
+      event: 'PASSWORD_CHANGED',
+      idempotencyKey: `security-password-change:${idempotencyKey}`,
+    });
     return outcome.value;
   }
   private async signupDurable(

@@ -551,8 +551,8 @@ function CollectorBetaOnboarding({
         <aside className="onboarding-callout">
           <ShieldCheck aria-hidden="true" />
           <span>
-            <strong>Provider status</strong> External identity, SMS, email verification, and 2FA are
-            deferred in this Beta.
+            <strong>Account security</strong> Email verification and account security are handled by
+            Slice. SMS verification is available when configured for your account.
           </span>
         </aside>
         <button

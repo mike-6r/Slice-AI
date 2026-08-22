@@ -97,7 +97,9 @@ const configSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
   RESEND_FROM_NAME: z.string().trim().min(1).max(128).optional(),
+  RESEND_REPLY_TO_EMAIL: z.string().email().optional(),
   RESEND_TEST_RECIPIENT_OVERRIDE: z.string().email().optional(),
+  EMAIL_ENABLED: z.enum(['true', 'false']).optional(),
   APP_PUBLIC_URL: z.string().url().optional(),
   EMAIL_VERIFICATION_TTL_SECONDS: z.coerce
     .number()
@@ -105,6 +107,18 @@ const configSchema = z.object({
     .min(300)
     .max(86_400)
     .default(3_600),
+  EMAIL_VERIFICATION_RESEND_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(30)
+    .max(3_600)
+    .default(60),
+  PASSWORD_RESET_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(86_400)
+    .default(900),
   // SMS verification is opt-in outside tests. Missing provider credentials must
   // never accidentally enable an external delivery path in staging/production.
   PHONE_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
@@ -365,12 +379,16 @@ export type AppConfig = {
   discordBotServiceToken?: string;
   discordBotGuildId?: string;
   emailDeliveryMode: 'local_test' | 'resend';
+  emailEnabled: boolean;
   resendApiKey?: string;
   resendFromEmail?: string;
   resendFromName?: string;
+  resendReplyToEmail?: string;
   resendTestRecipientOverride?: string;
   appPublicUrl: string;
   emailVerificationTtlSeconds: number;
+  emailVerificationResendSeconds: number;
+  passwordResetTtlSeconds: number;
   phoneVerificationEnabled: boolean;
   phoneDeliveryMode: 'local_test' | 'twilio_verify';
   twilioAccountSid?: string;
@@ -582,6 +600,13 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     (parsed.NODE_ENV === 'test' ? 'local_test' : 'resend');
   const emailDeliveryMode =
     emailDeliveryModeRaw === 'provider' ? 'resend' : emailDeliveryModeRaw;
+  const emailEnabled =
+    parsed.EMAIL_ENABLED !== undefined
+      ? parsed.EMAIL_ENABLED === 'true'
+      : parsed.NODE_ENV === 'test'
+        ? true
+        : emailDeliveryMode === 'resend' &&
+          Boolean(parsed.RESEND_API_KEY && parsed.RESEND_FROM_EMAIL);
   const phoneDeliveryModeRaw =
     parsed.PHONE_DELIVERY_MODE ??
     (parsed.NODE_ENV === 'test' ? 'local_test' : 'twilio_verify');
@@ -781,15 +806,19 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     discordBotServiceToken: parsed.DISCORD_BOT_SERVICE_TOKEN,
     discordBotGuildId: parsed.DISCORD_BOT_GUILD_ID,
     emailDeliveryMode,
+    emailEnabled,
     resendApiKey: parsed.RESEND_API_KEY,
     resendFromEmail: parsed.RESEND_FROM_EMAIL,
     resendFromName: parsed.RESEND_FROM_NAME,
+    resendReplyToEmail: parsed.RESEND_REPLY_TO_EMAIL,
     resendTestRecipientOverride:
       parsed.NODE_ENV === 'production'
         ? undefined
         : parsed.RESEND_TEST_RECIPIENT_OVERRIDE,
     appPublicUrl: appPublicUrl.replace(/\/$/, ''),
     emailVerificationTtlSeconds: parsed.EMAIL_VERIFICATION_TTL_SECONDS,
+    emailVerificationResendSeconds: parsed.EMAIL_VERIFICATION_RESEND_SECONDS,
+    passwordResetTtlSeconds: parsed.PASSWORD_RESET_TTL_SECONDS,
     phoneVerificationEnabled: twilioSmsEnabled,
     phoneDeliveryMode,
     twilioAccountSid: parsed.TWILIO_ACCOUNT_SID,

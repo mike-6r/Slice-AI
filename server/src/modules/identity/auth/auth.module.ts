@@ -21,11 +21,15 @@ import { AccountLifecycleService } from './account-lifecycle.service';
 import { CaptchaModule } from '../captcha/captcha.module';
 import { SignupConsentService } from './signup-consent.service';
 import { PhoneVerificationModule } from '../phone-verification/phone-verification.module';
+import { EmailDeliveryModule } from '../email-delivery/email-delivery.module';
+import { EmailVerificationModule } from '../email-verification/email-verification.module';
 @Module({
   imports: [
     IdentityPersistenceModule,
     CaptchaModule,
     forwardRef(() => PhoneVerificationModule),
+    EmailDeliveryModule,
+    forwardRef(() => EmailVerificationModule),
   ],
   controllers: [AuthController, TwoFactorController],
   providers: [
@@ -52,6 +56,7 @@ import { PhoneVerificationModule } from '../phone-verification/phone-verificatio
     IdempotencyCoordinator,
     AuthAbuseService,
     RecentAuthService,
+    PASSWORD_HASHER,
   ],
 })
 export class AuthModule {}

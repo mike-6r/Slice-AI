@@ -26,6 +26,7 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as PortfolioRouteImport } from './routes/portfolio'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StaffRouteImport } from './routes/staff'
@@ -128,6 +129,11 @@ const PortfolioRoute = PortfolioRouteImport.update({
   path: '/portfolio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -227,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/orders': typeof OrdersRoute
   '/portfolio': typeof PortfolioRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
@@ -262,6 +269,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/orders': typeof OrdersRoute
   '/portfolio': typeof PortfolioRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
@@ -298,6 +306,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/orders': typeof OrdersRoute
   '/portfolio': typeof PortfolioRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
@@ -335,6 +344,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/orders'
     | '/portfolio'
+    | '/reset-password'
     | '/security'
     | '/signup'
     | '/staff'
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/orders'
     | '/portfolio'
+    | '/reset-password'
     | '/security'
     | '/signup'
     | '/staff'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/orders'
     | '/portfolio'
+    | '/reset-password'
     | '/security'
     | '/signup'
     | '/staff'
@@ -441,6 +453,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   OrdersRoute: typeof OrdersRoute
   PortfolioRoute: typeof PortfolioRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
@@ -577,6 +590,13 @@ declare module '@tanstack/react-router' {
       path: '/portfolio'
       fullPath: '/portfolio'
       preLoaderRoute: typeof PortfolioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/security': {
@@ -723,6 +743,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   OrdersRoute: OrdersRoute,
   PortfolioRoute: PortfolioRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,

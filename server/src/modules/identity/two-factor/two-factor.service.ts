@@ -20,6 +20,7 @@ import {
   maskPhone,
 } from '../phone-verification/phone-verification.service';
 import { TwoFactorCryptoService } from './two-factor-crypto.service';
+import { TransactionalEmailService } from '../email-delivery/transactional-email.service';
 
 const RECOVERY_CODE_COUNT = 8;
 const RECOVERY_CODE_BYTES = 10;
@@ -44,6 +45,7 @@ export class TwoFactorService {
     private readonly recentAuth: RecentAuthService,
     @Inject(PHONE_VERIFICATION_DELIVERY)
     private readonly delivery: PhoneVerificationDelivery,
+    private readonly transactionalEmail?: TransactionalEmailService,
   ) {}
 
   async status(actor: Actor) {
@@ -147,6 +149,11 @@ export class TwoFactorService {
       return recoveryCodes;
     });
     if (!result) throw invalidCode();
+    void this.transactionalEmail?.safeSecurityNotification({
+      userId: actor.userId,
+      event: 'MFA_ENABLED',
+      idempotencyKey: `security-totp-enabled:${actor.userId}:${now.toISOString()}`,
+    });
     return { recoveryCodes: result };
   }
 
@@ -284,6 +291,11 @@ export class TwoFactorService {
       return recoveryCodes;
     });
     if (!result) throw invalidCode();
+    void this.transactionalEmail?.safeSecurityNotification({
+      userId: actor.userId,
+      event: 'MFA_ENABLED',
+      idempotencyKey: `security-sms-enabled:${actor.userId}:${now.toISOString()}`,
+    });
     return { recoveryCodes: result };
   }
 
@@ -360,6 +372,11 @@ export class TwoFactorService {
       return true;
     });
     if (!disabled) throw invalidCode();
+    void this.transactionalEmail?.safeSecurityNotification({
+      userId: actor.userId,
+      event: 'MFA_DISABLED',
+      idempotencyKey: `security-mfa-disabled:${actor.userId}:${now.toISOString()}`,
+    });
     return { disabled: true };
   }
 

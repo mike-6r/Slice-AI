@@ -61,7 +61,9 @@ export class AuthAbuseService {
       | 'two-factor-sms-login-send'
       | 'two-factor-sms-login-check'
       | 'two-factor-sms-login-resend'
-      | 'notification-preferences',
+      | 'notification-preferences'
+      | 'password-reset-request'
+      | 'password-reset-confirm',
     ip: string,
     accountHint?: string,
     phoneHint?: string,
