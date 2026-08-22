@@ -20838,6 +20838,19 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   }
   .slice-footer__security-card {
     justify-self: stretch;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  /* Keep the compact authenticated/anonymous header inside the narrowest viewport. */
+  .main-navigation .site-shell {
+    gap: 0.75rem;
+  }
+
+  .main-navigation .site-shell > .rounded-full {
+    display: none;
   }
 }
 
