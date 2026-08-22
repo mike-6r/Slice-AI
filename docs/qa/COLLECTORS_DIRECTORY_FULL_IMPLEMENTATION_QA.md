@@ -51,8 +51,8 @@ Run against the deployed staging commit and record screenshots in `docs/qa/scree
 
 ## Deployment
 
-- Commit: `c96de2a` — `Fix collectors directory data contract`; responsive follow-up release pending this QA-doc update
-- Staging release: `/opt/slice/releases/20260822-collectors-c96de2a`
+- Commit: `32d8a33` — `Polish collectors mobile layout and QA record`
+- Staging release: `/opt/slice/releases/20260822-collectors-32d8a33`
 - `/health`: PASS
 - `/ready`: PASS
 - `/collectors` canonical redirect: PASS (`307` to `?sort=featured&page=1`)
@@ -62,4 +62,17 @@ Run against the deployed staging commit and record screenshots in `docs/qa/scree
 
 ## Release gate
 
-Do not mark complete until the responsive follow-up release is active and staging confirms `/collectors`, one public `/collector/:slug` route, API health/readiness, the responsive matrix, and zero unexpected console/network errors. Do not seed or feature a collector merely to make the featured section appear.
+Release gate: PASS — staging confirms `/collectors`, one public `/collector/:slug` route, API health/readiness, the responsive matrix, and zero unexpected console/network errors. No Collector was seeded or featured merely to make the featured section appear.
+
+## Final status
+
+`SLICE COLLECTORS DIRECTORY + FEATURED COLLECTOR — COMPLETE`
+
+- Directory eligibility: PASS — active account plus active `COLLECTOR` role.
+- Revoked/disabled exclusion: PASS — enforced by the server query and covered by fixtures.
+- Optional-profile and zero-listing fallback: PASS.
+- Safe public projection/privacy: PASS.
+- Featured control: PASS — Admin-only, server-persisted, audited, and role-gated.
+- Search/filter/sort/pagination: PASS — server-backed with URL state and default page size 12.
+- Responsive/accessibility/console: PASS — five required widths, no horizontal overflow after the final mobile fix, and no browser error/warning logs.
+- Economic/domain mutation count: `0`.
