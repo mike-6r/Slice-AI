@@ -115,7 +115,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 ### 4. Collector, submission, media, Admin and lifecycle
 
 - `QA-033` PASS — supported cleanup leaves `demo-collector@slicecollectable.com` with active `USER + COLLECTOR`; unwanted assignments remain revoked and audited.
-- `QA-034` BLOCKED — fresh Collector browser login/workspace wrong-role UI retest is awaiting an authenticated browser session.
+- `QA-034` BLOCKED — fresh Collector browser verification could not pass the login gate: the staging Sign in control remained disabled after visible input, so no authenticated Collector workspace session was created.
 - `QA-035` BLOCKED — new disposable listing and card-identification workflow was not started.
 - `QA-036` BLOCKED — upload, replace/remove, invalid-file and pre-publication private-media matrix was not started.
 - `QA-037` PASS — existing public Umbreon Slice Grade is displayed as advisory, not as an official grade; fresh provider analysis was not triggered.
@@ -130,7 +130,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 - `QA-044` PASS — logged-out protected API baseline returned 401.
 - `QA-045` PASS — Investor UI direct routes to Collector workspace/Admin were denied safely.
-- `QA-046` BLOCKED — fresh Collector API denial passed, but browser UI wrong-role retest remains pending; do not infer authorization from hidden buttons.
+- `QA-046` BLOCKED — focused Collector API denial passed, but the browser UI retest remains blocked at fresh login; do not infer authorization from hidden buttons.
 - `QA-047` BLOCKED — cross-Collector private submission/media matrix was not run.
 - `QA-048` BLOCKED — logout Account A → login Account B cache-isolation matrix was not run.
 - `QA-049` PASS — no credentials, provider secrets or private account payloads were written to QA artifacts; no direct DB mutation was used.

@@ -51,4 +51,7 @@ Open — focused API/session/IDOR retest passed; browser wrong-role UI retest re
 Deployment status:
 
 - Commit `b26e407` is deployed at `/opt/slice/releases/20260821-b26e407`.
-- The remaining evidence item is a fresh authenticated Collector browser session to verify hidden/denied staff navigation and direct UI routes.
+- A fresh staging browser tab reached `/login`, but the form remained non-hydrated: visible typing did not update the controlled React state and `Sign in` stayed disabled. No `/auth/login` request was sent, no authenticated session was created, and no credentials were written to artifacts.
+- Because authentication could not begin, the required Collector workspace, staff-navigation, direct-route, network, cross-Collector, private-media and logout checks were not executed. The issue remains open and must not be treated as a permissions pass.
+
+Final browser verification attempt (2026-08-21): **BLOCKED at fresh login form hydration**. Console error log was empty; the browser tab was closed after clearing the unfinished form.
