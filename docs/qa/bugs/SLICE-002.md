@@ -42,16 +42,18 @@ Additional Notes:
 - Root cause: the Collector demo setup explicitly granted `ASSET_REVIEWER`; historical scoped assignments were not removed by the prior setup. The role schema already has a partial active uniqueness constraint on `(userId, role, scopeType, scopeId)`, and supported Admin grants are global-only.
 - Fix: `setup-demo-collector.ts` now provisions only `COLLECTOR`; staging safety validation now rejects reviewer authority on the Collector fixture. Revokes preserve rows and audit history.
 - Supported staging cleanup: three unwanted assignments on Collector A and one reviewer assignment on the separate Collector B baseline returned HTTP 204. Collector A has three `ROLE_REVOKED` audit events and revoked history rows.
-- Fresh Collector A login returned 200; Collector workspace returned 200; Admin overview/users, review queue, finance admin, and audit admin returned 403. Collector A cannot read Collector B submission detail or workspace detail (both 404), and its owned-submission list does not contain B’s ID.
+- Focused API/session checks remained green: fresh Collector A login and workspace returned 200; Admin overview/users, review queue, finance admin, and audit admin returned 403; Collector A cannot read Collector B submission detail or workspace detail (both 404), and its owned-submission list does not contain B’s ID.
 - Focused tests pass for the Collector fixture role boundary. No lifecycle, ownership, trading, ledger, Stripe, Umbreon, or Charizard data was changed.
 
 Status:  
-Open — focused API/session/IDOR retest passed; browser wrong-role UI retest remains pending
+Verified / Closed — final Collector browser authorization retest passed
 
 Deployment status:
 
 - Commit `b26e407` is deployed at `/opt/slice/releases/20260821-b26e407`.
-- A fresh staging browser tab reached `/login`, but the form remained non-hydrated: visible typing did not update the controlled React state and `Sign in` stayed disabled. No `/auth/login` request was sent, no authenticated session was created, and no credentials were written to artifacts.
-- Because authentication could not begin, the required Collector workspace, staff-navigation, direct-route, network, cross-Collector, private-media and logout checks were not executed. The issue remains open and must not be treated as a permissions pass.
+- The login component was not the defect. During the blocked attempt, `/opt/slice/current` pointed to `b26e407` but `/opt/slice/app` had drifted to a Discord-only release without `dist/client`. Apache asset aliases target `/opt/slice/app/dist/client`, so the login CSS/JavaScript returned 403 and the SSR form never hydrated; no `/auth/login` request was sent.
+- Runtime fix: restored `/opt/slice/app` to `/opt/slice/releases/20260821-b26e407` and restarted `slice-api.service` and `slice-web.service`. The aliased JavaScript/CSS returned 200, `/health` and `/ready` passed, and no application source change was required.
 
-Final browser verification attempt (2026-08-21): **BLOCKED at fresh login form hydration**. Console error log was empty; the browser tab was closed after clearing the unfinished form.
+Final browser verification (2026-08-21/22): **PASS**. A fresh Collector session logged in, reached `/portfolio`, loaded `/collector-workspace` as `Slice Demo Collector`, and remained authenticated after refresh. The workspace contained only Collector navigation. Direct Admin dashboard, Admin users, review queue, asset review, finance, audit and role-management routes settled on safe access-required/reviewer boundaries with no staff content. The known Collector B private submission rendered `Submission unavailable` with no private details or media. Logout returned the protected Collector route to the sign-in boundary. Console error/warning logs were empty on exercised routes; the focused protected-API matrix remained 401/403/404 as expected.
+- Safe browser screenshots were captured for the authenticated Collector workspace, denied reviewer route, and cross-Collector submission boundary. No credentials or secrets were included.
+- No new application bug ID was created: this was deployment-pointer drift, not an auth-form or authorization implementation defect. No lifecycle, ownership, trading, ledger, Stripe, Umbreon, or Charizard data was changed during the retest.

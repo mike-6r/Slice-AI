@@ -2,9 +2,9 @@
 
 ## Executive Result
 
-**FAIL — NOT READY for owner sign-off.** The focused release-gate retest closed the homepage and automated-environment blockers, but the Collector browser role retest remains pending.
+**FAIL — NOT READY for full owner sign-off.** The focused SLICE-002 Collector authorization retest is now closed and ready to resume the owner Beta plan, but economic/lifecycle QA, private-media coverage and responsive evidence remain outstanding.
 
-The public site, current Investor session, read-only marketplace/detail surfaces, health checks, and automated release gates were exercised. Destructive/economic QA remains stopped before purchase or lifecycle mutation. The dedicated Collector’s supported API/session/IDOR cleanup is complete, but its fresh browser wrong-role retest still needs an authenticated browser session. Responsive viewport evidence also remains pending.
+The public site, current Investor session, read-only marketplace/detail surfaces, health checks, and automated release gates were exercised. Destructive/economic QA remains stopped before purchase or lifecycle mutation. The dedicated Collector’s supported API/session/IDOR cleanup and final browser wrong-role retest are complete. Responsive viewport evidence remains pending.
 
 ## Environment
 
@@ -43,7 +43,7 @@ The public site, current Investor session, read-only marketplace/detail surfaces
 
 - Public/logged-out routes.
 - Existing authenticated Investor session: `demo-investor@slicecollectable.com` (read-only browser coverage).
-- Collector/Admin accounts were not used for fresh password entry in this pass; the independent role matrix is blocked pending the Critical role cleanup.
+- Fresh Collector browser session was used for the SLICE-002 authorization retest after the supported role cleanup; no credentials were written to artifacts.
 - No credentials were written to artifacts.
 
 ## Current Protected-State Inventory
@@ -59,11 +59,11 @@ Read-only database inspection showed:
 
 | Result | Count |
 |---|---:|
-| PASS | 44 |
+| PASS | 47 |
 | FAIL | 1 |
-| BLOCKED | 21 |
+| BLOCKED | 18 |
 | N/A | 4 |
-| Critical open bugs | 1 |
+| Critical open bugs | 0 |
 | High open bugs | 1 |
 | Medium open bugs | 1 |
 
@@ -115,7 +115,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 ### 4. Collector, submission, media, Admin and lifecycle
 
 - `QA-033` PASS — supported cleanup leaves `demo-collector@slicecollectable.com` with active `USER + COLLECTOR`; unwanted assignments remain revoked and audited.
-- `QA-034` BLOCKED — fresh Collector browser verification could not pass the login gate: the staging Sign in control remained disabled after visible input, so no authenticated Collector workspace session was created.
+- `QA-034` PASS — fresh Collector login succeeded, Collector Workspace loaded as Slice Demo Collector, and refresh preserved the session. The prior disabled-login symptom was deployment asset-pointer drift, not the login component.
 - `QA-035` BLOCKED — new disposable listing and card-identification workflow was not started.
 - `QA-036` BLOCKED — upload, replace/remove, invalid-file and pre-publication private-media matrix was not started.
 - `QA-037` PASS — existing public Umbreon Slice Grade is displayed as advisory, not as an official grade; fresh provider analysis was not triggered.
@@ -130,8 +130,8 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 - `QA-044` PASS — logged-out protected API baseline returned 401.
 - `QA-045` PASS — Investor UI direct routes to Collector workspace/Admin were denied safely.
-- `QA-046` BLOCKED — focused Collector API denial passed, but the browser UI retest remains blocked at fresh login; do not infer authorization from hidden buttons.
-- `QA-047` BLOCKED — cross-Collector private submission/media matrix was not run.
+- `QA-046` PASS — focused Collector API denial remained 401/403/404 as expected; the browser direct-route matrix showed safe access-required/reviewer boundaries and no staff content.
+- `QA-047` PASS — the known Collector B submission route rendered `Submission unavailable`; no private details, media or metadata were exposed.
 - `QA-048` BLOCKED — logout Account A → login Account B cache-isolation matrix was not run.
 - `QA-049` PASS — no credentials, provider secrets or private account payloads were written to QA artifacts; no direct DB mutation was used.
 - `QA-050` BLOCKED — draft/private-media anonymous and cross-user signed-download matrix needs a disposable submission and independent sessions.
@@ -168,7 +168,7 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 ## Bugs Found
 
 - `SLICE-001` Medium — homepage market-card terminology mismatch — Closed after deployed staging retest.
-- `SLICE-002` Critical — dedicated Collector has active staff-reviewer assignments — Open.
+- `SLICE-002` Critical — dedicated Collector has active staff-reviewer assignments — Closed after supported cleanup and final browser authorization retest.
 - `SLICE-003` High — local integration/E2E environment unavailable — Closed after isolated green-gate retest.
 
 Full bug templates are in `docs/qa/bugs/`.
@@ -179,13 +179,13 @@ Source, test-contract and isolated-runner changes were committed as `b26e407` an
 
 ## Outstanding Issues
 
-1. Complete the fresh Collector browser wrong-role/navigation retest for `SLICE-002`; do not use direct DB surgery.
-2. Complete fresh disposable Collector → Admin → Marketplace → Investor lifecycle only after the permission gate is green.
+1. Complete fresh disposable Collector → Admin → Marketplace → Investor lifecycle only after the permission gate is green.
+2. Complete the anonymous/foreign signed-download private-media matrix with disposable fixtures.
 3. Capture responsive evidence using a viewport-capable browser and execute Edge before external Beta sign-off.
 
 ## Final Sign-Off
 
-- [ ] No open Critical bugs — **NO** (`SLICE-002` open)
+- [x] No open Critical bugs — **YES** (`SLICE-002` closed; remaining blocked cases are planned QA scope)
 - [x] No core High bugs — **YES** (`SLICE-003` closed; responsive/Edge evidence remains a general sign-off item)
 - [x] Public website smoke
 - [ ] Investor core purchase journey
@@ -193,7 +193,7 @@ Source, test-contract and isolated-runner changes were committed as `b26e407` an
 - [ ] Submission journey
 - [ ] Ownership integrity reconciliation
 - [ ] Portfolio calculation reconciliation
-- [ ] Permissions / IDOR matrix
+- [x] Permissions / IDOR matrix — **SLICE-002 Collector browser authorization matrix complete**
 - [ ] Private media matrix
 - [ ] Collector → Admin
 - [ ] Admin → Marketplace
@@ -203,6 +203,13 @@ Source, test-contract and isolated-runner changes were committed as `b26e407` an
 - [x] Production configuration remaining documented
 
 ## QA Result
+
+### Focused SLICE-002 follow-up — 2026-08-21/22
+
+- Login root cause: `/opt/slice/app` drifted from the web release to a Discord-only release without `dist/client`; Apache asset aliases returned 403, leaving the SSR login form non-hydrated and the Sign in control disabled.
+- Runtime correction: `/opt/slice/app` was restored to `/opt/slice/releases/20260821-b26e407`; Slice API/web services restarted; assets returned 200 and health/readiness stayed green. No application source change was required.
+- Fresh Collector login, workspace, refresh, staff-route denial, cross-Collector denial and logout passed. Console error/warning logs were empty on exercised routes. No lifecycle, ownership, trading, Stripe, Umbreon, Charizard or financial state changed.
+- READY TO RESUME OWNER BETA QA: **YES**
 
 **FAIL**
 
@@ -222,8 +229,8 @@ No live Stripe mode, real money, physical shipment, custody, offering, ownership
 
 This is a focused follow-up to the three owner-authorized blockers; it is not a replacement for the full owner QA above.
 
-- `SLICE-002`: **focused API/session/IDOR retest passed**. Collector A now has exactly `USER + COLLECTOR`; three unwanted historical assignments remain revoked and audited. A fresh Collector session reached Collector Workspace (200), while Admin, user-management, review, finance-admin and audit-admin endpoints returned 403. Collector A could not read Collector B’s private submission (404). Browser wrong-role UI retest remains pending.
+- `SLICE-002`: **closed after final Collector browser authorization retest**. Collector A has exactly `USER + COLLECTOR`; three unwanted assignments remain revoked and audited. A fresh Collector browser session logged in, reached Collector Workspace, survived refresh, showed no staff navigation, and received safe access-required/reviewer boundaries for Admin, user-management, review, asset operations, finance, audit and role-management routes. Collector A could not load Collector B’s private submission; the UI showed `Submission unavailable` without private details or media. Logout returned the protected Collector route to the sign-in boundary. See `docs/qa/bugs/SLICE-002.md`.
 - `SLICE-003`: **closed**. The isolated test runner applies 79 migrations to a separate `slice_test` database and uses isolated Redis with `PROVIDER_MODE=local`. Integration completed 34/34 suites and 124/124 tests; E2E completed 32/32 suites and 102/102 tests with a clean process exit.
 - `SLICE-001`: **closed after deployment**. Homepage live cards now reuse the authoritative marketplace card projection; deployed browser evidence shows correct raw/condition/card-number/valuation terminology and no misleading legacy labels. Public Umbreon detail remained consistent.
 - Automated follow-up: frontend 38 files / 132 tests passed; backend unit 63 suites / 263 tests passed; Prisma validation, backend/frontend typechecks, backend build, and frontend client/SSR build passed. The touched backend TypeScript files pass lint; repository-wide frontend Prettier debt remains separate.
-- No economic, ownership, trading, Stripe, Umbreon, Charizard, ledger, or financial state was changed.
+- No economic, ownership, trading, Stripe, Umbreon, Charizard, ledger, or financial state was changed. The final Collector browser retest itself performed no state-changing operations beyond login/logout.
