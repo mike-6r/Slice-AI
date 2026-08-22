@@ -2,7 +2,7 @@
 
 Date: 2026-08-22  
 Scope: public `/marketplace` grid and `MarketAssetCard` presentation  
-Deployment: pending final staging verification
+Deployment: `b65a5e4` — `/opt/slice/releases/20260822-market-density-b65a5e4`
 
 ## Change summary
 
@@ -40,13 +40,25 @@ Deployment: pending final staging verification
 | Cursor pagination | PASS | 12-item request and guarded “Load more” |
 | Watchlist control | PASS | Existing mutation path preserved; no API changes |
 | Accessibility | PASS | Existing semantic links/buttons, image alt text, labels, and focus checks |
-| Console/network | PASS | No marketplace console errors or unexpected failures in staging |
+| Console/network | PASS | Browser error/warn log empty; public market API returned 200 |
 
 ## Responsive evidence
 
 Required widths: 390×844, 768×1024, 1280×800, 1440×900, 1920×1080.
 
-Screenshots are stored beside this document under `docs/qa/screenshots/`.
+| Viewport | Columns | Card width | Media height | Horizontal overflow |
+|---|---:|---:|---:|---:|
+| 390×844 | 1 | 343px | 323px | 0px |
+| 768×1024 | 2 | 300px | 286px | 0px |
+| 1280×800 | 3 | 300px | 286px | 0px |
+| 1440×900 | 3 | 300px | 286px | 0px |
+| 1920×1080 | 4 | 300px | 286px | 0px |
+
+The successful browser capture is stored as
+`docs/qa/screenshots/marketplace-density-390.png`. The browser capture surface
+timed out while changing between the remaining viewport sizes, so those sizes
+are recorded from live DOM geometry rather than represented by fabricated or
+synthetically populated screenshots.
 The current controlled-beta catalogue contains two published assets, so the
 four-plus-card visual state is validated from the deterministic grid geometry
 and card component tests without creating catalogue records or fake data.
@@ -61,3 +73,5 @@ and card component tests without creating catalogue records or fake data.
 - Production SSR build: PASS
 - Backend changes: NONE; backend test suite not required for this presentation-only change
 - Mutation count during QA: 0
+- Umbreon domain state changed: NO
+- Charizard domain state changed: NO
