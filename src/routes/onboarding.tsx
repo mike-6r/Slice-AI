@@ -21,6 +21,7 @@ import { deriveOnboardingStage } from "@/auth/onboarding-state";
 import { safeReturnIntent } from "@/auth/return-intent";
 import { session } from "@/auth/session";
 import { useSession } from "@/auth/use-session";
+import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
 import { isBetaEnvironment } from "@/config/environment";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
@@ -81,6 +82,7 @@ function OnboardingPage() {
   const [phoneResendAt, setPhoneResendAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [enrollment, setEnrollment] = useState<Awaited<
@@ -140,7 +142,8 @@ function OnboardingPage() {
     onSuccess: (result) => setSentEmailAt(result.resendAvailableAt),
   });
   const phoneSend = useMutation({
-    mutationFn: repositories.account.sendPhoneVerification,
+    mutationFn: ({ phone, country }: { phone: string; country: string }) =>
+      repositories.account.sendPhoneVerification(phone, country || undefined),
     onSuccess: (result) => {
       setPhoneResendAt(result.resendAvailableAt);
       setStage("phone-code");
@@ -301,10 +304,12 @@ function OnboardingPage() {
           <PhoneStep
             phone={phoneNumber}
             setPhone={setPhoneNumber}
+            country={phoneCountry}
+            setCountry={setPhoneCountry}
             sending={phoneSend.isPending}
             onSend={() => {
               setError(null);
-              phoneSend.mutate(phoneNumber);
+              phoneSend.mutate({ phone: phoneNumber, country: phoneCountry });
             }}
             onSkip={() => {
               setPhoneSkipped(true);
@@ -326,7 +331,7 @@ function OnboardingPage() {
             }}
             onResend={() => {
               setError(null);
-              phoneSend.mutate(phoneNumber);
+              phoneSend.mutate({ phone: phoneNumber, country: phoneCountry });
             }}
           />
         ) : null}
@@ -681,12 +686,16 @@ function EmailStep({
 function PhoneStep({
   phone,
   setPhone,
+  country,
+  setCountry,
   sending,
   onSend,
   onSkip,
 }: {
   phone: string;
   setPhone: (value: string) => void;
+  country: string;
+  setCountry: (value: string) => void;
   sending: boolean;
   onSend: () => void;
   onSkip: () => void;
@@ -698,18 +707,14 @@ function PhoneStep({
       eyebrow="Optional"
       lead="Add a phone number for account recovery and important security alerts."
     >
-      <label className="form-field" htmlFor="onboarding-phone">
-        <span>Phone number</span>
-        <input
-          id="onboarding-phone"
-          className="form-control"
-          inputMode="tel"
-          autoComplete="tel"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          placeholder="+44 7123 456789"
-        />
-      </label>
+      <InternationalPhoneInput
+        id="onboarding-phone"
+        phone={phone}
+        country={country}
+        onPhoneChange={setPhone}
+        onCountryChange={setCountry}
+        disabled={sending}
+      />
       <button
         className="primary-action onboarding-cta"
         disabled={sending || !phone.trim()}

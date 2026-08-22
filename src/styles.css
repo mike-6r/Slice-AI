@@ -6552,6 +6552,34 @@ body:has(.collectors-page) .site-shell {
   gap: 0.45rem;
 }
 
+.international-phone-input {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.international-phone-input__country,
+.international-phone-input__number {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.international-phone-input__country > span,
+.international-phone-input__number > span {
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.international-phone-input select {
+  appearance: auto;
+}
+
+.international-phone-input small {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .form-control {
   width: 100%;
   min-height: 2.9rem;

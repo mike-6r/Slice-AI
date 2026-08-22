@@ -23,6 +23,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
+import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
 import type {
   AccountCapability,
   BankConnection,
@@ -856,12 +857,14 @@ function PhoneDialog({
 }) {
   const { repositories } = useAppServices();
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [resendAt, setResendAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const send = useMutation({
-    mutationFn: repositories.account.sendPhoneVerification,
+    mutationFn: ({ phone: value, country: selectedCountry }: { phone: string; country: string }) =>
+      repositories.account.sendPhoneVerification(value, selectedCountry || undefined),
     onSuccess: (result) => {
       setSent(true);
       setResendAt(result.resendAvailableAt);
@@ -896,20 +899,17 @@ function PhoneDialog({
         onSubmit={(event) => {
           event.preventDefault();
           if (sent) confirm.mutate();
-          else send.mutate(phone);
+          else send.mutate({ phone, country });
         }}
       >
-        <label>
-          Phone number
-          <input
-            type="tel"
-            autoComplete="tel"
-            placeholder="+44…"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            required
-          />
-        </label>
+        <InternationalPhoneInput
+          id="account-phone-number"
+          phone={phone}
+          country={country}
+          onPhoneChange={setPhone}
+          onCountryChange={setCountry}
+          disabled={send.isPending || confirm.isPending || verified}
+        />
         {sent ? (
           <label>
             Six-digit code
@@ -954,7 +954,7 @@ function PhoneDialog({
             type="button"
             className="account-text-button"
             disabled={resendSeconds > 0 || send.isPending}
-            onClick={() => send.mutate(phone)}
+            onClick={() => send.mutate({ phone, country })}
           >
             {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}
           </button>

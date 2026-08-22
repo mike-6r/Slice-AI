@@ -1250,7 +1250,7 @@ export const mockRepositories: AppRepositories = {
         resendAvailableAt: null,
       };
     },
-    async sendPhoneVerification() {
+    async sendPhoneVerification(_phone?: string, _country?: string) {
       return { alreadyVerified: false, resendAvailableAt: null };
     },
     async confirmPhoneVerification(_code: string) {

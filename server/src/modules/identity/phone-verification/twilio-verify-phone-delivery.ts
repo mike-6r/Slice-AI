@@ -1,6 +1,10 @@
 import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
+  UnprocessableEntityException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import * as twilio from 'twilio';
@@ -76,8 +80,23 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
   }
 
   private mapProviderError(error: unknown) {
-    if (providerCode(error) === 60200)
-      return new ServiceUnavailableException({
+    const code = providerCode(error);
+    const status = providerStatus(error);
+    if (status === 429 || code === 20429)
+      return new HttpException(
+        {
+          code: 'PHONE_RATE_LIMITED',
+          message: 'Too many verification requests. Please wait and try again.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    if (code === 60200 || status === 400)
+      return new BadRequestException({
+        code: 'PHONE_INVALID',
+        message: 'Enter a valid phone number that can receive SMS.',
+      });
+    if (code === 60605 || code === 60606)
+      return new UnprocessableEntityException({
         code: 'PHONE_UNSUPPORTED',
         message: 'This phone number cannot receive SMS verification.',
       });
@@ -89,4 +108,12 @@ function providerCode(error: unknown) {
   return typeof error === 'object' && error !== null && 'code' in error
     ? Number((error as { code?: unknown }).code)
     : NaN;
+}
+
+function providerStatus(error: unknown) {
+  if (typeof error !== 'object' || error === null) return NaN;
+  const value =
+    (error as { status?: unknown }).status ??
+    (error as { statusCode?: unknown }).statusCode;
+  return typeof value === 'number' ? value : Number(value);
 }

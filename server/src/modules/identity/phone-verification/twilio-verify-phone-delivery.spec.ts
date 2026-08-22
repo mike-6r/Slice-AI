@@ -40,7 +40,12 @@ describe('TwilioVerifyPhoneDelivery', () => {
       purpose: 'PHONE',
     });
     await expect(
-      delivery.verify({ userId: 'user_123', phoneE164: '+447700900123', code: '123456', purpose: 'PHONE' }),
+      delivery.verify({
+        userId: 'user_123',
+        phoneE164: '+447700900123',
+        code: '123456',
+        purpose: 'PHONE',
+      }),
     ).resolves.toBe(true);
 
     expect(twilio.services).toHaveBeenCalledWith('VAverify');
@@ -62,7 +67,12 @@ describe('TwilioVerifyPhoneDelivery', () => {
       .mockReturnValue(twilio.value as never);
 
     await expect(
-      delivery.verify({ userId: 'user_123', phoneE164: '+447700900123', code: '000000', purpose: 'PHONE' }),
+      delivery.verify({
+        userId: 'user_123',
+        phoneE164: '+447700900123',
+        code: '000000',
+        purpose: 'PHONE',
+      }),
     ).resolves.toBe(false);
 
     const failedStart = client('canceled', 'approved');
@@ -90,5 +100,59 @@ describe('TwilioVerifyPhoneDelivery', () => {
         purpose: 'PHONE',
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('maps provider validation errors to a safe 400 without provider detail', async () => {
+    const twilio = client('pending', 'approved');
+    twilio.createVerification.mockRejectedValue({
+      code: 60200,
+      status: 400,
+      message: 'private provider response',
+    });
+    const delivery = new TwilioVerifyPhoneDelivery(config);
+    jest
+      .spyOn(delivery as never, 'createClient')
+      .mockReturnValue(twilio.value as never);
+
+    await expect(
+      delivery.deliver({
+        userId: 'user_123',
+        phoneE164: '+12025550103',
+        purpose: 'PHONE',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: {
+        code: 'PHONE_INVALID',
+        message: 'Enter a valid phone number that can receive SMS.',
+      },
+    });
+  });
+
+  it('maps provider rate limits to 429 without exposing provider detail', async () => {
+    const twilio = client('pending', 'approved');
+    twilio.createVerification.mockRejectedValue({
+      code: 20429,
+      status: 429,
+      message: 'private provider response',
+    });
+    const delivery = new TwilioVerifyPhoneDelivery(config);
+    jest
+      .spyOn(delivery as never, 'createClient')
+      .mockReturnValue(twilio.value as never);
+
+    await expect(
+      delivery.deliver({
+        userId: 'user_123',
+        phoneE164: '+12025550103',
+        purpose: 'PHONE',
+      }),
+    ).rejects.toMatchObject({
+      status: 429,
+      response: {
+        code: 'PHONE_RATE_LIMITED',
+        message: 'Too many verification requests. Please wait and try again.',
+      },
+    });
   });
 });

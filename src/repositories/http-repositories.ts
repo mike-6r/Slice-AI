@@ -4136,11 +4136,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           ),
         };
       },
-      async sendPhoneVerification(phone) {
+      async sendPhoneVerification(phone, country) {
         const value = objectField(
           await client.request<unknown>("/me/phone-verification/send", {
             method: "POST",
-            body: { phone },
+            body: { phone, ...(country ? { country } : {}) },
           }),
           "phone verification send",
         );

@@ -142,9 +142,7 @@ Browser QA remains to be completed at 390×844, 768×1024, 1280×800, 1440×900,
 
 The implementation is safe to deploy with SMS disabled. Staging SMS behavior must not be enabled by accident. Before enabling it, configure only staging Twilio credentials and the approved test service/number policy. Production requires separate credentials, approved geographic permissions, provider/compliance requirements, fraud/cost monitoring, and an explicit release decision.
 
-Deployment completed for commit `17e3d6f` at `/opt/slice/releases/20260822-17e3d6f`. Both `/opt/slice/current` and `/opt/slice/app` point to that release. `slice-api.service` and `slice-web.service` are active; API health, readiness, and local SSR checks returned 200; the public staging root returned 200; and the unauthenticated phone-security route returned the expected 401.
-
-The VPS environment currently reports `PHONE_DELIVERY_MODE=local_test` and no explicit `TWILIO_SMS_ENABLED` setting, so the new non-test default keeps SMS disabled. No real Twilio call or SMS was made during deployment. This document does not claim real-provider success without the controlled test above.
+The earlier implementation deployment completed at commit `17e3d6f` with SMS disabled. The deployment and runtime state for the database-constraint fix is recorded in the addendum below.
 
 ## Known limitations / launch blockers
 
@@ -164,3 +162,36 @@ and:
 `PASSWORD → PENDING MFA CHALLENGE → TWILIO VERIFY SEND → OTP → TWILIO VERIFY CHECK → FINAL SLICE SESSION`
 
 No fake SMS, universal QA code, client-authoritative verification, provider bypass, or browser secret is part of this implementation.
+
+## 2026-08-22 international-number and staging-500 fix addendum
+
+### Root cause and database correction
+
+Staging reproduced a 500 on `POST /api/v1/me/phone-verification/send` before any Twilio request. The deployed service delegated OTP ownership to Twilio and created a challenge with `codeHash = NULL`, while the original database migration still defined `PhoneVerificationChallenge.codeHash` as `TEXT NOT NULL`. Prisma returned a null-constraint violation.
+
+The Prisma model was already nullable. Migration `20260822210000_phone_verification_provider_owned_otp` now drops the database `NOT NULL` constraint. New provider-backed challenges continue to store no OTP or local hash; Twilio Verify remains the OTP authority.
+
+### International input
+
+- The send endpoint accepts optional `country` as a two-letter ISO country code.
+- Direct `+...` E.164 input works without a country selector.
+- Local-format input is normalized server-side with `libphonenumber-js` for the selected country.
+- Account Center and onboarding use the shared country selector and direct E.164 input. The selector is not persisted as account data.
+- Invalid or unqualified local input now returns 400 instead of the previous 409.
+
+### Safe provider mapping
+
+Provider responses are never returned raw. The adapter maps invalid destinations to `PHONE_INVALID` (400), unsupported SMS destinations to `PHONE_UNSUPPORTED` (422), provider rate limits to `PHONE_RATE_LIMITED` (429), and provider/configuration failures to `PHONE_DELIVERY_UNAVAILABLE` (503). Actual application defects retain normal 500 handling.
+
+### Verification gates
+
+- Focused phone suite: **13 passed**.
+- Full backend suite: **272 passed across 65 suites**.
+- Full frontend suite: **135 passed across 38 files**.
+- Backend and frontend typechecks: **PASS**.
+- Backend and frontend production builds: **PASS**.
+- Prisma validation and client generation: **PASS**.
+- Twilio Verify v2 API key SID + secret + Account SID configuration remains server-only.
+- `STRIPE`, wallet, ledger, ownership, trading, collectible, Discord, Resend, and identity-verification paths were not changed.
+
+Real SMS delivery QA still requires an explicitly authorized test phone. No SMS was sent without one. The remaining staging check is to send one controlled US test SMS, confirm the OTP, and verify the resulting masked account state without printing the number, OTP, secrets, or provider identifiers.

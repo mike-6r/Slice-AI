@@ -1847,6 +1847,7 @@ export interface AccountRepository {
   }>;
   sendPhoneVerification(
     phone: string,
+    country?: string,
   ): Promise<{ alreadyVerified: boolean; resendAvailableAt: string | null }>;
   confirmPhoneVerification(
     code: string,

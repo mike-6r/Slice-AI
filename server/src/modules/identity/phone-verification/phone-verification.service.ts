@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -6,7 +7,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import {
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from 'libphonenumber-js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
@@ -119,9 +123,15 @@ export class PhoneVerificationService {
     };
   }
 
-  async send(actor: Actor, rawPhone: string, ip: string, requestId: string) {
+  async send(
+    actor: Actor,
+    rawPhone: string,
+    ip: string,
+    requestId: string,
+    country?: string,
+  ) {
     this.requireEnabled();
-    const phoneE164 = normalizePhone(rawPhone);
+    const phoneE164 = normalizePhone(rawPhone, country);
     await this.abuse.enforce('phone-send', ip, actor.userId, phoneE164);
     const now = new Date();
     const outcome = await this.db.withTransaction(async (tx) => {
@@ -141,7 +151,8 @@ export class PhoneVerificationService {
       if (user.smsTwoFactor?.enabledAt && user.phoneE164 !== phoneE164)
         throw new ConflictException({
           code: 'PHONE_REQUIRED_FOR_SMS_MFA',
-          message: 'Disable SMS two-factor authentication before changing this phone number.',
+          message:
+            'Disable SMS two-factor authentication before changing this phone number.',
         });
       const latest = await tx.phoneVerificationChallenge.findFirst({
         where: {
@@ -243,7 +254,12 @@ export class PhoneVerificationService {
       select: { id: true, phoneE164: true },
     });
     if (!pending) throw this.invalid();
-    await this.abuse.enforce('phone-confirm', ip, actor.userId, pending.phoneE164);
+    await this.abuse.enforce(
+      'phone-confirm',
+      ip,
+      actor.userId,
+      pending.phoneE164,
+    );
     const providerApproved = await this.delivery.verify({
       userId: actor.userId,
       phoneE164: pending.phoneE164,
@@ -276,10 +292,14 @@ export class PhoneVerificationService {
           challenge.attemptCount >= this.config.phoneVerificationMaxAttempts
         )
           throw this.invalid();
-        if (user.smsTwoFactor?.enabledAt && user.phoneE164 !== pending.phoneE164)
+        if (
+          user.smsTwoFactor?.enabledAt &&
+          user.phoneE164 !== pending.phoneE164
+        )
           throw new ConflictException({
             code: 'PHONE_REQUIRED_FOR_SMS_MFA',
-            message: 'Disable SMS two-factor authentication before changing this phone number.',
+            message:
+              'Disable SMS two-factor authentication before changing this phone number.',
           });
         if (!providerApproved) {
           const exhausted =
@@ -305,7 +325,9 @@ export class PhoneVerificationService {
           data: { consumedAt: now },
         });
         if (consumed.count !== 1) throw this.invalid();
-        const changed = Boolean(user.phoneE164 && user.phoneE164 !== pending.phoneE164);
+        const changed = Boolean(
+          user.phoneE164 && user.phoneE164 !== pending.phoneE164,
+        );
         await tx.user.update({
           where: { id: actor.userId },
           data: { phoneE164: pending.phoneE164, phoneVerifiedAt: now },
@@ -372,7 +394,8 @@ export class PhoneVerificationService {
       if (user.smsTwoFactor?.enabledAt)
         throw new ConflictException({
           code: 'PHONE_REQUIRED_FOR_SMS_MFA',
-          message: 'Disable SMS two-factor authentication before removing this phone.',
+          message:
+            'Disable SMS two-factor authentication before removing this phone.',
         });
       if (!user.phoneE164) return false;
       await tx.user.update({
@@ -457,14 +480,33 @@ export class PhoneVerificationService {
   }
 }
 
-export function normalizePhone(value: string) {
-  const parsed = parsePhoneNumberFromString(value.trim());
+export function normalizePhone(value: string, country?: string) {
+  let parsed;
+  try {
+    const defaultCountry = country ? normalizeCountry(country) : undefined;
+    parsed = defaultCountry
+      ? parsePhoneNumberFromString(value.trim(), defaultCountry)
+      : parsePhoneNumberFromString(value.trim());
+  } catch {
+    throw invalidPhone();
+  }
   if (!parsed || !parsed.isValid() || !parsed.number.startsWith('+'))
-    throw new ConflictException({
-      code: 'PHONE_INVALID',
-      message: 'Enter a valid international phone number.',
-    });
+    throw invalidPhone();
   return parsed.number;
+}
+
+function normalizeCountry(value: string): CountryCode {
+  const normalized = value.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) throw invalidPhone();
+  return normalized as CountryCode;
+}
+
+function invalidPhone() {
+  return new BadRequestException({
+    code: 'PHONE_INVALID',
+    message:
+      'Enter a valid phone number. Use +country code for an international number.',
+  });
 }
 
 export function maskPhone(phone: string) {
