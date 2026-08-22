@@ -23,7 +23,7 @@ This release rebuilds the public `/collectors` directory against the real public
 | Frontend production build | PASS |
 | API Nest build | PASS |
 | Prisma schema validation | PASS |
-| Prisma migration | Pending staging deployment |
+| Prisma migration | PASS — `20260822130000_collectors_directory_featured` applied on staging |
 
 ## Browser QA matrix
 
@@ -31,21 +31,31 @@ Run against the deployed staging commit and record screenshots in `docs/qa/scree
 
 | Surface / width | 390×844 | 768×1024 | 1280×800 | 1440×900 | 1920×1080 | 2560×1440 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Directory initial load | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Search result | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Specialty filter | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Empty/error state | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Directory initial load | PASS | PASS | PASS | PASS | PASS | PASS |
+| Search result | PASS | PASS | PASS | PASS | PASS | PASS |
+| Specialty filter | PASS — empty taxonomy | PASS — empty taxonomy | PASS — empty taxonomy | PASS — empty taxonomy | PASS — empty taxonomy | PASS — empty taxonomy |
+| Empty/error state | PASS | PASS | PASS | PASS | PASS | PASS |
 
 ## Acceptance results
 
-- Real public data only: PASS in code review; staging runtime pending.
-- Search/filter/sort/pagination are query-backed: PASS in code review; staging runtime pending.
+- Real public data only: PASS — staging returned zero public profiles and no fixture was added.
+- Search/filter/sort/pagination are query-backed: PASS — URL state and API response verified with `q=Umbreon`.
 - Featured section has no arbitrary fallback: PASS.
-- Profile route remains available: PASS by route/build; staging runtime pending.
+- Profile route remains available: PASS by route/build; no public profile exists in current staging data for a populated detail pass.
 - No N+1 database fetch was added: PASS; directory uses bounded Prisma includes plus one count and one specialty projection query.
-- Responsive layout and accessibility: staging browser QA pending.
-- Console/network errors: staging browser QA pending.
-- Collector/domain state unchanged: PASS; no data mutation was run locally.
+- Responsive layout and accessibility: PASS at 390×844, 768×1024, 1280×800, 1440×900, 1920×1080, and 2560×1440; no horizontal overflow observed.
+- Console/network errors: PASS — browser console logs were empty; health, readiness, SSR redirect, and collectors API returned expected statuses.
+- Collector/domain state unchanged: PASS — only the additive featured schema migration ran; no collector, asset, ownership, wallet, offering, Stripe, trade, or settlement records were created or changed.
+
+## Deployment
+
+- Commit: `e2cb8c3` — `Rebuild public collectors directory`
+- Staging release: `/opt/slice/releases/20260822-collectors-e2cb8c3`
+- `/health`: PASS
+- `/ready`: PASS
+- `/collectors` canonical redirect: PASS (`307` to `?sort=featured&page=1`)
+- `/api/v1/collectors?page=1&pageSize=12&sort=featured`: PASS (`200`, zero real public profiles)
+- Screenshots: `docs/qa/screenshots/collectors-390.png`, `collectors-768.png`, `collectors-1280.png`, `collectors-1440.png`, `collectors-1920.png`, `collectors-2560.png`
 
 ## Release gate
 
