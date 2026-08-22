@@ -32526,12 +32526,12 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
 
 @media (max-width: 820px) {
   .asset-detail-page .asset-info-tip > div {
-    position: fixed;
-    top: 5rem;
-    left: 0.75rem;
-    right: auto;
-    width: calc(100vw - 1.5rem) !important;
-    max-width: calc(100vw - 1.5rem) !important;
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0.75rem;
+    left: auto;
+    width: min(14rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
   }
 
   .asset-detail-page .asset-redesign-hero {
