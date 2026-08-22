@@ -142,7 +142,9 @@ Browser QA remains to be completed at 390×844, 768×1024, 1280×800, 1440×900,
 
 The implementation is safe to deploy with SMS disabled. Staging SMS behavior must not be enabled by accident. Before enabling it, configure only staging Twilio credentials and the approved test service/number policy. Production requires separate credentials, approved geographic permissions, provider/compliance requirements, fraud/cost monitoring, and an explicit release decision.
 
-Deployment and health results are recorded after the build gates complete; this document must not claim real-provider success without the controlled test above.
+Deployment completed for commit `17e3d6f` at `/opt/slice/releases/20260822-17e3d6f`. Both `/opt/slice/current` and `/opt/slice/app` point to that release. `slice-api.service` and `slice-web.service` are active; API health, readiness, and local SSR checks returned 200; the public staging root returned 200; and the unauthenticated phone-security route returned the expected 401.
+
+The VPS environment currently reports `PHONE_DELIVERY_MODE=local_test` and no explicit `TWILIO_SMS_ENABLED` setting, so the new non-test default keeps SMS disabled. No real Twilio call or SMS was made during deployment. This document does not claim real-provider success without the controlled test above.
 
 ## Known limitations / launch blockers
 
