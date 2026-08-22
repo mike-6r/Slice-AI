@@ -105,7 +105,30 @@ The release gate is:
 
 ## Deployment and visual QA
 
-Deployment details and screenshots are appended after the staging release and browser pass. A browser-only visual PASS is not inferred from automated tests.
+The release was pushed as commit `d4ed96f` and activated on staging at:
+
+```text
+/opt/slice/releases/20260822-d4ed96f
+/opt/slice/current -> /opt/slice/releases/20260822-d4ed96f
+/opt/slice/app -> /opt/slice/releases/20260822-d4ed96f
+```
+
+The VPS deployment completed frontend/backend production builds, Prisma validation,
+and reported no pending migrations. `slice-api.service` and `slice-web.service`
+are active; `/health` and `/ready` passed, and the public home plus all four
+Portfolio URLs returned HTTP 200.
+
+Read-only browser QA started with an authenticated 390×844 Overview session.
+The deployed four-tab control had no horizontal overflow (`scrollWidth` matched
+the client width), and the mobile Overview screenshot was captured. On the next
+required 768×1024 Holdings navigation, the authenticated browser session expired
+and the page displayed “Sign in to view your portfolio”. Per the release brief,
+browser QA stopped immediately without retrying authentication.
+
+Therefore browser-only visual QA is **BLOCKED by session expiry**. The following
+visual checks were not claimed: 768×1024 Holdings, 1280×800, 1440×900,
+1920×1080, Orders, and Activity. A browser-only visual PASS is not inferred from
+automated tests or the captured 390px state.
 
 ## Known limitations
 
