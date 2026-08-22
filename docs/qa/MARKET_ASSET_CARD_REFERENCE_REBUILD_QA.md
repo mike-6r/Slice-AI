@@ -117,16 +117,42 @@ This is an execution-environment blocker, not a passing result. The release gate
 
 ## Deployment and staging retest
 
-No deployment was performed for this change because the required integration/E2E gates are not green. Consequently:
+The requested staging deployment completed after the local frontend/backend gates and the source archive was verified. The local integration/E2E blocker remains documented above, but the user explicitly requested deployment for visual review.
 
-- no commit hash is assigned for this rebuild yet;
-- no push was made;
-- no new VPS release was created;
-- `/opt/slice/current` and `/opt/slice/app` were not changed;
-- deployed JS/CSS asset, health, readiness, homepage, marketplace, and asset-detail checks remain pending;
-- deployed staging visual QA remains pending.
+- Commit: `ce8fc8d` (`feat: rebuild marketplace asset cards`)
+- Push: `origin/main` successful
+- VPS release: `/opt/slice/releases/20260822-ce8fc8d`
+- `/opt/slice/current`: `/opt/slice/releases/20260822-ce8fc8d`
+- `/opt/slice/app`: `/opt/slice/releases/20260822-ce8fc8d`
+- API service: active
+- Web service: active
+- `/health`: 200
+- `/ready`: 200
+- local SSR: 200
+- public homepage: 200
+- public marketplace: 200
+- public Umbreon detail: 200
+- discovered deployed JS/CSS assets: all 200
 
-This preserves the current staging release rather than shipping a backend projection change without its database-backed regression coverage.
+The release script ran frontend client/SSR builds, backend build, Prisma generate/validate, and `prisma migrate deploy` with no pending migrations. No financial or lifecycle mutation was performed.
+
+### Deployed staging card QA
+
+PASS. The deployed marketplace card rendered the authoritative staging values:
+
+- `Umbreon VMAX`
+- `Evolving Skies • #215/203`
+- `Raw / Ungraded`
+- `Mint`
+- `£1,647.17` Slice valuation
+- `$2,151.75` PriceCharting reference
+- `Market Open`
+- `1 active listings`
+- `9 Slices currently offered`
+- `Own available Slices`
+- `View collectible`
+
+The deployed browser render had no horizontal overflow, no console errors/warnings, and no hardcoded Umbreon-specific values. The marketplace response matched the backend listing projection.
 
 ## Known differences from the supplied reference
 
@@ -140,4 +166,4 @@ The change does not create trades, listings, ownership, issuance, valuation reco
 
 ## Release gate
 
-**IMPLEMENTED AND LOCALLY VISUALLY VERIFIED; NOT RELEASE-READY UNTIL INTEGRATION/E2E SERVICES ARE AVAILABLE.**
+**DEPLOYED TO STAGING FOR VISUAL REVIEW.** Local integration/E2E execution remains a follow-up gate because the workspace still lacks Docker/PostgreSQL test services.
