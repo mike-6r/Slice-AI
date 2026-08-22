@@ -57,6 +57,15 @@ function officialGradeLabel(asset: MarketplaceAsset) {
   return asset.grade.replaceAll(" · ", " ");
 }
 
+function formatActiveListingLabel(count: number) {
+  if (count <= 0) return "No active listings";
+  return `${count} active ${count === 1 ? "listing" : "listings"}`;
+}
+
+function formatAvailableUnits(units: string) {
+  return units === "1" ? "1 Slice currently offered" : `${units} Slices currently offered`;
+}
+
 function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
   const gallery = resolveMarketplaceMediaGallery(asset);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -167,10 +176,8 @@ function MarketAvailability({ asset }: { asset: MarketplaceAsset }) {
       </div>
       <div>
         <span className="market-card-label">Active listings</span>
-        <strong>{listings > 0 ? `${listings} active listings` : "No active listings"}</strong>
-        <small>
-          {hasUnits ? `${units} Slices currently offered` : "Nothing currently offered"}
-        </small>
+        <strong>{formatActiveListingLabel(listings)}</strong>
+        <small>{hasUnits ? formatAvailableUnits(units) : "Nothing currently offered"}</small>
       </div>
     </section>
   );
@@ -291,13 +298,10 @@ export function MarketAssetCard({
               {asset.title}
             </Link>
           </h2>
-          {asset.setName || asset.cardNumber ? (
-            <p className="market-card-identity-line">
-              {[asset.setName, asset.cardNumber ? `#${asset.cardNumber}` : undefined]
-                .filter(Boolean)
-                .join(" • ")}
-            </p>
-          ) : null}
+          <p className="market-card-identity-line">
+            {[asset.setName, asset.cardNumber].filter(Boolean).join(" · ") ||
+              "Set and card number unavailable"}
+          </p>
         </div>
         <div className="market-card-condition" aria-label="Condition and grading">
           <span>{officialGradeLabel(asset)}</span>

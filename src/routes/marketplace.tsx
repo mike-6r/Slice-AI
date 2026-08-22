@@ -26,6 +26,8 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { isBetaEnvironment } from "@/config/environment";
 import { useSession } from "@/auth/use-session";
 
+const MARKETPLACE_PAGE_SIZE = 12;
+
 export const Route = createFileRoute("/marketplace")({
   validateSearch: (search: Record<string, unknown>) => ({
     ...(typeof search.q === "string" && search.q.length > 0 ? { q: search.q.slice(0, 120) } : {}),
@@ -64,7 +66,7 @@ function Marketplace() {
       services.assets.list({
         sort: "title",
         cursor: pageParam,
-        limit: 48,
+        limit: MARKETPLACE_PAGE_SIZE,
         signal,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,

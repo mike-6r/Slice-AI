@@ -132,4 +132,29 @@ describe("MarketAssetCard layout contracts", () => {
     expect(html).toContain("12 Slices currently offered");
     expect(html).not.toContain("Buy & sell anytime");
   });
+
+  it("uses readable identity and singular listing copy", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard
+        asset={{
+          ...asset,
+          activeListingsCount: 1,
+          availableListingUnits: "1",
+        }}
+      />,
+    );
+
+    expect(html).toContain("Example Set · 1/10");
+    expect(html).not.toContain("Example Set • #1/10");
+    expect(html).toContain("1 active listing");
+    expect(html).toContain("1 Slice currently offered");
+  });
+
+  it("keeps missing identity data explicit", () => {
+    const html = renderToStaticMarkup(
+      <MarketAssetCard asset={{ ...asset, setName: undefined, cardNumber: undefined }} />,
+    );
+
+    expect(html).toContain("Set and card number unavailable");
+  });
 });

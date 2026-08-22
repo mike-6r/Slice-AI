@@ -14,7 +14,15 @@ export function MarketPagination({
   return (
     <div className="market-pagination">
       <p>
-        Showing <strong>{shown}</strong> of <strong>{total}</strong> matching assets
+        {hasMore ? (
+          <>
+            Showing the first <strong>{shown}</strong> matching assets
+          </>
+        ) : (
+          <>
+            Showing <strong>{total}</strong> matching {total === 1 ? "asset" : "assets"}
+          </>
+        )}
       </p>
       {hasMore && (
         <button type="button" onClick={onLoadMore} disabled={isLoading}>
