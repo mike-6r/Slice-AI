@@ -59,9 +59,9 @@ Read-only database inspection showed:
 
 | Result | Count |
 |---|---:|
-| PASS | 47 |
+| PASS | 49 |
 | FAIL | 1 |
-| BLOCKED | 18 |
+| BLOCKED | 16 |
 | N/A | 4 |
 | Critical open bugs | 0 |
 | High open bugs | 1 |
@@ -116,14 +116,14 @@ Every case below is represented in `SLICE_BETA_OWNER_FINAL_QA.json`.
 
 - `QA-033` PASS — supported cleanup leaves `demo-collector@slicecollectable.com` with active `USER + COLLECTOR`; unwanted assignments remain revoked and audited.
 - `QA-034` PASS — fresh Collector login succeeded, Collector Workspace loaded as Slice Demo Collector, and refresh preserved the session. The prior disabled-login symptom was deployment asset-pointer drift, not the login component.
-- `QA-035` BLOCKED — new disposable listing and card-identification workflow was not started.
+- `QA-035` BLOCKED — the disposable Collector is now ACTIVE, but the supported listing gate still requires email verification. No verification was forged or written directly to the database; no draft or card-identification record was created.
 - `QA-036` BLOCKED — upload, replace/remove, invalid-file and pre-publication private-media matrix was not started.
 - `QA-037` PASS — existing public Umbreon Slice Grade is displayed as advisory, not as an official grade; fresh provider analysis was not triggered.
 - `QA-038` BLOCKED — fresh submission/idempotency/status/intake workflow was not started.
 - `QA-039` BLOCKED — Admin review, intake and publication workflow was not started because the required Collector → Admin baseline was not safe to proceed.
-- `QA-040` BLOCKED — Collector public-profile privacy matrix needs independent Collector and Investor sessions.
+- `QA-040` PASS — the private Collector profile returned `Profile not found / private or unavailable` to logged-out and Investor viewers; no private submission details, media or metadata rendered.
 - `QA-041` PASS — Investor account settings were read-only inspected; no mutation was submitted.
-- `QA-042` BLOCKED — Collector account settings and membership state were not independently tested.
+- `QA-042` PASS — a fresh disposable Collector session rendered profile, `USER + COLLECTOR` roles, ACTIVE/pending-verification state, security gates and membership capacity; an unchanged profile save succeeded.
 - `QA-043` BLOCKED — Collector → Admin, Admin → Marketplace and Marketplace → Investor lifecycle cannot be signed off without a safe disposable fixture and fresh role matrix.
 
 ### 5. Permissions, isolation and security
@@ -203,6 +203,14 @@ Source, test-contract and isolated-runner changes were committed as `b26e407` an
 - [x] Production configuration remaining documented
 
 ## QA Result
+
+### Owner Beta retake — 2026-08-21
+
+- A disposable Collector account was created through the supported UI and granted only the Collector capability needed for this QA. The supported Admin activation request timed out, so it was not repeated blindly; read-only verification confirmed the account is `ACTIVE` and still email-unverified.
+- Collector account settings and public profile privacy were completed without touching protected assets, ownership, orders, executions, wallets, journals, Stripe state, Umbreon or Charizard. The profile save submitted no data change.
+- The normal email-verification gate prevents `/list` from creating a disposable submission. No submission, private upload, AI analysis, Admin review, publication, market, order or trade was created. This is recorded as a blocker rather than bypassed.
+- Provider calls during this retake: PriceCharting `0`, Ximilar `0`, Stripe live `0`. Protected/economic state remained unchanged; the only disposable-fixture mutations were account setup and supported role/status setup.
+- The remaining owner lifecycle, purchase, selling, concurrency, private-media, responsive viewport, Bacs and Connect cases remain blocked or N/A for the reasons recorded above. No new application bug was created because the observed blockers are test-environment/account-gate constraints.
 
 ### Focused SLICE-002 follow-up — 2026-08-21/22
 
