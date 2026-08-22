@@ -191,7 +191,11 @@ function AssetPage() {
   const backMedia = reverseMedia ? { src: reverseMedia.url, alt: reverseMedia.alt } : undefined;
   const lifecycle = asset.marketLifecycle;
   const initialOffering = asset.initialOffering;
-  const initialOfferingOpen = Boolean(initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status) && initialOffering.inventory);
+  const initialOfferingOpen = Boolean(
+    initialOffering &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status) &&
+    initialOffering.inventory,
+  );
   const history = historyQuery.data ?? [];
   const currentValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
   const currentValueCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
@@ -243,6 +247,15 @@ function AssetPage() {
       : "No trading history yet";
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const category = marketCategoryPresentation(asset.category);
+  const displayCurrency = ownershipSummaryQuery.data?.currency ?? currentValueCurrency ?? "GBP";
+  const condition = asset.conditionLabel ?? asset.grade ?? "Raw / Ungraded";
+  const handleWatch = () => {
+    if (!isAuthenticated) {
+      window.location.assign(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`);
+      return;
+    }
+    toggleWatchlist.mutate(asset.id);
+  };
 
   return (
     <div className="asset-detail-page">
@@ -257,60 +270,84 @@ function AssetPage() {
         className="asset-detail-shell asset-workspace asset-redesign"
         aria-labelledby="asset-title"
       >
-        <header className="asset-page-heading">
-          <div>
-            <p className="asset-kicker">Published collectible</p>
-            <h1 id="asset-title">{asset.title}</h1>
-            <p className="asset-page-subtitle">
-              {asset.setName ?? "Collectible"} ·{" "}
-              {assetQuery.data.details.card?.cardNumber ?? "Card number unavailable"} ·{" "}
-              {asset.grade ?? "Raw / ungraded"}
-            </p>
-          </div>
-          <div className="asset-page-heading__actions">
-            <span className="asset-status-badge">
-              <CheckCircle2 aria-hidden="true" /> Published
-            </span>
-            {lifecycle ? (
-              <span className="asset-status-badge asset-status-badge--pending">
-                {lifecycle.badge}
-              </span>
-            ) : null}
-            <InfoTip
-              label="What does published mean?"
-              text="Slice has reviewed this public record. Trading still depends on custody, supply approval, and issuance."
-            />
-          </div>
-        </header>
-
         <section className="asset-redesign-hero">
           <div className="asset-redesign-media">
             <AssetShowcase
               title={asset.title}
-              category={category.label}
               grader={asset.grader}
               gradeScore={asset.gradeScore}
               gradeLabel={asset.gradeLabel}
               certificationNumber={asset.certificationNumber}
               media={media}
               backMedia={backMedia}
-              watched={watched}
-              canWatch={isAuthenticated}
-              isUpdatingWatch={toggleWatchlist.isPending}
-              onToggleWatch={() => toggleWatchlist.mutate(asset.id)}
             />
             <p className="asset-media-caption">
-              <span>{category.label}</span>
+              <span>{backMedia ? "Front & back verified" : "Approved media"}</span>
               <span className="asset-media-caption__hint">
-                {backMedia
-                  ? "Hover or tap to view both sides"
-                  : "Approved front image · public record"}
+                {backMedia ? "Hover or tap to flip the card" : "Public catalogue image"}
               </span>
             </p>
           </div>
 
+          <section className="asset-reference-identity" aria-labelledby="asset-title">
+            <div className="asset-reference-identity__topline">
+              <p className="asset-kicker">Collectible</p>
+              <WatchlistControl
+                watched={watched}
+                isAuthenticated={isAuthenticated}
+                isUpdating={toggleWatchlist.isPending}
+                onClick={handleWatch}
+              />
+            </div>
+            <h1 id="asset-title">{asset.title}</h1>
+            <p className="asset-page-subtitle">
+              {[category.label, asset.setName, asset.cardNumber, condition, asset.year]
+                .filter(Boolean)
+                .join("  ·  ")}
+            </p>
+            <div className="asset-reference-identity__status" aria-label="Asset status">
+              <span className="asset-status-badge asset-status-badge--live">
+                <i aria-hidden="true" /> {lifecycle?.badge ?? "Published"}
+              </span>
+              {initialOffering ? (
+                <span className="asset-status-badge asset-status-badge--gold">
+                  Initial offering
+                </span>
+              ) : null}
+              <InfoTip
+                label="About this collectible"
+                text="Slice keeps the physical collectible, valuation, ownership supply, and trading state as separate records so each part remains clear."
+              />
+            </div>
+            <div className="asset-reference-identity__valuation">
+              <div>
+                <span className="asset-section-label">Slice valuation</span>
+                <strong>
+                  {currentValue === undefined
+                    ? "Unavailable"
+                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
+                </strong>
+                <small>
+                  {sliceValuationAt
+                    ? `Approved ${formatDate(sliceValuationAt)}`
+                    : "Authoritative Slice value"}
+                </small>
+              </div>
+              <div>
+                <span className="asset-section-label">External reference</span>
+                <strong>
+                  {asset.marketReference
+                    ? formatCurrency(asset.marketReference.amountMinor, {
+                        currency: asset.marketReference.currency,
+                      })
+                    : "Unavailable"}
+                </strong>
+                <small>{asset.marketReference?.source ?? "No external reference"}</small>
+              </div>
+            </div>
+          </section>
+
           <section className="asset-readiness-card" aria-labelledby="market-status-title">
-            <div className="asset-section-label">Market status</div>
             {notYetTradeable ? (
               <LifecycleReadinessPanel lifecycle={lifecycle} />
             ) : (
@@ -326,6 +363,11 @@ function AssetPage() {
                 ownShares={shares.ownShares}
                 isAuthenticated={isAuthenticated}
                 ownershipSummary={ownershipSummaryQuery.data}
+                trades={tradesQuery.data ?? []}
+                tradesLoading={tradesQuery.isLoading}
+                tradesError={tradesQuery.isError}
+                retryTrades={() => void tradesQuery.refetch()}
+                currency={displayCurrency}
               />
             )}
           </section>
@@ -344,7 +386,12 @@ function AssetPage() {
             <dl>
               <div>
                 <dt>Starting price</dt>
-                <dd>{formatPricePerUnit(Number(initialOffering.pricePerUnitMinor), initialOffering.currency)}</dd>
+                <dd>
+                  {formatPricePerUnit(
+                    Number(initialOffering.pricePerUnitMinor),
+                    initialOffering.currency,
+                  )}
+                </dd>
                 <small>per Slice</small>
               </div>
               <div>
@@ -353,7 +400,12 @@ function AssetPage() {
               </div>
               <div>
                 <dt>Collector retained</dt>
-                <dd>{formatOfferingPercentage(initialOffering.retainedUnits, initialOffering.totalUnits)}</dd>
+                <dd>
+                  {formatOfferingPercentage(
+                    initialOffering.retainedUnits,
+                    initialOffering.totalUnits,
+                  )}
+                </dd>
                 <small>remains in their portfolio</small>
               </div>
             </dl>
@@ -516,7 +568,7 @@ function AssetPage() {
             </div>
             <div>
               <span>Condition</span>
-              <strong>{asset.grade ?? "Raw / ungraded"}</strong>
+              <strong>{condition}</strong>
             </div>
             <div>
               <span>Catalogue state</span>
@@ -525,7 +577,13 @@ function AssetPage() {
           </section>
         </section>
 
-        {!asset.grade && asset.sliceGrade ? <SliceGradePanel grade={asset.sliceGrade} /> : null}
+        {!asset.grade ? (
+          asset.sliceGrade ? (
+            <SliceGradePanel grade={asset.sliceGrade} />
+          ) : (
+            <SliceGradeEmptyPanel />
+          )
+        ) : null}
 
         <section className="asset-redesign-grid asset-redesign-grid--lower">
           <section
@@ -595,36 +653,6 @@ function AssetPage() {
             </div>
           </section>
         </section>
-
-        {!notYetTradeable && (
-          <section className="asset-redesign-grid asset-redesign-grid--activity">
-            <RecentTrades
-              trades={tradesQuery.data ?? []}
-              isLoading={tradesQuery.isLoading}
-              isError={tradesQuery.isError}
-              retry={() => void tradesQuery.refetch()}
-            />
-            <section className="asset-market-note" aria-labelledby="market-note-title">
-              <p className="asset-section-label">Trading at a glance</p>
-              <h2 id="market-note-title">A simple loop from buy to sell.</h2>
-              <p>
-                Buy ownership units, watch your settled position grow in Portfolio, then return here
-                to sell when the market supports it.
-              </p>
-              <div className="asset-market-note__steps">
-                <span>
-                  <b>01</b>Buy
-                </span>
-                <span>
-                  <b>02</b>Track
-                </span>
-                <span>
-                  <b>03</b>Sell
-                </span>
-              </div>
-            </section>
-          </section>
-        )}
 
         <SimilarAssets
           items={(similarQuery.data?.items ?? []).map(toMarketplaceAsset)}
@@ -939,32 +967,40 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
   );
 }
 
+function SliceGradeEmptyPanel() {
+  return (
+    <section
+      className="asset-slice-grade-panel asset-slice-grade-panel--empty"
+      aria-labelledby="slice-grade-title"
+    >
+      <header className="asset-slice-grade-panel__header">
+        <div>
+          <p className="asset-section-label">Slice Grade</p>
+          <h2 id="slice-grade-title">AI-assisted condition insight</h2>
+          <p>No AI-assisted condition insight is available for this collectible yet.</p>
+        </div>
+        <span className="asset-slice-grade-panel__badge">Not available</span>
+      </header>
+    </section>
+  );
+}
+
 function AssetShowcase({
   title,
-  category,
   grader,
   gradeScore,
   gradeLabel,
   certificationNumber,
   media,
   backMedia,
-  watched,
-  canWatch,
-  isUpdatingWatch,
-  onToggleWatch,
 }: {
   title: string;
-  category: string;
   grader?: string;
   gradeScore?: number;
   gradeLabel?: string;
   certificationNumber?: string;
   media?: { src: string; alt: string };
   backMedia?: { src: string; alt: string };
-  watched: boolean;
-  canWatch: boolean;
-  isUpdatingWatch: boolean;
-  onToggleWatch: () => void;
 }) {
   const [manualFlip, setManualFlip] = useState<boolean | null>(null);
   const [hoverFlip, setHoverFlip] = useState(false);
@@ -979,7 +1015,6 @@ function AssetShowcase({
           <i key={index} />
         ))}
       </span>
-      <span className="asset-live-badge">Published</span>
       {grader && (
         <span className="asset-grade-badge">
           <small>{grader}</small>
@@ -988,21 +1023,6 @@ function AssetShowcase({
           <em>{certificationNumber ? `Cert. ${certificationNumber}` : "Public record"}</em>
         </span>
       )}
-      <button
-        type="button"
-        className="asset-watch-button"
-        aria-pressed={watched}
-        disabled={!canWatch || isUpdatingWatch}
-        title={canWatch ? "Add or remove from watchlist" : "Sign in to use watchlist"}
-        onClick={onToggleWatch}
-      >
-        <Bookmark aria-hidden="true" fill={watched ? "currentColor" : "none"} />
-        {watched ? "Watching" : "Watch"}
-      </button>
-      <span className="asset-category-pill">
-        <i aria-hidden="true" />
-        {category}
-      </span>
       <div
         className={`asset-card-stage${backMedia ? " has-back" : ""}${flipped ? " is-flipped" : ""}`}
         onMouseEnter={() => {
@@ -1046,6 +1066,32 @@ function AssetShowcase({
       </div>
       <span className="sr-only">{title}</span>
     </div>
+  );
+}
+
+function WatchlistControl({
+  watched,
+  isAuthenticated,
+  isUpdating,
+  onClick,
+}: {
+  watched: boolean;
+  isAuthenticated: boolean;
+  isUpdating: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="asset-watch-button asset-watch-button--identity"
+      aria-pressed={watched}
+      disabled={isUpdating}
+      title={isAuthenticated ? "Add or remove from watchlist" : "Sign in to use watchlist"}
+      onClick={onClick}
+    >
+      <Bookmark aria-hidden="true" fill={watched ? "currentColor" : "none"} />
+      {watched ? "Watching" : "Watchlist"}
+    </button>
   );
 }
 
@@ -1113,6 +1159,11 @@ function TradingPanel({
   ownShares,
   isAuthenticated,
   ownershipSummary,
+  trades,
+  tradesLoading,
+  tradesError,
+  retryTrades,
+  currency,
 }: {
   book: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["orderBook"]>> | undefined;
   isLoading: boolean;
@@ -1127,63 +1178,106 @@ function TradingPanel({
   ownershipSummary:
     | Awaited<ReturnType<ReturnType<typeof useAppServices>["trading"]["ownershipMarketSummary"]>>
     | undefined;
+  trades: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["recentTrades"]>>;
+  tradesLoading: boolean;
+  tradesError: boolean;
+  retryTrades: () => void;
+  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
   const canSell = isAuthenticated && ownShares !== undefined && ownShares > 0;
+  const marketOpen = ownershipSummary?.marketStatus === "OPEN";
+  const hasAvailable = (availableShares ?? 0) > 0;
+  const breakdown = ownershipSummary?.ownershipBreakdown;
+  const slicePrice =
+    ownershipSummary?.slicePriceMinor ??
+    (sharePriceMinor === undefined ? null : String(sharePriceMinor));
   return (
     <section className="asset-order-book">
-      <header>
-        <h2>{customerTerms.own}</h2>
-        <strong>Ownership &amp; trading</strong>
+      <header className="asset-trading-panel__header">
+        <div>
+          <p className="asset-section-label">Ownership &amp; trading</p>
+          <h2 id="market-status-title">Make it yours</h2>
+        </div>
+        <span className={`asset-market-status${marketOpen ? " is-open" : ""}`}>
+          <i aria-hidden="true" /> {marketOpen ? "Market open" : "Market preparing"}
+        </span>
       </header>
-      <p className="asset-trade-helper">
-        Choose what percentage of the whole collectible you want to own. Slice converts it into
-        whole ownership units, checks live liquidity, and takes you to a protected review step.
-      </p>
       <div className="asset-trading-summary">
         <Stat
-          label="Whole collectible market value"
+          label="Price per Slice"
+          value={slicePrice === null ? "Unavailable" : formatPricePerUnit(slicePrice, currency)}
+        />
+        <Stat
+          label="Slices available"
           value={
-            ownershipSummary?.impliedWholeValueMinor
-              ? formatCurrency(Number(ownershipSummary.impliedWholeValueMinor))
-              : "Unavailable"
+            availableShares === undefined
+              ? "Unavailable"
+              : `${availableShares.toLocaleString()} Slices`
           }
         />
         <Stat
-          label="Available ownership"
-          value={formatAvailability(ownershipSummary?.availableOwnershipPercent)}
-        />
-        <Stat
-          label="Value of 1%"
+          label="Total supply"
           value={
-            ownershipSummary?.onePercentValueMinor
-              ? formatCurrency(Number(ownershipSummary.onePercentValueMinor))
-              : "Unavailable"
+            issuedShares === undefined ? "Unavailable" : `${issuedShares.toLocaleString()} Slices`
           }
         />
       </div>
-      <p className="asset-panel-helper">
-        Available ownership is the percentage currently offered through the Slice market. Value of
-        1% is an approximate Slice-market calculation, not a third-party listing.
+      <p className="asset-trading-availability">
+        {ownershipSummary?.availableOwnershipPercent &&
+        ownershipSummary.availableOwnershipPercent !== "Not yet available"
+          ? `${formatAvailability(ownershipSummary.availableOwnershipPercent)} of the issued supply is currently listed.`
+          : "Availability will appear after ownership is issued."}
       </p>
-      <p className="asset-position-copy">
-        {isAuthenticated && ownShares !== undefined && issuedShares !== undefined
-          ? `You currently own ${formatOwnershipPercent(ownShares, issuedShares)}. Choose another percentage to see the resulting Slice quantity.`
-          : "The collectible is divided into whole ownership units. External reference values are shown separately from executable Slice pricing."}
-      </p>
-      <div className="asset-ownership-callout">
-        <strong>Percentage-first buying</strong>
-        <span>
-          {ownershipSummary?.onePercentSlices
-            ? `1% equals ${ownershipSummary.onePercentSlices} ownership units at the current issuance.`
-            : "Slice will show the valid ownership increment for this issuance."}
-        </span>
-        {!ownershipSummary?.hasImmediateLiquidity && (
-          <small>
-            No ownership is currently offered at the market price, but you can place a limit order.
-          </small>
-        )}
+      {breakdown ? (
+        <div className="asset-ownership-breakdown" aria-label="Ownership breakdown">
+          <div className="asset-ownership-breakdown__bar" aria-hidden="true">
+            <span
+              className="is-retained"
+              style={{
+                flexBasis: `${percentOf(breakdown.collectorRetainedSlices, issuedShares)}%`,
+              }}
+            />
+            <span
+              className="is-owned"
+              style={{ flexBasis: `${percentOf(breakdown.investorOwnedSlices, issuedShares)}%` }}
+            />
+            <span
+              className="is-available"
+              style={{ flexBasis: `${percentOf(availableShares, issuedShares)}%` }}
+            />
+          </div>
+          <div className="asset-ownership-breakdown__legend">
+            <span>
+              <i className="is-retained" /> Collector retained{" "}
+              <strong>{breakdown.collectorRetainedSlices}</strong>
+            </span>
+            <span>
+              <i className="is-owned" /> Investor owned{" "}
+              <strong>{breakdown.investorOwnedSlices}</strong>
+            </span>
+            <span>
+              <i className="is-available" /> Available{" "}
+              <strong>{availableShares?.toLocaleString() ?? "—"}</strong>
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div className="asset-current-position">
+        <div>
+          <span className="asset-section-label">Your position</span>
+          <strong>
+            {isAuthenticated && ownShares !== undefined
+              ? `${ownShares.toLocaleString()} Slices`
+              : "Sign in to see your position"}
+          </strong>
+        </div>
+        <small>
+          {isAuthenticated && ownShares !== undefined && issuedShares
+            ? formatOwnershipPercent(ownShares, issuedShares)
+            : "Ownership appears here after settlement."}
+        </small>
       </div>
       {isLoading ? (
         <p>Loading order book…</p>
@@ -1217,13 +1311,24 @@ function TradingPanel({
         </>
       )}
       <div className="asset-order-actions">
-        <Link to="/buy/$id" params={{ id }} className="is-buy">
-          <span>
-            <strong>Buy a Slice</strong>
-            <small>Choose ownership units</small>
-          </span>
-          <ArrowRight aria-hidden="true" />
-        </Link>
+        {marketOpen && hasAvailable ? (
+          <Link to="/buy/$id" params={{ id }} className="is-buy">
+            <span>
+              <strong>Buy Slices</strong>
+              <small>Choose how many you want</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        ) : (
+          <div className="is-buy is-disabled" aria-disabled="true">
+            <span>
+              <strong>Buying unavailable</strong>
+              <small>
+                {marketOpen ? "No Slices are currently listed" : "The market is not open yet"}
+              </small>
+            </span>
+          </div>
+        )}
         {canSell ? (
           <Link to="/sell/$id" params={{ id }} className="is-sell">
             <span>
@@ -1245,6 +1350,13 @@ function TradingPanel({
           </div>
         )}
       </div>
+      <RecentTrades
+        trades={trades}
+        isLoading={tradesLoading}
+        isError={tradesError}
+        retry={retryTrades}
+        currency={currency}
+      />
     </section>
   );
 }
@@ -1288,17 +1400,19 @@ function RecentTrades({
   isLoading,
   isError,
   retry,
+  currency,
 }: {
   trades: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["recentTrades"]>>;
   isLoading: boolean;
   isError: boolean;
   retry: () => void;
+  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   return (
     <section className="asset-recent-trades">
       <header>
-        <h2>Recent executions</h2>
-        <span>Public only</span>
+        <h3>Recent trades</h3>
+        <span>Public executions</span>
       </header>
       {isLoading ? (
         <p>Loading executions…</p>
@@ -1307,13 +1421,13 @@ function RecentTrades({
           Retry executions
         </button>
       ) : (
-        <ul>
+        <ul className="asset-recent-trades__table" aria-label="Recent trades">
           {trades.length ? (
             trades.slice(0, 7).map((trade) => (
               <li key={trade.id}>
                 <span>{formatDate(trade.executedAt)}</span>
-                <strong>{trade.units} ownership units</strong>
-                <em className="is-up">{formatCurrency(trade.pricePerUnit.amount)}</em>
+                <strong>{trade.units.toLocaleString()} Slices</strong>
+                <em className="is-up">{formatPricePerUnit(trade.pricePerUnit.amount, currency)}</em>
               </li>
             ))
           ) : (
@@ -1477,12 +1591,18 @@ function safeDisplayInteger(value: bigint | undefined) {
   return Number(value);
 }
 
-function initialOfferingAvailabilityBps(offering: NonNullable<ReturnType<typeof toMarketplaceAsset>["initialOffering"]>) {
+function initialOfferingAvailabilityBps(
+  offering: NonNullable<ReturnType<typeof toMarketplaceAsset>["initialOffering"]>,
+) {
   if (!offering.inventory) return 0;
   try {
     const total = BigInt(offering.totalUnits);
     return total > 0n
-      ? Number(((BigInt(offering.inventory.availableUnits) + BigInt(offering.inventory.reservedUnits)) * 10_000n) / total)
+      ? Number(
+          ((BigInt(offering.inventory.availableUnits) + BigInt(offering.inventory.reservedUnits)) *
+            10_000n) /
+            total,
+        )
       : 0;
   } catch {
     return 0;
@@ -1504,6 +1624,13 @@ function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
   const wholePercent = percentageBasisPoints / 100n;
   const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
   return `${wholePercent}.${fractionalPercent}% ownership`;
+}
+
+function percentOf(value: string | number | undefined, total: number | undefined) {
+  if (total === undefined || total <= 0 || value === undefined) return 0;
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.min(100, (numeric / total) * 100);
 }
 
 function formatPublicGrade(score?: number, label?: string) {

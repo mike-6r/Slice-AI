@@ -591,6 +591,7 @@ const mapOwnershipMarketSummary = (raw: unknown): OwnershipMarketSummary => {
   const value = objectField(raw, "ownership market summary");
   return {
     assetId: stringField(value.assetId, "summary.assetId"),
+    currency: value.currency as OwnershipMarketSummary["currency"],
     totalSlices: stringField(value.totalSlices, "summary.totalSlices"),
     availableSlices: stringField(value.availableSlices, "summary.availableSlices"),
     availableOwnershipPercent: stringField(
@@ -619,6 +620,23 @@ const mapOwnershipMarketSummary = (raw: unknown): OwnershipMarketSummary => {
     bestBidMinor: nullableString(value.bestBidMinor, "summary.bestBidMinor"),
     hasImmediateLiquidity: Boolean(value.hasImmediateLiquidity),
     marketStatus: value.marketStatus as OwnershipMarketSummary["marketStatus"],
+    ownershipBreakdown:
+      value.ownershipBreakdown && typeof value.ownershipBreakdown === "object"
+        ? {
+            collectorRetainedSlices: stringField(
+              (value.ownershipBreakdown as Record<string, unknown>).collectorRetainedSlices,
+              "summary.ownershipBreakdown.collectorRetainedSlices",
+            ),
+            investorOwnedSlices: stringField(
+              (value.ownershipBreakdown as Record<string, unknown>).investorOwnedSlices,
+              "summary.ownershipBreakdown.investorOwnedSlices",
+            ),
+            treasurySlices: stringField(
+              (value.ownershipBreakdown as Record<string, unknown>).treasurySlices,
+              "summary.ownershipBreakdown.treasurySlices",
+            ),
+          }
+        : undefined,
   };
 };
 const mapTradingPage = (raw: unknown): TradingOrderPage => {

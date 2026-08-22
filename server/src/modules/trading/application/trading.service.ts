@@ -254,13 +254,18 @@ export class TradingService {
       select: { id: true },
     });
     if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
-    const [market, supply, asks, bids, snapshot, policy] = await Promise.all([
+    const [market, supply, asks, bids, snapshot, policy, offering, positions] = await Promise.all([
       this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
       this.db.ownershipAssetSupply.findUnique({ where: { assetId: asset.id }, select: { totalUnits: true, status: true } }),
       this.bookLevels(asset.id, 'SELL', 100, 'asc'),
       this.bookLevels(asset.id, 'BUY', 100, 'desc'),
       this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
-      this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true } }),
+      this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true, valuationCurrency: true } }),
+      this.db.initialOffering.findUnique({ where: { assetId: asset.id }, select: { retainedUnits: true, originatingCollectorUserId: true } }),
+      this.db.ownershipPosition.findMany({
+        where: { assetId: asset.id },
+        select: { settledUnits: true, account: { select: { type: true, userId: true } } },
+      }),
     ]);
     const total = supply?.totalUnits ?? 0n;
     const available = asks.reduce((sum, level) => sum + BigInt(level.units), 0n);
@@ -273,8 +278,20 @@ export class TradingService {
     );
     const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
     const notYetIssued = total === 0n;
+    const investorOwned = positions.reduce(
+      (sum, position) =>
+        position.account.type === 'USER' && position.account.userId !== offering?.originatingCollectorUserId
+          ? sum + position.settledUnits
+          : sum,
+      0n,
+    );
+    const treasury = positions.reduce(
+      (sum, position) => (position.account.type === 'TREASURY' ? sum + position.settledUnits : sum),
+      0n,
+    );
     return {
       assetId: asset.id,
+      currency: policy?.valuationCurrency ?? 'GBP',
       totalSlices: total.toString(),
       availableSlices: available.toString(),
       availableOwnershipPercent: notYetIssued ? 'Not yet available' : formatOwnershipPercent(available, total),
@@ -288,6 +305,15 @@ export class TradingService {
       bestBidMinor: bestBid?.toString() ?? null,
       hasImmediateLiquidity: available > 0n,
       marketStatus: market?.status ?? 'CLOSED',
+      ...(offering
+        ? {
+            ownershipBreakdown: {
+              collectorRetainedSlices: offering.retainedUnits.toString(),
+              investorOwnedSlices: investorOwned.toString(),
+              treasurySlices: treasury.toString(),
+            },
+          }
+        : {}),
     };
   }
 

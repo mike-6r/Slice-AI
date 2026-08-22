@@ -565,6 +565,7 @@ export const mockRepositories: AppRepositories = {
       const p = priceFor(assetId).amount / 100;
       return {
         assetId,
+        currency: "GBP" as const,
         bids: buyOrders(p).map((row) => ({
           pricePerUnit: gbp(row.price),
           units: row.pct * 100,
@@ -800,6 +801,7 @@ export const mockRepositories: AppRepositories = {
     async getOwnershipMarketSummary(assetId) {
       return {
         assetId,
+        currency: "GBP" as const,
         totalSlices: "200",
         availableSlices: "100",
         availableOwnershipPercent: "50",
@@ -813,6 +815,11 @@ export const mockRepositories: AppRepositories = {
         bestBidMinor: "980",
         hasImmediateLiquidity: true,
         marketStatus: "OPEN" as const,
+        ownershipBreakdown: {
+          collectorRetainedSlices: "80",
+          investorOwnedSlices: "20",
+          treasurySlices: "0",
+        },
       };
     },
     async previewOwnershipOrder(input) {

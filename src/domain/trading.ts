@@ -126,6 +126,7 @@ export type OwnershipOrderPreview = {
 
 export type OwnershipMarketSummary = {
   assetId: string;
+  currency: "GBP" | "USD" | "CAD" | "EUR";
   totalSlices: string;
   availableSlices: string;
   availableOwnershipPercent: string;
@@ -139,6 +140,11 @@ export type OwnershipMarketSummary = {
   bestBidMinor: string | null;
   hasImmediateLiquidity: boolean;
   marketStatus: "OPEN" | "CLOSED" | "HALTED";
+  ownershipBreakdown?: {
+    collectorRetainedSlices: string;
+    investorOwnedSlices: string;
+    treasurySlices: string;
+  };
 };
 export interface TradingOrderView {
   id: string;
