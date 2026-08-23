@@ -21,7 +21,7 @@ environment files or source control.
 | --- | --- |
 | Resend | `EMAIL_DELIVERY_MODE=resend`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, optional `RESEND_FROM_NAME`, and an HTTPS `APP_PUBLIC_URL` |
 | Twilio Programmable SMS | `PHONE_DELIVERY_MODE=twilio_sms`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
-| Twilio Verify | `PHONE_DELIVERY_MODE=twilio_verify`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` |
+| Twilio Verify | `PHONE_DELIVERY_MODE=twilio_verify`, `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_VERIFY_SERVICE_SID` |
 | Cloudflare Turnstile | `CAPTCHA_PROVIDER=cloudflare_turnstile`, `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `TURNSTILE_EXPECTED_HOSTNAME`, `TURNSTILE_EXPECTED_ACTION=signup` |
 
 `RESEND_TEST_RECIPIENT_OVERRIDE` may redirect delivery in development or test

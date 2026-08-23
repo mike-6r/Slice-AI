@@ -155,4 +155,57 @@ describe('TwilioVerifyPhoneDelivery', () => {
       },
     });
   });
+
+  it('maps destination and fraud blocks to a useful unsupported-phone error', async () => {
+    const twilio = client('pending', 'approved');
+    twilio.createVerification.mockRejectedValue({
+      code: 60412,
+      status: 403,
+      message: 'private provider response',
+    });
+    const delivery = new TwilioVerifyPhoneDelivery(config);
+    jest
+      .spyOn(delivery as never, 'createClient')
+      .mockReturnValue(twilio.value as never);
+
+    await expect(
+      delivery.deliver({
+        userId: 'user_123',
+        phoneE164: '+12025550103',
+        purpose: 'PHONE',
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      response: {
+        code: 'PHONE_UNSUPPORTED',
+        message: 'This phone number cannot receive SMS verification.',
+      },
+    });
+  });
+
+  it('maps provider send-attempt limits to 429 even when Twilio returns 400', async () => {
+    const twilio = client('pending', 'approved');
+    twilio.createVerification.mockRejectedValue({
+      code: 60203,
+      status: 400,
+      message: 'private provider response',
+    });
+    const delivery = new TwilioVerifyPhoneDelivery(config);
+    jest
+      .spyOn(delivery as never, 'createClient')
+      .mockReturnValue(twilio.value as never);
+
+    await expect(
+      delivery.deliver({
+        userId: 'user_123',
+        phoneE164: '+12025550103',
+        purpose: 'PHONE',
+      }),
+    ).rejects.toMatchObject({
+      status: 429,
+      response: {
+        code: 'PHONE_RATE_LIMITED',
+      },
+    });
+  });
 });

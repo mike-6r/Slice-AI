@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   UnprocessableEntityException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import type { PhoneVerificationDelivery } from './phone-verification.service';
 @Injectable()
 export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
   readonly managesVerification = true;
+  private readonly logger = new Logger(TwilioVerifyPhoneDelivery.name);
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
@@ -82,7 +84,13 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
   private mapProviderError(error: unknown) {
     const code = providerCode(error);
     const status = providerStatus(error);
-    if (status === 429 || code === 20429)
+    this.logger.warn(
+      `Twilio Verify request rejected providerCode=${Number.isFinite(code) ? code : 'unknown'} providerStatus=${Number.isFinite(status) ? status : 'unknown'}`,
+    );
+    if (
+      status === 429 ||
+      [20429, 60203, 60207, 60212, 60245].includes(code)
+    )
       return new HttpException(
         {
           code: 'PHONE_RATE_LIMITED',
@@ -90,15 +98,28 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
+    if (
+      [
+        60006,
+        60008,
+        60205,
+        60410,
+        60412,
+        60600,
+        60605,
+        60606,
+        60607,
+        60608,
+      ].includes(code)
+    )
+      return new UnprocessableEntityException({
+        code: 'PHONE_UNSUPPORTED',
+        message: 'This phone number cannot receive SMS verification.',
+      });
     if (code === 60200 || status === 400)
       return new BadRequestException({
         code: 'PHONE_INVALID',
         message: 'Enter a valid phone number that can receive SMS.',
-      });
-    if (code === 60605 || code === 60606)
-      return new UnprocessableEntityException({
-        code: 'PHONE_UNSUPPORTED',
-        message: 'This phone number cannot receive SMS verification.',
       });
     return this.unavailable();
   }
