@@ -500,10 +500,6 @@ function AssetPage() {
               <span>Condition</span>
               <strong>{condition}</strong>
             </div>
-            <div>
-              <span>Catalogue state</span>
-              <strong className="is-positive">Published</strong>
-            </div>
           </section>
 
           {!asset.grade ? (
