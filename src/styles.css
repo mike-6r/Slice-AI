@@ -32560,6 +32560,12 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
     max-width: calc(100vw - 2rem);
   }
 
+  .asset-detail-page .asset-reference-identity__status .asset-info-tip > div {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   .asset-detail-page .asset-redesign-hero {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
