@@ -1,10 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { FinancialLedgerService } from './financial-ledger.service';
 import { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import { selectAuthoritativeSliceValuation } from '../../valuation/valuation-projection';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { publicBetaAssetWhere } from '../../../config/beta-policy';
+import { OBJECT_STORAGE, type ObjectStoragePort } from '../../submissions/ports/submission-storage.ports';
 
 @Injectable()
 export class PortfolioQueryService {
@@ -12,6 +13,7 @@ export class PortfolioQueryService {
     private readonly db: PrismaService,
     private readonly ledger: FinancialLedgerService,
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
+    @Optional() @Inject(OBJECT_STORAGE) private readonly storage?: ObjectStoragePort,
   ) {}
 
   async portfolioForUser(userId: string) {
@@ -19,9 +21,17 @@ export class PortfolioQueryService {
       this.ledger.walletForUser(userId),
       this.holdingsForUser(userId),
     ]);
-    const cashMinor = wallet.accounts.reduce(
-      (sum, account) => sum + BigInt(account.totalMinor),
-      0n,
+    // The ledger owns the aggregate cash projection. Keep the account-row
+    // reduction only as a compatibility fallback for older test fixtures.
+    const cashMinor =
+      typeof wallet.totalMinor === 'string'
+        ? BigInt(wallet.totalMinor)
+        : wallet.accounts.reduce(
+            (sum, account) => sum + BigInt(account.totalMinor),
+            0n,
+          );
+    const holdingsFullyValued = holdings.every(
+      (holding) => holding.estimatedValueMinor !== null,
     );
     const holdingsMinor = holdings.reduce(
       (sum, holding) =>
@@ -48,8 +58,17 @@ export class PortfolioQueryService {
       currency: 'GBP',
       cash: wallet,
       holdings,
-      estimatedHoldingsValueMinor: holdingsMinor.toString(),
-      estimatedPortfolioValueMinor: (cashMinor + holdingsMinor).toString(),
+      estimatedHoldingsValueMinor: holdingsFullyValued
+        ? holdingsMinor.toString()
+        : null,
+      estimatedPortfolioValueMinor: holdingsFullyValued
+        ? (cashMinor + holdingsMinor).toString()
+        : null,
+      totalAccountValueMinor: holdingsFullyValued
+        ? (cashMinor + holdingsMinor).toString()
+        : null,
+      availableCashMinor: wallet.availableMinor,
+      reservedCashMinor: wallet.reservedMinor,
       valuationStatus: holdings.some(
         (holding) => holding.estimatedValueMinor === null,
       )
@@ -92,6 +111,20 @@ export class PortfolioQueryService {
         slug: true,
         title: true,
         category: { select: { name: true } },
+        collectibleSet: { select: { name: true } },
+        submissions: {
+          where: { status: 'APPROVED' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: {
+            media: {
+              where: { status: 'SAFE', deletedAt: null },
+              orderBy: { slot: 'asc' },
+              take: 1,
+              select: { objectKey: true },
+            },
+          },
+        },
         gradeScaleEntry: {
           select: {
             grade: true,
@@ -141,12 +174,12 @@ export class PortfolioQueryService {
       },
     });
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
-    return positions.flatMap((position) => {
+    const projections = await Promise.all(positions.map(async (position) => {
       const asset = assetsById.get(position.assetId);
       // Retired staging assets remain archived for audit purposes, but are not
       // investable portfolio positions. Exclude them from every portfolio
       // projection so the demo stays aligned with the published catalogue.
-      if (!asset) return [];
+      if (!asset) return null;
       const supply = asset.ownershipSupply?.totalUnits;
       const mark = asset.marketSnapshots[0];
       const sliceValuation = selectAuthoritativeSliceValuation(
@@ -158,6 +191,7 @@ export class PortfolioQueryService {
         sliceValuation?.currency === 'GBP'
           ? sliceValuation.amountMinor
           : mark?.estimatedMarketValueMinor;
+      const thumbnailUrl = await this.safeThumbnailUrl(asset.submissions[0]?.media[0]?.objectKey);
       const estimated =
         supply && valuationMinor
           ? (valuationMinor * position.settledUnits) / supply
@@ -190,6 +224,7 @@ export class PortfolioQueryService {
         slug: asset.slug,
         title: asset.title,
         category: asset.category.name,
+        setName: asset.collectibleSet?.name ?? null,
         grade: asset.gradeScaleEntry
           ? `${asset.gradeScaleEntry.company.code} ${asset.gradeScaleEntry.grade.toString()} · ${asset.gradeScaleEntry.label}`
           : null,
@@ -216,6 +251,9 @@ export class PortfolioQueryService {
           ? formatOwnershipPercent(availableToBuyUnits, supply)
           : null,
         estimatedValueMinor: estimated?.toString() ?? null,
+        pricePerSliceMinor:
+          supply && valuationMinor ? (valuationMinor / supply).toString() : null,
+        thumbnailUrl,
         valuationAsOf:
           sliceValuation?.currency === 'GBP'
             ? sliceValuation.approvedAt.toISOString()
@@ -240,7 +278,15 @@ export class PortfolioQueryService {
             ? formatMoneyPercent(unrealisedPnlMinor, costBasis)
             : null,
       };
-    });
+    }));
+    return projections.filter((projection): projection is NonNullable<typeof projection> => projection !== null);
+  }
+
+  private async safeThumbnailUrl(objectKey: string | undefined) {
+    if (!objectKey || !this.storage) return null;
+    return this.storage
+      .createPrivateDownloadUrl(objectKey, new Date(Date.now() + 5 * 60_000))
+      .catch(() => null);
   }
 
   async holdingsPageForUser(

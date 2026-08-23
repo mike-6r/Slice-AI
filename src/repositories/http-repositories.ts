@@ -434,6 +434,22 @@ const mapTradingOrder = (raw: unknown): TradingOrderView => {
     assetId: stringField(value.assetId, "order.assetId"),
     assetSlug:
       value.assetSlug === undefined ? null : nullableString(value.assetSlug, "order.assetSlug"),
+    assetSummary:
+      value.assetSummary && typeof value.assetSummary === "object"
+        ? (() => {
+            const summary = objectField(value.assetSummary, "order.assetSummary");
+            return {
+              slug: nullableString(summary.slug, "order.assetSummary.slug"),
+              title: stringField(summary.title, "order.assetSummary.title"),
+              category: nullableString(summary.category, "order.assetSummary.category"),
+              setName: nullableString(summary.setName, "order.assetSummary.setName"),
+              thumbnailUrl: nullableString(
+                summary.thumbnailUrl,
+                "order.assetSummary.thumbnailUrl",
+              ),
+            };
+          })()
+        : undefined,
     side,
     type: "LIMIT",
     timeInForce: tif,
@@ -693,6 +709,22 @@ const mapExecutionPage = (raw: unknown): TradingExecutionPage => {
     return {
       executionId: stringField(item.executionId, "execution.id"),
       assetSlug: stringField(item.assetSlug, "execution.assetSlug"),
+      assetSummary:
+        item.assetSummary && typeof item.assetSummary === "object"
+          ? (() => {
+              const summary = objectField(item.assetSummary, "execution.assetSummary");
+              return {
+                slug: nullableString(summary.slug, "execution.assetSummary.slug"),
+                title: stringField(summary.title, "execution.assetSummary.title"),
+                category: nullableString(summary.category, "execution.assetSummary.category"),
+                setName: nullableString(summary.setName, "execution.assetSummary.setName"),
+                thumbnailUrl: nullableString(
+                  summary.thumbnailUrl,
+                  "execution.assetSummary.thumbnailUrl",
+                ),
+              };
+            })()
+          : undefined,
       side: item.side,
       units: stringField(item.units, "execution.units"),
       priceMinor: stringField(item.priceMinor, "execution.priceMinor"),

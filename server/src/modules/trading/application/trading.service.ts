@@ -37,6 +37,7 @@ import { Inject } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { isBetaFixtureSlug } from '../../../config/beta-policy';
 import { calculateInitialOfferingSettlement } from '../../initial-offering/domain/initial-offering';
+import { OBJECT_STORAGE, type ObjectStoragePort } from '../../submissions/ports/submission-storage.ports';
 
 export { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import {
@@ -80,6 +81,7 @@ export class TradingService {
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly capabilities?: AccountCapabilityService,
+    @Optional() @Inject(OBJECT_STORAGE) private readonly storage?: ObjectStoragePort,
   ) {}
 
   async preview(actor: Actor, input: OrderInput) {
@@ -638,7 +640,30 @@ export class TradingService {
     if (!placed.replayed) await this.matchMarket(canonicalAssetId, actor, requestId);
     const order = await this.db.tradingOrder.findUnique({
       where: { id: placed.orderId },
-      include: { asset: { select: { slug: true, ownershipSupply: { select: { totalUnits: true } } } } },
+      include: {
+        asset: {
+          select: {
+            slug: true,
+            title: true,
+            category: { select: { name: true } },
+            collectibleSet: { select: { name: true } },
+            submissions: {
+              where: { status: 'APPROVED' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: {
+                media: {
+                  where: { status: 'SAFE', deletedAt: null },
+                  orderBy: { slot: 'asc' },
+                  take: 1,
+                  select: { objectKey: true },
+                },
+              },
+            },
+            ownershipSupply: { select: { totalUnits: true } },
+          },
+        },
+      },
     });
     if (!order) throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found.' });
     return this.publicOrder(order, this.publicAssetSlug(order.asset.slug), order.asset.ownershipSupply?.totalUnits);
@@ -915,14 +940,46 @@ export class TradingService {
       // Archived assets remain in the audit ledger, but are no longer part of
       // a customer's active catalogue or current Orders workspace.
       where,
-      include: { asset: { select: { slug: true, ownershipSupply: { select: { totalUnits: true } } } } },
+      include: {
+        asset: {
+          select: {
+            slug: true,
+            title: true,
+            category: { select: { name: true } },
+            collectibleSet: { select: { name: true } },
+            submissions: {
+              where: { status: 'APPROVED' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: {
+                media: {
+                  where: { status: 'SAFE', deletedAt: null },
+                  orderBy: { slot: 'asc' },
+                  take: 1,
+                  select: { objectKey: true },
+                },
+              },
+            },
+            ownershipSupply: { select: { totalUnits: true } },
+          },
+        },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       ...(paged ? { skip: ((input.page ?? 1) - 1) * pageSize, take: pageSize } : { take: limit + 1 }),
     });
     const total = paged ? await this.db.tradingOrder.count({ where }) : null;
     const page = rows.slice(0, limit);
     return {
-      items: page.map((row) => this.publicOrder(row, this.publicAssetSlug(row.asset.slug), row.asset.ownershipSupply?.totalUnits)),
+      items: await Promise.all(
+        page.map(async (row) =>
+          this.publicOrder(
+            row,
+            this.publicAssetSlug(row.asset.slug),
+            row.asset.ownershipSupply?.totalUnits,
+            await this.publicAssetSummary(row.asset),
+          ),
+        ),
+      ),
       nextCursor: paged ? null : rows.length > limit ? (page.at(-1)?.id ?? null) : null,
       ...(paged
         ? {
@@ -993,7 +1050,27 @@ export class TradingService {
         ],
       },
       include: {
-        asset: { select: { slug: true } },
+        asset: {
+          select: {
+            slug: true,
+            title: true,
+            category: { select: { name: true } },
+            collectibleSet: { select: { name: true } },
+            submissions: {
+              where: { status: 'APPROVED' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: {
+                media: {
+                  where: { status: 'SAFE', deletedAt: null },
+                  orderBy: { slot: 'asc' },
+                  take: 1,
+                  select: { objectKey: true },
+                },
+              },
+            },
+          },
+        },
         buyOrder: { select: { userId: true } },
       },
       orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
@@ -1001,9 +1078,10 @@ export class TradingService {
     });
     const page = rows.slice(0, limit);
     return {
-      items: page.map((row) => ({
+      items: await Promise.all(page.map(async (row) => ({
         executionId: row.id,
         assetSlug: this.publicAssetSlug(row.asset.slug),
+        assetSummary: await this.publicAssetSummary(row.asset),
         side: row.buyOrder.userId === userId ? 'BUY' : 'SELL',
         units: row.units.toString(),
         priceMinor: row.priceMinor.toString(),
@@ -1014,7 +1092,7 @@ export class TradingService {
         settlementStatus: row.settlementStatus,
         marketSequence: row.marketSequence.toString(),
         executedAt: row.executedAt.toISOString(),
-      })),
+      }))),
       nextCursor:
         rows.length > limit && page.at(-1)
           ? this.encodeExecutionCursor(page.at(-1)!, userId)
@@ -1939,11 +2017,23 @@ export class TradingService {
     }));
   }
 
-  private publicOrder(order: TradingOrder, assetSlug?: string, totalUnits?: bigint) {
+  private publicOrder(
+    order: TradingOrder,
+    assetSlug?: string,
+    totalUnits?: bigint,
+    assetSummary?: {
+      slug: string | null;
+      title: string;
+      category: string | null;
+      setName: string | null;
+      thumbnailUrl: string | null;
+    } | null,
+  ) {
     return {
       id: order.id,
       assetId: order.assetId,
       assetSlug: assetSlug ?? null,
+      assetSummary: assetSummary ?? null,
       channel: order.channel,
       side: order.side,
       type: order.type,
@@ -1959,6 +2049,28 @@ export class TradingService {
       requestedOwnershipPercent: totalUnits ? formatOwnershipPercent(order.originalUnits, totalUnits) : null,
       filledOwnershipPercent: totalUnits ? formatOwnershipPercent(order.filledUnits, totalUnits) : null,
       remainingOwnershipPercent: totalUnits ? formatOwnershipPercent(order.remainingUnits, totalUnits) : null,
+    };
+  }
+
+  private async publicAssetSummary(asset: {
+    slug: string;
+    title: string;
+    category: { name: string };
+    collectibleSet: { name: string } | null;
+    submissions: Array<{ media: Array<{ objectKey: string }> }>;
+  }) {
+    const objectKey = asset.submissions[0]?.media[0]?.objectKey;
+    const thumbnailUrl = objectKey && this.storage
+      ? await this.storage
+          .createPrivateDownloadUrl(objectKey, new Date(Date.now() + 5 * 60_000))
+          .catch(() => null)
+      : null;
+    return {
+      slug: this.publicAssetSlug(asset.slug) ?? null,
+      title: asset.title,
+      category: asset.category.name,
+      setName: asset.collectibleSet?.name ?? null,
+      thumbnailUrl,
     };
   }
 

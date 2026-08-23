@@ -2,6 +2,49 @@ import { describe, expect, it, jest } from '@jest/globals';
 import { PortfolioQueryService } from './portfolio-query.service';
 
 describe('PortfolioQueryService holdings page projection', () => {
+  it('reconciles total account value from ledger cash plus marked holdings once', async () => {
+    type PortfolioQueryHarness = {
+      ledger: {
+        walletForUser: (userId: string) => Promise<{
+          currency: 'GBP';
+          totalMinor: string;
+          reservedMinor: string;
+          availableMinor: string;
+          accounts: Array<{ totalMinor: string }>;
+        }>;
+      };
+      holdingsForUser: (userId: string) => Promise<
+        Array<{ estimatedValueMinor: string | null; costBasisMinor: string | null }>
+      >;
+      portfolioForUser: PortfolioQueryService['portfolioForUser'];
+    };
+    const service = Object.create(PortfolioQueryService.prototype) as PortfolioQueryHarness;
+    service.ledger = {
+      walletForUser: jest.fn(async () => ({
+        currency: 'GBP',
+        totalMinor: '100000',
+        reservedMinor: '25000',
+        availableMinor: '75000',
+        accounts: [{ totalMinor: '100000' }],
+      })),
+    };
+    service.holdingsForUser = jest.fn(async () => [
+      {
+        estimatedValueMinor: '400164',
+        costBasisMinor: null,
+      },
+    ]);
+
+    const portfolio = await service.portfolioForUser('user-1');
+
+    expect(portfolio.cash.totalMinor).toBe('100000');
+    expect(portfolio.availableCashMinor).toBe('75000');
+    expect(portfolio.reservedCashMinor).toBe('25000');
+    expect(portfolio.estimatedHoldingsValueMinor).toBe('400164');
+    expect(portfolio.totalAccountValueMinor).toBe('500164');
+    expect(portfolio.estimatedPortfolioValueMinor).toBe('500164');
+  });
+
   it('filters, sorts, and paginates the authoritative holding projection', async () => {
     const service = Object.create(PortfolioQueryService.prototype) as PortfolioQueryService;
     const holdings = [

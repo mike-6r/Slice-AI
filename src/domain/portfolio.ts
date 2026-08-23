@@ -19,6 +19,15 @@ export interface PortfolioCashSummary {
   collectorProceedsReservedMinor?: GbpMinorUnits;
 }
 
+/** Safe, customer-facing identity shared by portfolio surfaces. */
+export interface PortfolioAssetSummary {
+  slug: string | null;
+  title: string;
+  category: string | null;
+  setName?: string | null;
+  thumbnailUrl?: string | null;
+}
+
 export interface WalletInsights {
   period: "month";
   currency: "GBP";
@@ -37,7 +46,9 @@ export interface PortfolioHolding {
   slug: string | null;
   title: string | null;
   category: string | null;
+  setName?: string | null;
   grade: string | null;
+  thumbnailUrl?: string | null;
   ownedUnits: string;
   totalUnits?: string | null;
   issuedUnits?: string | null;
@@ -51,6 +62,7 @@ export interface PortfolioHolding {
   availableToSellUnits?: string;
   availableUnits: string;
   estimatedValueMinor: GbpMinorUnits | null;
+  pricePerSliceMinor?: GbpMinorUnits | null;
   valuationAsOf: ISODateTime | null;
   valuationStatus: PortfolioValuationStatus;
   costBasisMinor: GbpMinorUnits | null;
@@ -101,6 +113,10 @@ export interface PortfolioSummary {
   holdings: PortfolioHolding[];
   estimatedHoldingsValueMinor: GbpMinorUnits | null;
   estimatedPortfolioValueMinor: GbpMinorUnits | null;
+  /** Total account value: total cash (including active reservations) + marked holdings. */
+  totalAccountValueMinor?: GbpMinorUnits | null;
+  availableCashMinor?: GbpMinorUnits | null;
+  reservedCashMinor?: GbpMinorUnits | null;
   valuationStatus: PortfolioValuationStatus;
   investedCostMinor?: GbpMinorUnits | null;
   unrealisedPnlMinor?: GbpMinorUnits | null;

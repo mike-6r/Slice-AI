@@ -8,9 +8,10 @@ import { FinancialReconciliationService } from './application/financial-reconcil
 import { FinanceController } from './http/finance.controller';
 import { PortfolioSnapshotService } from './application/portfolio-snapshot.service';
 import { PortfolioSnapshotWorker } from './application/portfolio-snapshot.worker';
+import { SubmissionStorageModule } from '../submissions/submission-storage.module';
 
 @Module({
-  imports: [AuthModule, AccessControlModule],
+  imports: [AuthModule, AccessControlModule, SubmissionStorageModule],
   controllers: [FinanceController],
   providers: [
     FinancialLedgerService,

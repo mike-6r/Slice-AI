@@ -213,8 +213,23 @@ export class FinancialLedgerService {
     const collectorProceedsMinor = proceedsBalance
       ? accountAuthority(proceeds.normalSide, proceedsBalance.postedDebitMinor, proceedsBalance.postedCreditMinor)
       : 0n;
+    const totalMinor = accounts.reduce((total, account) => {
+      const balance = account.balance;
+      return total + accountAuthority(
+        account.normalSide,
+        balance?.postedDebitMinor ?? 0n,
+        balance?.postedCreditMinor ?? 0n,
+      );
+    }, 0n);
+    const reservedMinor = accounts.reduce(
+      (total, account) => total + (account.balance?.reservedMinor ?? 0n),
+      0n,
+    );
     return {
       currency: 'GBP',
+      totalMinor: totalMinor.toString(),
+      reservedMinor: reservedMinor.toString(),
+      availableMinor: (totalMinor - reservedMinor).toString(),
       pendingMinor: pendingMinor.toString(),
       pendingDepositCount: pendingDeposits.length,
       pendingWithdrawalMinor: pendingWithdrawalMinor.toString(),

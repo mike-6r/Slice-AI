@@ -1,6 +1,7 @@
 import type { AssetId } from "./asset";
 import type { Brand, ISODateTime, Money, OwnershipUnits } from "./common";
 import type { UserId } from "./user";
+import type { PortfolioAssetSummary } from "./portfolio";
 
 export type OrderId = Brand<string, "OrderId">;
 export type OrderSide = "buy" | "sell";
@@ -150,6 +151,7 @@ export interface TradingOrderView {
   id: string;
   assetId: string;
   assetSlug: string | null;
+  assetSummary?: PortfolioAssetSummary | null;
   side: TradingOrderSide;
   type: "LIMIT";
   timeInForce: "GTC" | "IOC";
@@ -176,6 +178,7 @@ export interface TradingOrderPage {
 export interface TradingExecution {
   executionId: string;
   assetSlug: string;
+  assetSummary?: PortfolioAssetSummary | null;
   side: TradingOrderSide;
   units: string;
   priceMinor: string;

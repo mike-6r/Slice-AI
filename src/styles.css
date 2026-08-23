@@ -6552,6 +6552,489 @@ body:has(.collectors-page) .site-shell {
   gap: 0.45rem;
 }
 
+/* Portfolio final workspace pass: readable application hierarchy at every width. */
+.portfolio-page.portfolio-page--approved {
+  overflow-x: clip;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-shell {
+  width: min(calc(100% - 3rem), 112rem);
+  padding-block: 2.25rem 4.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  align-items: end;
+  padding-bottom: 1.2rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading__title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+  font-size: clamp(2.35rem, 3.6vw, 3.65rem);
+  line-height: .98;
+  letter-spacing: -.06em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading__count {
+  color: #72e4ca;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading > div > p:last-child {
+  max-width: 42rem;
+  margin-top: .8rem;
+  font-size: .95rem;
+  line-height: 1.55;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 1.1rem;
+  padding: .25rem;
+  gap: .2rem;
+  border: 1px solid rgba(143, 168, 178, .16);
+  border-radius: .8rem;
+  background: rgba(10, 16, 22, .8);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs a {
+  min-height: 2.35rem;
+  border-color: transparent;
+  border-radius: .55rem;
+  padding: .58rem .95rem;
+  color: #93a5ad;
+  background: transparent;
+  font-size: .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs a:hover,
+.portfolio-page.portfolio-page--approved .portfolio-tabs a:focus-visible {
+  color: #eaf6f2;
+  border-color: rgba(35, 217, 180, .2);
+  background: rgba(35, 217, 180, .06);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs a.border-accent\/40,
+.portfolio-page.portfolio-page--approved .portfolio-tabs a.bg-accent\/10 {
+  border-color: rgba(35, 217, 180, .42);
+  color: #bdf8e9;
+  background: rgba(35, 217, 180, .11);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpis {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-summary-kpi {
+  min-width: 0;
+  min-height: 7.25rem;
+  gap: .8rem;
+  border-radius: .85rem;
+  padding: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content p {
+  margin-bottom: .35rem;
+  color: #9bacb5;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  text-transform: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content strong {
+  display: block;
+  overflow: hidden;
+  font-size: clamp(1.2rem, 1.7vw, 1.75rem);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content span {
+  display: block;
+  margin-top: .45rem;
+  overflow: hidden;
+  color: #71838d;
+  font-size: .68rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.65fr);
+  grid-template-rows: minmax(22rem, auto) minmax(14rem, auto);
+  gap: .9rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+  grid-row: 1 / span 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--hero-performance {
+  min-height: 22rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--allocation {
+  min-height: 14rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .9rem;
+  margin-top: .9rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel {
+  min-width: 0;
+  border-radius: .9rem;
+  box-shadow: 0 .9rem 2.5rem rgba(0, 0, 0, .13);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__head {
+  min-height: 3.7rem;
+  padding: 1rem 1.1rem .75rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__head h2 {
+  font-size: 1rem;
+  letter-spacing: -.02em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__body {
+  min-width: 0;
+  padding: 0 1.1rem 1.1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, .7fr);
+  min-height: 17rem;
+  gap: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart {
+  min-width: 0;
+  min-height: 11rem;
+  padding-top: .75rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart svg {
+  height: 9rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary dl {
+  min-width: 0;
+  padding: .75rem .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary dd,
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary dt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table-wrap,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table-wrap {
+  min-width: 0;
+  border-top: 1px solid rgba(143, 168, 178, .12);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings th:first-child,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated th:first-child {
+  width: 30%;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings th,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated th {
+  padding: .78rem .5rem;
+  color: #8498a2;
+  font-size: .61rem;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings td,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td {
+  padding: .85rem .5rem;
+  vertical-align: middle;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-asset__icon,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset__icon,
+.portfolio-page.portfolio-page--approved .portfolio-holding-card__media > span {
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(25, 49, 53, .9), rgba(13, 24, 30, .94));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-asset__icon img,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset__icon img,
+.portfolio-page.portfolio-page--approved .portfolio-holding-card__media img,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__asset,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event__asset {
+  min-width: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__asset strong,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset__copy strong,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event__asset strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__quantity small {
+  display: block;
+  max-width: none;
+  margin-top: .2rem;
+  color: #7e919a;
+  line-height: 1.3;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-table {
+  min-width: 0;
+  width: 100%;
+  table-layout: auto;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-table th,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table td {
+  padding-inline: .55rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-mobile {
+  display: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-table {
+  min-width: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-table__head,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event {
+  grid-template-columns: minmax(14rem, 1.35fr) minmax(14rem, 1.25fr) 6rem minmax(9rem, .8fr) 8rem 1.2rem;
+  column-gap: .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-event {
+  min-width: 0;
+  min-height: 5.3rem;
+}
+
+@media (max-width: 1280px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell {
+    width: min(calc(100% - 2.5rem), 96rem);
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child {
+    grid-column: span 2;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .portfolio-page.portfolio-page--approved .portfolio-heading {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-heading__controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+    grid-row: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom > .portfolio-panel--market-watch {
+    grid-column: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell {
+    width: calc(100% - 1.25rem);
+    padding-block: 1.35rem 2.75rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+    font-size: clamp(2.2rem, 13vw, 3.35rem);
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-tabs a {
+    min-width: 0;
+    padding-inline: .3rem;
+    font-size: .7rem;
+    text-align: center;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-heading__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-holdings-search,
+  .portfolio-page.portfolio-page--approved .portfolio-holdings-filter {
+    width: 100%;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table-wrap--holdings-dedicated {
+    overflow: visible;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tbody,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tr,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td {
+    display: block;
+    width: 100%;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated thead {
+    display: none;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .8rem 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid rgba(143, 168, 178, .12);
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td:first-child,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td::before {
+    display: block;
+    margin-bottom: .25rem;
+    color: #71838d;
+    content: attr(data-label);
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-orders-table-wrap {
+    display: none;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-orders-mobile {
+    display: grid;
+    gap: .7rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child {
+    grid-column: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-summary-kpi {
+    min-height: 6.6rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary dl {
+    border-top: 1px solid rgba(143, 168, 178, .1);
+  }
+}
+
 .international-phone-input {
   display: grid;
   gap: 0.7rem;
@@ -32721,4 +33204,261 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .asset-detail-page .asset-similar-card {
     height: 8.5rem;
   }
+}
+
+/* Portfolio final cascade: keep the approved workspace readable after legacy
+   route styles and responsive rules have loaded. */
+.portfolio-page.portfolio-page--approved .portfolio-shell {
+  width: min(calc(100% - 3rem), 112rem);
+  padding-block: 2.25rem 4.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  padding-bottom: 1.2rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading__title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+  font-size: clamp(2.35rem, 3.6vw, 3.65rem);
+  line-height: .98;
+  letter-spacing: -.06em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading__count {
+  color: #72e4ca;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 1.1rem;
+  padding: .25rem;
+  gap: .2rem;
+  border: 1px solid rgba(143, 168, 178, .16);
+  border-radius: .8rem;
+  background: rgba(10, 16, 22, .8);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs a {
+  min-height: 2.35rem;
+  border-color: transparent;
+  border-radius: .55rem;
+  padding: .58rem .95rem;
+  color: #93a5ad;
+  background: transparent;
+  font-size: .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-tabs a.border-accent\/40,
+.portfolio-page.portfolio-page--approved .portfolio-tabs a.bg-accent\/10 {
+  border-color: rgba(35, 217, 180, .42);
+  color: #bdf8e9;
+  background: rgba(35, 217, 180, .11);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpis {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-order-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-summary-kpi {
+  min-width: 0;
+  min-height: 7.25rem;
+  border-radius: .85rem;
+  padding: 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content p {
+  margin-bottom: .35rem;
+  color: #9bacb5;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  text-transform: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content strong {
+  display: block;
+  overflow: hidden;
+  font-size: clamp(1.2rem, 1.7vw, 1.75rem);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpi__content span {
+  display: block;
+  margin-top: .45rem;
+  overflow: hidden;
+  color: #71838d;
+  font-size: .68rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.65fr);
+  grid-template-rows: minmax(22rem, auto) minmax(14rem, auto);
+  gap: .9rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+  grid-row: 1 / span 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-bottom {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .9rem;
+  margin-top: .9rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel {
+  min-width: 0;
+  border-radius: .9rem;
+  box-shadow: 0 .9rem 2.5rem rgba(0, 0, 0, .13);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__head {
+  min-height: 3.7rem;
+  padding: 1rem 1.1rem .75rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__head h2 {
+  font-size: 1rem;
+  letter-spacing: -.02em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel__body {
+  min-width: 0;
+  padding: 0 1.1rem 1.1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-summary dl {
+  min-width: 0;
+  padding: .75rem .8rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table-wrap,
+.portfolio-page.portfolio-page--approved .portfolio-orders-table-wrap {
+  min-width: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings th:first-child,
+.portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated th:first-child {
+  width: 30%;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-table__asset,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event__asset {
+  min-width: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-asset__icon,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset__icon,
+.portfolio-page.portfolio-page--approved .portfolio-holding-card__media > span {
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(25, 49, 53, .9), rgba(13, 24, 30, .94));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-asset__icon img,
+.portfolio-page.portfolio-page--approved .portfolio-order-asset__icon img,
+.portfolio-page.portfolio-page--approved .portfolio-holding-card__media img,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-orders-mobile {
+  display: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-activity-table__head,
+.portfolio-page.portfolio-page--approved .portfolio-activity-event {
+  grid-template-columns: minmax(14rem, 1.35fr) minmax(14rem, 1.25fr) 6rem minmax(9rem, .8fr) 8rem 1.2rem;
+  column-gap: .8rem;
+}
+
+@media (max-width: 1280px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell { width: min(calc(100% - 2.5rem), 96rem); }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child { grid-column: span 2; }
+}
+
+@media (max-width: 900px) {
+  .portfolio-page.portfolio-page--approved .portfolio-heading { grid-template-columns: 1fr; }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-bottom { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings { grid-row: auto; }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell { width: calc(100% - 1.25rem); padding-block: 1.35rem 2.75rem; }
+  .portfolio-page.portfolio-page--approved .portfolio-heading h1 { font-size: clamp(2.2rem, 13vw, 3.35rem); }
+  .portfolio-page.portfolio-page--approved .portfolio-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .portfolio-page.portfolio-page--approved .portfolio-tabs a { min-width: 0; padding-inline: .3rem; font-size: .7rem; text-align: center; }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child { grid-column: 1 / -1; }
+  .portfolio-page.portfolio-page--approved .portfolio-heading__controls { width: 100%; flex-direction: column; align-items: stretch; }
+  .portfolio-page.portfolio-page--approved .portfolio-holdings-search,
+  .portfolio-page.portfolio-page--approved .portfolio-holdings-filter { width: 100%; }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-hero { grid-template-columns: 1fr; }
+  .portfolio-page.portfolio-page--approved .portfolio-table-wrap--holdings-dedicated { overflow: visible; }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tbody,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tr,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td { display: block; width: 100%; }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated thead { display: none; }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 1rem; padding: 1rem 0; border-top: 1px solid rgba(143, 168, 178, .12); }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td { min-width: 0; padding: 0; }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td:first-child,
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td:last-child { grid-column: 1 / -1; }
+  .portfolio-page.portfolio-page--approved .portfolio-table--holdings-dedicated td::before { display: block; margin-bottom: .25rem; color: #71838d; content: attr(data-label); font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .portfolio-page.portfolio-page--approved .portfolio-orders-table-wrap { display: none; }
+  .portfolio-page.portfolio-page--approved .portfolio-orders-mobile { display: grid; gap: .7rem; }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-order-kpis { grid-template-columns: 1fr; }
+  .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child { grid-column: auto; }
+  .portfolio-page.portfolio-page--approved .portfolio-performance-summary { grid-template-columns: 1fr 1fr; }
 }

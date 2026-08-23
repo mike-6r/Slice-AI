@@ -78,15 +78,25 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
   if (body.currency !== "GBP" || !Array.isArray(body.accounts))
     throw new Error("Invalid wallet balance response.");
   const accounts = body.accounts.map((account) => object(account));
+  const accountTotalMinor = sumMinor(accounts.map((account) => minor(account.totalMinor, "wallet.totalMinor")));
+  const accountReservedMinor = sumMinor(
+    accounts.map((account) => minor(account.reservedMinor, "wallet.reservedMinor")),
+  );
+  const accountAvailableMinor = sumMinor(
+    accounts.map((account) => minor(account.availableMinor, "wallet.availableMinor")),
+  );
   return {
     currency: "GBP",
-    totalMinor: sumMinor(accounts.map((account) => minor(account.totalMinor, "wallet.totalMinor"))),
-    reservedMinor: sumMinor(
-      accounts.map((account) => minor(account.reservedMinor, "wallet.reservedMinor")),
-    ),
-    availableMinor: sumMinor(
-      accounts.map((account) => minor(account.availableMinor, "wallet.availableMinor")),
-    ),
+    totalMinor:
+      body.totalMinor === undefined ? accountTotalMinor : minor(body.totalMinor, "wallet.totalMinor"),
+    reservedMinor:
+      body.reservedMinor === undefined
+        ? accountReservedMinor
+        : minor(body.reservedMinor, "wallet.reservedMinor"),
+    availableMinor:
+      body.availableMinor === undefined
+        ? accountAvailableMinor
+        : minor(body.availableMinor, "wallet.availableMinor"),
     ...(body.pendingMinor !== undefined
       ? { pendingMinor: minor(body.pendingMinor, "wallet.pendingMinor") }
       : {}),
@@ -146,7 +156,9 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
     slug: nullableString(value.slug),
     title: nullableString(value.title),
     category: nullableString(value.category),
+    setName: nullableString(value.setName),
     grade: nullableString(value.grade),
+    thumbnailUrl: nullableString(value.thumbnailUrl),
     totalUnits: nullableString(value.totalUnits),
     issuedUnits: nullableString(value.issuedUnits),
     totalIssuedQuantity: nullableString(value.totalIssuedQuantity),
@@ -165,6 +177,12 @@ export const mapHolding = (raw: unknown): PortfolioHolding => {
       value.estimatedValueMinor === null
         ? null
         : minor(value.estimatedValueMinor, "holding.estimatedValueMinor"),
+    pricePerSliceMinor:
+      value.pricePerSliceMinor === null || value.pricePerSliceMinor === undefined
+        ? value.pricePerSliceMinor === undefined
+          ? undefined
+          : null
+        : minor(value.pricePerSliceMinor, "holding.pricePerSliceMinor"),
     valuationAsOf: nullableString(value.valuationAsOf) as PortfolioHolding["valuationAsOf"],
     valuationStatus: valuation(value.valuationStatus),
     costBasisMinor:
@@ -229,6 +247,24 @@ export const mapPortfolio = (raw: unknown): PortfolioSummary => {
       status === "FULL" && body.estimatedPortfolioValueMinor !== null
         ? minor(body.estimatedPortfolioValueMinor, "portfolio.estimatedPortfolioValueMinor")
         : null,
+    totalAccountValueMinor:
+      body.totalAccountValueMinor === null || body.totalAccountValueMinor === undefined
+        ? body.totalAccountValueMinor === undefined
+          ? undefined
+          : null
+        : minor(body.totalAccountValueMinor, "portfolio.totalAccountValueMinor"),
+    availableCashMinor:
+      body.availableCashMinor === null || body.availableCashMinor === undefined
+        ? body.availableCashMinor === undefined
+          ? undefined
+          : null
+        : minor(body.availableCashMinor, "portfolio.availableCashMinor"),
+    reservedCashMinor:
+      body.reservedCashMinor === null || body.reservedCashMinor === undefined
+        ? body.reservedCashMinor === undefined
+          ? undefined
+          : null
+        : minor(body.reservedCashMinor, "portfolio.reservedCashMinor"),
     valuationStatus: status,
     investedCostMinor:
       body.investedCostMinor === null || body.investedCostMinor === undefined

@@ -32,6 +32,7 @@ import { KpiIconTile } from "@/components/ui/KpiIconTile";
 import type {
   Asset,
   PortfolioHolding,
+  PortfolioAssetSummary,
   PortfolioHoldingPage,
   PortfolioSummary,
   PortfolioPerformance,
@@ -550,6 +551,9 @@ function PortfolioOrdersExperience({
         asset?.details.card?.playerOrCharacter,
         asset?.details.card?.set,
         asset?.details.card?.cardNumber,
+        order.assetSummary?.title,
+        order.assetSummary?.category,
+        order.assetSummary?.setName,
         holding?.title,
         holding?.category,
         holding?.grade,
@@ -780,7 +784,7 @@ function PortfolioOrdersExperience({
                       order={order}
                       holding={holdingByAsset.get(order.assetId)}
                       asset={resolveOrderAsset(order, assetById, assetBySlug)}
-                      onSelect={setSelectedOrder}
+          onSelect={setSelectedOrder}
                     />
                   ))}
                 </tbody>
@@ -877,9 +881,9 @@ function OrdersKpis({
         icon={CircleGauge}
       />
       <PortfolioKpi
-        label="Avg. fill rate"
+        label="Executed fill ratio"
         value={fillRate}
-        detail="Across filled and partially filled orders"
+        detail="Filled units ÷ units on executed orders"
         icon={ArrowUpRight}
       />
     </section>
@@ -947,7 +951,7 @@ function OrderTableRow({
         <button
           type="button"
           className="portfolio-order-view"
-          aria-label={`View order for ${holdingDisplayLabel(holding ?? ({ title: asset?.details.title } as PortfolioHolding))}`}
+          aria-label={`View order for ${orderAssetTitle(order, holding, asset)}`}
           onClick={() => onSelect(order)}
         >
           <ArrowRight aria-hidden="true" />
@@ -1111,7 +1115,7 @@ function OrderDetailDialog({
         </button>
         <p className="page-kicker">Order details</p>
         <h2 id="portfolio-order-dialog-title">
-          {holdingDisplayLabel(holding ?? ({ title: asset?.details.title } as PortfolioHolding))}
+          {orderAssetTitle(order, holding, asset)}
         </h2>
         <OrderAssetIdentity order={order} holding={holding} asset={asset} />
         <dl className="portfolio-order-detail-grid">
@@ -1212,18 +1216,21 @@ function OrderAssetIdentity({
   holding?: PortfolioHolding;
   asset?: Asset;
 }) {
-  const slug = holding?.slug ?? order.assetSlug;
+  const slug = holding?.slug ?? order.assetSlug ?? order.assetSummary?.slug;
   const media = asset?.media.find((item) => item.kind === "image");
-  const title = asset?.details.title ?? holding?.title ?? "Collectible";
+  const title = orderAssetTitle(order, holding, asset);
+  const thumbnailUrl = media?.url ?? order.assetSummary?.thumbnailUrl ?? holding?.thumbnailUrl;
+  const category = holding?.category ?? order.assetSummary?.category;
+  const setName = holding?.setName ?? order.assetSummary?.setName;
   const content = (
     <>
       <span className="portfolio-order-asset__icon" aria-hidden="true">
-        {media ? <img src={media.url} alt="" /> : <Landmark />}
+        {thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <Layers3 />}
       </span>
       <span className="portfolio-order-asset__copy">
         <strong>{title}</strong>
         <small>
-          {[holding?.category, holding?.grade].filter(Boolean).join(" · ") || "Collectible"}
+          {[category, setName, holding?.grade].filter(Boolean).join(" · ") || "Collectible"}
         </small>
       </span>
     </>
@@ -1237,6 +1244,10 @@ function OrderAssetIdentity({
   );
 }
 
+function orderAssetTitle(order: TradingOrderView, holding?: PortfolioHolding, asset?: Asset) {
+  return asset?.details.title ?? holding?.title ?? order.assetSummary?.title ?? "Collectible";
+}
+
 function fillPercent(order: TradingOrderView) {
   if (BigInt(order.originalUnits) <= 0n) return "0.00";
   return (
@@ -1245,8 +1256,7 @@ function fillPercent(order: TradingOrderView) {
 }
 
 function holdingSlicePrice(holding?: PortfolioHolding) {
-  if (!holding?.estimatedValueMinor || BigInt(holding.ownedUnits) <= 0n) return null;
-  return (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString();
+  return holding?.pricePerSliceMinor ?? null;
 }
 
 function friendlyAssetCategory(category?: string) {
@@ -1275,6 +1285,7 @@ function resolveOrderCategory(
 ) {
   return (
     holdingByAsset.get(order.assetId)?.category ??
+    order.assetSummary?.category ??
     friendlyAssetCategory(resolveOrderAsset(order, assetById, assetBySlug)?.details.category)
   );
 }
@@ -1368,20 +1379,14 @@ function PortfolioHeading({
     <header className="portfolio-heading">
       <div>
         <p className="page-kicker">Portfolio</p>
-        <h1>
-          Your{" "}
-          <span>
-            {isHoldings
-              ? query.isLoading
-                ? "Holdings"
-                : `Holdings (${holdingsCount})`
-              : isOrders
-                ? "Orders"
-                : isActivity
-                  ? "Activity"
-                  : "Slice"}
-          </span>
-        </h1>
+        <div className="portfolio-heading__title-row">
+          <h1>{isHoldings ? "Holdings" : isOrders ? "Orders" : isActivity ? "Activity" : "Portfolio"}</h1>
+          {isHoldings ? (
+            <span className="portfolio-heading__count">
+              {query.isLoading ? "Loading positions" : `${holdingsCount} position${holdingsCount === 1 ? "" : "s"}`}
+            </span>
+          ) : null}
+        </div>
         <p>
           {isHoldings
             ? "A detailed view of the collectibles you own."
@@ -1466,26 +1471,36 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 
   const summary = query.data;
   const valuation = derivePortfolioValuationSnapshot(summary);
+  const totalAccountValue =
+    summary.totalAccountValueMinor ?? summary.estimatedPortfolioValueMinor;
+  const availableCash = summary.availableCashMinor ?? summary.cash.availableMinor;
+  const reservedCash = summary.reservedCashMinor ?? summary.cash.reservedMinor;
   const unrealisedPercent =
     summary.unrealisedPnlPercent ??
     (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
-        label="Portfolio value"
-        value={portfolioValueLabel(summary)}
+        label="Total account value"
+        value={totalAccountValue !== null && summary.valuationStatus === "FULL" ? formatPortfolioMoney(totalAccountValue) : portfolioValueLabel(summary)}
         icon={Layers3}
         detail={
           summary.valuationStatus === "FULL"
-            ? "Total account value"
+            ? "Cash, reservations and holdings"
             : valuationDescription(summary.valuationStatus)
         }
       />
       <PortfolioKpi
         label="Available cash"
-        value={formatPortfolioMoney(summary.cash.availableMinor)}
+        value={formatPortfolioMoney(availableCash)}
         icon={WalletCards}
-        detail={`${formatPortfolioMoney(summary.cash.reservedMinor)} reserved for open activity`}
+        detail="Ready to use"
+      />
+      <PortfolioKpi
+        label="Reserved cash"
+        value={formatPortfolioMoney(reservedCash)}
+        icon={Wallet}
+        detail="Held for open activity"
       />
       <PortfolioKpi
         label="Holdings value"
@@ -1510,11 +1525,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
               : "negative"
             : undefined
         }
-        detail={
-          unrealisedPercent === null
-            ? "Compared with open cost"
-            : `${unrealisedPercent} vs. open cost`
-        }
+        detail={unrealisedPercent === null ? "Available once cost history is complete" : `${unrealisedPercent} vs. open cost`}
       />
     </section>
   );
@@ -1523,7 +1534,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 function KpiSkeletons() {
   return (
     <section className="portfolio-kpis" aria-label="Loading portfolio summary">
-      {[0, 1, 2, 3].map((item) => (
+      {[0, 1, 2, 3, 4].map((item) => (
         <article key={item} className="portfolio-summary-kpi portfolio-summary-kpi--loading">
           <div className="customer-skeleton size-11" />
           <div className="min-w-0 flex-1">
@@ -1634,7 +1645,7 @@ function PortfolioPerformancePanel({
   const valuation = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
   return (
     <PortfolioPanel
-      title="Portfolio performance"
+      title="Account value history"
       className="portfolio-panel--hero-performance"
       header={<PerformancePeriods active={range} onChange={onRangeChange} />}
     >
@@ -1645,8 +1656,12 @@ function PortfolioPerformancePanel({
       ) : (
         <div className="portfolio-performance-hero">
           <div className="portfolio-performance-hero__value">
-            <span>Current portfolio value</span>
-            <strong>{portfolioValueLabel(query.data)}</strong>
+            <span>Total account value</span>
+            <strong>
+              {query.data.totalAccountValueMinor !== undefined && query.data.totalAccountValueMinor !== null
+                ? formatPortfolioMoney(query.data.totalAccountValueMinor)
+                : portfolioValueLabel(query.data)}
+            </strong>
             {valuation ? (
               <p
                 className={BigInt(valuation.unrealisedValueMinor) >= 0n ? "is-credit" : "is-debit"}
@@ -1659,7 +1674,7 @@ function PortfolioPerformancePanel({
           <PerformanceChart query={performance} hasPortfolioData={query.data.holdings.length > 0} />
           <dl className="portfolio-performance-periods">
             <div>
-              <dt>Current marked value</dt>
+              <dt>Holdings value</dt>
               <dd>
                 {query.data.estimatedHoldingsValueMinor
                   ? formatPortfolioMoney(query.data.estimatedHoldingsValueMinor)
@@ -1667,24 +1682,28 @@ function PortfolioPerformancePanel({
               </dd>
             </div>
             <div>
-              <dt>Open position cost</dt>
+              <dt>Available cash</dt>
               <dd>
-                {valuation ? formatPortfolioMoney(valuation.investedCostMinor) : "Unavailable"}
+                {formatPortfolioMoney(query.data.availableCashMinor ?? query.data.cash.availableMinor)}
               </dd>
             </div>
             <div>
-              <dt>Unrealised P/L</dt>
+              <dt>Reserved cash</dt>
+              <dd>{formatPortfolioMoney(query.data.reservedCashMinor ?? query.data.cash.reservedMinor)}</dd>
+            </div>
+            <div>
+              <dt>Change after cash flows</dt>
               <dd
                 className={
-                  valuation && BigInt(valuation.unrealisedValueMinor) < 0n
+                  performance.data && BigInt(performance.data.periodChangeMinor ?? "0") < 0n
                     ? "is-debit"
                     : "is-credit"
                 }
               >
-                {valuation
-                  ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor)
+                {performance.data?.periodChangeMinor !== null && performance.data?.periodChangeMinor !== undefined
+                  ? formatSignedPortfolioMoney(performance.data.periodChangeMinor)
                   : "Unavailable"}
-              </dd>
+            </dd>
             </div>
             <div>
               <dt>All-time high</dt>
@@ -2001,20 +2020,17 @@ function HoldingsExperience({
 
 function HoldingCard({ holding }: { holding: PortfolioHolding }) {
   const valuation = deriveHoldingValuation(holding);
-  const currentSlicePrice =
-    holding.estimatedValueMinor && BigInt(holding.ownedUnits) > 0n
-      ? (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString()
-      : null;
+  const currentSlicePrice = holding.pricePerSliceMinor ?? null;
   return (
     <article className="portfolio-holding-card">
       <div className="portfolio-holding-card__media">
-        <span aria-hidden="true">
-          <Landmark />
+        <span aria-hidden="true" className={holding.thumbnailUrl ? undefined : "is-placeholder"}>
+          {holding.thumbnailUrl ? <img src={holding.thumbnailUrl} alt="" /> : <Layers3 />}
         </span>
       </div>
       <div className="portfolio-holding-card__body">
         <h3>{holdingDisplayLabel(holding)}</h3>
-        <p>{[holding.category, holding.grade].filter(Boolean).join(" · ") || "Collectible"}</p>
+        <p>{[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") || "Collectible"}</p>
         <dl>
           <div>
             <dt>Ownership</dt>
@@ -2043,7 +2059,7 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
           <div>
             <dt>Current value</dt>
             <dd>
-              {holding.estimatedValueMinor
+              {holding.estimatedValueMinor !== null
                 ? formatPortfolioMoney(holding.estimatedValueMinor)
                 : "Unavailable"}
             </dd>
@@ -2237,10 +2253,7 @@ function HoldingsPanel({
 
 function HoldingRow({ holding }: { holding: PortfolioHolding }) {
   const valuation = deriveHoldingValuation(holding);
-  const currentSlicePrice =
-    holding.estimatedValueMinor && BigInt(holding.ownedUnits) > 0n
-      ? (BigInt(holding.estimatedValueMinor) / BigInt(holding.ownedUnits)).toString()
-      : null;
+  const currentSlicePrice = holding.pricePerSliceMinor ?? null;
   return (
     <tr>
       <td data-label="Asset">
@@ -2281,9 +2294,6 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
             {holding.availableToSellUnits ?? holding.availableUnits}{" "}
             {(holding.availableToSellUnits ?? holding.availableUnits) === "1" ? "Slice" : "Slices"}{" "}
             available to sell
-            {holding.availableToBuyPercent !== null && holding.availableToBuyPercent !== undefined
-              ? ` · ${holding.availableToBuyPercent}% available to buy`
-              : ""}
           </small>
         </span>
       </td>
@@ -2291,7 +2301,7 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
         {currentSlicePrice ? formatPortfolioMoney(currentSlicePrice) : "Unavailable"}
       </td>
       <td data-label="Current value">
-        {holding.estimatedValueMinor
+        {holding.estimatedValueMinor !== null
           ? formatPortfolioMoney(holding.estimatedValueMinor)
           : "Unavailable"}
       </td>
@@ -2333,13 +2343,13 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
 function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
   return (
     <>
-      <span className="portfolio-asset__icon" aria-hidden="true">
-        <Landmark />
+      <span className={`portfolio-asset__icon${holding.thumbnailUrl ? "" : " is-placeholder"}`} aria-hidden="true">
+        {holding.thumbnailUrl ? <img src={holding.thumbnailUrl} alt="" /> : <Layers3 />}
       </span>
       <span className="portfolio-asset__copy">
         <strong title={holdingDisplayLabel(holding)}>{holdingDisplayLabel(holding)}</strong>
         <small>
-          {[holding.category, holding.grade].filter(Boolean).join(" · ") || "Collectible"}
+          {[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") || "Collectible"}
         </small>
       </span>
     </>
@@ -2549,7 +2559,7 @@ function PortfolioActivityExperience({
               <span>Activity</span>
               <span>Asset / details</span>
               <span>Type</span>
-              <span>Amount</span>
+              <span>Change</span>
               <span>Date &amp; time</span>
               <span aria-hidden="true" />
             </div>
@@ -2594,7 +2604,7 @@ function ActivityEventRow({ event, onOpen }: { event: ActivityEvent; onOpen: () 
               {event.asset.mediaUrl ? (
                 <img src={event.asset.mediaUrl} alt="" />
               ) : (
-                <Landmark aria-hidden="true" />
+                <Layers3 aria-hidden="true" />
               )}
             </span>
             <span>
@@ -2613,7 +2623,7 @@ function ActivityEventRow({ event, onOpen }: { event: ActivityEvent; onOpen: () 
                 ? "Security history"
                 : event.reference
                   ? `Reference: ${event.reference}`
-                  : "Customer account event"}
+                  : "Account history"}
             </small>
           </span>
         )}
@@ -2769,6 +2779,7 @@ function buildPortfolioActivityEvents(
     const asset = activityAsset(
       assetBySlug.get(execution.assetSlug),
       holdingBySlug.get(execution.assetSlug),
+      execution.assetSummary ?? order?.assetSummary,
     );
     const totalUnits = holdingBySlug.get(execution.assetSlug)?.totalUnits ?? null;
     const ownership = totalUnits ? ownershipPercent(execution.units, totalUnits) : null;
@@ -2815,6 +2826,7 @@ function buildPortfolioActivityEvents(
     const asset = activityAsset(
       assetBySlug.get(order.assetSlug ?? ""),
       holdingBySlug.get(order.assetSlug ?? ""),
+      order.assetSummary,
     );
     const totalUnits = holdingBySlug.get(order.assetSlug ?? "")?.totalUnits ?? null;
     const ownership = totalUnits ? ownershipPercent(order.originalUnits, totalUnits) : null;
@@ -2900,7 +2912,7 @@ function buildPortfolioActivityEvents(
       typeLabel: "Account",
       tone: "neutral",
       primary: "—",
-      secondary: ["Account event"],
+      secondary: ["Security event"],
       reference: item.reference,
       details: [
         { label: "Event", value: item.title },
@@ -2919,14 +2931,19 @@ function buildPortfolioActivityEvents(
 function activityAsset(
   asset: Asset | undefined,
   holding: PortfolioHolding | undefined,
+  summary?: PortfolioAssetSummary | null,
 ): ActivityEvent["asset"] {
-  if (!asset && !holding) return undefined;
-  const slug = asset?.slug ?? holding?.slug ?? null;
-  const media = asset?.media.find((item) => item.kind === "image")?.url ?? null;
+  if (!asset && !holding && !summary) return undefined;
+  const slug = asset?.slug ?? summary?.slug ?? holding?.slug ?? null;
+  const media =
+    asset?.media.find((item) => item.kind === "image")?.url ??
+    summary?.thumbnailUrl ??
+    holding?.thumbnailUrl ??
+    null;
   return {
     slug,
-    title: asset?.details.title ?? holding?.title ?? "Collectible",
-    category: friendlyActivityCategory(asset?.details.category ?? holding?.category),
+    title: asset?.details.title ?? summary?.title ?? holding?.title ?? "Collectible",
+    category: friendlyActivityCategory(asset?.details.category ?? summary?.category ?? holding?.category),
     grade: asset?.grade ? `${asset.grade.company} ${asset.grade.label}` : (holding?.grade ?? null),
     mediaUrl: media,
   };

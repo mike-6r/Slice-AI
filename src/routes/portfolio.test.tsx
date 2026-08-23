@@ -124,7 +124,7 @@ function renderPortfolio() {
 describe("approved portfolio workspace", () => {
   it("renders authoritative account data without fabricated historical performance", () => {
     const html = renderPortfolio();
-    expect(html).toContain("Portfolio value");
+    expect(html).toContain("Total account value");
     expect(html).toContain("Available cash");
     expect(html).toContain("Holdings value");
     expect(html).toContain("Unrealised P/L");
@@ -133,16 +133,16 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("20");
     expect(html).toContain("Recent activity");
     expect(html).toContain("Funds added");
-    expect(html).toContain("Current marked value");
-    expect(html).toContain("Open position cost");
+    expect(html).toContain("Reserved cash");
+    expect(html).toContain("Change after cash flows");
     expect(html).toContain("Unrealised P/L");
     expect(html).toContain("No portfolio performance history is available for this period.");
     expect(html).toContain("Recent orders");
     expect(html).toContain("View all holdings");
-    expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(4);
+    expect(html.match(/class="portfolio-summary-kpi"/g)).toHaveLength(5);
     expect(html).not.toContain('class="portfolio-kpi"');
     expect(html).toContain("portfolio-kpi__content");
-    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(5);
     expect(html).not.toContain("Demo Funding");
     expect(html).not.toContain("account-safe-id");
     expect(html).not.toContain("24h change");
