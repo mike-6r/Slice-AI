@@ -91,13 +91,59 @@ Required routes: live Umbreon and the QA Initial Offering asset.
 
 Required viewports: 1920×1080, 1440×900, 1280×800, 768×1024, 390×844.
 
-Status: pending deployment and final browser capture. Record screenshot paths,
-console/network results, flip, watchlist, info disclosure, and refresh-state
-results here after the staging pass. No economic mutation is required.
+Status: PASS after deployment of `0cc4cfb` to
+`/opt/slice/releases/20260823-0cc4cfbfb6c65caa67ddb8eb08ac7e1db924b5ab`.
+
+The settled screenshots are captured locally under `docs/qa/screenshots/`:
+
+- QA Initial Offering: `asset-hero-qa-initial-offering-1920x1080.png`,
+  `asset-hero-qa-initial-offering-1440x900.png`,
+  `asset-hero-qa-initial-offering-1280x800.png`,
+  `asset-hero-qa-initial-offering-768x1024.png`,
+  `asset-hero-qa-initial-offering-390x844.png`.
+- Umbreon: `asset-hero-umbreon-1920x1080.png`,
+  `asset-hero-umbreon-1440x900.png`, `asset-hero-umbreon-1280x800.png`,
+  `asset-hero-umbreon-768x1024.png`, `asset-hero-umbreon-390x844.png`.
+
+Responsive geometry checks passed at every required width for both routes:
+
+- No horizontal overflow or clipping (`scrollWidth` stayed within the viewport).
+- Desktop page flow is one full-width column; the hero is the only two-column
+  region and the trust strip is full-width with four columns.
+- 768px uses a stacked hero and 2×2 trust strip; 390px uses stacked panels and
+  one-column trust rows.
+
+Functional and accessibility checks:
+
+- Front/back flip: PASS. The control changes `Viewing front` ↔ `Viewing back`
+  and updates its accessible name/pressed state.
+- Real media: PASS. Approved front/back images render with descriptive alt
+  text and no crop in the card stage.
+- Watchlist: PASS for read state, sign-in affordance, loading/error copy, and
+  persisted repository wiring. Add/remove was not exercised because this QA
+  run is read-only and must not mutate the authenticated account.
+- Initial Offering info disclosure: present and keyboard-accessible through
+  the existing route component.
+- Duplicate IDs: none observed in the rendered page.
+
+Console/network results:
+
+- Browser console errors: 0.
+- Rendered public API health: HTTP 200; staging `/health` and `/ready` both
+  passed after activation.
+- Unexpected rendered-route 401/500: none observed.
+- Direct PriceCharting calls on render: 0.
+- Direct Ximilar calls on render: 0.
+- The hero consumes the public Slice projection; it does not call external
+  valuation or grading providers from the browser.
+
+No watchlist, ownership, issuance, market, order, trade, ledger, or provider
+mutation was performed during this pass.
 
 ## Release gate
 
-The implementation is ready for staging deployment. Final visual verdict is
-not claimed until the deployed screenshots are compared directly with the
-supplied mockup at the primary desktop size and checked at all required
-responsive widths.
+PASS for the requested public asset-detail hero scope. The deployed staging
+release is healthy, the page matches the supplied two-panel hero composition,
+the trust strip is full-width, and no major mismatch remains in the checked
+responsive widths. Existing unrelated repository-wide lint/typecheck fixture
+issues remain documented above and were not introduced by this pass.
