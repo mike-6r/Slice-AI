@@ -32391,6 +32391,11 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   font-size: 0.7rem;
 }
 
+/* Keep the ownership prompt visually separate from the primary action. */
+.markets-page .market-card-ownership {
+  margin-bottom: 0.45rem;
+}
+
 .markets-page .market-pagination {
   justify-content: flex-start;
   margin-top: 1.25rem;
