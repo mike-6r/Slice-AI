@@ -32316,7 +32316,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   /* Every card reserves the same valuation slot. A real market reference can
      include a source line; an unavailable reference must not pull the market
      and ownership sections upward on its card. */
-  min-height: 7.5rem;
+  min-height: 7.6rem;
   box-sizing: border-box;
   align-items: start;
   margin-top: 0.55rem;
