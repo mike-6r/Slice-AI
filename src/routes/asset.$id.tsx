@@ -513,6 +513,7 @@ function AssetPage() {
                   data={referenceHistory.map((point) => point.value.amount / 100)}
                   height={190}
                   showAxis
+                  currency={historyCurrency}
                   label={`External reference value history for ${asset.title}`}
                 />
               ) : (
@@ -528,9 +529,12 @@ function AssetPage() {
                 label="Starting value"
                 value={
                   referenceHistory[0]
-                    ? formatCurrency(referenceHistory[0].value.amount, {
-                        currency: historyCurrency,
-                      })
+                    ? formatAuthoritativeMoney(
+                        referenceHistory[0].value.amount,
+                        historyCurrency,
+                        historyCurrency,
+                        null,
+                      )
                     : "Not available"
                 }
               />
@@ -538,9 +542,12 @@ function AssetPage() {
                 label="Latest value"
                 value={
                   referenceHistory.at(-1)
-                    ? formatCurrency(referenceHistory.at(-1)!.value.amount, {
-                        currency: historyCurrency,
-                      })
+                    ? formatAuthoritativeMoney(
+                        referenceHistory.at(-1)!.value.amount,
+                        historyCurrency,
+                        historyCurrency,
+                        null,
+                      )
                     : "Not available"
                 }
               />

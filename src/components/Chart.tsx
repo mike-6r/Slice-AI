@@ -1,5 +1,7 @@
 import { useId } from "react";
 
+import type { SupportedCurrency } from "@/data/repositories";
+
 type SparklineProps = {
   data: number[];
   height?: number;
@@ -67,8 +69,17 @@ export function Sparkline({
   );
 }
 
-const axisLabel = (value: number) =>
-  value >= 1000 ? `£${Math.round(value / 1000)}K` : `£${Math.round(value)}`;
+const currencySymbols: Record<SupportedCurrency, string> = {
+  GBP: "£",
+  USD: "$",
+  CAD: "CA$",
+  EUR: "€",
+};
+
+const axisLabel = (value: number, currency: SupportedCurrency) => {
+  const symbol = currencySymbols[currency];
+  return value >= 1000 ? `${symbol}${Math.round(value / 1000)}K` : `${symbol}${Math.round(value)}`;
+};
 
 type PriceChartProps = {
   data: number[];
@@ -80,6 +91,7 @@ type PriceChartProps = {
   label?: string;
   showAxis?: boolean;
   className?: string;
+  currency?: SupportedCurrency;
 };
 
 export function PriceChart({
@@ -88,6 +100,7 @@ export function PriceChart({
   label = "Price history",
   showAxis = true,
   className,
+  currency = "GBP",
 }: PriceChartProps) {
   // Gradients are referenced by id, so each instance needs its own or charts bleed into each other.
   const gradientId = useId();
@@ -171,7 +184,7 @@ export function PriceChart({
         >
           {ticks.map((tick, index) => (
             <span key={index} className="leading-none">
-              {axisLabel(tick)}
+              {axisLabel(tick, currency)}
             </span>
           ))}
         </div>
