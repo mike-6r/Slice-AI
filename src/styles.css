@@ -33623,6 +33623,32 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   padding: 0.35rem 0.2rem;
 }
 
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__header h2 {
+  margin: 0.05rem 0 0.25rem;
+  font-size: 0.9rem;
+  line-height: 1.1;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__header p:not(.asset-section-label) {
+  max-height: 1.6rem;
+  margin-top: 0.15rem;
+  font-size: 0.56rem;
+  line-height: 1.25;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__score span,
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__score small {
+  overflow: hidden;
+  font-size: 0.48rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__score strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span,
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
   display: block;
