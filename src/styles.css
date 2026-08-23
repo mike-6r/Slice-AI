@@ -33527,9 +33527,10 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
 }
 
 .asset-detail-page .asset-card-stage {
-  top: 0.85rem;
+  top: 1.25rem;
   bottom: 3.2rem;
   width: min(46%, 14rem);
+  transform: translateX(-50%);
 }
 
 .asset-detail-page .asset-reference-identity h1 {
@@ -33613,6 +33614,21 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
 
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts div {
+  min-width: 0;
+  min-height: 0;
+  gap: 0.15rem;
+  padding: 0.35rem 0.2rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span,
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts div:nth-child(n + 4) {
