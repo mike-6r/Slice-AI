@@ -23,7 +23,8 @@ import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecyc
 import { selectAuthoritativeSliceValuation } from '../valuation/valuation-projection';
 import {
   downsampleReferencePoints,
-  calculateMovementBps,
+  calculateReferenceHistoryMetrics,
+  calculateReferenceMovements,
   type ReferenceHistoryPoint,
 } from './market-reference-metrics';
 
@@ -43,6 +44,10 @@ type MarketHistoryResponsePoint = {
   currency: string;
   source: string;
   dataStatus: 'DEMO' | 'DELAYED' | 'LIVE' | 'UNAVAILABLE';
+  changeFromPreviousMinor: bigint | null;
+  changeFromPreviousBps: number | null;
+  changeFromRangeStartMinor: bigint | null;
+  changeFromRangeStartBps: number | null;
 };
 const asMoney = (value: bigint, currency: string) => ({
   minor: value.toString(),
@@ -264,20 +269,22 @@ export class MarketService {
   }
   async history(slug: string, range: Range) {
     const asset = await this.asset(slug);
-    const from = new Date(Date.now() - ranges[range] * 86_400_000);
-    const referencePoints = await this.db.marketObservation.findMany({
-      where: {
-        assetId: asset.id,
-        providerCode: 'PRICECHARTING',
-        observationType: 'PRICE_GUIDE',
-        included: true,
-        observedAt: { gte: from },
-        matchQuality: { in: ['EXACT', 'STRONG'] },
-      },
-      orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
-      take: 10_000,
-    });
-    const referenceHistory: MarketHistoryResponsePoint[] = referencePoints.map((point) => ({
+    const now = new Date();
+    const referencePoints = (
+      await this.db.marketObservation.findMany({
+        where: {
+          assetId: asset.id,
+          providerCode: 'PRICECHARTING',
+          observationType: 'PRICE_GUIDE',
+          included: true,
+          observedAt: { lte: now },
+          matchQuality: { in: ['EXACT', 'STRONG'] },
+        },
+        orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+        take: 10_000,
+      })
+    ).reverse();
+    const referenceHistory = referencePoints.map((point) => ({
       id: point.id,
       priceMinor: point.priceMinor,
       observedAt: point.observedAt,
@@ -285,51 +292,124 @@ export class MarketService {
       source: point.providerCode,
       dataStatus: 'LIVE' as const,
     }));
-    const movementPoints: ReferenceHistoryPoint[] = referenceHistory.map((point) => ({
-      id: point.id,
-      priceMinor: point.priceMinor,
-      observedAt: point.observedAt,
-    }));
-    const responsePoints: MarketHistoryResponsePoint[] = referenceHistory.length
-      ? downsampleReferencePoints(referenceHistory).map((point) =>
-          referenceHistory.find((candidate) => candidate.id === point.id)!,
+    const valuationHistory = referenceHistory.length
+      ? []
+      : (
+          await this.db.assetValuationPoint.findMany({
+            where: {
+              assetId: asset.id,
+              observedAt: { lte: now },
+              ...(this.config.isBeta
+                ? {
+                    NOT: [
+                      { source: { startsWith: 'STAGING_' } },
+                      { source: { startsWith: 'DEMO_' } },
+                      { source: { startsWith: 'TEST_' } },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+            take: 10_000,
+          })
         )
-      : (await this.db.assetValuationPoint.findMany({
-          where: {
-            assetId: asset.id,
-            observedAt: { gte: from },
-            ...(this.config.isBeta
-              ? {
-                  NOT: [
-                    { source: { startsWith: 'STAGING_' } },
-                    { source: { startsWith: 'DEMO_' } },
-                    { source: { startsWith: 'TEST_' } },
-                  ],
-                }
-              : {}),
-          },
-          orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
-          take: 366,
-        })).map((point) => ({
+          .reverse()
+          .map((point) => ({
           id: point.id,
           priceMinor: point.estimatedMarketValueMinor,
           observedAt: point.observedAt,
           currency: point.currency,
           source: point.source,
           dataStatus: status(point.status),
-        }));
+          }));
+    const allHistory = referenceHistory.length ? referenceHistory : valuationHistory;
+    const historySource = referenceHistory.length ? 'PRICECHARTING' : 'SLICE_VALUATION';
+    const historyCurrency = allHistory.at(-1)?.currency ?? 'GBP';
+    const currencyHistory = allHistory.filter((point) => point.currency === historyCurrency);
+    const movementPoints: ReferenceHistoryPoint[] = currencyHistory.map((point) => ({
+      id: point.id,
+      priceMinor: point.priceMinor,
+      observedAt: point.observedAt,
+    }));
+    const metrics = calculateReferenceHistoryMetrics(
+      movementPoints,
+      ranges[range] * 86_400_000,
+    );
+    const visibleIds = new Set(metrics.visiblePoints.map((point) => point.id));
+    const chartPoints = metrics.startingPoint && !visibleIds.has(metrics.startingPoint.id)
+      ? [metrics.startingPoint, ...metrics.visiblePoints]
+      : metrics.visiblePoints;
+    const responsePoints: MarketHistoryResponsePoint[] = downsampleReferencePoints(chartPoints).map(
+      (point) => {
+        const sourcePoint = currencyHistory.find((candidate) => candidate.id === point.id)!;
+        const sourceIndex = currencyHistory.findIndex((candidate) => candidate.id === point.id);
+        const previous = sourceIndex > 0 ? currencyHistory[sourceIndex - 1] : undefined;
+        return {
+          ...sourcePoint,
+          changeFromPreviousMinor: previous ? point.priceMinor - previous.priceMinor : null,
+          changeFromPreviousBps: previous
+            ? calculateChangeBps(previous.priceMinor, point.priceMinor)
+            : null,
+          changeFromRangeStartMinor: metrics.startingPoint
+            ? point.priceMinor - metrics.startingPoint.priceMinor
+            : null,
+          changeFromRangeStartBps: metrics.startingPoint
+            ? calculateChangeBps(metrics.startingPoint.priceMinor, point.priceMinor)
+            : null,
+        };
+      },
+    );
+    const latest = metrics.latestPoint;
+    const latestSource = latest
+      ? currencyHistory.find((point) => point.id === latest.id)
+      : undefined;
+    const startingSource = metrics.startingPoint
+      ? currencyHistory.find((point) => point.id === metrics.startingPoint!.id)
+      : undefined;
+    const lastRefreshedAt = referenceHistory.length
+      ? asset.marketProviderMappings?.[0]?.lastSuccessAt ?? latest?.observedAt ?? null
+      : latest?.observedAt ?? null;
     return {
       assetSlug: asset.slug,
       range,
-      source: referenceHistory.length ? 'PRICECHARTING' : 'SLICE_VALUATION',
-      movementBps: referenceHistory.length
-        ? calculateMovementBps(movementPoints, ranges[range] * 86_400_000)
+      selectedRange: range,
+      source: historySource,
+      currency: latestSource?.currency ?? null,
+      movementBps: metrics.percentageChangeBps,
+      percentageChangeBps: metrics.percentageChangeBps,
+      movementAvailability: metrics.movementAvailability,
+      movementUnavailableReason: metrics.movementUnavailableReason,
+      rangeStart: metrics.rangeStart ? asOf(metrics.rangeStart) : null,
+      rangeEnd: metrics.rangeEnd ? asOf(metrics.rangeEnd) : null,
+      actualCoverageSeconds: metrics.actualCoverageSeconds,
+      lastRefreshedAt: lastRefreshedAt ? asOf(lastRefreshedAt) : null,
+      startingValue: startingSource
+        ? asMoney(metrics.startingPoint!.priceMinor, startingSource.currency)
         : null,
+      latestValue: latestSource
+        ? asMoney(metrics.latestPoint!.priceMinor, latestSource.currency)
+        : null,
+      absoluteChange: metrics.absoluteChangeMinor !== null && startingSource
+        ? asMoney(metrics.absoluteChangeMinor, startingSource.currency)
+        : null,
+      highValue: metrics.highValueMinor !== null ? asMoney(metrics.highValueMinor, historyCurrency) : null,
+      lowValue: metrics.lowValueMinor !== null ? asMoney(metrics.lowValueMinor, historyCurrency) : null,
+      historyPointCount: metrics.visiblePoints.length,
+      displayedPointCount: responsePoints.length,
       points: responsePoints.map((point) => ({
+        id: point.id,
         observedAt: asOf(point.observedAt),
         estimatedMarketValue: asMoney(point.priceMinor, point.currency),
         source: point.source,
         dataStatus: point.dataStatus,
+        changeFromPrevious: point.changeFromPreviousMinor === null
+          ? null
+          : asMoney(point.changeFromPreviousMinor, point.currency),
+        changeFromPreviousBps: point.changeFromPreviousBps,
+        changeFromRangeStart: point.changeFromRangeStartMinor === null
+          ? null
+          : asMoney(point.changeFromRangeStartMinor, point.currency),
+        changeFromRangeStartBps: point.changeFromRangeStartBps,
       })),
     };
   }
@@ -886,6 +966,7 @@ type PublicAssetRow = {
     lastSuccessfulRefreshAt?: Date | null;
   }>;
   marketObservations?: Array<{
+    id: string;
     observationType: string;
     priceMinor: bigint;
     currency: string;
@@ -1043,7 +1124,10 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
       market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference:
-      externalMarketReferenceFromMapping(priceChartingMapping) ??
+      externalMarketReferenceFromMapping(
+        priceChartingMapping,
+        asset.marketObservations ?? [],
+      ) ??
       externalMarketReferenceFromObservations(asset.marketObservations ?? []) ??
       externalMarketReference(asset.valuationEvidence ?? []),
     sliceGrade: await publicSliceGrade(
@@ -1306,7 +1390,10 @@ function externalMarketReferenceFromObservations(
   };
 }
 
-function externalMarketReferenceFromMapping(mapping: PublicMarketProviderMapping | null) {
+function externalMarketReferenceFromMapping(
+  mapping: PublicMarketProviderMapping | null,
+  observations: NonNullable<PublicAssetRow['marketObservations']>,
+) {
   if (
     !mapping ||
     mapping.providerCode !== 'PRICECHARTING' ||
@@ -1316,6 +1403,23 @@ function externalMarketReferenceFromMapping(mapping: PublicMarketProviderMapping
   ) {
     return null;
   }
+  const referencePoints: ReferenceHistoryPoint[] = observations
+    .filter(
+      (point) =>
+        point.providerCode === 'PRICECHARTING' &&
+        point.observationType === 'PRICE_GUIDE' &&
+        point.included !== false &&
+        (point.matchQuality === 'EXACT' || point.matchQuality === 'STRONG') &&
+        point.priceMinor > 0n,
+    )
+    .map((point) => ({
+      id: point.id,
+      priceMinor: point.priceMinor,
+      observedAt: point.observedAt,
+    }));
+  const movements = referencePoints.length
+    ? calculateReferenceMovements(referencePoints)
+    : null;
   return {
     currentListing: {
       amount: asMoney(mapping.currentPriceMinor, mapping.currentCurrency),
@@ -1326,11 +1430,11 @@ function externalMarketReferenceFromMapping(mapping: PublicMarketProviderMapping
         `https://www.pricecharting.com/product?id=${encodeURIComponent(mapping.providerExternalId)}`,
       observedAt: mapping.currentObservedAt.toISOString(),
     },
-    movement24hBps: mapping.referenceMovement24hBps,
-    movement7dBps: mapping.referenceMovement7dBps,
-    movement30dBps: mapping.referenceMovement30dBps,
-    movement90dBps: mapping.referenceMovement90dBps,
-    movement1yBps: mapping.referenceMovement1yBps,
+    movement24hBps: movements ? movements['24H'] : mapping.referenceMovement24hBps,
+    movement7dBps: movements ? movements['7D'] : mapping.referenceMovement7dBps,
+    movement30dBps: movements ? movements['30D'] : mapping.referenceMovement30dBps,
+    movement90dBps: movements ? movements['90D'] : mapping.referenceMovement90dBps,
+    movement1yBps: movements ? movements['1Y'] : mapping.referenceMovement1yBps,
     lastRefreshedAt: mapping.lastSuccessAt?.toISOString() ?? null,
     historyStartedAt: mapping.referenceHistoryStartedAt?.toISOString() ?? null,
     freshness: mapping.lastSuccessAt
@@ -1346,6 +1450,12 @@ function freshnessLabel(lastSuccessAt: Date) {
   if (age <= 7 * 24 * 60 * 60 * 1000) return 'STALE';
   return 'UNAVAILABLE';
 }
+
+function calculateChangeBps(startMinor: bigint, endMinor: bigint) {
+  if (startMinor <= 0n) return null;
+  return Number(((endMinor - startMinor) * 10_000n) / startMinor);
+}
+
 function encodeCursor(id: string) {
   return Buffer.from(JSON.stringify({ id })).toString('base64url');
 }

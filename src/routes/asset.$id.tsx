@@ -295,11 +295,25 @@ function AssetPage() {
     (history.source === undefined && Boolean(externalReference));
   const referenceHistory = hasReferenceHistory ? history : [];
   const historyCurrency =
-    referenceHistory[0]?.value.currency ?? asset.marketReference?.currency ?? currentValueCurrency;
+    history.currency ??
+    referenceHistory[0]?.value.currency ??
+    asset.marketReference?.currency ??
+    currentValueCurrency;
   const referenceMoveLabel =
-    hasReferenceHistory && history.movementBps !== null && history.movementBps !== undefined
-      ? formatPercent(history.movementBps / 100)
+    hasReferenceHistory &&
+    history.percentageChangeBps !== null &&
+    history.percentageChangeBps !== undefined
+      ? formatPercent(history.percentageChangeBps / 100)
       : "Not available";
+  const historyStartingValue =
+    history.startingValue ?? referenceHistory[0]?.value ?? null;
+  const historyLatestValue =
+    history.latestValue ?? referenceHistory.at(-1)?.value ?? null;
+  const historyPointCount = history.historyPointCount ?? referenceHistory.length;
+  const historyCoverageLabel = formatHistoryCoverage(history.actualCoverageSeconds);
+  const historyMovementReason =
+    history.movementUnavailableReason ??
+    (historyPointCount < 2 ? "Need at least two observations" : "Not enough history yet");
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const watchlistError = toggleWatchlist.isError;
   const category = marketCategoryPresentation(asset.category);
@@ -481,9 +495,12 @@ function AssetPage() {
         <section className="asset-detail-lower-grid">
           <section className="asset-price-panel" aria-labelledby="history-title">
             <header className="asset-reference-history__header">
-              <div className="asset-history-tabs" aria-label="Reference value history">
-                <span className="is-active">Reference value</span>
-                <h2 id="history-title">Value history</h2>
+              <div className="asset-history-heading">
+                <div className="asset-history-title">
+                  <span>Reference value</span>
+                  <h2 id="history-title">Value history</h2>
+                </div>
+                <small>PriceCharting reference history</small>
               </div>
               <div aria-label="History range">
                 {PERIODS.map((value) => (
@@ -510,12 +527,44 @@ function AssetPage() {
               ) : referenceHistory.length >= 2 ? (
                 <PriceChart
                   className="asset-price-chart"
-                  data={referenceHistory.map((point) => point.value.amount / 100)}
+                  data={referenceHistory.map((point) => ({
+                    value: point.value.amount / 100,
+                    timestamp: point.timestamp,
+                    source: point.source,
+                    previousChange:
+                      point.changeFromPrevious === undefined
+                        ? undefined
+                        : point.changeFromPrevious === null
+                          ? null
+                          : point.changeFromPrevious.amount / 100,
+                    previousChangeBps: point.changeFromPreviousBps,
+                    rangeChange:
+                      point.changeFromRangeStart === undefined
+                        ? undefined
+                        : point.changeFromRangeStart === null
+                          ? null
+                          : point.changeFromRangeStart.amount / 100,
+                    rangeChangeBps: point.changeFromRangeStartBps,
+                    refreshedAt: history.lastRefreshedAt,
+                  }))}
                   height={190}
                   showAxis
                   currency={historyCurrency}
                   label={`External reference value history for ${asset.title}`}
                 />
+              ) : referenceHistory.length === 1 ? (
+                <div className="asset-single-history">
+                  <strong>
+                    {formatAuthoritativeMoney(
+                      referenceHistory[0]!.value.amount,
+                      historyCurrency,
+                      historyCurrency,
+                      null,
+                    )}
+                  </strong>
+                  <span>{formatDate(referenceHistory[0]!.timestamp)}</span>
+                  <p>One observation so far. Movement will appear after another real snapshot is collected.</p>
+                </div>
               ) : (
                 <div className="asset-empty-history">
                   <span>—</span>
@@ -528,9 +577,9 @@ function AssetPage() {
               <Stat
                 label="Starting value"
                 value={
-                  referenceHistory[0]
+                  historyStartingValue
                     ? formatAuthoritativeMoney(
-                        referenceHistory[0].value.amount,
+                        historyStartingValue.amount,
                         historyCurrency,
                         historyCurrency,
                         null,
@@ -541,9 +590,9 @@ function AssetPage() {
               <Stat
                 label="Latest value"
                 value={
-                  referenceHistory.at(-1)
+                  historyLatestValue
                     ? formatAuthoritativeMoney(
-                        referenceHistory.at(-1)!.value.amount,
+                        historyLatestValue.amount,
                         historyCurrency,
                         historyCurrency,
                         null,
@@ -552,11 +601,53 @@ function AssetPage() {
                 }
               />
               <Stat
-                label="History points"
-                value={referenceHistory.length ? String(referenceHistory.length) : "Not available"}
+                label={`${period} move`}
+                value={referenceMoveLabel}
               />
-              <Stat label="24 hour move" value={referenceMoveLabel} />
+              <Stat
+                label="Observations"
+                value={historyPointCount ? `${historyPointCount}` : "Not available"}
+              />
             </div>
+            <div className="asset-chart-stats__secondary" aria-label="History context">
+              <span>
+                <b>High</b>
+                {history.highValue
+                  ? formatAuthoritativeMoney(
+                      history.highValue.amount,
+                      history.highValue.currency,
+                      history.highValue.currency,
+                      null,
+                    )
+                  : "Not available"}
+              </span>
+              <span>
+                <b>Low</b>
+                {history.lowValue
+                  ? formatAuthoritativeMoney(
+                      history.lowValue.amount,
+                      history.lowValue.currency,
+                      history.lowValue.currency,
+                      null,
+                    )
+                  : "Not available"}
+              </span>
+              <span>
+                <b>Coverage</b>
+                {historyCoverageLabel}
+              </span>
+              <span>
+                <b>Refreshed</b>
+                {history.lastRefreshedAt
+                  ? formatRelativeTime(history.lastRefreshedAt)
+                  : "Not available"}
+              </span>
+            </div>
+            {history.movementAvailability !== "AVAILABLE" ? (
+              <p className="asset-history-note">
+                {period} movement unavailable: {historyMovementReason}.
+              </p>
+            ) : null}
           </section>
 
           <section
@@ -1834,6 +1925,16 @@ function percentOf(value: string | number | undefined, total: number | undefined
 function formatPublicGrade(score?: number, label?: string) {
   const formattedScore = score === undefined ? undefined : Number(score.toFixed(2)).toString();
   return [formattedScore, label].filter(Boolean).join(" · ") || "Unavailable";
+}
+
+function formatHistoryCoverage(seconds?: number) {
+  if (!seconds || seconds < 60) return seconds ? "<1m" : "Not available";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
 }
 
 function PageState({

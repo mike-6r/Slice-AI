@@ -3469,23 +3469,103 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         )[range];
         const body = await client.get<{
           source: "PRICECHARTING" | "SLICE_VALUATION";
+          currency: SupportedCurrency | null;
           movementBps: number | null;
+          percentageChangeBps: number | null;
+          movementAvailability: "AVAILABLE" | "UNAVAILABLE";
+          movementUnavailableReason: string | null;
+          startingValue: { minor: string; currency: SupportedCurrency } | null;
+          latestValue: { minor: string; currency: SupportedCurrency } | null;
+          absoluteChange: { minor: string; currency: SupportedCurrency } | null;
+          highValue: { minor: string; currency: SupportedCurrency } | null;
+          lowValue: { minor: string; currency: SupportedCurrency } | null;
+          historyPointCount: number;
+          displayedPointCount: number;
+          rangeStart: string | null;
+          rangeEnd: string | null;
+          actualCoverageSeconds: number;
+          lastRefreshedAt: string | null;
           points: Array<{
+            id: string;
             observedAt: string;
             estimatedMarketValue: { minor: string; currency: SupportedCurrency };
+            source: string;
+            dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
+            changeFromPrevious: { minor: string; currency: SupportedCurrency } | null;
+            changeFromPreviousBps: number | null;
+            changeFromRangeStart: { minor: string; currency: SupportedCurrency } | null;
+            changeFromRangeStartBps: number | null;
           }>;
         }>(`/market/assets/${assetId}/history`, { range: backendRange });
         const points = body.points.map((point) => ({
+          id: point.id,
           timestamp: point.observedAt as ISODateTime,
           value: {
             amount: safeMinor(point.estimatedMarketValue.minor),
             currency: point.estimatedMarketValue.currency,
           },
+          source: point.source,
+          dataStatus: point.dataStatus,
+          changeFromPrevious: point.changeFromPrevious
+            ? {
+                amount: safeMinor(point.changeFromPrevious.minor),
+                currency: point.changeFromPrevious.currency,
+              }
+            : null,
+          changeFromPreviousBps: point.changeFromPreviousBps,
+          changeFromRangeStart: point.changeFromRangeStart
+            ? {
+                amount: safeMinor(point.changeFromRangeStart.minor),
+                currency: point.changeFromRangeStart.currency,
+              }
+            : null,
+          changeFromRangeStartBps: point.changeFromRangeStartBps,
         }));
         return Object.assign(points, {
           source: body.source,
           movementBps: body.movementBps,
           range,
+          selectedRange: range,
+          currency: body.currency,
+          startingValue: body.startingValue
+            ? {
+                amount: safeMinor(body.startingValue.minor),
+                currency: body.startingValue.currency,
+              }
+            : null,
+          latestValue: body.latestValue
+            ? {
+                amount: safeMinor(body.latestValue.minor),
+                currency: body.latestValue.currency,
+              }
+            : null,
+          absoluteChange: body.absoluteChange
+            ? {
+                amount: safeMinor(body.absoluteChange.minor),
+                currency: body.absoluteChange.currency,
+              }
+            : null,
+          percentageChangeBps: body.percentageChangeBps,
+          highValue: body.highValue
+            ? {
+                amount: safeMinor(body.highValue.minor),
+                currency: body.highValue.currency,
+              }
+            : null,
+          lowValue: body.lowValue
+            ? {
+                amount: safeMinor(body.lowValue.minor),
+                currency: body.lowValue.currency,
+              }
+            : null,
+          historyPointCount: body.historyPointCount,
+          displayedPointCount: body.displayedPointCount,
+          rangeStart: body.rangeStart as ISODateTime | null,
+          rangeEnd: body.rangeEnd as ISODateTime | null,
+          actualCoverageSeconds: body.actualCoverageSeconds,
+          lastRefreshedAt: body.lastRefreshedAt as ISODateTime | null,
+          movementAvailability: body.movementAvailability,
+          movementUnavailableReason: body.movementUnavailableReason,
         });
       },
       async getMarketMovers() {

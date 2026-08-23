@@ -35244,3 +35244,186 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
     padding-block: 6px;
   }
 }
+
+/* Reference-history interaction pass. Keep the established lower-row card,
+   but make its source, controls, observations, and context readable inside
+   the master 315px desktop cell. */
+.asset-detail-page .asset-reference-history__header {
+  min-width: 0;
+}
+.asset-detail-page .asset-history-heading {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.asset-detail-page .asset-history-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.asset-detail-page .asset-history-title span,
+.asset-detail-page .asset-history-title h2 {
+  margin: 0;
+  white-space: nowrap;
+}
+.asset-detail-page .asset-history-title span {
+  color: #39dfb1;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.asset-detail-page .asset-history-title h2 {
+  color: rgb(181 205 207 / 0.72);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.asset-detail-page .asset-history-heading > small {
+  overflow: hidden;
+  color: rgb(181 205 207 / 0.52);
+  font-size: 0.56rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-detail-page .asset-detail-lower-grid > .asset-price-panel > header > div:last-child {
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  gap: 0.15rem;
+  white-space: nowrap;
+}
+.asset-detail-page .asset-detail-lower-grid > .asset-price-panel > header button {
+  min-width: 2.28rem;
+  min-height: 2rem;
+  padding: 0.28rem 0.2rem;
+  font-size: 0.6rem;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage {
+  min-height: 0;
+  padding: 0.55rem 0.65rem;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage .asset-price-chart {
+  min-height: 0;
+}
+.asset-detail-page .asset-detail-lower-grid > .asset-price-panel {
+  grid-template-rows: 44px minmax(0, 1fr) auto auto;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stats {
+  margin: 0 0.65rem 0.35rem;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stats dl,
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stats dl:nth-child(n + 3) {
+  padding: 0.55rem 0.65rem;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stats dt { font-size: 0.54rem; }
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stats dd {
+  margin-top: 0.25rem;
+  font-size: 0.76rem;
+}
+.asset-detail-page .asset-chart-stats__secondary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0 0.65rem 0.25rem;
+  color: rgb(181 205 207 / 0.68);
+  font-size: 0.56rem;
+  line-height: 1.2;
+}
+.asset-detail-page .asset-chart-stats__secondary span {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-detail-page .asset-chart-stats__secondary b {
+  color: rgb(181 205 207 / 0.46);
+  font-family: var(--font-mono);
+  font-size: 0.48rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.asset-detail-page .asset-history-note {
+  min-width: 0;
+  margin: 0 0.65rem 0.35rem;
+  overflow: hidden;
+  color: rgb(181 205 207 / 0.54);
+  font-size: 0.52rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-detail-page .asset-single-history {
+  display: grid;
+  height: 100%;
+  place-content: center;
+  gap: 0.3rem;
+  color: rgb(181 205 207 / 0.72);
+  text-align: center;
+}
+.asset-detail-page .asset-single-history strong {
+  color: #eaf8f3;
+  font-size: 1.45rem;
+}
+.asset-detail-page .asset-single-history span { font-size: 0.62rem; }
+.asset-detail-page .asset-single-history p {
+  max-width: 18rem;
+  margin: 0;
+  font-size: 0.58rem;
+  line-height: 1.3;
+}
+.asset-detail-page .price-chart__observation { transition: r 120ms ease, opacity 120ms ease; }
+.asset-detail-page .price-chart__tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  min-width: 10rem;
+  max-width: 14rem;
+  gap: 0.2rem;
+  transform: translate(-50%, -100%);
+  border: 1px solid rgb(74 219 180 / 0.36);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: rgb(5 19 24 / 0.96);
+  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 0.25);
+  color: rgb(181 205 207 / 0.72);
+  font-size: 0.58rem;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.asset-detail-page .price-chart__tooltip strong { color: #eaf8f3; font-size: 0.78rem; }
+.asset-detail-page .price-chart__tooltip span { overflow-wrap: anywhere; }
+
+@media (max-width: 1279px) {
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+}
+@media (max-width: 560px) {
+  .asset-detail-page .asset-history-title { gap: 0.5rem; }
+  .asset-detail-page .asset-history-title span,
+  .asset-detail-page .asset-history-title h2 { font-size: 0.64rem; }
+  .asset-detail-page .asset-history-heading > small { font-size: 0.5rem; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel > header > div:last-child {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+  }
+  .asset-detail-page .asset-chart-stats__secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .asset-detail-page .asset-history-note { white-space: normal; }
+}

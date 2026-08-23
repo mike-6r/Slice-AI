@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { SupportedCurrency } from "@/data/repositories";
 
@@ -36,6 +36,11 @@ const toSmoothPath = (points: ReadonlyArray<readonly [number, number]>) => {
   );
 };
 
+const toLinearPath = (points: ReadonlyArray<readonly [number, number]>) =>
+  points
+    .map(([x, y], index) => `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`)
+    .join(" ");
+
 export function Sparkline({
   data,
   height = 32,
@@ -69,20 +74,8 @@ export function Sparkline({
   );
 }
 
-const currencySymbols: Record<SupportedCurrency, string> = {
-  GBP: "£",
-  USD: "$",
-  CAD: "CA$",
-  EUR: "€",
-};
-
-const axisLabel = (value: number, currency: SupportedCurrency) => {
-  const symbol = currencySymbols[currency];
-  return value >= 1000 ? `${symbol}${Math.round(value / 1000)}K` : `${symbol}${Math.round(value)}`;
-};
-
 type PriceChartProps = {
-  data: number[];
+  data: readonly (number | PriceChartPoint)[];
   height?: number;
   /**
    * Accessible description. Optional so existing callers keep compiling, but pass a
@@ -93,6 +86,52 @@ type PriceChartProps = {
   className?: string;
   currency?: SupportedCurrency;
 };
+
+export type PriceChartPoint = {
+  value: number;
+  timestamp?: string;
+  source?: string;
+  previousChange?: number | null;
+  previousChangeBps?: number | null;
+  rangeChange?: number | null;
+  rangeChangeBps?: number | null;
+  refreshedAt?: string | null;
+};
+
+function isPriceChartPoint(value: number | PriceChartPoint): value is PriceChartPoint {
+  return typeof value === "object";
+}
+
+function formatMoney(value: number, currency: SupportedCurrency) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatTooltipDate(value?: string) {
+  if (!value) return "Observation";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatBps(value: number | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const percent = value / 100;
+  return `${percent > 0 ? "+" : ""}${percent.toFixed(2)}%`;
+}
+
+function formatAxisLabel(value: number, currency: SupportedCurrency) {
+  const symbol = currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency === "CAD" ? "CA$" : "$";
+  return `${symbol}${Math.round(value).toLocaleString("en-GB")}`;
+}
 
 export function PriceChart({
   data,
@@ -108,29 +147,46 @@ export function PriceChart({
 
   if (data.length < 2) return null;
 
-  const rawMin = Math.min(...data);
-  const rawMax = Math.max(...data);
-  const pad = (rawMax - rawMin || rawMax || 1) * 0.12;
+  const pointsData = data.map((item) =>
+    isPriceChartPoint(item) ? item : { value: item },
+  );
+  const values = pointsData.map((item) => item.value);
+
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const pad = Math.max((rawMax - rawMin || rawMax || 1) * 0.12, 1);
   const min = rawMin - pad;
   const max = rawMax + pad;
   const range = max - min || 1;
 
-  const points = data.map((value, index) => {
+  const points = values.map((value, index) => {
     const x = (index / (data.length - 1)) * width;
     const y = height - ((value - min) / range) * height;
     return [x, y] as const;
   });
 
-  const line = toSmoothPath(points);
+  const line = toLinearPath(points);
   const area = `${line} L ${width},${height} L 0,${height} Z`;
-  const [lastX, lastY] = points[points.length - 1];
-  const rising = data[data.length - 1] >= data[0];
+  const [lastX, lastY] = points[points.length - 1]!;
+  const rising = values[values.length - 1]! >= values[0]!;
   const colour = rising ? "var(--color-positive)" : "var(--color-negative)";
 
-  const ticks = [max, min + range * 0.66, min + range * 0.33, min];
+  const ticks = [max, min + range * 0.75, min + range * 0.5, min + range * 0.25, min];
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const activePoint = activeIndex === null ? null : pointsData[activeIndex];
+  const activeCoordinates = activeIndex === null ? null : points[activeIndex];
+  const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const x = Math.max(0, Math.min(width, ((event.clientX - rect.left) / rect.width) * width));
+    setActiveIndex(Math.round((x / width) * (points.length - 1)));
+  };
 
   return (
-    <figure className={`price-chart relative m-0 h-full w-full ${className ?? ""}`}>
+    <figure
+      className={`price-chart relative m-0 h-full w-full ${className ?? ""}`}
+      onPointerLeave={() => setActiveIndex(null)}
+    >
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-full w-full overflow-visible"
@@ -138,6 +194,8 @@ export function PriceChart({
         role="img"
         aria-label={label}
         focusable="false"
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerMove}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
@@ -145,7 +203,7 @@ export function PriceChart({
             <stop offset="100%" stopColor={colour} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {[0.25, 0.5, 0.75].map((step) => (
+        {[0.2, 0.4, 0.6, 0.8].map((step) => (
           <line
             key={step}
             x1="0"
@@ -168,12 +226,37 @@ export function PriceChart({
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
+        {points.map(([x, y], index) => (
+          <circle
+            key={`${x}-${y}`}
+            className="price-chart__observation"
+            cx={x}
+            cy={y}
+            r={activeIndex === index ? 5 : points.length <= 24 ? 3 : 2}
+            fill={colour}
+            opacity={activeIndex === index || points.length <= 24 ? 0.86 : 0.28}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {activeCoordinates ? (
+          <line
+            className="price-chart__crosshair"
+            x1={activeCoordinates[0]}
+            x2={activeCoordinates[0]}
+            y1="0"
+            y2={height}
+            stroke="rgba(221, 238, 234, 0.4)"
+            strokeDasharray="3 4"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : null}
         <circle
           className="price-chart__dot"
-          cx={lastX}
-          cy={lastY}
+          cx={activeCoordinates?.[0] ?? lastX}
+          cy={activeCoordinates?.[1] ?? lastY}
           r="4"
-          fill={colour}
+          fill={activeCoordinates ? "#eaf8f3" : colour}
           vectorEffect="non-scaling-stroke"
         />
       </svg>
@@ -184,11 +267,37 @@ export function PriceChart({
         >
           {ticks.map((tick, index) => (
             <span key={index} className="leading-none">
-              {axisLabel(tick, currency)}
+              {formatAxisLabel(tick, currency)}
             </span>
           ))}
         </div>
       )}
+      {activePoint && activeCoordinates ? (
+        <div
+          className="price-chart__tooltip"
+          style={{
+            left: `${(activeCoordinates[0] / width) * 100}%`,
+            top: `${Math.max(5, Math.min(66, (activeCoordinates[1] / height) * 100 - 8))}%`,
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          <strong>{formatMoney(activePoint.value, currency)}</strong>
+          <span>{formatTooltipDate(activePoint.timestamp)}</span>
+          {activePoint.previousChange !== undefined ? (
+            <span>
+              Previous observation: {activePoint.previousChange === null ? "Not available" : `${activePoint.previousChange >= 0 ? "+" : ""}${formatMoney(activePoint.previousChange, currency)}${formatBps(activePoint.previousChangeBps) ? ` (${formatBps(activePoint.previousChangeBps)})` : ""}`}
+            </span>
+          ) : null}
+          {activePoint.rangeChange !== undefined ? (
+            <span>
+              Range start: {activePoint.rangeChange === null ? "Not available" : `${activePoint.rangeChange >= 0 ? "+" : ""}${formatMoney(activePoint.rangeChange, currency)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
+            </span>
+          ) : null}
+          {activePoint.source ? <span>{activePoint.source} reference</span> : null}
+          {activePoint.refreshedAt ? <span>Refreshed {formatTooltipDate(activePoint.refreshedAt)}</span> : null}
+        </div>
+      ) : null}
     </figure>
   );
 }
