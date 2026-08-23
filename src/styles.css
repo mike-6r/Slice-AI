@@ -32313,7 +32313,12 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 .markets-page .market-card-valuation {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  min-height: 0;
+  /* Every card reserves the same valuation slot. A real market reference can
+     include a source line; an unavailable reference must not pull the market
+     and ownership sections upward on its card. */
+  min-height: 7.5rem;
+  box-sizing: border-box;
+  align-items: start;
   margin-top: 0.55rem;
   gap: 0.65rem;
   padding-block: 0.6rem;
@@ -32332,7 +32337,9 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 }
 
 .markets-page .market-card-market-grid {
-  min-height: 0;
+  min-height: 4.3rem;
+  box-sizing: border-box;
+  align-items: start;
   gap: 0.6rem;
   padding-block: 0.55rem;
 }
