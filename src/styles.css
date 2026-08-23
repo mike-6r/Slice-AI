@@ -33649,6 +33649,31 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   line-height: 1;
 }
 
+.asset-detail-page .asset-detail-lower-grid {
+  min-height: 13.5rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage,
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage.is-empty {
+  height: 6rem;
+  min-height: 6rem;
+  padding: 0.55rem 1.5rem 0.65rem 0.55rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__evidence-toggle {
+  min-height: 0;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__evidence-toggle strong {
+  font-size: 0.55rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__evidence-toggle small {
+  font-size: 0.48rem;
+}
+
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span,
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
   display: block;
