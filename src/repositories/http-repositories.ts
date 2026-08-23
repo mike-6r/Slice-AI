@@ -49,6 +49,7 @@ import type {
   TradingOrderPage,
   TradingOrderPreview,
   OwnershipOrderPreview,
+  OwnershipMarketBreakdownCategory,
   OwnershipMarketSummary,
   TradingOrderView,
   UserId,
@@ -697,18 +698,64 @@ const mapOwnershipMarketSummary = (raw: unknown): OwnershipMarketSummary => {
     ownershipBreakdown:
       value.ownershipBreakdown && typeof value.ownershipBreakdown === "object"
         ? {
-            collectorRetainedSlices: stringField(
-              (value.ownershipBreakdown as Record<string, unknown>).collectorRetainedSlices,
-              "summary.ownershipBreakdown.collectorRetainedSlices",
+            semantics: (value.ownershipBreakdown as Record<string, unknown>)
+              .semantics as "SETTLED_OWNERSHIP",
+            categories: Array.isArray(
+              (value.ownershipBreakdown as Record<string, unknown>).categories,
+            )
+              ? (
+                  (value.ownershipBreakdown as Record<string, unknown>).categories as Array<
+                    Record<string, unknown>
+                  >
+                ).map((category, index) => ({
+                  key: stringField(
+                    category.key,
+                    `summary.ownershipBreakdown.categories[${index}].key`,
+                  ) as OwnershipMarketBreakdownCategory["key"],
+                  label: stringField(
+                    category.label,
+                    `summary.ownershipBreakdown.categories[${index}].label`,
+                  ),
+                  units: stringField(
+                    category.units,
+                    `summary.ownershipBreakdown.categories[${index}].units`,
+                  ),
+                  tone: stringField(
+                    category.tone,
+                    `summary.ownershipBreakdown.categories[${index}].tone`,
+                  ) as "retained" | "owned" | "available" | "inventory" | "unallocated",
+                }))
+              : [],
+            reconciles: booleanField(
+              (value.ownershipBreakdown as Record<string, unknown>).reconciles,
+              "summary.ownershipBreakdown.reconciles",
             ),
-            investorOwnedSlices: stringField(
-              (value.ownershipBreakdown as Record<string, unknown>).investorOwnedSlices,
-              "summary.ownershipBreakdown.investorOwnedSlices",
+            issuedUnits: stringField(
+              (value.ownershipBreakdown as Record<string, unknown>).issuedUnits,
+              "summary.ownershipBreakdown.issuedUnits",
             ),
-            treasurySlices: stringField(
-              (value.ownershipBreakdown as Record<string, unknown>).treasurySlices,
-              "summary.ownershipBreakdown.treasurySlices",
+            categorizedUnits: stringField(
+              (value.ownershipBreakdown as Record<string, unknown>).categorizedUnits,
+              "summary.ownershipBreakdown.categorizedUnits",
             ),
+            listedAvailability: (() => {
+              const listed = objectField(
+                (value.ownershipBreakdown as Record<string, unknown>).listedAvailability,
+                "summary.ownershipBreakdown.listedAvailability",
+              );
+              return {
+                units: stringField(
+                  listed.units,
+                  "summary.ownershipBreakdown.listedAvailability.units",
+                ),
+                percentage: stringField(
+                  listed.percentage,
+                  "summary.ownershipBreakdown.listedAvailability.percentage",
+                ),
+                relationship: listed.relationship as
+                  "SUBSET_OF_OWNERSHIP_BUCKET" | "SEPARATE_INVENTORY",
+              };
+            })(),
           }
         : undefined,
   };

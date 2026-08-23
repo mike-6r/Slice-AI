@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Bookmark,
+  BookOpen,
   CheckCircle2,
   ChevronRight,
   Info,
@@ -422,7 +423,8 @@ function AssetPage() {
               sharePriceMinor={slicePriceMinor}
               issuedShares={issuedSlices}
               availableShares={availableSlices}
-              ownShares={shares.ownShares}
+              ownPosition={ownPositionQuery.data}
+              positionLoading={ownPositionQuery.isLoading}
               isAuthenticated={isAuthenticated}
               ownershipSummary={ownershipSummaryQuery.data}
               trades={tradesQuery.data ?? []}
@@ -1234,7 +1236,8 @@ function TradingPanel({
   sharePriceMinor,
   issuedShares,
   availableShares,
-  ownShares,
+  ownPosition,
+  positionLoading,
   isAuthenticated,
   ownershipSummary,
   trades,
@@ -1251,7 +1254,9 @@ function TradingPanel({
   sharePriceMinor?: number;
   issuedShares?: number;
   availableShares?: number;
-  ownShares?: number;
+  ownPosition:
+    { settledUnits: string; reservedUnits: string; availableUnits: string } | null | undefined;
+  positionLoading: boolean;
   isAuthenticated: boolean;
   ownershipSummary:
     | Awaited<ReturnType<ReturnType<typeof useAppServices>["trading"]["ownershipMarketSummary"]>>
@@ -1264,13 +1269,25 @@ function TradingPanel({
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
-  const canSell = isAuthenticated && ownShares !== undefined && ownShares > 0;
+  const ownSettledShares = positiveSafeInteger(ownPosition?.settledUnits, true) ?? 0;
+  const ownAvailableShares = positiveSafeInteger(ownPosition?.availableUnits, true) ?? 0;
   const marketOpen = ownershipSummary?.marketStatus === "OPEN";
+  const canSell = isAuthenticated && marketOpen && ownAvailableShares > 0;
   const hasAvailable = (availableShares ?? 0) > 0;
   const breakdown = ownershipSummary?.ownershipBreakdown;
   const slicePrice =
     ownershipSummary?.slicePriceMinor ??
     (sharePriceMinor === undefined ? null : String(sharePriceMinor));
+  const categories = breakdown?.reconciles ? breakdown.categories : [];
+  const listedPercentage =
+    breakdown?.listedAvailability.percentage ?? ownershipSummary?.availableOwnershipPercent;
+  const sellMessage = !isAuthenticated
+    ? "Sign in to manage settled units"
+    : !marketOpen
+      ? "Available when the market is open"
+      : ownSettledShares === 0
+        ? "Available after you own settled units"
+        : "All settled units are currently reserved";
   return (
     <section className="asset-order-book">
       <header className="asset-trading-panel__header">
@@ -1303,10 +1320,12 @@ function TradingPanel({
         />
       </div>
       <p className="asset-trading-availability">
-        {ownershipSummary?.availableOwnershipPercent &&
-        ownershipSummary.availableOwnershipPercent !== "Not yet available"
-          ? `${formatAvailability(ownershipSummary.availableOwnershipPercent)} of the issued supply is currently listed.`
-          : "Availability will appear after ownership is issued."}
+        <Info aria-hidden="true" />
+        <span>
+          {listedPercentage && listedPercentage !== "Not yet available"
+            ? `${formatAvailability(listedPercentage)} of the issued supply is currently listed.`
+            : "Availability will appear after ownership is issued."}
+        </span>
       </p>
       <div className="asset-order-actions">
         {marketOpen && hasAvailable ? (
@@ -1339,76 +1358,82 @@ function TradingPanel({
           <div className="is-sell is-disabled" aria-disabled="true">
             <span>
               <strong>Sell Slices</strong>
-              <small>
-                {isAuthenticated
-                  ? "Available after you own settled units"
-                  : "Sign in to manage settled units"}
-              </small>
+              <small>{sellMessage}</small>
             </span>
           </div>
         )}
       </div>
       {breakdown ? (
-        <div className="asset-ownership-breakdown" aria-label="Ownership breakdown">
-          <div className="asset-ownership-breakdown__bar" aria-hidden="true">
-            <span
-              className="is-retained"
-              style={{
-                flexBasis: `${percentOf(breakdown.collectorRetainedSlices, issuedShares)}%`,
-              }}
-            />
-            <span
-              className="is-owned"
-              style={{ flexBasis: `${percentOf(breakdown.investorOwnedSlices, issuedShares)}%` }}
-            />
-            <span
-              className="is-available"
-              style={{ flexBasis: `${percentOf(availableShares, issuedShares)}%` }}
-            />
-          </div>
-          <div className="asset-ownership-breakdown__legend">
-            <span>
-              <i className="is-retained" /> Collector retained{" "}
-              <strong>
-                {Number(breakdown.collectorRetainedSlices).toLocaleString()}{" "}
-                <small>
-                  {formatAllocationPercent(breakdown.collectorRetainedSlices, issuedShares)}
-                </small>
-              </strong>
-            </span>
-            <span>
-              <i className="is-owned" /> Investor owned{" "}
-              <strong>
-                {Number(breakdown.investorOwnedSlices).toLocaleString()}{" "}
-                <small>
-                  {formatAllocationPercent(breakdown.investorOwnedSlices, issuedShares)}
-                </small>
-              </strong>
-            </span>
-            <span>
-              <i className="is-available" /> Available{" "}
-              <strong>
-                {availableShares?.toLocaleString() ?? "—"}{" "}
-                <small>{formatAllocationPercent(availableShares, issuedShares)}</small>
-              </strong>
-            </span>
-          </div>
+        <div
+          className={`asset-ownership-breakdown${breakdown.reconciles ? "" : " is-unavailable"}`}
+          aria-label="Settled ownership breakdown"
+        >
+          {breakdown.reconciles ? (
+            <>
+              <div className="asset-ownership-breakdown__bar" aria-hidden="true">
+                {categories.map((category) => (
+                  <span
+                    key={category.key}
+                    className={`is-${category.tone}`}
+                    style={{ flexBasis: `${percentOf(category.units, issuedShares)}%` }}
+                  />
+                ))}
+              </div>
+              <div className="asset-ownership-breakdown__legend">
+                {categories.map((category) => (
+                  <span key={category.key}>
+                    <i className={`is-${category.tone}`} /> {category.label}
+                    <strong>
+                      {formatSliceCount(category.units)}{" "}
+                      <small>{formatAllocationPercent(category.units, issuedShares)}</small>
+                    </strong>
+                  </span>
+                ))}
+              </div>
+              <p className="asset-ownership-breakdown__note">
+                {breakdown.listedAvailability.relationship === "SUBSET_OF_OWNERSHIP_BUCKET"
+                  ? `${formatSliceCount(breakdown.listedAvailability.units)} listed for sale; included in the ownership totals above.`
+                  : `${formatSliceCount(breakdown.listedAvailability.units)} available from the offering inventory.`}
+              </p>
+            </>
+          ) : (
+            <p className="asset-ownership-breakdown__unavailable">
+              Supply ownership is being reconciled. No category totals are shown until they match
+              issued supply.
+            </p>
+          )}
         </div>
       ) : null}
       <div className="asset-current-position">
         <div>
           <span className="asset-section-label">Your position</span>
-          <strong>
-            {isAuthenticated && ownShares !== undefined
-              ? `${ownShares.toLocaleString()} Slices`
-              : "Sign in to see your position"}
-          </strong>
+          {!isAuthenticated ? (
+            <strong>
+              <Link to="/login" search={{ returnTo: `/asset/${id}` }}>
+                Sign in to see your position
+              </Link>
+            </strong>
+          ) : positionLoading ? (
+            <strong>Loading your position…</strong>
+          ) : ownSettledShares > 0 ? (
+            <strong>{formatSliceCount(ownSettledShares)}</strong>
+          ) : (
+            <strong>0 Slices</strong>
+          )}
         </div>
-        <small>
-          {isAuthenticated && ownShares !== undefined && issuedShares
-            ? formatOwnershipPercent(ownShares, issuedShares)
-            : "Ownership appears here after settlement."}
-        </small>
+        {isAuthenticated && !positionLoading && ownSettledShares > 0 && issuedShares ? (
+          <div className="asset-current-position__supporting">
+            <small>{formatOwnershipPercent(ownSettledShares, issuedShares)}</small>
+            <small>{formatSliceCount(ownAvailableShares)} available to sell</small>
+            <Link to="/portfolio">View in Portfolio&nbsp;→</Link>
+          </div>
+        ) : (
+          <small>
+            {isAuthenticated
+              ? "You do not currently own settled Slices of this collectible."
+              : "Ownership appears here after settlement."}
+          </small>
+        )}
       </div>
       {isLoading ? (
         <p>Loading order book…</p>
@@ -1419,7 +1444,16 @@ function TradingPanel({
       ) : (
         <>
           <details className="asset-advanced-market-details">
-            <summary>View order book</summary>
+            <summary>
+              <span className="asset-order-book__summary-icon">
+                <BookOpen aria-hidden="true" />
+              </span>
+              <span>
+                <strong>View order book</strong>
+                <small>See live bids and asks for this asset</small>
+              </span>
+              <ArrowRight aria-hidden="true" />
+            </summary>
             <div className="asset-order-head">
               <span>Side</span>
               <span>Ownership units</span>
@@ -1514,41 +1548,40 @@ function RecentTrades({
         <button type="button" onClick={retry}>
           Retry executions
         </button>
-      ) : (
-        <>
-          <div className="asset-recent-trades__head" aria-hidden="true">
-            <span>Date</span>
-            <span>Side</span>
-            <span>Slices</span>
-            <span>Price / Slice</span>
-            <span>Total</span>
-          </div>
-          <ul className="asset-recent-trades__table" aria-label="Recent trades">
-            {trades.length ? (
-              trades.slice(0, 7).map((trade) => (
-                <li key={trade.id}>
-                  <span>{formatDate(trade.executedAt)}</span>
-                  <span className="asset-recent-trades__side" aria-label="Trade side unavailable">
+      ) : trades.length ? (
+        <div className="asset-recent-trades__table-wrap">
+          <table className="asset-recent-trades__table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Side</th>
+                <th scope="col">Slices</th>
+                <th scope="col">Price / Slice</th>
+                <th scope="col">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trades.slice(0, 7).map((trade) => (
+                <tr key={trade.id}>
+                  <td>{formatDate(trade.executedAt)}</td>
+                  <td
+                    className="asset-recent-trades__side"
+                    aria-label="Trade side is not shown in the public execution view"
+                  >
                     —
-                  </span>
-                  <strong>{Number(trade.units).toLocaleString()} Slices</strong>
-                  <em className="is-up">
+                  </td>
+                  <td>{formatSliceCount(trade.units)}</td>
+                  <td className="is-up">
                     {formatPricePerUnit(trade.pricePerUnit.amount, currency)}
-                  </em>
-                  <em>{formatTradeTotal(trade.units, trade.pricePerUnit.amount, currency)}</em>
-                </li>
-              ))
-            ) : (
-              <li>
-                <span>No public executions yet.</span>
-                <span>—</span>
-                <strong>—</strong>
-                <em>—</em>
-                <em>—</em>
-              </li>
-            )}
-          </ul>
-        </>
+                  </td>
+                  <td>{formatTradeTotal(trade.units, trade.pricePerUnit.amount, currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="asset-recent-trades__empty">No public trades yet.</p>
       )}
     </section>
   );
@@ -1732,9 +1765,7 @@ function formatOfferingPercentage(units: string, totalUnits: string) {
 function formatOwnershipPercent(ownedShares: number, issuedShares: number) {
   if (issuedShares <= 0) return "Your settled share position";
   const percentageBasisPoints = (BigInt(ownedShares) * 10_000n) / BigInt(issuedShares);
-  const wholePercent = percentageBasisPoints / 100n;
-  const fractionalPercent = (percentageBasisPoints % 100n).toString().padStart(2, "0");
-  return `${wholePercent}.${fractionalPercent}% ownership`;
+  return `${formatBasisPointPercent(percentageBasisPoints)}% ownership`;
 }
 
 function formatAllocationPercent(value: string | number | undefined, total: number | undefined) {
@@ -1742,10 +1773,17 @@ function formatAllocationPercent(value: string | number | undefined, total: numb
   try {
     const amount = BigInt(value);
     const basisPoints = (amount * 10_000n) / BigInt(total);
-    return `${basisPoints / 100n}.${(basisPoints % 100n).toString().padStart(2, "0")}%`;
+    return `${formatBasisPointPercent(basisPoints)}%`;
   } catch {
     return "—";
   }
+}
+
+function formatBasisPointPercent(value: bigint) {
+  const whole = value / 100n;
+  const remainder = value % 100n;
+  if (remainder === 0n) return whole.toString();
+  return `${whole}.${remainder.toString().padStart(2, "0").replace(/0+$/, "")}`;
 }
 
 function formatTradeTotal(
@@ -1756,6 +1794,15 @@ function formatTradeTotal(
   try {
     const totalMinor = BigInt(units) * BigInt(priceMinor);
     return formatMinorAmount(totalMinor, currency);
+  } catch {
+    return "Unavailable";
+  }
+}
+
+function formatSliceCount(value: string | number | bigint) {
+  try {
+    const count = typeof value === "bigint" ? value : BigInt(value);
+    return `${count.toLocaleString()} ${count === 1n ? "Slice" : "Slices"}`;
   } catch {
     return "Unavailable";
   }

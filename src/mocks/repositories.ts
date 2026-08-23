@@ -838,9 +838,35 @@ export const mockRepositories: AppRepositories = {
         hasImmediateLiquidity: true,
         marketStatus: "OPEN" as const,
         ownershipBreakdown: {
-          collectorRetainedSlices: "80",
-          investorOwnedSlices: "20",
-          treasurySlices: "0",
+          semantics: "SETTLED_OWNERSHIP" as const,
+          categories: [
+            {
+              key: "COLLECTOR_RETAINED" as const,
+              label: "Collector retained",
+              units: "80",
+              tone: "retained" as const,
+            },
+            {
+              key: "INVESTOR_OWNED" as const,
+              label: "Investor owned",
+              units: "20",
+              tone: "owned" as const,
+            },
+            {
+              key: "OFFERING_INVENTORY" as const,
+              label: "Available offering inventory",
+              units: "100",
+              tone: "available" as const,
+            },
+          ],
+          reconciles: true,
+          issuedUnits: "200",
+          categorizedUnits: "200",
+          listedAvailability: {
+            units: "100",
+            percentage: "50",
+            relationship: "SEPARATE_INVENTORY" as const,
+          },
         },
       };
     },

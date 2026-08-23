@@ -46,6 +46,7 @@ import {
   orderLifecycleEvent,
   tradeCompletedEvent,
 } from '../../outbox/domain/domain-event';
+import { buildPublicOwnershipBreakdown } from '../domain/public-ownership-breakdown';
 
 type Db = Prisma.TransactionClient;
 type OrderInput = {
@@ -70,7 +71,6 @@ type TreasuryListingInput = {
   timeInForce: 'GTC';
   reason: string;
 };
-
 const activeStatuses = ['OPEN', 'PARTIALLY_FILLED'] as const;
 
 @Injectable()
@@ -258,18 +258,27 @@ export class TradingService {
     if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
     const [market, supply, asks, bids, snapshot, policy, offering, positions] = await Promise.all([
       this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
-      this.db.ownershipAssetSupply.findUnique({ where: { assetId: asset.id }, select: { totalUnits: true, status: true } }),
+      this.db.ownershipAssetSupply.findUnique({
+        where: { assetId: asset.id },
+        select: { totalUnits: true, issuedUnits: true, status: true },
+      }),
       this.bookLevels(asset.id, 'SELL', 100, 'asc'),
       this.bookLevels(asset.id, 'BUY', 100, 'desc'),
       this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
       this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true, valuationCurrency: true } }),
       this.db.initialOffering.findUnique({ where: { assetId: asset.id }, select: { retainedUnits: true, originatingCollectorUserId: true } }),
       this.db.ownershipPosition.findMany({
-        where: { assetId: asset.id },
-        select: { settledUnits: true, account: { select: { type: true, userId: true } } },
+        where: { assetId: asset.id, account: { status: 'ACTIVE' } },
+        select: {
+          settledUnits: true,
+          account: { select: { type: true, userId: true, status: true } },
+        },
       }),
     ]);
-    const total = supply?.totalUnits ?? 0n;
+    // Public supply is issued supply, never the planned cap. Ownership
+    // positions are the settled unit authority; orders only describe listing
+    // availability and must not be mixed into the ownership bar.
+    const total = supply?.issuedUnits ?? 0n;
     const available = asks.reduce((sum, level) => sum + BigInt(level.units), 0n);
     const bestAsk = asks[0] ? BigInt(asks[0].priceMinor) : null;
     const bestBid = bids[0] ? BigInt(bids[0].priceMinor) : null;
@@ -280,17 +289,12 @@ export class TradingService {
     );
     const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
     const notYetIssued = total === 0n;
-    const investorOwned = positions.reduce(
-      (sum, position) =>
-        position.account.type === 'USER' && position.account.userId !== offering?.originatingCollectorUserId
-          ? sum + position.settledUnits
-          : sum,
-      0n,
-    );
-    const treasury = positions.reduce(
-      (sum, position) => (position.account.type === 'TREASURY' ? sum + position.settledUnits : sum),
-      0n,
-    );
+    const ownershipBreakdown = buildPublicOwnershipBreakdown({
+      issuedUnits: total,
+      listedUnits: available,
+      positions,
+      originatingCollectorUserId: offering?.originatingCollectorUserId,
+    });
     return {
       assetId: asset.id,
       currency: policy?.valuationCurrency ?? 'GBP',
@@ -307,15 +311,7 @@ export class TradingService {
       bestBidMinor: bestBid?.toString() ?? null,
       hasImmediateLiquidity: available > 0n,
       marketStatus: market?.status ?? 'CLOSED',
-      ...(offering
-        ? {
-            ownershipBreakdown: {
-              collectorRetainedSlices: offering.retainedUnits.toString(),
-              investorOwnedSlices: investorOwned.toString(),
-              treasurySlices: treasury.toString(),
-            },
-          }
-        : {}),
+      ownershipBreakdown,
     };
   }
 

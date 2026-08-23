@@ -125,6 +125,20 @@ export type OwnershipOrderPreview = {
   projectedRemainingAvailableIfFullyFilled: string | null;
 };
 
+export type OwnershipMarketBreakdownCategory = {
+  key:
+    | "COLLECTOR_RETAINED"
+    | "INVESTOR_OWNED"
+    | "OFFERING_INVENTORY"
+    | "PLATFORM_INVENTORY"
+    | "ESCROWED_SUPPLY"
+    | "EXTERNAL_SUPPLY"
+    | "UNALLOCATED_ISSUED";
+  label: string;
+  units: string;
+  tone: "retained" | "owned" | "available" | "inventory" | "unallocated";
+};
+
 export type OwnershipMarketSummary = {
   assetId: string;
   currency: "GBP" | "USD" | "CAD" | "EUR";
@@ -142,9 +156,16 @@ export type OwnershipMarketSummary = {
   hasImmediateLiquidity: boolean;
   marketStatus: "OPEN" | "CLOSED" | "HALTED";
   ownershipBreakdown?: {
-    collectorRetainedSlices: string;
-    investorOwnedSlices: string;
-    treasurySlices: string;
+    semantics: "SETTLED_OWNERSHIP";
+    categories: OwnershipMarketBreakdownCategory[];
+    reconciles: boolean;
+    issuedUnits: string;
+    categorizedUnits: string;
+    listedAvailability: {
+      units: string;
+      percentage: string;
+      relationship: "SUBSET_OF_OWNERSHIP_BUCKET" | "SEPARATE_INVENTORY";
+    };
   };
 };
 export interface TradingOrderView {
