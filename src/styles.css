@@ -32368,8 +32368,15 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   -webkit-line-clamp: 2;
 }
 
+.asset-detail-page .asset-slice-grade-panel__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
 .asset-detail-page .asset-slice-grade-panel__badge {
-  margin-top: 0.55rem;
+  align-self: start;
+  margin-top: 0;
   padding: 0.25rem 0.4rem;
   font-size: 0.5rem;
 }
@@ -32397,6 +32404,24 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
 
 .asset-detail-page .asset-slice-grade-panel__facts div {
   padding: 0.43rem;
+}
+
+.asset-detail-page .asset-slice-grade-panel__facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.asset-detail-page .asset-slice-grade-panel__facts div,
+.asset-detail-page .asset-slice-grade-panel__facts div:nth-child(odd) {
+  border-left: 1px solid rgb(93 170 165 / 0.14);
+}
+
+.asset-detail-page .asset-slice-grade-panel__facts div:first-child,
+.asset-detail-page .asset-slice-grade-panel__facts div:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.asset-detail-page .asset-slice-grade-panel__facts div:nth-child(n + 4) {
+  border-top: 1px solid rgb(93 170 165 / 0.14);
 }
 
 .asset-detail-page .asset-slice-grade-panel__evidence-toggle {
