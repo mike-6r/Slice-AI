@@ -29169,9 +29169,11 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .account-center-grid > .account-panel--profile,
 .account-center-grid > .account-panel--security { grid-column: span 6; }
 .account-center-grid > .account-panel--access,
+.account-center-grid > .account-panel--identity,
 .account-center-grid > .account-panel--sessions,
 .account-center-grid > .account-panel--linked,
 .account-center-grid > .account-panel--preferences { grid-column: span 4; }
+.account-center-grid > .account-panel { min-width: 0; }
 .account-panel__heading-row > span { display: none; }
 .account-panel--profile .account-profile-grid { margin-top: .75rem; }
 .account-profile-details { display: grid; min-width: 0; gap: .65rem; }
@@ -29202,6 +29204,18 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   .account-center-grid > .account-panel--activity,
   .account-center-grid > .account-panel--data,
   .account-center-grid > .account-panel--danger { grid-column: span 1; }
+}
+@media (max-width: 780px) {
+  .account-panel--identity .account-security-row {
+    grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+    align-items: start;
+    padding-block: 0.35rem;
+  }
+  .account-panel--identity .account-security-row > .account-inline-button {
+    grid-column: 2 / -1;
+    justify-self: start;
+    margin-top: 0.15rem;
+  }
 }
 
 /* Collector workspace clarity pass: keep the essentials visible and group the long-tail record. */
