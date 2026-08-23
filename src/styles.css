@@ -33512,3 +33512,164 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .portfolio-page.portfolio-page--approved .portfolio-kpis .portfolio-summary-kpi:first-child { grid-column: auto; }
   .portfolio-page.portfolio-page--approved .portfolio-performance-summary { grid-template-columns: 1fr 1fr; }
 }
+
+/* Asset detail mockup alignment — final route-scoped geometry. Keep the
+   three-column desktop composition fixed to the reference while allowing the
+   existing authoritative projections to grow naturally on smaller screens. */
+.asset-detail-page .asset-redesign {
+  width: min(calc(100% - clamp(2rem, 6.25vw, 6rem)), 90rem);
+  max-width: 90rem;
+}
+
+.asset-detail-page .asset-redesign-hero {
+  grid-template-columns: minmax(20rem, 0.88fr) minmax(27rem, 0.95fr) minmax(25rem, 1.05fr);
+  grid-template-rows: 20.5rem 14.5rem;
+}
+
+.asset-detail-page .asset-card-stage {
+  top: 0.85rem;
+  bottom: 3.2rem;
+  width: min(46%, 14rem);
+}
+
+.asset-detail-page .asset-reference-identity h1 {
+  max-width: 42rem;
+  font-size: clamp(1.9rem, 2.25vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.asset-detail-page .asset-showcase-footer {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  min-height: 2.75rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  border-top: 1px solid rgb(130 165 172 / 0.16);
+  padding: 0.55rem 0.9rem;
+  background: rgb(2 10 14 / 0.76);
+  color: #9bb5b6;
+  font-size: 0.62rem;
+  backdrop-filter: blur(10px);
+}
+
+.asset-detail-page .asset-showcase-footer__category,
+.asset-detail-page .asset-showcase-footer__side {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-detail-page .asset-showcase-footer__category {
+  justify-self: start;
+  border: 1px solid rgb(166 194 201 / 0.2);
+  border-radius: 999px;
+  padding: 0.32rem 0.62rem;
+  background: rgb(5 13 17 / 0.8);
+  color: #dbeae6;
+  font-weight: 700;
+}
+
+.asset-detail-page .asset-showcase-footer__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.48rem;
+}
+
+.asset-detail-page .asset-showcase-footer__dots button {
+  width: 0.42rem;
+  height: 0.42rem;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: rgb(142 163 168 / 0.42);
+  cursor: pointer;
+}
+
+.asset-detail-page .asset-showcase-footer__dots button.is-active,
+.asset-detail-page .asset-showcase-footer__dots button:hover,
+.asset-detail-page .asset-showcase-footer__dots button:focus-visible {
+  background: #27dca9;
+  box-shadow: 0 0 0 0.2rem rgb(39 220 169 / 0.12);
+}
+
+.asset-detail-page .asset-showcase-footer__side {
+  justify-self: end;
+  color: #c7dcda;
+  text-align: right;
+}
+
+.asset-detail-page .asset-detail-lower-grid {
+  grid-template-columns: minmax(0, 2.35fr) minmax(13.5rem, 0.99fr) minmax(14rem, 0.99fr) minmax(13rem, 0.9fr);
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts div:nth-child(n + 4) {
+  border-top: 0;
+}
+
+.asset-detail-page .asset-similar-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.asset-detail-page .asset-similar-card {
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+}
+
+@media (max-width: 1200px) and (min-width: 901px) {
+  .asset-detail-page .asset-similar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .asset-detail-page .asset-redesign {
+    width: min(calc(100% - 2rem), 54rem);
+  }
+
+  .asset-detail-page .asset-redesign-hero {
+    grid-template-rows: auto;
+  }
+
+  .asset-detail-page .asset-card-stage {
+    width: min(74%, 18.5rem);
+  }
+
+  .asset-detail-page .asset-similar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .asset-detail-page .asset-redesign {
+    width: calc(100% - 1.25rem);
+  }
+
+  .asset-detail-page .asset-reference-identity h1 {
+    font-size: clamp(2rem, 10vw, 2.4rem);
+  }
+
+  .asset-detail-page .asset-showcase-footer {
+    gap: 0.4rem;
+    padding-inline: 0.65rem;
+  }
+
+  .asset-detail-page .asset-showcase-footer__side {
+    font-size: 0.57rem;
+  }
+
+  .asset-detail-page .asset-similar-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

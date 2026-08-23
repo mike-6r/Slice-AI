@@ -268,6 +268,7 @@ function AssetPage() {
           <div className="asset-redesign-media">
             <AssetShowcase
               title={asset.title}
+              categoryLabel={category.label}
               grader={asset.grader}
               gradeScore={asset.gradeScore}
               gradeLabel={asset.gradeLabel}
@@ -275,12 +276,6 @@ function AssetPage() {
               media={media}
               backMedia={backMedia}
             />
-            <p className="asset-media-caption">
-              <span>{backMedia ? "Front & back verified" : "Approved media"}</span>
-              <span className="asset-media-caption__hint">
-                {backMedia ? "Hover or tap to flip the card" : "Public catalogue image"}
-              </span>
-            </p>
           </div>
 
           <section className="asset-reference-identity" aria-labelledby="asset-title">
@@ -715,10 +710,6 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
     value === null ? "—" : Number(value.toFixed(1)).toString();
   const evidence = grade.visualizations.filter((item) => item.url);
   const estimate = grade.overallEstimate === null ? "—" : score(grade.overallEstimate);
-  const range =
-    grade.overallMin !== null && grade.overallMax !== null
-      ? `${score(grade.overallMin)}–${score(grade.overallMax)}`
-      : "—";
   const selected = selectedEvidence === null ? null : evidence[selectedEvidence];
 
   useEffect(() => {
@@ -755,10 +746,6 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           <small>{grade.conditionLabel ?? "AI estimate"}</small>
         </div>
         <div className="asset-slice-grade-panel__facts">
-          <div>
-            <span>Estimate range</span>
-            <strong>{range}</strong>
-          </div>
           <div>
             <span>Centering</span>
             <strong>{score(grade.centeringScore)}</strong>
@@ -901,6 +888,7 @@ function SliceGradeEmptyPanel() {
 
 function AssetShowcase({
   title,
+  categoryLabel,
   grader,
   gradeScore,
   gradeLabel,
@@ -909,6 +897,7 @@ function AssetShowcase({
   backMedia,
 }: {
   title: string;
+  categoryLabel: string;
   grader?: string;
   gradeScore?: number;
   gradeLabel?: string;
@@ -977,6 +966,30 @@ function AssetShowcase({
             {flipped ? "Show front" : "Flip card"}
           </button>
         )}
+      </div>
+      <div className="asset-showcase-footer">
+        <span className="asset-showcase-footer__category">{categoryLabel}</span>
+        <div className="asset-showcase-footer__dots" aria-label="Card side">
+          <button
+            type="button"
+            className={!flipped ? "is-active" : undefined}
+            aria-label="Show front of card"
+            aria-pressed={!flipped}
+            onClick={() => setManualFlip(false)}
+          />
+          {backMedia ? (
+            <button
+              type="button"
+              className={flipped ? "is-active" : undefined}
+              aria-label="Show back of card"
+              aria-pressed={flipped}
+              onClick={() => setManualFlip(true)}
+            />
+          ) : null}
+        </div>
+        <span className="asset-showcase-footer__side">
+          {backMedia ? (flipped ? "Viewing back" : "Viewing front") : "Approved image"}
+        </span>
       </div>
       <span className="sr-only">{title}</span>
     </div>
@@ -1407,7 +1420,7 @@ function SimilarAssets({
   const similarKey = similar.map((item) => item.id).join("|");
   const [start, setStart] = useState(0);
   useEffect(() => setStart(0), [currentId, similarKey]);
-  const pageSize = 3;
+  const pageSize = 6;
   const visibleSimilar = similar.slice(start, start + pageSize);
   const canGoBack = start > 0;
   const canGoForward = start + pageSize < similar.length;
