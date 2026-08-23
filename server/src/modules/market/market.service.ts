@@ -21,6 +21,11 @@ import {
 } from '../submissions/ports/submission-storage.ports';
 import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
 import { selectAuthoritativeSliceValuation } from '../valuation/valuation-projection';
+import {
+  downsampleReferencePoints,
+  calculateMovementBps,
+  type ReferenceHistoryPoint,
+} from './market-reference-metrics';
 
 const ranges = {
   '1D': 1,
@@ -31,6 +36,14 @@ const ranges = {
   ALL: 3650,
 } as const;
 type Range = keyof typeof ranges;
+type MarketHistoryResponsePoint = {
+  id: string;
+  priceMinor: bigint;
+  observedAt: Date;
+  currency: string;
+  source: string;
+  dataStatus: 'DEMO' | 'DELAYED' | 'LIVE' | 'UNAVAILABLE';
+};
 const asMoney = (value: bigint, currency: string) => ({
   minor: value.toString(),
   currency: ['GBP', 'USD', 'CAD', 'EUR'].includes(currency) ? currency : 'GBP',
@@ -146,6 +159,29 @@ export class MarketService {
           orderBy: { observedAt: 'desc' },
           take: 50,
         },
+        marketProviderMappings: {
+          where: { providerCode: 'PRICECHARTING' },
+          select: {
+            providerCode: true,
+            providerExternalId: true,
+            providerUrl: true,
+            status: true,
+            lastSuccessAt: true,
+            lastFailureAt: true,
+            lastFailureCode: true,
+            nextRefreshAt: true,
+            currentPriceMinor: true,
+            currentCurrency: true,
+            currentObservedAt: true,
+            referenceHistoryStartedAt: true,
+            referenceMovement24hBps: true,
+            referenceMovement7dBps: true,
+            referenceMovement30dBps: true,
+            referenceMovement90dBps: true,
+            referenceMovement1yBps: true,
+          },
+          take: 1,
+        },
         submissions: {
           where: { status: 'APPROVED' },
           orderBy: { updatedAt: 'desc' },
@@ -229,34 +265,71 @@ export class MarketService {
   async history(slug: string, range: Range) {
     const asset = await this.asset(slug);
     const from = new Date(Date.now() - ranges[range] * 86_400_000);
-    const points = await this.db.assetValuationPoint.findMany({
+    const referencePoints = await this.db.marketObservation.findMany({
       where: {
         assetId: asset.id,
+        providerCode: 'PRICECHARTING',
+        observationType: 'PRICE_GUIDE',
+        included: true,
         observedAt: { gte: from },
-        ...(this.config.isBeta
-          ? {
-              NOT: [
-                { source: { startsWith: 'STAGING_' } },
-                { source: { startsWith: 'DEMO_' } },
-                { source: { startsWith: 'TEST_' } },
-              ],
-            }
-          : {}),
+        matchQuality: { in: ['EXACT', 'STRONG'] },
       },
       orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
-      take: 366,
+      take: 10_000,
     });
+    const referenceHistory: MarketHistoryResponsePoint[] = referencePoints.map((point) => ({
+      id: point.id,
+      priceMinor: point.priceMinor,
+      observedAt: point.observedAt,
+      currency: point.currency,
+      source: point.providerCode,
+      dataStatus: 'LIVE' as const,
+    }));
+    const movementPoints: ReferenceHistoryPoint[] = referenceHistory.map((point) => ({
+      id: point.id,
+      priceMinor: point.priceMinor,
+      observedAt: point.observedAt,
+    }));
+    const responsePoints: MarketHistoryResponsePoint[] = referenceHistory.length
+      ? downsampleReferencePoints(referenceHistory).map((point) =>
+          referenceHistory.find((candidate) => candidate.id === point.id)!,
+        )
+      : (await this.db.assetValuationPoint.findMany({
+          where: {
+            assetId: asset.id,
+            observedAt: { gte: from },
+            ...(this.config.isBeta
+              ? {
+                  NOT: [
+                    { source: { startsWith: 'STAGING_' } },
+                    { source: { startsWith: 'DEMO_' } },
+                    { source: { startsWith: 'TEST_' } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
+          take: 366,
+        })).map((point) => ({
+          id: point.id,
+          priceMinor: point.estimatedMarketValueMinor,
+          observedAt: point.observedAt,
+          currency: point.currency,
+          source: point.source,
+          dataStatus: status(point.status),
+        }));
     return {
       assetSlug: asset.slug,
       range,
-      points: points.map((point) => ({
+      source: referenceHistory.length ? 'PRICECHARTING' : 'SLICE_VALUATION',
+      movementBps: referenceHistory.length
+        ? calculateMovementBps(movementPoints, ranges[range] * 86_400_000)
+        : null,
+      points: responsePoints.map((point) => ({
         observedAt: asOf(point.observedAt),
-        estimatedMarketValue: asMoney(
-          point.estimatedMarketValueMinor,
-          point.currency,
-        ),
+        estimatedMarketValue: asMoney(point.priceMinor, point.currency),
         source: point.source,
-        dataStatus: status(point.status),
+        dataStatus: point.dataStatus,
       })),
     };
   }
@@ -321,6 +394,29 @@ export class MarketService {
           where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
           take: 50,
+        },
+        marketProviderMappings: {
+          where: { providerCode: 'PRICECHARTING' },
+          select: {
+            providerCode: true,
+            providerExternalId: true,
+            providerUrl: true,
+            status: true,
+            lastSuccessAt: true,
+            lastFailureAt: true,
+            lastFailureCode: true,
+            nextRefreshAt: true,
+            currentPriceMinor: true,
+            currentCurrency: true,
+            currentObservedAt: true,
+            referenceHistoryStartedAt: true,
+            referenceMovement24hBps: true,
+            referenceMovement7dBps: true,
+            referenceMovement30dBps: true,
+            referenceMovement90dBps: true,
+            referenceMovement1yBps: true,
+          },
+          take: 1,
         },
         submissions: {
           where: { status: 'APPROVED' },
@@ -463,6 +559,29 @@ export class MarketService {
               orderBy: { observedAt: 'desc' },
               take: 50,
             },
+            marketProviderMappings: {
+              where: { providerCode: 'PRICECHARTING' },
+              select: {
+                providerCode: true,
+                providerExternalId: true,
+                providerUrl: true,
+                status: true,
+                lastSuccessAt: true,
+                lastFailureAt: true,
+                lastFailureCode: true,
+                nextRefreshAt: true,
+                currentPriceMinor: true,
+                currentCurrency: true,
+                currentObservedAt: true,
+                referenceHistoryStartedAt: true,
+                referenceMovement24hBps: true,
+                referenceMovement7dBps: true,
+                referenceMovement30dBps: true,
+                referenceMovement90dBps: true,
+                referenceMovement1yBps: true,
+              },
+              take: 1,
+            },
             submissions: {
               where: { status: 'APPROVED' },
               orderBy: { updatedAt: 'desc' },
@@ -579,6 +698,29 @@ export class MarketService {
           where: this.publicMarketObservationFilter(),
           orderBy: { observedAt: 'desc' },
           take: 50,
+        },
+        marketProviderMappings: {
+          where: { providerCode: 'PRICECHARTING' },
+          select: {
+            providerCode: true,
+            providerExternalId: true,
+            providerUrl: true,
+            status: true,
+            lastSuccessAt: true,
+            lastFailureAt: true,
+            lastFailureCode: true,
+            nextRefreshAt: true,
+            currentPriceMinor: true,
+            currentCurrency: true,
+            currentObservedAt: true,
+            referenceHistoryStartedAt: true,
+            referenceMovement24hBps: true,
+            referenceMovement7dBps: true,
+            referenceMovement30dBps: true,
+            referenceMovement90dBps: true,
+            referenceMovement1yBps: true,
+          },
+          take: 1,
         },
         submissions: {
           where: { status: 'APPROVED' },
@@ -752,6 +894,25 @@ type PublicAssetRow = {
     observedAt: Date;
     occurredAt: Date | null;
   }>;
+  marketProviderMappings?: Array<{
+    providerCode: string;
+    providerExternalId: string;
+    providerUrl: string | null;
+    status: string;
+    lastSuccessAt: Date | null;
+    lastFailureAt: Date | null;
+    lastFailureCode: string | null;
+    nextRefreshAt: Date | null;
+    currentPriceMinor: bigint | null;
+    currentCurrency: string | null;
+    currentObservedAt: Date | null;
+    referenceHistoryStartedAt: Date | null;
+    referenceMovement24hBps: number | null;
+    referenceMovement7dBps: number | null;
+    referenceMovement30dBps: number | null;
+    referenceMovement90dBps: number | null;
+    referenceMovement1yBps: number | null;
+  }>;
   submissions?: Array<{
     declaredMetadata: unknown;
     preGrades?: PublicPreGrade[];
@@ -782,8 +943,12 @@ type PublicAssetRow = {
     status: string;
   }>;
 };
+type PublicMarketProviderMapping = NonNullable<
+  PublicAssetRow['marketProviderMappings']
+>[number];
 async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
+  const priceChartingMapping = asset.marketProviderMappings?.[0] ?? null;
   const activeSellOrders = asset.tradingOrders ?? [];
   const sliceValuation = selectAuthoritativeSliceValuation(
     asset.valuationDecisions,
@@ -869,6 +1034,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
       market?.lastSuccessfulRefreshAt?.toISOString() ?? null,
     marketSummary: summarizeObservations(asset.marketObservations ?? []),
     marketReference:
+      externalMarketReferenceFromMapping(priceChartingMapping) ??
       externalMarketReferenceFromObservations(asset.marketObservations ?? []) ??
       externalMarketReference(asset.valuationEvidence ?? []),
     sliceGrade: await publicSliceGrade(
@@ -1129,6 +1295,47 @@ function externalMarketReferenceFromObservations(
       observedAt: latest.observedAt.toISOString(),
     },
   };
+}
+
+function externalMarketReferenceFromMapping(mapping: PublicMarketProviderMapping | null) {
+  if (
+    !mapping ||
+    mapping.providerCode !== 'PRICECHARTING' ||
+    mapping.currentPriceMinor === null ||
+    mapping.currentCurrency === null ||
+    mapping.currentObservedAt === null
+  ) {
+    return null;
+  }
+  return {
+    currentListing: {
+      amount: asMoney(mapping.currentPriceMinor, mapping.currentCurrency),
+      source: 'PRICECHARTING',
+      externalReference: mapping.providerExternalId,
+      listingUrl:
+        mapping.providerUrl ??
+        `https://www.pricecharting.com/product?id=${encodeURIComponent(mapping.providerExternalId)}`,
+      observedAt: mapping.currentObservedAt.toISOString(),
+    },
+    movement24hBps: mapping.referenceMovement24hBps,
+    movement7dBps: mapping.referenceMovement7dBps,
+    movement30dBps: mapping.referenceMovement30dBps,
+    movement90dBps: mapping.referenceMovement90dBps,
+    movement1yBps: mapping.referenceMovement1yBps,
+    lastRefreshedAt: mapping.lastSuccessAt?.toISOString() ?? null,
+    historyStartedAt: mapping.referenceHistoryStartedAt?.toISOString() ?? null,
+    freshness: mapping.lastSuccessAt
+      ? freshnessLabel(mapping.lastSuccessAt)
+      : 'UNAVAILABLE',
+  };
+}
+
+function freshnessLabel(lastSuccessAt: Date) {
+  const age = Date.now() - lastSuccessAt.getTime();
+  if (age <= 24 * 60 * 60 * 1000) return 'FRESH';
+  if (age <= 72 * 60 * 60 * 1000) return 'AGING';
+  if (age <= 7 * 24 * 60 * 60 * 1000) return 'STALE';
+  return 'UNAVAILABLE';
 }
 function encodeCursor(id: string) {
   return Buffer.from(JSON.stringify({ id })).toString('base64url');

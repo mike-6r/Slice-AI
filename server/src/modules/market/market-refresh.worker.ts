@@ -20,7 +20,6 @@ export class MarketRefreshWorker implements OnApplicationBootstrap, OnModuleDest
 
   start() {
     if (this.timer || this.stopping) return;
-    void this.run();
     this.timer = setInterval(() => void this.run(), this.config.marketRefreshPollIntervalMs);
     this.timer.unref();
   }

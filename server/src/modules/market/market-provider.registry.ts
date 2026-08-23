@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import {
   CACHE_STORE,
@@ -131,6 +132,22 @@ export class PriceChartingProvider implements MarketDataProvider {
     ) {
       throw new Error('PRICECHARTING_NOT_CONFIGURED');
     }
+    const cacheKey = this.cache
+      ? this.cache.key(
+          'pricecharting-cache',
+          createHash('sha256')
+            .update(JSON.stringify({ resource, params }))
+            .digest('hex'),
+        )
+      : null;
+    if (cacheKey && this.config.priceChartingCacheTtlSeconds) {
+      try {
+        const cached = await this.cache!.get(cacheKey);
+        if (cached) return JSON.parse(cached) as unknown;
+      } catch {
+        // A cache outage must not prevent a provider refresh.
+      }
+    }
     await this.throttle();
     const url = new URL(
       `/api/${resource}`,
@@ -154,7 +171,17 @@ export class PriceChartingProvider implements MarketDataProvider {
       }
       if (response.status === 429) throw new Error('PRICECHARTING_RATE_LIMITED');
       if (!response.ok) throw new Error(`PRICECHARTING_HTTP_${response.status}`);
-      return await response.json();
+      const payload = await response.json();
+      if (cacheKey && this.config.priceChartingCacheTtlSeconds) {
+        try {
+          await this.cache!.set(cacheKey, JSON.stringify(payload), {
+            ttlSeconds: this.config.priceChartingCacheTtlSeconds,
+          });
+        } catch {
+          // A cache outage must not turn a successful provider response into a failure.
+        }
+      }
+      return payload;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('PRICECHARTING_TIMEOUT');

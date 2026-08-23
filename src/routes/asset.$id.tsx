@@ -20,6 +20,7 @@ import {
 } from "@/components/marketplace/marketplace-layout";
 import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import { formatRelativeTime } from "@/lib/finance";
 import {
   formatAvailability,
   formatMinorAmount,
@@ -45,6 +46,51 @@ function formatSourceReference(
   currency: SupportedCurrency,
 ) {
   return `${formatAuthoritativeMoney(valueInMinorUnits, currency, currency, null)} ${currency}`;
+}
+
+type ExternalReferenceProjection = {
+  movement24hBps?: number | null;
+  movement7dBps?: number | null;
+  movement30dBps?: number | null;
+  lastRefreshedAt?: string | null;
+  historyStartedAt?: string | null;
+  freshness?: string;
+};
+
+function ReferenceMovementGrid({ reference }: { reference?: ExternalReferenceProjection }) {
+  if (!reference) return null;
+  const rows = [
+    ["24H", reference.movement24hBps],
+    ["7D", reference.movement7dBps],
+    ["30D", reference.movement30dBps],
+  ] as const;
+  return (
+    <div className="asset-reference-movement" aria-label="PriceCharting reference movement">
+      <div className="asset-reference-movement__heading">
+        <span>Reference movement</span>
+        <small>
+          {reference.lastRefreshedAt
+            ? `Refreshed ${formatRelativeTime(reference.lastRefreshedAt)}`
+            : "Refresh not available"}
+        </small>
+      </div>
+      <div className="asset-reference-movement__grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong className={value === null || value === undefined ? "is-unavailable" : undefined}>
+              {value === null || value === undefined ? "Unavailable" : formatPercent(value / 100)}
+            </strong>
+          </div>
+        ))}
+      </div>
+      {reference.historyStartedAt ? (
+        <small className="asset-reference-movement__started">
+          History collected from {formatDate(reference.historyStartedAt)}
+        </small>
+      ) : null}
+    </div>
+  );
 }
 
 function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecycleProjection }) {
@@ -214,6 +260,7 @@ function AssetPage() {
   const marketReferenceAt =
     assetQuery.data.market?.reference?.currentListing?.observedAt ??
     assetQuery.data.market?.reference?.recentCompletedSale?.observedAt;
+  const externalReference = assetQuery.data.market?.reference;
   const shares = sharePresentation({
     issuedUnits: issuanceQuery.data?.issuedUnits,
     valueMinor: currentValue,
@@ -239,6 +286,10 @@ function AssetPage() {
     : hasTradingHistory && asset.change24hBps !== undefined
       ? formatPercent(asset.change24hBps / 100)
       : "No trading history yet";
+  const referenceMoveLabel =
+    externalReference?.movement24hBps === null || externalReference?.movement24hBps === undefined
+      ? "Unavailable"
+      : formatPercent(externalReference.movement24hBps / 100);
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const category = marketCategoryPresentation(asset.category);
   const displayCurrency = ownershipSummaryQuery.data?.currency ?? currentValueCurrency ?? "GBP";
@@ -333,6 +384,13 @@ function AssetPage() {
                     : "Unavailable"}
                 </strong>
                 <small>{asset.marketReference?.source ?? "No external reference"}</small>
+                {assetQuery.data.market?.reference ? (
+                  <small className="asset-reference-freshness">
+                    {assetQuery.data.market.reference.lastRefreshedAt
+                      ? `Refreshed ${formatRelativeTime(assetQuery.data.market.reference.lastRefreshedAt)}`
+                      : "Refresh not available"}
+                  </small>
+                ) : null}
               </div>
             </div>
           </section>
@@ -408,8 +466,12 @@ function AssetPage() {
           <section className="asset-price-panel" aria-labelledby="history-title">
             <header>
               <div>
-                <p className="asset-section-label">Reference value</p>
-                <h2 id="history-title">Value history</h2>
+                <p className="asset-section-label">
+                  {externalReference ? "PriceCharting reference" : "Reference value"}
+                </p>
+                <h2 id="history-title">
+                  {externalReference ? "Reference history" : "Value history"}
+                </h2>
               </div>
               <div aria-label="History range">
                 {PERIODS.map((value) => (
@@ -439,13 +501,17 @@ function AssetPage() {
                   data={history.map((point) => point.value.amount / 100)}
                   height={150}
                   showAxis
-                  label={`Estimated value history for ${asset.title}`}
+                  label={`${externalReference ? "PriceCharting reference" : "Estimated value"} history for ${asset.title}`}
                 />
               ) : (
                 <div className="asset-empty-history">
                   <span>—</span>
-                  <strong>No market history yet</strong>
-                  <p>History will appear as real market snapshots are collected.</p>
+                  <strong>{externalReference ? "No reference history yet" : "No market history yet"}</strong>
+                  <p>
+                    {externalReference
+                      ? "History will appear as provider observations are collected."
+                      : "History will appear as real market snapshots are collected."}
+                  </p>
                 </div>
               )}
             </div>
@@ -470,7 +536,10 @@ function AssetPage() {
                 label="History points"
                 value={history.length ? String(history.length) : "Not available"}
               />
-              <Stat label="24 hour move" value={marketMoveLabel} />
+              <Stat
+                label={externalReference ? "24H reference move" : "24 hour move"}
+                value={externalReference ? referenceMoveLabel : marketMoveLabel}
+              />
             </div>
           </section>
 
@@ -530,6 +599,7 @@ function AssetPage() {
             ) : (
               <div className="asset-external-panel__empty">No external reference available.</div>
             )}
+            <ReferenceMovementGrid reference={assetQuery.data.market?.reference} />
             <dl className="asset-external-panel__meta">
               <div>
                 <dt>Updated</dt>

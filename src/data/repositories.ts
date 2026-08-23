@@ -1054,6 +1054,17 @@ export type AdminCollectibleDetail = {
       currency: string;
       observedAt: string;
       nextRefreshAt: string | null;
+      status: string;
+      lastSuccessAt: string | null;
+      lastFailureAt: string | null;
+      lastFailureCode: string | null;
+      historyStartedAt: string | null;
+      movement24hBps: number | null;
+      movement7dBps: number | null;
+      movement30dBps: number | null;
+      movement90dBps: number | null;
+      movement1yBps: number | null;
+      observationCount: number;
     } | null;
     floor: { minor: string; currency: string } | null;
     salesAverage: { minor: string; currency: string } | null;

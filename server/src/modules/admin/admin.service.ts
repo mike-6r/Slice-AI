@@ -3881,6 +3881,7 @@ export class AdminService {
         OR: [{ id: reference }, { publicId: reference }, { slug: reference }],
       },
       include: {
+        _count: { select: { marketObservations: true } },
         category: true,
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
@@ -4336,15 +4337,46 @@ export class AdminService {
         asking: listing
           ? { minor: listing.minor, currency: listing.currency }
           : null,
-        reference: marketObservation
+        reference: mapping?.currentPriceMinor !== null && mapping?.currentPriceMinor !== undefined
           ? {
-              provider: marketObservation.providerCode,
-              externalId: marketObservation.providerExternalId,
-              minor: marketObservation.priceMinor.toString(),
-              currency: marketObservation.currency,
-              observedAt: marketObservation.observedAt.toISOString(),
+              provider: mapping.providerCode,
+              externalId: mapping.providerExternalId,
+              minor: mapping.currentPriceMinor.toString(),
+              currency: mapping.currentCurrency ?? marketObservation?.currency ?? 'USD',
+              observedAt: (mapping.currentObservedAt ?? marketObservation?.observedAt ?? new Date()).toISOString(),
               nextRefreshAt: mapping?.nextRefreshAt?.toISOString() ?? null,
+              status: mapping.status,
+              lastSuccessAt: mapping.lastSuccessAt?.toISOString() ?? null,
+              lastFailureAt: mapping.lastFailureAt?.toISOString() ?? null,
+              lastFailureCode: mapping.lastFailureCode,
+              historyStartedAt: mapping.referenceHistoryStartedAt?.toISOString() ?? null,
+              movement24hBps: mapping.referenceMovement24hBps,
+              movement7dBps: mapping.referenceMovement7dBps,
+              movement30dBps: mapping.referenceMovement30dBps,
+              movement90dBps: mapping.referenceMovement90dBps,
+              movement1yBps: mapping.referenceMovement1yBps,
+              observationCount: asset._count.marketObservations,
             }
+          : marketObservation
+            ? {
+                provider: marketObservation.providerCode,
+                externalId: marketObservation.providerExternalId,
+                minor: marketObservation.priceMinor.toString(),
+                currency: marketObservation.currency,
+                observedAt: marketObservation.observedAt.toISOString(),
+                nextRefreshAt: mapping?.nextRefreshAt?.toISOString() ?? null,
+                status: mapping?.status ?? 'UNKNOWN',
+                lastSuccessAt: mapping?.lastSuccessAt?.toISOString() ?? null,
+                lastFailureAt: mapping?.lastFailureAt?.toISOString() ?? null,
+                lastFailureCode: mapping?.lastFailureCode ?? null,
+                historyStartedAt: mapping?.referenceHistoryStartedAt?.toISOString() ?? null,
+                movement24hBps: mapping?.referenceMovement24hBps ?? null,
+                movement7dBps: mapping?.referenceMovement7dBps ?? null,
+                movement30dBps: mapping?.referenceMovement30dBps ?? null,
+                movement90dBps: mapping?.referenceMovement90dBps ?? null,
+                movement1yBps: mapping?.referenceMovement1yBps ?? null,
+                observationCount: asset._count.marketObservations,
+              }
           : null,
         floor: null,
         salesAverage:

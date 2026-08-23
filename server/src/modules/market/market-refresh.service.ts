@@ -6,6 +6,10 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import { MarketProviderRegistry } from './market-provider.registry';
 import type { MarketIdentity, ProviderObservation } from './market-provider.ports';
+import {
+  calculateReferenceMovements,
+  type ReferenceHistoryPoint,
+} from './market-reference-metrics';
 
 const REFRESH_INTERVALS_MS = {
   AUTO_MATCHED: 24 * 60 * 60 * 1000,
@@ -74,8 +78,20 @@ export class MarketRefreshService {
   }
 
   async refreshAsset(assetId: string, now = new Date()) {
+    const asset = await this.db.asset.findUnique({
+      where: { id: assetId },
+      select: { status: true, slug: true },
+    });
+    if (!asset || asset.status !== 'PUBLISHED' || (this.config.isBeta && asset.slug.startsWith('slice-demo-'))) {
+      throw new Error('MARKET_REFRESH_ASSET_NOT_ELIGIBLE');
+    }
     await this.ensureMappings(now, assetId);
-    const mappings = await this.db.marketProviderMapping.findMany({ where: { assetId } });
+    const mappings = await this.db.marketProviderMapping.findMany({
+      where: {
+        assetId,
+        status: { in: ['AUTO_MATCHED', 'STRONG', 'VERIFIED', 'STAFF_CONFIRMED'] },
+      },
+    });
     const cooldownUntil = new Date(now.getTime() + MANUAL_REFRESH_COOLDOWN_MS);
     let queued = 0;
     for (const mapping of mappings) {
@@ -154,7 +170,10 @@ export class MarketRefreshService {
       };
       if (!provider.supports(identity.category)) throw new Error('MARKET_PROVIDER_UNSUPPORTED_CATEGORY');
       const observations = await provider.fetchObservations(identity, job.mapping.providerExternalId);
+      const current = selectCurrentPriceGuide(observations);
+      if (!current) throw new Error('PRICECHARTING_REFERENCE_UNAVAILABLE');
       await this.persistObservations(job.mapping.id, asset.id, observations);
+      await this.updateCurrentReference(job.mapping.id, asset.id, current);
       await this.recordReferenceChange(asset.id, observations, now);
       await this.db.marketProviderMapping.update({
         where: { id: job.mapping.id },
@@ -192,6 +211,54 @@ export class MarketRefreshService {
     if (rows.length) await this.db.marketObservation.createMany({ data: rows, skipDuplicates: true });
   }
 
+  private async updateCurrentReference(
+    mappingId: string,
+    assetId: string,
+    current: ProviderObservation,
+  ) {
+    const history = await this.db.marketObservation.findMany({
+      where: {
+        assetId,
+        mappingId,
+        providerCode: 'PRICECHARTING',
+        providerExternalId: current.providerExternalId,
+        observationType: 'PRICE_GUIDE',
+        currency: current.currency,
+        grader: current.grader ?? null,
+        grade: current.grade ?? null,
+        included: true,
+        matchQuality: { in: ['EXACT', 'STRONG'] },
+      },
+      orderBy: [{ observedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, priceMinor: true, observedAt: true },
+    });
+    const points: ReferenceHistoryPoint[] = history.map((point) => ({
+      id: point.id,
+      priceMinor: point.priceMinor,
+      observedAt: point.observedAt,
+    }));
+    const latest = points.at(-1) ?? {
+      id: 'current',
+      priceMinor: current.priceMinor,
+      observedAt: current.observedAt,
+    };
+    const movements = calculateReferenceMovements(points.length ? points : [latest]);
+    await this.db.marketProviderMapping.update({
+      where: { id: mappingId },
+      data: {
+        currentPriceMinor: latest.priceMinor,
+        currentCurrency: current.currency,
+        currentObservedAt: latest.observedAt,
+        referenceHistoryStartedAt: points[0]?.observedAt ?? latest.observedAt,
+        referenceMovement24hBps: movements['24H'],
+        referenceMovement7dBps: movements['7D'],
+        referenceMovement30dBps: movements['30D'],
+        referenceMovement90dBps: movements['90D'],
+        referenceMovement1yBps: movements['1Y'],
+      },
+    });
+  }
+
   private async recordReferenceChange(assetId: string, current: ProviderObservation[], now: Date) {
     const latest = current.find((item) => item.matchQuality === 'EXACT' || item.matchQuality === 'STRONG');
     if (!latest || latest.priceMinor <= 0n) return;
@@ -221,8 +288,41 @@ export class MarketRefreshService {
       const identityHash = createHash('sha256').update(JSON.stringify({ category: asset.category.slug, year: asset.year, manufacturer: asset.manufacturer, set: asset.collectibleSet?.slug, cardNumber: asset.cardNumber, title: asset.title, grader: asset.gradeScaleEntry?.company.code, grade: asset.gradeScaleEntry?.grade.toString(), variant: asset.edition })).digest('hex');
       try {
         const existing = await this.db.marketProviderMapping.findUnique({ where: { assetId_providerCode: { assetId: asset.id, providerCode } } });
-        const identityChanged = Boolean(existing && (existing.identityHash !== identityHash || existing.providerExternalId !== providerExternalId));
-        await this.db.marketProviderMapping.upsert({ where: { assetId_providerCode: { assetId: asset.id, providerCode } }, create: { id: randomUUID(), assetId: asset.id, providerCode, providerExternalId, providerUrl: parsed.listingUrl, identityHash, nextRefreshAt: now }, update: identityChanged ? { providerExternalId, providerUrl: parsed.listingUrl, identityHash, status: 'AUTO_MATCHED', lastSuccessAt: null, lastFailureAt: null, lastFailureCode: null, cooldownUntil: null, nextRefreshAt: now } : { providerExternalId, providerUrl: parsed.listingUrl, identityHash } });
+      const identityChanged = Boolean(existing && (existing.identityHash !== identityHash || existing.providerExternalId !== providerExternalId));
+      await this.db.marketProviderMapping.upsert({
+        where: { assetId_providerCode: { assetId: asset.id, providerCode } },
+        create: {
+          id: randomUUID(),
+          assetId: asset.id,
+          providerCode,
+          providerExternalId,
+          providerUrl: parsed.listingUrl,
+          identityHash,
+          nextRefreshAt: now,
+        },
+        update: identityChanged
+          ? {
+              providerExternalId,
+              providerUrl: parsed.listingUrl,
+              identityHash,
+              status: 'AUTO_MATCHED',
+              lastSuccessAt: null,
+              lastFailureAt: null,
+              lastFailureCode: null,
+              cooldownUntil: null,
+              nextRefreshAt: now,
+              currentPriceMinor: null,
+              currentCurrency: null,
+              currentObservedAt: null,
+              referenceHistoryStartedAt: null,
+              referenceMovement24hBps: null,
+              referenceMovement7dBps: null,
+              referenceMovement30dBps: null,
+              referenceMovement90dBps: null,
+              referenceMovement1yBps: null,
+            }
+          : { providerExternalId, providerUrl: parsed.listingUrl, identityHash },
+      });
       } catch (error) { if (!isUniqueViolation(error)) throw error; }
     }
   }
@@ -247,6 +347,21 @@ export function freshnessState(now: Date, observedAt: Date): 'FRESH' | 'AGING' |
   return 'UNAVAILABLE';
 }
 
+export function selectCurrentPriceGuide(observations: readonly ProviderObservation[]) {
+  return observations
+    .filter(
+      (observation) =>
+        observation.observationType === 'PRICE_GUIDE' &&
+        observation.priceMinor > 0n &&
+        (observation.matchQuality === 'EXACT' || observation.matchQuality === 'STRONG'),
+    )
+    .sort((left, right) => qualityRank(left.matchQuality) - qualityRank(right.matchQuality))[0];
+}
+
+function qualityRank(value: ProviderObservation['matchQuality']) {
+  return value === 'EXACT' ? 0 : 1;
+}
+
 function safeErrorCode(error: unknown) { return error instanceof Error ? error.message.slice(0, 120) : 'MARKET_REFRESH_FAILED'; }
 function isUniqueViolation(error: unknown) { return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'; }
 function refreshInterval(status: string) {
@@ -257,7 +372,7 @@ function deterministicJitter(assetId: string, intervalMs: number) {
   return Math.floor((digest / 0xffffffff) * Math.min(30 * 60 * 1000, Math.floor(intervalMs * 0.1)));
 }
 function isPermanentFailure(code: string) {
-  return ['PRICECHARTING_AUTH_FAILED', 'PRICECHARTING_INVALID_RESPONSE', 'PRICECHARTING_NOT_CONFIGURED', 'MARKET_PROVIDER_UNSUPPORTED_CATEGORY', 'MARKET_ASSET_NOT_FOUND'].includes(code);
+  return ['PRICECHARTING_AUTH_FAILED', 'PRICECHARTING_INVALID_RESPONSE', 'PRICECHARTING_NOT_CONFIGURED', 'PRICECHARTING_REFERENCE_UNAVAILABLE', 'MARKET_PROVIDER_UNSUPPORTED_CATEGORY', 'MARKET_ASSET_NOT_FOUND'].includes(code);
 }
 function retryDelay(code: string, attempts: number, base: number, max: number) {
   if (code === 'PRICECHARTING_RATE_LIMITED') return Math.min(max, Math.max(base, 5 * 60 * 1000));

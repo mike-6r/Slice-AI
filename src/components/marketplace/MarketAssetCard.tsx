@@ -151,6 +151,11 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
               {asset.marketReference.source ?? "External reference"}
               {asset.marketReference.context ? ` · ${asset.marketReference.context}` : ""}
             </small>
+            {asset.marketReference.movement30dBps !== undefined ? (
+              <small className="market-card-reference-movement">
+                30D {formatPercent(asset.marketReference.movement30dBps / 100)}
+              </small>
+            ) : null}
           </>
         ) : (
           <strong className="market-card-reference-unavailable">Unavailable</strong>

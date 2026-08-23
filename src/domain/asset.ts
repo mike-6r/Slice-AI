@@ -205,6 +205,14 @@ export interface Asset {
     reference?: {
       currentListing?: ExternalMarketObservation;
       recentCompletedSale?: ExternalMarketObservation;
+      movement24hBps?: number | null;
+      movement7dBps?: number | null;
+      movement30dBps?: number | null;
+      movement90dBps?: number | null;
+      movement1yBps?: number | null;
+      lastRefreshedAt?: ISODateTime | null;
+      historyStartedAt?: ISODateTime | null;
+      freshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
     };
   };
 }

@@ -959,9 +959,29 @@ function MarketTab({ item }: { item: Detail }) {
             value={
               item.market.reference?.nextRefreshAt
                 ? date(item.market.reference.nextRefreshAt)
-                : null
+              : null
             }
           />
+          <Field label="Mapping status" value={item.market.reference?.status} />
+          <Field
+            label="Last successful refresh"
+            value={item.market.reference?.lastSuccessAt ? date(item.market.reference.lastSuccessAt) : "Not recorded"}
+          />
+          <Field
+            label="History points"
+            value={item.market.reference ? String(item.market.reference.observationCount) : "0"}
+          />
+          <Field
+            label="30D movement"
+            value={
+              item.market.reference?.movement30dBps === null || item.market.reference?.movement30dBps === undefined
+                ? "Unavailable"
+                : `${(item.market.reference.movement30dBps / 100).toFixed(2)}%`
+            }
+          />
+          {item.market.reference?.lastFailureCode ? (
+            <Field label="Last provider failure" value={item.market.reference.lastFailureCode} />
+          ) : null}
           <Field
             label="Current asking"
             value={

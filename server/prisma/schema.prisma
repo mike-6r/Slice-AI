@@ -1883,6 +1883,15 @@ model MarketProviderMapping {
   lastFailureCode    String?
   cooldownUntil      DateTime?
   nextRefreshAt      DateTime?
+  currentPriceMinor  BigInt?
+  currentCurrency    String?
+  currentObservedAt  DateTime?
+  referenceHistoryStartedAt DateTime?
+  referenceMovement24hBps Int?
+  referenceMovement7dBps  Int?
+  referenceMovement30dBps Int?
+  referenceMovement90dBps Int?
+  referenceMovement1yBps  Int?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   asset              Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)

@@ -35,6 +35,11 @@ export type MarketplaceAsset = {
     currency: SupportedCurrency;
     source?: string;
     context?: string;
+    movement24hBps?: number;
+    movement7dBps?: number;
+    movement30dBps?: number;
+    lastRefreshedAt?: string;
+    freshness?: string;
   };
   media?: Array<{ url: string; alt: string }>;
   sliceGrade?: SliceGrade;
@@ -97,6 +102,11 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
         currency: direct.amount.currency,
         source: direct.source,
         context: direct.externalReference,
+        movement24hBps: asset.market?.reference?.movement24hBps ?? undefined,
+        movement7dBps: asset.market?.reference?.movement7dBps ?? undefined,
+        movement30dBps: asset.market?.reference?.movement30dBps ?? undefined,
+        lastRefreshedAt: asset.market?.reference?.lastRefreshedAt ?? undefined,
+        freshness: asset.market?.reference?.freshness ?? undefined,
       };
     }
     const guide = asset.marketSummary?.priceGuides;

@@ -29,6 +29,7 @@ import type {
   AssetOperationsBoardResponse,
   InitialOfferingProjection,
   InitialOfferingPreview,
+  SupportedCurrency,
 } from "@/data/repositories";
 import type {
   Asset,
@@ -115,6 +116,14 @@ type MarketAssetDto = {
   marketReference: {
     currentListing?: ExternalMarketObservationDto;
     recentCompletedSale?: ExternalMarketObservationDto;
+    movement24hBps?: number | null;
+    movement7dBps?: number | null;
+    movement30dBps?: number | null;
+    movement90dBps?: number | null;
+    movement1yBps?: number | null;
+    lastRefreshedAt?: string | null;
+    historyStartedAt?: string | null;
+    freshness?: string | null;
   } | null;
   marketSummary?: {
     completedSales: MarketObservationSummaryDto | null;
@@ -326,6 +335,14 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
                 ),
               }
             : {}),
+          movement24hBps: value.marketReference.movement24hBps ?? null,
+          movement7dBps: value.marketReference.movement7dBps ?? null,
+          movement30dBps: value.marketReference.movement30dBps ?? null,
+          movement90dBps: value.marketReference.movement90dBps ?? null,
+          movement1yBps: value.marketReference.movement1yBps ?? null,
+          lastRefreshedAt: value.marketReference.lastRefreshedAt as ISODateTime | null,
+          historyStartedAt: value.marketReference.historyStartedAt as ISODateTime | null,
+          freshness: value.marketReference.freshness ?? undefined,
         }
       : undefined,
   },
@@ -3389,7 +3406,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const body = await client.get<{
           points: Array<{
             observedAt: string;
-            estimatedMarketValue: { minor: string; currency: "GBP" };
+            estimatedMarketValue: { minor: string; currency: SupportedCurrency };
           }>;
         }>(`/market/assets/${assetId}/history`, { range: backendRange });
         return body.points.map((point) => ({

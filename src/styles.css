@@ -32204,6 +32204,81 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   }
 }
 
+.asset-detail-page .asset-reference-freshness {
+  display: block;
+  margin-top: 0.28rem;
+  color: #42dfbd;
+  font-size: 0.55rem;
+}
+
+.asset-detail-page .asset-reference-movement {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(139, 168, 178, 0.12);
+}
+
+.asset-detail-page .asset-reference-movement__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #c8dbd8;
+  font-size: 0.58rem;
+  font-weight: 750;
+}
+
+.asset-detail-page .asset-reference-movement__heading small,
+.asset-detail-page .asset-reference-movement__started {
+  color: #849ca4;
+  font-size: 0.51rem;
+  font-weight: 500;
+}
+
+.asset-detail-page .asset-reference-movement__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.asset-detail-page .asset-reference-movement__grid > div {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.45rem;
+  border: 1px solid rgba(139, 168, 178, 0.12);
+  border-radius: 0.42rem;
+  background: rgba(8, 19, 24, 0.54);
+}
+
+.asset-detail-page .asset-reference-movement__grid span {
+  color: #849ca4;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+}
+
+.asset-detail-page .asset-reference-movement__grid strong {
+  color: #42dfbd;
+  font-size: 0.7rem;
+}
+
+.asset-detail-page .asset-reference-movement__grid strong.is-unavailable {
+  color: #849ca4;
+  font-size: 0.56rem;
+}
+
+.asset-detail-page .asset-reference-movement__started {
+  display: block;
+}
+
+@media (max-width: 520px) {
+  .asset-detail-page .asset-reference-movement__heading {
+    display: grid;
+    gap: 0.15rem;
+  }
+}
+
 /* ================================================================
    Marketplace grid and card correction — final route-scoped layer
 
@@ -32355,6 +32430,11 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 .markets-page .market-card-market-grid small,
 .markets-page .market-card-reference small {
   font-size: 0.6rem;
+}
+
+.markets-page .market-card-reference-movement {
+  color: #40dfba;
+  font-weight: 750;
 }
 
 .markets-page .market-card-ownership {
