@@ -87,6 +87,12 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
     this.logger.warn(
       `Twilio Verify request rejected providerCode=${Number.isFinite(code) ? code : 'unknown'} providerStatus=${Number.isFinite(status) ? status : 'unknown'}`,
     );
+    if (code === 21608)
+      return new ServiceUnavailableException({
+        code: 'PHONE_PROVIDER_RESTRICTED',
+        message:
+          'SMS verification is unavailable until the SMS provider account completes its compliance setup.',
+      });
     if (
       status === 429 ||
       [20429, 60203, 60207, 60212, 60245].includes(code)

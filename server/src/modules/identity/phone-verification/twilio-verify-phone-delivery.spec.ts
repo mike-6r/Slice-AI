@@ -208,4 +208,32 @@ describe('TwilioVerifyPhoneDelivery', () => {
       },
     });
   });
+
+  it('surfaces Twilio compliance restrictions without exposing provider detail', async () => {
+    const twilio = client('pending', 'approved');
+    twilio.createVerification.mockRejectedValue({
+      code: 21608,
+      status: 403,
+      message: 'private provider response',
+    });
+    const delivery = new TwilioVerifyPhoneDelivery(config);
+    jest
+      .spyOn(delivery as never, 'createClient')
+      .mockReturnValue(twilio.value as never);
+
+    await expect(
+      delivery.deliver({
+        userId: 'user_123',
+        phoneE164: '+12025550103',
+        purpose: 'PHONE',
+      }),
+    ).rejects.toMatchObject({
+      status: 503,
+      response: {
+        code: 'PHONE_PROVIDER_RESTRICTED',
+        message:
+          'SMS verification is unavailable until the SMS provider account completes its compliance setup.',
+      },
+    });
+  });
 });
