@@ -105,8 +105,28 @@ provider secrets.
 | Existing market history compatibility test | PASS |
 | Frontend typecheck | PASS |
 | Server typecheck | BLOCKED by pre-existing unrelated `portfolio-query.service.spec.ts` literal-widening error |
-| Production build | Pending final deployment run |
-| Controlled staging refresh | Pending authenticated staging operation |
+| Production build | PASS — frontend Vite/SSR and backend Nest builds |
+| Controlled staging refresh | PASS — one supported Umbreon refresh completed |
+
+## Recorded staging result
+
+On 23 August 2026, the existing published Umbreon VMAX mapping (`2513024`)
+was refreshed from the authenticated admin Collectibles → Market panel. One
+`MarketRefreshJob` was queued and completed on its first attempt. The mapping
+projection now reports `202500 USD`, `FRESH`, `-5.89%` over 24H, `-8.98%` over
+7D, and unavailable 30D/90D/1Y ranges because the stored history does not
+contain those real comparison boundaries. The provider observation count stayed
+at eight because the returned values were unchanged and the source fingerprint
+deduplicated them.
+
+A second admin refresh attempt inside the 15-minute cooldown created no second
+job and no second observation. Public detail and `/market/assets/.../history`
+then returned `source: PRICECHARTING`, eight points, the persisted current
+reference, freshness, and truthful movement values. Browser console output had
+only the standard React DevTools informational message; no application errors
+were recorded. The read-only state check confirmed the existing Umbreon
+ownership, order, execution, valuation, and published state remained present;
+the refresh workflow did not create or alter those domains.
 
 ## Controlled staging QA protocol
 
