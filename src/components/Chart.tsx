@@ -142,7 +142,8 @@ function formatBps(value: number | null | undefined) {
 }
 
 function formatAxisLabel(value: number, currency: SupportedCurrency) {
-  const symbol = currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency === "CAD" ? "CA$" : "$";
+  const symbol =
+    currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency === "CAD" ? "CA$" : "$";
   return `${symbol}${Math.round(value).toLocaleString("en-GB")}`;
 }
 
@@ -158,12 +159,11 @@ export function PriceChart({
   // Gradients are referenced by id, so each instance needs its own or charts bleed into each other.
   const gradientId = useId();
   const width = 900;
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   if (data.length < 2) return null;
 
-  const pointsData = data.map((item) =>
-    isPriceChartPoint(item) ? item : { value: item },
-  );
+  const pointsData = data.map((item) => (isPriceChartPoint(item) ? item : { value: item }));
   const values = pointsData.map((item) => item.value);
 
   const rawMin = Math.min(...values);
@@ -186,8 +186,9 @@ export function PriceChart({
   const colour = rising ? "var(--color-positive)" : "var(--color-negative)";
 
   const ticks = [max, min + range * 0.75, min + range * 0.5, min + range * 0.25, min];
-  const axisIndexes = [...new Set([0, Math.floor((pointsData.length - 1) / 2), pointsData.length - 1])];
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const axisIndexes = [
+    ...new Set([0, Math.floor((pointsData.length - 1) / 2), pointsData.length - 1]),
+  ];
   const activePoint = activeIndex === null ? null : pointsData[activeIndex];
   const activeCoordinates = activeIndex === null ? null : points[activeIndex];
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -308,16 +309,24 @@ export function PriceChart({
           <span>{formatTooltipDate(activePoint.timestamp)}</span>
           {activePoint.previousChange !== undefined ? (
             <span>
-              Previous observation: {activePoint.previousChange === null ? "Not available" : `${activePoint.previousChange >= 0 ? "+" : ""}${formatMoney(activePoint.previousChange, currency)}${formatBps(activePoint.previousChangeBps) ? ` (${formatBps(activePoint.previousChangeBps)})` : ""}`}
+              Previous observation:{" "}
+              {activePoint.previousChange === null
+                ? "Not available"
+                : `${activePoint.previousChange >= 0 ? "+" : ""}${formatMoney(activePoint.previousChange, currency)}${formatBps(activePoint.previousChangeBps) ? ` (${formatBps(activePoint.previousChangeBps)})` : ""}`}
             </span>
           ) : null}
           {activePoint.rangeChange !== undefined ? (
             <span>
-              Range start: {activePoint.rangeChange === null ? "Not available" : `${activePoint.rangeChange >= 0 ? "+" : ""}${formatMoney(activePoint.rangeChange, currency)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
+              Range start:{" "}
+              {activePoint.rangeChange === null
+                ? "Not available"
+                : `${activePoint.rangeChange >= 0 ? "+" : ""}${formatMoney(activePoint.rangeChange, currency)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
             </span>
           ) : null}
           {activePoint.source ? <span>{activePoint.source} reference</span> : null}
-          {activePoint.refreshedAt ? <span>Refreshed {formatTooltipDate(activePoint.refreshedAt)}</span> : null}
+          {activePoint.refreshedAt ? (
+            <span>Refreshed {formatTooltipDate(activePoint.refreshedAt)}</span>
+          ) : null}
         </div>
       ) : null}
     </figure>

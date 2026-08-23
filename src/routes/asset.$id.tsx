@@ -305,10 +305,8 @@ function AssetPage() {
     history.percentageChangeBps !== undefined
       ? formatPercent(history.percentageChangeBps / 100)
       : "Not available";
-  const historyStartingValue =
-    history.startingValue ?? referenceHistory[0]?.value ?? null;
-  const historyLatestValue =
-    history.latestValue ?? referenceHistory.at(-1)?.value ?? null;
+  const historyStartingValue = history.startingValue ?? referenceHistory[0]?.value ?? null;
+  const historyLatestValue = history.latestValue ?? referenceHistory.at(-1)?.value ?? null;
   const historyPointCount = history.historyPointCount ?? referenceHistory.length;
   const historyCoverageLabel = formatHistoryCoverage(history.actualCoverageSeconds);
   const historyMovementReason =
@@ -548,10 +546,10 @@ function AssetPage() {
                     refreshedAt: history.lastRefreshedAt,
                   }))}
                   height={190}
-                    showAxis
-                    currency={historyCurrency}
-                    timeRange={period}
-                    label={`External reference value history for ${asset.title}`}
+                  showAxis
+                  currency={historyCurrency}
+                  timeRange={period}
+                  label={`External reference value history for ${asset.title}`}
                 />
               ) : referenceHistory.length === 1 ? (
                 <div className="asset-single-history">
@@ -564,7 +562,10 @@ function AssetPage() {
                     )}
                   </strong>
                   <span>{formatDate(referenceHistory[0]!.timestamp)}</span>
-                  <p>One observation so far. Movement will appear after another real snapshot is collected.</p>
+                  <p>
+                    One observation so far. Movement will appear after another real snapshot is
+                    collected.
+                  </p>
                 </div>
               ) : (
                 <div className="asset-empty-history">
@@ -601,10 +602,7 @@ function AssetPage() {
                     : "Not available"
                 }
               />
-              <Stat
-                label={`${period} move`}
-                value={referenceMoveLabel}
-              />
+              <Stat label={`${period} move`} value={referenceMoveLabel} />
               <Stat
                 label="Observations"
                 value={historyPointCount ? `${historyPointCount}` : "Not available"}
