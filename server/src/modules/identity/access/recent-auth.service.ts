@@ -8,7 +8,8 @@ export class RecentAuthService {
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
   require(actor: Actor): void {
-    const ageMs = Date.now() - actor.authenticatedAt.getTime();
+    const freshness = actor.recentAuthAt ?? actor.authenticatedAt;
+    const ageMs = Date.now() - freshness.getTime();
     if (ageMs > this.config.recentAuthWindowSeconds * 1000) {
       throw new ForbiddenException({
         code: 'RECENT_AUTH_REQUIRED',

@@ -60,6 +60,7 @@ export type Actor = {
   sessionRevokedAt: Date | null;
   sessionRevocationReason: IdentitySession['revocationReason'];
   authenticatedAt: Date;
+  recentAuthAt?: Date | null;
 };
 export type DurableSignupResult = {
   userId: UserId;
@@ -265,6 +266,30 @@ export class AuthService {
     return this.issueLogin(user, requestId, sessionContext);
   }
 
+  async confirmRecentAuth(actor: Actor, password: string, requestId: string) {
+    const user = await this.users.findById(actor.userId);
+    if (!user || !(await this.passwords.verify(user.passwordHash, password))) {
+      throw new UnauthorizedException({
+        code: 'RECENT_AUTH_INVALID',
+        message: 'The password is incorrect.',
+      });
+    }
+    const now = new Date();
+    await this.uow.withinTransaction(async (tx) => {
+      await tx.sessions.markRecentAuth(actor.sessionId as never, now);
+      await tx.audit.append(
+        this.audit(
+          'RECENT_AUTH_CONFIRMED',
+          actor.userId,
+          actor.sessionId as never,
+          requestId,
+          now,
+        ),
+      );
+    });
+    return { confirmedAt: now.toISOString() };
+  }
+
   private async authenticatePassword(input: {
     email: string;
     password: string;
@@ -389,6 +414,7 @@ export class AuthService {
       current.familyId,
       current.authenticatedAt,
       current.userAgent,
+      current.recentAuthAt,
     );
     try {
       await this.uow.withinTransaction(async (tx) => {
@@ -451,6 +477,7 @@ export class AuthService {
       sessionRevokedAt: session.revokedAt,
       sessionRevocationReason: session.revocationReason,
       authenticatedAt: session.authenticatedAt,
+      recentAuthAt: session.recentAuthAt,
     };
   }
 
@@ -854,6 +881,7 @@ export class AuthService {
     familyId: string = randomUUID(),
     authenticatedAt: Date = now,
     userAgent: string | null | undefined = null,
+    recentAuthAt: Date | null = authenticatedAt,
   ) {
     const raw = this.tokens.createOpaqueRefreshToken();
     const value: IdentitySession = {
@@ -865,6 +893,7 @@ export class AuthService {
       replacedBySessionId: null,
       issuedAt: now,
       authenticatedAt,
+      recentAuthAt,
       expiresAt: new Date(
         now.getTime() + this.config.refreshTokenTtlSeconds * 1000,
       ),

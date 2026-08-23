@@ -35,6 +35,14 @@ export type TwoFactorLoginChallenge = {
   resendAvailableAt: string | null;
 };
 
+export type TotpEnrollment = {
+  issuer: string;
+  accountLabel: string;
+  manualEntryKey: string;
+  otpauthUri: string;
+  expiresAt: string;
+};
+
 @Injectable()
 export class TwoFactorService {
   constructor(
@@ -79,7 +87,7 @@ export class TwoFactorService {
     };
   }
 
-  async beginEnrollment(actor: Actor, ip: string, requestId: string) {
+  async beginEnrollment(actor: Actor, ip: string, requestId: string): Promise<TotpEnrollment> {
     this.recentAuth.require(actor);
     await this.abuse.enforce('two-factor-enroll', ip, actor.userId);
     const user = await this.db.user.findUniqueOrThrow({
@@ -123,17 +131,28 @@ export class TwoFactorService {
       accountLabel: user.email,
       manualEntryKey: secret,
       otpauthUri: authenticator.keyuri(user.email, this.config.twoFactorIssuer, secret),
+      expiresAt: new Date(
+        now.getTime() + this.config.twoFactorChallengeTtlSeconds * 1000,
+      ).toISOString(),
     };
   }
 
   async confirmEnrollment(actor: Actor, code: string, ip: string, requestId: string) {
+    this.recentAuth.require(actor);
     await this.abuse.enforce('two-factor-confirm', ip, actor.userId);
     const now = new Date();
     const result = await this.db.withTransaction(async (tx) => {
       const enrollment = await tx.userTwoFactor.findUnique({
         where: { userId: actor.userId },
       });
-      if (!enrollment || enrollment.enabledAt) return null;
+      if (
+        !enrollment ||
+        enrollment.enabledAt ||
+        enrollment.enrollmentStartedAt.getTime() +
+          this.config.twoFactorChallengeTtlSeconds * 1000 <=
+          now.getTime()
+      )
+        return null;
       const valid = await this.isValidCode(
         this.crypto.decrypt(enrollment.secretCiphertext, actor.userId),
         code,
@@ -238,6 +257,7 @@ export class TwoFactorService {
 
   async confirmSmsEnrollment(actor: Actor, code: string, ip: string, requestId: string) {
     this.requireSmsEnabled();
+    this.recentAuth.require(actor);
     const pending = await this.db.userSmsTwoFactor.findUnique({
       where: { userId: actor.userId },
       select: { phoneE164: true, enabledAt: true, enrollmentStartedAt: true },

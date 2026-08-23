@@ -1888,6 +1888,7 @@ export interface AccountRepository {
     accountLabel: string;
     manualEntryKey: string;
     otpauthUri: string;
+    expiresAt: string;
   }>;
   confirmTwoFactorEnrollment(code: string): Promise<{ recoveryCodes: string[] }>;
   beginSmsTwoFactorEnrollment(): Promise<{
@@ -1901,6 +1902,7 @@ export interface AccountRepository {
     code?: string;
     recoveryCode?: string;
   }): Promise<{ disabled: boolean }>;
+  confirmRecentAuth(password: string): Promise<{ confirmedAt: string }>;
   listSessions(): Promise<{
     sessions: Array<{
       reference: string;

@@ -1091,6 +1091,9 @@ model Session {
   replacedBySessionId String?
   issuedAt            DateTime  @default(now())
   authenticatedAt     DateTime  @default(now())
+  /// Password confirmation freshness for sensitive account actions, bound to
+  /// this exact session and separate from the original login timestamp.
+  recentAuthAt        DateTime?
   expiresAt           DateTime
   revokedAt           DateTime?
   revocationReason    String?
@@ -1103,6 +1106,7 @@ model Session {
   @@index([userId, revokedAt])
   @@index([userId, publicId])
   @@index([familyId])
+  @@index([recentAuthAt])
 }
 
 model AccountStatusHistory {

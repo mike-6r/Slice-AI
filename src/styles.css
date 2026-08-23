@@ -2587,6 +2587,50 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+.account-authenticator-setup {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  margin: 0.8rem 0;
+}
+.account-authenticator-setup > svg {
+  width: 10.5rem;
+  height: 10.5rem;
+  border-radius: 0.45rem;
+  background: #fff;
+  padding: 0.3rem;
+}
+.account-authenticator-setup > div {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+}
+.account-authenticator-label {
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+}
+.account-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.7rem 0;
+}
+.account-recovery-actions .account-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.account-recovery-actions svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+@media (max-width: 480px) {
+  .account-authenticator-setup {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+}
 @media (max-width: 640px) {
   .account-discord-link {
     grid-template-columns: 2rem minmax(0, 1fr);

@@ -26,6 +26,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   TWO_FACTOR_SMS_CHALLENGE_FAILED: ['method'],
   CONSENT_ACCEPTED: ['consentTypes', 'termsVersion', 'privacyVersion'],
   AUTH_PASSWORD_CHANGED: ['revokedOtherSessionCount'],
+  RECENT_AUTH_CONFIRMED: [],
   EMAIL_VERIFICATION_DELIVERY_FAILED: [],
   PASSWORD_RESET_REQUESTED: [],
   PASSWORD_RESET_COMPLETED: [],

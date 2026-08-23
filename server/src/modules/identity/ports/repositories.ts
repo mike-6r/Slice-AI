@@ -44,6 +44,7 @@ export interface SessionRepository {
   findByRefreshTokenHash(hash: string): Promise<IdentitySession | null>;
   listActiveByUser(userId: UserId, now: Date): Promise<IdentitySession[]>;
   touchLastUsed(id: SessionId, at: Date): Promise<void>;
+  markRecentAuth(id: SessionId, at: Date): Promise<void>;
   rotate(
     id: SessionId,
     successor: IdentitySession,

@@ -65,6 +65,9 @@ export const passwordChangeSchema = z
     newPassword: password,
   })
   .strict();
+export const recentAuthSchema = z
+  .object({ password: z.string().min(1).max(128) })
+  .strict();
 export const passwordResetRequestSchema = z
   .object({ email: z.string().email().transform(normalizeEmail) })
   .strict();

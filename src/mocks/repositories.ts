@@ -1308,6 +1308,12 @@ export const mockRepositories: AppRepositories = {
         "Two-factor management requires the authoritative API.",
       );
     },
+    async confirmRecentAuth() {
+      throw new ApiError(
+        "FEATURE_UNAVAILABLE",
+        "Recent authentication requires the authoritative API.",
+      );
+    },
     async listSessions() {
       return { sessions: [] };
     },

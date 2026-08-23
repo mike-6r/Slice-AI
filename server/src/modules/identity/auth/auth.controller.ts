@@ -20,6 +20,7 @@ import { Inject } from '@nestjs/common';
 import {
   loginSchema,
   passwordChangeSchema,
+  recentAuthSchema,
   profileUpdateSchema,
   preferencesUpdateSchema,
   activityQuerySchema,
@@ -422,6 +423,24 @@ export class AuthController {
       input,
       request.requestId ?? 'unknown',
       key!,
+    );
+  }
+  @Post('me/security/recent-auth')
+  @UseGuards(AccessTokenGuard)
+  async confirmRecentAuth(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = parse(recentAuthSchema, body);
+    await this.abuse.enforce(
+      'recent-auth',
+      request.ip ?? 'unknown',
+      request.actor!.userId,
+    );
+    return this.auth.confirmRecentAuth(
+      request.actor!,
+      input.password,
+      request.requestId ?? 'unknown',
     );
   }
   private withCookie(result: AuthResult, response: Response) {

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
+  Copy,
   Download,
   KeyRound,
   Landmark,
@@ -19,7 +20,8 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApiError } from "@/api/http-client";
 import { useSession } from "@/auth/use-session";
@@ -51,7 +53,7 @@ const errorCopy = (
   fallback = "We could not complete that action. Please retry.",
 ) =>
   error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED"
-    ? "For your security, sign in again and retry this action."
+    ? "For your security, confirm your password to continue."
     : error instanceof ApiError && error.code === "PHONE_PROVIDER_RESTRICTED"
       ? "SMS verification is temporarily unavailable while the provider completes its compliance setup."
       : error instanceof ApiError
@@ -659,6 +661,8 @@ function SecurityPanel({
   const [mode, setMode] = useState<
     "password" | "phone" | "twofactor" | "sms-twofactor" | "codes" | null
   >(null);
+  const [recentAuthAction, setRecentAuthAction] = useState<(() => void) | null>(null);
+  const requestRecentAuth = (retry: () => void) => setRecentAuthAction(() => retry);
   const sendEmail = useMutation({
     mutationFn: repositories.account.sendEmailVerification,
     onSuccess: refresh,
@@ -736,6 +740,7 @@ function SecurityPanel({
           close={() => setMode(null)}
           refresh={refresh}
           verified={Boolean(phone.data?.verified)}
+          onRecentAuthRequired={requestRecentAuth}
         />
       ) : null}
       {mode === "twofactor" ? (
@@ -744,12 +749,26 @@ function SecurityPanel({
           method={twoFactor.data?.method ?? null}
           close={() => setMode(null)}
           refresh={refresh}
+          onRecentAuthRequired={requestRecentAuth}
         />
       ) : null}
       {mode === "sms-twofactor" ? (
-        <SmsTwoFactorDialog close={() => setMode(null)} refresh={refresh} />
+        <SmsTwoFactorDialog
+          close={() => setMode(null)}
+          refresh={refresh}
+          onRecentAuthRequired={requestRecentAuth}
+        />
       ) : null}
-      {mode === "codes" ? <RecoveryDialog close={() => setMode(null)} /> : null}
+      {mode === "codes" ? (
+        <RecoveryDialog close={() => setMode(null)} onRecentAuthRequired={requestRecentAuth} />
+      ) : null}
+      {recentAuthAction ? (
+        <RecentAuthDialog
+          action={recentAuthAction}
+          close={() => setRecentAuthAction(null)}
+          onConfirmed={() => setRecentAuthAction(null)}
+        />
+      ) : null}
     </Panel>
   );
 }
@@ -852,10 +871,12 @@ function PhoneDialog({
   close,
   refresh,
   verified,
+  onRecentAuthRequired,
 }: {
   close: () => void;
   refresh: () => void;
   verified: boolean;
+  onRecentAuthRequired: (retry: () => void) => void;
 }) {
   const { repositories } = useAppServices();
   const [phone, setPhone] = useState("");
@@ -871,6 +892,10 @@ function PhoneDialog({
       setSent(true);
       setResendAt(result.resendAvailableAt);
     },
+    onError: (error, variables) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => send.mutate(variables));
+    },
   });
   const confirm = useMutation({
     mutationFn: () => repositories.account.confirmPhoneVerification(code),
@@ -884,6 +909,10 @@ function PhoneDialog({
     onSuccess: () => {
       refresh();
       close();
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => remove.mutate());
     },
   });
   useEffect(() => {
@@ -971,11 +1000,13 @@ function TwoFactorDialog({
   method,
   close,
   refresh,
+  onRecentAuthRequired,
 }: {
   enabled: boolean;
   method: "TOTP" | "SMS" | null;
   close: () => void;
   refresh: () => void;
+  onRecentAuthRequired: (retry: () => void) => void;
 }) {
   const { repositories } = useAppServices();
   const [enrollment, setEnrollment] = useState<{
@@ -983,28 +1014,54 @@ function TwoFactorDialog({
     accountLabel: string;
     manualEntryKey: string;
     otpauthUri: string;
+    expiresAt: string;
   } | null>(null);
   const [code, setCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [recovery, setRecovery] = useState<string[] | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const begin = useMutation({
     mutationFn: repositories.account.beginTwoFactorEnrollment,
-    onSuccess: setEnrollment,
+    onSuccess: (result) => {
+      setCode("");
+      setEnrollment(result);
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => begin.mutate());
+    },
   });
   const confirm = useMutation({
     mutationFn: () => repositories.account.confirmTwoFactorEnrollment(code),
     onSuccess: ({ recoveryCodes }) => {
-      setRecovery(recoveryCodes);
+      setRecovery(recoveryCodes.length ? recoveryCodes : null);
       refresh();
+      if (!recoveryCodes.length) close();
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => confirm.mutate());
     },
   });
   const disable = useMutation({
-    mutationFn: (input: { method?: "TOTP" | "SMS"; code?: string }) =>
+    mutationFn: (input: { method?: "TOTP" | "SMS"; code?: string; recoveryCode?: string }) =>
       repositories.account.disableTwoFactor(input),
     onSuccess: () => {
       refresh();
       close();
     },
+    onError: (error, input) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => disable.mutate(input));
+    },
   });
+  useEffect(() => {
+    if (!enrollment) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [enrollment]);
+  const enrollmentExpired = enrollment ? new Date(enrollment.expiresAt).getTime() <= now : false;
   if (recovery)
     return (
       <Dialog
@@ -1014,19 +1071,13 @@ function TwoFactorDialog({
           close();
         }}
       >
-        <p className="account-dialog-note">
-          These codes are shown once. Store them somewhere safe before continuing.
-        </p>
-        <pre className="account-recovery-codes">{recovery.join("\n")}</pre>
-        <button
-          className="account-primary"
-          onClick={() => {
+        <RecoveryCodesBlock
+          codes={recovery}
+          onSaved={() => {
             setRecovery(null);
             close();
           }}
-        >
-          I saved these codes
-        </button>
+        />
       </Dialog>
     );
   if (enabled && method === "SMS")
@@ -1056,22 +1107,46 @@ function TwoFactorDialog({
           className="account-dialog-form"
           onSubmit={(e) => {
             e.preventDefault();
-            disable.mutate({ method: "TOTP", code });
+            disable.mutate(
+              useRecoveryCode ? { method: "TOTP", recoveryCode } : { method: "TOTP", code },
+            );
           }}
         >
           <p className="account-dialog-note">
             Enter a current authenticator code to disable the authenticator-app method.
           </p>
-          <label>
-            Authenticator code
-            <input
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              required
-            />
-          </label>
+          {useRecoveryCode ? (
+            <label>
+              Recovery code
+              <input
+                value={recoveryCode}
+                onChange={(e) => setRecoveryCode(e.target.value)}
+                required
+              />
+            </label>
+          ) : (
+            <label>
+              Authenticator code
+              <input
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            className="account-text-button"
+            onClick={() => {
+              setUseRecoveryCode((value) => !value);
+              setCode("");
+              setRecoveryCode("");
+            }}
+          >
+            {useRecoveryCode ? "Use authenticator code" : "Use a recovery code"}
+          </button>
           {disable.error ? <p className="account-form-error">{errorCopy(disable.error)}</p> : null}
           <button className="account-danger-button" disabled={disable.isPending}>
             Disable two-factor authentication
@@ -1081,17 +1156,19 @@ function TwoFactorDialog({
     );
   return (
     <Dialog title="Set up two-factor authentication" close={close}>
-      {!enrollment ? (
+      {!enrollment || enrollmentExpired ? (
         <>
           <p className="account-dialog-note">
-            Generate a setup key, add it to an authenticator app, then confirm its six-digit code.
+            {enrollmentExpired
+              ? "This setup key expired. Start again to generate a fresh key."
+              : "Scan the QR code with an authenticator app, then confirm its six-digit code."}
           </p>
           <button
             className="account-primary"
             onClick={() => begin.mutate()}
             disabled={begin.isPending}
           >
-            {begin.isPending ? "Preparing…" : "Start setup"}
+            {begin.isPending ? "Preparing…" : enrollmentExpired ? "Start again" : "Start setup"}
           </button>
           {begin.error ? <p className="account-form-error">{errorCopy(begin.error)}</p> : null}
         </>
@@ -1103,11 +1180,24 @@ function TwoFactorDialog({
             confirm.mutate();
           }}
         >
-          <p className="account-dialog-note">Account: {enrollment.accountLabel}</p>
-          <code className="account-manual-key">{enrollment.manualEntryKey}</code>
-          <a className="account-text-button" href={enrollment.otpauthUri}>
-            Open authenticator app
-          </a>
+          <p className="account-dialog-note">
+            Scan this code in your authenticator app. The setup key expires in{" "}
+            {Math.max(1, Math.ceil((new Date(enrollment.expiresAt).getTime() - now) / 60_000))} min.
+          </p>
+          <div className="account-authenticator-setup">
+            <QRCodeSVG value={enrollment.otpauthUri} size={168} level="M" includeMargin />
+            <div>
+              <span className="account-authenticator-label">Can&apos;t scan?</span>
+              <code className="account-manual-key">{enrollment.manualEntryKey}</code>
+              <button
+                type="button"
+                className="account-text-button"
+                onClick={() => void navigator.clipboard?.writeText(enrollment.manualEntryKey)}
+              >
+                <Copy aria-hidden="true" /> Copy setup key
+              </button>
+            </div>
+          </div>
           <label>
             Authenticator code
             <input
@@ -1128,7 +1218,15 @@ function TwoFactorDialog({
   );
 }
 
-function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: () => void }) {
+function SmsTwoFactorDialog({
+  close,
+  refresh,
+  onRecentAuthRequired,
+}: {
+  close: () => void;
+  refresh: () => void;
+  onRecentAuthRequired: (retry: () => void) => void;
+}) {
   const { repositories } = useAppServices();
   const [enrollment, setEnrollment] = useState<{ phone: string; resendAvailableAt: string } | null>(
     null,
@@ -1139,10 +1237,18 @@ function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: ()
   const begin = useMutation({
     mutationFn: repositories.account.beginSmsTwoFactorEnrollment,
     onSuccess: setEnrollment,
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => begin.mutate());
+    },
   });
   const resend = useMutation({
     mutationFn: repositories.account.beginSmsTwoFactorEnrollment,
     onSuccess: setEnrollment,
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => resend.mutate());
+    },
   });
   const confirm = useMutation({
     mutationFn: () => repositories.account.confirmSmsTwoFactorEnrollment(code),
@@ -1150,6 +1256,10 @@ function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: ()
       setRecovery(recoveryCodes.length ? recoveryCodes : null);
       refresh();
       if (!recoveryCodes.length) close();
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => confirm.mutate());
     },
   });
   useEffect(() => {
@@ -1169,19 +1279,13 @@ function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: ()
           close();
         }}
       >
-        <p className="account-dialog-note">
-          These codes are shown once. Store them somewhere safe before continuing.
-        </p>
-        <pre className="account-recovery-codes">{recovery.join("\n")}</pre>
-        <button
-          className="account-primary"
-          onClick={() => {
+        <RecoveryCodesBlock
+          codes={recovery}
+          onSaved={() => {
             setRecovery(null);
             close();
           }}
-        >
-          I saved these codes
-        </button>
+        />
       </Dialog>
     );
   return (
@@ -1246,25 +1350,31 @@ function SmsTwoFactorDialog({ close, refresh }: { close: () => void; refresh: ()
     </Dialog>
   );
 }
-function RecoveryDialog({ close }: { close: () => void }) {
+function RecoveryDialog({
+  close,
+  onRecentAuthRequired,
+}: {
+  close: () => void;
+  onRecentAuthRequired: (retry: () => void) => void;
+}) {
   const { repositories } = useAppServices();
   const [codes, setCodes] = useState<string[] | null>(null);
   const mutation = useMutation({
     mutationFn: repositories.account.regenerateRecoveryCodes,
     onSuccess: ({ recoveryCodes }) => setCodes(recoveryCodes),
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED")
+        onRecentAuthRequired(() => mutation.mutate());
+    },
   });
   return (
     <Dialog title="Regenerate recovery codes" close={close}>
       {codes ? (
-        <>
-          <p className="account-dialog-note">
-            Your old unused codes are now invalid. Save these new codes now.
-          </p>
-          <pre className="account-recovery-codes">{codes.join("\n")}</pre>
-          <button className="account-primary" onClick={close}>
-            I saved these codes
-          </button>
-        </>
+        <RecoveryCodesBlock
+          codes={codes}
+          note="Your old unused codes are now invalid. Save these new codes now."
+          onSaved={close}
+        />
       ) : (
         <>
           <p className="account-dialog-note">This invalidates existing unused recovery codes.</p>
@@ -1280,6 +1390,101 @@ function RecoveryDialog({ close }: { close: () => void }) {
           </button>
         </>
       )}
+    </Dialog>
+  );
+}
+
+function RecoveryCodesBlock({
+  codes,
+  note = "These codes are shown once. Store them somewhere safe before continuing.",
+  onSaved,
+}: {
+  codes: string[];
+  note?: string;
+  onSaved: () => void;
+}) {
+  const copyCodes = async () => {
+    await navigator.clipboard?.writeText(codes.join("\n"));
+  };
+  const downloadCodes = () => {
+    const url = URL.createObjectURL(new Blob([codes.join("\n") + "\n"], { type: "text/plain" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "slice-recovery-codes.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <>
+      <p className="account-dialog-note">{note}</p>
+      <pre className="account-recovery-codes">{codes.join("\n")}</pre>
+      <div className="account-recovery-actions">
+        <button type="button" className="account-text-button" onClick={() => void copyCodes()}>
+          <Copy aria-hidden="true" /> Copy codes
+        </button>
+        <button type="button" className="account-text-button" onClick={downloadCodes}>
+          <Download aria-hidden="true" /> Download
+        </button>
+      </div>
+      <button className="account-primary" onClick={onSaved}>
+        I&apos;ve saved these codes
+      </button>
+    </>
+  );
+}
+
+function RecentAuthDialog({
+  action,
+  close,
+  onConfirmed,
+}: {
+  action: () => void;
+  close: () => void;
+  onConfirmed: () => void;
+}) {
+  const { repositories } = useAppServices();
+  const [password, setPassword] = useState("");
+  const confirm = useMutation({
+    mutationFn: () => repositories.account.confirmRecentAuth(password),
+    onSuccess: () => {
+      onConfirmed();
+      close();
+      action();
+    },
+  });
+  return (
+    <Dialog title="Confirm it's you" close={close}>
+      <form
+        className="account-dialog-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          confirm.mutate();
+        }}
+      >
+        <p className="account-dialog-note">
+          Enter your Slice password to continue this security change. This confirms your current
+          session for the next few minutes.
+        </p>
+        <label>
+          Password
+          <input
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </label>
+        {confirm.error ? (
+          <p className="account-form-error" role="alert">
+            {errorCopy(confirm.error, "That password could not be confirmed.")}
+          </p>
+        ) : null}
+        <button className="account-primary" disabled={confirm.isPending || !password}>
+          {confirm.isPending ? "Confirming…" : "Confirm and continue"}
+        </button>
+      </form>
     </Dialog>
   );
 }
@@ -1879,9 +2084,52 @@ function Dialog({
   close: () => void;
   children: ReactNode;
 }) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, [closeRef]);
   return (
     <div className="account-dialog-backdrop" role="presentation">
-      <section className="account-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <section
+        ref={dialogRef}
+        className="account-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <header>
           <h2>{title}</h2>
           <button type="button" onClick={close} aria-label="Close dialog">

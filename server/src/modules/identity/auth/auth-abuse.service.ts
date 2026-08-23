@@ -39,6 +39,7 @@ export class AuthAbuseService {
       | 'logout-all'
       | 'profile'
       | 'password'
+      | 'recent-auth'
       | 'email-send'
       | 'email-confirm'
       | 'two-factor-enroll'

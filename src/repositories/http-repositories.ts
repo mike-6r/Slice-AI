@@ -460,10 +460,7 @@ const mapTradingOrder = (raw: unknown): TradingOrderView => {
               title: stringField(summary.title, "order.assetSummary.title"),
               category: nullableString(summary.category, "order.assetSummary.category"),
               setName: nullableString(summary.setName, "order.assetSummary.setName"),
-              thumbnailUrl: nullableString(
-                summary.thumbnailUrl,
-                "order.assetSummary.thumbnailUrl",
-              ),
+              thumbnailUrl: nullableString(summary.thumbnailUrl, "order.assetSummary.thumbnailUrl"),
             };
           })()
         : undefined,
@@ -1526,8 +1523,14 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
                   slug: stringField(publicDirectory.slug, "admin user collector directory.slug"),
                   isPublic: Boolean(publicDirectory.isPublic),
                   isFeatured: Boolean(publicDirectory.isFeatured),
-                  featuredAt: nullableString(publicDirectory.featuredAt, "admin user collector directory.featuredAt"),
-                  publishedAt: nullableString(publicDirectory.publishedAt, "admin user collector directory.publishedAt"),
+                  featuredAt: nullableString(
+                    publicDirectory.featuredAt,
+                    "admin user collector directory.featuredAt",
+                  ),
+                  publishedAt: nullableString(
+                    publicDirectory.publishedAt,
+                    "admin user collector directory.publishedAt",
+                  ),
                 }
               : null,
             subscription: subscription
@@ -3587,11 +3590,14 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           CANCEL: "cancel",
           RESUME: "resume",
         } as const;
-        return client.request<import("@/data/repositories").CollectorMembershipActionResult>(`/collector-workspace/subscription/${paths[action]}`, {
-          method: "POST",
-          body: planCode ? { planCode } : undefined,
-          headers: { "Idempotency-Key": crypto.randomUUID() },
-        });
+        return client.request<import("@/data/repositories").CollectorMembershipActionResult>(
+          `/collector-workspace/subscription/${paths[action]}`,
+          {
+            method: "POST",
+            body: planCode ? { planCode } : undefined,
+            headers: { "Idempotency-Key": crypto.randomUUID() },
+          },
+        );
       },
       async listVaults() {
         return client.get<import("@/data/repositories").CollectorVaultProjection[]>(
@@ -4282,6 +4288,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           accountLabel: stringField(value.accountLabel, "twoFactor.accountLabel"),
           manualEntryKey: stringField(value.manualEntryKey, "twoFactor.manualEntryKey"),
           otpauthUri: stringField(value.otpauthUri, "twoFactor.otpauthUri"),
+          expiresAt: stringField(value.expiresAt, "twoFactor.expiresAt"),
         };
       },
       async confirmTwoFactorEnrollment(code) {
@@ -4321,6 +4328,16 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           "two-factor disable",
         );
         return { disabled: booleanField(value.disabled, "twoFactor.disabled") };
+      },
+      async confirmRecentAuth(password) {
+        const value = objectField(
+          await client.request<unknown>("/me/security/recent-auth", {
+            method: "POST",
+            body: { password },
+          }),
+          "recent authentication",
+        );
+        return { confirmedAt: stringField(value.confirmedAt, "recentAuth.confirmedAt") };
       },
       async listSessions() {
         const value = objectField(await client.get<unknown>("/me/sessions"), "sessions");

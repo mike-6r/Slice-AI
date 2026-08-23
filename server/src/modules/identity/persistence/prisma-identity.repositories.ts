@@ -176,6 +176,13 @@ class SessionAdapter implements SessionRepository {
       throw translate(error, 'SESSION_NOT_FOUND');
     }
   }
+  async markRecentAuth(id: SessionId, at: Date) {
+    const changed = await this.db.session.updateMany({
+      where: { id, revokedAt: null, expiresAt: { gt: at } },
+      data: { recentAuthAt: at },
+    });
+    if (changed.count !== 1) throw new RepositoryNotFound('SESSION_NOT_FOUND');
+  }
   async rotate(id: SessionId, successor: IdentitySession, rotatedAt: Date) {
     const changed = await this.db.session.updateMany({
       where: { id, revokedAt: null, expiresAt: { gt: rotatedAt } },

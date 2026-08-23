@@ -25,6 +25,7 @@ const session = (
   replacedBySessionId: null,
   issuedAt: new Date('2026-08-09T11:00:00.000Z'),
   authenticatedAt: actor.authenticatedAt,
+  recentAuthAt: null,
   expiresAt: new Date('2026-09-09T12:00:00.000Z'),
   revokedAt: null,
   revocationReason: null,

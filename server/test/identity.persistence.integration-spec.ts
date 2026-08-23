@@ -113,6 +113,7 @@ describe('identity persistence integration', () => {
       replacedBySessionId: null,
       issuedAt: now,
       authenticatedAt: now,
+      recentAuthAt: now,
       expiresAt: new Date(Date.now() + 60_000),
       revokedAt: null,
       revocationReason: null,

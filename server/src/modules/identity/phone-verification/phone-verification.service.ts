@@ -146,6 +146,8 @@ export class PhoneVerificationService {
         },
       });
       this.assertMutable(user.accountStatus);
+      if (user.phoneE164 && user.phoneE164 !== phoneE164)
+        this.recentAuth?.require(actor);
       if (user.phoneE164 === phoneE164 && user.phoneVerifiedAt)
         return { kind: 'verified' as const };
       if (user.smsTwoFactor?.enabledAt && user.phoneE164 !== phoneE164)

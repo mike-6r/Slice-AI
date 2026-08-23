@@ -14,7 +14,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, API_ORIGIN } from "@/api/http-client";
 import { deriveOnboardingStage } from "@/auth/onboarding-state";
@@ -89,6 +89,7 @@ function OnboardingPage() {
     ReturnType<typeof repositories.account.beginTwoFactorEnrollment>
   > | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [recentAuthRetry, setRecentAuthRetry] = useState<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,6 +163,10 @@ function OnboardingPage() {
       setEnrollment(result);
       setStage("authenticator");
     },
+    onError: (reason) => {
+      if (reason instanceof ApiError && reason.code === "RECENT_AUTH_REQUIRED")
+        setRecentAuthRetry(() => () => beginTotp.mutate());
+    },
   });
   const confirmTotp = useMutation({
     mutationFn: () => repositories.account.confirmTwoFactorEnrollment(totpCode),
@@ -169,6 +174,10 @@ function OnboardingPage() {
       setRecoveryCodes(result.recoveryCodes);
       await refresh();
       setStage("recovery");
+    },
+    onError: (reason) => {
+      if (reason instanceof ApiError && reason.code === "RECENT_AUTH_REQUIRED")
+        setRecentAuthRetry(() => () => confirmTotp.mutate());
     },
   });
   const startCompliance = useMutation({
@@ -385,6 +394,13 @@ function OnboardingPage() {
               onContinue={() => void navigate({ to: returnTo as never })}
             />
           )
+        ) : null}
+        {recentAuthRetry ? (
+          <OnboardingRecentAuthDialog
+            close={() => setRecentAuthRetry(null)}
+            action={recentAuthRetry}
+            onConfirmed={() => setRecentAuthRetry(null)}
+          />
         ) : null}
       </section>
     </main>
@@ -941,6 +957,116 @@ function RecoveryStep({ codes, onSaved }: { codes: string[]; onSaved: () => void
         I&apos;ve saved my codes
       </button>
     </Step>
+  );
+}
+
+function OnboardingRecentAuthDialog({
+  action,
+  close,
+  onConfirmed,
+}: {
+  action: () => void;
+  close: () => void;
+  onConfirmed: () => void;
+}) {
+  const { repositories } = useAppServices();
+  const [password, setPassword] = useState("");
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, [closeRef]);
+  const confirm = useMutation({
+    mutationFn: () => repositories.account.confirmRecentAuth(password),
+    onSuccess: () => {
+      onConfirmed();
+      close();
+      action();
+    },
+  });
+  return (
+    <div className="account-dialog-backdrop" role="presentation">
+      <section
+        ref={dialogRef}
+        className="account-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm it is you"
+      >
+        <header>
+          <h2>Confirm it&apos;s you</h2>
+          <button type="button" onClick={close} aria-label="Close dialog">
+            ×
+          </button>
+        </header>
+        <form
+          className="account-dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirm.mutate();
+          }}
+        >
+          <p className="account-dialog-note">
+            Enter your Slice password to continue this secure setup. Your current session will then
+            be trusted for the next few minutes.
+          </p>
+          <label>
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          {confirm.error ? (
+            <p className="form-error" role="alert">
+              {friendlyError(confirm.error)}
+            </p>
+          ) : null}
+          <button
+            className="primary-action onboarding-cta"
+            disabled={confirm.isPending || !password}
+          >
+            {confirm.isPending ? "Confirming..." : "Confirm and continue"}
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }
 

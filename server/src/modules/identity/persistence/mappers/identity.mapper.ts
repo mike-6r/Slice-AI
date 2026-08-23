@@ -46,6 +46,7 @@ export type PersistedIdentitySession = {
   replacedBySessionId: string | null;
   issuedAt: Date;
   authenticatedAt: Date;
+  recentAuthAt: Date | null;
   expiresAt: Date;
   revokedAt: Date | null;
   revocationReason: string | null;
@@ -147,6 +148,7 @@ export function mapIdentitySession(
       : null,
     issuedAt: asDate(record.issuedAt, 'issuedAt'),
     authenticatedAt: asDate(record.authenticatedAt, 'authenticatedAt'),
+    recentAuthAt: record.recentAuthAt,
     expiresAt: asDate(record.expiresAt, 'expiresAt'),
     revokedAt: record.revokedAt,
     revocationReason: record.revocationReason

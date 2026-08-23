@@ -53,6 +53,7 @@ describe('identity persistence mappers', () => {
         replacedBySessionId: null,
         issuedAt: new Date(),
         authenticatedAt: new Date(),
+        recentAuthAt: null,
         expiresAt: new Date(),
         revokedAt: null,
         revocationReason: 'NOT_A_REASON',

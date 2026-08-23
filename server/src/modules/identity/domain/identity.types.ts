@@ -140,6 +140,7 @@ export interface IdentitySession {
   replacedBySessionId: SessionId | null;
   issuedAt: Date;
   authenticatedAt: Date;
+  recentAuthAt: Date | null;
   expiresAt: Date;
   revokedAt: Date | null;
   revocationReason: SessionRevocationReason | null;

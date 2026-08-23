@@ -815,6 +815,51 @@ describe('authentication HTTP E2E with PostgreSQL and Redis', () => {
     ).toBe(1);
   });
 
+  it('requires server-authoritative recent password confirmation before TOTP enrollment', async () => {
+    const user = await signup(
+      `${runId}-recent-auth@example.test`,
+      `${runId}-recent-auth-signup`,
+      'Recent Auth User',
+      '198.51.100.123',
+    );
+    await prisma.session.updateMany({
+      where: { userId: user.body.user.id },
+      data: { recentAuthAt: new Date(Date.now() - 86_400_000) },
+    });
+    const blocked = await request(app.getHttpServer())
+      .post('/api/v1/me/2fa/enroll')
+      .set('authorization', `Bearer ${user.body.accessToken}`)
+      .set('x-forwarded-for', '198.51.100.124');
+    expectError(blocked, 403, 'RECENT_AUTH_REQUIRED');
+
+    const wrong = await request(app.getHttpServer())
+      .post('/api/v1/me/security/recent-auth')
+      .set('authorization', `Bearer ${user.body.accessToken}`)
+      .set('x-forwarded-for', '198.51.100.125')
+      .send({ password: 'incorrect-password' });
+    expectError(wrong, 401, 'RECENT_AUTH_INVALID');
+
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/v1/me/security/recent-auth')
+      .set('authorization', `Bearer ${user.body.accessToken}`)
+      .set('x-forwarded-for', '198.51.100.126')
+      .send({ password });
+    expect(confirmed.status).toBe(201);
+    expect(confirmed.body.confirmedAt).toEqual(expect.any(String));
+
+    const enrollment = await request(app.getHttpServer())
+      .post('/api/v1/me/2fa/enroll')
+      .set('authorization', `Bearer ${user.body.accessToken}`)
+      .set('x-forwarded-for', '198.51.100.127');
+    expect(enrollment.status).toBe(201);
+    expect(enrollment.body.expiresAt).toEqual(expect.any(String));
+    await expect(
+      prisma.auditEvent.findFirst({
+        where: { actorUserId: user.body.user.id, action: 'RECENT_AUTH_CONFIRMED' },
+      }),
+    ).resolves.toMatchObject({ result: 'SUCCESS' });
+  });
+
   it('enrolls, challenges, recovers, regenerates, and disables TOTP without creating a pre-2FA session', async () => {
     const first = await signup(
       `${runId}-two-factor@example.test`,
