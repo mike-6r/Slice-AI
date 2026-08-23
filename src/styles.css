@@ -35179,3 +35179,68 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid .asset-chart-stage .asset-price-chart,
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid .asset-empty-history { min-height: 0; }
 }
+
+/* Finish the master geometry after the legacy asset-detail passes. The desktop
+   trading rail is intentionally dense enough to fit its assigned span, while
+   the lower reference panels keep every value readable inside the shared row. */
+@media (min-width: 1280px) {
+  .asset-detail-page .asset-redesign > .asset-redesign-hero {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .asset-detail-page .asset-redesign > .asset-readiness-card {
+    padding: 14px 16px;
+  }
+  .asset-detail-page .asset-trading-summary {
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .asset-detail-page .asset-trading-summary dl,
+  .asset-detail-page .asset-trading-summary dl:first-child {
+    padding: 8px 10px;
+  }
+  .asset-detail-page .asset-trading-summary dl:first-child { padding: 10px 12px; }
+  .asset-detail-page .asset-trading-summary dl:first-child dd { font-size: 31px; }
+  .asset-detail-page .asset-trading-availability {
+    margin: 8px 0;
+    padding-top: 6px;
+  }
+  .asset-detail-page .asset-order-actions a,
+  .asset-detail-page .asset-order-actions .is-disabled {
+    min-height: 42px;
+    height: 42px;
+    padding-block: 6px;
+  }
+  .asset-detail-page .asset-ownership-breakdown {
+    margin-top: 8px;
+    padding-top: 8px;
+    padding-bottom: 6px;
+  }
+  .asset-detail-page .asset-ownership-breakdown__legend { margin-top: 6px; }
+  .asset-detail-page .asset-ownership-breakdown__note { margin-top: 4px; }
+  .asset-detail-page .asset-current-position {
+    gap: 8px;
+    margin-top: 8px;
+    padding-block: 6px;
+  }
+  .asset-detail-page .asset-current-position strong { font-size: 18px; }
+  .asset-detail-page .asset-advanced-market-details summary {
+    min-height: 40px;
+    padding-top: 8px;
+  }
+  .asset-detail-page .asset-recent-trades {
+    margin-top: 4px;
+    padding-top: 6px;
+  }
+  .asset-detail-page .asset-recent-trades__table-wrap { margin-top: 4px; }
+  .asset-detail-page .asset-recent-trades__table th,
+  .asset-detail-page .asset-recent-trades__table td { padding-block: 5px; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-external-panel {
+    overflow: auto;
+  }
+  .asset-detail-page .asset-detail-lower-grid .asset-external-panel__meta {
+    padding-top: 8px;
+  }
+  .asset-detail-page .asset-detail-lower-grid .asset-external-panel__meta > div {
+    padding-block: 6px;
+  }
+}
