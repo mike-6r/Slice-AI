@@ -9,12 +9,14 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
+  Layers3,
   LockKeyhole,
   PieChart,
   RotateCw,
+  ShoppingBag,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
 import {
@@ -48,6 +50,33 @@ export const Route = createFileRoute("/asset/$id")({
 
 const PERIODS = ["24H", "7D", "30D", "90D", "1Y", "ALL"] as const;
 const currentUser = "current" as never;
+
+const HOW_IT_WORKS_STEPS = [
+  {
+    number: "01",
+    title: "Slice secures the collectible",
+    copy: "The physical item is checked and placed into the required custody process.",
+    icon: ShieldCheck,
+  },
+  {
+    number: "02",
+    title: "Ownership units are issued",
+    copy: "The collectible is divided into units with a clear supply and price.",
+    icon: Layers3,
+  },
+  {
+    number: "03",
+    title: "Buy your position",
+    copy: "Choose the number of ownership units that fits you.",
+    icon: ShoppingBag,
+  },
+  {
+    number: "04",
+    title: "Track & sell later",
+    copy: "Follow your position in Portfolio and sell when the market is live.",
+    icon: PieChart,
+  },
+] as const;
 
 function formatSourceReference(
   valueInMinorUnits: number | string | bigint,
@@ -464,26 +493,18 @@ function AssetPage() {
             portion and track it in your Portfolio.
           </p>
           <div className="asset-how-it-works__grid">
-            <div>
-              <b>1</b>
-              <h3>Slice secures the collectible</h3>
-              <p>The physical item is checked and placed into the required custody process.</p>
-            </div>
-            <div>
-              <b>2</b>
-              <h3>Ownership units are issued</h3>
-              <p>The collectible is divided into units with a clear supply and price.</p>
-            </div>
-            <div>
-              <b>3</b>
-              <h3>Buy your position</h3>
-              <p>Choose the number of ownership units that fits you.</p>
-            </div>
-            <div>
-              <b>4</b>
-              <h3>Track &amp; sell later</h3>
-              <p>Follow your position in Portfolio and sell when the market is live.</p>
-            </div>
+            {HOW_IT_WORKS_STEPS.map(({ number, title, copy, icon: Icon }) => (
+              <div key={number} className="asset-how-it-works__step">
+                <div className="asset-how-it-works__step-top">
+                  <span className="asset-how-it-works__icon" aria-hidden="true">
+                    <Icon />
+                  </span>
+                  <b aria-label={`Step ${Number(number)}`}>{number}</b>
+                </div>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </div>
+            ))}
           </div>
           <Link className="asset-how-it-works__link" to="/how-it-works">
             Learn how Slice works <ArrowRight aria-hidden="true" />
@@ -956,27 +977,56 @@ function ExternalReference({
 }
 
 function SliceGradePanel({ grade }: { grade: SliceGrade }) {
-  const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const score = (value: number | null) =>
     value === null ? "—" : Number(value.toFixed(1)).toString();
   const evidence = grade.visualizations.filter((item) => item.url);
   const estimate = grade.overallEstimate === null ? "—" : score(grade.overallEstimate);
-  const selected = selectedEvidence === null ? null : evidence[selectedEvidence];
 
   useEffect(() => {
-    if (selectedEvidence === null) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedEvidence(null);
-    };
+    if (!evidenceOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", closeOnEscape);
+
+    const getFocusable = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute("disabled"));
+
+    const keepFocusInside = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEvidenceOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", keepFocusInside);
+    requestAnimationFrame(() => closeRef.current?.focus());
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", keepFocusInside);
+      previouslyFocused?.focus();
     };
-  }, [selectedEvidence]);
+  }, [evidenceOpen]);
+
+  const closeEvidence = () => setEvidenceOpen(false);
 
   return (
     <section className="asset-slice-grade-panel" aria-labelledby="slice-grade-title">
@@ -1023,103 +1073,130 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
           </div>
         </div>
       </div>
-      {evidence.length ? (
-        <>
-          <button
-            type="button"
-            className="asset-slice-grade-panel__evidence-toggle"
-            aria-expanded={evidenceOpen}
-            onClick={() => setEvidenceOpen((current) => !current)}
+      <button
+        type="button"
+        className="asset-slice-grade-panel__evidence-toggle"
+        aria-haspopup="dialog"
+        aria-expanded={evidenceOpen}
+        onClick={() => setEvidenceOpen(true)}
+      >
+        <span>
+          <strong>View grading evidence</strong>
+          <small>
+            {grade.analyzedAt ? `Analysed ${formatDate(grade.analyzedAt)}` : "Supporting images"}
+          </small>
+        </span>
+        <ArrowRight aria-hidden="true" />
+      </button>
+      {!evidence.length ? (
+        <p className="asset-slice-grade-panel__empty">
+          No supporting evidence is available for this grade.
+        </p>
+      ) : null}
+      {grade.warnings.length ? (
+        <p className="asset-slice-grade-panel__note">Review note: {grade.warnings[0]}</p>
+      ) : null}
+      {evidenceOpen ? (
+        <div
+          className="asset-slice-grade-modal"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeEvidence();
+          }}
+        >
+          <div
+            ref={dialogRef}
+            className="asset-slice-grade-modal__dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="slice-grade-evidence-title"
+            aria-describedby="slice-grade-evidence-description"
           >
-            <span>
-              <strong>{evidenceOpen ? "Hide grading evidence" : "View grading evidence"}</strong>
-              <small>
-                {grade.analyzedAt
-                  ? `Analysed ${formatDate(grade.analyzedAt)}`
-                  : "Supporting images"}
-              </small>
-            </span>
-            <ArrowRight aria-hidden="true" />
-          </button>
-          {evidenceOpen ? (
-            <div className="asset-slice-grade-panel__evidence">
-              <div className="asset-slice-grade-panel__evidence-heading">
-                <div>
-                  <strong>Image evidence</strong>
-                  <span>Areas used to form the estimate</span>
-                </div>
+            <header className="asset-slice-grade-modal__header">
+              <div>
+                <p className="asset-section-label">Slice Grade Evidence</p>
+                <h3 id="slice-grade-evidence-title">Supporting evidence for this insight</h3>
               </div>
-              <div className="asset-slice-grade-panel__images">
-                {evidence.map((item, index) => (
-                  <figure key={`${item.side}-${item.type}-${index}`}>
-                    <button
-                      type="button"
-                      className="asset-slice-grade-panel__image-button"
-                      aria-label={`View ${item.side === "FRONT" ? "front" : "back"} card ${item.type} evidence larger`}
-                      onClick={() => setSelectedEvidence(index)}
-                    >
+              <button
+                ref={closeRef}
+                type="button"
+                className="asset-slice-grade-modal__close"
+                aria-label="Close grading evidence"
+                onClick={closeEvidence}
+              >
+                ×
+              </button>
+            </header>
+            <p id="slice-grade-evidence-description" className="asset-slice-grade-modal__intro">
+              Supporting evidence used for this AI-assisted condition insight. Slice Grade is an
+              AI-assisted condition insight and is not an official third-party grading result.
+            </p>
+            <div className="asset-slice-grade-modal__summary">
+              <div>
+                <span>Estimated grade</span>
+                <strong>{estimate}</strong>
+                <small>{grade.conditionLabel ?? "AI estimate"}</small>
+              </div>
+              <div>
+                <span>Analysed</span>
+                <strong>{grade.analyzedAt ? formatDate(grade.analyzedAt) : "Not available"}</strong>
+                <small>Persisted Slice Grade result</small>
+              </div>
+            </div>
+            <div className="asset-slice-grade-modal__scores" aria-label="Grade component scores">
+              {[
+                ["Centering", grade.centeringScore],
+                ["Corners", grade.cornerScore],
+                ["Edges", grade.edgeScore],
+                ["Surface", grade.surfaceScore],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{score(value as number | null)}</strong>
+                </div>
+              ))}
+            </div>
+            {evidence.length ? (
+              <section
+                className="asset-slice-grade-modal__evidence"
+                aria-labelledby="evidence-images-title"
+              >
+                <div className="asset-slice-grade-modal__section-heading">
+                  <div>
+                    <h4 id="evidence-images-title">Image evidence</h4>
+                    <span>Public-safe views used to form the estimate.</span>
+                  </div>
+                  <span>
+                    {evidence.length} {evidence.length === 1 ? "image" : "images"}
+                  </span>
+                </div>
+                <div className="asset-slice-grade-modal__images">
+                  {evidence.map((item, index) => (
+                    <figure key={`${item.side}-${item.type}-${index}`}>
                       <img
                         src={item.url ?? undefined}
                         alt={`${item.side === "FRONT" ? "Front" : "Back"} card ${item.type} evidence`}
                       />
-                      <span aria-hidden="true">View larger</span>
-                    </button>
-                    <figcaption>
-                      {item.side === "FRONT" ? "Front" : "Back"} ·{" "}
-                      {item.type === "centering" ? "Centering" : "Overview"}
-                    </figcaption>
-                  </figure>
-                ))}
+                      <figcaption>
+                        {item.side === "FRONT" ? "Front" : "Back"} ·{" "}
+                        {item.type === "centering" ? "Centering" : "Overview"}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <div className="asset-slice-grade-modal__empty">
+                No supporting evidence is available for this grade.
               </div>
-            </div>
-          ) : null}
-        </>
-      ) : (
-        <p className="asset-slice-grade-panel__empty">
-          Image evidence is not available for this estimate.
-        </p>
-      )}
-      {grade.warnings.length ? (
-        <p className="asset-slice-grade-panel__note">Review note: {grade.warnings[0]}</p>
-      ) : null}
-      {selected?.url ? (
-        <div
-          className="asset-slice-grade-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Expanded Slice Grade evidence"
-          onClick={() => setSelectedEvidence(null)}
-        >
-          <div
-            className="asset-slice-grade-lightbox__content"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="asset-slice-grade-lightbox__header">
-              <div>
-                <p className="asset-section-label">Slice Grade evidence</p>
-                <strong>
-                  {selected.side === "FRONT" ? "Front" : "Back"} ·{" "}
-                  {selected.type === "centering" ? "Centering" : "Overview"}
-                </strong>
-              </div>
-              <button
-                type="button"
-                className="asset-slice-grade-lightbox__close"
-                aria-label="Close enlarged evidence image"
-                onClick={() => setSelectedEvidence(null)}
-              >
-                ×
+            )}
+            {grade.warnings.length ? (
+              <p className="asset-slice-grade-modal__warning">Review note: {grade.warnings[0]}</p>
+            ) : null}
+            <footer className="asset-slice-grade-modal__footer">
+              <button type="button" onClick={closeEvidence}>
+                Close
               </button>
-            </div>
-            <div className="asset-slice-grade-lightbox__image-wrap">
-              <img
-                src={selected.url}
-                alt={`${selected.side === "FRONT" ? "Front" : "Back"} card evidence enlarged`}
-              />
-            </div>
-            <p className="asset-slice-grade-lightbox__hint">
-              Click outside the image or press Escape to close.
-            </p>
+            </footer>
           </div>
         </div>
       ) : null}
