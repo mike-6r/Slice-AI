@@ -33674,6 +33674,19 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   font-size: 0.48rem;
 }
 
+.asset-detail-page .asset-detail-lower-grid .asset-details-panel > .asset-section-label {
+  margin: 0 0 0.25rem;
+  padding: 0;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-details-panel h2 {
+  margin: 0 0 0.35rem;
+}
+
+.asset-detail-page .asset-detail-lower-grid .asset-details-panel > div:not(.asset-section-label) {
+  padding-block: 0.28rem;
+}
+
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span,
 .asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
   display: block;
