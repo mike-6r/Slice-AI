@@ -52,9 +52,11 @@ const errorCopy = (
 ) =>
   error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED"
     ? "For your security, sign in again and retry this action."
-    : error instanceof ApiError
-      ? error.message
-      : fallback;
+    : error instanceof ApiError && error.code === "PHONE_PROVIDER_RESTRICTED"
+      ? "SMS verification is temporarily unavailable while the provider completes its compliance setup."
+      : error instanceof ApiError
+        ? error.message
+        : fallback;
 const date = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
