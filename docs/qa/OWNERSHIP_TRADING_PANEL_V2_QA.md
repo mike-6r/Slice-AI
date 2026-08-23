@@ -1,7 +1,7 @@
 # Slice Ownership & Trading Panel V2 QA
 
-Date: 2026-08-23  
-Deployment: `07b9335`  
+Date: 2026-08-23
+Deployment: `07b9335`
 VPS release: `/opt/slice/releases/20260823-07b9335b451f3a249aa14484b0f02f1a7ed2d5c6`
 
 ## Scope
