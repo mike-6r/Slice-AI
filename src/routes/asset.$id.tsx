@@ -25,7 +25,6 @@ import {
 } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import {
-  effectiveCardFlipState,
   resolveMarketplaceMedia,
 } from "@/components/marketplace/marketplace-layout";
 import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
@@ -1241,9 +1240,17 @@ function AssetShowcase({
   media?: { src: string; alt: string };
   backMedia?: { src: string; alt: string };
 }) {
-  const [manualFlip, setManualFlip] = useState<boolean | null>(null);
-  const [hoverFlip, setHoverFlip] = useState(false);
-  const flipped = effectiveCardFlipState(manualFlip, hoverFlip);
+  const [manualFlip, setManualFlip] = useState(false);
+  const [failedSides, setFailedSides] = useState({ front: false, back: false });
+  const hasBackMedia = Boolean(backMedia && !failedSides.back);
+  const flipped = hasBackMedia && manualFlip;
+
+  const mediaFallback = (side: "front" | "back") => (
+    <div className="asset-showcase-image asset-showcase-image--fallback" role="status">
+      <strong>{side === "front" ? "Front image" : "Back image"}</strong>
+      <span>Approved media unavailable</span>
+    </div>
+  );
 
   return (
     <div className="asset-showcase">
@@ -1263,40 +1270,41 @@ function AssetShowcase({
         </span>
       )}
       <div
-        className={`asset-card-stage${backMedia ? " has-back" : ""}${flipped ? " is-flipped" : ""}`}
-        onMouseEnter={() => {
-          if (backMedia) setHoverFlip(true);
-        }}
-        onMouseLeave={() => {
-          setHoverFlip(false);
-          setManualFlip(null);
-        }}
+        className={`asset-card-stage${hasBackMedia ? " has-back" : ""}${flipped ? " is-flipped" : ""}`}
       >
         <div className="asset-card-flip__inner">
           <div className="asset-card-face asset-card-face--front" aria-hidden={flipped}>
-            {media ? (
-              <img src={media.src} alt={media.alt} />
+            {media && !failedSides.front ? (
+              <img
+                src={media.src}
+                alt={media.alt}
+                onError={() => setFailedSides((current) => ({ ...current, front: true }))}
+              />
             ) : (
-              <div className="asset-showcase-image">Approved media unavailable</div>
+              mediaFallback("front")
             )}
             <span>Front</span>
           </div>
           <div className="asset-card-face asset-card-face--back" aria-hidden={!flipped}>
-            {backMedia ? (
-              <img src={backMedia.src} alt={backMedia.alt} />
+            {backMedia && !failedSides.back ? (
+              <img
+                src={backMedia.src}
+                alt={backMedia.alt}
+                onError={() => setFailedSides((current) => ({ ...current, back: true }))}
+              />
             ) : (
-              <div className="asset-showcase-image">Back image unavailable</div>
+              mediaFallback("back")
             )}
             <span>Back</span>
           </div>
         </div>
-        {backMedia && (
+        {hasBackMedia && (
           <button
             type="button"
             className="asset-card-flip-button"
             aria-pressed={flipped}
             aria-label={flipped ? "Show front of card" : "Show back of card"}
-            onClick={() => setManualFlip((current) => !effectiveCardFlipState(current, hoverFlip))}
+            onClick={() => setManualFlip((current) => !current)}
           >
             <RotateCw aria-hidden="true" />
             {flipped ? "Show front" : "Flip card"}
@@ -1305,15 +1313,15 @@ function AssetShowcase({
       </div>
       <div className="asset-showcase-footer">
         <span className="asset-showcase-footer__category">{categoryLabel}</span>
-        <div className="asset-showcase-footer__dots" aria-label="Card side">
-          <button
-            type="button"
-            className={!flipped ? "is-active" : undefined}
-            aria-label="Show front of card"
-            aria-pressed={!flipped}
-            onClick={() => setManualFlip(false)}
-          />
-          {backMedia ? (
+        {hasBackMedia ? (
+          <div className="asset-showcase-footer__dots" aria-label="Card side">
+            <button
+              type="button"
+              className={!flipped ? "is-active" : undefined}
+              aria-label="Show front of card"
+              aria-pressed={!flipped}
+              onClick={() => setManualFlip(false)}
+            />
             <button
               type="button"
               className={flipped ? "is-active" : undefined}
@@ -1321,10 +1329,13 @@ function AssetShowcase({
               aria-pressed={flipped}
               onClick={() => setManualFlip(true)}
             />
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <span className="asset-showcase-footer__dots-placeholder" aria-hidden="true" />
+        )}
         <span className="asset-showcase-footer__side">
-          {backMedia ? (flipped ? "Viewing back" : "Viewing front") : "Approved image"}
+          <span className="asset-showcase-footer__viewing-label">Viewing</span>{" "}
+          <strong>{flipped ? "back" : "front"}</strong>
         </span>
       </div>
       <span className="sr-only">{title}</span>

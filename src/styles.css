@@ -35525,3 +35525,163 @@ html,
   .asset-slice-grade-modal__scores > div:nth-child(n + 3) { border-top: 1px solid rgb(93 170 165 / 14%); }
   .asset-slice-grade-modal__images img { height: 16rem; }
 }
+
+/* Asset media viewer — keep the existing hero footprint, but let the approved
+   collectible own the stage instead of nesting it inside another framed card. */
+.asset-detail-page .asset-redesign-media .asset-showcase {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 58% 56% at 50% 66%, rgb(39 220 169 / 16%), transparent 72%),
+    radial-gradient(circle at 14% 12%, rgb(118 255 220 / 7%), transparent 34%),
+    linear-gradient(180deg, rgb(5 18 23 / 98%), rgb(2 10 14 / 99%));
+}
+.asset-detail-page .asset-showcase::after {
+  background: radial-gradient(ellipse 46% 27% at 50% 77%, rgb(65 236 191 / 17%), transparent 70%);
+  opacity: .72;
+}
+.asset-detail-page .asset-slab-light { opacity: .38; filter: blur(12px); }
+.asset-detail-page .asset-pedestal { opacity: .24; }
+.asset-detail-page .asset-particles { opacity: .28; }
+
+.asset-detail-page .asset-card-stage {
+  top: 46%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: min(76%, 15.5rem);
+  height: calc(100% - 5rem);
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: translate(-50%, -50%);
+}
+.asset-detail-page .asset-card-flip__inner {
+  border: 0;
+  background: transparent;
+  transition: transform 220ms cubic-bezier(.22, .72, .18, 1);
+}
+.asset-detail-page .asset-card-face {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.asset-detail-page .asset-card-face::after,
+.asset-detail-page .asset-card-face > span { display: none; }
+.asset-detail-page .asset-card-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 1.1rem 1.35rem rgb(0 0 0 / 38%)) drop-shadow(0 0 .9rem rgb(39 220 169 / 10%));
+  transition: filter 220ms ease, transform 220ms ease;
+}
+.asset-detail-page .asset-card-stage:hover .asset-card-face img { transform: scale(1.012); }
+.asset-detail-page .asset-showcase-image--fallback {
+  display: grid;
+  width: min(100%, 15rem);
+  min-height: 11rem;
+  place-content: center;
+  gap: .35rem;
+  border: 1px dashed rgb(132 172 177 / 34%);
+  border-radius: .8rem;
+  padding: 1rem;
+  color: #a9c3c5;
+  background: rgb(4 16 20 / 72%);
+  text-align: center;
+}
+.asset-detail-page .asset-showcase-image--fallback strong { color: #e2f5f0; font-size: .76rem; }
+.asset-detail-page .asset-showcase-image--fallback span { font-size: .66rem; }
+
+.asset-detail-page .asset-card-flip-button {
+  top: .72rem;
+  right: .72rem;
+  min-height: 2.45rem;
+  height: 2.45rem;
+  border-color: rgb(177 250 226 / 25%);
+  border-radius: .7rem;
+  padding: .42rem .7rem;
+  background: rgb(3 17 21 / 82%);
+  font-size: .72rem;
+  transition: border-color 170ms ease, background 170ms ease, color 170ms ease;
+}
+.asset-detail-page .asset-card-flip-button:hover,
+.asset-detail-page .asset-card-flip-button:focus-visible {
+  border-color: rgb(39 220 169 / 72%);
+  background: rgb(9 51 48 / 88%);
+  color: #e7fff7;
+  transform: none;
+}
+.asset-detail-page .asset-card-flip-button svg { width: 1rem; height: 1rem; }
+
+.asset-detail-page .asset-showcase-footer {
+  min-height: 3.25rem;
+  height: 3.25rem;
+  gap: .55rem;
+  padding: 0 .85rem;
+  background: linear-gradient(180deg, rgb(3 13 17 / 84%), rgb(2 10 14 / 96%));
+}
+.asset-detail-page .asset-showcase-footer__category {
+  max-width: 100%;
+  padding: .29rem .58rem;
+  font-size: .62rem;
+}
+.asset-detail-page .asset-showcase-footer__dots { gap: .42rem; }
+.asset-detail-page .asset-showcase-footer__dots button {
+  width: .56rem;
+  height: .56rem;
+  min-width: .56rem;
+  min-height: .56rem;
+  outline-offset: .2rem;
+}
+.asset-detail-page .asset-showcase-footer__dots-placeholder {
+  display: block;
+  width: .56rem;
+  height: .56rem;
+}
+.asset-detail-page .asset-showcase-footer__side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .22rem;
+  font-size: .64rem;
+}
+.asset-detail-page .asset-showcase-footer__viewing-label { color: #8da8aa; }
+.asset-detail-page .asset-showcase-footer__side strong { color: #d1e7e2; font-weight: 700; }
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-card-stage {
+    top: 45%;
+    width: min(82%, 14.5rem);
+    height: calc(100% - 5rem);
+  }
+  .asset-detail-page .asset-card-flip-button {
+    top: .58rem;
+    right: .58rem;
+    min-height: 2.25rem;
+    height: 2.25rem;
+    padding: .36rem .56rem;
+    font-size: .67rem;
+  }
+  .asset-detail-page .asset-card-flip-button svg { width: .9rem; height: .9rem; }
+  .asset-detail-page .asset-showcase-footer {
+    min-height: 3rem;
+    height: 3rem;
+    padding-inline: .68rem;
+  }
+  .asset-detail-page .asset-showcase-footer__category { padding-inline: .48rem; font-size: .58rem; }
+  .asset-detail-page .asset-showcase-footer__side { font-size: .58rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-detail-page .asset-card-flip__inner,
+  .asset-detail-page .asset-card-face img,
+  .asset-detail-page .asset-card-flip-button { transition-duration: .01ms !important; }
+  .asset-detail-page .asset-card-stage:hover .asset-card-face img { transform: none; }
+}
