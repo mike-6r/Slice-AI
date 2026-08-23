@@ -34725,3 +34725,83 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .asset-detail-page .asset-recent-trades { padding-inline: 0; }
   .asset-detail-page .asset-recent-trades header span { font-size: 0.8rem; }
 }
+
+/* Final lower-row cascade. The asset page has legacy visual passes below the
+   first lower-row implementation, so this deliberately remains the terminal
+   source of truth for the four-panel market/data section. */
+.asset-detail-page .asset-detail-lower-grid {
+  grid-template-columns: minmax(0, 2.35fr) minmax(12rem, 0.85fr) minmax(18rem, 1.12fr) minmax(15rem, 0.98fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+.asset-detail-page .asset-detail-lower-grid > * {
+  min-height: 560px;
+  height: 100%;
+}
+.asset-detail-page .asset-detail-lower-grid > .asset-price-panel {
+  grid-template-rows: auto minmax(330px, 1fr) auto;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage,
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage.is-empty {
+  min-height: 330px;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-chart-stage .asset-price-chart,
+.asset-detail-page .asset-detail-lower-grid .asset-empty-history {
+  min-height: 290px;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__header p:not(.asset-section-label) {
+  max-height: none;
+  overflow: visible;
+  font-size: 0.78rem;
+  line-height: 1.52;
+  white-space: normal;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__score span,
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__score small,
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span,
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts span {
+  font-size: 0.6rem;
+  line-height: 1.25;
+}
+.asset-detail-page .asset-detail-lower-grid .asset-slice-grade-panel__facts strong {
+  font-size: 1.02rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 1280px) {
+  .asset-detail-page .asset-detail-lower-grid {
+    grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 0.88fr);
+  }
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel,
+  .asset-detail-page .asset-detail-lower-grid > .asset-external-panel { grid-column: 1 / -1; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-details-panel { grid-column: 1; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-slice-grade-panel { grid-column: 2; }
+}
+
+@media (max-width: 900px) {
+  .asset-detail-page .asset-detail-lower-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel,
+  .asset-detail-page .asset-detail-lower-grid > .asset-external-panel { grid-column: 1 / -1; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-details-panel { grid-column: 1; }
+  .asset-detail-page .asset-detail-lower-grid > .asset-slice-grade-panel { grid-column: 2; }
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-detail-lower-grid { grid-template-columns: minmax(0, 1fr); }
+  .asset-detail-page .asset-detail-lower-grid > * {
+    grid-column: 1 !important;
+    min-height: 0;
+  }
+  .asset-detail-page .asset-detail-lower-grid > .asset-price-panel { min-height: 32rem; }
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage,
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage.is-empty { min-height: 16rem; }
+  .asset-detail-page .asset-detail-lower-grid .asset-chart-stage .asset-price-chart,
+  .asset-detail-page .asset-detail-lower-grid .asset-empty-history { min-height: 14rem; }
+}
