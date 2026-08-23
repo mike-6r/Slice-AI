@@ -131,18 +131,25 @@ Required browser widths remain:
 
 1920×1080, 1440×900, 1280×800, 768×1024, 390×844
 
-Visual staging QA with an authorized disposable account and an authenticator app is pending deployment. It must verify the complete chain without recording any secret, OTP, or recovery code in screenshots or logs.
+Visual staging QA with an authorized disposable account and an authenticator app remains pending. It must verify the complete chain without recording any secret, OTP, or recovery code in screenshots or logs. No authenticated disposable account or authenticator session was available in this pass, so this gate was not represented as passed.
 
 ## Deployment
 
-Deployment is pending the final commit/release gate in this working pass. After commit, push, and staging deployment, record:
+The implementation was committed and pushed as `dbbf01a` (`feat(auth): complete TOTP recent-auth flow`) and deployed to staging on 2026-08-23 as:
 
-- commit and release identifier;
-- /opt/slice/current and /opt/slice/app targets;
-- /health and /ready;
+- release: `/opt/slice/releases/20260823-dbbf01a`;
+- `/opt/slice/current` → `/opt/slice/releases/20260823-dbbf01a`;
+- `/opt/slice/app` → `/opt/slice/releases/20260823-dbbf01a`;
+- `/health`: PASS (`status: ok`);
+- `/ready`: PASS (PostgreSQL and Redis up);
+- `slice-api.service`: active;
+- `slice-web.service`: active.
+
+The remaining release-gate checks are:
+
 - browser QA result at all required widths;
 - zero financial/provider mutations.
 
 ## Release gate
 
-The code path is fail-closed for stale sessions and MFA proof failures. Do not enable SMS or make any provider configuration change as part of this task. Final GO requires the isolated database-backed E2E suite and controlled staging browser QA to be run successfully.
+The code path is fail-closed for stale sessions and MFA proof failures. Do not enable SMS or make any provider configuration change as part of this task. Final GO remains blocked until the isolated database-backed E2E suite can run with its PostgreSQL service and controlled staging browser QA is completed with an authorized disposable account.
