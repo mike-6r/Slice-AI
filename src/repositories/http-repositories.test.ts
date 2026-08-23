@@ -126,6 +126,35 @@ describe("HTTP catalogue mapping", () => {
     ]);
   });
 
+  it("preserves persisted reference-history source and range movement metadata", async () => {
+    const get = vi.fn().mockResolvedValue({
+      source: "PRICECHARTING",
+      movementBps: -124,
+      points: [
+        {
+          observedAt: "2026-08-01T00:00:00.000Z",
+          estimatedMarketValue: { minor: "202500", currency: "USD" },
+        },
+        {
+          observedAt: "2026-08-23T00:00:00.000Z",
+          estimatedMarketValue: { minor: "198000", currency: "USD" },
+        },
+      ],
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    const history = await repositories.market.getPriceHistory("asset-public-id" as never, "30D");
+
+    expect(history).toMatchObject({
+      source: "PRICECHARTING",
+      movementBps: -124,
+      range: "30D",
+    });
+    expect(history).toHaveLength(2);
+    expect(history[0]?.value).toEqual({ amount: 202500, currency: "USD" });
+    expect(get).toHaveBeenCalledWith("/market/assets/asset-public-id/history", { range: "30D" });
+  });
+
   it("maps authoritative trading contracts and uses mutations with idempotency keys", async () => {
     const request = vi
       .fn()

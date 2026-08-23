@@ -3468,18 +3468,25 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           { "24H": "1D", "7D": "7D", "30D": "30D", "90D": "3M", "1Y": "1Y", ALL: "ALL" } as const
         )[range];
         const body = await client.get<{
+          source: "PRICECHARTING" | "SLICE_VALUATION";
+          movementBps: number | null;
           points: Array<{
             observedAt: string;
             estimatedMarketValue: { minor: string; currency: SupportedCurrency };
           }>;
         }>(`/market/assets/${assetId}/history`, { range: backendRange });
-        return body.points.map((point) => ({
+        const points = body.points.map((point) => ({
           timestamp: point.observedAt as ISODateTime,
           value: {
             amount: safeMinor(point.estimatedMarketValue.minor),
             currency: point.estimatedMarketValue.currency,
           },
         }));
+        return Object.assign(points, {
+          source: body.source,
+          movementBps: body.movementBps,
+          range,
+        });
       },
       async getMarketMovers() {
         return (await client.get<{ items: MarketAssetDto[] }>("/market/movers")).items.map(

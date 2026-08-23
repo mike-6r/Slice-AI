@@ -7,6 +7,17 @@ export interface PricePoint {
   timestamp: ISODateTime;
   value: Money;
 }
+/**
+ * A persisted market-history response. The array shape keeps existing chart
+ * consumers compatible while preserving backend movement/source metadata for
+ * surfaces that need to distinguish external reference history from Slice
+ * valuation history.
+ */
+export type PriceHistory = PricePoint[] & {
+  source?: "PRICECHARTING" | "SLICE_VALUATION";
+  movementBps?: number | null;
+  range?: TimeRange;
+};
 export interface ComparableSale {
   id: string;
   occurredAt: ISODateTime;

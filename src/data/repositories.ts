@@ -33,7 +33,6 @@ import type {
   BankConnectionCheckoutSession,
   ConnectPayoutSetup,
   PriceAlert,
-  PricePoint,
   SaleProposal,
   SaleProposalPage,
   AssetSubmission,
@@ -1392,7 +1391,7 @@ export interface AdminRepository {
 
 export interface MarketRepository {
   getMarketSummary(): Promise<MarketSummary>;
-  getPriceHistory(assetId: AssetId, range: TimeRange): Promise<PricePoint[]>;
+  getPriceHistory(assetId: AssetId, range: TimeRange): Promise<import("@/domain").PriceHistory>;
   getMarketMovers(): Promise<Asset[]>;
   getRecentTrades(assetId: AssetId): Promise<import("@/domain").Trade[]>;
   getOrderBook(assetId: AssetId): Promise<OrderBook>;

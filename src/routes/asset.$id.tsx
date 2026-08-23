@@ -268,6 +268,7 @@ function AssetPage() {
   const currentValueCurrency = asset.sliceValuationCurrency;
   const sliceValuationAt = asset.sliceValuationApprovedAt;
   const marketReferenceAt =
+    assetQuery.data.market?.reference?.lastRefreshedAt ??
     assetQuery.data.market?.reference?.currentListing?.observedAt ??
     assetQuery.data.market?.reference?.recentCompletedSale?.observedAt;
   const externalReference = assetQuery.data.market?.reference;
@@ -289,17 +290,16 @@ function AssetPage() {
   const notYetTradeable = lifecycle
     ? lifecycle.phase !== "LIVE"
     : !issuanceQuery.isLoading && issuanceQuery.data === null;
-  const hasTradingHistory = (tradesQuery.data?.length ?? 0) > 0;
-  const historyCurrency = history[0]?.value.currency ?? currentValueCurrency;
-  const marketMoveLabel = notYetTradeable
-    ? "Not available yet"
-    : hasTradingHistory && asset.change24hBps !== undefined
-      ? formatPercent(asset.change24hBps / 100)
-      : "No trading history yet";
+  const hasReferenceHistory =
+    history.source === "PRICECHARTING" ||
+    (history.source === undefined && Boolean(externalReference));
+  const referenceHistory = hasReferenceHistory ? history : [];
+  const historyCurrency =
+    referenceHistory[0]?.value.currency ?? asset.marketReference?.currency ?? currentValueCurrency;
   const referenceMoveLabel =
-    externalReference?.movement24hBps === null || externalReference?.movement24hBps === undefined
-      ? "Unavailable"
-      : formatPercent(externalReference.movement24hBps / 100);
+    hasReferenceHistory && history.movementBps !== null && history.movementBps !== undefined
+      ? formatPercent(history.movementBps / 100)
+      : "Not available";
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const watchlistError = toggleWatchlist.isError;
   const category = marketCategoryPresentation(asset.category);
@@ -480,14 +480,10 @@ function AssetPage() {
 
         <section className="asset-detail-lower-grid">
           <section className="asset-price-panel" aria-labelledby="history-title">
-            <header>
-              <div>
-                <p className="asset-section-label">
-                  {externalReference ? "PriceCharting reference" : "Reference value"}
-                </p>
-                <h2 id="history-title">
-                  {externalReference ? "Reference history" : "Value history"}
-                </h2>
+            <header className="asset-reference-history__header">
+              <div className="asset-history-tabs" aria-label="Reference value history">
+                <span className="is-active">Reference value</span>
+                <h2 id="history-title">Value history</h2>
               </div>
               <div aria-label="History range">
                 {PERIODS.map((value) => (
@@ -503,7 +499,7 @@ function AssetPage() {
               </div>
             </header>
             <div
-              className={`asset-chart-stage${history.length < 2 && !historyQuery.isLoading && !historyQuery.isError ? " is-empty" : ""}`}
+              className={`asset-chart-stage${referenceHistory.length < 2 && !historyQuery.isLoading && !historyQuery.isError ? " is-empty" : ""}`}
             >
               {historyQuery.isLoading ? (
                 <p>Loading historical valuations…</p>
@@ -511,25 +507,19 @@ function AssetPage() {
                 <button type="button" onClick={() => void historyQuery.refetch()}>
                   Retry history
                 </button>
-              ) : history.length >= 2 ? (
+              ) : referenceHistory.length >= 2 ? (
                 <PriceChart
                   className="asset-price-chart"
-                  data={history.map((point) => point.value.amount / 100)}
-                  height={150}
+                  data={referenceHistory.map((point) => point.value.amount / 100)}
+                  height={190}
                   showAxis
-                  label={`${externalReference ? "PriceCharting reference" : "Estimated value"} history for ${asset.title}`}
+                  label={`External reference value history for ${asset.title}`}
                 />
               ) : (
                 <div className="asset-empty-history">
                   <span>—</span>
-                  <strong>
-                    {externalReference ? "No reference history yet" : "No market history yet"}
-                  </strong>
-                  <p>
-                    {externalReference
-                      ? "History will appear as provider observations are collected."
-                      : "History will appear as real market snapshots are collected."}
-                  </p>
+                  <strong>No market history yet</strong>
+                  <p>History will appear as real market snapshots are collected.</p>
                 </div>
               )}
             </div>
@@ -537,27 +527,28 @@ function AssetPage() {
               <Stat
                 label="Starting value"
                 value={
-                  history[0]
-                    ? formatCurrency(history[0].value.amount, { currency: historyCurrency })
+                  referenceHistory[0]
+                    ? formatCurrency(referenceHistory[0].value.amount, {
+                        currency: historyCurrency,
+                      })
                     : "Not available"
                 }
               />
               <Stat
                 label="Latest value"
                 value={
-                  history.at(-1)
-                    ? formatCurrency(history.at(-1)!.value.amount, { currency: historyCurrency })
+                  referenceHistory.at(-1)
+                    ? formatCurrency(referenceHistory.at(-1)!.value.amount, {
+                        currency: historyCurrency,
+                      })
                     : "Not available"
                 }
               />
               <Stat
                 label="History points"
-                value={history.length ? String(history.length) : "Not available"}
+                value={referenceHistory.length ? String(referenceHistory.length) : "Not available"}
               />
-              <Stat
-                label={externalReference ? "24H reference move" : "24 hour move"}
-                value={externalReference ? referenceMoveLabel : marketMoveLabel}
-              />
+              <Stat label="24 hour move" value={referenceMoveLabel} />
             </div>
           </section>
 
@@ -573,19 +564,19 @@ function AssetPage() {
             </div>
             <div>
               <span>Set</span>
-              <strong>{asset.setName ?? "Unavailable"}</strong>
+              <strong>{asset.setName ?? "—"}</strong>
             </div>
             <div>
               <span>Year</span>
-              <strong>{asset.year ?? "Unavailable"}</strong>
+              <strong>{asset.year ?? "—"}</strong>
             </div>
             <div>
               <span>Card number</span>
-              <strong>{assetQuery.data.details.card?.cardNumber ?? "Unavailable"}</strong>
+              <strong>{assetQuery.data.details.card?.cardNumber ?? "—"}</strong>
             </div>
             <div>
               <span>Condition</span>
-              <strong>{condition}</strong>
+              <strong>{condition || "—"}</strong>
             </div>
           </section>
 
@@ -615,13 +606,24 @@ function AssetPage() {
                 <small>{asset.marketReference.context ?? "Observed reference"}</small>
               </div>
             ) : (
-              <div className="asset-external-panel__empty">No external reference available.</div>
+              <div className="asset-external-panel__empty">
+                <strong>Unavailable</strong>
+                <span>No external reference</span>
+              </div>
             )}
             <ReferenceMovementGrid reference={assetQuery.data.market?.reference} />
             <dl className="asset-external-panel__meta">
               <div>
                 <dt>Updated</dt>
-                <dd>{marketReferenceAt ? formatDate(marketReferenceAt) : "Unavailable"}</dd>
+                <dd>{marketReferenceAt ? formatDate(marketReferenceAt) : "—"}</dd>
+              </div>
+              <div>
+                <dt>Slice valuation</dt>
+                <dd>
+                  {currentValue === undefined
+                    ? "—"
+                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
+                </dd>
               </div>
             </dl>
           </section>
@@ -890,12 +892,19 @@ function SliceGradePanel({ grade }: { grade: SliceGrade }) {
             condition and is not an official grading result.
           </p>
         </div>
-        <span className="asset-slice-grade-panel__badge">Supporting evidence</span>
+        {evidence.length ? (
+          <span className="asset-slice-grade-panel__badge">Supporting evidence</span>
+        ) : null}
       </header>
       <div className="asset-slice-grade-panel__summary">
         <div className="asset-slice-grade-panel__score">
           <span>Estimated grade</span>
-          <strong>{estimate}</strong>
+          <div
+            className="asset-slice-grade-panel__emblem"
+            aria-label={`Estimated Slice Grade ${estimate}`}
+          >
+            <strong>{estimate}</strong>
+          </div>
           <small>{grade.conditionLabel ?? "AI estimate"}</small>
         </div>
         <div className="asset-slice-grade-panel__facts">
