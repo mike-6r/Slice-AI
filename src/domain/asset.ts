@@ -159,6 +159,11 @@ export interface Asset {
   grade?: Grade;
   certification?: Certification;
   verification?: VerificationRecord;
+  /** Safe public projection used by customer-facing trust surfaces. */
+  publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
+  publication?: { status: string; asOf: ISODateTime | null };
+  custody?: { status: string; asOf: ISODateTime } | null;
+  insurance?: { status: string; expiresAt: ISODateTime } | null;
   vault?: VaultRecord;
   /** Not exposed by the public market API until ownership is implemented. */
   ownershipAvailableBps?: BasisPoints;

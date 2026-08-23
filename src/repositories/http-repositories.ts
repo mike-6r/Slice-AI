@@ -85,6 +85,10 @@ type MarketAssetDto = {
   cardNumber: string | null;
   description: string | null;
   conditionLabel?: string | null;
+  publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
+  publication?: { status: string; asOf: string | null } | null;
+  custody?: { status: string; asOf: string } | null;
+  insurance?: { status: string; expiresAt: string } | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
   sliceGrade?: SliceGrade | null;
   certificationNumber?: string;
@@ -264,6 +268,16 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     },
   },
   conditionLabel: value.conditionLabel ?? undefined,
+  publicVerificationStatus: value.publicVerificationStatus,
+  publication: value.publication
+    ? { status: value.publication.status, asOf: value.publication.asOf as ISODateTime | null }
+    : undefined,
+  custody: value.custody
+    ? { status: value.custody.status, asOf: value.custody.asOf as ISODateTime }
+    : null,
+  insurance: value.insurance
+    ? { status: value.insurance.status, expiresAt: value.insurance.expiresAt as ISODateTime }
+    : null,
   status: "listed",
   media: (value.media ?? []).map((item, index) => ({
     id: item.id,

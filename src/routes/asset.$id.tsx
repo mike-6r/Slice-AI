@@ -2,17 +2,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   Bookmark,
   CheckCircle2,
   ChevronRight,
   Info,
+  LockKeyhole,
+  PieChart,
   RotateCw,
+  ShieldCheck,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
-import { toMarketplaceAsset } from "@/components/marketplace/market-api-presentation";
+import {
+  toMarketplaceAsset,
+  type MarketplaceAsset,
+} from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import {
   effectiveCardFlipState,
@@ -78,7 +85,9 @@ function ReferenceMovementGrid({ reference }: { reference?: ExternalReferencePro
         {rows.map(([label, value]) => (
           <div key={label}>
             <span>{label}</span>
-            <strong className={value === null || value === undefined ? "is-unavailable" : undefined}>
+            <strong
+              className={value === null || value === undefined ? "is-unavailable" : undefined}
+            >
               {value === null || value === undefined ? "Unavailable" : formatPercent(value / 100)}
             </strong>
           </div>
@@ -254,9 +263,9 @@ function AssetPage() {
   const lifecycle = asset.marketLifecycle;
   const initialOffering = asset.initialOffering;
   const history = historyQuery.data ?? [];
-  const currentValue = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
-  const currentValueCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
-  const sliceValuationAt = asset.sliceValuationApprovedAt ?? asset.asOf;
+  const currentValue = asset.sliceValuationAmountMinor;
+  const currentValueCurrency = asset.sliceValuationCurrency;
+  const sliceValuationAt = asset.sliceValuationApprovedAt;
   const marketReferenceAt =
     assetQuery.data.market?.reference?.currentListing?.observedAt ??
     assetQuery.data.market?.reference?.recentCompletedSale?.observedAt;
@@ -291,6 +300,7 @@ function AssetPage() {
       ? "Unavailable"
       : formatPercent(externalReference.movement24hBps / 100);
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
+  const watchlistError = toggleWatchlist.isError;
   const category = marketCategoryPresentation(asset.category);
   const displayCurrency = ownershipSummaryQuery.data?.currency ?? currentValueCurrency ?? "GBP";
   const condition = asset.conditionLabel ?? asset.grade ?? "Raw / Ungraded";
@@ -339,6 +349,11 @@ function AssetPage() {
                 onClick={handleWatch}
               />
             </div>
+            {watchlistError ? (
+              <p className="asset-watch-error" role="status">
+                Watchlist could not be updated. Please try again.
+              </p>
+            ) : null}
             <h1 id="asset-title">{asset.title}</h1>
             <p className="asset-page-subtitle">
               {[category.label, asset.setName, asset.cardNumber, condition, asset.year]
@@ -367,11 +382,7 @@ function AssetPage() {
                     ? "Unavailable"
                     : formatCurrency(currentValue, { currency: currentValueCurrency })}
                 </strong>
-                <small>
-                  {sliceValuationAt
-                    ? `Approved ${formatDate(sliceValuationAt)}`
-                    : "Authoritative Slice value"}
-                </small>
+                {sliceValuationAt ? <small>Approved {formatDate(sliceValuationAt)}</small> : null}
               </div>
               <div>
                 <span className="asset-section-label">External reference</span>
@@ -394,72 +405,75 @@ function AssetPage() {
               </div>
             </div>
           </section>
+        </section>
 
-          <section className="asset-readiness-card" aria-labelledby="market-status-title">
-            {notYetTradeable ? (
-              <LifecycleReadinessPanel lifecycle={lifecycle} />
-            ) : (
-              <TradingPanel
-                book={orderBookQuery.data}
-                isLoading={orderBookQuery.isLoading}
-                isError={orderBookQuery.isError}
-                retry={() => void orderBookQuery.refetch()}
-                id={id}
-                sharePriceMinor={slicePriceMinor}
-                issuedShares={issuedSlices}
-                availableShares={availableSlices}
-                ownShares={shares.ownShares}
-                isAuthenticated={isAuthenticated}
-                ownershipSummary={ownershipSummaryQuery.data}
-                trades={tradesQuery.data ?? []}
-                tradesLoading={tradesQuery.isLoading}
-                tradesError={tradesQuery.isError}
-                retryTrades={() => void tradesQuery.refetch()}
-                currency={displayCurrency}
-              />
-            )}
-          </section>
-          <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
-            <div className="asset-section-heading">
-              <div>
-                <p className="asset-section-label">New to Slice?</p>
-                <h2 id="how-it-works-title">Ownership, in plain English</h2>
-              </div>
-              <InfoTip
-                label="What is a Slice?"
-                text="A Slice is a digital ownership unit linked to a real collectible held through Slice’s custody process."
-              />
+        <AssetTrustStrip asset={asset} lifecycle={lifecycle} />
+
+        <section className="asset-readiness-card" aria-labelledby="market-status-title">
+          {notYetTradeable ? (
+            <LifecycleReadinessPanel lifecycle={lifecycle} />
+          ) : (
+            <TradingPanel
+              book={orderBookQuery.data}
+              isLoading={orderBookQuery.isLoading}
+              isError={orderBookQuery.isError}
+              retry={() => void orderBookQuery.refetch()}
+              id={id}
+              sharePriceMinor={slicePriceMinor}
+              issuedShares={issuedSlices}
+              availableShares={availableSlices}
+              ownShares={shares.ownShares}
+              isAuthenticated={isAuthenticated}
+              ownershipSummary={ownershipSummaryQuery.data}
+              trades={tradesQuery.data ?? []}
+              tradesLoading={tradesQuery.isLoading}
+              tradesError={tradesQuery.isError}
+              retryTrades={() => void tradesQuery.refetch()}
+              currency={displayCurrency}
+            />
+          )}
+        </section>
+
+        <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
+          <div className="asset-section-heading">
+            <div>
+              <p className="asset-section-label">New to Slice?</p>
+              <h2 id="how-it-works-title">Ownership, in plain English</h2>
             </div>
-            <p className="asset-section-intro">
-              You do not need to buy the whole collectible. Slice lets you own a clearly defined
-              portion and track it in your Portfolio.
-            </p>
-            <div className="asset-how-it-works__grid">
-              <div>
-                <b>1</b>
-                <h3>Slice secures the collectible</h3>
-                <p>The physical item is checked and placed into the required custody process.</p>
-              </div>
-              <div>
-                <b>2</b>
-                <h3>Ownership units are issued</h3>
-                <p>The collectible is divided into units with a clear supply and price.</p>
-              </div>
-              <div>
-                <b>3</b>
-                <h3>Buy your position</h3>
-                <p>Choose the number of ownership units that fits you.</p>
-              </div>
-              <div>
-                <b>4</b>
-                <h3>Track &amp; sell later</h3>
-                <p>Follow your position in Portfolio and sell when the market is live.</p>
-              </div>
+            <InfoTip
+              label="What is a Slice?"
+              text="A Slice is a digital ownership unit linked to a real collectible held through Slice’s custody process."
+            />
+          </div>
+          <p className="asset-section-intro">
+            You do not need to buy the whole collectible. Slice lets you own a clearly defined
+            portion and track it in your Portfolio.
+          </p>
+          <div className="asset-how-it-works__grid">
+            <div>
+              <b>1</b>
+              <h3>Slice secures the collectible</h3>
+              <p>The physical item is checked and placed into the required custody process.</p>
             </div>
-            <Link className="asset-how-it-works__link" to="/how-it-works">
-              Learn how Slice works <ArrowRight aria-hidden="true" />
-            </Link>
-          </section>
+            <div>
+              <b>2</b>
+              <h3>Ownership units are issued</h3>
+              <p>The collectible is divided into units with a clear supply and price.</p>
+            </div>
+            <div>
+              <b>3</b>
+              <h3>Buy your position</h3>
+              <p>Choose the number of ownership units that fits you.</p>
+            </div>
+            <div>
+              <b>4</b>
+              <h3>Track &amp; sell later</h3>
+              <p>Follow your position in Portfolio and sell when the market is live.</p>
+            </div>
+          </div>
+          <Link className="asset-how-it-works__link" to="/how-it-works">
+            Learn how Slice works <ArrowRight aria-hidden="true" />
+          </Link>
         </section>
 
         <section className="asset-detail-lower-grid">
@@ -506,7 +520,9 @@ function AssetPage() {
               ) : (
                 <div className="asset-empty-history">
                   <span>—</span>
-                  <strong>{externalReference ? "No reference history yet" : "No market history yet"}</strong>
+                  <strong>
+                    {externalReference ? "No reference history yet" : "No market history yet"}
+                  </strong>
                   <p>
                     {externalReference
                       ? "History will appear as provider observations are collected."
@@ -618,6 +634,75 @@ function AssetPage() {
         />
       </main>
     </div>
+  );
+}
+
+function AssetTrustStrip({
+  asset,
+  lifecycle,
+}: {
+  asset: MarketplaceAsset;
+  lifecycle?: MarketLifecycleProjection;
+}) {
+  const issuedUnits =
+    asset.issuedUnits && /^\d+$/.test(asset.issuedUnits) ? Number(asset.issuedUnits) : null;
+  const issuedLabel =
+    issuedUnits !== null && Number.isSafeInteger(issuedUnits) ? issuedUnits.toLocaleString() : null;
+  const verified = asset.publicVerificationStatus === "VERIFIED";
+  const secured = asset.custodyStatus === "SECURED";
+  const marketOpen = lifecycle?.phase === "LIVE" && lifecycle.canBuy && lifecycle.canSell;
+
+  return (
+    <section className="asset-trust-strip" aria-label="Collectible information">
+      <TrustItem
+        icon={<ShieldCheck aria-hidden="true" />}
+        title={verified ? "Collector Verified" : "Verification in progress"}
+        copy={
+          verified
+            ? "This collectible has been verified and authenticated by Slice."
+            : "Slice is completing the collectible review before this claim is shown."
+        }
+      />
+      <TrustItem
+        icon={<LockKeyhole aria-hidden="true" />}
+        title={secured ? "Custodial Security" : "Custody preparation"}
+        copy={
+          secured
+            ? "Held through Slice’s approved custody process."
+            : "Custody details will appear when the collectible is secured."
+        }
+      />
+      <TrustItem
+        icon={<PieChart aria-hidden="true" />}
+        title="Fractional Ownership"
+        copy={
+          issuedLabel
+            ? `${issuedLabel} Slices issued. Own a verifiable portion of this collectible.`
+            : "Ownership units will be issued after the collectible is prepared."
+        }
+      />
+      <TrustItem
+        icon={<ArrowLeftRight aria-hidden="true" />}
+        title={marketOpen ? "Trade Freely" : "Marketplace access"}
+        copy={
+          marketOpen
+            ? "Buy and sell eligible Slices through the Slice marketplace."
+            : "Trading opens when the market is ready for this collectible."
+        }
+      />
+    </section>
+  );
+}
+
+function TrustItem({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
+  return (
+    <article className="asset-trust-item">
+      <span className="asset-trust-item__icon">{icon}</span>
+      <div>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+      </div>
+    </article>
   );
 }
 

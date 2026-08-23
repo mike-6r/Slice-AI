@@ -15,6 +15,10 @@ export type MarketplaceAsset = {
   gradeLabel?: string;
   grade?: string;
   certificationNumber?: string;
+  publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
+  custodyStatus?: string;
+  insuranceActive?: boolean;
+  issuedUnits?: string;
   sliceValuationAmountMinor?: number;
   sliceValuationCurrency?: SupportedCurrency;
   sliceValuationApprovedAt?: string;
@@ -63,6 +67,10 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   grader: asset.grade?.company.toUpperCase(),
   gradeScore: asset.grade?.numeric,
   gradeLabel: asset.grade?.label,
+  publicVerificationStatus: asset.publicVerificationStatus,
+  custodyStatus: asset.custody?.status,
+  insuranceActive: asset.insurance?.status === "ACTIVE",
+  issuedUnits: asset.ownership?.issuedUnits,
   grade: asset.grade
     ? [
         asset.grade.company.toUpperCase(),

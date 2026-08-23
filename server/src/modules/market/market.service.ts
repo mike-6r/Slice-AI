@@ -658,6 +658,10 @@ export class MarketService {
         },
         publication: { select: { status: true, publishedAt: true } },
         custodyRecord: { select: { status: true, updatedAt: true } },
+        insuranceCoverage: {
+          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+          take: 1,
+        },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -989,6 +993,11 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     conditionLabel: collectorConditionValue(
       asset.submissions?.[0]?.declaredMetadata,
     ),
+    // Public market results only select approved submissions. Keep the
+    // projection coarse; review records and staff notes never leave the API.
+    publicVerificationStatus: asset.submissions?.length
+      ? 'VERIFIED'
+      : 'UNAVAILABLE',
     media,
     ...(asset.certificationNumber
       ? { certificationNumber: asset.certificationNumber }
