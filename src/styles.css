@@ -34067,3 +34067,19 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .asset-detail-page .asset-trust-item h2 { font-size: 0.98rem; }
   .asset-detail-page .asset-trust-item p { font-size: 0.8rem; }
 }
+
+/* The former hero assigned grid columns to these sections. They now belong
+   to the page's deliberate vertical reading order, not the hero grid. */
+.asset-detail-page .asset-redesign {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+}
+.asset-detail-page .asset-redesign > .asset-redesign-hero,
+.asset-detail-page .asset-redesign > .asset-trust-strip,
+.asset-detail-page .asset-redesign > .asset-readiness-card,
+.asset-detail-page .asset-redesign > .asset-how-it-works,
+.asset-detail-page .asset-redesign > .asset-detail-lower-grid,
+.asset-detail-page .asset-redesign > .asset-similar-section {
+  grid-column: auto;
+  grid-row: auto;
+}
