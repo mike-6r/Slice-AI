@@ -115,13 +115,7 @@ function Marketplace() {
     setFilters((current) => ({ ...current, [key]: value }));
   const selectQuickFilter = (value: QuickFilterId) => {
     setQuickFilter(value);
-    setSort(
-      value === "biggest-movers"
-        ? "biggest-movers"
-        : value === "new-listings"
-          ? "newest"
-          : "trending",
-    );
+    setSort(value === "biggest-movers" ? "biggest-movers" : "trending");
   };
   const visible = useMemo(
     () => sortMarketAssets(filterMarketAssets(assets, filters, query, quickFilter), sort),

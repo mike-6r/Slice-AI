@@ -1,13 +1,9 @@
 import type { MarketplaceAsset } from "@/components/marketplace/market-api-presentation";
-import {
-  marketCategoryPresentation,
-  marketplaceEditorialTag,
-} from "@/components/marketplace/marketplace-presentation";
+import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 
 export type MarketView = "grid" | "compact" | "detailed";
-export type MarketSort = "trending" | "price-high" | "price-low" | "biggest-movers" | "newest";
-export type QuickFilterId =
-  "trending" | "biggest-movers" | "new-listings" | "most-watched" | "editors-picks";
+export type MarketSort = "trending" | "price-high" | "price-low" | "biggest-movers";
+export type QuickFilterId = "trending" | "biggest-movers";
 
 export type MarketFilters = {
   category: string;
@@ -27,7 +23,6 @@ export const MARKET_SORTS: Array<{ value: MarketSort; label: string }> = [
   { value: "price-high", label: "Estimated value: high to low" },
   { value: "price-low", label: "Estimated value: low to high" },
   { value: "biggest-movers", label: "Biggest movers" },
-  { value: "newest", label: "Newest" },
 ];
 
 export const categoryGroup = (category: string) => marketCategoryPresentation(category).slug;
@@ -51,7 +46,6 @@ export function filterMarketAssets(
   const normalizedQuery = query.trim().toLowerCase();
   return assets.filter((asset) => {
     const category = marketCategoryPresentation(asset.category);
-    const tag = marketplaceEditorialTag(asset);
     const matchesQuery =
       !normalizedQuery ||
       [asset.title, category.label, asset.setName, asset.grade]
@@ -62,13 +56,9 @@ export function filterMarketAssets(
     const matchesSet =
       filters.setEdition === "Any set / edition" || asset.setName === filters.setEdition;
     const matchesQuickFilter =
-      quickFilter === "most-watched"
-        ? tag.label === "Most Watched"
-        : quickFilter === "editors-picks"
-          ? tag.label === "Editor's Pick"
-          : quickFilter === "new-listings"
-            ? tag.label === "New Listing"
-            : true;
+      quickFilter === "biggest-movers"
+        ? asset.tradingHasExecutionHistory === true && asset.change24hBps !== undefined
+        : true;
     return (
       matchesQuery &&
       matchesCategory &&
@@ -91,13 +81,12 @@ export const sortMarketAssets = (assets: MarketplaceAsset[], sort: MarketSort) =
         return valueA - valueB;
       case "biggest-movers":
         return (b.change24hBps ?? -Infinity) - (a.change24hBps ?? -Infinity);
-      case "newest":
-        return b.slug.localeCompare(a.slug);
       default:
         return (
-          Number(marketplaceEditorialTag(b).label === "Trending") -
-            Number(marketplaceEditorialTag(a).label === "Trending") ||
-          (b.change24hBps ?? -Infinity) - (a.change24hBps ?? -Infinity)
+          Number(b.tradingHasExecutionHistory === true) -
+            Number(a.tradingHasExecutionHistory === true) ||
+          (b.change24hBps ?? -Infinity) - (a.change24hBps ?? -Infinity) ||
+          valueB - valueA
         );
     }
   });

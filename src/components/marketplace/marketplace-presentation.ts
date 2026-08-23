@@ -1,19 +1,13 @@
 import {
-  Award,
   CircleDot,
-  Clock3,
   Diamond,
-  Eye,
-  Flame,
   Gem,
   Shield,
   Sparkles,
   Swords,
-  TrendingUp,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import type { MarketplaceAsset } from "./market-api-presentation";
 
 export type MarketCategoryPresentation = {
   slug: string;
@@ -78,52 +72,6 @@ export function marketCategoryPresentation(category: string): MarketCategoryPres
       slug: canonical || "other",
       label: category.trim() || "Other",
       icon: CATEGORY_PRESENTATIONS.other.icon,
-    }
-  );
-}
-
-export type MarketplaceEditorialTag = {
-  label:
-    | "Trending"
-    | "High Interest"
-    | "Modern Chase"
-    | "Iconic"
-    | "Editor's Pick"
-    | "Rising Fast"
-    | "Most Watched"
-    | "Rare Find"
-    | "New Listing"
-    | "Blue Chip";
-  tone: "green" | "blue" | "purple" | "orange";
-  icon: LucideIcon;
-};
-
-// PRESENTATION-ONLY MARKETPLACE SHOWCASE LABELS. NOT AUTHORITATIVE TRADING SIGNALS.
-const EDITORIAL_TAGS: Array<{ match: RegExp; tag: MarketplaceEditorialTag }> = [
-  { match: /umbreon.*vmax|moonbreon/i, tag: { label: "Modern Chase", tone: "purple", icon: Gem } },
-  { match: /grey felt hat|van gogh/i, tag: { label: "Most Watched", tone: "blue", icon: Eye } },
-  { match: /charizard/i, tag: { label: "Trending", tone: "green", icon: Flame } },
-  { match: /wembanyama/i, tag: { label: "High Interest", tone: "green", icon: TrendingUp } },
-  { match: /bedard/i, tag: { label: "New Listing", tone: "orange", icon: Clock3 } },
-  { match: /stroud/i, tag: { label: "Editor's Pick", tone: "purple", icon: Sparkles } },
-  {
-    match: /black-lotus|dark-magician/i,
-    tag: { label: "Editor's Pick", tone: "purple", icon: Sparkles },
-  },
-  { match: /jordan|rayquaza/i, tag: { label: "Rising Fast", tone: "green", icon: TrendingUp } },
-  { match: /pikachu|luka/i, tag: { label: "Most Watched", tone: "blue", icon: Eye } },
-  { match: /blastoise/i, tag: { label: "Rare Find", tone: "blue", icon: Gem } },
-  { match: /mantle/i, tag: { label: "Blue Chip", tone: "blue", icon: Award } },
-  { match: /one-piece/i, tag: { label: "New Listing", tone: "orange", icon: Clock3 } },
-];
-
-export function marketplaceEditorialTag(asset: Pick<MarketplaceAsset, "slug" | "title">) {
-  const identity = `${asset.slug} ${asset.title}`;
-  return (
-    EDITORIAL_TAGS.find(({ match }) => match.test(identity))?.tag ?? {
-      label: "New Listing",
-      tone: "orange",
-      icon: Clock3,
     }
   );
 }

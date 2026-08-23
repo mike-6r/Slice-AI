@@ -7,7 +7,6 @@ import { formatPercent } from "@/lib/format";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
-import { marketplaceEditorialTag } from "./marketplace-presentation";
 import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marketplace-layout";
 
 function formatReferenceMoney(
@@ -194,7 +193,6 @@ function OwnershipPrompt({ asset }: { asset: MarketplaceAsset }) {
         <strong>{hasListings ? "Own available Slices" : "Own in Slices"}</strong>
         <small>Fractional ownership of this collectible</small>
       </span>
-      <ArrowRight aria-hidden="true" />
     </div>
   );
 }
@@ -262,12 +260,8 @@ export function MarketAssetCard({
     onSuccess: (next) => client.setQueryData(["watchlist", "current"], next),
     onSettled: () => void client.invalidateQueries({ queryKey: ["watchlist", "current"] }),
   });
-  const editorial = marketplaceEditorialTag(asset);
-
   return (
-    <article
-      className={`market-investment-card market-investment-card--${editorial.tone}${compact ? " is-compact" : ""}`}
-    >
+    <article className={`market-investment-card${compact ? " is-compact" : ""}`}>
       <div className="market-card-visual-wrap">
         <AssetVisual asset={asset} />
         <button
@@ -306,7 +300,9 @@ export function MarketAssetCard({
         <div className="market-card-condition" aria-label="Condition and grading">
           <span>{officialGradeLabel(asset)}</span>
           {asset.conditionLabel ? (
-            <span aria-label={`Condition: ${asset.conditionLabel}`}>{asset.conditionLabel}</span>
+            <span aria-label={`Condition: ${asset.conditionLabel}`}>
+              Condition: {asset.conditionLabel}
+            </span>
           ) : null}
         </div>
         <ValuationBlock asset={asset} />
@@ -322,16 +318,13 @@ export function MarketAssetCard({
 
 export function MarketDetailedRow({ asset }: { asset: MarketplaceAsset }) {
   const { formatMoney } = useCurrency();
-  const editorial = marketplaceEditorialTag(asset);
   const lifecycle = asset.marketLifecycle;
   const hasLifecycleMovement = asset.tradingHasExecutionHistory && asset.change24hBps !== undefined;
   return (
     <article className="market-detailed-row">
       <AssetVisual asset={asset} />
       <div className="market-detailed-identity">
-        <span className={`market-status-badge is-${editorial.tone}`}>
-          {lifecycle?.badge ?? editorial.label}
-        </span>
+        <span className="market-status-badge">{lifecycle?.badge ?? "Market status"}</span>
         <h2>
           <Link to="/asset/$id" params={{ id: asset.slug }}>
             {asset.title}

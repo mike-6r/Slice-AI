@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { filterMarketAssets, sortMarketAssets, type MarketFilters } from "./marketplace-helpers";
-import { marketCategoryPresentation, marketplaceEditorialTag } from "./marketplace-presentation";
+import { marketCategoryPresentation } from "./marketplace-presentation";
 
 const filters: MarketFilters = {
   category: "All Assets",
@@ -21,6 +21,7 @@ const assets: MarketplaceAsset[] = [
     estimatedMarketValueMinor: 2_458_000,
     availabilityBps: 2_461,
     change24hBps: 1_243,
+    tradingHasExecutionHistory: true,
   },
   {
     id: "black-lotus",
@@ -32,6 +33,7 @@ const assets: MarketplaceAsset[] = [
     estimatedMarketValueMinor: 9_200_000,
     availabilityBps: 1_430,
     change24hBps: 522,
+    tradingHasExecutionHistory: true,
   },
   {
     id: "one-piece",
@@ -53,13 +55,7 @@ describe("marketplace presentation", () => {
     expect(marketCategoryPresentation("magic-the-gathering").label).toBe("Magic: The Gathering");
   });
 
-  it("uses deterministic presentation-only editorial labels", () => {
-    expect(marketplaceEditorialTag(assets[0]).label).toBe("Trending");
-    expect(marketplaceEditorialTag(assets[1]).label).toBe("Editor's Pick");
-    expect(marketplaceEditorialTag(assets[2]).label).toBe("New Listing");
-  });
-
-  it("filters real records by category, grade, price, set, and editorial tab", () => {
+  it("filters real records by category, grade, price, set, and market activity", () => {
     expect(
       filterMarketAssets(
         assets,
@@ -73,11 +69,13 @@ describe("marketplace presentation", () => {
         "trending",
       ).map((asset) => asset.id),
     ).toEqual(["charizard"]);
-    expect(filterMarketAssets(assets, filters, "", "editors-picks")).toEqual([assets[1]]);
-    expect(filterMarketAssets(assets, filters, "", "new-listings")).toEqual([assets[2]]);
+    expect(filterMarketAssets(assets, filters, "", "biggest-movers")).toEqual([
+      assets[0],
+      assets[1],
+    ]);
   });
 
-  it("keeps the curated trending asset first without replacing real records", () => {
+  it("puts assets with real execution history first in trending order", () => {
     expect(sortMarketAssets([assets[1], assets[0]], "trending").map((asset) => asset.id)).toEqual([
       "charizard",
       "black-lotus",

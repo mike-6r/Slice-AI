@@ -1,12 +1,9 @@
-import { Eye, Flame, Gauge, Sparkles, WandSparkles } from "lucide-react";
+import { Flame, Gauge } from "lucide-react";
 import type { QuickFilterId } from "./marketplace-helpers";
 
 const QUICK_FILTERS = [
   { id: "trending", label: "Trending", icon: Flame },
-  { id: "new-listings", label: "New Listings", icon: Sparkles },
   { id: "biggest-movers", label: "Biggest movers", icon: Gauge },
-  { id: "most-watched", label: "Most Watched", icon: Eye },
-  { id: "editors-picks", label: "Editor's Picks", icon: WandSparkles },
 ] satisfies Array<{ id: QuickFilterId; label: string; icon: typeof Flame }>;
 
 export function MarketQuickFilters({
