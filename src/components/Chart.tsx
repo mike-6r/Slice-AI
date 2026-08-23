@@ -1,6 +1,7 @@
 import { useId, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { SupportedCurrency } from "@/data/repositories";
+import type { TimeRange } from "@/domain/market";
 
 type SparklineProps = {
   data: number[];
@@ -85,6 +86,7 @@ type PriceChartProps = {
   showAxis?: boolean;
   className?: string;
   currency?: SupportedCurrency;
+  timeRange?: TimeRange;
 };
 
 export type PriceChartPoint = {
@@ -122,6 +124,17 @@ function formatTooltipDate(value?: string) {
   }).format(new Date(value));
 }
 
+function formatAxisDate(value: string | undefined, range?: TimeRange) {
+  if (!value) return "";
+  const options: Intl.DateTimeFormatOptions =
+    range === "24H"
+      ? { hour: "2-digit", minute: "2-digit" }
+      : range === "1Y" || range === "ALL"
+        ? { month: "short", year: "numeric" }
+        : { day: "numeric", month: "short" };
+  return new Intl.DateTimeFormat("en-GB", options).format(new Date(value));
+}
+
 function formatBps(value: number | null | undefined) {
   if (value === null || value === undefined) return null;
   const percent = value / 100;
@@ -140,6 +153,7 @@ export function PriceChart({
   showAxis = true,
   className,
   currency = "GBP",
+  timeRange,
 }: PriceChartProps) {
   // Gradients are referenced by id, so each instance needs its own or charts bleed into each other.
   const gradientId = useId();
@@ -172,6 +186,7 @@ export function PriceChart({
   const colour = rising ? "var(--color-positive)" : "var(--color-negative)";
 
   const ticks = [max, min + range * 0.75, min + range * 0.5, min + range * 0.25, min];
+  const axisIndexes = [...new Set([0, Math.floor((pointsData.length - 1) / 2), pointsData.length - 1])];
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const activePoint = activeIndex === null ? null : pointsData[activeIndex];
   const activeCoordinates = activeIndex === null ? null : points[activeIndex];
@@ -272,6 +287,13 @@ export function PriceChart({
           ))}
         </div>
       )}
+      {axisIndexes.some((index) => pointsData[index]?.timestamp) ? (
+        <div className="price-chart__x-axis" aria-hidden="true">
+          {axisIndexes.map((index) => (
+            <span key={index}>{formatAxisDate(pointsData[index]?.timestamp, timeRange)}</span>
+          ))}
+        </div>
+      ) : null}
       {activePoint && activeCoordinates ? (
         <div
           className="price-chart__tooltip"

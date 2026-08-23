@@ -548,9 +548,10 @@ function AssetPage() {
                     refreshedAt: history.lastRefreshedAt,
                   }))}
                   height={190}
-                  showAxis
-                  currency={historyCurrency}
-                  label={`External reference value history for ${asset.title}`}
+                    showAxis
+                    currency={historyCurrency}
+                    timeRange={period}
+                    label={`External reference value history for ${asset.title}`}
                 />
               ) : referenceHistory.length === 1 ? (
                 <div className="asset-single-history">
