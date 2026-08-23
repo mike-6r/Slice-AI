@@ -303,7 +303,7 @@ function AssetPage() {
     hasReferenceHistory &&
     history.percentageChangeBps !== null &&
     history.percentageChangeBps !== undefined
-      ? formatPercent(history.percentageChangeBps / 100)
+      ? `${formatPercent(history.percentageChangeBps / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${history.absoluteChange ? ` (${formatAuthoritativeMoney(history.absoluteChange.amount, history.absoluteChange.currency, history.absoluteChange.currency, null)})` : ""}`
       : "Not available";
   const historyStartingValue = history.startingValue ?? referenceHistory[0]?.value ?? null;
   const historyLatestValue = history.latestValue ?? referenceHistory.at(-1)?.value ?? null;
