@@ -1,7 +1,7 @@
 # Slice Monetization Full QA
 
-Status: implementation and automated validation in progress; staging sandbox
-verification is required after deployment.
+Status: deployed to staging; controlled sandbox transaction checks remain
+unexecuted because no disposable economic fixture was authorized.
 
 ## Expected policy
 
@@ -58,6 +58,28 @@ other controlled economic fixture.
 - No customer cash, Collector proceeds, external clearing, orders, or trades are
   created by this implementation itself.
 - No live Stripe mode is enabled.
+
+## Recorded release validation — 2026-08-24
+
+- Source branch: `main`; the final commit and VPS release hash are recorded in
+  the deployment handoff.
+- API, web, and Discord worker: active.
+- `/health`: PASS.
+- `/ready`: PASS; PostgreSQL and Redis are up.
+- Public `/api/v1/fees`: PASS; GBP, 0 bps deposit, 250 bps withdrawal,
+  0/0 secondary trading, and 500 bps new Initial Offering policy observed.
+- Prisma migration status: PASS; all 88 migrations applied.
+- Backend: 72 suites / 308 tests, typecheck, and build PASS.
+- Frontend: 39 files / 143 tests, typecheck, client build, and SSR build PASS.
+- No live Stripe mode was enabled and no external settlement was attempted.
+- No controlled Umbreon, Charizard, customer, Collector, order, trade, or
+  financial fixture was mutated by this release.
+
+The disposable deposit, withdrawal, Initial Offering, and secondary execution
+checks above are intentionally not marked PASS without an explicitly approved
+disposable staging fixture and a sandbox provider flow. The release is
+therefore deployable but not a full economic GO until those safe checks are
+run.
 
 ## Deployment gate
 
