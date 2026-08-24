@@ -179,14 +179,39 @@ or wallet-state refreshes. No logout/login is required for the card to update.
 - Frontend capability modal, Account Center, and HTTP contract tests: **21
   passed**.
 - Frontend typecheck: **PASS**.
+- Frontend production build: **PASS**.
+- Backend production build: **PASS**.
 - Full financial behavior was not mutated or exercised against real money.
 
 ## Release gate
 
-The implementation is ready to build and deploy after the focused checks pass.
-Staging verification must confirm the deployed response includes `status` and
-the feature-specific reasons above, and that the rendered card no longer
-contains `Feature availability required` for these three capabilities.
+The implementation was deployed to staging in release **17cbf81**
+(`/opt/slice/releases/20260824-17cbf81`). Prisma reported no pending
+migrations. `slice-api.service` and `slice-web.service` are active; API
+`/health` and `/ready` and the web root returned successfully.
+
+The live authenticated staging check for
+`demo-investor@slicecollectable.com` confirmed:
+
+- Account: **ACTIVE**, role projection **USER only**.
+- Current compliance: **PENDING / REQUIRES_INPUT**, provider
+  **STRIPE_SANDBOX**.
+- Place Buy Order: **ACTION_REQUIRED / COMPLIANCE_REVIEW_REQUIRED**.
+- Place Sell Order: **ACTION_REQUIRED / COMPLIANCE_REVIEW_REQUIRED**.
+- Deposit Funds: **TEMPORARILY_UNAVAILABLE / DEPOSITS_UNAVAILABLE**.
+- Withdraw Funds: **TEMPORARILY_UNAVAILABLE / WITHDRAWALS_UNAVAILABLE**.
+
+Browser QA confirmed the Account Security & Access card uses the server
+statuses and no longer renders `Feature availability required`. The deposit
+action opens a “Deposits are temporarily unavailable” modal with no misleading
+setup CTA. The buy action opens a “Verification is under review” modal with
+email and service availability marked complete, identity verification as the
+next requirement, and a link to Account → Identity. Browser diagnostics
+contained only the standard React DevTools informational message.
+
+The QA session performed only authentication, GET projections, navigation, and
+opening non-mutating blocker dialogs. No financial, identity, bank, payout,
+market, ownership, ledger, or provider operation was changed.
 
 No market matching, ownership, ledger, fees, PriceCharting, asset pages,
 Collector pages, Discord, Stripe objects, or Twilio actions were changed.
