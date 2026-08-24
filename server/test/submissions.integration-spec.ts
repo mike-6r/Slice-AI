@@ -45,7 +45,7 @@ describe('Document 010 PostgreSQL submission invariants', () => {
     await db.$disconnect();
   });
 
-  it('enforces one slot per submission and keeps review history append-only', async () => {
+  it('keeps primary media replacement in the service and allows optional media multiplicity', async () => {
     const submission = await db.assetSubmission.create({
       data: { id: `${id}-draft`, ownerUserId: ownerId, categoryId },
     });
@@ -61,19 +61,28 @@ describe('Document 010 PostgreSQL submission invariants', () => {
         status: 'SAFE',
       },
     });
-    await expect(
-      db.submissionMedia.create({
-        data: {
-          id: `${id}-front-duplicate`,
-          submissionId: submission.id,
-          slot: 'front',
-          objectKey: `${id}/front-duplicate`,
-          originalFilename: 'front2.jpg',
-          mimeType: 'image/jpeg',
-          sizeBytes: 10,
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'P2002' });
+    await db.submissionMedia.create({
+      data: {
+        id: `${id}-additional-one`,
+        submissionId: submission.id,
+        slot: 'additional-image',
+        objectKey: `${id}/additional-one`,
+        originalFilename: 'additional-one.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 10,
+      },
+    });
+    await db.submissionMedia.create({
+      data: {
+        id: `${id}-additional-two`,
+        submissionId: submission.id,
+        slot: 'additional-image',
+        objectKey: `${id}/additional-two`,
+        originalFilename: 'additional-two.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 10,
+      },
+    });
     await db.verificationReview.createMany({
       data: [
         {

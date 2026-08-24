@@ -104,7 +104,7 @@ describe('Document 010 submission media HTTP E2E', () => {
         409,
       ],
       [
-        'side',
+        'additional-image',
         {
           mimeType: 'image/jpeg',
           sizeBytes: 42,

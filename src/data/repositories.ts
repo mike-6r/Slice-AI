@@ -41,6 +41,8 @@ import type {
   AssetOperationSummary,
   CreateSubmissionDraft,
   CollectibleReferenceImport,
+  GradeOption,
+  GradingCompanyOption,
   SubmissionCategory,
   SubmissionDetail,
   RawCardPreGradeResponse,
@@ -90,6 +92,8 @@ export interface AssetRepository {
 }
 export interface CatalogueRepository {
   listSubmissionCategories(): Promise<SubmissionCategory[]>;
+  listGradingCompanies(): Promise<GradingCompanyOption[]>;
+  listGrades(companyCode: string): Promise<GradeOption[]>;
 }
 export interface SubmissionRepository {
   importReference(input: { url: string }): Promise<CollectibleReferenceImport>;

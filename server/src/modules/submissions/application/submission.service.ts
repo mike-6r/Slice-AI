@@ -26,22 +26,30 @@ import { collectorUsageFor } from '../../collector-workspace/collector-entitleme
 import { preGradeProjection } from './raw-card-pregrade.service';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
-import { customerResourceEvent, eventType } from '../../outbox/domain/domain-event';
+import {
+  customerResourceEvent,
+  eventType,
+} from '../../outbox/domain/domain-event';
 import {
   assertEditableStatus,
+  assertMediaSlot,
   assertExpectedVersion,
   assertMediaProperties,
   assertRequiredSafeMedia,
+  assertSubmissionMediaReady,
   assertGradeMetadata,
   assertSubmissionDetails,
+  assertSubmissionReady,
   assertSubmissionTerms,
   assertReviewerIsNotOwner,
   assertVerifiedMediaContent,
+  REQUIRED_MEDIA_SLOTS,
 } from '../domain/submission.policy';
 
 type Db = Prisma.TransactionClient;
 type DraftInput = {
   categoryId: string;
+  currentStep?: number;
   setId?: string | null;
   gradeScaleEntryId?: string | null;
   declaredMetadata?: Record<string, unknown> | null;
@@ -74,6 +82,14 @@ const metadataAllowedKeys = new Set([
   'provenanceNotes',
   'knownDefects',
   'termsAcknowledged',
+  'marketCheckStatus',
+  'marketCheckAcknowledged',
+  'offerIntentMode',
+  'offerIntentPercent',
+  'collectorExpectedValueMinor',
+  'collectorExpectedCurrency',
+  'collectorReviewerNotes',
+  'aiReviewStatus',
   'customerReference',
 ]);
 
@@ -116,6 +132,7 @@ export class SubmissionService {
             id: randomUUID(),
             ownerUserId: actor.userId,
             categoryId: input.categoryId,
+            currentStep: input.currentStep ?? 1,
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
@@ -193,11 +210,7 @@ export class SubmissionService {
       });
     }
     const entitlements = subscription.plan.entitlements;
-    const usage = await collectorUsageFor(
-      db,
-      actor.userId,
-      entitlements,
-    );
+    const usage = await collectorUsageFor(db, actor.userId, entitlements);
     const maxActive = usage.maxActiveCollectibles;
     const maxDrafts = usage.maxOpenDrafts;
     const maxOpenSubmissions = usage.maxOpenSubmissions;
@@ -275,7 +288,27 @@ export class SubmissionService {
       },
     });
     if (!submission) this.notFound();
-    return ownerProjection(submission!);
+    const projected = ownerProjection(submission!);
+    const mediaById = new Map(
+      submission!.media.map((media) => [media.id, media]),
+    );
+    return {
+      ...projected,
+      media: await Promise.all(
+        projected.media.map(async (media) => ({
+          ...media,
+          previewUrl:
+            media.status === 'SAFE'
+              ? await this.storage
+                  .createPrivateDownloadUrl(
+                    mediaById.get(media.id)!.objectKey,
+                    new Date(Date.now() + 5 * 60_000),
+                  )
+                  .catch(() => null)
+              : null,
+        })),
+      ),
+    };
   }
 
   /**
@@ -394,7 +427,13 @@ export class SubmissionService {
       // STG-* certification provenance; they are retained for audit history.
       take: Math.max(limit + 1, 100),
     });
-    const visible = rows.filter((row) => !isBetaFixtureSubmission(row.declaredMetadata, this.config.isBeta === true));
+    const visible = rows.filter(
+      (row) =>
+        !isBetaFixtureSubmission(
+          row.declaredMetadata,
+          this.config.isBeta === true,
+        ),
+    );
     const final = visible[limit - 1];
     return {
       items: visible.slice(0, limit).map(ownerProjection),
@@ -426,6 +465,8 @@ export class SubmissionService {
         if (current.version !== input.version) {
           const sameDraft =
             current.categoryId === input.categoryId &&
+            (input.currentStep === undefined ||
+              current.currentStep === input.currentStep) &&
             JSON.stringify(current.declaredMetadata) ===
               JSON.stringify(input.declaredMetadata ?? null);
           if (sameDraft) {
@@ -480,10 +521,14 @@ export class SubmissionService {
             });
           }
         }
+        const wasAiReviewSkipped = isAiReviewSkipped(current.declaredMetadata);
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
             categoryId: input.categoryId,
+            ...(input.currentStep === undefined
+              ? {}
+              : { currentStep: input.currentStep }),
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
@@ -503,6 +548,14 @@ export class SubmissionService {
             ? { marketResearchId: input.marketResearchId }
             : {}),
         });
+        if (
+          input.declaredMetadata?.aiReviewStatus === 'AI_REVIEW_SKIPPED' &&
+          !wasAiReviewSkipped
+        ) {
+          await audit('RAW_CARD_PREGRADE_SKIPPED', 'submission', id, {
+            reason: 'collector_selected_skip',
+          });
+        }
         return ownerProjection(updated);
       },
     );
@@ -531,10 +584,15 @@ export class SubmissionService {
       async (db, audit) => {
         const submission = await this.ownerForUpdate(db, actor.userId, id);
         assertEditableStatus(submission.status);
+        assertMediaSlot(input.slot);
         assertMediaProperties(input);
-        const existing = await db.submissionMedia.findUnique({
-          where: { submissionId_slot: { submissionId: id, slot: input.slot } },
-        });
+        const existing =
+          input.slot === 'additional-image'
+            ? null
+            : await db.submissionMedia.findFirst({
+                where: { submissionId: id, slot: input.slot, deletedAt: null },
+                orderBy: { createdAt: 'desc' },
+              });
         if (existing && existing.status !== 'DELETED') {
           throw new ConflictException({
             code: 'SUBMISSION_STATE_CONFLICT',
@@ -723,6 +781,22 @@ export class SubmissionService {
           where: { id },
           data: { version: { increment: 1 } },
         });
+        if (media!.slot === 'front' || media!.slot === 'back') {
+          const stale = await db.rawCardPreGrade.updateMany({
+            where: {
+              submissionId: id,
+              supersededAt: null,
+              status: { in: ['IN_PROGRESS', 'SUCCEEDED'] },
+            },
+            data: { status: 'STALE' },
+          });
+          if (stale.count) {
+            await audit('RAW_CARD_PREGRADE_INVALIDATED', 'submission', id, {
+              changedSlot: media!.slot,
+              invalidatedCount: stale.count,
+            });
+          }
+        }
         await audit('SUBMISSION_MEDIA_DELETED', 'submission-media', mediaId, {
           submissionId: id,
           slot: media!.slot,
@@ -737,13 +811,14 @@ export class SubmissionService {
     );
   }
 
-  submit(
+  async submit(
     actor: Actor,
     id: string,
     version: number,
     requestId: string,
     key: string,
   ) {
+    await this.capabilities?.require(actor, 'LIST_ASSET');
     return this.mutate(
       actor,
       `submission.submit:${id}`,
@@ -756,13 +831,26 @@ export class SubmissionService {
         await this.ownerForUpdate(db, actor.userId, id);
         const submission = await db.assetSubmission.findUniqueOrThrow({
           where: { id },
-          include: { media: true },
+          include: {
+            media: true,
+            preGrades: {
+              where: { supersededAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { status: true },
+            },
+          },
         });
         assertEditableStatus(submission.status);
         assertExpectedVersion(submission.version, version);
-        assertSubmissionDetails(submission.declaredMetadata);
+        assertSubmissionReady(
+          submission.declaredMetadata,
+          submission.preGrades[0] ?? null,
+        );
         assertSubmissionTerms(submission.declaredMetadata);
         assertRequiredSafeMedia(submission.media);
+        assertSubmissionMediaReady(submission.media);
+        await this.assertReferences(db, { categoryId: submission.categoryId });
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -778,6 +866,17 @@ export class SubmissionService {
         await audit('SUBMISSION_SUBMITTED', 'submission', id, {
           version: updated.version,
         });
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.submissionSubmitted,
+            submissionId: id,
+            status: 'SUBMITTED',
+            actorUserId: actor.userId,
+            correlationId: requestId,
+            occurredAt: updated.submittedAt ?? new Date(),
+          }),
+        );
         return ownerProjection(updated);
       },
     );
@@ -950,7 +1049,14 @@ export class SubmissionService {
         gradeScaleEntry: {
           select: { label: true, company: { select: { code: true } } },
         },
-        media: { select: { slot: true, status: true, deletedAt: true, objectKey: true } },
+        media: {
+          select: {
+            slot: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+          },
+        },
         marketResearch: {
           orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
           take: 1,
@@ -962,13 +1068,19 @@ export class SubmissionService {
       rows.map(async (row) => {
         const item = reviewQueueProjection(row);
         const front = row.media.find(
-          (media) => media.slot === 'front' && media.status === 'SAFE' && media.deletedAt === null,
+          (media) =>
+            media.slot === 'front' &&
+            media.status === 'SAFE' &&
+            media.deletedAt === null,
         );
         return {
           ...item,
           thumbnailUrl: front
             ? await this.storage
-                .createPrivateDownloadUrl(front.objectKey, new Date(Date.now() + 5 * 60_000))
+                .createPrivateDownloadUrl(
+                  front.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
                 .catch(() => null)
             : null,
         };
@@ -1119,25 +1231,35 @@ export class SubmissionService {
         related,
       ),
     };
-    const currentPreGrade = submission!.preGrades.find((item) => !item.supersededAt);
+    const currentPreGrade = submission!.preGrades.find(
+      (item) => !item.supersededAt,
+    );
     const safeReviewMedia = submission!.media.filter(
       (media) => media.status === 'SAFE' && media.deletedAt === null,
     );
     const signedMedia = new Map(
       await Promise.all(
-        safeReviewMedia.map(async (media) => [
-          media.id,
-          await this.storage
-            .createPrivateDownloadUrl(media.objectKey, new Date(Date.now() + 5 * 60_000))
-            .catch(() => null),
-        ] as const),
+        safeReviewMedia.map(
+          async (media) =>
+            [
+              media.id,
+              await this.storage
+                .createPrivateDownloadUrl(
+                  media.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
+                .catch(() => null),
+            ] as const,
+        ),
       ),
     );
     const frontMedia = safeReviewMedia.find((media) => media.slot === 'front');
     response.collectible = response.collectible
       ? {
           ...response.collectible,
-          thumbnailUrl: frontMedia ? signedMedia.get(frontMedia.id) ?? null : null,
+          thumbnailUrl: frontMedia
+            ? (signedMedia.get(frontMedia.id) ?? null)
+            : null,
         }
       : response.collectible;
     response.evidenceSummary = response.evidenceSummary
@@ -1150,12 +1272,24 @@ export class SubmissionService {
         }
       : response.evidenceSummary;
     if (response.preGrade && currentPreGrade) {
-      response.preGrade.visualizations = await Promise.all((Array.isArray(currentPreGrade.visualizations) ? currentPreGrade.visualizations : []).filter(isPersistedPreGradeVisualization).map(async (visualization) => ({
-        side: visualization.side,
-        type: visualization.type,
-        url: await this.storage.createPrivateDownloadUrl(visualization.objectKey, new Date(Date.now() + 5 * 60_000)).catch(() => null),
-        centering: visualization.centering ?? null,
-      })));
+      response.preGrade.visualizations = await Promise.all(
+        (Array.isArray(currentPreGrade.visualizations)
+          ? currentPreGrade.visualizations
+          : []
+        )
+          .filter(isPersistedPreGradeVisualization)
+          .map(async (visualization) => ({
+            side: visualization.side,
+            type: visualization.type,
+            url: await this.storage
+              .createPrivateDownloadUrl(
+                visualization.objectKey,
+                new Date(Date.now() + 5 * 60_000),
+              )
+              .catch(() => null),
+            centering: visualization.centering ?? null,
+          })),
+      );
     }
     return response;
   }
@@ -1268,7 +1402,21 @@ export class SubmissionService {
             completedAt: new Date(),
           },
         });
-        if (decision === 'CHANGES_REQUESTED' || decision === 'APPROVED') await this.outbox.append(db, customerResourceEvent({ eventType: decision === 'CHANGES_REQUESTED' ? eventType.submissionChangesRequested : eventType.submissionApproved, submissionId: id, status: decision, actorUserId: submission!.ownerUserId, correlationId: requestId, occurredAt: updated.reviewedAt ?? new Date() }));
+        if (decision === 'CHANGES_REQUESTED' || decision === 'APPROVED')
+          await this.outbox.append(
+            db,
+            customerResourceEvent({
+              eventType:
+                decision === 'CHANGES_REQUESTED'
+                  ? eventType.submissionChangesRequested
+                  : eventType.submissionApproved,
+              submissionId: id,
+              status: decision,
+              actorUserId: submission!.ownerUserId,
+              correlationId: requestId,
+              occurredAt: updated.reviewedAt ?? new Date(),
+            }),
+          );
         const auditAction =
           decision === 'CHANGES_REQUESTED'
             ? 'SUBMISSION_CHANGES_REQUESTED'
@@ -1293,7 +1441,9 @@ export class SubmissionService {
     requestId: string,
     key: string,
   ) {
-    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+    if (
+      !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
+    ) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to correct submission identity.',
@@ -1326,7 +1476,8 @@ export class SubmissionService {
         if (current!.status !== 'APPROVED') {
           throw new ConflictException({
             code: 'SUBMISSION_STATE_CONFLICT',
-            message: 'Only an approved submission can receive an identity correction.',
+            message:
+              'Only an approved submission can receive an identity correction.',
           });
         }
         if (current!.assetId) {
@@ -1601,6 +1752,14 @@ function jsonMetadata(
   }
   return value as Prisma.InputJsonValue;
 }
+function isAiReviewSkipped(value: Prisma.JsonValue | null) {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).aiReviewStatus === 'AI_REVIEW_SKIPPED',
+  );
+}
 function isSafeCustomerReference(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const reference = value as Record<string, unknown>;
@@ -1673,6 +1832,7 @@ function ownerProjection(submission: {
   id: string;
   status: string;
   version: number;
+  currentStep: number;
   categoryId: string;
   setId: string | null;
   gradeScaleEntryId: string | null;
@@ -1699,6 +1859,7 @@ function ownerProjection(submission: {
     id: submission.id,
     status: submission.status,
     version: submission.version,
+    currentStep: submission.currentStep,
     categoryId: submission.categoryId,
     setId: submission.setId,
     gradeScaleEntryId: submission.gradeScaleEntryId,
@@ -1717,12 +1878,22 @@ function ownerProjection(submission: {
 
 /** Explicit staging fixture provenance used only for the live-Beta customer
  * projection. Real submissions are never inferred from titles or status. */
-function isBetaFixtureSubmission(metadata: Prisma.JsonValue | null, isBeta: boolean) {
-  if (!isBeta || !metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+function isBetaFixtureSubmission(
+  metadata: Prisma.JsonValue | null,
+  isBeta: boolean,
+) {
+  if (
+    !isBeta ||
+    !metadata ||
+    typeof metadata !== 'object' ||
+    Array.isArray(metadata)
+  )
+    return false;
   const value = metadata as Record<string, unknown>;
   return (
     value.betaFixtureRetired === true ||
-    (typeof value.certificationNumber === 'string' && value.certificationNumber.startsWith('STG-'))
+    (typeof value.certificationNumber === 'string' &&
+      value.certificationNumber.startsWith('STG-'))
   );
 }
 function reviewProjection(submission: {
@@ -1777,7 +1948,7 @@ type ReviewQueueRow = {
   marketResearch: Array<{ state: string; collectedAt: Date }>;
 };
 
-const REQUIRED_QUEUE_EVIDENCE = ['front', 'back'];
+const REQUIRED_QUEUE_EVIDENCE = [...REQUIRED_MEDIA_SLOTS];
 
 function reviewQueueProjection(submission: ReviewQueueRow) {
   const metadata =
@@ -2034,6 +2205,7 @@ type ReviewDetailRow = {
     cornerScore: number | null;
     edgeScore: number | null;
     surfaceScore: number | null;
+    confidence: number | null;
     conditionLabel: string | null;
     autographDetected: boolean | null;
     categoryDetected: string | null;
@@ -2059,7 +2231,9 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       ? marketResearchProjection(submission.marketResearch[0])
       : null,
     preGrade: submission.preGrades.find((item) => !item.supersededAt)
-      ? preGradeProjection(submission.preGrades.find((item) => !item.supersededAt)!)
+      ? preGradeProjection(
+          submission.preGrades.find((item) => !item.supersededAt)!,
+        )
       : null,
     reviews: submission.reviews.map((review) => ({
       id: review.id,
@@ -2072,10 +2246,19 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
     })),
   };
 }
-function isPersistedPreGradeVisualization(value: unknown): value is { side: 'FRONT' | 'BACK'; type: 'overview' | 'centering'; objectKey: string; centering?: Record<string, number> | null } {
+function isPersistedPreGradeVisualization(value: unknown): value is {
+  side: 'FRONT' | 'BACK';
+  type: 'overview' | 'centering';
+  objectKey: string;
+  centering?: Record<string, number> | null;
+} {
   if (!value || typeof value !== 'object') return false;
   const item = value as Record<string, unknown>;
-  return (item.side === 'FRONT' || item.side === 'BACK') && (item.type === 'overview' || item.type === 'centering') && typeof item.objectKey === 'string';
+  return (
+    (item.side === 'FRONT' || item.side === 'BACK') &&
+    (item.type === 'overview' || item.type === 'centering') &&
+    typeof item.objectKey === 'string'
+  );
 }
 function reviewDetailContextProjection(
   submission: ReviewDetailRow,
@@ -2130,7 +2313,7 @@ function reviewDetailContextProjection(
     stringMetadata(metadata.name) ??
     context?.asset?.title ??
     'Untitled submission';
-  const requiredSlots = new Set(['front', 'back']);
+  const requiredSlots = new Set<string>(REQUIRED_MEDIA_SLOTS);
   const safeMedia = submission.media.filter(
     (item) => item.status === 'SAFE' && item.deletedAt === null,
   );

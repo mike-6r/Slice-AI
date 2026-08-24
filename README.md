@@ -74,3 +74,11 @@ The included local `server` browser QA seed is catalogue/notification-only. It i
 ## Testing and deployment
 
 This project currently has lint, typecheck, and production-build verification. Add route/component tests alongside new behavior. The TanStack Start build emits an SSR request handler rather than a static `index.html`; `npm run start:ssr` hosts that handler for a Node reverse-proxy deployment. Configure environment variables in the deployment platform, not in source control. The staging VPS procedure, health checks, backups and rollback boundaries are documented in [docs/STAGING_VPS_DEPLOYMENT.md](docs/STAGING_VPS_DEPLOYMENT.md).
+
+## Discord operations
+
+The Discord companion bot is deliberately separated from financial authority:
+it provides community, support, moderation, and safe public-data surfaces only.
+Its operational QA and command documentation is in
+[`docs/discord`](docs/discord/), including advanced tickets, aggregate
+analytics retention, Collector/Collectible Spotlight, and community systems.

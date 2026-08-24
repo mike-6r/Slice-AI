@@ -1,4 +1,5 @@
 import * as request from 'supertest';
+import { REQUIRED_MEDIA_SLOTS } from '../src/modules/submissions/domain/submission.policy';
 import {
   bootSubmissionHarness,
   closeSubmissionHarness,
@@ -49,12 +50,15 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('authorization', owner.auth)
       .set('x-forwarded-for', owner.clientIp)
       .set('idempotency-key', `${h.runId}-draft`)
-      .send({ categoryId, declaredMetadata: { name: 'Review fixture', termsAcknowledged: true } });
+      .send({
+        categoryId,
+        declaredMetadata: { name: 'Review fixture', termsAcknowledged: true },
+      });
     expect(draft.status).toBe(201);
     expect(draft.body.id).toBeDefined();
     id = draft.body.id;
     await h.db.submissionMedia.createMany({
-      data: ['front', 'back'].map((slot) => ({
+      data: REQUIRED_MEDIA_SLOTS.map((slot) => ({
         id: `${h.runId}-${slot}`,
         submissionId: id,
         slot,
@@ -68,7 +72,11 @@ describe('Document 010 reviewer HTTP E2E', () => {
     });
   });
   afterAll(async () =>
-    closeSubmissionHarness(h, [owner.id, reviewer.id, secondReviewer.id], categoryId),
+    closeSubmissionHarness(
+      h,
+      [owner.id, reviewer.id, secondReviewer.id],
+      categoryId,
+    ),
   );
   it('queues, claims, requests changes, audits and notifies without exposing notes', async () => {
     const submit = await request(h.app.getHttpServer())
@@ -96,7 +104,9 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('authorization', secondReviewer.auth)
       .set('x-forwarded-for', secondReviewer.clientIp);
     expect(secondQueue.status).toBe(200);
-    expect(secondQueue.body.items.map((x: { id: string }) => x.id)).not.toContain(id);
+    expect(
+      secondQueue.body.items.map((x: { id: string }) => x.id),
+    ).not.toContain(id);
     const secondDetail = await request(h.app.getHttpServer())
       .get(`/api/v1/reviews/submissions/${id}`)
       .set('authorization', secondReviewer.auth)
@@ -112,7 +122,10 @@ describe('Document 010 reviewer HTTP E2E', () => {
     expect(JSON.stringify(changes.body)).not.toContain('private reviewer note');
     expect(
       await h.db.outboxEvent.count({
-        where: { eventType: 'submission.changesrequested', actorUserId: owner.id },
+        where: {
+          eventType: 'submission.changesrequested',
+          actorUserId: owner.id,
+        },
       }),
     ).toBe(1);
     expect(

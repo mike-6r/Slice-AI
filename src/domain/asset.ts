@@ -99,6 +99,7 @@ export interface SliceGrade {
   cornerScore: number | null;
   edgeScore: number | null;
   surfaceScore: number | null;
+  confidence?: number | null;
   conditionLabel: string | null;
   analyzedAt?: ISODateTime | null;
   warnings: string[];

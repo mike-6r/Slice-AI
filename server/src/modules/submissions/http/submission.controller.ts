@@ -34,6 +34,7 @@ const metadata = z.record(z.unknown()).nullable().optional();
 const draft = z
   .object({
     categoryId: id,
+    currentStep: z.number().int().min(1).max(6).optional(),
     setId: id.nullable().optional(),
     gradeScaleEntryId: id.nullable().optional(),
     declaredMetadata: metadata,
@@ -77,7 +78,10 @@ const identityCorrection = z
   .object({
     version: z.number().int().min(1),
     name: z.string().trim().min(1).max(255),
-    year: z.string().trim().regex(/^\d{4}$/),
+    year: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/),
     note: z.string().trim().min(1).max(2000),
   })
   .strict();
@@ -128,12 +132,8 @@ const marketResearch = z
     refresh: z.boolean().optional(),
   })
   .strict();
-const marketResearchAttach = z
-  .object({ submissionId: id })
-  .strict();
-const marketResearchPromotion = z
-  .object({ assetId: id })
-  .strict();
+const marketResearchAttach = z.object({ submissionId: id }).strict();
+const marketResearchPromotion = z.object({ assetId: id }).strict();
 
 @Controller()
 export class SubmissionController {
@@ -289,7 +289,10 @@ export class SubmissionController {
   }
   @Get('submissions/:id/pre-grade')
   @UseGuards(AccessTokenGuard)
-  preGradeResult(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
+  preGradeResult(
+    @Param('id') submissionId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.preGrade.getOwned(req.actor!, submissionId);
   }
   @Post('submissions/:id/pre-grade')
@@ -300,9 +303,20 @@ export class SubmissionController {
     @Req() req: AuthenticatedRequest,
   ) {
     if (!key || !/^[\x21-\x7e]{1,128}$/.test(key))
-      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
-    await this.limiter.enforce('pregrade', req.ip ?? 'unknown', req.actor!.userId);
-    return this.preGrade.analyze(req.actor!, submissionId, req.requestId ?? 'unknown');
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    await this.limiter.enforce(
+      'pregrade',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
+    return this.preGrade.analyze(
+      req.actor!,
+      submissionId,
+      req.requestId ?? 'unknown',
+    );
   }
   @Patch('submissions/:id')
   @UseGuards(AccessTokenGuard)

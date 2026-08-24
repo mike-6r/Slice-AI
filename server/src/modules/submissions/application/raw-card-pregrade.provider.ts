@@ -13,6 +13,7 @@ export type RawCardPreGradeProviderResult = {
   cornerScore: number | null;
   edgeScore: number | null;
   surfaceScore: number | null;
+  confidence: number | null;
   conditionLabel: string | null;
   autographDetected: boolean | null;
   categoryDetected: string | null;
@@ -22,7 +23,12 @@ export type RawCardPreGradeProviderResult = {
   rawResponse: unknown | null;
   visualizations: RawCardVisualization[];
 };
-export type RawCardVisualization = { side: 'FRONT' | 'BACK'; overviewUrl: string | null; centeringUrl: string | null; centering: Record<string, number> | null };
+export type RawCardVisualization = {
+  side: 'FRONT' | 'BACK';
+  overviewUrl: string | null;
+  centeringUrl: string | null;
+  centering: Record<string, number> | null;
+};
 
 export type RawCardPreGradeProviderInput = {
   front: Buffer;
@@ -32,7 +38,9 @@ export type RawCardPreGradeProviderInput = {
 
 export interface RawCardPreGradeProvider {
   readonly providerName: string;
-  analyze(input: RawCardPreGradeProviderInput): Promise<RawCardPreGradeProviderResult>;
+  analyze(
+    input: RawCardPreGradeProviderInput,
+  ): Promise<RawCardPreGradeProviderResult>;
   extractVisualizations?(rawResponse: unknown): RawCardVisualization[];
   configured(): boolean;
 }
@@ -58,16 +66,19 @@ export class XimilarRawCardPreGradeProvider implements RawCardPreGradeProvider {
   configured() {
     return Boolean(
       this.config.ximilarEnabled &&
-        this.config.ximilarCardGradingEnabled &&
-        this.config.ximilarApiToken,
+      this.config.ximilarCardGradingEnabled &&
+      this.config.ximilarApiToken,
     );
   }
 
   extractVisualizations(rawResponse: unknown) {
-    return normalizeResponse(null, isRecord(rawResponse) ? rawResponse : {}).visualizations;
+    return normalizeResponse(null, isRecord(rawResponse) ? rawResponse : {})
+      .visualizations;
   }
 
-  async analyze(input: RawCardPreGradeProviderInput): Promise<RawCardPreGradeProviderResult> {
+  async analyze(
+    input: RawCardPreGradeProviderInput,
+  ): Promise<RawCardPreGradeProviderResult> {
     if (!this.configured())
       return emptyResult('NOT_CONFIGURED', 'NOT_CONFIGURED');
 
@@ -107,7 +118,9 @@ export class XimilarRawCardPreGradeProvider implements RawCardPreGradeProvider {
         return emptyResult(requestId, error.code);
       return emptyResult(
         requestId,
-        error instanceof XimilarProviderError ? 'TEMPORARILY_UNAVAILABLE' : 'TEMPORARILY_UNAVAILABLE',
+        error instanceof XimilarProviderError
+          ? 'TEMPORARILY_UNAVAILABLE'
+          : 'TEMPORARILY_UNAVAILABLE',
       );
     }
   }
@@ -120,7 +133,10 @@ export class XimilarRawCardPreGradeProvider implements RawCardPreGradeProvider {
     let attempt = 0;
     while (true) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.config.ximilarTimeoutMs ?? 45_000);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        this.config.ximilarTimeoutMs ?? 45_000,
+      );
       try {
         const response = await fetch(url, {
           method,
@@ -184,8 +200,7 @@ function normalizeResponse(
     : [];
   const parsed = records.map(parseRecord);
   const primary = parsed.find((item) => item.final !== null) ?? parsed[0];
-  if (!primary)
-    return emptyResult(requestId, 'PROVIDER_NO_ANALYSIS', envelope);
+  if (!primary) return emptyResult(requestId, 'PROVIDER_NO_ANALYSIS', envelope);
   const warnings = parsed.flatMap((item) => item.warnings);
   const final = primary.final;
   return {
@@ -200,6 +215,7 @@ function normalizeResponse(
     cornerScore: primary.corners,
     edgeScore: primary.edges,
     surfaceScore: primary.surface,
+    confidence: primary.confidence,
     conditionLabel: primary.condition,
     autographDetected: primary.autograph,
     categoryDetected: primary.category,
@@ -213,33 +229,48 @@ function normalizeResponse(
 
 function parseRecord(raw: Record<string, unknown>, index = 0) {
   const grades = record(raw.grades);
-  const card = Array.isArray(raw.card) && isRecord(raw.card[0]) ? raw.card[0] : {};
+  const card =
+    Array.isArray(raw.card) && isRecord(raw.card[0]) ? raw.card[0] : {};
   const tags = record(card._tags);
   const side = tagName(tags.Side);
   const category = tagName(tags.Category);
   const autographTag = tagName(tags.Autograph);
   const status = record(raw._status);
-  const warning = status.code !== undefined && Number(status.code) !== 200
-    ? stringValue(status.text) ?? 'Provider could not analyze this photo.'
-    : null;
+  const warning =
+    status.code !== undefined && Number(status.code) !== 200
+      ? (stringValue(status.text) ?? 'Provider could not analyze this photo.')
+      : null;
   return {
     raw,
-    side: normalizeSide(side ?? stringValue(raw._id) ?? stringValue(card._id), index),
+    side: normalizeSide(
+      side ?? stringValue(raw._id) ?? stringValue(card._id),
+      index,
+    ),
     category,
     autograph: autographTag ? autographTag.toLowerCase() === 'yes' : null,
     final: numberValue(grades.final),
+    confidence: percentageValue(
+      grades.confidence ?? raw.confidence ?? card.confidence,
+    ),
     corners: numberValue(grades.corners),
     edges: numberValue(grades.edges),
     surface: numberValue(grades.surface),
     centering: numberValue(grades.centering),
     condition: stringValue(grades.condition),
     warnings: warning ? [warning] : [],
-    visualizations: [{
-      side: normalizeSide(side ?? stringValue(raw._id) ?? stringValue(card._id), index),
-      overviewUrl: stringValue(raw._full_url_card) ?? stringValue(card._full_url_card),
-      centeringUrl: stringValue(raw._exact_url_card) ?? stringValue(card._exact_url_card),
-      centering: numericRecord(card.centering),
-    }].filter((item) => item.overviewUrl || item.centeringUrl),
+    visualizations: [
+      {
+        side: normalizeSide(
+          side ?? stringValue(raw._id) ?? stringValue(card._id),
+          index,
+        ),
+        overviewUrl:
+          stringValue(raw._full_url_card) ?? stringValue(card._full_url_card),
+        centeringUrl:
+          stringValue(raw._exact_url_card) ?? stringValue(card._exact_url_card),
+        centering: numericRecord(card.centering),
+      },
+    ].filter((item) => item.overviewUrl || item.centeringUrl),
   };
 }
 
@@ -265,6 +296,7 @@ function emptyResult(
     cornerScore: null,
     edgeScore: null,
     surfaceScore: null,
+    confidence: null,
     conditionLabel: null,
     autographDetected: null,
     categoryDetected: null,
@@ -275,8 +307,24 @@ function emptyResult(
     visualizations: [],
   };
 }
-function normalizeSide(value: string | null, index: number): 'FRONT' | 'BACK' { return value?.toUpperCase().includes('BACK') || value?.toLowerCase() === 'b' ? 'BACK' : value?.toUpperCase().includes('FRONT') || value?.toLowerCase() === 'f' ? 'FRONT' : index === 1 ? 'BACK' : 'FRONT'; }
-function numericRecord(value: unknown): Record<string, number> | null { if (!isRecord(value)) return null; const entries = Object.entries(value).filter(([, item]) => typeof item === 'number' && Number.isFinite(item)); return entries.length ? Object.fromEntries(entries) as Record<string, number> : null; }
+function normalizeSide(value: string | null, index: number): 'FRONT' | 'BACK' {
+  return value?.toUpperCase().includes('BACK') || value?.toLowerCase() === 'b'
+    ? 'BACK'
+    : value?.toUpperCase().includes('FRONT') || value?.toLowerCase() === 'f'
+      ? 'FRONT'
+      : index === 1
+        ? 'BACK'
+        : 'FRONT';
+}
+function numericRecord(value: unknown): Record<string, number> | null {
+  if (!isRecord(value)) return null;
+  const entries = Object.entries(value).filter(
+    ([, item]) => typeof item === 'number' && Number.isFinite(item),
+  );
+  return entries.length
+    ? (Object.fromEntries(entries) as Record<string, number>)
+    : null;
+}
 
 function record(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
@@ -289,6 +337,12 @@ function stringValue(value: unknown) {
 }
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+function percentageValue(value: unknown) {
+  const number = numberValue(value);
+  if (number === null || number < 0) return null;
+  if (number <= 1) return number * 100;
+  return number <= 100 ? number : null;
 }
 function tagName(value: unknown) {
   if (!Array.isArray(value) || !isRecord(value[0])) return null;

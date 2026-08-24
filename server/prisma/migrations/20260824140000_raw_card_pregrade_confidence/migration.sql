@@ -1,0 +1,1 @@
+ALTER TABLE "RawCardPreGrade" ADD COLUMN "confidence" DOUBLE PRECISION;

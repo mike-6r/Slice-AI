@@ -18,7 +18,14 @@ import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list
 
 export const Route = createFileRoute("/submissions/$id")({ component: SubmissionDetailPage });
 
-const REQUIRED_EVIDENCE_SLOTS = ["front", "back"] as const;
+const REQUIRED_EVIDENCE_SLOTS = [
+  "front",
+  "back",
+  "top-edge",
+  "bottom-edge",
+  "left-edge",
+  "right-edge",
+] as const;
 const OPTIONAL_EVIDENCE_SLOTS = [
   {
     slot: "grading-label",
@@ -83,6 +90,7 @@ function SubmissionDetailPage() {
       services.repositories.submissions.updateDraft(id, {
         version: detail.data!.version,
         categoryId: input.categoryId,
+        ...(input.nextStep ? { currentStep: input.nextStep } : {}),
         declaredMetadata: input.declaredMetadata,
       }),
     onSuccess: (_detail, input) => {
@@ -371,7 +379,7 @@ function SubmissionDetailPage() {
           <div>
             <h2 className="text-lg font-semibold">Photos and supporting evidence</h2>
             <p className="mt-1 text-sm text-subtle">
-              Upload the two required photos first, then add optional supporting images if they help
+              Upload the six required views first, then add optional supporting images if they help
               review. Images are checked by the submission service before they are ready.
             </p>
           </div>
@@ -495,7 +503,7 @@ function SubmissionDetailPage() {
                 onClick={() => {
                   if (!evidenceReady) {
                     setLocalError(
-                      "Front and back images must both be marked ready before you submit this asset for review.",
+                      "All six required views must be marked ready before you submit this asset for review.",
                     );
                     return;
                   }

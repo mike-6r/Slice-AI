@@ -1117,10 +1117,18 @@ const mapSubmission = (raw: unknown): AssetSubmission => {
     throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid submission metadata from service.");
   if (!Number.isSafeInteger(value.version) || (value.version as number) < 1)
     throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid submission version from service.");
+  const currentStep = value.currentStep === undefined ? 1 : value.currentStep;
+  if (
+    !Number.isSafeInteger(currentStep) ||
+    (currentStep as number) < 1 ||
+    (currentStep as number) > 6
+  )
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid submission current step from service.");
   return {
     id: stringField(value.id, "submission.id"),
     status: stringField(value.status, "submission.status"),
     version: value.version as number,
+    currentStep: currentStep as number,
     categoryId: stringField(value.categoryId, "submission.categoryId"),
     setId: nullableString(value.setId, "submission.setId"),
     gradeScaleEntryId: nullableString(value.gradeScaleEntryId, "submission.gradeScaleEntryId"),
@@ -1143,6 +1151,7 @@ const mapSubmissionMedia = (raw: unknown): SubmissionMedia => {
     mimeType: stringField(value.mimeType, "submission media.mimeType"),
     sizeBytes: Number(value.sizeBytes),
     status: status as SubmissionMedia["status"],
+    previewUrl: typeof value.previewUrl === "string" ? value.previewUrl : null,
     createdAt: stringField(value.createdAt, "submission media.createdAt") as ISODateTime,
     updatedAt: stringField(value.updatedAt, "submission media.updatedAt") as ISODateTime,
   };
@@ -1189,6 +1198,7 @@ const mapRawCardPreGrade = (raw: unknown): RawCardPreGrade => {
     cornerScore: number(value.cornerScore),
     edgeScore: number(value.edgeScore),
     surfaceScore: number(value.surfaceScore),
+    confidence: number(value.confidence),
     conditionLabel: nullableString(value.conditionLabel, "pre-grade.conditionLabel"),
     autographDetected:
       typeof value.autographDetected === "boolean" ? value.autographDetected : null,
@@ -3368,6 +3378,28 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             item.description === null
               ? null
               : stringField(item.description, "category.description"),
+        }));
+      },
+      async listGradingCompanies() {
+        const body = await client.get<{
+          items: Array<{ code: string; name: string }>;
+        }>("/grading-companies");
+        return body.items.map((item) => ({
+          code: stringField(item.code, "gradingCompany.code"),
+          name: stringField(item.name, "gradingCompany.name"),
+        }));
+      },
+      async listGrades(companyCode) {
+        const body = await client.get<{
+          items: Array<{ grade: string; label: string; conditionLabel: string | null }>;
+        }>(`/grading-companies/${encodeURIComponent(companyCode)}/grades`);
+        return body.items.map((item) => ({
+          grade: stringField(item.grade, "grade.grade"),
+          label: stringField(item.label, "grade.label"),
+          conditionLabel:
+            item.conditionLabel === null
+              ? null
+              : stringField(item.conditionLabel, "grade.conditionLabel"),
         }));
       },
     },

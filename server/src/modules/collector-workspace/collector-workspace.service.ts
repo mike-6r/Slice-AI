@@ -12,9 +12,13 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { OutboxWriter } from '../outbox/application/outbox-writer.service';
-import { customerResourceEvent, eventType } from '../outbox/domain/domain-event';
+import {
+  customerResourceEvent,
+  eventType,
+} from '../outbox/domain/domain-event';
 import { collectorUsageFor } from './collector-entitlements';
 import { CollectorMembershipService } from '../providers/application/collector-membership.service';
+import { REQUIRED_MEDIA_SLOTS } from '../submissions/domain/submission.policy';
 
 const pipeline = [
   'DRAFT',
@@ -525,8 +529,30 @@ export class CollectorWorkspaceService {
       });
       if (!intake.shipment) {
         const occurredAt = shipment.createdAt;
-        await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentTrackingAdded, submissionId, intakeId: intake.id, status: 'SHIPPED', actorUserId: userId, correlationId: `shipment:${shipment.id}`, occurredAt }));
-        await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentInTransit, submissionId, intakeId: intake.id, status: 'IN_TRANSIT', actorUserId: userId, correlationId: `shipment:${shipment.id}`, occurredAt }));
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.shipmentTrackingAdded,
+            submissionId,
+            intakeId: intake.id,
+            status: 'SHIPPED',
+            actorUserId: userId,
+            correlationId: `shipment:${shipment.id}`,
+            occurredAt,
+          }),
+        );
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.shipmentInTransit,
+            submissionId,
+            intakeId: intake.id,
+            status: 'IN_TRANSIT',
+            actorUserId: userId,
+            correlationId: `shipment:${shipment.id}`,
+            occurredAt,
+          }),
+        );
       }
       return updated;
     });
@@ -573,9 +599,25 @@ export class CollectorWorkspaceService {
       const updated = await db.submissionIntake.update({
         where: { id: intakeId },
         data: { status: 'RECEIVED', receivedAt: new Date() },
-        include: { vault: true, shipment: true, receipt: true, submission: { select: { ownerUserId: true } } },
+        include: {
+          vault: true,
+          shipment: true,
+          receipt: true,
+          submission: { select: { ownerUserId: true } },
+        },
       });
-      await this.outbox.append(db, customerResourceEvent({ eventType: eventType.intakeReceiptConfirmed, submissionId: updated.submissionId, intakeId, status: 'RECEIVED', actorUserId: updated.submission.ownerUserId, correlationId: `receipt:${intakeId}`, occurredAt: updated.receivedAt ?? new Date() }));
+      await this.outbox.append(
+        db,
+        customerResourceEvent({
+          eventType: eventType.intakeReceiptConfirmed,
+          submissionId: updated.submissionId,
+          intakeId,
+          status: 'RECEIVED',
+          actorUserId: updated.submission.ownerUserId,
+          correlationId: `receipt:${intakeId}`,
+          occurredAt: updated.receivedAt ?? new Date(),
+        }),
+      );
       return updated;
     });
   }
@@ -602,10 +644,49 @@ export class CollectorWorkspaceService {
     const deliveredAt =
       status === 'DELIVERED' ? new Date() : shipment.deliveredAt;
     return this.db.$transaction(async (db) => {
-      await db.intakeShipment.update({ where: { intakeId }, data: { status, deliveredAt, lastCheckedAt: new Date() } });
-      const updated = await db.submissionIntake.update({ where: { id: intakeId }, data: { status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT', deliveredAt }, include: { vault: true, shipment: true, receipt: true, submission: { select: { ownerUserId: true } } } });
-      if (status === 'DELIVERED' && shipment.status !== 'DELIVERED') await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentCarrierDelivered, submissionId: updated.submissionId, intakeId, status: 'DELIVERED', actorUserId: updated.submission.ownerUserId, correlationId: `shipment:${shipment.id}`, occurredAt: deliveredAt! }));
-      if (status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT') await this.outbox.append(db, customerResourceEvent({ eventType: eventType.shipmentInTransit, submissionId: updated.submissionId, intakeId, status: 'IN_TRANSIT', actorUserId: updated.submission.ownerUserId, correlationId: `shipment:${shipment.id}`, occurredAt: new Date() }));
+      await db.intakeShipment.update({
+        where: { intakeId },
+        data: { status, deliveredAt, lastCheckedAt: new Date() },
+      });
+      const updated = await db.submissionIntake.update({
+        where: { id: intakeId },
+        data: {
+          status: status === 'DELIVERED' ? 'DELIVERED' : 'IN_TRANSIT',
+          deliveredAt,
+        },
+        include: {
+          vault: true,
+          shipment: true,
+          receipt: true,
+          submission: { select: { ownerUserId: true } },
+        },
+      });
+      if (status === 'DELIVERED' && shipment.status !== 'DELIVERED')
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.shipmentCarrierDelivered,
+            submissionId: updated.submissionId,
+            intakeId,
+            status: 'DELIVERED',
+            actorUserId: updated.submission.ownerUserId,
+            correlationId: `shipment:${shipment.id}`,
+            occurredAt: deliveredAt!,
+          }),
+        );
+      if (status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT')
+        await this.outbox.append(
+          db,
+          customerResourceEvent({
+            eventType: eventType.shipmentInTransit,
+            submissionId: updated.submissionId,
+            intakeId,
+            status: 'IN_TRANSIT',
+            actorUserId: updated.submission.ownerUserId,
+            correlationId: `shipment:${shipment.id}`,
+            occurredAt: new Date(),
+          }),
+        );
       return updated;
     });
   }
@@ -888,11 +969,13 @@ function isBetaFixtureSubmission(
 ) {
   if (!isBeta) return false;
   if (assetSlug?.startsWith('slice-demo-')) return true;
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+    return false;
   const value = metadata as Record<string, unknown>;
   return (
     value.betaFixtureRetired === true ||
-    (typeof value.certificationNumber === 'string' && value.certificationNumber.startsWith('STG-'))
+    (typeof value.certificationNumber === 'string' &&
+      value.certificationNumber.startsWith('STG-'))
   );
 }
 
@@ -1097,7 +1180,7 @@ function requestFor(asset: WorkspaceItem): CollectorRequestView[] {
         type: 'ADD_REQUIRED_EVIDENCE' as const,
         category: 'SUBMISSION' as const,
         priority: 'REMINDER' as const,
-        reason: 'Add the required front and back evidence before submitting.',
+        reason: 'Add all required evidence before submitting.',
         badge: 'Evidence needed',
         action: 'Add photos',
         actionLabel: 'Add photos',
@@ -1256,17 +1339,19 @@ function lifecycleFor(
   const currentLabel =
     asset.submissionStatus === 'APPROVED'
       ? 'Approved'
-      : action?.actionLabel ??
-        (asset.stage === 'MARKET_LIVE' ? 'Market Live' : stageLabel(asset.stage));
+      : (action?.actionLabel ??
+        (asset.stage === 'MARKET_LIVE'
+          ? 'Market Live'
+          : stageLabel(asset.stage)));
   const currentDetail =
     asset.submissionStatus === 'APPROVED' && approvedAwaitingShipment
       ? 'Your submission was approved. Ship the physical collectible when you are ready, then add carrier and tracking details.'
-      : action?.reason ??
+      : (action?.reason ??
         (hasMarket
           ? 'Your collectible is verified, held in Slice custody, and currently available through the marketplace.'
           : asset.stage === 'DRAFT'
             ? 'Finish your collectible submission when you are ready.'
-            : 'Slice is moving your collectible through the authenticated workflow. No action is required from you right now.');
+            : 'Slice is moving your collectible through the authenticated workflow. No action is required from you right now.'));
   const nextMilestone = action
     ? { label: action.actionLabel, detail: action.reason }
     : hasMarket
@@ -1351,7 +1436,11 @@ function nextActionFor(
     return 'Add required evidence';
   if (status === 'DRAFT') return 'Finish your draft';
   if (status === 'APPROVED' && !intake) return 'Choose an intake destination';
-  if (status === 'APPROVED' && intake?.status === 'SHIPPING_REQUIRED' && !intake.shipment)
+  if (
+    status === 'APPROVED' &&
+    intake?.status === 'SHIPPING_REQUIRED' &&
+    !intake.shipment
+  )
     return 'Ship your collectible';
   if (status === 'APPROVED') return 'Approved';
   if (stage === 'SUBMITTED' || stage === 'REVIEW')
@@ -1363,7 +1452,7 @@ function nextActionFor(
 }
 
 function missingRequiredEvidence(media: WorkspaceMedia[]) {
-  return !['front', 'back'].every((slot) =>
+  return !REQUIRED_MEDIA_SLOTS.every((slot) =>
     media.some((item) => item.slot === slot && item.status === 'SAFE'),
   );
 }

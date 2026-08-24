@@ -1,0 +1,2 @@
+ALTER TABLE "AssetSubmission"
+ADD COLUMN "currentStep" INTEGER NOT NULL DEFAULT 1;

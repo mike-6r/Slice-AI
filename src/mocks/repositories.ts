@@ -402,6 +402,22 @@ export const mockRepositories: AppRepositories = {
     async listSubmissionCategories() {
       return submissionCategories;
     },
+    async listGradingCompanies() {
+      return [
+        { code: "PSA", name: "PSA" },
+        { code: "BGS", name: "BGS" },
+        { code: "CGC", name: "CGC" },
+        { code: "SGC", name: "SGC" },
+      ];
+    },
+    async listGrades() {
+      return [
+        { grade: "10.00", label: "10", conditionLabel: "Gem Mint" },
+        { grade: "9.50", label: "9.5", conditionLabel: "Gem Mint" },
+        { grade: "9.00", label: "9", conditionLabel: "Mint" },
+        { grade: "8.00", label: "8", conditionLabel: "Near Mint-Mint" },
+      ];
+    },
   },
   submissions: {
     async importReference() {
@@ -421,6 +437,7 @@ export const mockRepositories: AppRepositories = {
         id: `mock-submission-${submissionDrafts.length + 1}`,
         status: "DRAFT",
         version: 1,
+        currentStep: input.currentStep ?? 1,
         categoryId: input.categoryId,
         setId: null,
         gradeScaleEntryId: null,

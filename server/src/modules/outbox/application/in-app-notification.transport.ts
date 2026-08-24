@@ -14,12 +14,21 @@ export class InAppNotificationTransport implements NotificationTransport {
   async deliver(delivery: NotificationDelivery): Promise<NotificationTransportOutcome> {
     const userId = delivery.destinationKey.startsWith('user:') ? delivery.destinationKey.slice(5) : '';
     if (!userId) return { status: 'NON_RETRYABLE_FAILURE', code: 'DESTINATION_INVALID' };
+    const payload = delivery.payload && typeof delivery.payload === 'object' && !Array.isArray(delivery.payload)
+      ? delivery.payload as Record<string, unknown>
+      : {};
+    const isSubmissionReceived = payload.eventType === 'submission.submitted';
+    const title = isSubmissionReceived ? 'We received your collectible submission.' : delivery.topic;
+    const body = isSubmissionReceived
+      ? 'Your submission is private and ready for Slice team review.'
+      : 'You have a new account notification.';
+    const resourceId = typeof payload.submissionId === 'string' ? payload.submissionId : delivery.id;
     let notification;
     let created = false;
     try {
       notification = await this.db.notification.create({ data: {
-        deliveryId: delivery.deliveryId, userId, type: delivery.topic, title: delivery.topic,
-        body: 'You have a new account notification.', resourceType: 'notification-delivery', resourceId: delivery.id,
+        deliveryId: delivery.deliveryId, userId, type: delivery.topic, title,
+        body, resourceType: isSubmissionReceived ? 'submission' : 'notification-delivery', resourceId,
       } });
       created = true;
     } catch (error) {

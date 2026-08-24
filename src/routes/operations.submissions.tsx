@@ -691,7 +691,7 @@ function Evidence({
       id: item.id,
       slot: item.slot,
       status: item.status,
-      required: ["front", "back"].includes(item.slot),
+      required: ["front", "back", "top-edge", "bottom-edge", "left-edge", "right-edge"].includes(item.slot),
       thumbnailUrl: null,
     }));
   const active = items.find((item) => item.id === focused);

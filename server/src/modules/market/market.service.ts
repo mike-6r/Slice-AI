@@ -199,8 +199,12 @@ export class MarketService {
             declaredMetadata: true,
             owner: {
               select: {
-                profile: { select: { displayName: true, publicUsername: true } },
-                publicCollectorProfile: { select: { slug: true, isPublic: true } },
+                profile: {
+                  select: { displayName: true, publicUsername: true },
+                },
+                publicCollectorProfile: {
+                  select: { slug: true, isPublic: true },
+                },
               },
             },
             media: {
@@ -288,16 +292,22 @@ export class MarketService {
       .filter((asset) => {
         const hasInitialOffering = Boolean(
           asset.initialOffering &&
-            ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
+          ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
         );
-        const hasExternalReference = Boolean(asset.marketReference?.currentListing);
-        return hasInitialOffering || asset.trading?.hasExecutionHistory || hasExternalReference;
+        const hasExternalReference = Boolean(
+          asset.marketReference?.currentListing,
+        );
+        return (
+          hasInitialOffering ||
+          asset.trading?.hasExecutionHistory ||
+          hasExternalReference
+        );
       })
       .map((asset) => ({
         asset,
         hasInitialOffering: Boolean(
           asset.initialOffering &&
-            ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
+          ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
         ),
         hasExternalReference: Boolean(asset.marketReference?.currentListing),
       }));
@@ -314,7 +324,10 @@ export class MarketService {
           hasInitialOffering: right.hasInitialOffering,
           hasExternalReference: right.hasExternalReference,
         });
-        return leftPriority - rightPriority || left.asset.title.localeCompare(right.asset.title);
+        return (
+          leftPriority - rightPriority ||
+          left.asset.title.localeCompare(right.asset.title)
+        );
       })
       .slice(0, 6);
 
@@ -331,7 +344,9 @@ export class MarketService {
       where: { slug: { in: selected.map(({ asset }) => asset.slug) } },
       select: { id: true, slug: true },
     });
-    const assetIdBySlug = new Map(databaseAssets.map((asset) => [asset.slug, asset.id]));
+    const assetIdBySlug = new Map(
+      databaseAssets.map((asset) => [asset.slug, asset.id]),
+    );
     const executions = await this.db.tradingExecution.findMany({
       where: {
         assetId: { in: databaseAssets.map((asset) => asset.id) },
@@ -340,7 +355,10 @@ export class MarketService {
       orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
       select: { assetId: true, priceMinor: true, executedAt: true },
     });
-    const latestExecutionByAssetId = new Map<string, (typeof executions)[number]>();
+    const latestExecutionByAssetId = new Map<
+      string,
+      (typeof executions)[number]
+    >();
     for (const execution of executions) {
       if (!latestExecutionByAssetId.has(execution.assetId)) {
         latestExecutionByAssetId.set(execution.assetId, execution);
@@ -353,9 +371,10 @@ export class MarketService {
         ? latestExecutionByAssetId.get(databaseAssetId)
         : undefined;
       const offering = asset.initialOffering;
-      const activeOffering = offering && ['OPEN', 'PARTIALLY_FILLED'].includes(offering.status)
-        ? offering
-        : null;
+      const activeOffering =
+        offering && ['OPEN', 'PARTIALLY_FILLED'].includes(offering.status)
+          ? offering
+          : null;
       const externalReference = asset.marketReference?.currentListing;
       const sliceMarketPrice = activeOffering
         ? {
@@ -365,7 +384,9 @@ export class MarketService {
             },
             kind: 'INITIAL_OFFERING' as const,
             observedAt:
-              activeOffering.updatedAt ?? latestExecution?.executedAt.toISOString() ?? null,
+              activeOffering.updatedAt ??
+              latestExecution?.executedAt.toISOString() ??
+              null,
           }
         : latestExecution
           ? {
@@ -381,25 +402,32 @@ export class MarketService {
             }
           : undefined;
       const referenceUpdatedAt =
-        asset.marketReference?.lastRefreshedAt ?? externalReference?.observedAt ?? null;
-      const updatedAt = [
-        sliceMarketPrice?.observedAt ?? null,
-        referenceUpdatedAt,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .sort()
-        .at(-1) ?? null;
+        asset.marketReference?.lastRefreshedAt ??
+        externalReference?.observedAt ??
+        null;
+      const updatedAt =
+        [sliceMarketPrice?.observedAt ?? null, referenceUpdatedAt]
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1) ?? null;
 
       return {
         assetId: asset.publicId,
         slug: asset.slug,
         title: asset.title,
-        ...(asset.collectibleSet?.name ? { setName: asset.collectibleSet.name } : {}),
+        ...(asset.collectibleSet?.name
+          ? { setName: asset.collectibleSet.name }
+          : {}),
         ...(asset.cardNumber ? { cardNumber: asset.cardNumber } : {}),
         ...(sliceMarketPrice?.observedAt
           ? { sliceMarketPrice }
           : sliceMarketPrice
-            ? { sliceMarketPrice: { ...sliceMarketPrice, observedAt: new Date().toISOString() } }
+            ? {
+                sliceMarketPrice: {
+                  ...sliceMarketPrice,
+                  observedAt: new Date().toISOString(),
+                },
+              }
             : {}),
         ...(externalReference
           ? {
@@ -426,11 +454,12 @@ export class MarketService {
       void freshness;
       return snapshotItem;
     });
-    const lastUpdatedAt = snapshotItems
-      .map((item) => item.lastUpdatedAt)
-      .filter((value): value is string => Boolean(value))
-      .sort()
-      .at(-1) ?? null;
+    const lastUpdatedAt =
+      snapshotItems
+        .map((item) => item.lastUpdatedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null;
     return {
       generatedAt: new Date().toISOString(),
       status: deriveMarketSnapshotStatus(items),
@@ -491,38 +520,54 @@ export class MarketService {
         )
           .reverse()
           .map((point) => ({
-          id: point.id,
-          priceMinor: point.estimatedMarketValueMinor,
-          observedAt: point.observedAt,
-          currency: point.currency,
-          source: point.source,
-          dataStatus: status(point.status),
+            id: point.id,
+            priceMinor: point.estimatedMarketValueMinor,
+            observedAt: point.observedAt,
+            currency: point.currency,
+            source: point.source,
+            dataStatus: status(point.status),
           }));
-    const allHistory = referenceHistory.length ? referenceHistory : valuationHistory;
-    const historySource = referenceHistory.length ? 'PRICECHARTING' : 'SLICE_VALUATION';
+    const allHistory = referenceHistory.length
+      ? referenceHistory
+      : valuationHistory;
+    const historySource = referenceHistory.length
+      ? 'PRICECHARTING'
+      : 'SLICE_VALUATION';
     const historyCurrency = allHistory.at(-1)?.currency ?? 'GBP';
-    const currencyHistory = allHistory.filter((point) => point.currency === historyCurrency);
-    const movementPoints: ReferenceHistoryPoint[] = currencyHistory.map((point) => ({
-      id: point.id,
-      priceMinor: point.priceMinor,
-      observedAt: point.observedAt,
-    }));
+    const currencyHistory = allHistory.filter(
+      (point) => point.currency === historyCurrency,
+    );
+    const movementPoints: ReferenceHistoryPoint[] = currencyHistory.map(
+      (point) => ({
+        id: point.id,
+        priceMinor: point.priceMinor,
+        observedAt: point.observedAt,
+      }),
+    );
     const metrics = calculateReferenceHistoryMetrics(
       movementPoints,
       ranges[range] * 86_400_000,
     );
     const visibleIds = new Set(metrics.visiblePoints.map((point) => point.id));
-    const chartPoints = metrics.startingPoint && !visibleIds.has(metrics.startingPoint.id)
-      ? [metrics.startingPoint, ...metrics.visiblePoints]
-      : metrics.visiblePoints;
-    const responsePoints: MarketHistoryResponsePoint[] = downsampleReferencePoints(chartPoints).map(
-      (point) => {
-        const sourcePoint = currencyHistory.find((candidate) => candidate.id === point.id)!;
-        const sourceIndex = currencyHistory.findIndex((candidate) => candidate.id === point.id);
-        const previous = sourceIndex > 0 ? currencyHistory[sourceIndex - 1] : undefined;
+    const chartPoints =
+      metrics.startingPoint && !visibleIds.has(metrics.startingPoint.id)
+        ? [metrics.startingPoint, ...metrics.visiblePoints]
+        : metrics.visiblePoints;
+    const responsePoints: MarketHistoryResponsePoint[] =
+      downsampleReferencePoints(chartPoints).map((point) => {
+        const sourcePoint = currencyHistory.find(
+          (candidate) => candidate.id === point.id,
+        )!;
+        const sourceIndex = currencyHistory.findIndex(
+          (candidate) => candidate.id === point.id,
+        );
+        const previous =
+          sourceIndex > 0 ? currencyHistory[sourceIndex - 1] : undefined;
         return {
           ...sourcePoint,
-          changeFromPreviousMinor: previous ? point.priceMinor - previous.priceMinor : null,
+          changeFromPreviousMinor: previous
+            ? point.priceMinor - previous.priceMinor
+            : null,
           changeFromPreviousBps: previous
             ? calculateChangeBps(previous.priceMinor, point.priceMinor)
             : null,
@@ -530,11 +575,13 @@ export class MarketService {
             ? point.priceMinor - metrics.startingPoint.priceMinor
             : null,
           changeFromRangeStartBps: metrics.startingPoint
-            ? calculateChangeBps(metrics.startingPoint.priceMinor, point.priceMinor)
+            ? calculateChangeBps(
+                metrics.startingPoint.priceMinor,
+                point.priceMinor,
+              )
             : null,
         };
-      },
-    );
+      });
     const latest = metrics.latestPoint;
     const latestSource = latest
       ? currencyHistory.find((point) => point.id === latest.id)
@@ -543,8 +590,10 @@ export class MarketService {
       ? currencyHistory.find((point) => point.id === metrics.startingPoint!.id)
       : undefined;
     const lastRefreshedAt = referenceHistory.length
-      ? asset.marketProviderMappings?.[0]?.lastSuccessAt ?? latest?.observedAt ?? null
-      : latest?.observedAt ?? null;
+      ? (asset.marketProviderMappings?.[0]?.lastSuccessAt ??
+        latest?.observedAt ??
+        null)
+      : (latest?.observedAt ?? null);
     return {
       assetSlug: asset.slug,
       range,
@@ -565,11 +614,18 @@ export class MarketService {
       latestValue: latestSource
         ? asMoney(metrics.latestPoint!.priceMinor, latestSource.currency)
         : null,
-      absoluteChange: metrics.absoluteChangeMinor !== null && startingSource
-        ? asMoney(metrics.absoluteChangeMinor, startingSource.currency)
-        : null,
-      highValue: metrics.highValueMinor !== null ? asMoney(metrics.highValueMinor, historyCurrency) : null,
-      lowValue: metrics.lowValueMinor !== null ? asMoney(metrics.lowValueMinor, historyCurrency) : null,
+      absoluteChange:
+        metrics.absoluteChangeMinor !== null && startingSource
+          ? asMoney(metrics.absoluteChangeMinor, startingSource.currency)
+          : null,
+      highValue:
+        metrics.highValueMinor !== null
+          ? asMoney(metrics.highValueMinor, historyCurrency)
+          : null,
+      lowValue:
+        metrics.lowValueMinor !== null
+          ? asMoney(metrics.lowValueMinor, historyCurrency)
+          : null,
       historyPointCount: metrics.visiblePoints.length,
       displayedPointCount: responsePoints.length,
       points: responsePoints.map((point) => ({
@@ -578,13 +634,15 @@ export class MarketService {
         estimatedMarketValue: asMoney(point.priceMinor, point.currency),
         source: point.source,
         dataStatus: point.dataStatus,
-        changeFromPrevious: point.changeFromPreviousMinor === null
-          ? null
-          : asMoney(point.changeFromPreviousMinor, point.currency),
+        changeFromPrevious:
+          point.changeFromPreviousMinor === null
+            ? null
+            : asMoney(point.changeFromPreviousMinor, point.currency),
         changeFromPreviousBps: point.changeFromPreviousBps,
-        changeFromRangeStart: point.changeFromRangeStartMinor === null
-          ? null
-          : asMoney(point.changeFromRangeStartMinor, point.currency),
+        changeFromRangeStart:
+          point.changeFromRangeStartMinor === null
+            ? null
+            : asMoney(point.changeFromRangeStartMinor, point.currency),
         changeFromRangeStartBps: point.changeFromRangeStartBps,
       })),
     };
@@ -693,7 +751,8 @@ export class MarketService {
     const firstByAsset = (executions: typeof latestExecutions) => {
       const result = new Map<string, (typeof executions)[number]>();
       for (const execution of executions) {
-        if (!result.has(execution.assetId)) result.set(execution.assetId, execution);
+        if (!result.has(execution.assetId))
+          result.set(execution.assetId, execution);
       }
       return result;
     };
@@ -704,11 +763,14 @@ export class MarketService {
         rows.map(async (row) => {
           const latest = latestByAsset.get(row.id);
           const baseline = baselineByAsset.get(row.id);
-          const activeOffering = row.initialOffering &&
+          const activeOffering =
+            row.initialOffering &&
             ['OPEN', 'PARTIALLY_FILLED'].includes(row.initialOffering.status)
-            ? row.initialOffering
-            : null;
-          const valuation = selectAuthoritativeSliceValuation(row.valuationDecisions);
+              ? row.initialOffering
+              : null;
+          const valuation = selectAuthoritativeSliceValuation(
+            row.valuationDecisions,
+          );
           const displayPrice = latest
             ? {
                 type: 'LAST_EXECUTION' as const,
@@ -718,7 +780,10 @@ export class MarketService {
             : activeOffering
               ? {
                   type: 'INITIAL_OFFERING' as const,
-                  amount: asMoney(activeOffering.pricePerUnitMinor, activeOffering.currency),
+                  amount: asMoney(
+                    activeOffering.pricePerUnitMinor,
+                    activeOffering.currency,
+                  ),
                   observedAt: activeOffering.updatedAt.toISOString(),
                 }
               : valuation
@@ -732,15 +797,17 @@ export class MarketService {
                     amount: null,
                     observedAt: null,
                   };
-          const movement24hBps = latest && baseline && baseline.priceMinor > 0n
-            ? Number(
-                ((latest.priceMinor - baseline.priceMinor) * 10_000n) /
-                  baseline.priceMinor,
-              )
-            : null;
+          const movement24hBps =
+            latest && baseline && baseline.priceMinor > 0n
+              ? Number(
+                  ((latest.priceMinor - baseline.priceMinor) * 10_000n) /
+                    baseline.priceMinor,
+                )
+              : null;
           const marketState = activeOffering
             ? ('INITIAL_OFFERING' as const)
-            : row.tradingMarket?.status === 'OPEN' && row.tradingMarket.tradingEnabled
+            : row.tradingMarket?.status === 'OPEN' &&
+                row.tradingMarket.tradingEnabled
               ? ('LIVE_MARKET' as const)
               : row.tradingMarket
                 ? ('MARKET_CLOSED' as const)
@@ -759,10 +826,17 @@ export class MarketService {
             slug: row.slug,
             title: row.title,
             category: row.category.slug,
-            ...(row.collectibleSet?.name ? { setName: row.collectibleSet.name } : {}),
+            ...(row.collectibleSet?.name
+              ? { setName: row.collectibleSet.name }
+              : {}),
             ...(row.cardNumber ? { cardNumber: row.cardNumber } : {}),
             ...(thumbnailUrl
-              ? { thumbnail: { url: thumbnailUrl, alt: `${row.title} public thumbnail` } }
+              ? {
+                  thumbnail: {
+                    url: thumbnailUrl,
+                    alt: `${row.title} public thumbnail`,
+                  },
+                }
               : {}),
             marketState,
             displayPrice,
@@ -897,8 +971,12 @@ export class MarketService {
               include: {
                 owner: {
                   select: {
-                    profile: { select: { displayName: true, publicUsername: true } },
-                    publicCollectorProfile: { select: { slug: true, isPublic: true } },
+                    profile: {
+                      select: { displayName: true, publicUsername: true },
+                    },
+                    publicCollectorProfile: {
+                      select: { slug: true, isPublic: true },
+                    },
                   },
                 },
                 media: {
@@ -1047,8 +1125,12 @@ export class MarketService {
           include: {
             owner: {
               select: {
-                profile: { select: { displayName: true, publicUsername: true } },
-                publicCollectorProfile: { select: { slug: true, isPublic: true } },
+                profile: {
+                  select: { displayName: true, publicUsername: true },
+                },
+                publicCollectorProfile: {
+                  select: { slug: true, isPublic: true },
+                },
               },
             },
             preGrades: {
@@ -1065,6 +1147,7 @@ export class MarketService {
                 cornerScore: true,
                 edgeScore: true,
                 surfaceScore: true,
+                confidence: true,
                 conditionLabel: true,
                 analyzedAt: true,
                 warnings: true,
@@ -1145,6 +1228,7 @@ type PublicPreGrade = {
   cornerScore: number | null;
   edgeScore: number | null;
   surfaceScore: number | null;
+  confidence: number | null;
   conditionLabel: string | null;
   analyzedAt: Date | null;
   warnings: unknown;
@@ -1242,7 +1326,10 @@ type PublicAssetRow = {
   submissions?: Array<{
     declaredMetadata: unknown;
     owner?: {
-      profile: { displayName: string | null; publicUsername: string | null } | null;
+      profile: {
+        displayName: string | null;
+        publicUsername: string | null;
+      } | null;
       publicCollectorProfile: { slug: string; isPublic: boolean } | null;
     };
     preGrades?: PublicPreGrade[];
@@ -1310,13 +1397,15 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const approvedMedia = asset.submissions?.[0]?.media ?? [];
   const listingSubmission = asset.submissions?.[0];
   const publicCollector = listingSubmission?.owner?.publicCollectorProfile;
-  const listedBy = publicCollector?.isPublic && listingSubmission?.owner
-    ? {
-        displayName: listingSubmission.owner.profile?.displayName ?? 'Collector',
-        username: listingSubmission.owner.profile?.publicUsername ?? null,
-        slug: publicCollector.slug,
-      }
-    : null;
+  const listedBy =
+    publicCollector?.isPublic && listingSubmission?.owner
+      ? {
+          displayName:
+            listingSubmission.owner.profile?.displayName ?? 'Collector',
+          username: listingSubmission.owner.profile?.publicUsername ?? null,
+          slug: publicCollector.slug,
+        }
+      : null;
   const media = (
     await Promise.all(
       approvedMedia.map(async (item) => ({
@@ -1424,25 +1513,34 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           issuedUnits: asset.ownershipSupply.issuedUnits.toString(),
         }
       : null,
-    initialOffering: asset.initialOffering && ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(asset.initialOffering.status)
-      ? {
-          status: asset.initialOffering.status,
-          totalUnits: asset.initialOffering.totalUnits.toString(),
-          offeredUnits: asset.initialOffering.offeredUnits.toString(),
-          retainedUnits: asset.initialOffering.retainedUnits.toString(),
-          pricePerUnitMinor: asset.initialOffering.pricePerUnitMinor.toString(),
-          currency: asset.initialOffering.currency,
-          updatedAt: asset.initialOffering.updatedAt.toISOString(),
-          inventory: asset.initialOffering.inventory
-            ? {
-                offeredUnits: asset.initialOffering.inventory.offeredUnits.toString(),
-                availableUnits: asset.initialOffering.inventory.availableUnits.toString(),
-                reservedUnits: asset.initialOffering.inventory.reservedUnits.toString(),
-                settledUnits: asset.initialOffering.inventory.settledUnits.toString(),
-              }
-            : null,
-        }
-      : null,
+    initialOffering:
+      asset.initialOffering &&
+      ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(
+        asset.initialOffering.status,
+      )
+        ? {
+            status: asset.initialOffering.status,
+            totalUnits: asset.initialOffering.totalUnits.toString(),
+            offeredUnits: asset.initialOffering.offeredUnits.toString(),
+            retainedUnits: asset.initialOffering.retainedUnits.toString(),
+            pricePerUnitMinor:
+              asset.initialOffering.pricePerUnitMinor.toString(),
+            currency: asset.initialOffering.currency,
+            updatedAt: asset.initialOffering.updatedAt.toISOString(),
+            inventory: asset.initialOffering.inventory
+              ? {
+                  offeredUnits:
+                    asset.initialOffering.inventory.offeredUnits.toString(),
+                  availableUnits:
+                    asset.initialOffering.inventory.availableUnits.toString(),
+                  reservedUnits:
+                    asset.initialOffering.inventory.reservedUnits.toString(),
+                  settledUnits:
+                    asset.initialOffering.inventory.settledUnits.toString(),
+                }
+              : null,
+          }
+        : null,
     trading: asset.tradingMarket
       ? {
           status: asset.tradingMarket.status,
@@ -1528,6 +1626,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
       cornerScore: preGrade.cornerScore,
       edgeScore: preGrade.edgeScore,
       surfaceScore: preGrade.surfaceScore,
+      confidence: preGrade.confidence,
       conditionLabel: preGrade.conditionLabel,
       analyzedAt: preGrade.analyzedAt?.toISOString() ?? null,
       warnings: Array.isArray(preGrade.warnings)
@@ -1715,10 +1814,16 @@ function externalMarketReferenceFromMapping(
         `https://www.pricecharting.com/product?id=${encodeURIComponent(mapping.providerExternalId)}`,
       observedAt: mapping.currentObservedAt.toISOString(),
     },
-    movement24hBps: movements ? movements['24H'] : mapping.referenceMovement24hBps,
+    movement24hBps: movements
+      ? movements['24H']
+      : mapping.referenceMovement24hBps,
     movement7dBps: movements ? movements['7D'] : mapping.referenceMovement7dBps,
-    movement30dBps: movements ? movements['30D'] : mapping.referenceMovement30dBps,
-    movement90dBps: movements ? movements['90D'] : mapping.referenceMovement90dBps,
+    movement30dBps: movements
+      ? movements['30D']
+      : mapping.referenceMovement30dBps,
+    movement90dBps: movements
+      ? movements['90D']
+      : mapping.referenceMovement90dBps,
     movement1yBps: movements ? movements['1Y'] : mapping.referenceMovement1yBps,
     lastRefreshedAt: mapping.lastSuccessAt?.toISOString() ?? null,
     historyStartedAt: mapping.referenceHistoryStartedAt?.toISOString() ?? null,

@@ -1386,6 +1386,7 @@ model AssetSubmission {
   assetId              String?
   status               SubmissionStatus              @default(DRAFT)
   version              Int                           @default(1)
+  currentStep          Int                           @default(1)
   categoryId           String
   setId                String?
   gradeScaleEntryId    String?
@@ -1433,6 +1434,7 @@ model RawCardPreGrade {
   cornerScore         Float?
   edgeScore           Float?
   surfaceScore        Float?
+  confidence          Float?
   conditionLabel      String?
   autographDetected   Boolean?
   categoryDetected    String?
@@ -1522,7 +1524,6 @@ model SubmissionMedia {
   valuationEvidence ValuationEvidence[]   @relation("ValuationEvidenceDocument")
   coverageEvidence  InsuranceCoverage[]   @relation("InsuranceCoverageDocument")
 
-  @@unique([submissionId, slot])
   @@index([submissionId, status, slot])
   @@index([sha256])
 }

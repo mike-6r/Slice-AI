@@ -5,6 +5,7 @@ export interface AssetSubmission {
   id: string;
   status: string;
   version: number;
+  currentStep: number;
   categoryId: string;
   setId: string | null;
   gradeScaleEntryId: string | null;
@@ -23,6 +24,7 @@ export interface SubmissionMedia {
   mimeType: string;
   sizeBytes: number;
   status: "PENDING_UPLOAD" | "UPLOADED" | "SCANNING" | "SAFE" | "REJECTED" | "DELETED";
+  previewUrl?: string | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -58,6 +60,7 @@ export interface RawCardPreGrade {
   cornerScore: number | null;
   edgeScore: number | null;
   surfaceScore: number | null;
+  confidence: number | null;
   conditionLabel: string | null;
   autographDetected: boolean | null;
   categoryDetected: string | null;
@@ -307,8 +310,20 @@ export interface SubmissionCategory {
   description: string | null;
 }
 
+export interface GradingCompanyOption {
+  code: string;
+  name: string;
+}
+
+export interface GradeOption {
+  grade: string;
+  label: string;
+  conditionLabel: string | null;
+}
+
 export interface CreateSubmissionDraft {
   categoryId: string;
+  currentStep?: number;
   declaredMetadata: {
     name: string;
     manufacturer?: string;
@@ -328,6 +343,14 @@ export interface CreateSubmissionDraft {
     provenanceNotes?: string;
     knownDefects?: string;
     termsAcknowledged?: boolean;
+    marketCheckStatus?: MarketResearchSnapshot["state"];
+    marketCheckAcknowledged?: boolean;
+    offerIntentMode?: "25" | "50" | "75" | "100" | "CUSTOM";
+    offerIntentPercent?: string;
+    collectorExpectedValueMinor?: string;
+    collectorExpectedCurrency?: string;
+    collectorReviewerNotes?: string;
+    aiReviewStatus?: "AI_REVIEW_SKIPPED";
     customerReference?: CustomerReference;
   };
   marketResearchId?: string;

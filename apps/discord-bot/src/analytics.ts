@@ -4,8 +4,16 @@ export type AnalyticsOutcome = 'SUCCESS' | 'USER_VALIDATION_ERROR' | 'PERMISSION
 export type AnalyticsPeriod = '24h' | '7d' | '30d';
 export type AnalyticsHealth = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'UNKNOWN';
 
+/** Daily aggregates contain no message text or command arguments. Keep them for
+ * 13 months to support year-over-year operational comparisons.  Worker
+ * heartbeats are operational telemetry, not historical analytics, and expire
+ * after 90 days. */
+export const ANALYTICS_DAILY_RETENTION_DAYS = 400;
+export const ANALYTICS_HEARTBEAT_RETENTION_DAYS = 90;
+
 export function analyticsDay(value = new Date()): Date { return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate())); }
 export function analyticsPeriodStart(period: AnalyticsPeriod, now = new Date()): Date { return new Date(now.getTime() - (period === '24h' ? 1 : period === '7d' ? 7 : 30) * 86_400_000); }
+export function analyticsRetentionStart(days: number, now = new Date()): Date { return analyticsDay(new Date(now.getTime() - days * 86_400_000)); }
 
 /** Analytics writes are caller-isolated: callers always invoke through capture(). */
 export class DiscordAnalyticsService {
@@ -29,6 +37,17 @@ export class DiscordAnalyticsService {
   }
   async communityInteraction(guildId: string, actorId: string, at = new Date()): Promise<void> { const day = analyticsDay(at); await this.prisma.discordAnalyticsDailyMemberActivity.upsert({ where: { guildId_discordUserId_day: { guildId, discordUserId: actorId, day } }, create: { guildId, discordUserId: actorId, day, communityInteraction: true }, update: { communityInteraction: true } }); }
   async heartbeat(input: { workerName: string; instanceId: string; successfulScan?: boolean; failed?: boolean; metadata?: Record<string, string | number | boolean> }): Promise<void> { const now = new Date(); await this.prisma.discordWorkerHeartbeat.upsert({ where: { workerName: input.workerName }, create: { workerName: input.workerName, instanceId: input.instanceId, lastStartedAt: now, lastHeartbeatAt: now, ...(input.successfulScan ? { lastSuccessfulScanAt: now } : {}), ...(input.failed ? { lastErrorAt: now, status: 'DEGRADED' } : {}), metadata: input.metadata }, update: { instanceId: input.instanceId, lastHeartbeatAt: now, ...(input.successfulScan ? { lastSuccessfulScanAt: now, status: 'HEALTHY' } : {}), ...(input.failed ? { lastErrorAt: now, status: 'DEGRADED' } : {}), metadata: input.metadata } }); }
+  async pruneRetention(now = new Date()): Promise<void> {
+    const dailyBefore = analyticsRetentionStart(ANALYTICS_DAILY_RETENTION_DAYS, now);
+    const heartbeatBefore = new Date(now.getTime() - ANALYTICS_HEARTBEAT_RETENTION_DAYS * 86_400_000);
+    await this.prisma.$transaction([
+      this.prisma.discordAnalyticsDailyChannel.deleteMany({ where: { day: { lt: dailyBefore } } }),
+      this.prisma.discordAnalyticsDailyCommand.deleteMany({ where: { day: { lt: dailyBefore } } }),
+      this.prisma.discordAnalyticsDailyMemberActivity.deleteMany({ where: { day: { lt: dailyBefore } } }),
+      this.prisma.discordAnalyticsDailyGuild.deleteMany({ where: { day: { lt: dailyBefore } } }),
+      this.prisma.discordWorkerHeartbeat.deleteMany({ where: { lastHeartbeatAt: { lt: heartbeatBefore } } }),
+    ]);
+  }
   async overview(guildId: string, period: AnalyticsPeriod, memberCount: number) {
     const start = analyticsPeriodStart(period); const priorStart = new Date(start.getTime() - (Date.now() - start.getTime())); const [daily, priorDaily, active, channels, commands, ticketGroups, ticketOpened, ticketResolved, suggestions, polls, giveaways, memes, publications, runs] = await Promise.all([
       this.prisma.discordAnalyticsDailyGuild.aggregate({ where: { guildId, day: { gte: analyticsDay(start) } }, _sum: analyticsSums() }),

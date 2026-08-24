@@ -72,7 +72,7 @@ export class OutboxHandlerRegistry {
     @Optional() routing?: NotificationRoutingService,
     @Optional() deliveries?: NotificationDeliveryService,
   ) {
-    this.handlers = [new TradeCompletedOutboxHandler(routing, deliveries), ...[eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].map((type) => new RoutedPrivateOutboxHandler(type, isOrderPayload, routing, deliveries)), ...[eventType.submissionChangesRequested, eventType.submissionApproved, eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].map((type) => new RoutedPrivateOutboxHandler(type, isResourcePayload, routing, deliveries)), new RoutedPrivateOutboxHandler(eventType.movementSettled, isMovementPayload, routing, deliveries)];
+    this.handlers = [new TradeCompletedOutboxHandler(routing, deliveries), ...[eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].map((type) => new RoutedPrivateOutboxHandler(type, isOrderPayload, routing, deliveries)), ...[eventType.submissionSubmitted, eventType.submissionChangesRequested, eventType.submissionApproved, eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].map((type) => new RoutedPrivateOutboxHandler(type, isResourcePayload, routing, deliveries)), new RoutedPrivateOutboxHandler(eventType.movementSettled, isMovementPayload, routing, deliveries)];
   }
 
   /** A bounded registration seam for internal, idempotent future consumers. */

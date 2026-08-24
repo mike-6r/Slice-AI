@@ -21,6 +21,7 @@ import { SubmissionService } from '../modules/submissions/application/submission
 import { LocalSubmissionStorage } from '../modules/submissions/infrastructure/local-submission-storage';
 import { TradingService } from '../modules/trading/application/trading.service';
 import { tradingPolicy } from '../modules/trading/domain/trading-policy';
+import { REQUIRED_MEDIA_SLOTS } from '../modules/submissions/domain/submission.policy';
 import {
   ensureDemoAccount,
   ensureDemoFunding,
@@ -372,8 +373,16 @@ async function archiveRetiredDemoSubmissions(
     .map((submission) => submission.id);
   if (!retiredIds.length) return;
   await db.assetSubmission.updateMany({
-    where: { id: { in: retiredIds }, ownerUserId, status: { not: 'CANCELLED' } },
-    data: { status: 'CANCELLED', cancelledAt: new Date(), version: { increment: 1 } },
+    where: {
+      id: { in: retiredIds },
+      ownerUserId,
+      status: { not: 'CANCELLED' },
+    },
+    data: {
+      status: 'CANCELLED',
+      cancelledAt: new Date(),
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -825,17 +834,63 @@ async function ensureCollectorEntitlementsAndVaults(db: PrismaService) {
     select: { code: true },
   });
   if (plans.length !== 3) {
-    throw new Error('Collector membership plans are missing. Apply the membership migration before running the demo setup.');
+    throw new Error(
+      'Collector membership plans are missing. Apply the membership migration before running the demo setup.',
+    );
   }
   // Membership plans are migration-owned and membership state is Stripe-owned.
   // This fixture may provision vault reference data, but it must never create
   // or reactivate a fake paid subscription.
   const destinations = [
-    ['Slice London Vault', 'London', 'GB', 'Ship using a tracked service. Include the intake reference on the outer packaging.', 'Slice Collectable\nIntake team\nLondon, United Kingdom'],
-    ['Slice US East Intake', 'US East', 'US', 'Use protective packaging and a tracked service. Include the intake reference with your shipment.', 'Slice Collectable\nUS East Intake\nUnited States'],
+    [
+      'Slice London Vault',
+      'London',
+      'GB',
+      'Ship using a tracked service. Include the intake reference on the outer packaging.',
+      'Slice Collectable\nIntake team\nLondon, United Kingdom',
+    ],
+    [
+      'Slice US East Intake',
+      'US East',
+      'US',
+      'Use protective packaging and a tracked service. Include the intake reference with your shipment.',
+      'Slice Collectable\nUS East Intake\nUnited States',
+    ],
   ] as const;
-  for (const [displayName, region, countryCode, shippingInstructions, customerSafeAddress] of destinations) {
-    await db.vaultIntakeLocation.upsert({ where: { id: `staging-${countryCode.toLowerCase()}-intake` }, create: { id: `staging-${countryCode.toLowerCase()}-intake`, displayName, region, countryCode, shippingInstructions, customerSafeAddress, acceptedCategories: [], operationallyApproved: false, acceptingShipments: false, environment: 'beta' }, update: { displayName, region, countryCode, shippingInstructions, customerSafeAddress, active: true, intakeAvailable: true, operationallyApproved: false, acceptingShipments: false, environment: 'beta' } });
+  for (const [
+    displayName,
+    region,
+    countryCode,
+    shippingInstructions,
+    customerSafeAddress,
+  ] of destinations) {
+    await db.vaultIntakeLocation.upsert({
+      where: { id: `staging-${countryCode.toLowerCase()}-intake` },
+      create: {
+        id: `staging-${countryCode.toLowerCase()}-intake`,
+        displayName,
+        region,
+        countryCode,
+        shippingInstructions,
+        customerSafeAddress,
+        acceptedCategories: [],
+        operationallyApproved: false,
+        acceptingShipments: false,
+        environment: 'beta',
+      },
+      update: {
+        displayName,
+        region,
+        countryCode,
+        shippingInstructions,
+        customerSafeAddress,
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: false,
+        acceptingShipments: false,
+        environment: 'beta',
+      },
+    });
   }
 }
 
@@ -1193,7 +1248,7 @@ async function ensureSubmission(
         })
       ).map((media) => [media.slot, media]),
     );
-    for (const slot of ['front', 'back']) {
+    for (const slot of REQUIRED_MEDIA_SLOTS) {
       const fixture = fixtureMedia(`${spec.key}:${slot}`);
       let media = mediaBySlot.get(slot);
       if (media?.status === 'REJECTED') {
@@ -1364,7 +1419,10 @@ async function ensureAssetLifecycle(
     await lifecycle.custody(
       admin,
       assetId,
-      { toStatus: 'RECEIVED', providerRef: `collector-custody-received:${spec.key}` },
+      {
+        toStatus: 'RECEIVED',
+        providerRef: `collector-custody-received:${spec.key}`,
+      },
       `collector-custody-${randomUUID()}`,
       `collector-custody-received:${spec.key}`,
     );
@@ -1375,7 +1433,10 @@ async function ensureAssetLifecycle(
     await lifecycle.custody(
       admin,
       assetId,
-      { toStatus: 'INSPECTED', providerRef: `collector-custody-inspected:${spec.key}` },
+      {
+        toStatus: 'INSPECTED',
+        providerRef: `collector-custody-inspected:${spec.key}`,
+      },
       `collector-custody-${randomUUID()}`,
       `collector-custody-inspected:${spec.key}`,
     );
@@ -1417,12 +1478,17 @@ async function ensureAssetLifecycle(
       `collector-coverage-${randomUUID()}`,
       `collector-coverage:${spec.key}`,
     );
-  custody = await db.vaultCustodyRecord.findUniqueOrThrow({ where: { assetId } });
+  custody = await db.vaultCustodyRecord.findUniqueOrThrow({
+    where: { assetId },
+  });
   if (custody.status === 'INSPECTED')
     await lifecycle.custody(
       admin,
       assetId,
-      { toStatus: 'SECURED', providerRef: `collector-custody-secured:${spec.key}` },
+      {
+        toStatus: 'SECURED',
+        providerRef: `collector-custody-secured:${spec.key}`,
+      },
       `collector-custody-${randomUUID()}`,
       `collector-custody-secured:${spec.key}`,
     );
@@ -1437,16 +1503,24 @@ async function ensureAssetLifecycle(
       `collector-publish-${randomUUID()}`,
       `collector-publish:${spec.key}`,
     );
-  const policy = await db.ownershipSupplyPolicy.findUnique({ where: { assetId } });
+  const policy = await db.ownershipSupplyPolicy.findUnique({
+    where: { assetId },
+  });
   if (!asset.ownershipSupply && !policy)
     await ownershipPolicy.propose(
       admin,
       assetId,
-      { policyCode: 'STANDARD_COLLECTIBLE_V1', totalUnits: '1000', reason: 'Staging demo fixture policy.' },
+      {
+        policyCode: 'STANDARD_COLLECTIBLE_V1',
+        totalUnits: '1000',
+        reason: 'Staging demo fixture policy.',
+      },
       `collector-policy-propose-${randomUUID()}`,
       `collector-policy-propose:${spec.key}`,
     );
-  const proposedPolicy = await db.ownershipSupplyPolicy.findUnique({ where: { assetId } });
+  const proposedPolicy = await db.ownershipSupplyPolicy.findUnique({
+    where: { assetId },
+  });
   if (!asset.ownershipSupply && proposedPolicy?.status === 'PROPOSED')
     await ownershipPolicy.approve(
       admin,
@@ -1834,7 +1908,9 @@ async function ensureDemoInvestorLots(
         userId: investorUserId,
         assetId: execution.assetId,
         units: execution.units.toString(),
-        totalCostMinor: (execution.grossMinor + execution.buyerFeeMinor).toString(),
+        totalCostMinor: (
+          execution.grossMinor + execution.buyerFeeMinor
+        ).toString(),
         sourceReference: execution.correlationId,
       },
       `staging-demo-investor-lot:${execution.correlationId}`,
@@ -2078,7 +2154,7 @@ async function ensureWorkspaceQueue(
       submission = await db.assetSubmission.findUniqueOrThrow({
         where: { id: draft.id },
       });
-      for (const slot of ['front', 'back']) {
+      for (const slot of REQUIRED_MEDIA_SLOTS) {
         const fixture = fixtureMedia(`collector-b:${index}:${slot}`);
         const intent = await submissions.uploadIntent(
           owner,

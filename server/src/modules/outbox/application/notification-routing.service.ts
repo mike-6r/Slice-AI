@@ -12,7 +12,7 @@ export class NotificationRoutingService {
   route(event: OutboxEvent): DeliveryIntent[] {
     if (event.eventType === eventType.tradeCompleted && event.schemaVersion === 1) return this.publicTrade(event);
     if ([eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateOrder(event);
-    if ([eventType.submissionChangesRequested, eventType.submissionApproved].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateResource(event, notificationTopic.collectorActions);
+    if ([eventType.submissionSubmitted, eventType.submissionChangesRequested, eventType.submissionApproved].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateResource(event, notificationTopic.collectorActions);
     if ([eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].includes(event.eventType as never) && event.schemaVersion === 1) return this.privateResource(event, notificationTopic.shipping);
     if (event.eventType === eventType.movementSettled && event.schemaVersion === 1) return this.privateMovement(event);
     throw new OutboxHandlerError('NON_RETRYABLE', 'EVENT_SCHEMA_UNKNOWN');
