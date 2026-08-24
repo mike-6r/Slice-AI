@@ -63,7 +63,10 @@ export interface TradingOrderPreview {
   limitPriceMinor: string;
   grossMinor: string;
   feeMinor: string;
-  feeApplication: "SETTLEMENT_BOUNDARY_PENDING" | "NOT_APPLIED" | string;
+  feeApplication:
+    "SETTLEMENT_BOUNDARY_PENDING" | "ESTIMATED_AT_SETTLEMENT" | "NOT_APPLIED" | string;
+  feeRole?: "MAKER" | "TAKER" | null;
+  feeBps?: number;
   reservationMinor: string | null;
   reservationUnits: string | null;
   marketStatus: "OPEN" | "CLOSED" | "HALTED";
@@ -204,6 +207,8 @@ export interface TradingExecution {
   units: string;
   priceMinor: string;
   feeMinor: string;
+  grossMinor?: string;
+  netMinor?: string;
   settlementStatus: string;
   marketSequence: string;
   executedAt: ISODateTime;

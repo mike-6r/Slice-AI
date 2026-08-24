@@ -87,6 +87,15 @@ export class TradingService {
   async preview(actor: Actor, input: OrderInput) {
     const market = await this.marketForInput(input.assetId);
     const normalized = normalizeLimitOrder({ ...input, ...market });
+    const opposingSide = normalized.side === 'BUY' ? 'SELL' : 'BUY';
+    const bestOpposing = (
+      await this.bookLevels(
+        input.assetId,
+        opposingSide,
+        1,
+        opposingSide === 'SELL' ? 'asc' : 'desc',
+      )
+    )[0];
     const grossMinor = checkedGross(
       normalized.limitPriceMinor,
       normalized.units,
@@ -96,10 +105,16 @@ export class TradingService {
         'INVALID_ORDER_NOTIONAL',
         'Order does not satisfy the market minimum notional.',
       );
-    const policyFeeMinor = feeMinor(
-      grossMinor,
-      normalized.side === 'BUY' ? market.takerFeeBps : market.makerFeeBps,
-    );
+    const crossesCurrentLiquidity = bestOpposing
+      ? normalized.side === 'BUY'
+        ? normalized.limitPriceMinor >= BigInt(bestOpposing.priceMinor)
+        : normalized.limitPriceMinor <= BigInt(bestOpposing.priceMinor)
+      : false;
+    const feeRole = crossesCurrentLiquidity ? 'TAKER' : 'MAKER';
+    const estimatedFeeBps = crossesCurrentLiquidity
+      ? market.takerFeeBps
+      : market.makerFeeBps;
+    const policyFeeMinor = feeMinor(grossMinor, estimatedFeeBps);
     return {
       assetId: input.assetId,
       side: normalized.side,
@@ -109,7 +124,9 @@ export class TradingService {
       limitPriceMinor: normalized.limitPriceMinor.toString(),
       grossMinor: grossMinor.toString(),
       feeMinor: policyFeeMinor.toString(),
-      feeApplication: tradingPolicy.fee.application,
+      feeApplication: 'ESTIMATED_AT_SETTLEMENT',
+      feeRole,
+      feeBps: estimatedFeeBps,
       reservationMinor:
         normalized.side === 'BUY'
           ? (grossMinor + feeMinor(grossMinor, market.takerFeeBps)).toString()
@@ -190,7 +207,17 @@ export class TradingService {
       : { units: 0n, gross: 0n, worst: null };
     const open = requestedSlices ? requestedSlices - executable.units : 0n;
     const grossAtLimit = requestedSlices && limitPrice ? requestedSlices * limitPrice : null;
-    const fee = grossAtLimit === null ? null : feeMinor(grossAtLimit, input.side === 'BUY' ? market.takerFeeBps : market.makerFeeBps);
+    const crossesCurrentLiquidity = Boolean(
+      limitPrice !== null &&
+        bestBookPrice !== null &&
+        (input.side === 'BUY'
+          ? limitPrice >= bestBookPrice
+          : limitPrice <= bestBookPrice),
+    );
+    const estimatedFeeBps = crossesCurrentLiquidity
+      ? market.takerFeeBps
+      : market.makerFeeBps;
+    const fee = grossAtLimit === null ? null : feeMinor(grossAtLimit, estimatedFeeBps);
     const cashTotal = cashAccount?.balance
       ? accountAuthority(cashAccount.normalSide, cashAccount.balance.postedDebitMinor, cashAccount.balance.postedCreditMinor) - cashAccount.balance.reservedMinor
       : null;
@@ -228,6 +255,7 @@ export class TradingService {
         : null,
       estimatedReservationMinor: grossAtLimit === null || fee === null ? null : (grossAtLimit + fee).toString(),
       feeMinor: fee?.toString() ?? null,
+      feeRole: fee === null ? null : crossesCurrentLiquidity ? 'TAKER' : 'MAKER',
       executableSlices: executable.units.toString(),
       openSlices: open.toString(),
       bestMarketPriceMinor: bestBookPrice?.toString() ?? null,
@@ -1085,6 +1113,11 @@ export class TradingService {
           row.buyOrder.userId === userId
             ? row.buyerFeeMinor.toString()
             : row.sellerFeeMinor.toString(),
+        grossMinor: row.grossMinor.toString(),
+        netMinor: (
+          row.grossMinor +
+          (row.buyOrder.userId === userId ? row.buyerFeeMinor : -row.sellerFeeMinor)
+        ).toString(),
         settlementStatus: row.settlementStatus,
         marketSequence: row.marketSequence.toString(),
         executedAt: row.executedAt.toISOString(),

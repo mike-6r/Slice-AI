@@ -34,6 +34,7 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   ConnectPayoutSetup,
+  FeePolicy,
   PortfolioSummary,
   WalletInsights,
   WalletMovementPage,
@@ -87,16 +88,15 @@ export function Wallet() {
     queryFn: services.providers.bankConnections,
     enabled: isAuthenticated,
   });
-  const currentUser = useQuery({
-    queryKey: queryKeys.user.current,
-    queryFn: services.repositories.users.getCurrentUser,
-    enabled: isAuthenticated,
-  });
-  const isCollector = currentUser.data?.roles.includes("COLLECTOR") ?? false;
   const connectPayout = useQuery({
     queryKey: queryKeys.providers.connectPayoutSetup,
     queryFn: services.providers.connectPayoutSetup,
-    enabled: isAuthenticated && isCollector,
+    enabled: isAuthenticated,
+  });
+  const feePolicy = useQuery({
+    queryKey: queryKeys.providers.feePolicy,
+    queryFn: services.providers.feePolicy,
+    enabled: isAuthenticated,
   });
   const capabilities = useQuery({
     queryKey: queryKeys.account.capabilities,
@@ -110,6 +110,7 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.providers.feePolicy });
     void queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities });
   };
   const verification = useMutation({
@@ -171,6 +172,7 @@ export function Wallet() {
               (item) =>
                 item.capability === (action === "DEPOSIT" ? "DEPOSIT_FUNDS" : "WITHDRAW_FUNDS"),
             )}
+            feePolicy={feePolicy}
             onCapabilityRequired={setCapabilityDialog}
           />
           <AccountStatusPanel
@@ -179,7 +181,6 @@ export function Wallet() {
             capabilities={capabilities.data?.capabilities}
             verification={verification}
             connectPayout={connectPayout}
-            isCollector={isCollector}
             onCreateConnect={services.providers.createConnectOnboarding}
           />
         </section>
@@ -207,7 +208,7 @@ export function Wallet() {
   );
 }
 
-function CollectorPayoutPanel({
+function PayoutSetupPanel({
   query,
   refreshWallet,
   onCreate,
@@ -229,11 +230,11 @@ function CollectorPayoutPanel({
   const title = ready
     ? "Payouts ready"
     : status === "NOT_STARTED"
-      ? "Set up collector payouts"
+      ? "Set up withdrawals"
       : "Finish payout setup";
   const detail = ready
-    ? "Your collector proceeds can be withdrawn through your connected payout account."
-    : "Stripe securely collects the identity and bank details required to send collector proceeds. Slice never collects those details directly.";
+    ? "Your eligible Slice cash can be withdrawn through your connected payout account."
+    : "Stripe securely collects the identity and bank details required to send a withdrawal. Slice never collects those details directly.";
   return (
     <WalletPanel title={title} icon={<ArrowUpFromLine />} className="wallet-panel--payouts">
       <div className="wallet-panel__body">
@@ -289,9 +290,9 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
     <section className="wallet-kpis" aria-label="Cash summary">
       <WalletKpi
         icon={WalletCards}
-        label="Available cash"
-        value={formatWalletMoney(cash.availableMinor)}
-        detail="Ready to invest"
+        label="Withdrawable cash"
+        value={formatWalletMoney(cash.withdrawableMinor ?? cash.availableMinor)}
+        detail="Posted cash not reserved"
       />
       <WalletKpi
         icon={ArrowDownToLine}
@@ -512,6 +513,7 @@ function MoveMoneyPanel({
   banks,
   movement,
   capability,
+  feePolicy,
   onCapabilityRequired,
 }: {
   action: WalletMovementType;
@@ -522,6 +524,7 @@ function MoveMoneyPanel({
   banks: UseQueryResult<BankConnection[]>;
   movement: ReturnType<typeof useMutation<WalletMovementView, Error, void>>;
   capability: AccountCapability | undefined;
+  feePolicy: UseQueryResult<FeePolicy>;
   onCapabilityRequired: (decision: AccountCapability) => void;
 }) {
   const providerReady = compliance.data?.status === "APPROVED";
@@ -593,9 +596,8 @@ function MoveMoneyPanel({
           </label>
           {action === "WITHDRAWAL" ? (
             <p>
-              Withdrawals use your verified collector payout account. Slice does not collect bank
-              details in this form, and settled cash remains reserved until the provider confirms
-              the payout.
+              Withdrawals use your verified payout account. Slice does not collect bank details in
+              this form, and eligible cash remains reserved until the provider confirms the payout.
             </p>
           ) : (
             <p>
@@ -603,6 +605,18 @@ function MoveMoneyPanel({
               provisional cash.
             </p>
           )}
+          {feePolicy.data ? (
+            <p className="wallet-move-fee">
+              Slice fee: {formatMovementFee(feePolicy.data, action)}
+              {(
+                action === "DEPOSIT"
+                  ? feePolicy.data.deposit.providerFeeSeparate
+                  : feePolicy.data.withdrawal.providerFeeSeparate
+              )
+                ? " Provider fees, if any, are separate from Slice fees."
+                : ""}
+            </p>
+          ) : null}
           <button type="submit" disabled={domainBlocked || movement.isPending}>
             {movement.isPending
               ? "Submitting…"
@@ -636,15 +650,17 @@ function capabilityInlineReason(capability: AccountCapability) {
     case "BANK_ACCOUNT_REQUIRED":
       return "Connect a UK bank account before requesting a deposit.";
     case "PAYOUT_ACCOUNT_REQUIRED":
-      return "Complete payout setup before withdrawing collector proceeds.";
+      return "Complete payout setup before withdrawing available cash.";
     case "PAYOUT_ACCOUNT_REVIEW_REQUIRED":
       return "Payout setup is still under review.";
     case "COLLECTOR_PAYOUTS_REQUIRED":
-      return "Withdrawals are currently supported for collector proceeds only.";
+      return "Complete payout setup before requesting a withdrawal.";
+    case "NO_WITHDRAWABLE_BALANCE":
+      return "No funds are available to withdraw. Settled cash reserved for orders is excluded.";
     case "DEPOSITS_UNAVAILABLE":
       return "Deposits are temporarily unavailable in this environment.";
     case "WITHDRAWALS_UNAVAILABLE":
-      return "Withdrawals are not available for this account in this environment.";
+      return "Withdrawals are temporarily unavailable in this environment.";
     case "TRADING_UNAVAILABLE":
       return "Trading is temporarily unavailable in this environment.";
     default:
@@ -658,7 +674,6 @@ function AccountStatusPanel({
   capabilities,
   verification,
   connectPayout,
-  isCollector,
   onCreateConnect,
 }: {
   query: UseQueryResult<ComplianceSummary>;
@@ -666,7 +681,6 @@ function AccountStatusPanel({
   capabilities?: AccountCapability[];
   verification: UseMutationResult<ComplianceSession, Error, void>;
   connectPayout: UseQueryResult<ConnectPayoutSetup>;
-  isCollector: boolean;
   onCreateConnect: () => Promise<ConnectPayoutSetup>;
 }) {
   const connected = banks.data?.some((bank) => bank.status === "CONNECTED") ?? false;
@@ -725,18 +739,14 @@ function AccountStatusPanel({
                 icon={<ArrowUpFromLine />}
                 label="Payout readiness"
                 detail={
-                  isCollector
-                    ? connectPayout.isLoading
-                      ? "Loading payout status"
-                      : payoutDetail(connectPayout.data?.status)
-                    : "Available for collector accounts"
+                  connectPayout.isLoading
+                    ? "Loading payout status"
+                    : payoutDetail(connectPayout.data?.status)
                 }
                 status={
-                  isCollector
-                    ? connectPayout.isLoading
-                      ? "LOADING"
-                      : (connectPayout.data?.status ?? "UNAVAILABLE")
-                    : "NOT_REQUIRED"
+                  connectPayout.isLoading
+                    ? "LOADING"
+                    : (connectPayout.data?.status ?? "UNAVAILABLE")
                 }
               />
             </dl>
@@ -762,7 +772,7 @@ function AccountStatusPanel({
               </button>
             ) : null}
             {verification.error ? <InlineError error={verification.error} /> : null}
-            {isCollector && connectPayout.data && connectPayout.data.status !== "READY" ? (
+            {connectPayout.data && connectPayout.data.status !== "READY" ? (
               <button
                 type="button"
                 className="wallet-verify-button wallet-verify-button--secondary"
@@ -1361,15 +1371,19 @@ function payoutDetail(status: string | undefined) {
   return (
     (
       {
-        NOT_STARTED: "Connect a payout account to receive collector proceeds",
+        NOT_STARTED: "Connect a payout account to receive withdrawals",
         ACTION_REQUIRED: "Finish the required payout account steps",
         UNDER_REVIEW: "Stripe is reviewing your payout account",
-        READY: "Collector proceeds can be paid out",
+        READY: "Eligible cash can be paid out",
         RESTRICTED: "Payouts are restricted until account requirements are resolved",
         DISABLED: "Payouts are disabled for this account",
       } as Record<string, string>
     )[status ?? "NOT_STARTED"] ?? "Payout status unavailable"
   );
+}
+function formatMovementFee(policy: FeePolicy, action: WalletMovementType) {
+  const bps = action === "DEPOSIT" ? policy.deposit.sliceFeeBps : policy.withdrawal.sliceFeeBps;
+  return bps === 0 ? "none" : `${bps} bps`;
 }
 function friendlyStatus(status: string) {
   const labels: Record<string, string> = {

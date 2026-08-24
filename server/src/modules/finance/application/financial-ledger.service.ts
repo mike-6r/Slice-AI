@@ -213,6 +213,28 @@ export class FinancialLedgerService {
     const collectorProceedsMinor = proceedsBalance
       ? accountAuthority(proceeds.normalSide, proceedsBalance.postedDebitMinor, proceedsBalance.postedCreditMinor)
       : 0n;
+    const withdrawableSources = accounts
+      .filter((account) =>
+        account.code === 'CASH_AVAILABLE' ||
+        account.code === 'COLLECTOR_PROCEEDS_AVAILABLE',
+      )
+      .map((account) => {
+        const balance = account.balance;
+        const posted = accountAuthority(
+          account.normalSide,
+          balance?.postedDebitMinor ?? 0n,
+          balance?.postedCreditMinor ?? 0n,
+        );
+        const available = posted - (balance?.reservedMinor ?? 0n);
+        return {
+          code: account.code,
+          availableMinor: (available > 0n ? available : 0n).toString(),
+        };
+      });
+    const withdrawableMinor = withdrawableSources.reduce(
+      (total, source) => total + BigInt(source.availableMinor),
+      0n,
+    );
     const totalMinor = accounts.reduce((total, account) => {
       const balance = account.balance;
       return total + accountAuthority(
@@ -236,6 +258,12 @@ export class FinancialLedgerService {
       pendingWithdrawalCount: pendingWithdrawals.length,
       orderReservedMinor: orderReservedMinor.toString(),
       withdrawalReservedMinor: withdrawalReservedMinor.toString(),
+      // This is the only customer-facing withdrawal amount. It is derived
+      // from posted GBP cash accounts after active reservations; pending
+      // provider movements have no posted balance and therefore cannot inflate
+      // it.
+      withdrawableMinor: withdrawableMinor.toString(),
+      withdrawableSources,
       collectorProceedsMinor: collectorProceedsMinor.toString(),
       collectorProceedsReservedMinor: (proceedsBalance?.reservedMinor ?? 0n).toString(),
       accounts: accounts.map((account) => {

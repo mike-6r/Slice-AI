@@ -44,6 +44,28 @@ describe("Document 013 finance API adapter", () => {
     expect("profitLoss" in holding).toBe(false);
     expect("allocation" in holding).toBe(false);
   });
+
+  it("preserves backend-authoritative withdrawal availability and pending state", () => {
+    const cash = mapCash({
+      currency: "GBP",
+      totalMinor: "10000",
+      reservedMinor: "2500",
+      availableMinor: "7500",
+      withdrawableMinor: "5000",
+      pendingMinor: "1200",
+      pendingDepositCount: 1,
+      pendingWithdrawalMinor: "800",
+      pendingWithdrawalCount: 1,
+      withdrawableSources: [
+        { code: "CASH_AVAILABLE", availableMinor: "5000" },
+        { code: "COLLECTOR_PROCEEDS_AVAILABLE", availableMinor: "0" },
+      ],
+      accounts: [],
+    });
+    expect(cash.withdrawableMinor).toBe("5000");
+    expect(cash.pendingMinor).toBe("1200");
+    expect(cash.withdrawableSources).toHaveLength(2);
+  });
   it("keeps sellable ownership separate from market buy liquidity", () => {
     const holding = mapHolding({
       assetId: "asset",

@@ -38,6 +38,7 @@ export type CapabilityReason =
   | 'PAYOUT_ACCOUNT_REQUIRED'
   | 'PAYOUT_ACCOUNT_REVIEW_REQUIRED'
   | 'COLLECTOR_PAYOUTS_REQUIRED'
+  | 'NO_WITHDRAWABLE_BALANCE'
   | 'TRADING_UNAVAILABLE'
   | 'DEPOSITS_UNAVAILABLE'
   | 'WITHDRAWALS_UNAVAILABLE'
@@ -56,6 +57,7 @@ type Requirement = {
     | 'BANK_ACCOUNT'
     | 'PAYOUT_ACCOUNT'
     | 'PROVIDER_AVAILABILITY'
+    | 'CASH_BALANCE'
     | 'ACCOUNT_STATUS'
     | 'FEATURE_AVAILABILITY';
   satisfied: boolean;
@@ -141,10 +143,6 @@ export class AccountCapabilityService {
           select: { id: true },
           take: 1,
         },
-        roleAssignments: {
-          where: { revokedAt: null },
-          select: { role: true },
-        },
         externalFinancialAccounts: {
           where: {
             provider: providerForMode(this.config.providerMode),
@@ -163,6 +161,24 @@ export class AccountCapabilityService {
           },
           select: { status: true },
           take: 1,
+        },
+        financialAccounts: {
+          where: {
+            ownerType: 'USER',
+            code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
+            currency: 'GBP',
+            status: 'ACTIVE',
+          },
+          select: {
+            normalSide: true,
+            balance: {
+              select: {
+                postedDebitMinor: true,
+                postedCreditMinor: true,
+                reservedMinor: true,
+              },
+            },
+          },
         },
       },
     });
@@ -290,17 +306,6 @@ export class AccountCapabilityService {
       capability === 'WITHDRAW_FUNDS' &&
       this.config.providerMode !== 'local'
     ) {
-      const collector = user.roleAssignments.some(
-        (assignment) => assignment.role === 'COLLECTOR',
-      );
-      if (!collector) {
-        needs('PROVIDER_AVAILABILITY', false);
-        return this.denied(
-          capability,
-          'COLLECTOR_PAYOUTS_REQUIRED',
-          requirements,
-        );
-      }
       const payout = user.externalConnectAccounts[0];
       const payoutReady = payout?.status === 'READY';
       needs('PAYOUT_ACCOUNT', payoutReady);
@@ -313,6 +318,23 @@ export class AccountCapabilityService {
           requirements,
         );
       }
+    }
+    if (capability === 'WITHDRAW_FUNDS') {
+      const withdrawableMinor = (user.financialAccounts ?? []).reduce(
+        (total, account) => {
+          if (!account.balance) return total;
+          const posted =
+            account.normalSide === 'CREDIT'
+              ? account.balance.postedCreditMinor - account.balance.postedDebitMinor
+              : account.balance.postedDebitMinor - account.balance.postedCreditMinor;
+          const available = posted - account.balance.reservedMinor;
+          return total + (available > 0n ? available : 0n);
+        },
+        0n,
+      );
+      needs('CASH_BALANCE', withdrawableMinor > 0n);
+      if (withdrawableMinor <= 0n)
+        return this.denied(capability, 'NO_WITHDRAWABLE_BALANCE', requirements);
     }
     return this.allowed(capability, requirements);
   }
@@ -421,17 +443,18 @@ function customerMessage(reason: CapabilityReason) {
     BANK_ACCOUNT_REQUIRED:
       'Connect a UK bank account before requesting a deposit.',
     PAYOUT_ACCOUNT_REQUIRED:
-      'Complete payout setup before withdrawing collector proceeds.',
+      'Complete payout setup before withdrawing available cash.',
     PAYOUT_ACCOUNT_REVIEW_REQUIRED:
       'Payout setup is still under review. You can withdraw once it is approved.',
     COLLECTOR_PAYOUTS_REQUIRED:
-      'Withdrawals are currently supported for collector proceeds only.',
+      'Complete payout setup before requesting a withdrawal.',
+    NO_WITHDRAWABLE_BALANCE: 'No settled cash is currently available to withdraw.',
     TRADING_UNAVAILABLE:
       'Trading is temporarily unavailable in this environment.',
     DEPOSITS_UNAVAILABLE:
       'Deposits are temporarily unavailable in this environment.',
     WITHDRAWALS_UNAVAILABLE:
-      'Withdrawals are available for collector proceeds only in this environment.',
+      'Withdrawals are temporarily unavailable in this environment.',
     ACCOUNT_RESTRICTED: 'This action is unavailable for this account.',
     ACCOUNT_DEACTIVATED:
       'This action is unavailable for a deactivated account.',

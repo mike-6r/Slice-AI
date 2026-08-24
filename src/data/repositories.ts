@@ -33,6 +33,7 @@ import type {
   BankConnection,
   BankConnectionCheckoutSession,
   ConnectPayoutSetup,
+  FeePolicy,
   PriceAlert,
   SaleProposal,
   SaleProposalPage,
@@ -1737,6 +1738,7 @@ export interface ProviderRepository {
   disconnectBankConnection(id: string): Promise<{ disconnected: boolean; replayed: boolean }>;
   setDefaultBankConnection(id: string): Promise<{ selected: boolean }>;
   getConnectPayoutSetup(): Promise<ConnectPayoutSetup>;
+  getFeePolicy(): Promise<FeePolicy>;
   createConnectOnboarding(): Promise<ConnectPayoutSetup>;
   refreshConnectOnboarding(): Promise<ConnectPayoutSetup>;
   listMovements(input?: { cursor?: string; limit?: number }): Promise<WalletMovementPage>;

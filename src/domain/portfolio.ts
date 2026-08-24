@@ -15,6 +15,12 @@ export interface PortfolioCashSummary {
   pendingWithdrawalCount?: number;
   orderReservedMinor?: GbpMinorUnits;
   withdrawalReservedMinor?: GbpMinorUnits;
+  /** Posted GBP cash that is eligible for an external withdrawal. */
+  withdrawableMinor?: GbpMinorUnits;
+  withdrawableSources?: Array<{
+    code: string;
+    availableMinor: GbpMinorUnits;
+  }>;
   collectorProceedsMinor?: GbpMinorUnits;
   collectorProceedsReservedMinor?: GbpMinorUnits;
 }

@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { jest } from '@jest/globals';
 import { mapConnectAccountStatus, StripeConnectPayoutService } from './stripe-connect-payout.service';
 
 describe('StripeConnectPayoutService', () => {
@@ -15,8 +15,19 @@ describe('StripeConnectPayoutService', () => {
     expect(mapConnectAccountStatus(account({ currently_due: [], past_due: ['individual.verification'], pending_verification: [], errors: [], disabled_reason: 'requirements.past_due' }, { transfers: 'inactive' }))).toBe('DISABLED');
   });
 
-  it('requires the collector role before exposing payout setup', async () => {
-    const service = new StripeConnectPayoutService({} as never, {} as never, {} as never, {} as never);
-    await expect(service.status({ roles: ['USER'], userId: 'u-1' } as never)).rejects.toBeInstanceOf(ForbiddenException);
+  it('exposes reusable payout setup to a normal user without a collector role', async () => {
+    const service = new StripeConnectPayoutService(
+      {
+        externalConnectAccount: {
+          findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+        },
+      } as never,
+      {} as never,
+      { provider: () => 'STRIPE_SANDBOX', environment: () => 'SANDBOX' } as never,
+      {} as never,
+    );
+    await expect(
+      service.status({ roles: ['USER'], userId: 'u-1' } as never),
+    ).resolves.toMatchObject({ status: 'NOT_STARTED' });
   });
 });

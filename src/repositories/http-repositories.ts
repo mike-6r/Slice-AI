@@ -43,6 +43,7 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   ConnectPayoutSetup,
+  FeePolicy,
   TradingExecution,
   TradingExecutionPage,
   TradingOrderInput,
@@ -624,6 +625,13 @@ const mapTradingPreview = (raw: unknown): TradingOrderPreview => {
     grossMinor: stringField(value.grossMinor, "preview.grossMinor"),
     feeMinor: stringField(value.feeMinor, "preview.feeMinor"),
     feeApplication: stringField(value.feeApplication, "preview.feeApplication"),
+    feeRole:
+      value.feeRole === "MAKER" || value.feeRole === "TAKER"
+        ? value.feeRole
+        : value.feeRole === null
+          ? null
+          : undefined,
+    ...(value.feeBps === undefined ? {} : { feeBps: Number(value.feeBps) }),
     reservationMinor: nullableString(value.reservationMinor, "preview.reservationMinor"),
     reservationUnits: nullableString(value.reservationUnits, "preview.reservationUnits"),
     marketStatus: stringField(
@@ -903,6 +911,12 @@ const mapExecutionPage = (raw: unknown): TradingExecutionPage => {
       units: stringField(item.units, "execution.units"),
       priceMinor: stringField(item.priceMinor, "execution.priceMinor"),
       feeMinor: stringField(item.feeMinor, "execution.feeMinor"),
+      ...(item.grossMinor === undefined
+        ? {}
+        : { grossMinor: stringField(item.grossMinor, "execution.grossMinor") }),
+      ...(item.netMinor === undefined
+        ? {}
+        : { netMinor: stringField(item.netMinor, "execution.netMinor") }),
       settlementStatus: stringField(item.settlementStatus, "execution.settlementStatus"),
       marketSequence: stringField(item.marketSequence, "execution.marketSequence"),
       executedAt: stringField(item.executedAt, "execution.executedAt") as ISODateTime,
@@ -1032,6 +1046,57 @@ const mapConnectPayoutSetup = (raw: unknown): ConnectPayoutSetup => {
           },
     onboardingUrl: nullableString(value.onboardingUrl, "connect.onboardingUrl"),
     expiresAt: nullableString(value.expiresAt, "connect.expiresAt") as ISODateTime | null,
+  };
+};
+const mapFeePolicy = (raw: unknown): FeePolicy => {
+  const value = objectField(raw, "fee policy");
+  const nonNegativeInteger = (input: unknown, label: string) => {
+    if (typeof input !== "number" || !Number.isInteger(input) || input < 0)
+      throw new ApiError("CLIENT_CONTRACT_ERROR", `Invalid ${label}.`);
+    return input;
+  };
+  const movement = (input: unknown, label: string) => {
+    const row = objectField(input, label);
+    if (typeof row.providerFeeSeparate !== "boolean")
+      throw new ApiError("CLIENT_CONTRACT_ERROR", `Invalid ${label}.`);
+    return {
+      sliceFeeBps: nonNegativeInteger(row.sliceFeeBps, `${label}.sliceFeeBps`),
+      providerFeeSeparate: row.providerFeeSeparate,
+    };
+  };
+  const secondary = objectField(value.secondaryTrading, "fee policy secondary trading");
+  const offering = objectField(value.initialOffering, "fee policy initial offering");
+  if (value.currency !== "GBP")
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Unsupported fee policy currency.");
+  return {
+    currency: "GBP",
+    movementScheduleVersion: stringField(
+      value.movementScheduleVersion,
+      "feePolicy.movementScheduleVersion",
+    ),
+    deposit: movement(value.deposit, "fee policy deposit"),
+    withdrawal: movement(value.withdrawal, "fee policy withdrawal"),
+    secondaryTrading: {
+      scheduleVersion: stringField(
+        secondary.scheduleVersion,
+        "feePolicy.secondaryTrading.scheduleVersion",
+      ),
+      makerFeeBps: nonNegativeInteger(
+        secondary.makerFeeBps,
+        "feePolicy.secondaryTrading.makerFeeBps",
+      ),
+      takerFeeBps: nonNegativeInteger(
+        secondary.takerFeeBps,
+        "feePolicy.secondaryTrading.takerFeeBps",
+      ),
+    },
+    initialOffering: {
+      scheduleVersion: stringField(
+        offering.scheduleVersion,
+        "feePolicy.initialOffering.scheduleVersion",
+      ),
+      feeBps: nonNegativeInteger(offering.feeBps, "feePolicy.initialOffering.feeBps"),
+    },
   };
 };
 const mapSubmission = (raw: unknown): AssetSubmission => {
@@ -4137,6 +4202,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async getConnectPayoutSetup() {
         return mapConnectPayoutSetup(await client.get<unknown>("/wallet/payouts/connect"));
+      },
+      async getFeePolicy() {
+        return mapFeePolicy(await client.get<unknown>("/fees"));
       },
       async createConnectOnboarding() {
         return mapConnectPayoutSetup(

@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { randomUUID } from 'node:crypto';
@@ -59,7 +59,6 @@ export class StripeConnectPayoutService {
   ) {}
 
   async status(actor: Actor) {
-    this.requireCollector(actor);
     const provider = this.stripeFactory.provider();
     const environment = this.stripeFactory.environment();
     const row = await this.db.externalConnectAccount.findUnique({ where: { provider_environment_userId: { provider, environment, userId: actor.userId } } });
@@ -70,7 +69,6 @@ export class StripeConnectPayoutService {
   }
 
   async createOnboardingLink(actor: Actor, requestId: string) {
-    this.requireCollector(actor);
     const stripe = this.stripeFactory.get();
     const provider = this.stripeFactory.provider();
     const environment = this.stripeFactory.environment();
@@ -120,7 +118,7 @@ export class StripeConnectPayoutService {
     const provider = this.stripeFactory.provider();
     const environment = this.stripeFactory.environment();
     const account = await this.db.externalConnectAccount.findUnique({ where: { provider_environment_userId: { provider, environment, userId: input.userId } } });
-    if (!account || account.status !== 'READY') throw new ConflictException({ code: 'CONNECT_PAYOUT_NOT_READY', message: 'Complete payout setup before withdrawing collector proceeds.' });
+    if (!account || account.status !== 'READY') throw new ConflictException({ code: 'CONNECT_PAYOUT_NOT_READY', message: 'Complete payout setup before withdrawing available cash.' });
     const externalAccountId = this.crypto.decrypt(account.externalAccountIdCiphertext, `connect-account:${account.id}`);
     const amount = BigInt(input.amountMinor);
     if (amount > BigInt(Number.MAX_SAFE_INTEGER)) throw new ConflictException({ code: 'STRIPE_AMOUNT_OUT_OF_RANGE', message: 'Withdrawal amount is too large.' });
@@ -181,10 +179,6 @@ export class StripeConnectPayoutService {
   private async syncAccount(id: string, account: Stripe.Account) {
     const status = mapConnectAccountStatus(account);
     return this.db.externalConnectAccount.update({ where: { id }, data: { status, requirementsSummary: requirementsSummary(account), detailsSubmitted: account.details_submitted, payoutsEnabled: account.payouts_enabled, transfersCapability: account.capabilities?.transfers ?? null, lastSyncedAt: new Date() } });
-  }
-
-  private requireCollector(actor: Actor) {
-    if (!actor.roles.includes('COLLECTOR')) throw new ForbiddenException({ code: 'COLLECTOR_PAYOUTS_REQUIRED', message: 'Payout setup is available to collector accounts.' });
   }
 
   private text(value: unknown) { return typeof value === 'string' && value.length > 0 ? value : null; }

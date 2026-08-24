@@ -21,6 +21,7 @@ import { ControlRateLimitService } from '../../identity/access/control-rate-limi
 import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { PortfolioSnapshotService, type PortfolioPerformanceRange } from '../application/portfolio-snapshot.service';
+import { currentFeePolicy } from '../domain/fee-policy';
 
 const historyQuery = z
   .object({
@@ -58,6 +59,11 @@ export class FinanceController {
   @UseGuards(AccessTokenGuard)
   wallet(@Req() req: AuthenticatedRequest) {
     return this.ledger.walletForUser(req.actor!.userId);
+  }
+
+  @Get('fees')
+  fees() {
+    return currentFeePolicy();
   }
 
   @Get('me/wallet/transactions')

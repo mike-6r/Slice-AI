@@ -569,6 +569,8 @@ function RecentExecutionsPanel({
                   <th>Shares</th>
                   <th>Price / share</th>
                   <th>Gross value</th>
+                  <th>Fee</th>
+                  <th>Net / total</th>
                   <th>Executed</th>
                   <th>Settlement</th>
                 </tr>
@@ -592,8 +594,13 @@ function RecentExecutionsPanel({
                       <td>{formatOrderMoney(execution.priceMinor)}</td>
                       <td>
                         {formatOrderMoney(
-                          (BigInt(execution.priceMinor) * BigInt(execution.units)).toString(),
+                          execution.grossMinor ??
+                            (BigInt(execution.priceMinor) * BigInt(execution.units)).toString(),
                         )}
+                      </td>
+                      <td>{formatOrderMoney(execution.feeMinor)}</td>
+                      <td>
+                        {execution.netMinor ? formatOrderMoney(execution.netMinor) : "Unavailable"}
                       </td>
                       <td>{formatOrderDate(execution.executedAt)}</td>
                       <td>
@@ -603,7 +610,7 @@ function RecentExecutionsPanel({
                   ))
                 ) : (
                   <tr className="orders-table__empty-row">
-                    <td colSpan={7}>
+                    <td colSpan={9}>
                       <strong>No executions yet.</strong>
                       <span>Authoritative fills will appear here.</span>
                     </td>

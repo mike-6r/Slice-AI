@@ -287,6 +287,11 @@ export class WalletMovementService {
           include: { balance: true },
         });
       }
+      if (!cash && type === 'WITHDRAWAL')
+        throw new ConflictException({
+          code: 'NO_WITHDRAWABLE_BALANCE',
+          message: 'No posted GBP cash is available for withdrawal.',
+        });
       if (!cash)
         throw new NotFoundException({
           code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
@@ -438,7 +443,10 @@ export class WalletMovementService {
         where: { id: movement.cashAccountId },
         select: { code: true },
       });
-      if (cashAccount?.code !== 'COLLECTOR_PROCEEDS_AVAILABLE') {
+      if (
+        cashAccount?.code !== 'CASH_AVAILABLE' &&
+        cashAccount?.code !== 'COLLECTOR_PROCEEDS_AVAILABLE'
+      ) {
         await this.failFromProvider({
           movementId: movement.id,
           reasonCode: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED',
@@ -447,7 +455,7 @@ export class WalletMovementService {
         throw new ConflictException({
           code: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED',
           message:
-            'External withdrawals are currently available for collector proceeds only.',
+            'External withdrawals are not currently available for this cash balance.',
         });
       }
       if (!this.connectPayouts) {
@@ -458,7 +466,7 @@ export class WalletMovementService {
         });
         throw new ConflictException({
           code: 'STRIPE_CONNECT_UNAVAILABLE',
-          message: 'Collector payouts are not configured.',
+          message: 'Payouts are not configured.',
         });
       }
       try {

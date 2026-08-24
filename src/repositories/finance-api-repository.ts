@@ -78,7 +78,9 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
   if (body.currency !== "GBP" || !Array.isArray(body.accounts))
     throw new Error("Invalid wallet balance response.");
   const accounts = body.accounts.map((account) => object(account));
-  const accountTotalMinor = sumMinor(accounts.map((account) => minor(account.totalMinor, "wallet.totalMinor")));
+  const accountTotalMinor = sumMinor(
+    accounts.map((account) => minor(account.totalMinor, "wallet.totalMinor")),
+  );
   const accountReservedMinor = sumMinor(
     accounts.map((account) => minor(account.reservedMinor, "wallet.reservedMinor")),
   );
@@ -88,7 +90,9 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
   return {
     currency: "GBP",
     totalMinor:
-      body.totalMinor === undefined ? accountTotalMinor : minor(body.totalMinor, "wallet.totalMinor"),
+      body.totalMinor === undefined
+        ? accountTotalMinor
+        : minor(body.totalMinor, "wallet.totalMinor"),
     reservedMinor:
       body.reservedMinor === undefined
         ? accountReservedMinor
@@ -128,6 +132,27 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
             body.withdrawalReservedMinor,
             "wallet.withdrawalReservedMinor",
           ),
+        }
+      : {}),
+    ...(body.withdrawableMinor !== undefined
+      ? { withdrawableMinor: minor(body.withdrawableMinor, "wallet.withdrawableMinor") }
+      : {}),
+    ...(body.withdrawableSources !== undefined
+      ? {
+          withdrawableSources: Array.isArray(body.withdrawableSources)
+            ? body.withdrawableSources.map((rawSource) => {
+                const source = object(rawSource);
+                return {
+                  code: requiredString(source.code, "wallet.withdrawableSources.code"),
+                  availableMinor: minor(
+                    source.availableMinor,
+                    "wallet.withdrawableSources.availableMinor",
+                  ),
+                };
+              })
+            : (() => {
+                throw new Error("Invalid wallet withdrawable sources response.");
+              })(),
         }
       : {}),
     ...(body.collectorProceedsMinor !== undefined

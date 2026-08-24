@@ -20,6 +20,7 @@ import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import type {
   AccountCapability,
+  FeePolicy,
   TradingOrderInput,
   TradingOrderPreview,
   TradingOrderSide,
@@ -78,6 +79,10 @@ export function TradingOrderForm({
     queryKey: queryKeys.account.capabilities,
     queryFn: services.account.capabilities,
   });
+  const feePolicy = useQuery({
+    queryKey: queryKeys.providers.feePolicy,
+    queryFn: services.providers.feePolicy,
+  });
   const asset = useQuery({
     queryKey: queryKeys.assets.detail(assetSlug),
     queryFn: () => services.assets.get(assetSlug as never),
@@ -111,17 +116,19 @@ export function TradingOrderForm({
     issuance.data?.issuedUnits,
   );
   const initialOffering = asset.data?.initialOffering;
-  const initialOfferingOpen = Boolean(initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status));
+  const initialOfferingOpen = Boolean(
+    initialOffering && ["OPEN", "PARTIALLY_FILLED"].includes(initialOffering.status),
+  );
   const suggestedPrice =
     side === "BUY" && initialOfferingOpen && initialOffering
       ? BigInt(initialOffering.pricePerUnitMinor)
       : side === "BUY"
-      ? bestAsk
-        ? BigInt(bestAsk.pricePerUnit.amount)
-        : referencePrice
-      : bestBid
-        ? BigInt(bestBid.pricePerUnit.amount)
-        : referencePrice;
+        ? bestAsk
+          ? BigInt(bestAsk.pricePerUnit.amount)
+          : referencePrice
+        : bestBid
+          ? BigInt(bestBid.pricePerUnit.amount)
+          : referencePrice;
 
   useEffect(() => {
     if (!priceTouched && !price && suggestedPrice && suggestedPrice > 0n)
@@ -420,8 +427,8 @@ export function TradingOrderForm({
                       : "Unavailable"
                   }
                 />
-                  <ContextRow
-                    label="Price per Slice"
+                <ContextRow
+                  label="Price per Slice"
                   value={
                     ownershipPreview.data?.slicePriceMinor === undefined
                       ? "Unavailable"
@@ -620,6 +627,7 @@ export function TradingOrderForm({
                 ownershipPreview={ownershipPreview.data}
                 side={side}
                 loading={livePreview.isFetching || ownershipPreview.isFetching}
+                feePolicy={feePolicy.data}
               />
               {side === "BUY" && ownershipPreview.data?.cashShortfallMinor && (
                 <p className="trading-error" role="alert">
@@ -677,7 +685,10 @@ export function TradingOrderForm({
                         : "Unavailable"
                     }
                   />
-                  <Cell label="Authoritative fee preview" value={formatGbpMinor(review.feeMinor)} />
+                  <Cell
+                    label={`Estimated ${review.feeRole === "TAKER" ? "taker" : "maker"} fee`}
+                    value={formatGbpMinor(review.feeMinor)}
+                  />
                   <Cell
                     label={side === "BUY" ? "Maximum cash reserved" : "Estimated proceeds"}
                     value={
@@ -701,6 +712,11 @@ export function TradingOrderForm({
                   </span>
                 </p>
               </div>
+              <p className="trading-fee-disclosure">
+                This is an estimated {review?.feeRole?.toLowerCase() ?? "settlement"} fee based on
+                the current order book. A limit order can partially cross and rest; Slice records
+                the final maker/taker fee on each execution.
+              </p>
               {place.isError && (
                 <p role="alert" className="trading-error">
                   {messageFor(place.error)}
@@ -814,11 +830,13 @@ function Estimate({
   ownershipPreview,
   side,
   loading,
+  feePolicy,
 }: {
   preview?: TradingOrderPreview;
   ownershipPreview?: import("@/domain").OwnershipOrderPreview;
   side: TradingOrderSide;
   loading: boolean;
+  feePolicy?: FeePolicy;
 }) {
   return (
     <section className="trading-estimate" aria-live="polite">
@@ -875,7 +893,7 @@ function Estimate({
           }
         />
         <ContextRow
-          label="Policy fee"
+          label={`${preview?.feeRole === "TAKER" ? "Estimated taker" : preview?.feeRole === "MAKER" ? "Estimated maker" : "Estimated"} fee`}
           value={
             ownershipPreview?.feeMinor
               ? formatGbpMinor(ownershipPreview.feeMinor)
@@ -884,6 +902,12 @@ function Estimate({
                 : "—"
           }
         />
+        <p className="trading-fee-disclosure">
+          {feePolicy
+            ? `Current policy: maker ${feePolicy.secondaryTrading.makerFeeBps} bps; taker ${feePolicy.secondaryTrading.takerFeeBps} bps.`
+            : "The current maker/taker policy is retrieved from Slice before confirmation."}{" "}
+          The final role is recorded when an execution settles.
+        </p>
         <ContextRow
           label={side === "BUY" ? "Resulting ownership" : "Remaining ownership"}
           value={

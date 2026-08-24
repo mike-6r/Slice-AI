@@ -1154,6 +1154,20 @@ export const mockRepositories: AppRepositories = {
         expiresAt: null,
       };
     },
+    async getFeePolicy() {
+      return {
+        currency: "GBP" as const,
+        movementScheduleVersion: "NO_SLICE_MOVEMENT_FEE_V1",
+        deposit: { sliceFeeBps: 0, providerFeeSeparate: true },
+        withdrawal: { sliceFeeBps: 0, providerFeeSeparate: true },
+        secondaryTrading: {
+          scheduleVersion: "INITIAL_POLICY_V1",
+          makerFeeBps: 0,
+          takerFeeBps: 100,
+        },
+        initialOffering: { scheduleVersion: "INITIAL_OFFERING_ZERO_FEE_V1", feeBps: 0 },
+      };
+    },
     async createConnectOnboarding() {
       throw new Error("Connect payout setup is unavailable in explicit mock mode.");
     },

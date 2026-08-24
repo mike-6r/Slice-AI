@@ -138,6 +138,7 @@ export class ProviderService {
   setDefaultBankConnection = (id: string) =>
     this.repositories.providers.setDefaultBankConnection(id);
   connectPayoutSetup = () => this.repositories.providers.getConnectPayoutSetup();
+  feePolicy = () => this.repositories.providers.getFeePolicy();
   createConnectOnboarding = () => this.repositories.providers.createConnectOnboarding();
   refreshConnectOnboarding = () => this.repositories.providers.refreshConnectOnboarding();
   movements = (input?: { cursor?: string; limit?: number }) =>

@@ -58,6 +58,16 @@ export interface ConnectPayoutSetup {
   expiresAt: ISODateTime | null;
 }
 
+/** Backend-authoritative fee disclosure used before customer actions. */
+export interface FeePolicy {
+  currency: "GBP";
+  movementScheduleVersion: string;
+  deposit: { sliceFeeBps: number; providerFeeSeparate: boolean };
+  withdrawal: { sliceFeeBps: number; providerFeeSeparate: boolean };
+  secondaryTrading: { scheduleVersion: string; makerFeeBps: number; takerFeeBps: number };
+  initialOffering: { scheduleVersion: string; feeBps: number };
+}
+
 export type WalletMovementType = "DEPOSIT" | "WITHDRAWAL";
 export type WalletMovementStatus =
   | "CREATED"

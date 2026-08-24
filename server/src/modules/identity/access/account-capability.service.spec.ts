@@ -24,6 +24,12 @@ const user = (overrides: Record<string, unknown> = {}) => ({
   roleAssignments: [],
   externalFinancialAccounts: [],
   externalConnectAccounts: [],
+  financialAccounts: [
+    {
+      normalSide: 'CREDIT',
+      balance: { postedDebitMinor: 0n, postedCreditMinor: 10_000n, reservedMinor: 0n },
+    },
+  ],
   ...overrides,
 });
 
@@ -213,11 +219,56 @@ describe('AccountCapabilityService', () => {
       service.evaluate('user-1', 'WITHDRAW_FUNDS'),
     ).resolves.toMatchObject({
       allowed: false,
-      status: 'BLOCKED',
-      reason: 'COLLECTOR_PAYOUTS_REQUIRED',
+      status: 'ACTION_REQUIRED',
+      reason: 'PAYOUT_ACCOUNT_REQUIRED',
       requirements: expect.arrayContaining([
-        { type: 'PROVIDER_AVAILABILITY', satisfied: false },
+        { type: 'PAYOUT_ACCOUNT', satisfied: false },
       ]),
+    });
+  });
+
+  it('allows a verified investor to withdraw when the reusable payout account is ready', async () => {
+    const service = subject(
+      user({
+        roleAssignments: [],
+        externalConnectAccounts: [{ status: 'READY' }],
+      }),
+      config({
+        providerMode: 'stripe_sandbox',
+        operationalFeatures: {
+          trading: true,
+          deposits: true,
+          withdrawals: true,
+          listing: true,
+          realtime: true,
+        },
+      }),
+    );
+    await expect(
+      service.evaluate('user-1', 'WITHDRAW_FUNDS'),
+    ).resolves.toMatchObject({ allowed: true, reason: null });
+  });
+
+  it('reports zero withdrawable balance separately from account or provider blockers', async () => {
+    const service = subject(
+      user({ financialAccounts: [] }),
+      config({
+        providerMode: 'local',
+        operationalFeatures: {
+          trading: true,
+          deposits: true,
+          withdrawals: true,
+          listing: true,
+          realtime: true,
+        },
+      }),
+    );
+    await expect(
+      service.evaluate('user-1', 'WITHDRAW_FUNDS'),
+    ).resolves.toMatchObject({
+      allowed: false,
+      reason: 'NO_WITHDRAWABLE_BALANCE',
+      requirements: expect.arrayContaining([{ type: 'CASH_BALANCE', satisfied: false }]),
     });
   });
 

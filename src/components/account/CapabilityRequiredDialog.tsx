@@ -27,16 +27,20 @@ const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; de
   },
   PAYOUT_ACCOUNT_REQUIRED: {
     title: "Complete payout setup to withdraw",
-    detail: "Collector proceeds can be withdrawn after the connected payout account is ready.",
+    detail: "Eligible cash can be withdrawn after the connected payout account is ready.",
   },
   PAYOUT_ACCOUNT_REVIEW_REQUIRED: {
     title: "Payout setup is under review",
-    detail: "You can withdraw collector proceeds after the payout account review is complete.",
+    detail: "You can withdraw eligible cash after the payout account review is complete.",
   },
   COLLECTOR_PAYOUTS_REQUIRED: {
-    title: "Withdrawals are for collector proceeds",
+    title: "Complete payout setup to withdraw",
+    detail: "A connected payout account is required before you can request a withdrawal.",
+  },
+  NO_WITHDRAWABLE_BALANCE: {
+    title: "No funds available to withdraw",
     detail:
-      "This Stripe payout path is available to collector accounts with settled proceeds and a ready payout account.",
+      "Add and settle funds before requesting a withdrawal. Cash reserved for orders is not available.",
   },
   TRADING_UNAVAILABLE: {
     title: "Trading is temporarily unavailable",
@@ -47,8 +51,8 @@ const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; de
     detail: "Deposits are currently disabled in this environment. No account step is missing.",
   },
   WITHDRAWALS_UNAVAILABLE: {
-    title: "Withdrawals are not available for this account",
-    detail: "This environment supports withdrawals for collector proceeds only.",
+    title: "Withdrawals are temporarily unavailable",
+    detail: "Withdrawals are currently disabled in this environment. No account step is missing.",
   },
   ACCOUNT_RESTRICTED: {
     title: "This action is unavailable",
