@@ -9,13 +9,13 @@ import {
 export const REQUIRED_MEDIA_SLOTS = [
   'front',
   'back',
+] as const;
+export const AI_REQUIRED_MEDIA_SLOTS = ['front', 'back'] as const;
+export const OPTIONAL_MEDIA_SLOTS = [
   'top-edge',
   'bottom-edge',
   'left-edge',
   'right-edge',
-] as const;
-export const AI_REQUIRED_MEDIA_SLOTS = ['front', 'back'] as const;
-export const OPTIONAL_MEDIA_SLOTS = [
   'grading-label',
   'condition-detail',
   'additional-image',

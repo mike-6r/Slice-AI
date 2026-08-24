@@ -59,21 +59,17 @@ export const Route = createFileRoute("/list")({
 const REQUIRED_SLOTS = [
   "front",
   "back",
-  "top-edge",
-  "bottom-edge",
-  "left-edge",
-  "right-edge",
 ] as const;
 const AI_REQUIRED_SLOTS = ["front", "back"] as const;
 const REQUIRED_PHOTO_CONFIG = [
   ["front", "Front", "Entire front of the card or slab."],
   ["back", "Back", "Entire back with identifying details visible."],
-  ["top-edge", "Top edge", "Show edge wear, whitening, or slab condition."],
-  ["bottom-edge", "Bottom edge", "Show edge wear, whitening, or slab condition."],
-  ["left-edge", "Left edge", "Show edge wear, whitening, or slab condition."],
-  ["right-edge", "Right edge", "Show edge wear, whitening, or slab condition."],
 ] as const;
 const OPTIONAL_SLOTS = [
+  ["top-edge", "Top edge", "Optional view for edge wear, whitening, or slab condition."],
+  ["bottom-edge", "Bottom edge", "Optional view for edge wear, whitening, or slab condition."],
+  ["left-edge", "Left edge", "Optional view for edge wear, whitening, or slab condition."],
+  ["right-edge", "Right edge", "Optional view for edge wear, whitening, or slab condition."],
   ["grading-label", "Grading label close-up", "Help us read the label and certification number."],
   ["condition-detail", "Condition detail", "Show any damage or condition detail clearly."],
   ["additional-image", "Additional evidence", "Add another well-lit view of the collectible."],
@@ -2082,7 +2078,7 @@ export function PhotosStep({
             <div className="list-photos-section__heading">
               <div>
                 <h3 id="required-photos-title">Required photos</h3>
-                <p>Capture each angle clearly so visible condition can be assessed.</p>
+                <p>Front and back are required. Edge views can be added when they help show condition.</p>
               </div>
               <span className={remaining ? "list-photo-count" : "list-photo-count is-complete"}>
                 {REQUIRED_SLOTS.length - remaining} of {REQUIRED_SLOTS.length} added
@@ -2117,7 +2113,7 @@ export function PhotosStep({
                 <h3 id="additional-photos-title">
                   Additional photos <small>(optional)</small>
                 </h3>
-                <p>Add any extra photos that show the condition or unique details.</p>
+                <p>Add optional edge views or extra photos that show condition or unique details.</p>
               </div>
             </div>
             <div className="list-additional-upload-row">

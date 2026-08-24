@@ -180,7 +180,7 @@ describe("Document 010 list asset UI", () => {
     expect(html).not.toContain("Ximilar returned");
   });
 
-  it("renders the six required photo views, optional evidence, and truthful raw-card guidance", () => {
+  it("renders front and back as required while keeping edge views optional", () => {
     const html = renderToStaticMarkup(
       <PhotosStep
         previews={{}}
@@ -194,7 +194,7 @@ describe("Document 010 list asset UI", () => {
       />,
     );
     expect(html).toContain("Add photos of your card.");
-    expect(html).toContain("0 of 6 added");
+    expect(html).toContain("0 of 2 added");
     expect(html).toContain("Top edge");
     expect(html).toContain("Bottom edge");
     expect(html).toContain("Left edge");

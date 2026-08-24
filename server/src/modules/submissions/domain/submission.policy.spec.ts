@@ -50,6 +50,7 @@ describe('submission policy', () => {
   it('accepts declared optional roles while rejecting unsupported evidence roles', () => {
     expect(() => assertMediaSlot('additional-image')).not.toThrow();
     expect(() => assertMediaSlot('grading-label')).not.toThrow();
+    expect(() => assertMediaSlot('top-edge')).not.toThrow();
     expect(() => assertMediaSlot('unknown-role')).toThrow(
       'That evidence role is not supported.',
     );
