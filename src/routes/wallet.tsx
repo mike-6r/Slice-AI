@@ -605,9 +605,15 @@ function MoveMoneyPanel({
               provisional cash.
             </p>
           )}
+          {feePolicy.data && action === "WITHDRAWAL" && parseWalletGbp(amount) ? (
+            <p className="wallet-move-fee">
+              You send: {formatWalletMoney(parseWalletGbp(amount)!)}
+              {" · "}You receive: {formatWalletMoney(withdrawalNetMinor(feePolicy.data, amount))}
+            </p>
+          ) : null}
           {feePolicy.data ? (
             <p className="wallet-move-fee">
-              Slice fee: {formatMovementFee(feePolicy.data, action)}
+              Slice fee: {formatMovementFee(feePolicy.data, action, amount)}
               {(
                 action === "DEPOSIT"
                   ? feePolicy.data.deposit.providerFeeSeparate
@@ -1381,9 +1387,22 @@ function payoutDetail(status: string | undefined) {
     )[status ?? "NOT_STARTED"] ?? "Payout status unavailable"
   );
 }
-function formatMovementFee(policy: FeePolicy, action: WalletMovementType) {
+function formatMovementFee(policy: FeePolicy, action: WalletMovementType, amount: string) {
   const bps = action === "DEPOSIT" ? policy.deposit.sliceFeeBps : policy.withdrawal.sliceFeeBps;
-  return bps === 0 ? "none" : `${bps} bps`;
+  if (bps === 0) return "none";
+  const amountMinor = parseWalletGbp(amount);
+  if (!amountMinor) return `${bps / 100}%`;
+  return `${formatWalletMoney(feeMinorForPolicy(amountMinor, bps))} (${bps / 100}%)`;
+}
+function withdrawalNetMinor(policy: FeePolicy, amount: string) {
+  const amountMinor = parseWalletGbp(amount);
+  if (!amountMinor) return "0";
+  return (
+    BigInt(amountMinor) - BigInt(feeMinorForPolicy(amountMinor, policy.withdrawal.sliceFeeBps))
+  ).toString();
+}
+function feeMinorForPolicy(amountMinor: string, bps: number) {
+  return ((BigInt(amountMinor) * BigInt(bps)) / 10_000n).toString();
 }
 function friendlyStatus(status: string) {
   const labels: Record<string, string> = {

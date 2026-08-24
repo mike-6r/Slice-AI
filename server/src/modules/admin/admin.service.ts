@@ -17,6 +17,7 @@ import { isBetaFixtureSlug } from '../../config/beta-policy';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/submission-storage.ports';
 import { OwnershipPolicyService } from '../ownership/application/ownership-policy.service';
 import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
+import { PlatformRevenueSettlementService } from '../finance/application/platform-revenue-settlement.service';
 
 type AdminAttention = {
   id: string;
@@ -164,6 +165,7 @@ export class AdminService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     private readonly ownershipPolicy: OwnershipPolicyService,
+    private readonly platformRevenue: PlatformRevenueSettlementService,
   ) {}
 
   async setCollectorFeatured(
@@ -3494,7 +3496,7 @@ export class AdminService {
 
   async financeSummary(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
-    const [pendingMovements, exceptions, mismatches] = await Promise.all([
+    const [pendingMovements, exceptions, mismatches, revenue] = await Promise.all([
       this.db.moneyMovement.count({
         where: {
           status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] },
@@ -3506,17 +3508,26 @@ export class AdminService {
       this.db.financialReconciliationRun.count({
         where: { status: 'MISMATCH' },
       }),
+      this.platformRevenue.projection(),
     ]);
     return {
       currency: 'GBP',
       pendingMovements,
       exceptions,
       reconciliationMismatches: mismatches,
+      platformRevenue: {
+        grossRevenueMinor: revenue.grossRevenueMinor,
+        providerExpensesMinor: revenue.providerExpensesMinor,
+        estimatedNetContributionMinor: revenue.estimatedNetContributionMinor,
+        eligibleSettlementMinor: revenue.eligibleSettlementMinor,
+        pendingProviderCostCount: revenue.pendingProviderCostCount,
+      },
     };
   }
 
   async financeDashboard(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
+    const platformRevenue = await this.platformRevenue.projection();
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
     const historyStart = new Date(dayStart);
@@ -3544,7 +3555,7 @@ export class AdminService {
           select: { normalSide: true, balance: true },
         }),
         this.db.financialAccount.findMany({
-          where: { code: { in: ['INITIAL_OFFERING_FEE_REVENUE', 'TRADING_FEE_REVENUE', 'EXTERNAL_GBP_CLEARING'] }, currency: 'GBP' },
+          where: { code: { in: ['INITIAL_OFFERING_FEE_REVENUE', 'TRADING_FEE_REVENUE', 'WITHDRAWAL_FEE_REVENUE', 'EXTERNAL_GBP_CLEARING'] }, currency: 'GBP' },
           select: { code: true, normalSide: true, balance: true },
         }),
         this.db.tradingOrder.count({
@@ -3672,12 +3683,18 @@ export class AdminService {
         orderReservedMinor: orderReserved.toString(),
         withdrawalReservedMinor: withdrawalReserved.toString(),
         collectorProceedsMinor: collectorProceeds.toString(),
-        sliceFeeRevenueMinor: ((revenue.get('INITIAL_OFFERING_FEE_REVENUE') ?? 0n) + (revenue.get('TRADING_FEE_REVENUE') ?? 0n)).toString(),
+        sliceFeeRevenueMinor: ((revenue.get('INITIAL_OFFERING_FEE_REVENUE') ?? 0n) + (revenue.get('TRADING_FEE_REVENUE') ?? 0n) + (revenue.get('WITHDRAWAL_FEE_REVENUE') ?? 0n)).toString(),
         externalClearingMinor: externalClearing.toString(),
         reconciliationMismatches: reconRuns.filter((run) => run.status === 'MISMATCH').length,
         openOrders,
         executionsToday: executions.length,
+        platformGrossRevenueMinor: platformRevenue.grossRevenueMinor,
+        platformProviderExpensesMinor: platformRevenue.providerExpensesMinor,
+        platformEstimatedNetContributionMinor: platformRevenue.estimatedNetContributionMinor,
+        platformEligibleSettlementMinor: platformRevenue.eligibleSettlementMinor,
+        providerCostsPendingEvidence: platformRevenue.pendingProviderCostCount,
       },
+      platformRevenue,
       overview: {
         totalVolumeMinor: totalVolume.toString(),
         buyVolumeMinor: executions

@@ -13,8 +13,8 @@ describe('Document 014 trading policy variables', () => {
   };
 
   it('uses bounded integer basis points and explicit fee application', () => {
-    expect(tradingPolicy.fee.application).toBe('SETTLEMENT_BOUNDARY_PENDING');
-    expect(feeMinor(10_000n, policy.takerFeeBps)).toBe(100n);
+    expect(tradingPolicy.fee.application).toBe('SLICE_ZERO_TRADING_FEES_V2');
+    expect(feeMinor(10_000n, policy.takerFeeBps)).toBe(0n);
     expect(() => assertMarketPolicy({ ...policy, takerFeeBps: 1_001 })).toThrow(
       'policy is invalid',
     );
@@ -22,8 +22,8 @@ describe('Document 014 trading policy variables', () => {
 
   it('calculates maker and taker fee previews with deterministic integer rounding', () => {
     expect(feeMinor(999n, policy.makerFeeBps)).toBe(0n);
-    expect(feeMinor(101n, policy.takerFeeBps)).toBe(2n);
-    expect(feeMinor(10_000n, policy.takerFeeBps)).toBe(100n);
+    expect(feeMinor(101n, policy.takerFeeBps)).toBe(0n);
+    expect(feeMinor(10_000n, policy.takerFeeBps)).toBe(0n);
     expect(feeMinor(10_000n, policy.takerFeeBps)).toBeLessThanOrEqual(10_000n);
   });
 

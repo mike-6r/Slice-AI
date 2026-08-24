@@ -1739,7 +1739,7 @@ async function ensureTradingDemonstration(input: {
         takerFeeBps: tradingPolicy.fee.takerBps,
         selfTradePrevention: tradingPolicy.selfTradePrevention,
         tradingEnabled: true,
-        feeScheduleVersion: 'STAGING_DEMO_POLICY_V1',
+        feeScheduleVersion: tradingPolicy.fee.application,
       },
       update: { status: 'OPEN', tradingEnabled: true },
     });

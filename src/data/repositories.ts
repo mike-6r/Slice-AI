@@ -489,6 +489,13 @@ export type AdminFinanceSummary = {
   pendingMovements: number;
   exceptions: number;
   reconciliationMismatches: number;
+  platformRevenue?: {
+    grossRevenueMinor: string;
+    providerExpensesMinor: string;
+    estimatedNetContributionMinor: string;
+    eligibleSettlementMinor: string;
+    pendingProviderCostCount: number;
+  };
 };
 
 export type AdminFinanceDashboard = {
@@ -500,6 +507,20 @@ export type AdminFinanceDashboard = {
     pendingWithdrawalsMinor: string;
     openOrders: number;
     executionsToday: number;
+    platformGrossRevenueMinor?: string;
+    platformProviderExpensesMinor?: string;
+    platformEstimatedNetContributionMinor?: string;
+    platformEligibleSettlementMinor?: string;
+    providerCostsPendingEvidence?: number;
+  };
+  platformRevenue?: {
+    grossRevenueMinor: string;
+    providerExpensesMinor: string;
+    estimatedNetContributionMinor: string;
+    eligibleSettlementMinor: string;
+    knownProviderCostsMinor: string;
+    pendingProviderCostCount: number;
+    externalSettlement: { status: string; destination: string | null };
   };
   overview: {
     totalVolumeMinor: string;

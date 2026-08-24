@@ -1354,7 +1354,7 @@ export class TradingService {
           takerFeeBps: tradingPolicy.fee.takerBps,
           selfTradePrevention: tradingPolicy.selfTradePrevention,
           tradingEnabled: true,
-          feeScheduleVersion: 'INITIAL_POLICY_V1',
+          feeScheduleVersion: tradingPolicy.fee.application,
         },
       });
       await tx.audit.append({

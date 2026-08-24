@@ -183,6 +183,7 @@ enum JournalTransactionType {
   ADMIN_CORRECTION
   DISTRIBUTION
   INITIAL_OFFERING_SETTLEMENT
+  PROVIDER_EXPENSE
 }
 
 enum JournalTransactionStatus {
@@ -441,6 +442,34 @@ enum ProviderIncidentSeverity {
 enum ProviderIncidentStatus {
   OPEN
   RESOLVED
+}
+
+enum ProviderFinancialCostType {
+  DEPOSIT_PROCESSING
+  WITHDRAWAL_PROCESSING
+  PAYOUT_PROCESSING
+  TRANSFER_PROCESSING
+  DISPUTE
+  RETURN
+  OTHER
+}
+
+enum ProviderFinancialCostStatus {
+  PENDING_EVIDENCE
+  OBSERVED
+  POSTED
+  RECONCILED
+  FAILED
+}
+
+enum PlatformRevenueSettlementStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  APPROVED
+  PROCESSING
+  SETTLED
+  FAILED
+  CANCELLED
 }
 
 enum CatalogueStatus {
@@ -770,77 +799,79 @@ enum AssetPublicationStatus {
 }
 
 model User {
-  id                              String                             @id @default(cuid())
-  email                           String                             @unique
-  normalizedEmail                 String                             @unique
-  passwordHash                    String
-  emailVerifiedAt                 DateTime?
-  phoneE164                       String?                            @unique
-  phoneVerifiedAt                 DateTime?
-  accountStatus                   AccountStatus                      @default(PENDING_REVIEW)
-  createdAt                       DateTime                           @default(now())
-  updatedAt                       DateTime                           @updatedAt
-  lastLoginAt                     DateTime?
-  profile                         UserProfile?
-  sessions                        Session[]
-  roleAssignments                 RoleAssignment[]
-  statusHistory                   AccountStatusHistory[]
-  auditEvents                     AuditEvent[]                       @relation("ActorAuditEvents")
-  publicCollectorProfile          PublicCollectorProfile?
-  watchlistItems                  WatchlistItem[]
-  notifications                   Notification[]
-  notificationPreferences         NotificationPreference[]
-  submissions                     AssetSubmission[]                  @relation("SubmissionOwner")
-  assignedReviews                 VerificationReview[]               @relation("ReviewReviewer")
-  valuationEvidence               ValuationEvidence[]                @relation("ValuationEvidenceCreator")
-  valuationDecisions              ValuationDecision[]                @relation("ValuationDecisionCreator")
-  ownershipSupplyPoliciesProposed OwnershipSupplyPolicy[]            @relation("OwnershipSupplyPolicyProposer")
-  ownershipSupplyPoliciesApproved OwnershipSupplyPolicy[]            @relation("OwnershipSupplyPolicyApprover")
-  publications                    AssetPublication[]                 @relation("PublicationActor")
-  ownershipAccounts               OwnershipAccount[]                 @relation("OwnershipAccountUser")
-  financialAccounts               FinancialAccount[]                 @relation("FinancialAccountUser")
-  portfolioLots                   PortfolioLot[]
-  tradingOrders                   TradingOrder[]                     @relation("TradingOrderUser")
-  tradingOrdersActed              TradingOrder[]                     @relation("TradingOrderActor")
-  followingCollectors             CollectorFollow[]                  @relation("CollectorFollower")
-  followedByCollectors            CollectorFollow[]                  @relation("CollectorFollowed")
-  discussionPosts                 DiscussionPost[]                   @relation("DiscussionAuthor")
-  contentReports                  ContentReport[]                    @relation("ContentReporter")
-  moderationActions               ModerationAction[]                 @relation("ModerationActor")
-  saleProposals                   SaleProposal[]                     @relation("SaleProposer")
-  proposalEligibility             ProposalEligibility[]              @relation("EligibilityUser")
-  proposalVotes                   ProposalVote[]                     @relation("VoteCaster")
-  externalSaleVerifications       ExternalSaleVerification[]         @relation("SaleVerifier")
-  saleVerificationApprovals       ExternalSaleVerificationApproval[] @relation("SaleVerificationApprover")
-  complianceCases                 ComplianceCase[]
-  complianceDecisions             ComplianceDecision[]               @relation("ComplianceDecisionActor")
-  externalFinancialAccounts       ExternalFinancialAccount[]
-  externalProviderCustomers       ExternalProviderCustomer[]
-  financialConnectionSessions     FinancialConnectionSession[]
-  bacsSetupSessions               BacsSetupSession[]
-  externalConnectAccounts         ExternalConnectAccount[]
-  moneyMovements                  MoneyMovement[]
-  complianceHolds                 ComplianceHold[]
-  providerIncidents               ProviderIncident[]                 @relation("ProviderIncidentOwner")
-  discordAccountLink              DiscordAccountLink?
-  discordOAuthStates              DiscordOAuthState[]
-  emailVerificationTokens         EmailVerificationToken[]
-  passwordResetTokens             PasswordResetToken[]
-  transactionalEmailDeliveries    TransactionalEmailDelivery[]
-  phoneVerificationChallenges     PhoneVerificationChallenge[]
-  twoFactor                       UserTwoFactor?
-  smsTwoFactor                    UserSmsTwoFactor?
-  twoFactorRecoveryCodes          TwoFactorRecoveryCode[]
-  twoFactorLoginChallenges        TwoFactorLoginChallenge[]
-  deletionRequests                AccountDeletionRequest[]
-  consentAcceptances              ConsentAcceptance[]
-  collectorSubscriptions          CollectorSubscription[]
-  receiptConfirmations            IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
-  portfolioSnapshots              PortfolioSnapshot[]
-  controlledBetaBypasses          ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
-  initialOfferingsOriginated      InitialOffering[]                  @relation("InitialOfferingOriginator")
-  initialOfferingsBeneficiary     InitialOffering[]                  @relation("InitialOfferingBeneficiary")
-  initialOfferingInventories      InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
+  id                                  String                             @id @default(cuid())
+  email                               String                             @unique
+  normalizedEmail                     String                             @unique
+  passwordHash                        String
+  emailVerifiedAt                     DateTime?
+  phoneE164                           String?                            @unique
+  phoneVerifiedAt                     DateTime?
+  accountStatus                       AccountStatus                      @default(PENDING_REVIEW)
+  createdAt                           DateTime                           @default(now())
+  updatedAt                           DateTime                           @updatedAt
+  lastLoginAt                         DateTime?
+  profile                             UserProfile?
+  sessions                            Session[]
+  roleAssignments                     RoleAssignment[]
+  statusHistory                       AccountStatusHistory[]
+  auditEvents                         AuditEvent[]                       @relation("ActorAuditEvents")
+  publicCollectorProfile              PublicCollectorProfile?
+  watchlistItems                      WatchlistItem[]
+  notifications                       Notification[]
+  notificationPreferences             NotificationPreference[]
+  submissions                         AssetSubmission[]                  @relation("SubmissionOwner")
+  assignedReviews                     VerificationReview[]               @relation("ReviewReviewer")
+  valuationEvidence                   ValuationEvidence[]                @relation("ValuationEvidenceCreator")
+  valuationDecisions                  ValuationDecision[]                @relation("ValuationDecisionCreator")
+  ownershipSupplyPoliciesProposed     OwnershipSupplyPolicy[]            @relation("OwnershipSupplyPolicyProposer")
+  ownershipSupplyPoliciesApproved     OwnershipSupplyPolicy[]            @relation("OwnershipSupplyPolicyApprover")
+  publications                        AssetPublication[]                 @relation("PublicationActor")
+  ownershipAccounts                   OwnershipAccount[]                 @relation("OwnershipAccountUser")
+  financialAccounts                   FinancialAccount[]                 @relation("FinancialAccountUser")
+  portfolioLots                       PortfolioLot[]
+  tradingOrders                       TradingOrder[]                     @relation("TradingOrderUser")
+  tradingOrdersActed                  TradingOrder[]                     @relation("TradingOrderActor")
+  followingCollectors                 CollectorFollow[]                  @relation("CollectorFollower")
+  followedByCollectors                CollectorFollow[]                  @relation("CollectorFollowed")
+  discussionPosts                     DiscussionPost[]                   @relation("DiscussionAuthor")
+  contentReports                      ContentReport[]                    @relation("ContentReporter")
+  moderationActions                   ModerationAction[]                 @relation("ModerationActor")
+  saleProposals                       SaleProposal[]                     @relation("SaleProposer")
+  proposalEligibility                 ProposalEligibility[]              @relation("EligibilityUser")
+  proposalVotes                       ProposalVote[]                     @relation("VoteCaster")
+  externalSaleVerifications           ExternalSaleVerification[]         @relation("SaleVerifier")
+  saleVerificationApprovals           ExternalSaleVerificationApproval[] @relation("SaleVerificationApprover")
+  complianceCases                     ComplianceCase[]
+  complianceDecisions                 ComplianceDecision[]               @relation("ComplianceDecisionActor")
+  externalFinancialAccounts           ExternalFinancialAccount[]
+  externalProviderCustomers           ExternalProviderCustomer[]
+  financialConnectionSessions         FinancialConnectionSession[]
+  bacsSetupSessions                   BacsSetupSession[]
+  externalConnectAccounts             ExternalConnectAccount[]
+  moneyMovements                      MoneyMovement[]
+  complianceHolds                     ComplianceHold[]
+  providerIncidents                   ProviderIncident[]                 @relation("ProviderIncidentOwner")
+  discordAccountLink                  DiscordAccountLink?
+  discordOAuthStates                  DiscordOAuthState[]
+  emailVerificationTokens             EmailVerificationToken[]
+  passwordResetTokens                 PasswordResetToken[]
+  transactionalEmailDeliveries        TransactionalEmailDelivery[]
+  phoneVerificationChallenges         PhoneVerificationChallenge[]
+  twoFactor                           UserTwoFactor?
+  smsTwoFactor                        UserSmsTwoFactor?
+  twoFactorRecoveryCodes              TwoFactorRecoveryCode[]
+  twoFactorLoginChallenges            TwoFactorLoginChallenge[]
+  deletionRequests                    AccountDeletionRequest[]
+  consentAcceptances                  ConsentAcceptance[]
+  collectorSubscriptions              CollectorSubscription[]
+  receiptConfirmations                IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
+  portfolioSnapshots                  PortfolioSnapshot[]
+  controlledBetaBypasses              ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
+  initialOfferingsOriginated          InitialOffering[]                  @relation("InitialOfferingOriginator")
+  initialOfferingsBeneficiary         InitialOffering[]                  @relation("InitialOfferingBeneficiary")
+  initialOfferingInventories          InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
+  platformRevenueSettlementsRequested PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementRequester")
+  platformRevenueSettlementsApproved  PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementApprover")
 
   @@index([accountStatus])
 }
@@ -1699,28 +1730,28 @@ model CollectorPlan {
 }
 
 model CollectorSubscription {
-  id                         String                      @id @default(cuid())
+  id                         String                               @id @default(cuid())
   userId                     String
   planId                     String
-  status                     CollectorSubscriptionStatus @default(INCOMPLETE)
+  status                     CollectorSubscriptionStatus          @default(INCOMPLETE)
   provider                   String?
   providerCustomerId         String?
-  providerSubscriptionId     String?                     @unique
-  providerCheckoutSessionId  String?                     @unique
+  providerSubscriptionId     String?                              @unique
+  providerCheckoutSessionId  String?                              @unique
   providerPriceId            String?
   currentPeriodStart         DateTime?
   currentPeriodEnd           DateTime?
-  cancelAtPeriodEnd          Boolean                     @default(false)
+  cancelAtPeriodEnd          Boolean                              @default(false)
   paymentMethodBrand         String?
   paymentMethodLast4         String?
   paymentMethodExpMonth      Int?
   paymentMethodExpYear       Int?
   lastProviderEventCreatedAt DateTime?
   lastProviderEventIdHash    String?
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  user                       User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  plan                       CollectorPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  createdAt                  DateTime                             @default(now())
+  updatedAt                  DateTime                             @updatedAt
+  user                       User                                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan                       CollectorPlan                        @relation(fields: [planId], references: [id], onDelete: Restrict)
   statusHistory              CollectorSubscriptionStatusHistory[]
 
   @@index([userId, status, updatedAt])
@@ -1729,15 +1760,15 @@ model CollectorSubscription {
 }
 
 model CollectorSubscriptionStatusHistory {
-  id                  String                      @id @default(cuid())
+  id                  String                       @id @default(cuid())
   subscriptionId      String
   fromStatus          CollectorSubscriptionStatus?
   toStatus            CollectorSubscriptionStatus
   source              String
   providerEventIdHash String?
   reason              String?
-  createdAt           DateTime                    @default(now())
-  subscription        CollectorSubscription       @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  createdAt           DateTime                     @default(now())
+  subscription        CollectorSubscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@index([subscriptionId, createdAt, id])
   @@index([providerEventIdHash])
@@ -1873,34 +1904,34 @@ model AssetMarketSnapshot {
 /// Provider identity authority. Mappings are reused by scheduled refreshes;
 /// provider-specific IDs are never rediscovered on a page render.
 model MarketProviderMapping {
-  id                 String              @id @default(cuid())
-  assetId            String
-  providerCode       String
-  providerExternalId String
-  providerUrl        String?
-  identityHash       String
-  status             String              @default("AUTO_MATCHED")
-  matchQuality       String              @default("STRONG")
-  lastVerifiedAt     DateTime?
-  lastSuccessAt      DateTime?
-  lastFailureAt      DateTime?
-  lastFailureCode    String?
-  cooldownUntil      DateTime?
-  nextRefreshAt      DateTime?
-  currentPriceMinor  BigInt?
-  currentCurrency    String?
-  currentObservedAt  DateTime?
+  id                        String              @id @default(cuid())
+  assetId                   String
+  providerCode              String
+  providerExternalId        String
+  providerUrl               String?
+  identityHash              String
+  status                    String              @default("AUTO_MATCHED")
+  matchQuality              String              @default("STRONG")
+  lastVerifiedAt            DateTime?
+  lastSuccessAt             DateTime?
+  lastFailureAt             DateTime?
+  lastFailureCode           String?
+  cooldownUntil             DateTime?
+  nextRefreshAt             DateTime?
+  currentPriceMinor         BigInt?
+  currentCurrency           String?
+  currentObservedAt         DateTime?
   referenceHistoryStartedAt DateTime?
-  referenceMovement24hBps Int?
-  referenceMovement7dBps  Int?
-  referenceMovement30dBps Int?
-  referenceMovement90dBps Int?
-  referenceMovement1yBps  Int?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  asset              Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  observations       MarketObservation[]
-  refreshJobs        MarketRefreshJob[]
+  referenceMovement24hBps   Int?
+  referenceMovement7dBps    Int?
+  referenceMovement30dBps   Int?
+  referenceMovement90dBps   Int?
+  referenceMovement1yBps    Int?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  asset                     Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  observations              MarketObservation[]
+  refreshJobs               MarketRefreshJob[]
 
   @@unique([assetId, providerCode])
   @@unique([providerCode, providerExternalId])
@@ -2191,21 +2222,23 @@ model FinancialAccount {
 }
 
 model JournalTransaction {
-  id              String                    @id @default(cuid())
-  type            JournalTransactionType
-  status          JournalTransactionStatus  @default(POSTED)
-  currency        String
-  correlationId   String                    @unique
-  descriptionCode String
-  reversalOfId    String?                   @unique
-  createdByUserId String?
-  effectiveAt     DateTime                  @default(now())
-  createdAt       DateTime                  @default(now())
-  reversalOf      JournalTransaction?       @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversal        JournalTransaction?       @relation("JournalReversal")
-  entries         JournalEntry[]
-  saleProceeds    ExternalSaleVerification? @relation("SaleProceedsJournal")
-  moneyMovement   MoneyMovement?            @relation("MovementJournal")
+  id                        String                     @id @default(cuid())
+  type                      JournalTransactionType
+  status                    JournalTransactionStatus   @default(POSTED)
+  currency                  String
+  correlationId             String                     @unique
+  descriptionCode           String
+  reversalOfId              String?                    @unique
+  createdByUserId           String?
+  effectiveAt               DateTime                   @default(now())
+  createdAt                 DateTime                   @default(now())
+  reversalOf                JournalTransaction?        @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal                  JournalTransaction?        @relation("JournalReversal")
+  entries                   JournalEntry[]
+  saleProceeds              ExternalSaleVerification?  @relation("SaleProceedsJournal")
+  moneyMovement             MoneyMovement?             @relation("MovementJournal")
+  providerCost              ProviderFinancialCost?
+  platformRevenueSettlement PlatformRevenueSettlement?
 
   @@index([currency, effectiveAt, id])
 }
@@ -2460,6 +2493,12 @@ model MoneyMovement {
   cashAccountId               String
   type                        MoneyMovementType
   amountMinor                 BigInt
+  /// Customer-entered gross amount. For withdrawals, this is the amount
+  /// reserved/debited from the customer wallet.
+  sliceFeeMinor               BigInt                    @default(0)
+  /// Provider-facing amount. Deposits equal amountMinor; withdrawals are
+  /// gross less Slice's disclosed withdrawal fee.
+  providerAmountMinor         BigInt?
   currency                    String
   status                      MoneyMovementStatus       @default(CREATED)
   provider                    ProviderCode
@@ -2481,6 +2520,7 @@ model MoneyMovement {
   connectPayout               ConnectPayout?
   history                     MoneyMovementHistory[]
   holds                       ComplianceHold[]
+  providerCosts               ProviderFinancialCost[]
 
   @@unique([userId, type, idempotencyKeyHash])
   @@unique([provider, providerReferenceHash])
@@ -2509,6 +2549,7 @@ model ConnectPayout {
   lastSyncedAt                 DateTime?
   movement                     MoneyMovement               @relation(fields: [movementId], references: [id], onDelete: Restrict)
   connectAccount               ExternalConnectAccount      @relation(fields: [connectAccountId], references: [id], onDelete: Restrict)
+  providerCosts                ProviderFinancialCost[]
 
   @@unique([provider, externalTransferIdHash])
   @@unique([provider, externalPayoutIdHash])
@@ -2602,6 +2643,87 @@ model ProviderIncident {
   @@index([provider, status, severity, createdAt])
 }
 
+/// Provider fee evidence is persisted separately from customer movements and
+/// Slice revenue. A missing provider balance transaction is explicitly
+/// pending evidence; it is never represented as a guessed zero fee.
+model ProviderFinancialCost {
+  id                         String                      @id @default(cuid())
+  provider                   ProviderCode
+  environment                ExternalProviderEnvironment
+  currency                   String
+  amountMinor                BigInt?
+  costType                   ProviderFinancialCostType
+  sourceObjectType           String
+  sourceObjectId             String
+  balanceTransactionId       String?
+  relatedMovementId          String?
+  relatedConnectPayoutId     String?
+  status                     ProviderFinancialCostStatus @default(PENDING_EVIDENCE)
+  failureCode                String?
+  observedAt                 DateTime?
+  postedJournalTransactionId String?                     @unique
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  relatedMovement            MoneyMovement?              @relation(fields: [relatedMovementId], references: [id], onDelete: Restrict)
+  relatedConnectPayout       ConnectPayout?              @relation(fields: [relatedConnectPayoutId], references: [id], onDelete: Restrict)
+  postedJournalTransaction   JournalTransaction?         @relation(fields: [postedJournalTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, environment, sourceObjectType, sourceObjectId, costType])
+  @@unique([provider, environment, balanceTransactionId])
+  @@index([status, createdAt, id])
+  @@index([relatedMovementId, status])
+  @@index([relatedConnectPayoutId, status])
+}
+
+/// Dual-control snapshot of Slice-owned revenue eligible for settlement. It
+/// never contains customer liabilities, Collector proceeds, or external
+/// clearing balances. No external payout is implied by APPROVED.
+model PlatformRevenueSettlement {
+  id                         String                          @id @default(cuid())
+  currency                   String
+  grossRevenueMinor          BigInt
+  providerExpensesMinor      BigInt
+  eligibleSettlementMinor    BigInt
+  requestedAmountMinor       BigInt
+  requestIdempotencyKeyHash  String                          @unique
+  approvalIdempotencyKeyHash String?                         @unique
+  status                     PlatformRevenueSettlementStatus @default(DRAFT)
+  externalStatus             String                          @default("NOT_CONFIGURED")
+  requestedByUserId          String
+  approvedByUserId           String?
+  providerReference          String?
+  journalTransactionId       String?                         @unique
+  failureCode                String?
+  requestedAt                DateTime                        @default(now())
+  approvedAt                 DateTime?
+  processingAt               DateTime?
+  settledAt                  DateTime?
+  createdAt                  DateTime                        @default(now())
+  updatedAt                  DateTime                        @updatedAt
+  requestedBy                User                            @relation("PlatformRevenueSettlementRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approvedBy                 User?                           @relation("PlatformRevenueSettlementApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  journalTransaction         JournalTransaction?             @relation(fields: [journalTransactionId], references: [id], onDelete: Restrict)
+  lines                      PlatformRevenueSettlementLine[]
+
+  @@index([status, createdAt, id])
+  @@index([requestedByUserId, createdAt, id])
+}
+
+model PlatformRevenueSettlementLine {
+  id           String                    @id @default(cuid())
+  settlementId String
+  category     String
+  sourceType   String
+  sourceId     String
+  amountMinor  BigInt
+  currency     String
+  createdAt    DateTime                  @default(now())
+  settlement   PlatformRevenueSettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+
+  @@unique([settlementId, category, sourceType, sourceId])
+  @@index([sourceType, sourceId])
+}
+
 /// Document 014 local/test market configuration. Production trading hours and
 /// fee schedules remain outside this model until separately approved.
 model TradingMarket {
@@ -2611,10 +2733,10 @@ model TradingMarket {
   lotSizeUnits          BigInt              @default(1)
   minimumNotionalMinor  BigInt              @default(100)
   makerFeeBps           Int                 @default(0)
-  takerFeeBps           Int                 @default(100)
+  takerFeeBps           Int                 @default(0)
   selfTradePrevention   String              @default("REJECT_TAKER")
   tradingEnabled        Boolean             @default(true)
-  feeScheduleVersion    String              @default("INITIAL_POLICY_V1")
+  feeScheduleVersion    String              @default("ZERO_TRADING_FEES_V2")
   nextPrioritySequence  BigInt              @default(1)
   nextExecutionSequence BigInt              @default(1)
   version               Int                 @default(1)

@@ -1,6 +1,12 @@
 import { ConflictException } from '@nestjs/common';
 
 export const initialOfferingFeePolicy = {
+  version: 'INITIAL_OFFERING_5_PERCENT_V1',
+  feeBps: 500,
+} as const;
+
+/** Historical policy retained for explicit compatibility checks only. */
+export const initialOfferingZeroFeePolicy = {
   version: 'INITIAL_OFFERING_ZERO_FEE_V1',
   feeBps: 0,
 } as const;

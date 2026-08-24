@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   Post,
+  Param,
   Query,
   Req,
   UseGuards,
@@ -22,6 +23,7 @@ import { PermissionGuard } from '../../identity/access/permission.guard';
 import { RequirePermission } from '../../identity/access/permission.decorator';
 import { PortfolioSnapshotService, type PortfolioPerformanceRange } from '../application/portfolio-snapshot.service';
 import { currentFeePolicy } from '../domain/fee-policy';
+import { PlatformRevenueSettlementService } from '../application/platform-revenue-settlement.service';
 
 const historyQuery = z
   .object({
@@ -43,6 +45,8 @@ const holdingsPageQuery = z.object({
   category: z.string().trim().max(120).optional(),
   sort: z.enum(['VALUE_DESC', 'OWNERSHIP_DESC', 'TITLE_ASC']).default('TITLE_ASC'),
 }).strict();
+const revenueSettlementRequestBody = z.object({ requestedAmountMinor: z.string().regex(/^\d+$/).optional() }).strict();
+const revenueSettlementApprovalBody = z.object({ settlementId: z.string().min(1) }).strict();
 
 @Controller()
 export class FinanceController {
@@ -52,6 +56,7 @@ export class FinanceController {
     private readonly reconciliation: FinancialReconciliationService,
     private readonly limiter: ControlRateLimitService,
     private readonly snapshots: PortfolioSnapshotService,
+    private readonly revenueSettlements: PlatformRevenueSettlementService,
   ) {}
 
   /** Self-only, derived projection. No account IDs, counterparty data, or journal metadata. */
@@ -64,6 +69,37 @@ export class FinanceController {
   @Get('fees')
   fees() {
     return currentFeePolicy();
+  }
+
+  @Get('admin/finance/revenue-settlements/projection')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.read')
+  revenueSettlementProjection() {
+    return this.revenueSettlements.projection();
+  }
+
+  @Post('admin/finance/revenue-settlements/request')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  revenueSettlementRequest(
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = this.parse(revenueSettlementRequestBody, body);
+    return this.write(req, key, () => this.revenueSettlements.request(req.actor!, input.requestedAmountMinor, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/finance/revenue-settlements/:id/approve')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  revenueSettlementApprove(
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.parse(revenueSettlementApprovalBody, { settlementId: id });
+    return this.write(req, key, () => this.revenueSettlements.approve(req.actor!, id, req.requestId ?? 'unknown', key!));
   }
 
   @Get('me/wallet/transactions')

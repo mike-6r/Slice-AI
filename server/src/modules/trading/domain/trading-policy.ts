@@ -16,10 +16,10 @@ export const tradingPolicy = Object.freeze({
   defaultMinimumNotionalMinor: 100n,
   fee: Object.freeze({
     makerBps: 0,
-    takerBps: 100,
+    takerBps: 0,
     minBps: 0,
     maxBps: 1_000,
-    application: 'SETTLEMENT_BOUNDARY_PENDING' as const,
+    application: 'SLICE_ZERO_TRADING_FEES_V2' as const,
   }),
   selfTradePrevention: 'REJECT_TAKER' as const,
   localAlwaysOpen: false,

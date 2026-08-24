@@ -182,7 +182,7 @@ function OfferingPreview({ preview }: { preview: InitialOfferingPreview }) {
           value={formatMinorAmount(preview.grossOfferingMinor, preview.currency)}
         />
         <PreviewField
-          label="Fees"
+          label={`Slice fee (${preview.feeBps / 100}%)`}
           value={
             preview.feeMinor === "0"
               ? "No fee configured"
@@ -219,6 +219,10 @@ function OfferingSummary({ offering }: { offering: InitialOfferingProjection }) 
         <PreviewField
           label="Gross proceeds"
           value={formatMinorAmount(offering.grossOfferingMinor, offering.currency)}
+        />
+        <PreviewField
+          label={`Slice fee (${offering.feeBps / 100}%)`}
+          value={formatMinorAmount(offering.feeMinor, offering.currency)}
         />
         <PreviewField
           label="Estimated collector proceeds"

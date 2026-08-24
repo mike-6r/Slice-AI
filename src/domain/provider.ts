@@ -85,6 +85,8 @@ export interface WalletMovementView {
   id: string;
   type: WalletMovementType;
   amountMinor: string;
+  sliceFeeMinor?: string;
+  providerAmountMinor?: string;
   currency: "GBP";
   status: WalletMovementStatus;
   createdAt: ISODateTime;

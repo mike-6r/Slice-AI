@@ -42,6 +42,21 @@ export class ProviderReconciliationService {
         const duplicatePostings = await db.journalTransaction.count({ where: { correlationId: `provider-movement:${movement.id}` } });
         if (duplicatePostings > 1) issues.push({ movementId: movement.id, code: 'DUPLICATE_POSTING' });
       }
+      const providerCosts = await db.providerFinancialCost.findMany({
+        where: { provider },
+        select: { id: true, status: true, amountMinor: true, postedJournalTransactionId: true, relatedMovementId: true },
+      });
+      for (const cost of providerCosts) {
+        if (cost.status === 'PENDING_EVIDENCE') {
+          issues.push({ movementId: cost.relatedMovementId, code: 'PROVIDER_COST_EVIDENCE_PENDING', expectedMinor: cost.amountMinor ?? undefined });
+        }
+        if (cost.status === 'OBSERVED') {
+          issues.push({ movementId: cost.relatedMovementId, code: 'PROVIDER_COST_MISSING_EXPENSE_JOURNAL', expectedMinor: cost.amountMinor ?? undefined });
+        }
+        if ((cost.status === 'POSTED' || cost.status === 'RECONCILED') && !cost.postedJournalTransactionId) {
+          issues.push({ movementId: cost.relatedMovementId, code: 'PROVIDER_COST_MISSING_EXPENSE_JOURNAL', expectedMinor: cost.amountMinor ?? undefined });
+        }
+      }
       const codes = [...new Set(issues.map((item) => item.code))].sort();
       const run = await db.providerReconciliationRun.create({ data: { id: randomUUID(), provider, status: codes.length ? 'MISMATCH' : 'RECONCILED', actorUserId: actor.userId } });
       if (issues.length) await db.providerDiscrepancy.createMany({ data: issues.map((item) => ({ id: randomUUID(), runId: run.id, code: item.code, movementId: item.movementId, expectedMinor: item.expectedMinor, actualMinor: item.actualMinor })) });

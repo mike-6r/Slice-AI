@@ -1159,13 +1159,13 @@ export const mockRepositories: AppRepositories = {
         currency: "GBP" as const,
         movementScheduleVersion: "NO_SLICE_MOVEMENT_FEE_V1",
         deposit: { sliceFeeBps: 0, providerFeeSeparate: true },
-        withdrawal: { sliceFeeBps: 0, providerFeeSeparate: true },
+        withdrawal: { sliceFeeBps: 250, providerFeeSeparate: true },
         secondaryTrading: {
-          scheduleVersion: "INITIAL_POLICY_V1",
+          scheduleVersion: "SLICE_ZERO_TRADING_FEES_V2",
           makerFeeBps: 0,
-          takerFeeBps: 100,
+          takerFeeBps: 0,
         },
-        initialOffering: { scheduleVersion: "INITIAL_OFFERING_ZERO_FEE_V1", feeBps: 0 },
+        initialOffering: { scheduleVersion: "INITIAL_OFFERING_5_PERCENT_V1", feeBps: 500 },
       };
     },
     async createConnectOnboarding() {

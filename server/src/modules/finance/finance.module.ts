@@ -9,6 +9,7 @@ import { FinanceController } from './http/finance.controller';
 import { PortfolioSnapshotService } from './application/portfolio-snapshot.service';
 import { PortfolioSnapshotWorker } from './application/portfolio-snapshot.worker';
 import { SubmissionStorageModule } from '../submissions/submission-storage.module';
+import { PlatformRevenueSettlementService } from './application/platform-revenue-settlement.service';
 
 @Module({
   imports: [AuthModule, AccessControlModule, SubmissionStorageModule],
@@ -20,6 +21,7 @@ import { SubmissionStorageModule } from '../submissions/submission-storage.modul
     FinancialReconciliationService,
     PortfolioSnapshotService,
     PortfolioSnapshotWorker,
+    PlatformRevenueSettlementService,
   ],
   exports: [
     FinancialLedgerService,
@@ -27,6 +29,7 @@ import { SubmissionStorageModule } from '../submissions/submission-storage.modul
     PortfolioQueryService,
     FinancialReconciliationService,
     PortfolioSnapshotService,
+    PlatformRevenueSettlementService,
   ],
 })
 export class FinanceModule {}

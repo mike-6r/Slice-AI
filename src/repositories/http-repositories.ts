@@ -975,6 +975,17 @@ const mapMovement = (raw: unknown): WalletMovementView => {
     id: stringField(value.id, "movement.id"),
     type: value.type,
     amountMinor: stringField(value.amountMinor, "movement.amountMinor"),
+    ...(value.sliceFeeMinor === undefined
+      ? {}
+      : { sliceFeeMinor: stringField(value.sliceFeeMinor, "movement.sliceFeeMinor") }),
+    ...(value.providerAmountMinor === undefined
+      ? {}
+      : {
+          providerAmountMinor: stringField(
+            value.providerAmountMinor,
+            "movement.providerAmountMinor",
+          ),
+        }),
     currency: "GBP",
     status: value.status as WalletMovementView["status"],
     createdAt: stringField(value.createdAt, "movement.createdAt") as ISODateTime,
@@ -2394,7 +2405,80 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
       ),
       openOrders: Number(kpis.openOrders ?? 0),
       executionsToday: Number(kpis.executionsToday ?? 0),
+      platformGrossRevenueMinor:
+        kpis.platformGrossRevenueMinor === undefined
+          ? undefined
+          : mapMinor(kpis.platformGrossRevenueMinor, "finance.kpis.platformGrossRevenueMinor"),
+      platformProviderExpensesMinor:
+        kpis.platformProviderExpensesMinor === undefined
+          ? undefined
+          : mapMinor(
+              kpis.platformProviderExpensesMinor,
+              "finance.kpis.platformProviderExpensesMinor",
+            ),
+      platformEstimatedNetContributionMinor:
+        kpis.platformEstimatedNetContributionMinor === undefined
+          ? undefined
+          : mapMinor(
+              kpis.platformEstimatedNetContributionMinor,
+              "finance.kpis.platformEstimatedNetContributionMinor",
+            ),
+      platformEligibleSettlementMinor:
+        kpis.platformEligibleSettlementMinor === undefined
+          ? undefined
+          : mapMinor(
+              kpis.platformEligibleSettlementMinor,
+              "finance.kpis.platformEligibleSettlementMinor",
+            ),
+      providerCostsPendingEvidence:
+        kpis.providerCostsPendingEvidence === undefined
+          ? undefined
+          : Number(kpis.providerCostsPendingEvidence ?? 0),
     },
+    platformRevenue:
+      value.platformRevenue &&
+      typeof value.platformRevenue === "object" &&
+      !Array.isArray(value.platformRevenue)
+        ? (() => {
+            const revenue = objectField(value.platformRevenue, "admin platform revenue");
+            const external =
+              revenue.externalSettlement &&
+              typeof revenue.externalSettlement === "object" &&
+              !Array.isArray(revenue.externalSettlement)
+                ? objectField(revenue.externalSettlement, "admin external settlement")
+                : { status: "NOT_CONFIGURED", destination: null };
+            return {
+              grossRevenueMinor: mapMinor(
+                revenue.grossRevenueMinor,
+                "admin revenue.grossRevenueMinor",
+              ),
+              providerExpensesMinor: mapMinor(
+                revenue.providerExpensesMinor,
+                "admin revenue.providerExpensesMinor",
+              ),
+              estimatedNetContributionMinor: mapMinor(
+                revenue.estimatedNetContributionMinor,
+                "admin revenue.estimatedNetContributionMinor",
+              ),
+              eligibleSettlementMinor: mapMinor(
+                revenue.eligibleSettlementMinor,
+                "admin revenue.eligibleSettlementMinor",
+              ),
+              knownProviderCostsMinor: mapMinor(
+                revenue.knownProviderCostsMinor,
+                "admin revenue.knownProviderCostsMinor",
+              ),
+              pendingProviderCostCount: Number(revenue.pendingProviderCostCount ?? 0),
+              externalSettlement: {
+                status: stringField(external.status, "admin external settlement.status"),
+                destination: nullableString(
+                  external.destination,
+                  "admin external settlement.destination",
+                ),
+              },
+            };
+          })()
+        : undefined,
     overview: {
       totalVolumeMinor: mapMinor(overview.totalVolumeMinor, "finance.overview.totalVolumeMinor"),
       buyVolumeMinor: mapMinor(overview.buyVolumeMinor, "finance.overview.buyVolumeMinor"),

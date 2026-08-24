@@ -12,6 +12,7 @@ import { BankConnectionService, providerUnavailable, type ActiveProviderCode } f
 import { StripeClientFactory } from './stripe-provider.client';
 import { StripeConnectPayoutService } from './stripe-connect-payout.service';
 import { CollectorMembershipService } from './collector-membership.service';
+import { ProviderFinancialCostService } from './provider-financial-cost.service';
 
 type Provider = ActiveProviderCode;
 
@@ -32,6 +33,7 @@ export class ProviderWebhookService {
     private readonly bankLinks: BankConnectionService,
     private readonly connectPayouts: StripeConnectPayoutService,
     private readonly memberships: CollectorMembershipService,
+    private readonly providerCosts: ProviderFinancialCostService,
   ) {}
 
   async receive(input: {
@@ -161,7 +163,10 @@ export class ProviderWebhookService {
     const connectEffect = await this.connectPayouts.processWebhook(provider as 'STRIPE_SANDBOX' | 'STRIPE_LIVE', type, payload);
     if (connectEffect) {
       if (connectEffect.action === 'PROCESSING') await this.movements.processingFromProvider({ movementId: connectEffect.movementId, requestId });
-      else if (connectEffect.action === 'COMPLETE' && connectEffect.providerReference) await this.movements.completeFromProvider({ movementId: connectEffect.movementId, providerReference: connectEffect.providerReference, providerEventId: eventId, requestId });
+      else if (connectEffect.action === 'COMPLETE' && connectEffect.providerReference) {
+        await this.movements.completeFromProvider({ movementId: connectEffect.movementId, providerReference: connectEffect.providerReference, providerEventId: eventId, requestId });
+        await this.providerCosts.observePayoutForExternalId({ provider: provider as 'STRIPE_SANDBOX' | 'STRIPE_LIVE', payoutId: connectEffect.providerReference, requestId });
+      }
       else if (connectEffect.action === 'FAIL') await this.movements.failFromProvider({ movementId: connectEffect.movementId, reasonCode: connectEffect.reasonCode ?? 'STRIPE_PAYOUT_FAILED', requestId });
       else if (connectEffect.action === 'HOLD') await this.movements.holdFromProvider({ movementId: connectEffect.movementId, reasonCode: connectEffect.reasonCode ?? 'STRIPE_PAYOUT_REVIEW', requestId });
       return;
@@ -212,6 +217,7 @@ export class ProviderWebhookService {
       await this.movements.processingFromProvider({ movementId, requestId });
     } else if (type === 'payment_intent.succeeded') {
       await this.movements.completeFromProvider({ movementId, providerReference: paymentIntentId, providerEventId: eventId, requestId });
+      await this.providerCosts.observePaymentIntent({ movementId, paymentIntentId, requestId });
     } else if (type === 'payment_intent.payment_failed') {
       const error = payload.last_payment_error && typeof payload.last_payment_error === 'object' ? (payload.last_payment_error as Record<string, unknown>).code : undefined;
       await this.movements.failFromProvider({ movementId, reasonCode: this.text(error) ?? 'STRIPE_PAYMENT_FAILED', requestId });

@@ -27,7 +27,8 @@ type PostJournalInput = Readonly<{
     | 'CASH_RESERVATION'
     | 'CASH_RELEASE'
     | 'ADMIN_CORRECTION'
-    | 'DISTRIBUTION';
+    | 'DISTRIBUTION'
+    | 'PROVIDER_EXPENSE';
   correlationId: string;
   descriptionCode: string;
   lines: readonly JournalLine[];

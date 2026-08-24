@@ -400,6 +400,49 @@ export function AdminFinanceTrading({
           </section>
           <section className="admin-finance-side-card">
             <div className="admin-finance-side-heading">
+              <h3>Slice revenue</h3>
+              <span>GBP authority</span>
+            </div>
+            <div className="admin-finance-side-grid">
+              <Metric
+                label="Fee revenue"
+                value={money(dashboard?.platformRevenue?.grossRevenueMinor)}
+                tone="green"
+              />
+              <Metric
+                label="Provider expense"
+                value={money(dashboard?.platformRevenue?.providerExpensesMinor)}
+                tone="gold"
+              />
+              <Metric
+                label="Known provider costs"
+                value={money(dashboard?.platformRevenue?.knownProviderCostsMinor)}
+                tone="gold"
+              />
+              <Metric
+                label="Net contribution"
+                value={money(dashboard?.platformRevenue?.estimatedNetContributionMinor)}
+                tone="purple"
+              />
+              <Metric
+                label="Eligible to settle"
+                value={money(dashboard?.platformRevenue?.eligibleSettlementMinor)}
+                tone="cyan"
+              />
+            </div>
+            <p className="admin-finance-muted">
+              {dashboard?.platformRevenue?.pendingProviderCostCount
+                ? `${dashboard.platformRevenue.pendingProviderCostCount} provider cost record${dashboard.platformRevenue.pendingProviderCostCount === 1 ? "" : "s"} awaiting evidence.`
+                : "Provider expenses are shown only from recorded provider evidence."}
+            </p>
+            <p className="admin-finance-muted">
+              External settlement:{" "}
+              {dashboard?.platformRevenue?.externalSettlement.status ?? "Not configured"}. No payout
+              is implied.
+            </p>
+          </section>
+          <section className="admin-finance-side-card">
+            <div className="admin-finance-side-heading">
               <h3>Recent Activity</h3>
               <button type="button" onClick={() => selectTab("movements")}>
                 View all

@@ -24,6 +24,7 @@ import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { movementSettledEvent } from '../../outbox/domain/domain-event';
 import { accountAuthority } from '../../finance/domain/journal';
+import { feeForBps, WITHDRAWAL_FEE_BPS } from '../../finance/domain/fee-policy';
 import { BankConnectionService } from './external-provider-boundaries';
 import {
   ConnectPayoutExternalTransferError,
@@ -188,6 +189,8 @@ export class WalletMovementService {
     key: string,
   ) {
     const amountMinor = this.amount(amountText);
+    const sliceFeeMinor = type === 'WITHDRAWAL' ? feeForBps(amountMinor, WITHDRAWAL_FEE_BPS) : 0n;
+    const providerAmountMinor = amountMinor - sliceFeeMinor;
     await this.compliance.requireIdentityApproved(
       actor.userId,
       type === 'WITHDRAWAL' ? ['WITHDRAWAL'] : ['FUNDING'],
@@ -304,6 +307,8 @@ export class WalletMovementService {
           cashAccountId: cash.id,
           type,
           amountMinor,
+          sliceFeeMinor,
+          providerAmountMinor,
           currency: 'GBP',
           status: 'PENDING_PROVIDER',
           provider: moneyMovementProviderCode(this.config.providerMode),
@@ -473,7 +478,7 @@ export class WalletMovementService {
         await this.connectPayouts.createPayout({
           userId: actor.userId,
           movementId: movement.id,
-          amountMinor: amountText,
+          amountMinor: (movement.providerAmountMinor ?? movement.amountMinor).toString(),
         });
         await this.processingFromProvider({
           movementId: movement.id,
@@ -599,6 +604,10 @@ export class WalletMovementService {
       }
       await providerTestFailurePoint('movement.complete.before-journal');
       const clearing = await this.clearingAccount();
+      const withdrawalFeeAccount = movement.type === 'WITHDRAWAL' && movement.sliceFeeMinor > 0n
+        ? await this.withdrawalFeeAccount(db)
+        : null;
+      const providerAmountMinor = movement.providerAmountMinor ?? movement.amountMinor;
       const actor = this.providerActor(movement.userId, movement.id);
       const journal = await this.ledger.postInTransaction(
         db,
@@ -609,7 +618,10 @@ export class WalletMovementService {
               ? 'EXTERNAL_DEPOSIT'
               : 'EXTERNAL_WITHDRAWAL',
           correlationId: `provider-movement:${movement.id}`,
-          descriptionCode: `${movement.type}_PROVIDER_CONFIRMED`,
+          descriptionCode:
+            movement.type === 'WITHDRAWAL' && movement.sliceFeeMinor > 0n
+              ? 'WITHDRAWAL_PROVIDER_CONFIRMED_WITH_FEE'
+              : `${movement.type}_PROVIDER_CONFIRMED`,
           lines:
             movement.type === 'DEPOSIT'
               ? [
@@ -633,8 +645,15 @@ export class WalletMovementService {
                   {
                     accountId: clearing,
                     side: 'CREDIT',
-                    amountMinor: movement.amountMinor.toString(),
+                    amountMinor: providerAmountMinor.toString(),
                   },
+                  ...(withdrawalFeeAccount
+                    ? [{
+                        accountId: withdrawalFeeAccount,
+                        side: 'CREDIT' as const,
+                        amountMinor: movement.sliceFeeMinor.toString(),
+                      }]
+                    : []),
                 ],
         },
         input.requestId,
@@ -1320,6 +1339,29 @@ export class WalletMovementService {
     });
   }
 
+  private async withdrawalFeeAccount(db: Prisma.TransactionClient) {
+    const existing = await db.financialAccount.findFirst({
+      where: {
+        ownerType: 'PLATFORM',
+        code: 'WITHDRAWAL_FEE_REVENUE',
+        currency: 'GBP',
+      },
+    });
+    if (existing) return existing.id;
+    return (
+      await db.financialAccount.create({
+        data: {
+          id: randomUUID(),
+          ownerType: 'PLATFORM',
+          accountType: 'REVENUE',
+          code: 'WITHDRAWAL_FEE_REVENUE',
+          currency: 'GBP',
+          normalSide: 'CREDIT',
+        },
+      })
+    ).id;
+  }
+
   private async updateStatus(
     id: string,
     status: 'FAILED',
@@ -1377,6 +1419,8 @@ export class WalletMovementService {
       id: string;
       type: string;
       amountMinor: bigint;
+      sliceFeeMinor?: bigint;
+      providerAmountMinor?: bigint | null;
       currency: string;
       status: string;
       createdAt: Date;
@@ -1395,6 +1439,8 @@ export class WalletMovementService {
       id: item.id,
       type: item.type,
       amountMinor: item.amountMinor.toString(),
+      sliceFeeMinor: (item.sliceFeeMinor ?? 0n).toString(),
+      providerAmountMinor: (item.providerAmountMinor ?? item.amountMinor).toString(),
       currency: item.currency,
       status: item.status,
       createdAt: item.createdAt.toISOString(),

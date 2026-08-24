@@ -904,7 +904,10 @@ function Estimate({
         />
         <p className="trading-fee-disclosure">
           {feePolicy
-            ? `Current policy: maker ${feePolicy.secondaryTrading.makerFeeBps} bps; taker ${feePolicy.secondaryTrading.takerFeeBps} bps.`
+            ? feePolicy.secondaryTrading.makerFeeBps === 0 &&
+              feePolicy.secondaryTrading.takerFeeBps === 0
+              ? "Current policy: No trading fees."
+              : `Current policy: maker ${feePolicy.secondaryTrading.makerFeeBps} bps; taker ${feePolicy.secondaryTrading.takerFeeBps} bps.`
             : "The current maker/taker policy is retrieved from Slice before confirmation."}{" "}
           The final role is recorded when an execution settles.
         </p>
