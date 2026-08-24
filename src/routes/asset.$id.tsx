@@ -587,8 +587,11 @@ function AssetPage() {
               ) : (
                 <div className="asset-empty-history">
                   <span>—</span>
-                  <strong>No market history yet</strong>
-                  <p>History will appear as real market snapshots are collected.</p>
+                  <strong>History collection has just started</strong>
+                  <p>
+                    Real PriceCharting observations will appear here as the scheduled collection
+                    runs.
+                  </p>
                 </div>
               )}
             </div>

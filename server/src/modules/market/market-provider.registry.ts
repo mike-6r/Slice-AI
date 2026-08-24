@@ -154,7 +154,9 @@ export class PriceChartingProvider implements MarketDataProvider {
     await this.throttle();
     const url = new URL(
       `/api/${resource}`,
-      this.config.priceChartingBaseUrl ?? 'https://www.pricecharting.com',
+      this.config.priceChartingApiBaseUrl ??
+        this.config.priceChartingBaseUrl ??
+        'https://www.pricecharting.com',
     );
     Object.entries({ ...params, t: this.config.priceChartingApiToken }).forEach(
       ([key, value]) => url.searchParams.set(key, value),

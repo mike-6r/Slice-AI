@@ -3777,11 +3777,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         );
       },
       async getPriceHistory(assetId, range) {
-        const backendRange = (
-          { "24H": "1D", "7D": "7D", "30D": "30D", "90D": "3M", "1Y": "1Y", ALL: "ALL" } as const
-        )[range];
         const body = await client.get<{
           source: "PRICECHARTING" | "SLICE_VALUATION";
+          series?: import("@/domain/market").ReferenceSeries;
+          availableSeries?: import("@/domain/market").ReferenceSeries[];
           currency: SupportedCurrency | null;
           movementBps: number | null;
           percentageChangeBps: number | null;
@@ -3809,7 +3808,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
             changeFromRangeStart: { minor: string; currency: SupportedCurrency } | null;
             changeFromRangeStartBps: number | null;
           }>;
-        }>(`/market/assets/${assetId}/history`, { range: backendRange });
+        }>(`/market/assets/${assetId}/history`, { range });
         const points = body.points.map((point) => ({
           id: point.id,
           timestamp: point.observedAt as ISODateTime,
@@ -3836,6 +3835,8 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         }));
         return Object.assign(points, {
           source: body.source,
+          series: body.series,
+          availableSeries: body.availableSeries,
           movementBps: body.movementBps,
           range,
           selectedRange: range,

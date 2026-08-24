@@ -172,7 +172,12 @@ export class MarketRefreshService {
       const observations = await provider.fetchObservations(identity, job.mapping.providerExternalId);
       const current = selectCurrentPriceGuide(observations);
       if (!current) throw new Error('PRICECHARTING_REFERENCE_UNAVAILABLE');
-      await this.persistObservations(job.mapping.id, asset.id, observations);
+      await this.persistObservations(
+        job.mapping.id,
+        asset.id,
+        observations,
+        refreshInterval(job.mapping.status),
+      );
       await this.updateCurrentReference(job.mapping.id, asset.id, current);
       await this.recordReferenceChange(asset.id, observations, now);
       await this.db.marketProviderMapping.update({
@@ -199,14 +204,19 @@ export class MarketRefreshService {
     }
   }
 
-  private async persistObservations(mappingId: string, assetId: string, observations: ProviderObservation[]) {
+  private async persistObservations(
+    mappingId: string,
+    assetId: string,
+    observations: ProviderObservation[],
+    heartbeatIntervalMs: number,
+  ) {
     const rows = observations.map((observation) => ({
       id: randomUUID(), assetId, mappingId, providerCode: 'PRICECHARTING', providerExternalId: observation.providerExternalId,
       observationType: observation.observationType, priceMinor: observation.priceMinor, currency: observation.currency,
       grader: observation.grader, grade: observation.grade, title: observation.title, externalUrl: observation.externalUrl,
       occurredAt: observation.occurredAt, observedAt: observation.observedAt, matchQuality: observation.matchQuality,
       included: observation.matchQuality === 'EXACT' || observation.matchQuality === 'STRONG', exclusionReason: observation.exclusionReason,
-      sourceFingerprint: fingerprint(observation), provenance: observation.provenance as Prisma.InputJsonValue,
+      sourceFingerprint: fingerprint(observation, heartbeatIntervalMs), provenance: observation.provenance as Prisma.InputJsonValue,
     }));
     if (rows.length) await this.db.marketObservation.createMany({ data: rows, skipDuplicates: true });
   }
@@ -332,11 +342,18 @@ function providerIdFromUrl(value: string) {
   try { const parsed = new URL(value); const marker = '/game/'; const index = parsed.pathname.indexOf(marker); return index >= 0 ? parsed.pathname.slice(index + marker.length).replace(/^\/+|\/+$/g, '') : null; } catch { return null; }
 }
 
-function fingerprint(observation: ProviderObservation) {
+export function fingerprint(
+  observation: ProviderObservation,
+  heartbeatIntervalMs: number,
+) {
   const provenance = observation.provenance as Record<string, unknown> | undefined;
   const stableCondition = typeof provenance?.conditionKey === 'string' ? provenance.conditionKey : '';
+  // PriceCharting guide responses have no provider event timestamp. Bucket the
+  // server observation time so an unchanged value gets one real heartbeat per
+  // scheduled cadence, while retries inside the same cadence remain idempotent.
+  const bucket = Math.floor(observation.observedAt.getTime() / heartbeatIntervalMs);
   const eventTime = observation.occurredAt?.toISOString() ?? '';
-  return createHash('sha256').update([observation.providerExternalId, observation.observationType, stableCondition, observation.priceMinor.toString(), observation.currency, eventTime].join('|')).digest('hex');
+  return createHash('sha256').update([observation.providerExternalId, observation.observationType, stableCondition, observation.priceMinor.toString(), observation.currency, eventTime, bucket].join('|')).digest('hex');
 }
 
 export function freshnessState(now: Date, observedAt: Date): 'FRESH' | 'AGING' | 'STALE' | 'UNAVAILABLE' {

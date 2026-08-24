@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Stripe v22 is CommonJS in the Nest CommonJS build. */
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 // Stripe v22 exposes a CommonJS export. Use the assignment import so the
 // production CommonJS build instantiates the SDK correctly as well as the

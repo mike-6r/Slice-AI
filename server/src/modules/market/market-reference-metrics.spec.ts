@@ -5,7 +5,14 @@ import {
   calculateReferenceMovements,
   downsampleReferencePoints,
 } from './market-reference-metrics';
-import { selectCurrentPriceGuide } from './market-refresh.service';
+import {
+  selectCurrentPriceGuide,
+} from './market-refresh.service';
+import {
+  referenceSeriesForAsset,
+  referenceSeriesForObservation,
+} from './market.service';
+import { fingerprint } from './market-refresh.service';
 
 const point = (id: string, priceMinor: bigint, observedAt: string) => ({
   id,
@@ -134,5 +141,34 @@ describe('PriceCharting reference metrics', () => {
     const unusable = { ...base, matchQuality: 'EXACT' as const, priceMinor: 0n };
 
     expect(selectCurrentPriceGuide([base, unusable, exact])).toBe(exact);
+  });
+
+  it('selects the asset-relevant external series without silently changing grade', () => {
+    expect(referenceSeriesForAsset(null, null)).toBe('UNGRADED');
+    expect(referenceSeriesForAsset('PSA', '10.00')).toBe('PSA_10');
+    expect(referenceSeriesForAsset('BGS', '10')).toBe('BGS_10');
+    expect(referenceSeriesForAsset('PSA', '9.5')).toBe('GRADE_9_5');
+    expect(referenceSeriesForObservation(null, '9')).toBe('GRADE_9');
+    expect(referenceSeriesForObservation('CGC', '10')).toBeNull();
+  });
+
+  it('creates one unchanged-value heartbeat per scheduled cadence', () => {
+    const base = {
+      providerExternalId: '2513024',
+      observationType: 'PRICE_GUIDE' as const,
+      priceMinor: 2_025n,
+      currency: 'USD',
+      title: 'Umbreon VMAX',
+      observedAt: new Date('2026-08-24T06:00:00.000Z'),
+      matchQuality: 'EXACT' as const,
+      provenance: { conditionKey: 'loose-price' },
+    };
+    const cadence = 6 * 60 * 60 * 1000;
+    expect(fingerprint(base, cadence)).toBe(
+      fingerprint({ ...base, observedAt: new Date('2026-08-24T11:59:59.000Z') }, cadence),
+    );
+    expect(fingerprint(base, cadence)).not.toBe(
+      fingerprint({ ...base, observedAt: new Date('2026-08-24T12:00:00.000Z') }, cadence),
+    );
   });
 });

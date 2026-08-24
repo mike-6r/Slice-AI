@@ -118,3 +118,89 @@ describe('MarketService similar-assets projection', () => {
     });
   });
 });
+
+describe('MarketService persisted PriceCharting history', () => {
+  it('uses the current mapping and real observations without valuation fallback', async () => {
+    const observations = [
+      {
+        id: 'current-2',
+        assetId: 'current-asset',
+        providerCode: 'PRICECHARTING',
+        providerExternalId: 'current-product-id',
+        observationType: 'PRICE_GUIDE',
+        priceMinor: 1_200n,
+        currency: 'USD',
+        grader: null,
+        grade: null,
+        included: true,
+        matchQuality: 'EXACT',
+        observedAt: new Date('2026-08-24T12:00:00.000Z'),
+      },
+      {
+        id: 'current-1',
+        assetId: 'current-asset',
+        providerCode: 'PRICECHARTING',
+        providerExternalId: 'current-product-id',
+        observationType: 'PRICE_GUIDE',
+        priceMinor: 1_000n,
+        currency: 'USD',
+        grader: null,
+        grade: null,
+        included: true,
+        matchQuality: 'EXACT',
+        observedAt: new Date('2026-08-20T12:00:00.000Z'),
+      },
+      {
+        id: 'old-product',
+        assetId: 'current-asset',
+        providerCode: 'PRICECHARTING',
+        providerExternalId: 'old-product-id',
+        observationType: 'PRICE_GUIDE',
+        priceMinor: 900n,
+        currency: 'USD',
+        grader: null,
+        grade: null,
+        included: true,
+        matchQuality: 'EXACT',
+        observedAt: new Date('2026-08-24T12:00:00.000Z'),
+      },
+    ];
+    const db = {
+      asset: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...currentAsset,
+          slug: 'current-card',
+          gradeScaleEntry: null,
+          marketProviderMappings: [
+            {
+              providerExternalId: 'current-product-id',
+              lastSuccessAt: new Date('2026-08-24T12:01:00.000Z'),
+            },
+          ],
+        }),
+      },
+      marketObservation: { findMany: jest.fn().mockResolvedValue(observations) },
+    };
+    const service = new MarketService(
+      db as never,
+      {} as never,
+      { all: () => [] } as never,
+      { isBeta: false } as never,
+      { createPrivateDownloadUrl: jest.fn() } as never,
+    );
+
+    await expect(service.history('current-card', 'ALL')).resolves.toMatchObject({
+      source: 'PRICECHARTING',
+      series: 'UNGRADED',
+      availableSeries: ['UNGRADED'],
+      historyPointCount: 2,
+      latestValue: { minor: '1200', currency: 'USD' },
+      movementAvailability: 'AVAILABLE',
+    });
+    expect(db.marketObservation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ providerExternalId: 'current-product-id' }),
+      }),
+    );
+  });
+});

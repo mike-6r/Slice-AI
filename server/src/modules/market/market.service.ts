@@ -33,14 +33,24 @@ import {
 } from './market-snapshot';
 
 const ranges = {
-  '1D': 1,
+  '24H': 1,
   '7D': 7,
   '30D': 30,
-  '3M': 90,
+  '90D': 90,
   '1Y': 365,
   ALL: 3650,
 } as const;
 type Range = keyof typeof ranges;
+export const REFERENCE_SERIES = [
+  'UNGRADED',
+  'GRADE_7',
+  'GRADE_8',
+  'GRADE_9',
+  'GRADE_9_5',
+  'PSA_10',
+  'BGS_10',
+] as const;
+export type ReferenceSeries = (typeof REFERENCE_SERIES)[number];
 type MarketHistoryResponsePoint = {
   id: string;
   priceMinor: bigint;
@@ -472,23 +482,54 @@ export class MarketService {
     const asset = await this.asset(slug);
     return assetView(asset, this.storage);
   }
-  async history(slug: string, range: Range) {
+  async history(
+    slug: string,
+    range: Range,
+    requestedSeries?: ReferenceSeries,
+  ) {
     const asset = await this.asset(slug);
     const now = new Date();
-    const referencePoints = (
-      await this.db.marketObservation.findMany({
-        where: {
-          assetId: asset.id,
-          providerCode: 'PRICECHARTING',
-          observationType: 'PRICE_GUIDE',
-          included: true,
-          observedAt: { lte: now },
-          matchQuality: { in: ['EXACT', 'STRONG'] },
-        },
-        orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
-        take: 10_000,
-      })
-    ).reverse();
+    const mapping = asset.marketProviderMappings?.[0] ?? null;
+    const selectedSeries =
+      requestedSeries ??
+      referenceSeriesForAsset(
+        asset.gradeScaleEntry?.company.code ?? null,
+        asset.gradeScaleEntry?.grade.toString() ?? null,
+      );
+    const providerRows = mapping
+      ? (
+          await this.db.marketObservation.findMany({
+          where: {
+            assetId: asset.id,
+            providerCode: 'PRICECHARTING',
+            providerExternalId: mapping.providerExternalId,
+            observationType: 'PRICE_GUIDE',
+            included: true,
+            observedAt: { lte: now },
+            matchQuality: { in: ['EXACT', 'STRONG'] },
+          },
+          orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+          take: 10_000,
+          })
+        ).filter((point) => point.providerExternalId === mapping.providerExternalId)
+      : [];
+    const availableSeries = REFERENCE_SERIES.filter((series) =>
+      providerRows.some(
+        (point) =>
+          referenceSeriesForObservation(point.grader, point.grade) === series,
+      ),
+    );
+    const referencePoints = providerRows
+      .filter(
+        (point) =>
+          referenceSeriesForObservation(point.grader, point.grade) ===
+          selectedSeries,
+      )
+      .sort(
+        (left, right) =>
+          left.observedAt.getTime() - right.observedAt.getTime() ||
+          left.id.localeCompare(right.id),
+      );
     const referenceHistory = referencePoints.map((point) => ({
       id: point.id,
       priceMinor: point.priceMinor,
@@ -497,42 +538,10 @@ export class MarketService {
       source: point.providerCode,
       dataStatus: 'LIVE' as const,
     }));
-    const valuationHistory = referenceHistory.length
-      ? []
-      : (
-          await this.db.assetValuationPoint.findMany({
-            where: {
-              assetId: asset.id,
-              observedAt: { lte: now },
-              ...(this.config.isBeta
-                ? {
-                    NOT: [
-                      { source: { startsWith: 'STAGING_' } },
-                      { source: { startsWith: 'DEMO_' } },
-                      { source: { startsWith: 'TEST_' } },
-                    ],
-                  }
-                : {}),
-            },
-            orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
-            take: 10_000,
-          })
-        )
-          .reverse()
-          .map((point) => ({
-            id: point.id,
-            priceMinor: point.estimatedMarketValueMinor,
-            observedAt: point.observedAt,
-            currency: point.currency,
-            source: point.source,
-            dataStatus: status(point.status),
-          }));
-    const allHistory = referenceHistory.length
-      ? referenceHistory
-      : valuationHistory;
-    const historySource = referenceHistory.length
-      ? 'PRICECHARTING'
-      : 'SLICE_VALUATION';
+    // External reference history must never fall back to Slice valuation
+    // points. Those are a separate staff-controlled authority.
+    const allHistory = referenceHistory;
+    const historySource = 'PRICECHARTING' as const;
     const historyCurrency = allHistory.at(-1)?.currency ?? 'GBP';
     const currencyHistory = allHistory.filter(
       (point) => point.currency === historyCurrency,
@@ -544,9 +553,17 @@ export class MarketService {
         observedAt: point.observedAt,
       }),
     );
+    const historyWindowMs =
+      range === 'ALL'
+        ? Math.max(
+            1,
+            (movementPoints.at(-1)?.observedAt.getTime() ?? now.getTime()) -
+              (movementPoints[0]?.observedAt.getTime() ?? now.getTime()),
+          )
+        : ranges[range] * 86_400_000;
     const metrics = calculateReferenceHistoryMetrics(
       movementPoints,
-      ranges[range] * 86_400_000,
+      historyWindowMs,
     );
     const visibleIds = new Set(metrics.visiblePoints.map((point) => point.id));
     const chartPoints =
@@ -589,21 +606,24 @@ export class MarketService {
     const startingSource = metrics.startingPoint
       ? currencyHistory.find((point) => point.id === metrics.startingPoint!.id)
       : undefined;
-    const lastRefreshedAt = referenceHistory.length
-      ? (asset.marketProviderMappings?.[0]?.lastSuccessAt ??
-        latest?.observedAt ??
-        null)
-      : (latest?.observedAt ?? null);
+    const lastRefreshedAt = mapping?.lastSuccessAt ?? latest?.observedAt ?? null;
+    const movementUnavailableReason = referenceHistory.length
+      ? metrics.movementUnavailableReason
+      : availableSeries.length
+        ? `Reference unavailable for ${selectedSeries}`
+        : 'History collection has just started.';
     return {
       assetSlug: asset.slug,
       range,
       selectedRange: range,
       source: historySource,
+      series: selectedSeries,
+      availableSeries,
       currency: latestSource?.currency ?? null,
       movementBps: metrics.percentageChangeBps,
       percentageChangeBps: metrics.percentageChangeBps,
       movementAvailability: metrics.movementAvailability,
-      movementUnavailableReason: metrics.movementUnavailableReason,
+      movementUnavailableReason,
       rangeStart: metrics.rangeStart ? asOf(metrics.rangeStart) : null,
       rangeEnd: metrics.rangeEnd ? asOf(metrics.rangeEnd) : null,
       actualCoverageSeconds: metrics.actualCoverageSeconds,
@@ -1815,16 +1835,20 @@ function externalMarketReferenceFromMapping(
       observedAt: mapping.currentObservedAt.toISOString(),
     },
     movement24hBps: movements
-      ? movements['24H']
+      ? (movements['24H'] ?? mapping.referenceMovement24hBps)
       : mapping.referenceMovement24hBps,
-    movement7dBps: movements ? movements['7D'] : mapping.referenceMovement7dBps,
+    movement7dBps: movements
+      ? (movements['7D'] ?? mapping.referenceMovement7dBps)
+      : mapping.referenceMovement7dBps,
     movement30dBps: movements
-      ? movements['30D']
+      ? (movements['30D'] ?? mapping.referenceMovement30dBps)
       : mapping.referenceMovement30dBps,
     movement90dBps: movements
-      ? movements['90D']
+      ? (movements['90D'] ?? mapping.referenceMovement90dBps)
       : mapping.referenceMovement90dBps,
-    movement1yBps: movements ? movements['1Y'] : mapping.referenceMovement1yBps,
+    movement1yBps: movements
+      ? (movements['1Y'] ?? mapping.referenceMovement1yBps)
+      : mapping.referenceMovement1yBps,
     lastRefreshedAt: mapping.lastSuccessAt?.toISOString() ?? null,
     historyStartedAt: mapping.referenceHistoryStartedAt?.toISOString() ?? null,
     freshness: mapping.lastSuccessAt
@@ -1844,6 +1868,48 @@ function freshnessLabel(lastSuccessAt: Date) {
 function calculateChangeBps(startMinor: bigint, endMinor: bigint) {
   if (startMinor <= 0n) return null;
   return Number(((endMinor - startMinor) * 10_000n) / startMinor);
+}
+
+export function referenceSeriesForAsset(
+  grader: string | null | undefined,
+  grade: string | null | undefined,
+): ReferenceSeries {
+  if (!grader && !grade) return 'UNGRADED';
+  const normalizedGrader = normalizeSeriesText(grader);
+  const normalizedGrade = normalizeGrade(grade);
+  if (normalizedGrader === 'PSA' && normalizedGrade === '10') return 'PSA_10';
+  if (normalizedGrader === 'BGS' && normalizedGrade === '10') return 'BGS_10';
+  if (normalizedGrade === '7') return 'GRADE_7';
+  if (normalizedGrade === '8') return 'GRADE_8';
+  if (normalizedGrade === '9') return 'GRADE_9';
+  if (normalizedGrade === '9.5') return 'GRADE_9_5';
+  return 'UNGRADED';
+}
+
+export function referenceSeriesForObservation(
+  grader: string | null | undefined,
+  grade: string | null | undefined,
+): ReferenceSeries | null {
+  if (!grader && !grade) return 'UNGRADED';
+  const normalizedGrader = normalizeSeriesText(grader);
+  const normalizedGrade = normalizeGrade(grade);
+  if (normalizedGrader === 'PSA' && normalizedGrade === '10') return 'PSA_10';
+  if (normalizedGrader === 'BGS' && normalizedGrade === '10') return 'BGS_10';
+  if (normalizedGrade === '7') return 'GRADE_7';
+  if (normalizedGrade === '8') return 'GRADE_8';
+  if (normalizedGrade === '9') return 'GRADE_9';
+  if (normalizedGrade === '9.5') return 'GRADE_9_5';
+  return null;
+}
+
+function normalizeSeriesText(value: string | null | undefined) {
+  return (value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeGrade(value: string | null | undefined) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '';
+  return parsed.toFixed(1).replace(/\.0$/, '');
 }
 
 function encodeCursor(id: string) {

@@ -141,10 +141,14 @@ function formatBps(value: number | null | undefined) {
   return `${percent > 0 ? "+" : ""}${percent.toFixed(2)}%`;
 }
 
-function formatAxisLabel(value: number, currency: SupportedCurrency) {
+function formatAxisLabel(value: number, currency: SupportedCurrency, span: number) {
   const symbol =
     currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency === "CAD" ? "CA$" : "$";
-  return `${symbol}${Math.round(value).toLocaleString("en-GB")}`;
+  const fractionDigits = span < 10 ? 2 : span < 100 ? 1 : 0;
+  return `${symbol}${value.toLocaleString("en-GB", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}`;
 }
 
 export function PriceChart({
@@ -288,7 +292,7 @@ export function PriceChart({
         >
           {ticks.map((tick, index) => (
             <span key={index} className="leading-none">
-              {formatAxisLabel(tick, currency)}
+              {formatAxisLabel(tick, currency, rawMax - rawMin)}
             </span>
           ))}
         </div>

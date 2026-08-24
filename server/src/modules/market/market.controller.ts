@@ -43,7 +43,23 @@ const moversQuery = z
   .strict();
 const rangeQuery = z
   .object({
-    range: z.enum(['1D', '7D', '30D', '3M', '1Y', 'ALL']).default('30D'),
+    range: z
+      .enum(['24H', '7D', '30D', '90D', '1Y', 'ALL', '1D', '3M'])
+      .default('30D')
+      .transform((value) =>
+        value === '1D' ? '24H' : value === '3M' ? '90D' : value,
+      ),
+    series: z
+      .enum([
+        'UNGRADED',
+        'GRADE_7',
+        'GRADE_8',
+        'GRADE_9',
+        'GRADE_9_5',
+        'PSA_10',
+        'BGS_10',
+      ])
+      .optional(),
   })
   .strict();
 const similarQuery = z
@@ -67,7 +83,14 @@ export class MarketController {
     @Param('slug') slug: string,
     @Query() query: unknown,
   ) {
-    return this.market.history(slug, parse(rangeQuery, query).range ?? '30D');
+    const input = parse(rangeQuery, query);
+    const range =
+      input.range === '1D'
+        ? '24H'
+        : input.range === '3M'
+          ? '90D'
+          : input.range;
+    return this.market.history(slug, range ?? '30D', input.series);
   }
   @Get('assets/:slug/similar') similar(
     @Param('slug') slug: string,

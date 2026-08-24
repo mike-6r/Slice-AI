@@ -2,6 +2,14 @@ import type { AssetId } from "./asset";
 import type { BasisPoints, CurrencyCode, ISODateTime, Money, Percentage } from "./common";
 
 export type TimeRange = "24H" | "7D" | "30D" | "90D" | "1Y" | "ALL";
+export type ReferenceSeries =
+  | "UNGRADED"
+  | "GRADE_7"
+  | "GRADE_8"
+  | "GRADE_9"
+  | "GRADE_9_5"
+  | "PSA_10"
+  | "BGS_10";
 export type ValuationSource = "demo-market" | "auction-comparable" | "manual-appraisal";
 export interface PricePoint {
   timestamp: ISODateTime;
@@ -25,6 +33,8 @@ export interface PriceHistoryPoint extends PricePoint {
  */
 export type PriceHistory = PriceHistoryPoint[] & {
   source?: "PRICECHARTING" | "SLICE_VALUATION";
+  series?: ReferenceSeries;
+  availableSeries?: ReferenceSeries[];
   movementBps?: number | null;
   range?: TimeRange;
   selectedRange?: TimeRange;
