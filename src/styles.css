@@ -35773,3 +35773,34 @@ html,
   .asset-detail-page .asset-how-it-works__step p { font-size: .65rem; line-height: 1.38; }
   .asset-detail-page .asset-how-it-works__link { margin-top: 10px; }
 }
+
+/* Final cascade correction: the master grid has a more-specific compact rule,
+   so keep these dimensions explicit without changing the section footprint. */
+.asset-detail-page .asset-redesign > .asset-how-it-works {
+  max-height: 220px;
+  padding: 8px 16px 6px;
+}
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__grid { margin-top: 6px; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step,
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step:first-child,
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step:nth-child(3) { padding: 7px 10px; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__icon { width: 30px; height: 30px; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step-top { min-height: 30px; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step h3 { margin-top: .35rem; font-size: .7rem; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step p { font-size: .56rem; line-height: 1.25; }
+.asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__link { margin-top: 5px; }
+
+@media (max-width: 900px) {
+  .asset-detail-page .asset-redesign > .asset-how-it-works { height: auto; max-height: none; padding: 14px; }
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__grid { margin-top: 12px; grid-auto-rows: 106px; }
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-redesign > .asset-how-it-works { padding: 14px 12px 12px; }
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__grid { grid-auto-rows: auto; margin-top: 12px; }
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step,
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step:first-child,
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step:nth-child(3) { min-height: 0; padding: 11px 12px; }
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step h3 { font-size: .76rem; }
+  .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step p { font-size: .65rem; line-height: 1.38; }
+}
