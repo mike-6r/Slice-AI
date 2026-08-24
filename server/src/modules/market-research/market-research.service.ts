@@ -13,7 +13,10 @@ import { APP_CONFIG, type AppConfig } from '../../config/app-config';
 import { Inject } from '@nestjs/common';
 import type { Actor } from '../identity/auth/auth.service';
 import { MarketProviderRegistry } from '../market/market-provider.registry';
-import type { MarketIdentity, ProviderObservation } from '../market/market-provider.ports';
+import type {
+  MarketIdentity,
+  ProviderObservation,
+} from '../market/market-provider.ports';
 import { CollectorMembershipService } from '../providers/application/collector-membership.service';
 
 export type MarketResearchInput = {
@@ -60,6 +63,10 @@ type MatchedObservation = Observation & {
   exclusionReason?: string;
   included: boolean;
 };
+type ProviderCollectionResult = {
+  observations: Observation[] | null;
+  reason?: string;
+};
 
 /** Provider-neutral whole-collectible market research. It intentionally does
  * not read or write Slice's fractional trading or D11 valuation records. */
@@ -92,15 +99,16 @@ export class CollectibleMarketResearchService {
       if (cached) return researchProjection(cached);
     }
 
-    const raw = await this.collectProviderObservations(identity, input);
-    if (raw === null) {
+    const collected = await this.collectProviderObservations(identity, input);
+    if (collected.observations === null) {
       if (this.config.isBeta || this.config.environment === 'production') {
         return this.unavailable(
           actor.userId,
           identity,
           identityHash,
           requestId,
-          'No approved external market provider is configured.',
+          collected.reason ??
+            'The approved external market provider is unavailable.',
         );
       }
       // Development/test-only references remain available for deterministic
@@ -115,8 +123,16 @@ export class CollectibleMarketResearchService {
         ),
       );
     }
-    const observations = raw.map((item) => classifyObservation(identity, item));
-    return this.persistResearch(actor, identity, identityHash, requestId, observations);
+    const observations = collected.observations.map((item) =>
+      classifyObservation(identity, item),
+    );
+    return this.persistResearch(
+      actor,
+      identity,
+      identityHash,
+      requestId,
+      observations,
+    );
   }
 
   private async persistResearch(
@@ -181,16 +197,34 @@ export class CollectibleMarketResearchService {
   private async collectProviderObservations(
     identity: Identity,
     input: MarketResearchInput,
-  ): Promise<Observation[] | null> {
+  ): Promise<ProviderCollectionResult> {
     const provider = this.providers.get('PRICECHARTING');
-    if (!provider?.searchProducts || !provider.fetchObservations) return null;
+    if (!provider?.searchProducts || !provider.fetchObservations) {
+      return {
+        observations: null,
+        reason: 'PriceCharting is not available on this server.',
+      };
+    }
     const health = await provider.health();
-    if (!health.configured) return null;
+    if (!health.configured) {
+      return { observations: null, reason: health.detail };
+    }
     const category = await this.db.category.findUnique({
       where: { id: identity.categoryId },
       select: { slug: true },
     });
-    if (!category || !provider.supports(category.slug)) return null;
+    if (!category) {
+      return {
+        observations: null,
+        reason: 'The selected collectible category could not be loaded.',
+      };
+    }
+    if (!provider.supports(category.slug)) {
+      return {
+        observations: null,
+        reason: 'PriceCharting does not support this collectible category yet.',
+      };
+    }
     const marketIdentity: MarketIdentity = {
       category: category.slug,
       year: identity.year ? Number(identity.year) || null : null,
@@ -204,21 +238,31 @@ export class CollectibleMarketResearchService {
       grade: identity.grade,
     };
     const reference = customerReference(input.declaredMetadata);
-    const providerId = reference?.provider === 'PriceCharting'
-      ? reference.externalReferenceId
-      : null;
+    const providerId =
+      reference?.provider === 'PriceCharting'
+        ? reference.externalReferenceId
+        : null;
     try {
-      let selectedId = providerId && /^\d+$/.test(providerId) ? providerId : null;
+      let selectedId =
+        providerId && /^\d+$/.test(providerId) ? providerId : null;
       if (!selectedId) {
         const candidates = await provider.searchProducts(marketIdentity);
-        const exact = candidates.filter((candidate) => candidate.matchQuality === 'EXACT');
-        if (exact.length !== 1) return [];
+        const exact = candidates.filter(
+          (candidate) => candidate.matchQuality === 'EXACT',
+        );
+        if (exact.length !== 1) return { observations: [] };
         selectedId = exact[0]!.providerProductId;
       }
-      const providerRows = await provider.fetchObservations(marketIdentity, selectedId);
-      return providerRows.map(providerObservationToResearch);
-    } catch {
-      return null;
+      const providerRows = await provider.fetchObservations(
+        marketIdentity,
+        selectedId,
+      );
+      return { observations: providerRows.map(providerObservationToResearch) };
+    } catch (error) {
+      return {
+        observations: null,
+        reason: providerFailureReason(error),
+      };
     }
   }
 
@@ -249,7 +293,9 @@ export class CollectibleMarketResearchService {
    * require a second paid lookup.
    */
   async reclassifyStored(actor: Actor, researchId: string, requestId: string) {
-    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+    if (
+      !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
+    ) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to reclassify market research.',
@@ -259,7 +305,8 @@ export class CollectibleMarketResearchService {
       where: { id: researchId },
       include: { observations: { orderBy: { observedAt: 'desc' } } },
     });
-    if (!record) throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
+    if (!record)
+      throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
     const identity = record.identity as unknown as Identity;
     const observations: Observation[] = record.observations.map((item) => ({
       providerCode: item.providerCode,
@@ -275,7 +322,9 @@ export class CollectibleMarketResearchService {
       grade: item.grade ?? undefined,
       variant: item.variant ?? undefined,
     }));
-    const classified = observations.map((item) => classifyObservation(identity, item));
+    const classified = observations.map((item) =>
+      classifyObservation(identity, item),
+    );
     const now = new Date();
     const aggregate = aggregateSnapshot(classified, now);
     const updated = await this.db.$transaction(async (db) => {
@@ -317,7 +366,10 @@ export class CollectibleMarketResearchService {
         requestId,
         sessionId: actor.sessionId,
         result: 'SUCCESS',
-        metadata: { state: aggregate.state, exactCompCount: aggregate.snapshot.exactCompCount },
+        metadata: {
+          state: aggregate.state,
+          exactCompCount: aggregate.snapshot.exactCompCount,
+        },
         createdAt: now,
       },
     });
@@ -330,7 +382,9 @@ export class CollectibleMarketResearchService {
     submissionId: string,
     requestId: string,
   ) {
-    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+    if (
+      !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
+    ) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to attach market research.',
@@ -340,20 +394,31 @@ export class CollectibleMarketResearchService {
       where: { id: researchId, submissionId: null },
       include: { observations: { orderBy: { observedAt: 'desc' } } },
     });
-    if (!record) throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
+    if (!record)
+      throw new NotFoundException({ code: 'MARKET_RESEARCH_NOT_FOUND' });
     const submission = await this.db.assetSubmission.findUnique({
       where: { id: submissionId },
-      select: { id: true, ownerUserId: true, status: true, assetId: true, categoryId: true, declaredMetadata: true },
+      select: {
+        id: true,
+        ownerUserId: true,
+        status: true,
+        assetId: true,
+        categoryId: true,
+        declaredMetadata: true,
+      },
     });
-    if (!submission) throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
+    if (!submission)
+      throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
     if (submission.status !== 'APPROVED' || submission.assetId) {
       throw new ConflictException({
         code: 'SUBMISSION_STATE_CONFLICT',
-        message: 'Only an approved, unlinked submission can receive market research.',
+        message:
+          'Only an approved, unlinked submission can receive market research.',
       });
     }
     const metadata =
-      submission.declaredMetadata && typeof submission.declaredMetadata === 'object'
+      submission.declaredMetadata &&
+      typeof submission.declaredMetadata === 'object'
         ? (submission.declaredMetadata as Record<string, unknown>)
         : {};
     const storedIdentity = record.identity as unknown as Identity;
@@ -369,12 +434,18 @@ export class CollectibleMarketResearchService {
       if (!stored) return true;
       const submissionKey = field === 'name' ? 'name' : field;
       const current = metadata[submissionKey];
-      return typeof current === 'string' && normalize(current) === normalize(stored);
+      return (
+        typeof current === 'string' && normalize(current) === normalize(stored)
+      );
     });
-    if (!identityMatches || storedIdentity.categoryId !== submission.categoryId) {
+    if (
+      !identityMatches ||
+      storedIdentity.categoryId !== submission.categoryId
+    ) {
       throw new ConflictException({
         code: 'MARKET_RESEARCH_IDENTITY_MISMATCH',
-        message: 'Refresh market research after correcting the submission identity.',
+        message:
+          'Refresh market research after correcting the submission identity.',
       });
     }
     const updated = await this.db.submissionMarketResearch.update({
@@ -416,7 +487,9 @@ export class CollectibleMarketResearchService {
     assetId: string,
     requestId: string,
   ) {
-    if (!actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')) {
+    if (
+      !actor.roles.some((role) => role === 'ADMIN' || role === 'ASSET_REVIEWER')
+    ) {
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to promote market research.',
@@ -426,31 +499,48 @@ export class CollectibleMarketResearchService {
       where: { id: submissionId },
       include: {
         marketResearch: { include: { observations: true } },
-        asset: { include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } } } },
+        asset: {
+          include: {
+            category: true,
+            collectibleSet: true,
+            gradeScaleEntry: { include: { company: true } },
+          },
+        },
       },
     });
-    if (!submission) throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
-    if (submission.status !== 'APPROVED' || submission.assetId !== assetId || !submission.asset) {
+    if (!submission)
+      throw new NotFoundException({ code: 'SUBMISSION_NOT_FOUND' });
+    if (
+      submission.status !== 'APPROVED' ||
+      submission.assetId !== assetId ||
+      !submission.asset
+    ) {
       throw new ConflictException({
         code: 'ASSET_PROMOTION_PRECONDITION_FAILED',
-        message: 'The approved submission must already be linked to the requested canonical Asset.',
+        message:
+          'The approved submission must already be linked to the requested canonical Asset.',
       });
     }
     const asset = submission.asset;
     const research = submission.marketResearch
       .filter((item) => item.submissionId === submissionId)
-      .sort((left, right) => right.collectedAt.getTime() - left.collectedAt.getTime())[0];
+      .sort(
+        (left, right) =>
+          right.collectedAt.getTime() - left.collectedAt.getTime(),
+      )[0];
     if (!research) {
       throw new ConflictException({
         code: 'ASSET_PROMOTION_RESEARCH_MISSING',
-        message: 'Confirmed submission market research is required before promotion.',
+        message:
+          'Confirmed submission market research is required before promotion.',
       });
     }
     const identity = research.identity as unknown as Identity;
     if (!identityCompatibleWithAsset(identity, asset)) {
       throw new ConflictException({
         code: 'ASSET_PROMOTION_IDENTITY_CONFLICT',
-        message: 'The confirmed provider identity does not match the canonical Asset.',
+        message:
+          'The confirmed provider identity does not match the canonical Asset.',
       });
     }
     const observation = research.observations.find(
@@ -465,7 +555,8 @@ export class CollectibleMarketResearchService {
     if (!observation) {
       throw new ConflictException({
         code: 'ASSET_PROMOTION_RAW_REFERENCE_MISSING',
-        message: 'An exact raw PriceCharting reference is required before promotion.',
+        message:
+          'An exact raw PriceCharting reference is required before promotion.',
       });
     }
     const providerProductId = observation.externalReferenceId.split(':', 1)[0]!;
@@ -480,21 +571,33 @@ export class CollectibleMarketResearchService {
     const result = await this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${assetId} FOR UPDATE`;
       const existingMapping = await db.marketProviderMapping.findUnique({
-        where: { assetId_providerCode: { assetId, providerCode: 'PRICECHARTING' } },
+        where: {
+          assetId_providerCode: { assetId, providerCode: 'PRICECHARTING' },
+        },
       });
-      if (existingMapping && existingMapping.providerExternalId !== providerProductId) {
+      if (
+        existingMapping &&
+        existingMapping.providerExternalId !== providerProductId
+      ) {
         throw new ConflictException({
           code: 'MAPPING_CONFLICT',
-          message: 'The canonical Asset already has a different PriceCharting product mapping.',
+          message:
+            'The canonical Asset already has a different PriceCharting product mapping.',
         });
       }
       const mappingForProvider = await db.marketProviderMapping.findUnique({
-        where: { providerCode_providerExternalId: { providerCode: 'PRICECHARTING', providerExternalId: providerProductId } },
+        where: {
+          providerCode_providerExternalId: {
+            providerCode: 'PRICECHARTING',
+            providerExternalId: providerProductId,
+          },
+        },
       });
       if (mappingForProvider && mappingForProvider.assetId !== assetId) {
         throw new ConflictException({
           code: 'MAPPING_CONFLICT',
-          message: 'That PriceCharting product is already mapped to another canonical Asset.',
+          message:
+            'That PriceCharting product is already mapped to another canonical Asset.',
         });
       }
       const mapping = existingMapping
@@ -523,47 +626,55 @@ export class CollectibleMarketResearchService {
             },
           });
       const existingObservation = await db.marketObservation.findUnique({
-        where: { providerCode_sourceFingerprint: { providerCode: 'PRICECHARTING', sourceFingerprint } },
+        where: {
+          providerCode_sourceFingerprint: {
+            providerCode: 'PRICECHARTING',
+            sourceFingerprint,
+          },
+        },
       });
       if (existingObservation && existingObservation.assetId !== assetId) {
         throw new ConflictException({
           code: 'MARKET_OBSERVATION_CONFLICT',
-          message: 'The confirmed observation is already attached to another canonical Asset.',
+          message:
+            'The confirmed observation is already attached to another canonical Asset.',
         });
       }
-      const promotedObservation = existingObservation ?? await db.marketObservation.create({
-        data: {
-          id: randomUUID(),
-          assetId,
-          mappingId: mapping.id,
-          providerCode: 'PRICECHARTING',
-          providerExternalId: providerProductId,
-          observationType: 'PRICE_GUIDE',
-          priceMinor: observation.amountMinor,
-          currency: observation.currency,
-          grader: null,
-          grade: null,
-          title: observation.originalTitle,
-          externalUrl: observation.externalUrl,
-          occurredAt: observation.observedAt,
-          observedAt: observation.observedAt,
-          matchQuality: 'EXACT',
-          included: true,
-          exclusionReason: null,
-          sourceFingerprint,
-          provenance: {
-            provider: 'PRICECHARTING',
-            providerProductId,
-            conditionKey: 'loose-price',
+      const promotedObservation =
+        existingObservation ??
+        (await db.marketObservation.create({
+          data: {
+            id: randomUUID(),
+            assetId,
+            mappingId: mapping.id,
+            providerCode: 'PRICECHARTING',
+            providerExternalId: providerProductId,
             observationType: 'PRICE_GUIDE',
-            sourceCurrency: observation.currency,
-            submissionId,
-            submissionResearchId: research.id,
-            submissionObservationId: observation.id,
-            identityHash: research.identityHash,
-          } as Prisma.InputJsonValue,
-        },
-      });
+            priceMinor: observation.amountMinor,
+            currency: observation.currency,
+            grader: null,
+            grade: null,
+            title: observation.originalTitle,
+            externalUrl: observation.externalUrl,
+            occurredAt: observation.observedAt,
+            observedAt: observation.observedAt,
+            matchQuality: 'EXACT',
+            included: true,
+            exclusionReason: null,
+            sourceFingerprint,
+            provenance: {
+              provider: 'PRICECHARTING',
+              providerProductId,
+              conditionKey: 'loose-price',
+              observationType: 'PRICE_GUIDE',
+              sourceCurrency: observation.currency,
+              submissionId,
+              submissionResearchId: research.id,
+              submissionObservationId: observation.id,
+              identityHash: research.identityHash,
+            } as Prisma.InputJsonValue,
+          },
+        }));
       await db.auditEvent.create({
         data: {
           id: randomUUID(),
@@ -731,6 +842,22 @@ function customerReference(metadata: Record<string, unknown>) {
   };
 }
 
+function providerFailureReason(error: unknown) {
+  const code = error instanceof Error ? error.message : '';
+  switch (code) {
+    case 'PRICECHARTING_AUTH_FAILED':
+      return 'PriceCharting rejected the configured API credentials.';
+    case 'PRICECHARTING_RATE_LIMITED':
+      return 'PriceCharting is rate-limiting requests. Please try again shortly.';
+    case 'PRICECHARTING_TIMEOUT':
+      return 'PriceCharting took too long to respond. Please try again.';
+    case 'PRICECHARTING_NOT_CONFIGURED':
+      return 'PriceCharting is not configured on this server.';
+    default:
+      return 'PriceCharting could not be reached right now. Please try again.';
+  }
+}
+
 function providerObservationToResearch(
   observation: ProviderObservation,
 ): Observation {
@@ -765,16 +892,24 @@ function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function identityCompatibleWithAsset(identity: Identity, asset: {
-  category: { id: string };
-  year: number | null;
-  title: string;
-  collectibleSet: { name: string } | null;
-  cardNumber: string | null;
-  edition: string | null;
-}) {
-  const same = (left: string | number | null | undefined, right: string | number | null | undefined) =>
-    left == null || right == null || normalize(String(left)) === normalize(String(right));
+function identityCompatibleWithAsset(
+  identity: Identity,
+  asset: {
+    category: { id: string };
+    year: number | null;
+    title: string;
+    collectibleSet: { name: string } | null;
+    cardNumber: string | null;
+    edition: string | null;
+  },
+) {
+  const same = (
+    left: string | number | null | undefined,
+    right: string | number | null | undefined,
+  ) =>
+    left == null ||
+    right == null ||
+    normalize(String(left)) === normalize(String(right));
   return (
     identity.categoryId === asset.category.id &&
     same(identity.year, asset.year) &&
@@ -911,11 +1046,12 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
         : exactSales.length
           ? 'LOW'
           : null;
-  const state = sales.length || priceGuides.length
-    ? (sales.length || priceGuides.length) === 1
-      ? 'LIMITED'
-      : 'FOUND'
-    : 'NO_MATCHES';
+  const state =
+    sales.length || priceGuides.length
+      ? (sales.length || priceGuides.length) === 1
+        ? 'LIMITED'
+        : 'FOUND'
+      : 'NO_MATCHES';
   return {
     state,
     dataQuality,

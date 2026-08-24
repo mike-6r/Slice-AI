@@ -15,6 +15,14 @@ function config(overrides: Partial<AppConfig> = {}) {
 describe('PriceChartingProvider', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it('supports the canonical Pokémon category aliases used by the catalogue', () => {
+    const provider = new PriceChartingProvider(config());
+
+    expect(provider.supports('poke-mon')).toBe(true);
+    expect(provider.supports('pokemon-tcg')).toBe(true);
+    expect(provider.supports('sports-cards')).toBe(true);
+  });
+
   it('uses the documented product endpoint and token query parameter', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(
@@ -42,8 +50,15 @@ describe('PriceChartingProvider', () => {
     expect(product.currency).toBe('USD');
     expect(product.references).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ conditionKey: 'loose-price', amountMinor: 10000n }),
-        expect.objectContaining({ conditionKey: 'manual-only-price', grader: 'PSA', grade: '10' }),
+        expect.objectContaining({
+          conditionKey: 'loose-price',
+          amountMinor: 10000n,
+        }),
+        expect.objectContaining({
+          conditionKey: 'manual-only-price',
+          grader: 'PSA',
+          grade: '10',
+        }),
       ]),
     );
   });
@@ -85,10 +100,18 @@ describe('PriceChartingProvider', () => {
     );
 
     expect(observations).toHaveLength(9);
-    expect(observations.find((item) => item.grader === 'PSA')?.matchQuality).toBe('WEAK');
-    expect(observations.find((item) => item.grader === 'BGS')?.matchQuality).toBe('WEAK');
-    expect(observations.find((item) => item.grader === undefined)?.matchQuality).toBe('WEAK');
-    expect(observations.every((item) => item.observationType === 'PRICE_GUIDE')).toBe(true);
+    expect(
+      observations.find((item) => item.grader === 'PSA')?.matchQuality,
+    ).toBe('WEAK');
+    expect(
+      observations.find((item) => item.grader === 'BGS')?.matchQuality,
+    ).toBe('WEAK');
+    expect(
+      observations.find((item) => item.grader === undefined)?.matchQuality,
+    ).toBe('WEAK');
+    expect(
+      observations.every((item) => item.observationType === 'PRICE_GUIDE'),
+    ).toBe(true);
   });
 
   it('fails closed when the provider is not configured', async () => {
@@ -96,7 +119,9 @@ describe('PriceChartingProvider', () => {
       config({ priceChartingEnabled: false, priceChartingApiToken: undefined }),
     );
 
-    await expect(provider.getProduct('123')).rejects.toThrow('PRICECHARTING_NOT_CONFIGURED');
+    await expect(provider.getProduct('123')).rejects.toThrow(
+      'PRICECHARTING_NOT_CONFIGURED',
+    );
     await expect(provider.health()).resolves.toMatchObject({
       configured: false,
       status: 'UNAVAILABLE',
@@ -134,15 +159,25 @@ describe('PriceChartingProvider', () => {
       '2513024',
     );
 
-    expect(observations.find((item) => item.grader === undefined)?.matchQuality).toBe('EXACT');
-    expect(observations.filter((item) => item.matchQuality === 'EXACT')).toHaveLength(1);
-    expect(observations.filter((item) => item.matchQuality === 'WEAK')).toHaveLength(2);
+    expect(
+      observations.find((item) => item.grader === undefined)?.matchQuality,
+    ).toBe('EXACT');
+    expect(
+      observations.filter((item) => item.matchQuality === 'EXACT'),
+    ).toHaveLength(1);
+    expect(
+      observations.filter((item) => item.matchQuality === 'WEAK'),
+    ).toHaveLength(2);
   });
 
   it('classifies provider authentication failures separately', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{}', { status: 401 }));
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 401 }));
     const provider = new PriceChartingProvider(config());
 
-    await expect(provider.getProduct('2513024')).rejects.toThrow('PRICECHARTING_AUTH_FAILED');
+    await expect(provider.getProduct('2513024')).rejects.toThrow(
+      'PRICECHARTING_AUTH_FAILED',
+    );
   });
 });

@@ -52,14 +52,15 @@ export class PriceChartingProvider implements MarketDataProvider {
   ) {}
 
   supports(category: string) {
+    const normalizedCategory = category.toLowerCase().replace(/[^a-z0-9]/g, '');
     return [
       'pokemon',
-      'pokemon-tcg',
-      'sports-cards',
+      'pokemontcg',
+      'sportscards',
       'football',
       'basketball',
       'hockey',
-    ].includes(category.toLowerCase());
+    ].includes(normalizedCategory);
   }
 
   async health() {
@@ -75,7 +76,9 @@ export class PriceChartingProvider implements MarketDataProvider {
     };
   }
 
-  async searchProducts(identity: MarketIdentity): Promise<MarketProductCandidate[]> {
+  async searchProducts(
+    identity: MarketIdentity,
+  ): Promise<MarketProductCandidate[]> {
     const query = buildSearchQuery(identity);
     const payload = await this.request('products', { q: query });
     const rows = objectArray(payload, 'products');
@@ -169,8 +172,10 @@ export class PriceChartingProvider implements MarketDataProvider {
       if (response.status === 401 || response.status === 403) {
         throw new Error('PRICECHARTING_AUTH_FAILED');
       }
-      if (response.status === 429) throw new Error('PRICECHARTING_RATE_LIMITED');
-      if (!response.ok) throw new Error(`PRICECHARTING_HTTP_${response.status}`);
+      if (response.status === 429)
+        throw new Error('PRICECHARTING_RATE_LIMITED');
+      if (!response.ok)
+        throw new Error(`PRICECHARTING_HTTP_${response.status}`);
       const payload = await response.json();
       if (cacheKey && this.config.priceChartingCacheTtlSeconds) {
         try {
@@ -186,7 +191,10 @@ export class PriceChartingProvider implements MarketDataProvider {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('PRICECHARTING_TIMEOUT');
       }
-      if (error instanceof Error && error.message.startsWith('PRICECHARTING_')) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith('PRICECHARTING_')
+      ) {
         throw error;
       }
       throw new Error('PRICECHARTING_REQUEST_FAILED');
@@ -208,11 +216,19 @@ export class PriceChartingProvider implements MarketDataProvider {
         const key = this.cache.key('pricecharting', 'global-rate');
         const ttlSeconds = Math.max(
           2,
-          Math.ceil((this.config.priceChartingMinRequestIntervalMs ?? 1_000) / 1_000) + 1,
+          Math.ceil(
+            (this.config.priceChartingMinRequestIntervalMs ?? 1_000) / 1_000,
+          ) + 1,
         );
         for (;;) {
           try {
-            if (await this.cache.set(key, String(Date.now()), { ttlSeconds, nx: true })) break;
+            if (
+              await this.cache.set(key, String(Date.now()), {
+                ttlSeconds,
+                nx: true,
+              })
+            )
+              break;
           } catch {
             break;
           }
@@ -242,19 +258,32 @@ const CONDITION_FIELDS = [
   ['condition-18-price', 'SGC 10', 'SGC', '10', true],
 ] as const;
 
-function parseProduct(payload: unknown, fallbackId: string): PriceChartingProduct {
-  const row = isRecord(payload) && isRecord(payload.product) ? payload.product : payload;
+function parseProduct(
+  payload: unknown,
+  fallbackId: string,
+): PriceChartingProduct {
+  const row =
+    isRecord(payload) && isRecord(payload.product) ? payload.product : payload;
   if (!isRecord(row)) throw new Error('PRICECHARTING_INVALID_RESPONSE');
   const providerProductId = stringValue(row.id) ?? fallbackId;
-  const title = stringValue(row['product-name']) ?? stringValue(row.title) ?? '';
+  const title =
+    stringValue(row['product-name']) ?? stringValue(row.title) ?? '';
   const set = stringValue(row['console-name']) ?? stringValue(row.set) ?? null;
   const releaseDate = stringValue(row['release-date']) ?? null;
   const year = releaseDate ? Number(releaseDate.slice(0, 4)) || null : null;
-  const currency = (stringValue(row.currency) ?? stringValue(row['currency-code']) ?? 'USD').toUpperCase();
-  const references = CONDITION_FIELDS.flatMap(([conditionKey, label, grader, grade, exactGrader]) => {
-    const amountMinor = integerAmount(row[conditionKey]);
-    return amountMinor === null ? [] : [{ conditionKey, label, amountMinor, grader, grade, exactGrader }];
-  });
+  const currency = (
+    stringValue(row.currency) ??
+    stringValue(row['currency-code']) ??
+    'USD'
+  ).toUpperCase();
+  const references = CONDITION_FIELDS.flatMap(
+    ([conditionKey, label, grader, grade, exactGrader]) => {
+      const amountMinor = integerAmount(row[conditionKey]);
+      return amountMinor === null
+        ? []
+        : [{ conditionKey, label, amountMinor, grader, grade, exactGrader }];
+    },
+  );
   return {
     providerProductId,
     title,
@@ -271,7 +300,8 @@ function parseCandidate(
   row: Record<string, unknown>,
   identity: MarketIdentity,
 ): MarketProductCandidate | undefined {
-  const providerProductId = stringValue(row.id) ?? stringValue(row['product-id']);
+  const providerProductId =
+    stringValue(row.id) ?? stringValue(row['product-id']);
   const title = stringValue(row['product-name']) ?? stringValue(row.title);
   if (!providerProductId || !title) return undefined;
   const candidate: MarketProductCandidate = {
@@ -285,8 +315,16 @@ function parseCandidate(
   };
   const normalized = normalize(`${candidate.title} ${candidate.set ?? ''}`);
   const number = normalize(identity.cardNumber);
-  const titleMatch = normalize(identity.title).split(' ').filter(Boolean).every((part) => normalized.includes(part));
-  candidate.matchQuality = number && normalized.includes(number) && titleMatch ? 'EXACT' : titleMatch ? 'STRONG' : 'NEEDS_CONFIRMATION';
+  const titleMatch = normalize(identity.title)
+    .split(' ')
+    .filter(Boolean)
+    .every((part) => normalized.includes(part));
+  candidate.matchQuality =
+    number && normalized.includes(number) && titleMatch
+      ? 'EXACT'
+      : titleMatch
+        ? 'STRONG'
+        : 'NEEDS_CONFIRMATION';
   return candidate;
 }
 
@@ -300,7 +338,8 @@ function conditionMatch(
       : 'WEAK';
   }
   if (!reference.exactGrader) return 'WEAK';
-  return normalize(identity.grader) === normalize(reference.grader) && normalize(identity.grade) === normalize(reference.grade)
+  return normalize(identity.grader) === normalize(reference.grader) &&
+    normalize(identity.grade) === normalize(reference.grade)
     ? 'EXACT'
     : 'WEAK';
 }
@@ -312,8 +351,14 @@ function objectArray(value: unknown, key: string) {
 }
 
 function integerAmount(value: unknown): bigint | null {
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return BigInt(value);
-  if (typeof value === 'string' && /^\d+$/.test(value.trim()) && BigInt(value) > 0n) return BigInt(value);
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+    return BigInt(value);
+  if (
+    typeof value === 'string' &&
+    /^\d+$/.test(value.trim()) &&
+    BigInt(value) > 0n
+  )
+    return BigInt(value);
   return null;
 }
 
@@ -326,7 +371,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function buildSearchQuery(identity: MarketIdentity) {
-  return [identity.title, identity.edition, identity.set, identity.cardNumber, identity.variant, identity.year]
+  return [
+    identity.title,
+    identity.edition,
+    identity.set,
+    identity.cardNumber,
+    identity.variant,
+    identity.year,
+  ]
     .filter((value): value is string | number => Boolean(value))
     .join(' ');
 }

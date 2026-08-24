@@ -8158,6 +8158,68 @@
   }
 }
 
+/* Final Step 3 correction: keep fallback fields aligned with the other
+   listing controls at every width. */
+.list-market-fallback-fields > label {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  min-width: 0;
+  color: #dce7e7;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.list-market-fallback-fields .list-market-money-input,
+.list-market-fallback-fields textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(149, 172, 182, 0.28);
+  border-radius: 0.6rem;
+  background: rgba(5, 10, 14, 0.72);
+  color: #f2f8f7;
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+.list-market-fallback-fields .list-market-money-input {
+  min-height: 3rem;
+  margin-top: 0;
+}
+.list-market-fallback-fields .list-market-money-input input {
+  min-height: 2.9rem;
+  padding: 0.65rem 0.75rem 0.65rem 0;
+  color: #f2f8f7;
+  font-size: 0.9rem;
+}
+.list-market-fallback-fields textarea {
+  min-height: 7rem;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.45;
+  resize: vertical;
+}
+.list-market-fallback-fields input::placeholder,
+.list-market-fallback-fields textarea::placeholder {
+  color: #879ba5;
+  opacity: 1;
+}
+.list-market-fallback-fields .list-market-money-input:focus-within,
+.list-market-fallback-fields textarea:focus {
+  border-color: #22d3a5;
+  background: rgba(6, 18, 21, 0.9);
+  box-shadow: 0 0 0 3px rgba(34, 211, 165, 0.12);
+}
+@media (max-width: 620px) {
+  .list-market-fallback-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Final Step 2 correction: keep every field in the guided form as a real,
    aligned control and render help in a viewport-safe portal. */
 .list-step--details .list-details-grid > label,
