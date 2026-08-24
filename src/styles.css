@@ -8158,6 +8158,91 @@
   }
 }
 
+/* Final Step 2 correction: keep every field in the guided form as a real,
+   aligned control and render help in a viewport-safe portal. */
+.list-step--details .list-details-grid > label,
+.list-step--details .list-grading-grid > label {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  min-width: 0;
+  color: #dce7e7;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.list-step--details .list-details-grid input,
+.list-step--details .list-details-grid select,
+.list-step--details .list-grading-grid input,
+.list-step--details .list-grading-grid select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  border: 1px solid rgba(149, 172, 182, 0.28);
+  border-radius: 0.6rem;
+  background: rgba(5, 10, 14, 0.72);
+  padding: 0.65rem 0.75rem;
+  color: #f2f8f7;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+.list-step--details .list-details-grid input::placeholder,
+.list-step--details .list-grading-grid input::placeholder {
+  color: #879ba5;
+  opacity: 1;
+}
+.list-step--details .list-details-grid input:focus,
+.list-step--details .list-details-grid select:focus,
+.list-step--details .list-grading-grid input:focus,
+.list-step--details .list-grading-grid select:focus {
+  border-color: #22d3a5;
+  background: rgba(6, 18, 21, 0.9);
+  box-shadow: 0 0 0 3px rgba(34, 211, 165, 0.12);
+}
+.list-step--details .list-field-label {
+  display: inline-flex;
+  min-height: 1.25rem;
+  align-items: center;
+  gap: 0.35rem;
+}
+.list-step--details .list-field-tooltip {
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+.list-field-tooltip-content {
+  z-index: 100;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 1.5rem));
+  border: 1px solid rgba(62, 224, 181, 0.42);
+  border-radius: 0.55rem;
+  background: #0b1b1d;
+  padding: 0.65rem 0.75rem;
+  color: #e7faf4;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.38);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+@media (max-width: 560px) {
+  .list-step--details .list-details-grid input,
+  .list-step--details .list-details-grid select,
+  .list-step--details .list-grading-grid input,
+  .list-step--details .list-grading-grid select {
+    min-height: 3.15rem;
+  }
+  .list-field-tooltip-content {
+    max-width: min(18rem, calc(100vw - 1.25rem));
+  }
+}
+
 /* Step 6 review surface — dense summary left, calm guidance rail right. */
 .list-step-progress ol {
   grid-template-columns: repeat(6, minmax(0, 1fr));

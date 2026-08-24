@@ -47,6 +47,7 @@ import { useCurrency } from "@/currency/CurrencyProvider";
 import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 import { formatDate } from "@/lib/format";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 import { isValidPercent } from "./-list-validation";
 
@@ -1317,16 +1318,37 @@ export function DetailsStep({
 }
 
 function TooltipHint({ label }: { label: string }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <button
-      type="button"
-      className="list-field-tooltip"
-      title={label}
-      aria-label={label}
-      onClick={(event) => event.preventDefault()}
-    >
-      <CircleHelp aria-hidden="true" />
-    </button>
+    <TooltipProvider delayDuration={140} skipDelayDuration={100}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="list-field-tooltip"
+            aria-label={`Show help: ${label}`}
+            aria-expanded={open}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.preventDefault();
+              setOpen((current) => !current);
+            }}
+          >
+            <CircleHelp aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          align="center"
+          sideOffset={8}
+          collisionPadding={12}
+          className="list-field-tooltip-content"
+        >
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

@@ -243,6 +243,8 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain('value="215/203"');
     expect(html).toContain("Not applicable for raw cards");
     expect(html).toContain('disabled=""');
+    expect(html).toContain('aria-label="Show help: The year the card was released."');
+    expect(html).toContain('aria-label="Show help: The overall condition of the card."');
     expect(html).not.toContain("Certification number");
     expect(html).not.toContain("Anything else we should know");
   });
