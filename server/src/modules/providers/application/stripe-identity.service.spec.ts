@@ -45,4 +45,29 @@ describe('StripeIdentityVerificationService', () => {
       expect.objectContaining({ idempotencyKey: expect.stringContaining('slice-identity-session') }),
     );
   });
+
+  it('normalizes Stripe create failures instead of leaking a generic 500', async () => {
+    const service = new StripeIdentityVerificationService(
+      { user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ email: 'test@example.com' }) } } as never,
+      {
+        get: () => ({
+          identity: {
+            verificationSessions: {
+              create: jest.fn().mockRejectedValue(new Error('provider request failed')),
+            },
+          },
+        }),
+        environment: () => 'SANDBOX',
+      } as never,
+      { providerMode: 'stripe_sandbox', appPublicUrl: 'https://staging.slicecollectable.com' } as never,
+    );
+
+    await expect(service.createSession({ userId: 'user-1', requestId: 'request-1' })).rejects.toMatchObject({
+      status: 503,
+      response: {
+        code: 'IDENTITY_PROVIDER_UNAVAILABLE',
+        message: 'Identity verification is temporarily unavailable. Please try again shortly.',
+      },
+    });
+  });
 });

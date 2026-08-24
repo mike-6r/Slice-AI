@@ -1,9 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import type { IdentityVerificationProvider, IdentityVerificationState, NormalizedComplianceStatus } from '../domain/provider.types';
 import { providerCode, providerUnavailable } from './external-provider-boundaries';
 import { StripeClientFactory } from './stripe-provider.client';
+
+type StripeClient = ReturnType<StripeClientFactory['get']>;
+type VerificationSession = Awaited<ReturnType<StripeClient['identity']['verificationSessions']['retrieve']>>;
 
 /** Stripe Identity boundary. Provider-sensitive identity data never leaves this adapter. */
 @Injectable()
@@ -18,14 +21,20 @@ export class StripeIdentityVerificationService implements IdentityVerificationPr
     void input.requestId;
     const stripe = this.stripeFactory.get();
     const user = await this.db.user.findUniqueOrThrow({ where: { id: input.userId }, select: { email: true } });
-    const session = await stripe.identity.verificationSessions.create({
-      type: 'document',
-      client_reference_id: input.userId,
-      provided_details: { email: user.email },
-      options: { document: { require_live_capture: true, require_matching_selfie: true } },
-      return_url: `${this.config.appPublicUrl.replace(/\/$/, '')}/account?verification=complete`,
-      metadata: { slice_user_id: input.userId, slice_environment: this.stripeFactory.environment() },
-    }, { idempotencyKey: input.idempotencyKey ?? `slice-identity-session:${this.stripeFactory.environment()}:${input.userId}:${input.requestId}` });
+    let session: Awaited<ReturnType<typeof stripe.identity.verificationSessions.create>>;
+    try {
+      session = await stripe.identity.verificationSessions.create({
+        type: 'document',
+        client_reference_id: input.userId,
+        provided_details: { email: user.email },
+        options: { document: { require_live_capture: true, require_matching_selfie: true } },
+        return_url: `${this.config.appPublicUrl.replace(/\/$/, '')}/account?verification=complete`,
+        metadata: { slice_user_id: input.userId, slice_environment: this.stripeFactory.environment() },
+      }, { idempotencyKey: input.idempotencyKey ?? `slice-identity-session:${this.stripeFactory.environment()}:${input.userId}:${input.requestId}` });
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw identityProviderUnavailable(error);
+    }
     this.assertMode(session.livemode);
     return {
       providerReference: session.id,
@@ -36,7 +45,13 @@ export class StripeIdentityVerificationService implements IdentityVerificationPr
   }
 
   async getIdentityVerification(verificationId: string) {
-    const session = await this.stripeFactory.get().identity.verificationSessions.retrieve(verificationId);
+    let session: VerificationSession;
+    try {
+      session = await this.stripeFactory.get().identity.verificationSessions.retrieve(verificationId);
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw identityProviderUnavailable(error);
+    }
     this.assertMode(session.livemode);
     const mapped = mapIdentityStatus(session.status);
     return { status: mapped.complianceStatus, identityState: mapped.identityState, sessionUrl: session.url, safeFailureCode: safeFailureCode(session.last_error?.code) };
@@ -45,6 +60,14 @@ export class StripeIdentityVerificationService implements IdentityVerificationPr
   private assertMode(livemode: boolean) {
     if (livemode !== (this.config.providerMode === 'stripe_live')) throw providerUnavailable(providerCode(this.config.providerMode), 'Stripe Identity session belongs to another environment.');
   }
+}
+
+function identityProviderUnavailable(error: unknown): ServiceUnavailableException {
+  void error;
+  return new ServiceUnavailableException({
+    code: 'IDENTITY_PROVIDER_UNAVAILABLE',
+    message: 'Identity verification is temporarily unavailable. Please try again shortly.',
+  });
 }
 
 export function mapIdentityStatus(status: string): { complianceStatus: NormalizedComplianceStatus; identityState: IdentityVerificationState } {
