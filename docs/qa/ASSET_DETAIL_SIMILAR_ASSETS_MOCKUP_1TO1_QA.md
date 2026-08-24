@@ -105,12 +105,31 @@ rail. They remain available in the existing labelled reference surfaces.
 
 ## Browser QA / deployment
 
-Browser screenshots and live deployment are recorded only after the release is
-activated. The sparse staging API currently returns zero similar assets for the
-Umbreon slug, so no fake multi-card state is used to make the screenshot look
-full.
+- Commit: `5851e9e`
+- Release: `/opt/slice/releases/20260823-5851e9e`
+- `/opt/slice/current`: points to the release above
+- `/opt/slice/app`: points to the release above
+- `slice-api.service`: active
+- `slice-web.service`: active
+- `/health`: PASS
+- `/ready`: PASS — PostgreSQL and Redis up
+- Public asset page: HTTP 200
+- Similar endpoint: HTTP 200 with the truthful sparse response `{ "items": [] }`
+- Browser console: only the standard React DevTools informational message; no
+  application errors
+- Page-level horizontal overflow at the available browser viewport (1280px):
+  none
 
-Planned widths: 1920×1080, 1440×900, 1280×800, 768×1024, and 390×844.
+The live staging API currently returns zero similar assets for the Umbreon slug,
+so the panel is intentionally hidden rather than filled with fake cards. The
+full-width rail, one-result behavior, fixed card widths, and responsive media
+rules are implemented for when eligible comparable assets exist.
+
+The browser surface used for this pass exposes a fixed 1280×720 viewport; the
+requested 1920×1080, 1440×900, 1280×800, 768×1024, and 390×844 breakpoints were
+verified against the terminal CSS rules and static layout constraints, while a
+live screenshot was captured at the available viewport. No application or
+page-level horizontal overflow was observed.
 
 ## Mutation safety
 
@@ -120,6 +139,6 @@ Charizard state is changed.
 
 ## Final status
 
-Implementation: COMPLETE locally.
+Implementation: COMPLETE.
 
-Deployment: PENDING activation and browser screenshot capture.
+Deployment: PASS.
