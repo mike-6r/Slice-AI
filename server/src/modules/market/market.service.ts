@@ -27,6 +27,10 @@ import {
   calculateReferenceMovements,
   type ReferenceHistoryPoint,
 } from './market-reference-metrics';
+import {
+  deriveMarketSnapshotStatus,
+  marketSnapshotPriority,
+} from './market-snapshot';
 
 const ranges = {
   '1D': 1,
@@ -260,6 +264,168 @@ export class MarketService {
         filtered.length > query.limit
           ? encodeCursor(filtered[query.limit - 1]!.id)
           : null,
+    };
+  }
+
+  /**
+   * One batched, public projection for the global ticker. It intentionally
+   * chooses a real Slice price (offering price or settled last trade) and a
+   * separately-labelled external reference. Approved whole-asset valuation is
+   * not used as a market quote here.
+   */
+  async snapshot() {
+    const listed = await this.list({
+      sort: 'title',
+      limit: 48,
+    });
+    const candidates = listed.items
+      .filter((asset) => {
+        const hasInitialOffering = Boolean(
+          asset.initialOffering &&
+            ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
+        );
+        const hasExternalReference = Boolean(asset.marketReference?.currentListing);
+        return hasInitialOffering || asset.trading?.hasExecutionHistory || hasExternalReference;
+      })
+      .map((asset) => ({
+        asset,
+        hasInitialOffering: Boolean(
+          asset.initialOffering &&
+            ['OPEN', 'PARTIALLY_FILLED'].includes(asset.initialOffering.status),
+        ),
+        hasExternalReference: Boolean(asset.marketReference?.currentListing),
+      }));
+
+    const selected = candidates
+      .sort((left, right) => {
+        const leftPriority = marketSnapshotPriority({
+          hasLastTrade: Boolean(left.asset.trading?.hasExecutionHistory),
+          hasInitialOffering: left.hasInitialOffering,
+          hasExternalReference: left.hasExternalReference,
+        });
+        const rightPriority = marketSnapshotPriority({
+          hasLastTrade: Boolean(right.asset.trading?.hasExecutionHistory),
+          hasInitialOffering: right.hasInitialOffering,
+          hasExternalReference: right.hasExternalReference,
+        });
+        return leftPriority - rightPriority || left.asset.title.localeCompare(right.asset.title);
+      })
+      .slice(0, 6);
+
+    if (!selected.length) {
+      return {
+        generatedAt: new Date().toISOString(),
+        status: 'UNAVAILABLE' as const,
+        lastUpdatedAt: null,
+        items: [],
+      };
+    }
+
+    const databaseAssets = await this.db.asset.findMany({
+      where: { slug: { in: selected.map(({ asset }) => asset.slug) } },
+      select: { id: true, slug: true },
+    });
+    const assetIdBySlug = new Map(databaseAssets.map((asset) => [asset.slug, asset.id]));
+    const executions = await this.db.tradingExecution.findMany({
+      where: {
+        assetId: { in: databaseAssets.map((asset) => asset.id) },
+        settlementStatus: 'SETTLED',
+      },
+      orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
+      select: { assetId: true, priceMinor: true, executedAt: true },
+    });
+    const latestExecutionByAssetId = new Map<string, (typeof executions)[number]>();
+    for (const execution of executions) {
+      if (!latestExecutionByAssetId.has(execution.assetId)) {
+        latestExecutionByAssetId.set(execution.assetId, execution);
+      }
+    }
+
+    const items = selected.map(({ asset }) => {
+      const databaseAssetId = assetIdBySlug.get(asset.slug);
+      const latestExecution = databaseAssetId
+        ? latestExecutionByAssetId.get(databaseAssetId)
+        : undefined;
+      const offering = asset.initialOffering;
+      const activeOffering = offering && ['OPEN', 'PARTIALLY_FILLED'].includes(offering.status)
+        ? offering
+        : null;
+      const externalReference = asset.marketReference?.currentListing;
+      const sliceMarketPrice = activeOffering
+        ? {
+            amount: {
+              minor: activeOffering.pricePerUnitMinor.toString(),
+              currency: activeOffering.currency,
+            },
+            kind: 'INITIAL_OFFERING' as const,
+            observedAt:
+              activeOffering.updatedAt ?? latestExecution?.executedAt.toISOString() ?? null,
+          }
+        : latestExecution
+          ? {
+              amount: {
+                minor: latestExecution.priceMinor.toString(),
+                currency:
+                  asset.sliceValuation?.amount.currency ??
+                  asset.marketReference?.currentListing?.amount.currency ??
+                  'GBP',
+              },
+              kind: 'LAST_TRADE' as const,
+              observedAt: latestExecution.executedAt.toISOString(),
+            }
+          : undefined;
+      const referenceUpdatedAt =
+        asset.marketReference?.lastRefreshedAt ?? externalReference?.observedAt ?? null;
+      const updatedAt = [
+        sliceMarketPrice?.observedAt ?? null,
+        referenceUpdatedAt,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null;
+
+      return {
+        assetId: asset.publicId,
+        slug: asset.slug,
+        title: asset.title,
+        ...(asset.collectibleSet?.name ? { setName: asset.collectibleSet.name } : {}),
+        ...(asset.cardNumber ? { cardNumber: asset.cardNumber } : {}),
+        ...(sliceMarketPrice?.observedAt
+          ? { sliceMarketPrice }
+          : sliceMarketPrice
+            ? { sliceMarketPrice: { ...sliceMarketPrice, observedAt: new Date().toISOString() } }
+            : {}),
+        ...(externalReference
+          ? {
+              externalReference: {
+                amount: externalReference.amount,
+                source: externalReference.source,
+                movement24hBps: asset.marketReference?.movement24hBps ?? null,
+                lastRefreshedAt: asset.marketReference?.lastRefreshedAt ?? null,
+                freshness: asset.marketReference?.freshness ?? null,
+              },
+            }
+          : {}),
+        marketState: activeOffering
+          ? ('INITIAL_OFFERING' as const)
+          : sliceMarketPrice
+            ? ('SECONDARY_MARKET' as const)
+            : ('REFERENCE_ONLY' as const),
+        lastUpdatedAt: updatedAt,
+        freshness: asset.marketReference?.freshness ?? null,
+      };
+    });
+    const snapshotItems = items.map(({ freshness: _freshness, ...item }) => item);
+    const lastUpdatedAt = snapshotItems
+      .map((item) => item.lastUpdatedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+    return {
+      generatedAt: new Date().toISOString(),
+      status: deriveMarketSnapshotStatus(items),
+      lastUpdatedAt,
+      items: snapshotItems,
     };
   }
 
@@ -941,6 +1107,7 @@ type PublicAssetRow = {
     retainedUnits: bigint;
     pricePerUnitMinor: bigint;
     currency: string;
+    updatedAt: Date;
     inventory: {
       offeredUnits: bigint;
       availableUnits: bigint;
@@ -1031,6 +1198,30 @@ type PublicAssetRow = {
 type PublicMarketProviderMapping = NonNullable<
   PublicAssetRow['marketProviderMappings']
 >[number];
+type PublicExternalMarketReference = {
+  currentListing?: {
+    amount: { minor: string; currency: string };
+    source: string;
+    externalReference: string;
+    listingUrl: string;
+    observedAt: string;
+  };
+  recentCompletedSale?: {
+    amount: { minor: string; currency: string };
+    source: string;
+    externalReference: string;
+    listingUrl: string;
+    observedAt: string;
+  };
+  movement24hBps?: number | null;
+  movement7dBps?: number | null;
+  movement30dBps?: number | null;
+  movement90dBps?: number | null;
+  movement1yBps?: number | null;
+  lastRefreshedAt?: string | null;
+  historyStartedAt?: string | null;
+  freshness?: string | null;
+};
 async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
   const priceChartingMapping = asset.marketProviderMappings?.[0] ?? null;
@@ -1154,6 +1345,7 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
           retainedUnits: asset.initialOffering.retainedUnits.toString(),
           pricePerUnitMinor: asset.initialOffering.pricePerUnitMinor.toString(),
           currency: asset.initialOffering.currency,
+          updatedAt: asset.initialOffering.updatedAt.toISOString(),
           inventory: asset.initialOffering.inventory
             ? {
                 offeredUnits: asset.initialOffering.inventory.offeredUnits.toString(),
@@ -1322,7 +1514,7 @@ function summarizeObservations(
 
 function externalMarketReference(
   records: NonNullable<PublicAssetRow['valuationEvidence']>,
-) {
+): PublicExternalMarketReference | null {
   const read = (sourceType: string) => {
     const record = records.find((item) => item.sourceType === sourceType);
     if (!record?.sourceRef) return null;
@@ -1368,7 +1560,7 @@ function externalMarketReference(
 
 function externalMarketReferenceFromObservations(
   observations: NonNullable<PublicAssetRow['marketObservations']>,
-) {
+): PublicExternalMarketReference | null {
   const latest = observations.find(
     (item) =>
       item.providerCode === 'PRICECHARTING' &&
@@ -1393,7 +1585,7 @@ function externalMarketReferenceFromObservations(
 function externalMarketReferenceFromMapping(
   mapping: PublicMarketProviderMapping | null,
   observations: NonNullable<PublicAssetRow['marketObservations']>,
-) {
+): PublicExternalMarketReference | null {
   if (
     !mapping ||
     mapping.providerCode !== 'PRICECHARTING' ||

@@ -23,6 +23,7 @@ export class AssetService {
 export class MarketService {
   constructor(private readonly repositories: AppRepositories) {}
   summary = () => this.repositories.market.getMarketSummary();
+  snapshot = () => this.repositories.market.getMarketSnapshot();
   movers = () => this.repositories.market.getMarketMovers();
   priceHistory = (assetId: import("@/domain").AssetId, range: import("@/domain").TimeRange) =>
     this.repositories.market.getPriceHistory(assetId, range);

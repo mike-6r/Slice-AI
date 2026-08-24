@@ -57,6 +57,7 @@ export interface InitialOfferingProjection {
   retainedUnits: string;
   pricePerUnitMinor: string;
   currency: "GBP" | "USD" | "EUR" | "CAD";
+  updatedAt?: ISODateTime;
   inventory: {
     offeredUnits: string;
     availableUnits: string;

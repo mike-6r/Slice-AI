@@ -126,6 +126,48 @@ describe("HTTP catalogue mapping", () => {
     ]);
   });
 
+  it("maps the batched market snapshot without exposing whole-asset valuation as a quote", async () => {
+    const get = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-23T12:00:00.000Z",
+      status: "CURRENT",
+      lastUpdatedAt: "2026-08-23T11:59:00.000Z",
+      items: [
+        {
+          assetId: "asset-public-id",
+          slug: "charizard",
+          title: "Charizard",
+          sliceMarketPrice: {
+            amount: { minor: "164", currency: "GBP" },
+            kind: "LAST_TRADE",
+            observedAt: "2026-08-23T11:59:00.000Z",
+          },
+          externalReference: {
+            amount: { minor: "202500", currency: "USD" },
+            source: "PRICECHARTING",
+            movement24hBps: -589,
+            lastRefreshedAt: "2026-08-23T11:58:00.000Z",
+            freshness: "FRESH",
+          },
+          marketState: "SECONDARY_MARKET",
+          lastUpdatedAt: "2026-08-23T11:59:00.000Z",
+        },
+      ],
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(repositories.market.getMarketSnapshot()).resolves.toMatchObject({
+      status: "CURRENT",
+      items: [
+        {
+          title: "Charizard",
+          sliceMarketPrice: { amount: { amount: 164, currency: "GBP" }, kind: "LAST_TRADE" },
+          externalReference: { amount: { amount: 202500, currency: "USD" }, movement24hBps: -589 },
+        },
+      ],
+    });
+    expect(get).toHaveBeenCalledWith("/market/snapshot");
+  });
+
   it("preserves persisted reference-history source and range movement metadata", async () => {
     const get = vi.fn().mockResolvedValue({
       source: "PRICECHARTING",

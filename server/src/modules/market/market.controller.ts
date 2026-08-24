@@ -78,6 +78,9 @@ export class MarketController {
   @Get('summary') summary() {
     return this.market.summary();
   }
+  @Get('snapshot') snapshot() {
+    return this.market.snapshot();
+  }
   @Get('movers') movers(@Query() query: unknown) {
     const input = parse(moversQuery, query);
     return this.market.movers(input.kind ?? 'gainers', input.limit ?? 12);

@@ -10,6 +10,7 @@ export const queryKeys = {
   },
   market: {
     summary: ["market", "summary"] as const,
+    snapshot: ["market", "snapshot"] as const,
     movers: ["market", "movers"] as const,
     history: (id: string, range: string) => ["market", "history", id, range] as const,
     orderBook: (id: string) => ["market", "order-book", id] as const,

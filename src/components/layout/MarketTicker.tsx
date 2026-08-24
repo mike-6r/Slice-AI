@@ -1,103 +1,126 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { HOMEPAGE_MARKET_TICKER } from "@/data/homepage-showcase";
-import { useTrendingAssets } from "@/queries/hooks";
+import { Link } from "@tanstack/react-router";
+import type { MarketSnapshot, MarketSnapshotItem } from "@/domain";
+import { formatRelativeTime } from "@/lib/finance";
 import { formatPercent } from "@/lib/format";
 import { useCurrency } from "@/currency/CurrencyProvider";
-import { isBetaEnvironment } from "@/config/environment";
+import { useMarketSnapshot } from "@/queries/hooks";
 
-/** Published Slice market data; it never substitutes the legacy sample tape in API mode. */
+/**
+ * A compact window into the same persisted market projections used by the
+ * asset page and marketplace. It never falls back to editorial showcase data.
+ */
 export function MarketTicker() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const market = useMarketSnapshot();
+  const snapshot = market.data;
+  const items = snapshot?.items ?? [];
+  const status = market.isError ? "DELAYED" : snapshot?.status ?? "UNAVAILABLE";
 
-  if (pathname === "/" && !isBetaEnvironment) {
-    return <HomepageShowcaseTicker />;
-  }
-
-  return <AuthoritativeMarketTicker />;
-}
-
-function HomepageShowcaseTicker() {
   return (
-    <div className="hidden border-b border-border bg-surface/60 lg:block">
-      <div className="site-shell flex h-6 items-center gap-5 text-[8px] font-medium tabular">
-        <span className="shrink-0 uppercase tracking-[0.18em] text-muted">Market snapshot</span>
-        <ul
-          className="flex items-center gap-5 overflow-hidden"
-          aria-label="Illustrative market tape"
-        >
-          {HOMEPAGE_MARKET_TICKER.map((item) => (
-            <li key={item.symbol} className="flex shrink-0 items-center gap-2">
-              <span className="text-subtle">{item.symbol}</span>
-              <span className="text-foreground">{item.value}</span>
-              <span className={item.tone === "positive" ? "text-positive" : "text-negative"}>
-                {item.movement}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <span className="ml-auto flex shrink-0 items-center gap-3 text-subtle">
-          <span className="market-tape__dot" aria-hidden="true" />
-          Showcase data
+    <div className="market-tape border-b border-border bg-surface/60">
+      <div className="site-shell market-tape__shell text-[8px] font-medium tabular">
+        <span className="market-tape__label shrink-0 uppercase tracking-[0.18em] text-muted">
+          Market snapshot
         </span>
+        <div className="market-tape__rail" aria-live="polite">
+          {market.isLoading && !snapshot ? (
+            <span className="market-tape__loading text-muted">Loading market data…</span>
+          ) : items.length ? (
+            <ul className="market-tape__items" aria-label="Live market snapshot">
+              {items.map((item) => (
+                <SnapshotItem key={item.assetId} item={item} />
+              ))}
+            </ul>
+          ) : market.isError ? (
+            <span className="text-muted">Market data delayed</span>
+          ) : (
+            <span className="text-muted">No published market data yet</span>
+          )}
+        </div>
+        <SnapshotFreshness status={status} lastUpdatedAt={snapshot?.lastUpdatedAt ?? null} />
       </div>
     </div>
   );
 }
 
-function AuthoritativeMarketTicker() {
-  const market = useTrendingAssets();
+function SnapshotItem({ item }: { item: MarketSnapshotItem }) {
   const { formatMoney } = useCurrency();
-  const assets = market.data ?? [];
-  if (!market.isLoading && !market.isError && assets.length === 0) return null;
+  const slicePrice = item.sliceMarketPrice;
+  const reference = item.externalReference;
+  const movement = reference?.movement24hBps;
+  const priceLabel = slicePrice
+    ? `${formatMoney(slicePrice.amount.amount, slicePrice.amount.currency)} / Slice`
+    : null;
+  const priceKind = slicePrice
+    ? slicePrice.kind === "INITIAL_OFFERING"
+      ? "Initial offering"
+      : "Last trade"
+    : null;
+  const referenceLabel = reference
+    ? `${reference.source === "PRICECHARTING" ? "PC" : reference.source} ${formatMoney(reference.amount.amount, reference.amount.currency)}`
+    : null;
+  const label = [
+    item.title,
+    priceLabel && priceKind ? `${priceLabel}, ${priceKind}` : priceLabel,
+    referenceLabel,
+    movement === null || movement === undefined ? null : `${formatPercent(movement / 100)} 24h`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="hidden border-b border-border bg-surface/60 lg:block">
-      <div className="site-shell flex h-6 items-center gap-5 text-[8px] font-medium tabular">
-        <span className="shrink-0 uppercase tracking-[0.18em] text-muted">Market snapshot</span>
-        {market.isLoading ? (
-          <span className="text-muted">Loading published market data…</span>
-        ) : market.isError ? (
-          <span className="text-muted">Market data unavailable</span>
-        ) : assets.length ? (
-          <ul className="flex items-center gap-5 overflow-hidden">
-            {assets.slice(0, 5).map((asset) => {
-              const valuation = asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
-              return (
-                <li key={asset.id} className="shrink-0">
-                  <Link
-                    to="/asset/$id"
-                    params={{ id: asset.slug ?? asset.id }}
-                    className="market-tape__item flex items-center gap-2 rounded-sm"
-                  >
-                    <span className="text-subtle">{asset.symbol}</span>
-                    <span className="text-foreground">
-                      {valuation
-                        ? formatMoney(valuation.amount, valuation.currency)
-                        : "Unavailable"}
-                    </span>
-                    {asset.market?.hasTradingHistory && asset.market.change24hBps !== undefined && (
-                      <span
-                        className={
-                          asset.market.change24hBps >= 0 ? "text-positive" : "text-negative"
-                        }
-                      >
-                        {formatPercent(asset.market.change24hBps / 100)}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <span className="text-muted">No published market data yet</span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-3 text-subtle">
-          <span className="market-tape__dot" aria-hidden="true" />
-          {assets.some((asset) => asset.market?.dataStatus === "LIVE")
-            ? "Live source available"
-            : "Estimated market data"}
-        </span>
-      </div>
-    </div>
+    <li className="market-tape__asset shrink-0">
+      <Link
+        to="/asset/$id"
+        params={{ id: item.slug }}
+        className="market-tape__item flex min-w-0 items-center gap-2 rounded-sm"
+        aria-label={label}
+        title={label}
+      >
+        <span className="market-tape__title text-subtle">{item.title}</span>
+        {priceLabel ? (
+          <span className="market-tape__slice-price text-foreground">
+            {priceLabel}
+            <span className="market-tape__price-kind text-muted">{priceKind}</span>
+          </span>
+        ) : null}
+        {reference ? (
+          <span
+            className="market-tape__reference text-subtle"
+            title={`${reference.source} external reference in ${reference.amount.currency}`}
+          >
+            {referenceLabel}
+          </span>
+        ) : null}
+        {movement !== null && movement !== undefined ? (
+          <span className={movement >= 0 ? "text-positive" : "text-negative"}>
+            {formatPercent(movement / 100)} <span className="text-muted">24h</span>
+          </span>
+        ) : null}
+      </Link>
+    </li>
+  );
+}
+
+function SnapshotFreshness({
+  status,
+  lastUpdatedAt,
+}: {
+  status: MarketSnapshot["status"];
+  lastUpdatedAt: string | null;
+}) {
+  const statusLabel =
+    status === "CURRENT"
+      ? "Market data current"
+      : status === "UNAVAILABLE"
+        ? "Market data unavailable"
+        : lastUpdatedAt
+          ? `Last updated ${formatRelativeTime(lastUpdatedAt)}`
+          : "Market data delayed";
+  const statusTone = status === "CURRENT" ? "is-current" : "is-delayed";
+  return (
+    <span className={`market-tape__status ${statusTone} ml-auto shrink-0 text-subtle`}>
+      <span className="market-tape__dot" aria-hidden="true" />
+      {statusLabel}
+    </span>
   );
 }

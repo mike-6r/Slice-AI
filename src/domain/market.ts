@@ -74,6 +74,35 @@ export interface MarketSummary {
   verifiedAssets: number;
   activeCollectors: number;
 }
+export type MarketSnapshotStatus = "CURRENT" | "AGING" | "STALE" | "DELAYED" | "UNAVAILABLE";
+export type MarketSnapshotPriceKind = "INITIAL_OFFERING" | "LAST_TRADE";
+export interface MarketSnapshotItem {
+  assetId: AssetId;
+  slug: string;
+  title: string;
+  setName?: string;
+  cardNumber?: string;
+  sliceMarketPrice?: {
+    amount: Money;
+    kind: MarketSnapshotPriceKind;
+    observedAt: ISODateTime;
+  };
+  externalReference?: {
+    amount: Money;
+    source: string;
+    movement24hBps?: number | null;
+    lastRefreshedAt?: ISODateTime | null;
+    freshness?: string | null;
+  };
+  marketState: "INITIAL_OFFERING" | "SECONDARY_MARKET" | "REFERENCE_ONLY";
+  lastUpdatedAt: ISODateTime | null;
+}
+export interface MarketSnapshot {
+  generatedAt: ISODateTime;
+  status: MarketSnapshotStatus;
+  lastUpdatedAt: ISODateTime | null;
+  items: MarketSnapshotItem[];
+}
 export interface OrderBookLevel {
   pricePerUnit: Money;
   units: number;

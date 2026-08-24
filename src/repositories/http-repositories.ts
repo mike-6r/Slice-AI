@@ -72,6 +72,7 @@ import type {
   PublicationReadiness,
   AccountCapability,
   MarketSummary,
+  MarketSnapshot,
 } from "@/domain";
 import { basisPoints, minorUnits, percentage } from "@/domain";
 import { createFinanceApiRepository } from "./finance-api-repository";
@@ -169,6 +170,32 @@ type ExternalMarketObservationDto = {
 };
 
 type MarketAssetPageDto = { items: MarketAssetDto[]; hasMore: boolean; nextCursor: string | null };
+type MarketSnapshotDto = {
+  generatedAt: string;
+  status: "CURRENT" | "AGING" | "STALE" | "DELAYED" | "UNAVAILABLE";
+  lastUpdatedAt: string | null;
+  items: Array<{
+    assetId: string;
+    slug: string;
+    title: string;
+    setName?: string;
+    cardNumber?: string;
+    sliceMarketPrice?: {
+      amount: { minor: string; currency: SupportedCurrency };
+      kind: "INITIAL_OFFERING" | "LAST_TRADE";
+      observedAt: string;
+    };
+    externalReference?: {
+      amount: { minor: string; currency: SupportedCurrency };
+      source: string;
+      movement24hBps?: number | null;
+      lastRefreshedAt?: string | null;
+      freshness?: string | null;
+    };
+    marketState: "INITIAL_OFFERING" | "SECONDARY_MARKET" | "REFERENCE_ONLY";
+    lastUpdatedAt: string | null;
+  }>;
+};
 type CollectorDto = {
   slug: string;
   headline: string | null;
@@ -373,6 +400,47 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
   initialOffering: value.initialOffering ?? undefined,
   trading: value.trading ?? undefined,
   marketLifecycle: value.marketLifecycle,
+});
+
+const mapMarketSnapshot = (value: MarketSnapshotDto): MarketSnapshot => ({
+  generatedAt: value.generatedAt as ISODateTime,
+  status: value.status,
+  lastUpdatedAt: value.lastUpdatedAt as ISODateTime | null,
+  items: value.items.map((item) => ({
+    assetId: item.assetId as AssetId,
+    slug: item.slug,
+    title: item.title,
+    ...(item.setName ? { setName: item.setName } : {}),
+    ...(item.cardNumber ? { cardNumber: item.cardNumber } : {}),
+    ...(item.sliceMarketPrice
+      ? {
+          sliceMarketPrice: {
+            amount: {
+              amount: safeMinor(item.sliceMarketPrice.amount.minor),
+              currency: item.sliceMarketPrice.amount.currency,
+            },
+            kind: item.sliceMarketPrice.kind,
+            observedAt: item.sliceMarketPrice.observedAt as ISODateTime,
+          },
+        }
+      : {}),
+    ...(item.externalReference
+      ? {
+          externalReference: {
+            amount: {
+              amount: safeMinor(item.externalReference.amount.minor),
+              currency: item.externalReference.amount.currency,
+            },
+            source: item.externalReference.source,
+            movement24hBps: item.externalReference.movement24hBps ?? null,
+            lastRefreshedAt: item.externalReference.lastRefreshedAt as ISODateTime | null,
+            freshness: item.externalReference.freshness ?? null,
+          },
+        }
+      : {}),
+    marketState: item.marketState,
+    lastUpdatedAt: item.lastUpdatedAt as ISODateTime | null,
+  })),
 });
 
 const mapMarketObservationSummary = (value: MarketObservationSummaryDto | null | undefined) =>
@@ -3462,6 +3530,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           verifiedAssets: value.activeAssetCount,
           activeCollectors: value.collectorCount,
         } satisfies MarketSummary;
+      },
+      async getMarketSnapshot() {
+        return mapMarketSnapshot(await client.get<MarketSnapshotDto>("/market/snapshot"));
       },
       async getPriceHistory(assetId, range) {
         const backendRange = (

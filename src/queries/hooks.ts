@@ -45,6 +45,17 @@ export const useMarketSummary = () => {
     staleTime: STALE_TIME,
   });
 };
+export const useMarketSnapshot = () => {
+  const s = useAppServices();
+  return useQuery({
+    queryKey: queryKeys.market.snapshot,
+    queryFn: s.market.snapshot,
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+    retry: 1,
+  });
+};
 export const useMarketMovers = () => {
   const s = useAppServices();
   return useQuery({

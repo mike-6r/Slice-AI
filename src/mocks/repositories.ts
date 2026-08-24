@@ -538,6 +538,28 @@ export const mockRepositories: AppRepositories = {
         activeCollectors: COLLECTORS.length,
       };
     },
+    async getMarketSnapshot() {
+      const generatedAt = now();
+      return {
+        generatedAt,
+        status: "CURRENT" as const,
+        lastUpdatedAt: generatedAt,
+        items: mappedAssets.slice(0, 5).map((asset) => ({
+          assetId: asset.id,
+          slug: asset.slug ?? asset.id,
+          title: asset.details.title,
+          ...(asset.details.card?.set ? { setName: asset.details.card.set } : {}),
+          ...(asset.details.card?.cardNumber ? { cardNumber: asset.details.card.cardNumber } : {}),
+          sliceMarketPrice: {
+            amount: priceFor(asset.id),
+            kind: "LAST_TRADE" as const,
+            observedAt: generatedAt,
+          },
+          marketState: "SECONDARY_MARKET" as const,
+          lastUpdatedAt: generatedAt,
+        })),
+      };
+    },
     async getPriceHistory(assetId, range: TimeRange) {
       const record = ASSETS.find((asset) => asset.id === assetId);
       const length = { "24H": 16, "7D": 28, "30D": 42, "90D": 64, "1Y": 82, ALL: 90 }[range];

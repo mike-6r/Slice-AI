@@ -35897,3 +35897,102 @@ html,
 @media (max-width: 560px) {
   .asset-detail-page .asset-redesign > .asset-similar-section.is-single { width: 100%; }
 }
+
+/* Market snapshot: compact, readable, and horizontally safe at narrow widths. */
+.market-tape {
+  width: 100%;
+  overflow: hidden;
+}
+.market-tape__shell {
+  display: flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  gap: 1rem;
+  overflow: hidden;
+}
+.market-tape__rail {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.market-tape__items {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 1.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.market-tape__asset {
+  min-width: 0;
+}
+.market-tape__item {
+  min-width: 0;
+  max-width: 32rem;
+  transition: color 160ms ease;
+}
+.market-tape__item:hover,
+.market-tape__item:focus-visible {
+  color: var(--color-accent);
+}
+.market-tape__title {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-tape__slice-price,
+.market-tape__reference,
+.market-tape__price-kind {
+  white-space: nowrap;
+}
+.market-tape__price-kind {
+  margin-left: 0.3rem;
+}
+.market-tape__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+.market-tape__status.is-delayed .market-tape__dot {
+  background: var(--color-warning, #d9a441);
+  animation: none;
+}
+.market-tape__loading {
+  display: inline-block;
+  min-width: 9rem;
+}
+
+@media (max-width: 720px) {
+  .market-tape__shell {
+    min-height: 28px;
+    gap: 0.65rem;
+  }
+  .market-tape__label {
+    font-size: 0.48rem;
+  }
+  .market-tape__status {
+    display: none;
+  }
+  .market-tape__rail {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .market-tape__rail::-webkit-scrollbar {
+    display: none;
+  }
+  .market-tape__items {
+    max-width: none;
+    overflow: visible;
+    gap: 1rem;
+  }
+  .market-tape__item {
+    max-width: 24rem;
+  }
+  .market-tape__title {
+    max-width: 9rem;
+  }
+}

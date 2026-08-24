@@ -1391,6 +1391,7 @@ export interface AdminRepository {
 
 export interface MarketRepository {
   getMarketSummary(): Promise<MarketSummary>;
+  getMarketSnapshot(): Promise<import("@/domain").MarketSnapshot>;
   getPriceHistory(assetId: AssetId, range: TimeRange): Promise<import("@/domain").PriceHistory>;
   getMarketMovers(): Promise<Asset[]>;
   getRecentTrades(assetId: AssetId): Promise<import("@/domain").Trade[]>;
