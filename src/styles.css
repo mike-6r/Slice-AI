@@ -3124,6 +3124,7 @@
   }
 }
 
+
 /* Accounts / User Detail control center pass */
 .featured-market-hero--beta-empty {
   display: flex;
@@ -53462,5 +53463,75 @@ html,
   }
   .list-import-result dl > div {
     grid-template-columns: 5.7rem minmax(0, 1fr);
+  }
+}
+
+/* Step 4 final sizing correction: the evidence area is paired with a
+   guidance rail, so six desktop columns make every tile too narrow. Keep the
+   tile anatomy consistent and let the grid reflow at the same breakpoints as
+   the rest of the listing flow. */
+.list-required-photo-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.list-photo-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.list-photo-tile > header {
+  min-height: 3.55rem;
+  padding: 0.65rem 0.7rem 0.45rem;
+}
+.list-photo-tile h4 {
+  font-size: 0.76rem;
+}
+.list-photo-tile > header small {
+  max-width: 5rem;
+  font-size: 0.6rem;
+}
+.list-photo-tile__preview,
+.list-photo-tile__preview img {
+  min-height: 9.25rem;
+  height: 9.25rem;
+}
+.list-photo-tile__preview strong {
+  max-width: 9rem;
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+.list-photo-tile > p {
+  min-height: 3.4rem;
+  padding: 0.55rem 0.7rem 0;
+  font-size: 0.64rem;
+}
+.list-photo-tile__actions {
+  min-height: 3.25rem;
+  margin-top: auto;
+  padding: 0.55rem 0.7rem 0.7rem;
+}
+.list-photo-tile__actions label {
+  min-height: 2.25rem;
+  padding-inline: 0.45rem;
+  font-size: 0.66rem;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+}
+.list-photo-login-hint {
+  min-height: 3.25rem;
+  margin-top: auto;
+  box-sizing: border-box;
+  padding: 0.55rem 0.7rem 0.7rem;
+  font-size: 0.64rem;
+}
+@media (max-width: 760px) {
+  .list-required-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .list-required-photo-grid {
+    grid-template-columns: 1fr;
   }
 }
