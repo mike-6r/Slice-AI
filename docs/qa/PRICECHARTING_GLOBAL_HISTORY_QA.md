@@ -58,11 +58,15 @@ conversion, historical scraping, or backfill is used.
 
 - Backend typecheck: PASS
 - Frontend typecheck: PASS
-- Reference metric tests: pending final run
-- Provider adapter tests: pending final run
-- Backend build: pending final run
-- Frontend tests/build: pending final run
-- Prisma validate/generate/migration status: pending deployment run
+- Backend full suite: PASS — 72 suites, 317 tests
+- Focused market/reference suites: PASS — 3 suites, 19 tests
+- Frontend tests: PASS — 39 files, 153 tests
+- Backend build: PASS
+- Frontend client and SSR builds: PASS
+- Prisma validate/generate: PASS
+- VPS migration status: PASS — 91 migrations found, none pending
+- Frontend repo-wide lint: EXISTING DEBT — 4,895 unrelated Prettier violations;
+  no scoped lint regression was introduced
 
 ## Browser QA matrix
 
@@ -77,6 +81,24 @@ Check each with empty history, one point, two or more points, insufficient
 coverage, and a graded asset where staging has a genuine exact series. Confirm
 the range controls change the API range, tooltips expose date/time/currency/
 source, the y-axis retains useful precision, and there is no clipping on mobile.
+
+### Staging run
+
+| Viewport | Result | Evidence |
+| --- | --- | --- |
+| 1920×1080 | PASS | Established Umbreon history, metadata fully visible |
+| 1440×900 | PASS | Established Umbreon history, responsive panel layout |
+| 1280×800 | PASS | Established Umbreon history, no lower-row overlap |
+| 390×844 | PASS | Stacked layout; execution table fits without horizontal clipping |
+
+Additional browser checks:
+
+- Range controls `24H`, `7D`, `30D`, `90D`, `1Y`, and `ALL`: PASS
+- Real persisted graph points and PriceCharting attribution: PASS
+- Chart axis precision and insufficient-coverage state: PASS
+- Console warnings/errors across the final viewport pass: none observed
+- Browser render provider calls: none observed; the page consumes Slice API
+  projections and does not invoke PriceCharting or Ximilar directly
 
 ## Economic safety checks
 
@@ -96,3 +118,17 @@ Release only after automated validation, migration status, staging HTTP checks,
 worker health, admin observability, and responsive browser QA are green. A
 provider outage or missing boundary remains visible as unavailable/stale state;
 the system never substitutes a static market value.
+
+## Deployment record
+
+- Commit: `4847508`
+- VPS release: `/opt/slice/releases/20260824-4847508-git`
+- `/opt/slice/current`: verified at the same release
+- `/opt/slice/app`: verified at the same release
+- `slice-api.service`: active
+- `slice-web.service`: active
+- Staging home and Umbreon asset page: HTTP 200
+- Deploy health checks: PASS
+
+Runtime status is GO for staging. Production remains gated by the existing
+repo-wide frontend formatting debt until that separate cleanup is completed.
