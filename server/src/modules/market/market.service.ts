@@ -197,6 +197,12 @@ export class MarketService {
           take: 1,
           select: {
             declaredMetadata: true,
+            owner: {
+              select: {
+                profile: { select: { displayName: true, publicUsername: true } },
+                publicCollectorProfile: { select: { slug: true, isPublic: true } },
+              },
+            },
             media: {
               where: { status: 'SAFE', deletedAt: null },
               orderBy: { slot: 'asc' },
@@ -415,7 +421,11 @@ export class MarketService {
         freshness: asset.marketReference?.freshness ?? null,
       };
     });
-    const snapshotItems = items.map(({ freshness: _freshness, ...item }) => item);
+    const snapshotItems = items.map((item) => {
+      const { freshness, ...snapshotItem } = item;
+      void freshness;
+      return snapshotItem;
+    });
     const lastUpdatedAt = snapshotItems
       .map((item) => item.lastUpdatedAt)
       .filter((value): value is string => Boolean(value))
@@ -581,133 +591,185 @@ export class MarketService {
   }
   async similar(slug: string, limit: number) {
     const asset = await this.asset(slug);
-    const rows = await this.db.asset.findMany({
-      where: {
-        status: 'PUBLISHED',
-        ...publicBetaAssetWhere(this.config.isBeta),
-        id: { not: asset.id },
-        categoryId: asset.categoryId,
-        ...(asset.setId ? { setId: asset.setId } : {}),
-      },
-      include: {
-        category: true,
-        collectibleSet: true,
-        gradeScaleEntry: { include: { company: true } },
-        ownershipSupply: {
-          select: { status: true, totalUnits: true, issuedUnits: true },
-        },
-        ownershipSupplyPolicy: { select: { status: true } },
-        initialOffering: {
-          include: { inventory: true },
-        },
-        tradingMarket: {
-          select: { status: true, tradingEnabled: true },
-        },
-        tradingOrders: {
-          where: {
-            side: 'SELL',
-            channel: 'SECONDARY_MARKET',
-            status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
-          },
-          select: { remainingUnits: true },
-        },
-        _count: { select: { tradingExecutions: true } },
-        marketSnapshots: {
-          ...this.publicMarketSnapshotFilter(),
-          orderBy: { asOf: 'desc' },
-          take: 1,
-        },
-        valuationEvidence: {
-          where: this.publicValuationEvidenceFilter(),
-          orderBy: { observedAt: 'desc' },
-          take: 2,
-        },
-        valuationDecisions: {
-          where: { status: 'ACTIVE' },
-          orderBy: { decidedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            valueMinor: true,
-            currency: true,
-            confidence: true,
-            methodologyCode: true,
-            decidedAt: true,
-            status: true,
-          },
-        },
-        marketObservations: {
-          where: this.publicMarketObservationFilter(),
-          orderBy: { observedAt: 'desc' },
-          take: 50,
-        },
-        marketProviderMappings: {
-          where: { providerCode: 'PRICECHARTING' },
-          select: {
-            providerCode: true,
-            providerExternalId: true,
-            providerUrl: true,
-            status: true,
-            lastSuccessAt: true,
-            lastFailureAt: true,
-            lastFailureCode: true,
-            nextRefreshAt: true,
-            currentPriceMinor: true,
-            currentCurrency: true,
-            currentObservedAt: true,
-            referenceHistoryStartedAt: true,
-            referenceMovement24hBps: true,
-            referenceMovement7dBps: true,
-            referenceMovement30dBps: true,
-            referenceMovement90dBps: true,
-            referenceMovement1yBps: true,
-          },
-          take: 1,
-        },
-        submissions: {
-          where: { status: 'APPROVED' },
-          orderBy: { updatedAt: 'desc' },
-          take: 1,
-          include: {
-            preGrades: {
-              where: { status: 'SUCCEEDED', supersededAt: null },
-              orderBy: { analyzedAt: 'desc' },
-              take: 1,
-              select: {
-                status: true,
-                provider: true,
-                overallEstimate: true,
-                overallMin: true,
-                overallMax: true,
-                centeringScore: true,
-                cornerScore: true,
-                edgeScore: true,
-                surfaceScore: true,
-                conditionLabel: true,
-                analyzedAt: true,
-                warnings: true,
-                visualizations: true,
-              },
-            },
-            media: {
-              where: { status: 'SAFE', deletedAt: null },
-              orderBy: { slot: 'asc' },
-              select: { id: true, slot: true, status: true, objectKey: true },
-            },
-          },
-        },
-        publication: true,
-        custodyRecord: true,
-        insuranceCoverage: {
-          where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
-          take: 1,
+    const boundedLimit = Math.min(Math.max(limit, 1), 24);
+    const projection = {
+      id: true,
+      publicId: true,
+      slug: true,
+      title: true,
+      cardNumber: true,
+      category: { select: { slug: true } },
+      collectibleSet: { select: { name: true } },
+      initialOffering: {
+        select: {
+          status: true,
+          pricePerUnitMinor: true,
+          currency: true,
+          updatedAt: true,
         },
       },
-      orderBy: { id: 'asc' },
-      take: limit,
+      tradingMarket: {
+        select: { status: true, tradingEnabled: true },
+      },
+      valuationDecisions: {
+        where: { status: 'ACTIVE' },
+        orderBy: { decidedAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          valueMinor: true,
+          currency: true,
+          confidence: true,
+          methodologyCode: true,
+          decidedAt: true,
+          status: true,
+        },
+      },
+      submissions: {
+        where: { status: 'APPROVED' },
+        orderBy: { updatedAt: 'desc' },
+        take: 1,
+        select: {
+          media: {
+            where: { status: 'SAFE', deletedAt: null },
+            orderBy: { slot: 'asc' },
+            take: 1,
+            select: { slot: true, objectKey: true },
+          },
+        },
+      },
+    } as const;
+    const baseWhere = {
+      status: 'PUBLISHED' as const,
+      ...publicBetaAssetWhere(this.config.isBeta),
+      id: { not: asset.id },
+      categoryId: asset.categoryId,
+    };
+    const sameSetRows = await this.db.asset.findMany({
+      where: asset.setId ? { ...baseWhere, setId: asset.setId } : baseWhere,
+      select: projection,
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+      take: boundedLimit,
     });
+    const rows =
+      sameSetRows.length >= boundedLimit || !asset.setId
+        ? sameSetRows
+        : [
+            ...sameSetRows,
+            ...(await this.db.asset.findMany({
+              where: { ...baseWhere, setId: { not: asset.setId } },
+              select: projection,
+              orderBy: [{ title: 'asc' }, { id: 'asc' }],
+              take: boundedLimit - sameSetRows.length,
+            })),
+          ];
+    const assetIds = rows.map((row) => row.id);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const executionSelect = {
+      assetId: true,
+      priceMinor: true,
+      executedAt: true,
+    } as const;
+    const [latestExecutions, baselineExecutions] = await Promise.all([
+      this.db.tradingExecution.findMany({
+        where: { assetId: { in: assetIds }, settlementStatus: 'SETTLED' },
+        orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
+        // Keep this bounded while leaving enough room to find one recent row
+        // for every recommendation in a busy market.
+        take: Math.max(boundedLimit * 48, 96),
+        select: executionSelect,
+      }),
+      this.db.tradingExecution.findMany({
+        where: {
+          assetId: { in: assetIds },
+          settlementStatus: 'SETTLED',
+          executedAt: { lte: twentyFourHoursAgo },
+        },
+        orderBy: [{ executedAt: 'desc' }, { id: 'desc' }],
+        take: Math.max(boundedLimit * 48, 96),
+        select: executionSelect,
+      }),
+    ]);
+    const firstByAsset = (executions: typeof latestExecutions) => {
+      const result = new Map<string, (typeof executions)[number]>();
+      for (const execution of executions) {
+        if (!result.has(execution.assetId)) result.set(execution.assetId, execution);
+      }
+      return result;
+    };
+    const latestByAsset = firstByAsset(latestExecutions);
+    const baselineByAsset = firstByAsset(baselineExecutions);
     return {
-      items: await Promise.all(rows.map((row) => assetView(row, this.storage))),
+      items: await Promise.all(
+        rows.map(async (row) => {
+          const latest = latestByAsset.get(row.id);
+          const baseline = baselineByAsset.get(row.id);
+          const activeOffering = row.initialOffering &&
+            ['OPEN', 'PARTIALLY_FILLED'].includes(row.initialOffering.status)
+            ? row.initialOffering
+            : null;
+          const valuation = selectAuthoritativeSliceValuation(row.valuationDecisions);
+          const displayPrice = latest
+            ? {
+                type: 'LAST_EXECUTION' as const,
+                amount: asMoney(latest.priceMinor, 'GBP'),
+                observedAt: latest.executedAt.toISOString(),
+              }
+            : activeOffering
+              ? {
+                  type: 'INITIAL_OFFERING' as const,
+                  amount: asMoney(activeOffering.pricePerUnitMinor, activeOffering.currency),
+                  observedAt: activeOffering.updatedAt.toISOString(),
+                }
+              : valuation
+                ? {
+                    type: 'VALUATION' as const,
+                    amount: asMoney(valuation.amountMinor, valuation.currency),
+                    observedAt: valuation.approvedAt.toISOString(),
+                  }
+                : {
+                    type: 'UNAVAILABLE' as const,
+                    amount: null,
+                    observedAt: null,
+                  };
+          const movement24hBps = latest && baseline && baseline.priceMinor > 0n
+            ? Number(
+                ((latest.priceMinor - baseline.priceMinor) * 10_000n) /
+                  baseline.priceMinor,
+              )
+            : null;
+          const marketState = activeOffering
+            ? ('INITIAL_OFFERING' as const)
+            : row.tradingMarket?.status === 'OPEN' && row.tradingMarket.tradingEnabled
+              ? ('LIVE_MARKET' as const)
+              : row.tradingMarket
+                ? ('MARKET_CLOSED' as const)
+                : ('REFERENCE_ONLY' as const);
+          const media = row.submissions[0]?.media[0];
+          const thumbnailUrl = media
+            ? await this.storage
+                .createPrivateDownloadUrl(
+                  media.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
+                .catch(() => null)
+            : null;
+          return {
+            assetId: row.publicId,
+            slug: row.slug,
+            title: row.title,
+            category: row.category.slug,
+            ...(row.collectibleSet?.name ? { setName: row.collectibleSet.name } : {}),
+            ...(row.cardNumber ? { cardNumber: row.cardNumber } : {}),
+            ...(thumbnailUrl
+              ? { thumbnail: { url: thumbnailUrl, alt: `${row.title} public thumbnail` } }
+              : {}),
+            marketState,
+            displayPrice,
+            movement24hBps,
+          };
+        }),
+      ),
     };
   }
   async summary() {
@@ -833,6 +895,12 @@ export class MarketService {
               orderBy: { updatedAt: 'desc' },
               take: 1,
               include: {
+                owner: {
+                  select: {
+                    profile: { select: { displayName: true, publicUsername: true } },
+                    publicCollectorProfile: { select: { slug: true, isPublic: true } },
+                  },
+                },
                 media: {
                   where: { status: 'SAFE', deletedAt: null },
                   orderBy: { slot: 'asc' },
@@ -977,6 +1045,12 @@ export class MarketService {
           orderBy: { updatedAt: 'desc' },
           take: 1,
           include: {
+            owner: {
+              select: {
+                profile: { select: { displayName: true, publicUsername: true } },
+                publicCollectorProfile: { select: { slug: true, isPublic: true } },
+              },
+            },
             preGrades: {
               where: { status: 'SUCCEEDED', supersededAt: null },
               orderBy: { analyzedAt: 'desc' },
@@ -1167,6 +1241,10 @@ type PublicAssetRow = {
   }>;
   submissions?: Array<{
     declaredMetadata: unknown;
+    owner?: {
+      profile: { displayName: string | null; publicUsername: string | null } | null;
+      publicCollectorProfile: { slug: string; isPublic: boolean } | null;
+    };
     preGrades?: PublicPreGrade[];
     media: Array<{
       id: string;
@@ -1230,6 +1308,15 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
     asset.valuationDecisions,
   );
   const approvedMedia = asset.submissions?.[0]?.media ?? [];
+  const listingSubmission = asset.submissions?.[0];
+  const publicCollector = listingSubmission?.owner?.publicCollectorProfile;
+  const listedBy = publicCollector?.isPublic && listingSubmission?.owner
+    ? {
+        displayName: listingSubmission.owner.profile?.displayName ?? 'Collector',
+        username: listingSubmission.owner.profile?.publicUsername ?? null,
+        slug: publicCollector.slug,
+      }
+    : null;
   const media = (
     await Promise.all(
       approvedMedia.map(async (item) => ({
@@ -1388,6 +1475,12 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
             asOf: asset.publication.publishedAt?.toISOString() ?? null,
           }
         : null,
+    listing: listingSubmission
+      ? {
+          listedAt: asset.publication?.publishedAt?.toISOString() ?? null,
+          listedBy,
+        }
+      : null,
     custody:
       asset.custodyRecord?.status === 'SECURED'
         ? {

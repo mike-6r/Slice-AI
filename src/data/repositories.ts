@@ -6,6 +6,7 @@ import type {
   CollectorDirectorySort,
   DiscussionMessage,
   MarketSummary,
+  SimilarAsset,
   Notification,
   Order,
   OrderBook,
@@ -1392,6 +1393,7 @@ export interface AdminRepository {
 export interface MarketRepository {
   getMarketSummary(): Promise<MarketSummary>;
   getMarketSnapshot(): Promise<import("@/domain").MarketSnapshot>;
+  getSimilarAssets(assetId: AssetId, limit?: number): Promise<SimilarAsset[]>;
   getPriceHistory(assetId: AssetId, range: TimeRange): Promise<import("@/domain").PriceHistory>;
   getMarketMovers(): Promise<Asset[]>;
   getRecentTrades(assetId: AssetId): Promise<import("@/domain").Trade[]>;

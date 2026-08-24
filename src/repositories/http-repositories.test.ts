@@ -13,6 +13,14 @@ const dto = {
   cardNumber: "4/102",
   description: "Reference-only staging record.",
   certificationNumber: "58291042",
+  listing: {
+    listedAt: "2026-08-16T01:03:01.814Z",
+    listedBy: {
+      displayName: "Slice Demo Collector",
+      username: "slice-demo-collector",
+      slug: "slice-demo-collector",
+    },
+  },
   category: { slug: "pokemon", name: "Pokémon" },
   collectibleSet: null,
   grading: { companyCode: "PSA", grade: "10.00", label: "10" },
@@ -104,6 +112,14 @@ describe("HTTP catalogue mapping", () => {
     expect(asset.ownershipAvailableBps).toBeUndefined();
     expect(asset.market?.source).toBe("AUCTION_COMPS");
     expect(asset.certification).toEqual({ company: "PSA", number: "58291042" });
+    expect(asset.listing).toEqual({
+      listedAt: "2026-08-16T01:03:01.814Z",
+      listedBy: {
+        displayName: "Slice Demo Collector",
+        username: "slice-demo-collector",
+        slug: "slice-demo-collector",
+      },
+    });
   });
 
   it("keeps Slice Grade supporting evidence separate from official grading", () => {
@@ -168,6 +184,48 @@ describe("HTTP catalogue mapping", () => {
       ],
     });
     expect(get).toHaveBeenCalledWith("/market/snapshot");
+  });
+
+  it("maps the bounded similar-assets projection and preserves price semantics", async () => {
+    const get = vi.fn().mockResolvedValue({
+      items: [
+        {
+          assetId: "similar-asset",
+          slug: "umbreon-vmax",
+          title: "Umbreon VMAX",
+          category: "pokemon",
+          setName: "Evolving Skies",
+          cardNumber: "215/203",
+          thumbnail: {
+            url: "https://example.com/umbreon.jpg",
+            alt: "Umbreon VMAX public thumbnail",
+          },
+          marketState: "LIVE_MARKET",
+          displayPrice: {
+            type: "LAST_EXECUTION",
+            amount: { minor: "164", currency: "GBP" },
+            observedAt: "2026-08-23T12:00:00.000Z",
+          },
+          movement24hBps: 235,
+        },
+      ],
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(
+      repositories.market.getSimilarAssets("asset-public-id" as never, 8),
+    ).resolves.toMatchObject([
+      {
+        assetId: "similar-asset",
+        setName: "Evolving Skies",
+        displayPrice: {
+          type: "LAST_EXECUTION",
+          amount: { amount: 164, currency: "GBP" },
+        },
+        movement24hBps: 235,
+      },
+    ]);
+    expect(get).toHaveBeenCalledWith("/market/assets/asset-public-id/similar", { limit: 8 });
   });
 
   it("preserves persisted reference-history source and range movement metadata", async () => {

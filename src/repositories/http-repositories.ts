@@ -73,6 +73,7 @@ import type {
   AccountCapability,
   MarketSummary,
   MarketSnapshot,
+  SimilarAsset,
 } from "@/domain";
 import { basisPoints, minorUnits, percentage } from "@/domain";
 import { createFinanceApiRepository } from "./finance-api-repository";
@@ -89,6 +90,14 @@ type MarketAssetDto = {
   conditionLabel?: string | null;
   publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
   publication?: { status: string; asOf: string | null } | null;
+  listing?: {
+    listedAt: string | null;
+    listedBy: {
+      displayName: string;
+      username: string | null;
+      slug: string;
+    } | null;
+  } | null;
   custody?: { status: string; asOf: string } | null;
   insurance?: { status: string; expiresAt: string } | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
@@ -196,6 +205,22 @@ type MarketSnapshotDto = {
     lastUpdatedAt: string | null;
   }>;
 };
+type SimilarAssetDto = {
+  assetId: string;
+  slug: string;
+  title: string;
+  category: string;
+  setName?: string;
+  cardNumber?: string;
+  thumbnail?: { url: string; alt: string } | null;
+  marketState: SimilarAsset["marketState"];
+  displayPrice: {
+    type: SimilarAsset["displayPrice"]["type"];
+    amount: { minor: string; currency: SupportedCurrency } | null;
+    observedAt: string | null;
+  };
+  movement24hBps?: number | null;
+};
 type CollectorDto = {
   slug: string;
   headline: string | null;
@@ -299,6 +324,12 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
   publicVerificationStatus: value.publicVerificationStatus,
   publication: value.publication
     ? { status: value.publication.status, asOf: value.publication.asOf as ISODateTime | null }
+    : undefined,
+  listing: value.listing
+    ? {
+        listedAt: value.listing.listedAt as ISODateTime | null,
+        listedBy: value.listing.listedBy,
+      }
     : undefined,
   custody: value.custody
     ? { status: value.custody.status, asOf: value.custody.asOf as ISODateTime }
@@ -3534,6 +3565,36 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getMarketSnapshot() {
         return mapMarketSnapshot(await client.get<MarketSnapshotDto>("/market/snapshot"));
       },
+      async getSimilarAssets(assetId, limit = 8) {
+        const body = await client.get<{ items: SimilarAssetDto[] }>(
+          `/market/assets/${encodeURIComponent(assetId)}/similar`,
+          { limit },
+        );
+        return body.items.map(
+          (item) =>
+            ({
+              assetId: item.assetId as AssetId,
+              slug: item.slug,
+              title: item.title,
+              category: item.category,
+              ...(item.setName ? { setName: item.setName } : {}),
+              ...(item.cardNumber ? { cardNumber: item.cardNumber } : {}),
+              ...(item.thumbnail ? { thumbnail: item.thumbnail } : {}),
+              marketState: item.marketState,
+              displayPrice: {
+                type: item.displayPrice.type,
+                amount: item.displayPrice.amount
+                  ? {
+                      amount: safeMinor(item.displayPrice.amount.minor),
+                      currency: item.displayPrice.amount.currency,
+                    }
+                  : null,
+                observedAt: item.displayPrice.observedAt as ISODateTime | null,
+              },
+              movement24hBps: item.movement24hBps ?? null,
+            }) satisfies SimilarAsset,
+        );
+      },
       async getPriceHistory(assetId, range) {
         const backendRange = (
           { "24H": "1D", "7D": "7D", "30D": "30D", "90D": "3M", "1Y": "1Y", ALL: "ALL" } as const
@@ -4349,13 +4410,12 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                 "accountCapability.capability",
               ) as AccountCapability["capability"],
               allowed: booleanField(item.allowed, "accountCapability.allowed"),
-              status:
-                (typeof item.status === "string"
-                  ? item.status
-                  : fallbackCapabilityStatus(
-                      Boolean(item.allowed),
-                      reason as AccountCapability["reason"],
-                    )) as AccountCapability["status"],
+              status: (typeof item.status === "string"
+                ? item.status
+                : fallbackCapabilityStatus(
+                    Boolean(item.allowed),
+                    reason as AccountCapability["reason"],
+                  )) as AccountCapability["status"],
               reason: reason as AccountCapability["reason"],
               requirements: item.requirements.map((requirement) => {
                 const requirementValue = objectField(requirement, "account capability requirement");

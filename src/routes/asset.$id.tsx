@@ -21,12 +21,12 @@ import { useSession } from "@/auth/use-session";
 import { PriceChart } from "@/components/Chart";
 import {
   toMarketplaceAsset,
+  toMarketplaceSimilarAsset,
+  type MarketplaceSimilarAsset,
   type MarketplaceAsset,
 } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
-import {
-  resolveMarketplaceMedia,
-} from "@/components/marketplace/marketplace-layout";
+import { resolveMarketplaceMedia } from "@/components/marketplace/marketplace-layout";
 import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/finance";
@@ -230,11 +230,8 @@ function AssetPage() {
   const similarQuery = useQuery({
     queryKey: ["asset", id, "similar"],
     enabled: Boolean(assetQuery.data),
-    queryFn: () =>
-      services.repositories.assets.listAssets({
-        category: assetQuery.data?.details.category,
-        limit: 6,
-      }),
+    queryFn: async () =>
+      (await services.market.similar(id as never, 8)).map(toMarketplaceSimilarAsset),
   });
   const orderBookQuery = useQuery({
     queryKey: queryKeys.market.orderBook(id),
@@ -695,6 +692,32 @@ function AssetPage() {
               <span>Condition</span>
               <strong>{condition || "—"}</strong>
             </div>
+            {asset.listing ? (
+              <>
+                <div>
+                  <span>Listed by</span>
+                  <strong>
+                    {asset.listing.listedBy ? (
+                      <Link
+                        to="/collector/$id/assets"
+                        params={{ id: asset.listing.listedBy.slug }}
+                        className="asset-listing-link"
+                      >
+                        {asset.listing.listedBy.displayName}
+                      </Link>
+                    ) : (
+                      "Slice collector"
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>Listed on</span>
+                  <strong>
+                    {asset.listing.listedAt ? formatDate(asset.listing.listedAt) : "—"}
+                  </strong>
+                </div>
+              </>
+            ) : null}
           </section>
 
           {!asset.grade ? (
@@ -747,7 +770,7 @@ function AssetPage() {
         </section>
 
         <SimilarAssets
-          items={(similarQuery.data?.items ?? []).map(toMarketplaceAsset)}
+          items={similarQuery.data ?? []}
           currentId={asset.id}
           currentSlug={asset.slug}
           isLoading={similarQuery.isLoading}
@@ -1795,7 +1818,7 @@ function SimilarAssets({
   isError,
   retry,
 }: {
-  items: Array<ReturnType<typeof toMarketplaceAsset>>;
+  items: MarketplaceSimilarAsset[];
   currentId: string;
   currentSlug: string;
   isLoading: boolean;
@@ -1803,29 +1826,59 @@ function SimilarAssets({
   retry: () => void;
 }) {
   const similar = items
-    .filter((item) => item.id !== currentId && item.slug !== currentSlug)
-    .slice(0, 6);
-  const similarKey = similar.map((item) => item.id).join("|");
-  const [start, setStart] = useState(0);
-  useEffect(() => setStart(0), [currentId, similarKey]);
-  const pageSize = 6;
-  const visibleSimilar = similar.slice(start, start + pageSize);
-  const canGoBack = start > 0;
-  const canGoForward = start + pageSize < similar.length;
+    .filter((item) => item.assetId !== currentId && item.slug !== currentSlug)
+    .slice(0, 8);
+  const similarKey = similar.map((item) => item.assetId).join("|");
+  const railRef = useRef<HTMLDivElement>(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [canGoForward, setCanGoForward] = useState(false);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const updateControls = () => {
+      const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+      setCanGoBack(rail.scrollLeft > 2);
+      setCanGoForward(maxScroll - rail.scrollLeft > 2);
+    };
+    updateControls();
+    rail.addEventListener("scroll", updateControls, { passive: true });
+    window.addEventListener("resize", updateControls);
+    return () => {
+      rail.removeEventListener("scroll", updateControls);
+      window.removeEventListener("resize", updateControls);
+    };
+  }, [currentId, similarKey, isLoading]);
   if (!isLoading && !isError && similar.length === 0) return null;
+  const moveRail = (direction: -1 | 1) => {
+    const rail = railRef.current;
+    const firstCard = rail?.querySelector<HTMLElement>(".asset-similar-card");
+    if (!rail || !firstCard) return;
+    const gap = Number.parseFloat(getComputedStyle(rail).columnGap || "0") || 0;
+    rail.scrollBy({
+      left: direction * (firstCard.getBoundingClientRect().width + gap),
+      behavior: "smooth",
+    });
+  };
   return (
-    <section className={`asset-similar-section${visibleSimilar.length === 1 ? " is-single" : ""}`}>
+    <section className="asset-similar-section">
       <header>
-        <h2>Similar assets</h2>
         <div>
-          <Link to="/marketplace">View market</Link>
-          {similar.length > pageSize ? (
+          <p className="asset-section-label">Similar assets</p>
+          <p className="asset-similar-section__subtitle">
+            Discover other collectibles in the same category.
+          </p>
+        </div>
+        <div>
+          <Link className="asset-similar-section__market-link" to="/marketplace">
+            View market <ArrowRight aria-hidden="true" />
+          </Link>
+          {similar.length > 1 && !isLoading && !isError ? (
             <>
               <button
                 type="button"
                 aria-label="Previous similar assets"
                 disabled={!canGoBack}
-                onClick={() => setStart((current) => Math.max(0, current - pageSize))}
+                onClick={() => moveRail(-1)}
               >
                 <ArrowLeft aria-hidden="true" />
               </button>
@@ -1833,9 +1886,7 @@ function SimilarAssets({
                 type="button"
                 aria-label="Next similar assets"
                 disabled={!canGoForward}
-                onClick={() =>
-                  setStart((current) => Math.min(current + pageSize, similar.length - 1))
-                }
+                onClick={() => moveRail(1)}
               >
                 <ChevronRight aria-hidden="true" />
               </button>
@@ -1844,52 +1895,100 @@ function SimilarAssets({
         </div>
       </header>
       {isLoading ? (
-        <p>Loading related catalogue…</p>
+        <div className="asset-similar-grid asset-similar-grid--loading" aria-hidden="true">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div className="asset-similar-card asset-similar-card--skeleton" key={index} />
+          ))}
+        </div>
       ) : isError ? (
-        <button type="button" onClick={retry}>
-          Retry similar assets
-        </button>
+        <div className="asset-similar-error">
+          <p>Similar collectibles are temporarily unavailable.</p>
+          <button type="button" onClick={retry}>
+            Retry
+          </button>
+        </div>
       ) : similar.length ? (
-        <div className={`asset-similar-grid${visibleSimilar.length === 1 ? " is-single" : ""}`}>
-          {visibleSimilar.map((item) => {
-            const media = resolveMarketplaceMedia(item);
+        <div className="asset-similar-grid" ref={railRef} aria-label="Similar assets">
+          {similar.map((item) => {
             return (
               <Link
-                key={item.id}
+                key={item.assetId}
                 to="/asset/$id"
                 params={{ id: item.slug }}
                 className="asset-similar-card"
               >
                 <div className="asset-similar-card__media">
-                  {media ? (
-                    <img src={media.src} alt={media.alt} />
+                  {item.thumbnail ? (
+                    <img src={item.thumbnail.url} alt={item.thumbnail.alt} />
                   ) : (
                     <span className="asset-similar-card__placeholder">Image unavailable</span>
                   )}
                 </div>
-                <section>
+                <div className="asset-similar-card__body">
                   <h3>{item.title}</h3>
-                  <p>{item.grade ?? marketCategoryPresentation(item.category).label}</p>
-                  <strong>
-                    {item.estimatedMarketValueMinor === undefined
-                      ? "Unavailable"
-                      : formatCurrency(item.estimatedMarketValueMinor, {
-                          currency: item.estimatedMarketValueCurrency,
-                        })}
-                  </strong>
-                  {item.change24hBps !== undefined && (
-                    <em>{formatPercent(item.change24hBps / 100)}</em>
-                  )}
-                </section>
+                  <p className="asset-similar-card__metadata">
+                    {item.setName ?? marketCategoryPresentation(item.category).label}
+                    {item.cardNumber ? ` · ${item.cardNumber}` : ""}
+                  </p>
+                  <div className="asset-similar-card__quote">
+                    <span>{similarPriceLabel(item.displayPrice.type)}</span>
+                    <strong>{formatSimilarPrice(item.displayPrice)}</strong>
+                    {item.movement24hBps !== null && item.movement24hBps !== undefined ? (
+                      <em className={item.movement24hBps < 0 ? "is-negative" : ""}>
+                        {formatSimilarMovement(item.movement24hBps)}
+                      </em>
+                    ) : null}
+                  </div>
+                  <span
+                    className={`asset-similar-card__state is-${item.marketState.toLowerCase()}`}
+                  >
+                    <span aria-hidden="true" />
+                    {similarMarketStateLabel(item.marketState)}
+                  </span>
+                </div>
               </Link>
             );
           })}
         </div>
-      ) : (
-        <p>No similar public assets are available.</p>
-      )}
+      ) : null}
     </section>
   );
+}
+
+function similarPriceLabel(type: MarketplaceSimilarAsset["displayPrice"]["type"]) {
+  return type === "LAST_EXECUTION"
+    ? "Last sale"
+    : type === "INITIAL_OFFERING"
+      ? "Initial offering"
+      : type === "VALUATION"
+        ? "Slice valuation"
+        : "Market price";
+}
+
+function formatSimilarPrice(price: MarketplaceSimilarAsset["displayPrice"]) {
+  if (!price.amount) return "Unavailable";
+  const amount = formatMinorAmount(price.amount.amount, price.amount.currency);
+  return price.type === "LAST_EXECUTION" || price.type === "INITIAL_OFFERING"
+    ? `${amount} / Slice`
+    : amount;
+}
+
+function formatSimilarMovement(valueBps: number) {
+  const value = valueBps / 100;
+  return `${value > 0 ? "+" : ""}${new Intl.NumberFormat("en-GB", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}% (24h)`;
+}
+
+function similarMarketStateLabel(state: MarketplaceSimilarAsset["marketState"]) {
+  return state === "LIVE_MARKET"
+    ? "Live market"
+    : state === "INITIAL_OFFERING"
+      ? "Initial offering"
+      : state === "MARKET_CLOSED"
+        ? "Market closed"
+        : "Reference only";
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Asset, MarketLifecycleProjection, SliceGrade } from "@/domain";
+import type { Asset, MarketLifecycleProjection, SimilarAsset, SliceGrade } from "@/domain";
 import type { SupportedCurrency } from "@/data/repositories";
 
 export type MarketplaceAsset = {
@@ -16,6 +16,7 @@ export type MarketplaceAsset = {
   grade?: string;
   certificationNumber?: string;
   publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
+  listing?: Asset["listing"];
   custodyStatus?: string;
   insuranceActive?: boolean;
   issuedUnits?: string;
@@ -55,6 +56,8 @@ export type MarketplaceAsset = {
   initialOffering?: import("@/domain").InitialOfferingProjection;
 };
 
+export type MarketplaceSimilarAsset = SimilarAsset;
+
 export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   id: asset.id,
   slug: asset.slug ?? asset.id,
@@ -68,6 +71,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   gradeScore: asset.grade?.numeric,
   gradeLabel: asset.grade?.label,
   publicVerificationStatus: asset.publicVerificationStatus,
+  listing: asset.listing,
   custodyStatus: asset.custody?.status,
   insuranceActive: asset.insurance?.status === "ACTIVE",
   issuedUnits: asset.ownership?.issuedUnits,
@@ -139,3 +143,5 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   marketLifecycle: asset.marketLifecycle,
   initialOffering: asset.initialOffering,
 });
+
+export const toMarketplaceSimilarAsset = (asset: SimilarAsset): MarketplaceSimilarAsset => asset;

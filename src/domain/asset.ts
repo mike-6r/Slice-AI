@@ -163,6 +163,15 @@ export interface Asset {
   /** Safe public projection used by customer-facing trust surfaces. */
   publicVerificationStatus?: "VERIFIED" | "IN_PROGRESS" | "UNAVAILABLE";
   publication?: { status: string; asOf: ISODateTime | null };
+  /** Public provenance for the catalogue listing, never private account data. */
+  listing?: {
+    listedAt: ISODateTime | null;
+    listedBy: {
+      displayName: string;
+      username: string | null;
+      slug: string;
+    } | null;
+  };
   custody?: { status: string; asOf: ISODateTime } | null;
   insurance?: { status: string; expiresAt: ISODateTime } | null;
   vault?: VaultRecord;

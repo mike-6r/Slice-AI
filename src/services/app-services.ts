@@ -25,6 +25,8 @@ export class MarketService {
   summary = () => this.repositories.market.getMarketSummary();
   snapshot = () => this.repositories.market.getMarketSnapshot();
   movers = () => this.repositories.market.getMarketMovers();
+  similar = (assetId: import("@/domain").AssetId, limit?: number) =>
+    this.repositories.market.getSimilarAssets(assetId, limit);
   priceHistory = (assetId: import("@/domain").AssetId, range: import("@/domain").TimeRange) =>
     this.repositories.market.getPriceHistory(assetId, range);
   orderBook = (assetId: import("@/domain").AssetId) =>

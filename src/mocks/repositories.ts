@@ -560,6 +560,29 @@ export const mockRepositories: AppRepositories = {
         })),
       };
     },
+    async getSimilarAssets(assetId, limit = 8) {
+      return mappedAssets
+        .filter((asset) => asset.id !== assetId)
+        .slice(0, limit)
+        .map((asset) => ({
+          assetId: asset.id,
+          slug: asset.slug ?? asset.id,
+          title: asset.details.title,
+          category: asset.details.category,
+          ...(asset.details.card?.set ? { setName: asset.details.card.set } : {}),
+          ...(asset.details.card?.cardNumber ? { cardNumber: asset.details.card.cardNumber } : {}),
+          ...(asset.media[0]
+            ? { thumbnail: { url: asset.media[0].url, alt: asset.media[0].alt } }
+            : {}),
+          marketState: "LIVE_MARKET" as const,
+          displayPrice: {
+            type: "LAST_EXECUTION" as const,
+            amount: priceFor(asset.id),
+            observedAt: now(),
+          },
+          movement24hBps: null,
+        }));
+    },
     async getPriceHistory(assetId, range: TimeRange) {
       const record = ASSETS.find((asset) => asset.id === assetId);
       const length = { "24H": 16, "7D": 28, "30D": 42, "90D": 64, "1Y": 82, ALL: 90 }[range];

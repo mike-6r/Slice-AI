@@ -103,6 +103,26 @@ export interface MarketSnapshot {
   lastUpdatedAt: ISODateTime | null;
   items: MarketSnapshotItem[];
 }
+export type SimilarAssetMarketState =
+  "LIVE_MARKET" | "INITIAL_OFFERING" | "MARKET_CLOSED" | "REFERENCE_ONLY";
+export type SimilarAssetDisplayPriceType =
+  "LAST_EXECUTION" | "INITIAL_OFFERING" | "VALUATION" | "UNAVAILABLE";
+export interface SimilarAsset {
+  assetId: AssetId;
+  slug: string;
+  title: string;
+  category: string;
+  setName?: string;
+  cardNumber?: string;
+  thumbnail?: { url: string; alt: string };
+  marketState: SimilarAssetMarketState;
+  displayPrice: {
+    type: SimilarAssetDisplayPriceType;
+    amount: Money | null;
+    observedAt: ISODateTime | null;
+  };
+  movement24hBps?: number | null;
+}
 export interface OrderBookLevel {
   pricePerUnit: Money;
   units: number;
