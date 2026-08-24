@@ -749,6 +749,7 @@ function AssetPage() {
         <SimilarAssets
           items={(similarQuery.data?.items ?? []).map(toMarketplaceAsset)}
           currentId={asset.id}
+          currentSlug={asset.slug}
           isLoading={similarQuery.isLoading}
           isError={similarQuery.isError}
           retry={() => void similarQuery.refetch()}
@@ -1789,17 +1790,21 @@ function RecentTrades({
 function SimilarAssets({
   items,
   currentId,
+  currentSlug,
   isLoading,
   isError,
   retry,
 }: {
   items: Array<ReturnType<typeof toMarketplaceAsset>>;
   currentId: string;
+  currentSlug: string;
   isLoading: boolean;
   isError: boolean;
   retry: () => void;
 }) {
-  const similar = items.filter((item) => item.id !== currentId).slice(0, 6);
+  const similar = items
+    .filter((item) => item.id !== currentId && item.slug !== currentSlug)
+    .slice(0, 6);
   const similarKey = similar.map((item) => item.id).join("|");
   const [start, setStart] = useState(0);
   useEffect(() => setStart(0), [currentId, similarKey]);
@@ -1807,28 +1812,35 @@ function SimilarAssets({
   const visibleSimilar = similar.slice(start, start + pageSize);
   const canGoBack = start > 0;
   const canGoForward = start + pageSize < similar.length;
+  if (!isLoading && !isError && similar.length === 0) return null;
   return (
-    <section className="asset-similar-section">
+    <section className={`asset-similar-section${visibleSimilar.length === 1 ? " is-single" : ""}`}>
       <header>
         <h2>Similar assets</h2>
         <div>
           <Link to="/marketplace">View market</Link>
-          <button
-            type="button"
-            aria-label="Previous similar assets"
-            disabled={!canGoBack}
-            onClick={() => setStart((current) => Math.max(0, current - pageSize))}
-          >
-            <ArrowLeft aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label="Next similar assets"
-            disabled={!canGoForward}
-            onClick={() => setStart((current) => Math.min(current + pageSize, similar.length - 1))}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
+          {similar.length > pageSize ? (
+            <>
+              <button
+                type="button"
+                aria-label="Previous similar assets"
+                disabled={!canGoBack}
+                onClick={() => setStart((current) => Math.max(0, current - pageSize))}
+              >
+                <ArrowLeft aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next similar assets"
+                disabled={!canGoForward}
+                onClick={() =>
+                  setStart((current) => Math.min(current + pageSize, similar.length - 1))
+                }
+              >
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
       {isLoading ? (

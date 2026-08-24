@@ -35866,3 +35866,34 @@ html,
   .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step h3 { font-size: .76rem; }
   .asset-detail-page .asset-redesign > .asset-how-it-works .asset-how-it-works__step p { font-size: .65rem; line-height: 1.38; }
 }
+
+/* Similar assets should size to the results that actually exist. A single
+   recommendation stays a compact rail instead of leaving a full-width empty
+   panel around one card. */
+.asset-detail-page .asset-redesign > .asset-similar-section {
+  height: auto;
+  min-height: 0;
+  align-self: start;
+}
+.asset-detail-page .asset-redesign > .asset-similar-section.is-single {
+  width: min(100%, 34rem);
+}
+.asset-detail-page .asset-redesign > .asset-similar-section.is-single .asset-similar-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.asset-detail-page .asset-redesign > .asset-similar-section.is-single .asset-similar-card {
+  height: 7rem;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+}
+.asset-detail-page .asset-redesign > .asset-similar-section.is-single .asset-similar-card > div {
+  min-height: 7rem;
+}
+.asset-detail-page .asset-redesign > .asset-similar-section.is-single .asset-similar-card img {
+  width: 4.5rem;
+  height: 6.25rem;
+}
+
+@media (max-width: 560px) {
+  .asset-detail-page .asset-redesign > .asset-similar-section.is-single { width: 100%; }
+}
