@@ -1,12 +1,14 @@
 # Slice Stripe Sandbox Deposit + Withdrawal QA
 
-Status: implementation complete; controlled Stripe sandbox execution remains account/provider dependent
+Status: implementation deployed; controlled Stripe sandbox execution remains account/provider dependent
 
 This document records the GBP-only deposit and withdrawal implementation for staging. It supersedes the older capability-gating snapshot that described funding as feature-disabled.
 
 ## Root cause of the old capability cards
 
-The deployed VPS environment contained explicit `OPERATIONAL_DEPOSITS_ENABLED=false` and `OPERATIONAL_WITHDRAWALS_ENABLED=false` settings. The capability service therefore returned `TEMPORARILY_UNAVAILABLE` before evaluating bank or payout readiness. This was a real operational kill switch, not a missing Stripe API route.
+The deployed VPS environment contained explicit `OPERATIONAL_DEPOSITS_ENABLED=false` and `OPERATIONAL_WITHDRAWALS_ENABLED=false` settings. The capability service therefore returned `TEMPORARILY_UNAVAILABLE` before evaluating bank or payout readiness. This was a real operational kill switch, not a missing Stripe API route. The stale duplicate `PROVIDER_MODE=local` assignment was also removed so the staging file has one effective provider assignment.
+
+The staging environment now explicitly has both operational funding flags set to `true`, one effective `PROVIDER_MODE=stripe_sandbox`, `STRIPE_BANK_FUNDING_RAIL=bacs_debit`, and `STRIPE_LIVE_ENABLED=false`.
 
 After the staging configuration is corrected, the capability projection is truthful:
 
@@ -84,7 +86,7 @@ Focused coverage includes:
 - webhook signature/livemode/deduplication boundaries;
 - frontend capability copy and safe blocker actions.
 
-Automated tests use deterministic providers and do not call Stripe.
+Automated tests use deterministic providers and do not call Stripe. Final local validation for this release: backend **71 suites / 303 tests PASS**, frontend **39 files / 142 tests PASS**, Prisma validation **PASS**, backend build **PASS**, frontend client/SSR build **PASS**, and changed-file lint **PASS**.
 
 ## Controlled staging QA
 
@@ -108,3 +110,15 @@ No manual balance mutation, fake movement, fake webhook, market mutation, owners
 - Investor withdrawals through an unsupported generic bank path: NO; collector Connect path only.
 - Umbreon, Charizard, ownership, offering, trades, and market data: unchanged.
 - Full real Stripe sandbox E2E: BLOCKED until the authorized eligible fixtures and provider webhook evidence are available.
+
+## Deployment evidence
+
+- Commit: `303c1e7`
+- Active release: `/opt/slice/releases/20260824-303c1e7`
+- `/opt/slice/current`: `/opt/slice/releases/20260824-303c1e7`
+- `/opt/slice/app`: `/opt/slice/releases/20260824-303c1e7`
+- API service: active
+- Web service: active
+- `/health`: PASS
+- `/ready`: PASS (Postgres and Redis up)
+- No Stripe object, deposit, withdrawal, journal, balance, market, ownership, offering, Umbreon, or Charizard mutation was performed during this implementation/deployment.
