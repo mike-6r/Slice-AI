@@ -105,8 +105,9 @@ rail. They remain available in the existing labelled reference surfaces.
 
 ## Browser QA / deployment
 
-- Commit: `5851e9e`
-- Release: `/opt/slice/releases/20260823-5851e9e`
+- Runtime commit: `5851e9e`
+- Active deployment sync: `38d7a0a` (documentation-only)
+- Release: `/opt/slice/releases/20260823-38d7a0a`
 - `/opt/slice/current`: points to the release above
 - `/opt/slice/app`: points to the release above
 - `slice-api.service`: active
