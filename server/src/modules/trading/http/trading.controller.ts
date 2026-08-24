@@ -43,13 +43,19 @@ const ownershipPreviewInput = z
   .object({
     assetId: z.string().min(1).max(128),
     side: z.enum(['BUY', 'SELL']),
+    desiredSlices: z.string().regex(/^[1-9]\d*$/).max(32).optional(),
     desiredOwnershipPercent: z.string().regex(/^\d{1,3}(?:\.\d{1,4})?$/).optional(),
     desiredAmountMinor: z.string().regex(/^[1-9]\d*$/).optional(),
     limitPriceMinor: z.string().regex(/^[1-9]\d*$/).optional(),
     timeInForce: z.enum(['GTC', 'IOC']).default('GTC'),
   })
   .strict()
-  .refine((value) => Boolean(value.desiredOwnershipPercent) !== Boolean(value.desiredAmountMinor));
+  .refine(
+    (value) =>
+      [value.desiredSlices, value.desiredOwnershipPercent, value.desiredAmountMinor].filter(
+        Boolean,
+      ).length === 1,
+  );
 const page = z
   .object({
     cursor: z.string().min(1).max(128).optional(),
@@ -91,6 +97,21 @@ export class TradingController {
   ownershipPreview(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     const input = this.parse(ownershipPreviewInput, body);
     return this.trading.previewOwnership(req.actor!, {
+      ...input,
+      timeInForce: input.timeInForce ?? 'GTC',
+    });
+  }
+
+  @Post('market/assets/:slug/ownership/preview')
+  publicOwnershipPreview(@Param('slug') slug: string, @Body() body: unknown) {
+    const bodyRecord = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const input = this.parse(ownershipPreviewInput, {
+      ...bodyRecord,
+      assetId: slug,
+    });
+    return this.trading.previewOwnership(null, {
       ...input,
       timeInForce: input.timeInForce ?? 'GTC',
     });

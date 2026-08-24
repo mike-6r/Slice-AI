@@ -11,7 +11,7 @@ import {
 
 /**
  * Editorial homepage showcase. The card is the visual anchor for the
- * landing page; the surrounding market pulse demonstrates the experience
+ * landing page; the surrounding examples demonstrate the experience
  * visitors can expect after joining Slice.
  */
 export function FeaturedMarketHero() {
@@ -25,7 +25,7 @@ export function FeaturedMarketHero() {
       <span className="charizard-showcase__glow" aria-hidden="true" />
       <div className="charizard-showcase__eyebrow" aria-hidden="true">
         <span>●</span>
-        Live collectible experience
+        The Slice experience
         <span>Explore ↗</span>
       </div>
 
@@ -35,7 +35,8 @@ export function FeaturedMarketHero() {
 
       <div className="charizard-showcase__copy">
         <div className="charizard-showcase__tags" aria-label="Featured collectible details">
-          <span>Featured collectible</span>
+          <span>Illustrative example</span>
+          <span>Demo only</span>
           <span>{featured.grade}</span>
         </div>
         <p className="page-kicker">A new way to collect</p>
@@ -47,53 +48,32 @@ export function FeaturedMarketHero() {
 
         <div className="charizard-showcase__market-card">
           <div className="charizard-showcase__value">
-            <span>PSA 10 market price</span>
+            <span>External market reference</span>
             <strong>{featured.displayPrice}</strong>
-            <b>PriceCharting guide · GBP converted</b>
+            <b>PriceCharting PSA 10 guide · USD</b>
           </div>
-          <div
-            className="charizard-showcase__chart"
-            role="img"
-            aria-label="Rising market pulse over the last 30 days"
-          >
-            <svg viewBox="0 0 360 112" preserveAspectRatio="none" aria-hidden="true">
-              <defs>
-                <linearGradient id="charizard-pulse-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22d3a5" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#22d3a5" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 91 L22 95 L43 83 L66 89 L88 72 L110 78 L133 62 L157 68 L178 54 L202 57 L224 43 L246 47 L268 34 L292 38 L316 23 L338 26 L360 9 L360 112 L0 112 Z"
-                fill="url(#charizard-pulse-fill)"
-              />
-              <path
-                d="M0 91 L22 95 L43 83 L66 89 L88 72 L110 78 L133 62 L157 68 L178 54 L202 57 L224 43 L246 47 L268 34 L292 38 L316 23 L338 26 L360 9"
-                fill="none"
-                stroke="#22d3a5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-              />
-              <circle cx="360" cy="9" r="3.4" fill="#a7f3d0" />
-            </svg>
-            <span>$350K</span>
-            <span>$300K</span>
+          <div className="charizard-showcase__value charizard-showcase__value--slice">
+            <span>Illustrative Slice offering</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation}</strong>
+            <b>
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices} · {HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice} per
+              Slice
+            </b>
           </div>
         </div>
 
         <div className="charizard-showcase__facts">
           <div>
-            <span>Slices available</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.availableShares}</strong>
+            <span>Illustrative supply</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices}</strong>
           </div>
           <div>
-            <span>Starting at</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.sharePrice}</strong>
+            <span>Price per Slice</span>
+            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice}</strong>
           </div>
           <div>
-            <span>Minimum</span>
-            <strong>1 Slice</strong>
+            <span>Example buy</span>
+            <strong>25 · £250</strong>
           </div>
         </div>
 
@@ -104,7 +84,7 @@ export function FeaturedMarketHero() {
 
       <div className="charizard-showcase__stamp" aria-hidden="true">
         <CheckCircle2 />
-        <span>Real collectible</span>
+        <span>Collectible ownership</span>
         <small>
           Clear ownership
           <br />

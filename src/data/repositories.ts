@@ -1662,6 +1662,7 @@ export interface TradingRepository {
   /** Document 014 authority. API mode must use these operations, not local demos. */
   previewOrder(input: TradingOrderInput): Promise<TradingOrderPreview>;
   previewOwnershipOrder(input: OwnershipPreviewInput): Promise<OwnershipOrderPreview>;
+  previewPublicOwnershipOrder(input: OwnershipPreviewInput): Promise<OwnershipOrderPreview>;
   getOwnershipMarketSummary(assetSlug: string): Promise<OwnershipMarketSummary>;
   placeOrder(input: TradingOrderInput): Promise<TradingOrderView>;
   cancelOrder(orderId: string): Promise<TradingOrderView>;

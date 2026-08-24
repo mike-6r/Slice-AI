@@ -67,6 +67,8 @@ export class TradingService {
     this.repositories.trading.previewOrder(input);
   previewOwnershipOrder = (input: import("@/domain").OwnershipPreviewInput) =>
     this.repositories.trading.previewOwnershipOrder(input);
+  previewPublicOwnershipOrder = (input: import("@/domain").OwnershipPreviewInput) =>
+    this.repositories.trading.previewPublicOwnershipOrder(input);
   ownershipMarketSummary = (assetSlug: string) =>
     this.repositories.trading.getOwnershipMarketSummary(assetSlug);
   placeOrder = (input: import("@/domain").TradingOrderInput) =>

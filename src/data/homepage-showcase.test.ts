@@ -34,20 +34,24 @@ describe("homepage showcase routing", () => {
     );
   });
 
-  it("keeps the illustrative share maths internally consistent", () => {
+  it("keeps the illustrative Slice maths internally consistent", () => {
     expect(HOMEPAGE_OWNERSHIP_EXAMPLE).toMatchObject({
-      referenceValue: "£258,146.94",
-      totalShares: "195 shares",
-      totalSharesCount: 195,
-      availableShares: "62 shares",
-      sharePrice: "£10.00",
-      exampleShares: "25 shares",
-      exampleInvestment: "£250",
-      exampleOwnership: "12.82%",
+      externalReferenceValue: "$343,098.00 USD",
+      illustrativeValuation: "£10,000.00",
+      totalSlices: "1,000 Slices",
+      totalSlicesCount: 1000,
+      slicePrice: "£10.00",
+      exampleSlices: "25 Slices",
+      exampleInvestment: "£250.00",
+      exampleOwnership: "2.50%",
+      exampleSellSlices: "5 Slices",
+      exampleSellProceeds: "£50.00",
+      remainingSlices: "20 Slices",
+      remainingOwnership: "2.00%",
     });
   });
 
-  it("uses the GBP-converted PriceCharting PSA 10 guide for the featured Charizard", () => {
-    expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("£258,146.94");
+  it("keeps the PriceCharting PSA 10 guide in its source currency", () => {
+    expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("$343,098.00 USD");
   });
 });

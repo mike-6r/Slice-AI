@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  ArrowRight,
   Banknote,
   BookOpen,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/api/http-client";
+import { useSession } from "@/auth/use-session";
 import { CapabilityRequiredDialog } from "@/components/account/CapabilityRequiredDialog";
 import { assetShowcaseMedia } from "@/components/marketplace/demo-asset-media";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
@@ -36,6 +38,7 @@ import {
   formatGbpMinor,
   gbpInputToMinor,
   minorToGbpInput,
+  parsePositiveShares,
   referenceSharePriceMinor,
 } from "./trading-order-presentation";
 
@@ -46,7 +49,7 @@ const messageFor = (error: unknown) => {
     if (error.code === "INSUFFICIENT_FUNDS")
       return "Your available cash does not cover this order and its authoritative fee preview.";
     if (error.code === "INSUFFICIENT_UNITS")
-      return "You do not have enough ownership units for this sell order.";
+      return "You do not have enough Slices for this sell order.";
     if (error.code === "COMPLIANCE_REQUIRED")
       return "Complete the required verification step before placing this order.";
     if (error.code === "MARKET_NOT_OPEN") return "This market is not currently accepting orders.";
@@ -63,10 +66,12 @@ export function TradingOrderForm({
   side: TradingOrderSide;
 }) {
   const services = useAppServices();
+  const { isAuthenticated } = useSession();
   const queryClient = useQueryClient();
   const [stage, setStage] = useState<Stage>("configure");
   const [ownershipPercent, setOwnershipPercent] = useState("1");
-  const [inputMode, setInputMode] = useState<"PERCENTAGE" | "AMOUNT">("PERCENTAGE");
+  const [inputMode, setInputMode] = useState<"SLICES" | "PERCENTAGE" | "AMOUNT">("SLICES");
+  const [sliceQuantity, setSliceQuantity] = useState("1");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
   const [priceTouched, setPriceTouched] = useState(false);
@@ -78,6 +83,7 @@ export function TradingOrderForm({
   const capabilities = useQuery({
     queryKey: queryKeys.account.capabilities,
     queryFn: services.account.capabilities,
+    enabled: isAuthenticated,
   });
   const feePolicy = useQuery({
     queryKey: queryKeys.providers.feePolicy,
@@ -90,6 +96,7 @@ export function TradingOrderForm({
   const portfolio = useQuery({
     queryKey: queryKeys.portfolio.summary,
     queryFn: services.portfolio.portfolio,
+    enabled: isAuthenticated,
   });
   const orderBook = useQuery({
     queryKey: queryKeys.market.orderBook(assetSlug),
@@ -102,6 +109,7 @@ export function TradingOrderForm({
   const position = useQuery({
     queryKey: ["ownership", "position", assetSlug],
     queryFn: () => services.ownership.ownMarketPosition(assetSlug),
+    enabled: isAuthenticated,
   });
 
   const holding = portfolio.data?.holdings.find(
@@ -151,26 +159,37 @@ export function TradingOrderForm({
       "ownership-preview",
       asset.data?.id,
       side,
+      sliceQuantity,
       ownershipPercent,
       inputMode,
       inputMode === "PERCENTAGE" ? ownershipPercent : amount,
       price,
       timeInForce,
     ],
-    queryFn: () =>
-      services.trading.previewOwnershipOrder({
+    queryFn: () => {
+      const input = {
         assetId: asset.data!.id,
         side,
-        ...(inputMode === "PERCENTAGE"
-          ? { desiredOwnershipPercent: ownershipPercent }
-          : { desiredAmountMinor: gbpInputToMinor(amount) || undefined }),
+        ...(inputMode === "SLICES"
+          ? { desiredSlices: sliceQuantity }
+          : inputMode === "PERCENTAGE"
+            ? { desiredOwnershipPercent: ownershipPercent }
+            : { desiredAmountMinor: gbpInputToMinor(amount) || undefined }),
         limitPriceMinor:
           limitPriceMinor && BigInt(limitPriceMinor) > 0n ? limitPriceMinor : undefined,
         timeInForce,
-      }),
+      };
+      return isAuthenticated
+        ? services.trading.previewOwnershipOrder(input)
+        : services.trading.previewPublicOwnershipOrder(input);
+    },
     enabled: Boolean(
       asset.data &&
-      (inputMode === "PERCENTAGE" ? percentInputIsValid : Boolean(gbpInputToMinor(amount))) &&
+      (inputMode === "SLICES"
+        ? Boolean(parsePositiveShares(sliceQuantity))
+        : inputMode === "PERCENTAGE"
+          ? percentInputIsValid
+          : Boolean(gbpInputToMinor(amount))) &&
       (!capability || capability.allowed),
     ),
     retry: false,
@@ -188,6 +207,8 @@ export function TradingOrderForm({
     : null;
 
   const validationError = useMemo(() => {
+    if (inputMode === "SLICES" && !parsePositiveShares(sliceQuantity))
+      return "Enter a whole number of Slices, such as 1 or 25.";
     if (inputMode === "PERCENTAGE" && !ownershipPercent)
       return "Enter the percentage of the collectible you want to own.";
     if (inputMode === "PERCENTAGE" && !percentInputIsValid)
@@ -211,6 +232,7 @@ export function TradingOrderForm({
     ownershipPreview.data,
     percentInputIsValid,
     price,
+    sliceQuantity,
   ]);
 
   const orderInput = useMemo<TradingOrderInput | null>(() => {
@@ -228,7 +250,7 @@ export function TradingOrderForm({
   const livePreview = useQuery({
     queryKey: ["trading", "preview", orderInput],
     queryFn: () => services.trading.previewOrder(orderInput!),
-    enabled: Boolean(orderInput && (!capability || capability.allowed)),
+    enabled: Boolean(orderInput && isAuthenticated && (!capability || capability.allowed)),
     retry: false,
     staleTime: 0,
   });
@@ -273,6 +295,12 @@ export function TradingOrderForm({
   const availableCash = BigInt(portfolio.data?.cash.availableMinor ?? "0");
 
   const openReview = async () => {
+    if (!isAuthenticated) {
+      window.location.assign(
+        `/login?returnTo=${encodeURIComponent(`/${side === "BUY" ? "buy" : "sell"}/${assetSlug}`)}`,
+      );
+      return;
+    }
     if (capability && !capability.allowed) {
       setCapabilityDialog(capability);
       return;
@@ -298,7 +326,7 @@ export function TradingOrderForm({
           </h1>
           <p>Slice returned the authoritative order state below.</p>
           <dl className="trading-summary-grid">
-            <Cell label="Ownership units" value={result.originalUnits} />
+            <Cell label="Slices" value={result.originalUnits} />
             <Cell label="Filled" value={result.filledUnits} />
             <Cell label="Remaining" value={result.remainingUnits} />
             <Cell label="Limit price" value={formatGbpMinor(result.limitPriceMinor)} />
@@ -343,8 +371,8 @@ export function TradingOrderForm({
           </p>
           <h1>Place a {action.toLowerCase()} order</h1>
           <p>
-            Choose the percentage or amount you want and your limit price. Slice confirms fees,
-            reservations and fills.
+            Choose how many Slices you want and your limit price. Slice confirms fees, reservations
+            and fills.
           </p>
         </div>
         <div className="trading-asset-chip">
@@ -378,8 +406,8 @@ export function TradingOrderForm({
                   <p className="trading-eyebrow">Trade ownership</p>
                   <h2>{side === "BUY" ? "Own this collectible" : "Sell ownership"}</h2>
                   <p>
-                    Choose a percentage or amount of the whole collectible. Slice converts it into
-                    whole ownership units and checks the live market before you review.
+                    Choose how many Slices you want. Slice confirms the live price, fees and
+                    resulting ownership before you review.
                   </p>
                 </div>
               </div>
@@ -399,46 +427,16 @@ export function TradingOrderForm({
                   Sell
                 </Link>
               </div>
-              <div className="trading-ownership-facts">
-                {side === "BUY" && initialOfferingOpen ? (
-                  <ContextRow label="Channel" value="Initial offering" />
-                ) : null}
-                <ContextRow
-                  label="Slice market-implied value"
-                  value={
-                    ownershipPreview.data?.impliedWholeValueMinor
-                      ? formatGbpMinor(ownershipPreview.data.impliedWholeValueMinor)
-                      : "Unavailable"
-                  }
-                />
-                <ContextRow
-                  label="Available ownership"
-                  value={
-                    ownershipPreview.data
-                      ? formatAvailability(ownershipPreview.data.availableOwnershipPercent)
-                      : "Unavailable"
-                  }
-                />
-                <ContextRow
-                  label="Value of 1%"
-                  value={
-                    ownershipPreview.data?.onePercentValueMinor
-                      ? formatGbpMinor(ownershipPreview.data.onePercentValueMinor)
-                      : "Unavailable"
-                  }
-                />
-                <ContextRow
-                  label="Price per Slice"
-                  value={
-                    ownershipPreview.data?.slicePriceMinor === undefined
-                      ? "Unavailable"
-                      : formatPricePerUnit(ownershipPreview.data.slicePriceMinor, "GBP")
-                  }
-                />
-              </div>
               <fieldset className="trading-input-mode">
-                <legend>Buy by</legend>
-                <div className="trading-side-tabs" role="tablist" aria-label="Order input mode">
+                <legend>Choose quantity</legend>
+                <div className="trading-input-mode__tabs" role="tablist" aria-label="Order input mode">
+                  <button
+                    type="button"
+                    className={inputMode === "SLICES" ? "is-active" : ""}
+                    onClick={() => setInputMode("SLICES")}
+                  >
+                    Slices
+                  </button>
                   <button
                     type="button"
                     className={inputMode === "PERCENTAGE" ? "is-active" : ""}
@@ -455,7 +453,37 @@ export function TradingOrderForm({
                   </button>
                 </div>
               </fieldset>
-              {inputMode === "PERCENTAGE" ? (
+              {inputMode === "SLICES" ? (
+                <>
+                  <label className="trading-field-label" htmlFor="trading-slice-quantity">
+                    {side === "BUY" ? "How many Slices would you like?" : "How many Slices would you like to sell?"}
+                  </label>
+                  <input
+                    id="trading-slice-quantity"
+                    value={sliceQuantity}
+                    onChange={(event) => setSliceQuantity(event.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    min="1"
+                    step="1"
+                    aria-describedby="trading-ownership-help"
+                    className="trading-input trading-slice-input"
+                  />
+                  <div className="trading-quick-row" aria-label="Choose a Slice quantity">
+                    {[1, 5, 10, 25].map((quantity) => (
+                      <button
+                        key={quantity}
+                        type="button"
+                        className={sliceQuantity === String(quantity) ? "is-selected" : ""}
+                        aria-pressed={sliceQuantity === String(quantity)}
+                        onClick={() => setSliceQuantity(String(quantity))}
+                      >
+                        {quantity}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : inputMode === "PERCENTAGE" ? (
                 <>
                   <label className="trading-field-label" htmlFor="trading-ownership-percent">
                     {side === "BUY"
@@ -496,12 +524,54 @@ export function TradingOrderForm({
                   </div>
                 </>
               )}
+              <PurchaseSummary
+                side={side}
+                isAuthenticated={isAuthenticated}
+                ownershipPreview={ownershipPreview.data}
+                orderPreview={livePreview.data}
+                currency="GBP"
+                loading={ownershipPreview.isFetching || livePreview.isFetching}
+                orderReady={Boolean(orderInput)}
+              />
+              <details className="trading-context-details">
+                <summary>View market context</summary>
+                <div className="trading-ownership-facts">
+                  {side === "BUY" && initialOfferingOpen ? (
+                    <ContextRow label="Channel" value="Initial offering" />
+                  ) : null}
+                  <ContextRow
+                    label="Slice market-implied value"
+                    value={
+                      ownershipPreview.data?.impliedWholeValueMinor
+                        ? formatGbpMinor(ownershipPreview.data.impliedWholeValueMinor)
+                        : "Unavailable"
+                    }
+                  />
+                  <ContextRow
+                    label="Available ownership"
+                    value={
+                      ownershipPreview.data
+                        ? formatAvailability(ownershipPreview.data.availableOwnershipPercent)
+                        : "Unavailable"
+                    }
+                  />
+                  <ContextRow
+                    label="Value of 1%"
+                    value={
+                      ownershipPreview.data?.onePercentValueMinor
+                        ? formatGbpMinor(ownershipPreview.data.onePercentValueMinor)
+                        : "Unavailable"
+                    }
+                  />
+                </div>
+              </details>
               <p id="trading-ownership-help" className="trading-field-help">
-                Valid increments are{" "}
-                {ownershipPreview.data?.ownershipIncrementPercent ?? "whole Slice"}%.
+                {inputMode === "SLICES"
+                  ? "Each Slice represents a defined fraction of this collectible."
+                  : `Valid increments are ${ownershipPreview.data?.ownershipIncrementPercent ?? "whole Slice"}%.`}{" "}
                 {side === "SELL" && ownershipPreview.data
-                  ? ` You currently own ${ownershipPreview.data.ownedOwnershipPercent}% (${ownershipPreview.data.ownedSlices} ownership units).`
-                  : " This is ownership of the whole collectible, not a percentage of your holdings."}
+                  ? `You currently own ${ownershipPreview.data.ownedOwnershipPercent}% (${ownershipPreview.data.ownedSlices} Slices).`
+                  : " Your ownership percentage is calculated from the Slice quantity."}
               </p>
               {ownershipPreview.data?.requestedSlices === null &&
                 ownershipPreview.data.lowerSnap &&
@@ -533,13 +603,13 @@ export function TradingOrderForm({
               <section className="trading-how-it-works">
                 <strong>How ownership works</strong>
                 <span>
-                  This collectible is divided into ownership units. Slice calculates the valid
-                  quantity and estimated order value from the live market.
+                  This collectible is divided into Slices. Slice calculates the valid quantity and
+                  estimated order value from the live market.
                 </span>
               </section>
               <p className="trading-field-help">
                 1. Choose your ownership&nbsp;&nbsp; 2. Review your order&nbsp;&nbsp; 3. Filled
-                ownership units appear in your Portfolio. Orders may remain open until matching
+                    Slices appear in your Portfolio. Orders may remain open until matching
                 liquidity is available.
               </p>
               <details className="trading-advanced-settings">
@@ -622,26 +692,22 @@ export function TradingOrderForm({
                   View requirement.
                 </button>
               )}
-              <Estimate
-                preview={livePreview.data}
-                ownershipPreview={ownershipPreview.data}
-                side={side}
-                loading={livePreview.isFetching || ownershipPreview.isFetching}
-                feePolicy={feePolicy.data}
-              />
+              <details className="trading-detailed-preview">
+                <summary>View full order calculation</summary>
+                <Estimate
+                  preview={livePreview.data}
+                  ownershipPreview={ownershipPreview.data}
+                  side={side}
+                  loading={livePreview.isFetching || ownershipPreview.isFetching}
+                  feePolicy={feePolicy.data}
+                />
+              </details>
               {side === "BUY" && ownershipPreview.data?.cashShortfallMinor && (
                 <p className="trading-error" role="alert">
                   You need approximately {formatGbpMinor(ownershipPreview.data.cashShortfallMinor)}{" "}
                   more available cash for this order.
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={!orderInput || livePreview.isFetching}
-                className="primary-action trading-submit"
-              >
-                Review {action.toLowerCase()} order
-              </button>
             </form>
           ) : (
             <section>
@@ -674,7 +740,7 @@ export function TradingOrderForm({
                           : "Unavailable"
                     }
                   />
-                  <Cell label="Ownership units" value={review.units} />
+                  <Cell label="Slices" value={review.units} />
                   <Cell label="Limit price" value={formatGbpMinor(review.limitPriceMinor)} />
                   <Cell label="Order value" value={formatGbpMinor(review.grossMinor)} />
                   <Cell
@@ -752,7 +818,7 @@ export function TradingOrderForm({
               <dl className="trading-context-list">
                 <ContextRow label="Available cash" value={formatGbpMinor(availableCash)} />
                 <ContextRow
-                  label="Ownership units already owned"
+                  label="Slices already owned"
                   value={settledOwned.toLocaleString("en-GB")}
                 />
                 <ContextRow
@@ -760,7 +826,7 @@ export function TradingOrderForm({
                   value={
                     !ownershipPreview.data
                       ? "Unavailable"
-                      : `${formatAvailability(ownershipPreview.data.availableOwnershipPercent)} (${ownershipPreview.data.availableSlices} units)`
+                      : `${formatAvailability(ownershipPreview.data.availableOwnershipPercent)} (${ownershipPreview.data.availableSlices} Slices)`
                   }
                 />
                 <ContextRow label="Minimum order" value="1 Slice" />
@@ -768,7 +834,7 @@ export function TradingOrderForm({
             ) : (
               <dl className="trading-context-list">
                 <ContextRow
-                  label="Ownership units owned"
+                  label="Slices owned"
                   value={settledOwned.toLocaleString("en-GB")}
                 />
                 <ContextRow
@@ -788,7 +854,7 @@ export function TradingOrderForm({
           </ContextCard>
           <ContextCard title="Market snapshot" icon={<BookOpen />}>
             <div className="trading-book-head">
-              <span>Ownership units</span>
+              <span>Slices</span>
               <span>Price</span>
             </div>
             <BookSide label="Asks" levels={orderBook.data?.asks.slice(0, 3)} tone="ask" />
@@ -825,6 +891,141 @@ export function TradingOrderForm({
   );
 }
 
+function PurchaseSummary({
+  side,
+  isAuthenticated,
+  ownershipPreview,
+  orderPreview,
+  currency,
+  loading,
+  orderReady,
+}: {
+  side: TradingOrderSide;
+  isAuthenticated: boolean;
+  ownershipPreview?: import("@/domain").OwnershipOrderPreview;
+  orderPreview?: TradingOrderPreview;
+  currency: "GBP" | "USD" | "CAD" | "EUR";
+  loading: boolean;
+  orderReady: boolean;
+}) {
+  const quantity = ownershipPreview?.requestedSlices;
+  const pricePerSlice =
+    orderPreview?.estimatedAveragePriceMinor ??
+    ownershipPreview?.estimatedAveragePriceMinor ??
+    ownershipPreview?.slicePriceMinor;
+  const gross = orderPreview?.grossMinor ?? ownershipPreview?.estimatedCostMinor;
+  const fee = orderPreview?.feeMinor ?? ownershipPreview?.feeMinor;
+  const buyTotal =
+    orderPreview?.reservationMinor ?? ownershipPreview?.estimatedReservationMinor ?? null;
+  const sellNet =
+    gross === null || gross === undefined || fee === null || fee === undefined
+      ? null
+      : (BigInt(gross) - BigInt(fee)).toString();
+  const finalValue = side === "BUY" ? buyTotal : sellNet;
+  const formatValue = (value: string | null | undefined) =>
+    value === null || value === undefined
+      ? loading
+        ? "Checking…"
+        : "—"
+      : formatGbpMinor(value);
+  const formatSlices = (value: string | null | undefined) =>
+    value === null || value === undefined
+      ? "— Slices"
+      : `${BigInt(value).toLocaleString("en-GB")} Slices`;
+  const ownershipRequested = ownershipPreview?.requestedOwnershipPercent;
+  const ownershipAfter =
+    side === "BUY"
+      ? ownershipPreview?.resultingOwnershipPercent
+      : ownershipPreview?.remainingOwnershipPercent;
+
+  return (
+    <section
+      className="trading-purchase-summary"
+      aria-label={`${side === "BUY" ? "Buy" : "Sell"} Slice summary`}
+      aria-busy={loading}
+    >
+      <div className="trading-purchase-summary__topline">
+        <div>
+          <span>Price per Slice</span>
+          <strong>
+            {pricePerSlice === null || pricePerSlice === undefined
+              ? loading
+                ? "Checking…"
+                : "Unavailable"
+              : formatPricePerUnit(pricePerSlice, currency)}
+          </strong>
+        </div>
+        <div>
+          <span>Slices available</span>
+          <strong>
+            {ownershipPreview?.availableSlices
+              ? formatSlices(ownershipPreview.availableSlices)
+              : loading
+                ? "Checking…"
+                : "Unavailable"}
+          </strong>
+        </div>
+      </div>
+
+      <div className="trading-purchase-summary__selection">
+        <div>
+          <span>{side === "BUY" ? "You’re buying" : "You’re selling"}</span>
+          <strong>{formatSlices(quantity)}</strong>
+        </div>
+        <div>
+          <span>{side === "BUY" ? "Total cost" : "Net proceeds"}</span>
+          <strong>{formatValue(finalValue)}</strong>
+        </div>
+      </div>
+
+      <dl className="trading-purchase-summary__economics">
+        <div>
+          <dt>{side === "BUY" ? "Order value" : "Gross proceeds"}</dt>
+          <dd>{formatValue(gross)}</dd>
+        </div>
+        <div>
+          <dt>Trading fee</dt>
+          <dd>{formatValue(fee)}</dd>
+        </div>
+        <div className="is-total">
+          <dt>{side === "BUY" ? "Final total" : "Net proceeds"}</dt>
+          <dd>{formatValue(finalValue)}</dd>
+        </div>
+      </dl>
+
+      <div className="trading-purchase-summary__ownership">
+        <div>
+          <span>{side === "BUY" ? "Ownership acquired" : "Ownership sold"}</span>
+          <strong>{ownershipRequested ? `${ownershipRequested}%` : "—"}</strong>
+        </div>
+        <div>
+          <span>{side === "BUY" ? "Your ownership after purchase" : "Remaining ownership"}</span>
+          <strong>{ownershipAfter ? `${ownershipAfter}%` : "—"}</strong>
+        </div>
+        <div>
+          <span>Current ownership</span>
+          <strong>
+            {isAuthenticated && ownershipPreview
+              ? `${ownershipPreview.ownedOwnershipPercent}%`
+              : "Sign in to see"}
+          </strong>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || (isAuthenticated && !orderReady)}
+        className="primary-action trading-submit"
+      >
+        {isAuthenticated
+          ? `Review ${side === "BUY" ? "buy" : "sell"} order`
+          : `Sign in to ${side === "BUY" ? "buy" : "sell"}`}
+        <ArrowRight aria-hidden="true" />
+      </button>
+    </section>
+  );
+}
+
 function Estimate({
   preview,
   ownershipPreview,
@@ -855,7 +1056,7 @@ function Estimate({
           }
         />
         <ContextRow
-          label="Ownership units"
+          label="Slices"
           value={ownershipPreview?.requestedSlices ?? preview?.units ?? "—"}
         />
         <ContextRow

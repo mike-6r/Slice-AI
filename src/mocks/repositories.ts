@@ -983,6 +983,9 @@ export const mockRepositories: AppRepositories = {
           input.side === "BUY" ? String(Math.max(0, 100 - slices)) : null,
       };
     },
+    async previewPublicOwnershipOrder(input) {
+      return this.previewOwnershipOrder(input);
+    },
     async previewOrder(input) {
       const orderPreview = preview(
         input.assetId as AssetId,

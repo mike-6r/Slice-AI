@@ -14,7 +14,7 @@ export type HomepageShowcaseAsset = Readonly<{
   grade: string;
   image: string;
   displayPrice: string;
-  displaySharePrice: string;
+  displaySlicePrice: string;
   displayMovement: string;
   displayAvailability: string;
   movementTone: "positive" | "negative";
@@ -26,25 +26,29 @@ export type HomepageShowcaseAsset = Readonly<{
 export type ShowcaseDestination =
   Readonly<{ kind: "asset"; id: string }> | Readonly<{ kind: "marketplace"; to: "/marketplace" }>;
 
-// PriceCharting PSA 10 guide: $343,098 USD converted at $1 = £0.7524.
-export const HOMEPAGE_FEATURED_PSA10_VALUE_GBP = "£258,146.94";
+// PriceCharting PSA 10 guide. Keep this external reference in its source currency.
+export const HOMEPAGE_FEATURED_PSA10_VALUE_USD = "$343,098.00 USD";
 
 /**
  * Homepage-owned example terms used to explain the Slice experience. These
  * values are intentionally kept separate from authoritative asset data.
  */
 export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
-  referenceValue: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
-  collectibleValue: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
-  totalShares: "195 shares",
-  totalSharesCount: 195,
-  availableShares: "62 shares",
-  sharePrice: "£10.00",
-  exampleShares: "25 shares",
-  exampleInvestment: "£250",
-  exampleOwnership: "12.82%",
-  availableOwnership: "31.8%",
-  minimumPurchase: "Illustrative · 1 share · £10",
+  externalReferenceValue: HOMEPAGE_FEATURED_PSA10_VALUE_USD,
+  illustrativeValuation: "£10,000.00",
+  totalSlices: "1,000 Slices",
+  totalSlicesCount: 1000,
+  availableSlices: "1,000 Slices",
+  slicePrice: "£10.00",
+  slicePriceGbp: 10,
+  exampleSlices: "25 Slices",
+  exampleInvestment: "£250.00",
+  exampleOwnership: "2.50%",
+  exampleSellSlices: "5 Slices",
+  exampleSellProceeds: "£50.00",
+  remainingSlices: "20 Slices",
+  remainingOwnership: "2.00%",
+  minimumPurchase: "Illustrative · 1 Slice · £10",
 } as const;
 
 const catalogue: readonly HomepageShowcaseAsset[] = [
@@ -56,8 +60,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: umbreonImage,
     displayPrice: "£1,950",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "32.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-umbreon-vmax-moonbreon",
@@ -71,8 +75,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: pikachuImage,
     displayPrice: "US$470",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "41.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-pikachu-grey-felt-hat",
@@ -86,8 +90,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: charizardImage,
     displayPrice: "US$399.99",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "52.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-charizard-ex-obsidian-flames",
@@ -101,8 +105,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "BGS 9.5 · Mint",
     image: wembanyamaImage,
     displayPrice: "US$215",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "60.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-victor-wembanyama-prizm-rookie",
@@ -116,8 +120,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: bedardImage,
     displayPrice: "CA$750",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "47.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-connor-bedard-young-guns",
@@ -131,8 +135,8 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: stroudImage,
     displayPrice: "US$550",
-    displaySharePrice: "Illustrative from £10 / share",
-    displayMovement: "Market pulse",
+    displaySlicePrice: "Illustrative from £10 / Slice",
+    displayMovement: "Reference example",
     displayAvailability: "38.0%",
     movementTone: "positive",
     realAssetId: "slice-demo-cj-stroud-purple-pulsar-rookie",
@@ -151,10 +155,10 @@ export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
   title: "1999 Base Set 1st Edition Charizard",
   grade: "PSA 10 · Gem Mint",
   image: charizardBaseSetImage,
-  displayPrice: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
-  displaySharePrice: "From £10 / Slice",
-  displayMovement: "PriceCharting guide",
-  displayAvailability: "0%",
+  displayPrice: HOMEPAGE_FEATURED_PSA10_VALUE_USD,
+  displaySlicePrice: "£10 / Slice",
+  displayMovement: "External reference",
+  displayAvailability: "100%",
   realAssetId: "slice-demo-charizard-base-set-1st-edition",
   staticExample: true,
 };
@@ -163,23 +167,23 @@ export const HOMEPAGE_TRENDING_ASSETS = catalogue;
 export const HOMEPAGE_MARKET_METRICS = [
   {
     label: "Market value",
-    value: HOMEPAGE_FEATURED_PSA10_VALUE_GBP,
-    detail: "PriceCharting PSA 10 guide · GBP converted",
+    value: HOMEPAGE_FEATURED_PSA10_VALUE_USD,
+    detail: "External PriceCharting PSA 10 guide · USD",
     tone: "positive",
   },
   {
-    label: "Share price",
-    value: "£10.00",
-    detail: "Illustrative ownership unit",
+    label: "Slice valuation",
+    value: HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation,
+    detail: "Illustrative Slice offering · 1,000 Slices",
     tone: "positive",
   },
   {
-    label: "Available",
-    value: "32.0%",
-    detail: "Illustrative share availability",
+    label: "Price per Slice",
+    value: HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice,
+    detail: "Illustrative offering terms",
     tone: "positive",
   },
-  { label: "Minimum", value: "£10", detail: "Illustrative 1-share minimum", tone: "positive" },
+  { label: "Example buy", value: "£250", detail: "25 Slices · 2.50% ownership", tone: "positive" },
   {
     label: "Card images",
     value: "6 cards",
@@ -191,8 +195,8 @@ export const HOMEPAGE_MARKET_METRICS = [
 export const HOMEPAGE_MARKET_TICKER = catalogue.map((asset) => ({
   symbol: asset.symbol,
   value: asset.displayPrice,
-  movement: "Market pulse",
-  tone: "positive" as const,
+  movement: "Reference example",
+  tone: "neutral" as const,
 }));
 
 export const HOMEPAGE_MARKET_MOVERS = {
@@ -207,9 +211,9 @@ export const HOMEPAGE_ALLOCATION = [
 ] as const;
 
 export const HOMEPAGE_PORTFOLIO_EXAMPLE = [
-  { label: "Umbreon VMAX", shares: "25 shares", ownership: "5.8%" },
-  { label: "Wembanyama Rookie", shares: "10 shares", ownership: "1.0%" },
-  { label: "Bedard Young Guns", shares: "15 shares", ownership: "1.5%" },
+  { label: "Umbreon VMAX", slices: "25 Slices", ownership: "5.8%" },
+  { label: "Wembanyama Rookie", slices: "10 Slices", ownership: "1.0%" },
+  { label: "Bedard Young Guns", slices: "15 Slices", ownership: "1.5%" },
 ] as const;
 
 export function showcaseDestination(asset: HomepageShowcaseAsset): ShowcaseDestination {

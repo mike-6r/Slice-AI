@@ -83,6 +83,7 @@ export interface TradingOrderPreview {
 export type OwnershipPreviewInput = {
   assetId: string;
   side: TradingOrderSide;
+  desiredSlices?: string;
   desiredOwnershipPercent?: string;
   desiredAmountMinor?: string;
   limitPriceMinor?: string;

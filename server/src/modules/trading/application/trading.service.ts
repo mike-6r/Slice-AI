@@ -60,6 +60,7 @@ type OrderInput = {
 type OwnershipPreviewInput = {
   assetId: string;
   side: 'BUY' | 'SELL';
+  desiredSlices?: string;
   desiredOwnershipPercent?: string;
   desiredAmountMinor?: string;
   limitPriceMinor?: string;
@@ -143,7 +144,7 @@ export class TradingService {
    * ownership units and projects executable liquidity without creating an
    * order. The place() path still revalidates every value at reservation time.
    */
-  async previewOwnership(actor: Actor, input: OwnershipPreviewInput) {
+  async previewOwnership(actor: Actor | null, input: OwnershipPreviewInput) {
     const assetId = await this.resolveAssetId(input.assetId);
     const market = await this.marketForInput(assetId);
     const supply = await this.db.ownershipAssetSupply.findUnique({
@@ -165,11 +166,15 @@ export class TradingService {
         where: { assetId },
         select: { status: true, pricePerUnitMinor: true },
       }),
-      this.db.ownershipAccount.findUnique({ where: { userId: actor.userId } }),
-      this.db.financialAccount.findFirst({
-        where: { ownerType: 'USER', ownerUserId: actor.userId, code: 'CASH_AVAILABLE', currency: 'GBP' },
-        include: { balance: true },
-      }),
+      actor
+        ? this.db.ownershipAccount.findUnique({ where: { userId: actor.userId } })
+        : Promise.resolve(null),
+      actor
+        ? this.db.financialAccount.findFirst({
+            where: { ownerType: 'USER', ownerUserId: actor.userId, code: 'CASH_AVAILABLE', currency: 'GBP' },
+            include: { balance: true },
+          })
+        : Promise.resolve(null),
     ]);
     const position = account
       ? await this.db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId, accountId: account.id } } })
@@ -190,12 +195,15 @@ export class TradingService {
     const requestedSlicesFromAmount = input.desiredAmountMinor
       ? unitsForBudget(levels, BigInt(input.desiredAmountMinor), limitPrice, marketPrice)
       : null;
+    const requestedSlicesFromQuantity = input.desiredSlices ? BigInt(input.desiredSlices) : null;
     const requestedBps = input.desiredOwnershipPercent ? parseOwnershipBps(input.desiredOwnershipPercent) : null;
     const numerator = requestedBps === null ? 0n : requestedBps * total;
     const lowerSlices = numerator / 10_000n;
     const exact = numerator % 10_000n === 0n;
     const upperSlices = exact ? lowerSlices : lowerSlices + 1n;
-    const requestedSlices = requestedSlicesFromAmount !== null
+    const requestedSlices = requestedSlicesFromQuantity !== null
+      ? requestedSlicesFromQuantity
+      : requestedSlicesFromAmount !== null
       ? requestedSlicesFromAmount
       : exact ? lowerSlices : null;
     const requestedOwnershipPercent = requestedSlices !== null
@@ -260,11 +268,15 @@ export class TradingService {
       openSlices: open.toString(),
       bestMarketPriceMinor: bestBookPrice?.toString() ?? null,
       worstExpectedPriceMinor: executable.worst?.toString() ?? null,
-      lowerSnap: { slices: lowerSlices.toString(), ownershipPercent: formatOwnershipPercent(lowerSlices, total) },
-      upperSnap: exact ? null : { slices: upperSlices.toString(), ownershipPercent: formatOwnershipPercent(upperSlices, total) },
+      lowerSnap: input.desiredSlices
+        ? null
+        : { slices: lowerSlices.toString(), ownershipPercent: formatOwnershipPercent(lowerSlices, total) },
+      upperSnap: input.desiredSlices || exact
+        ? null
+        : { slices: upperSlices.toString(), ownershipPercent: formatOwnershipPercent(upperSlices, total) },
       hasImmediateLiquidity: executable.units > 0n,
       marketStatus: market.status,
-      eligibility: actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
+      eligibility: actor === null || actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
       availableCashMinor: cashTotal?.toString() ?? null,
       cashShortfallMinor:
         input.side === 'BUY' && cashTotal !== null && grossAtLimit !== null && fee !== null && grossAtLimit + fee > cashTotal
@@ -2126,7 +2138,7 @@ export class TradingService {
   }
   private async resolveAssetId(value: string) {
     const asset = await this.db.asset.findFirst({
-      where: { OR: [{ id: value }, { publicId: value }] },
+      where: { OR: [{ id: value }, { publicId: value }, { slug: value }] },
       select: { id: true },
     });
     if (!asset)

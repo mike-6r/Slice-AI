@@ -4155,6 +4155,14 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           }),
         );
       },
+      async previewPublicOwnershipOrder(input) {
+        return mapOwnershipPreview(
+          await client.request<unknown>(
+            `/market/assets/${encodeURIComponent(input.assetId)}/ownership/preview`,
+            { method: "POST", body: input },
+          ),
+        );
+      },
       async placeOrder(input) {
         return mapTradingOrder(
           await client.request<unknown>("/trading/orders", {
