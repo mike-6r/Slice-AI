@@ -36360,6 +36360,27 @@ html,
    carries the generated `bg-surface/60` utility, which lets scrolled content
    show through it even though the parent navigation is sticky. */
 @media (max-width: 1279px) {
+  .main-navigation {
+    position: sticky;
+    top: 0;
+    overflow: visible;
+    isolation: isolate;
+  }
+  .main-navigation::before {
+    position: absolute;
+    top: -6rem;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 0;
+    background: #08090c;
+    content: "";
+    pointer-events: none;
+  }
+  .main-navigation > * {
+    position: relative;
+    z-index: 1;
+  }
   .main-navigation,
   .main-navigation .market-tape,
   .main-navigation .market-tape__shell,
