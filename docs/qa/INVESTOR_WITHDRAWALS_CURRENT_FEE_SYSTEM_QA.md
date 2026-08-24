@@ -157,6 +157,18 @@ this task. A real Stripe Sandbox investor payout should be marked BLOCKED, not
 passed, if the disposable fixture lacks an approved Connect account or Stripe
 cannot produce the provider state transition/webhook needed for final payout.
 
+Deployment verification for this pass:
+
+- Git commit: `984457f75b6fb89db4c8eb75f3a621b360c97559`.
+- Active release: `/opt/slice/releases/984457f75b6fb89db4c8eb75f3a621b360c97559`.
+- `slice-api`, `slice-web`, and `slice-discord-worker`: active.
+- `/health`: PASS; `/ready`: PASS with PostgreSQL and Redis up.
+- Prisma deployment: PASS; no pending migrations.
+- Public staging `/api/v1/fees`: PASS and returned the policy above.
+- Public staging `/`: HTTP 200.
+- No controlled asset, offering, ownership, order, trade, or treasury state
+  was mutated during deployment or verification.
+
 ## Remaining launch blockers
 
 - A disposable, non-Collector Stripe Sandbox investor fixture must complete
