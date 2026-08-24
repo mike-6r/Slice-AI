@@ -50528,11 +50528,11 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
     grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 16px;
     height: auto;
-    min-height: 390px;
+    min-height: 430px;
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid > * {
     height: auto;
-    min-height: 390px;
+    min-height: 430px;
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-price-panel {
     grid-column: span 5;
