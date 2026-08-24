@@ -36355,3 +36355,16 @@ html,
   .asset-detail-page .asset-similar-grid { scroll-behavior: auto; }
   .asset-detail-page .asset-similar-card--skeleton { animation: none; }
 }
+
+/* Mobile chrome must be a continuous, opaque stacking surface. The ticker
+   carries the generated `bg-surface/60` utility, which lets scrolled content
+   show through it even though the parent navigation is sticky. */
+@media (max-width: 1279px) {
+  .main-navigation,
+  .main-navigation .market-tape,
+  .main-navigation .market-tape__shell,
+  .main-navigation > .site-shell {
+    background-color: #08090c;
+    background-image: none;
+  }
+}
