@@ -191,8 +191,11 @@ export function PriceChart({
   ];
   const activePoint = activeIndex === null ? null : pointsData[activeIndex];
   const activeCoordinates = activeIndex === null ? null : points[activeIndex];
-  const activeTooltipPlacement =
-    activeCoordinates && activeCoordinates[1] / height < 0.32 ? "below" : "above";
+  // Keep the tooltip inside the chart stage. Near the top or bottom, following
+  // the point exactly would push the panel into the header or stats row.
+  const activeTooltipTop = activeCoordinates
+    ? Math.max(38, Math.min(62, (activeCoordinates[1] / height) * 100))
+    : 50;
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
@@ -299,12 +302,12 @@ export function PriceChart({
       ) : null}
       {activePoint && activeCoordinates ? (
         <div
-          className={`price-chart__tooltip price-chart__tooltip--${activeTooltipPlacement}`}
+          className="price-chart__tooltip"
           style={{
             left: `${Math.max(10, Math.min(90, (activeCoordinates[0] / width) * 100))}%`,
-            top: `${activeTooltipPlacement === "below" ? Math.min(90, (activeCoordinates[1] / height) * 100 + 8) : Math.max(8, (activeCoordinates[1] / height) * 100 - 8)}%`,
+            top: `${activeTooltipTop}%`,
           }}
-          data-placement={activeTooltipPlacement}
+          data-placement="contained"
           role="status"
           aria-live="polite"
         >
