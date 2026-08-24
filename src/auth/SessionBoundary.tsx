@@ -89,7 +89,7 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
 
   const protectedRoute =
     isClient &&
-    /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|buy|sell|watchlist)(\/|$)/.test(
+    /^\/(admin|account|dashboard|portfolio|orders|wallet|list|onboarding|collector-workspace|operations|submissions|watchlist)(\/|$)/.test(
       window.location.pathname,
     );
   const needsRestoreScreen =
