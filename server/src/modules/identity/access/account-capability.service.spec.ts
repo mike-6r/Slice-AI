@@ -170,12 +170,16 @@ describe('AccountCapabilityService', () => {
         },
       }),
     );
-    await expect(service.evaluate('user-1', 'DEPOSIT_FUNDS')).resolves.toMatchObject({
+    await expect(
+      service.evaluate('user-1', 'DEPOSIT_FUNDS'),
+    ).resolves.toMatchObject({
       allowed: false,
       status: 'TEMPORARILY_UNAVAILABLE',
       reason: 'DEPOSITS_UNAVAILABLE',
     });
-    await expect(service.evaluate('user-1', 'WITHDRAW_FUNDS')).resolves.toMatchObject({
+    await expect(
+      service.evaluate('user-1', 'WITHDRAW_FUNDS'),
+    ).resolves.toMatchObject({
       allowed: false,
       status: 'TEMPORARILY_UNAVAILABLE',
       reason: 'WITHDRAWALS_UNAVAILABLE',
@@ -196,15 +200,24 @@ describe('AccountCapabilityService', () => {
         },
       }),
     );
-    await expect(service.evaluate('user-1', 'DEPOSIT_FUNDS')).resolves.toMatchObject({
+    await expect(
+      service.evaluate('user-1', 'DEPOSIT_FUNDS'),
+    ).resolves.toMatchObject({
       allowed: false,
       reason: 'BANK_ACCOUNT_REQUIRED',
-      requirements: expect.arrayContaining([{ type: 'BANK_ACCOUNT', satisfied: false }]),
+      requirements: expect.arrayContaining([
+        { type: 'BANK_ACCOUNT', satisfied: false },
+      ]),
     });
-    await expect(service.evaluate('user-1', 'WITHDRAW_FUNDS')).resolves.toMatchObject({
+    await expect(
+      service.evaluate('user-1', 'WITHDRAW_FUNDS'),
+    ).resolves.toMatchObject({
       allowed: false,
-      reason: 'WITHDRAWALS_UNAVAILABLE',
-      requirements: expect.arrayContaining([{ type: 'PROVIDER_AVAILABILITY', satisfied: false }]),
+      status: 'BLOCKED',
+      reason: 'COLLECTOR_PAYOUTS_REQUIRED',
+      requirements: expect.arrayContaining([
+        { type: 'PROVIDER_AVAILABILITY', satisfied: false },
+      ]),
     });
   });
 
@@ -222,11 +235,15 @@ describe('AccountCapabilityService', () => {
         },
       }),
     );
-    await expect(service.evaluate('user-1', 'PLACE_BUY_ORDER')).resolves.toMatchObject({
+    await expect(
+      service.evaluate('user-1', 'PLACE_BUY_ORDER'),
+    ).resolves.toMatchObject({
       allowed: false,
       status: 'ACTION_REQUIRED',
       reason: 'COMPLIANCE_REVIEW_REQUIRED',
-      requirements: expect.arrayContaining([{ type: 'IDENTITY_VERIFICATION', satisfied: false }]),
+      requirements: expect.arrayContaining([
+        { type: 'IDENTITY_VERIFICATION', satisfied: false },
+      ]),
     });
   });
 

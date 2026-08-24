@@ -46,6 +46,7 @@ export type AccountCapabilityReason =
   | "BANK_ACCOUNT_REQUIRED"
   | "PAYOUT_ACCOUNT_REQUIRED"
   | "PAYOUT_ACCOUNT_REVIEW_REQUIRED"
+  | "COLLECTOR_PAYOUTS_REQUIRED"
   | "TRADING_UNAVAILABLE"
   | "DEPOSITS_UNAVAILABLE"
   | "WITHDRAWALS_UNAVAILABLE"
@@ -56,10 +57,7 @@ export type AccountCapabilityReason =
   | "FEATURE_DISABLED";
 
 export type AccountCapabilityStatus =
-  | "AVAILABLE"
-  | "ACTION_REQUIRED"
-  | "TEMPORARILY_UNAVAILABLE"
-  | "BLOCKED";
+  "AVAILABLE" | "ACTION_REQUIRED" | "TEMPORARILY_UNAVAILABLE" | "BLOCKED";
 
 export interface AccountCapability {
   capability: AccountCapabilityName;

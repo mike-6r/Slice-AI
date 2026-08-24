@@ -64,7 +64,6 @@ export function Wallet() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useSession();
   const [amount, setAmount] = useState("");
-  const [destination, setDestination] = useState("");
   const [action, setAction] = useState<WalletMovementType>("DEPOSIT");
   const [movementFilter, setMovementFilter] = useState<WalletMovementFilter>("ALL");
   const [capabilityDialog, setCapabilityDialog] = useState<AccountCapability | null>(null);
@@ -139,12 +138,10 @@ export function Wallet() {
         ? services.providers.createDeposit(amountMinor)
         : services.providers.createWithdrawal({
             amountMinor,
-            destinationReference: destination.trim() || undefined,
           });
     },
     onSuccess: (result) => {
       setAmount("");
-      setDestination("");
       refreshWallet();
       toast.success(`${result.type === "DEPOSIT" ? "Deposit" : "Withdrawal"} request created.`);
     },
@@ -167,8 +164,6 @@ export function Wallet() {
             setAction={setAction}
             amount={amount}
             setAmount={setAmount}
-            destination={destination}
-            setDestination={setDestination}
             compliance={compliance}
             banks={banks}
             movement={movement}
@@ -513,8 +508,6 @@ function MoveMoneyPanel({
   setAction,
   amount,
   setAmount,
-  destination,
-  setDestination,
   compliance,
   banks,
   movement,
@@ -525,8 +518,6 @@ function MoveMoneyPanel({
   setAction: (value: WalletMovementType) => void;
   amount: string;
   setAmount: (value: string) => void;
-  destination: string;
-  setDestination: (value: string) => void;
   compliance: UseQueryResult<ComplianceSummary>;
   banks: UseQueryResult<BankConnection[]>;
   movement: ReturnType<typeof useMutation<WalletMovementView, Error, void>>;
@@ -601,14 +592,11 @@ function MoveMoneyPanel({
             />
           </label>
           {action === "WITHDRAWAL" ? (
-            <label>
-              Destination reference
-              <input
-                value={destination}
-                onChange={(event) => setDestination(event.target.value)}
-                placeholder="Enter a permitted destination"
-              />
-            </label>
+            <p>
+              Withdrawals use your verified collector payout account. Slice does not collect bank
+              details in this form, and settled cash remains reserved until the provider confirms
+              the payout.
+            </p>
           ) : (
             <p>
               Bacs deposits remain pending until Stripe confirms settlement. They never add
@@ -651,6 +639,8 @@ function capabilityInlineReason(capability: AccountCapability) {
       return "Complete payout setup before withdrawing collector proceeds.";
     case "PAYOUT_ACCOUNT_REVIEW_REQUIRED":
       return "Payout setup is still under review.";
+    case "COLLECTOR_PAYOUTS_REQUIRED":
+      return "Withdrawals are currently supported for collector proceeds only.";
     case "DEPOSITS_UNAVAILABLE":
       return "Deposits are temporarily unavailable in this environment.";
     case "WITHDRAWALS_UNAVAILABLE":

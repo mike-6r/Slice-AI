@@ -25,9 +25,24 @@ import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { movementSettledEvent } from '../../outbox/domain/domain-event';
 import { accountAuthority } from '../../finance/domain/journal';
 import { BankConnectionService } from './external-provider-boundaries';
-import { ConnectPayoutExternalTransferError, StripeConnectPayoutService } from './stripe-connect-payout.service';
+import {
+  ConnectPayoutExternalTransferError,
+  StripeConnectPayoutService,
+} from './stripe-connect-payout.service';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
+
+/**
+ * Destination screening belongs to the local destination-based provider
+ * adapter. Stripe withdrawals are bank payouts to a verified Connect account;
+ * Stripe's connected-account requirements and Slice's compliance gates are the
+ * authoritative controls for that destination.
+ */
+export function requiresDestinationScreening(
+  providerMode: AppConfig['providerMode'],
+) {
+  return providerMode === 'local';
+}
 
 export function calculateWithdrawalVelocity(
   movements: ReadonlyArray<{ amountMinor: bigint; createdAt: Date }>,
@@ -96,11 +111,18 @@ export class WalletMovementService {
   ) {
     await this.capabilities?.require(actor, 'WITHDRAW_FUNDS');
     this.recentAuth.require(actor);
-    const screening = await this.screening.screen({
-      address: destinationReference,
-      currency: 'GBP',
-      chain: destinationChain,
-    });
+    // Stripe-mode withdrawals use the verified Connect account as the payout
+    // destination. The blockchain adapter is only valid for the local
+    // destination-based provider path; sending a bank payout through it
+    // requires a blockchain chain and can reject an otherwise valid payout
+    // before the Connect lifecycle starts.
+    const screening = requiresDestinationScreening(this.config.providerMode)
+      ? await this.screening.screen({
+          address: destinationReference,
+          currency: 'GBP',
+          chain: destinationChain,
+        })
+      : { decision: 'ALLOW' as const };
     if (screening.decision !== 'ALLOW') {
       await this.db.$transaction(async (db) => {
         await db.complianceHold.create({
@@ -196,7 +218,8 @@ export class WalletMovementService {
             },
           },
         });
-        if (existingBeforeLock) return { movement: existingBeforeLock, reused: true };
+        if (existingBeforeLock)
+          return { movement: existingBeforeLock, reused: true };
         await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`}))`;
       }
       const existingAfterLock = await db.moneyMovement.findUnique({
@@ -208,8 +231,10 @@ export class WalletMovementService {
           },
         },
       });
-      if (existingAfterLock) return { movement: existingAfterLock, reused: true };
-      if (type === 'WITHDRAWAL') await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
+      if (existingAfterLock)
+        return { movement: existingAfterLock, reused: true };
+      if (type === 'WITHDRAWAL')
+        await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
@@ -220,24 +245,28 @@ export class WalletMovementService {
         },
         include: { balance: true },
       });
-      const hasSufficientAvailable = (account: (typeof cashAccounts)[number]) => {
+      const hasSufficientAvailable = (
+        account: (typeof cashAccounts)[number],
+      ) => {
         const balance = account.balance;
         if (!balance) return false;
         const authority = balance.postedCreditMinor - balance.postedDebitMinor;
         return authority - balance.reservedMinor >= amountMinor;
       };
-      const cash = type === 'WITHDRAWAL'
-        ? cashAccounts.find(
-            (account) =>
-              account.code === 'COLLECTOR_PROCEEDS_AVAILABLE' &&
-              hasSufficientAvailable(account),
-          ) ??
-          cashAccounts.find(
-            (account) =>
-              account.code === 'CASH_AVAILABLE' &&
-              hasSufficientAvailable(account),
-          ) ?? cashAccounts.find((account) => account.code === 'CASH_AVAILABLE')
-        : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
+      const cash =
+        type === 'WITHDRAWAL'
+          ? (cashAccounts.find(
+              (account) =>
+                account.code === 'COLLECTOR_PROCEEDS_AVAILABLE' &&
+                hasSufficientAvailable(account),
+            ) ??
+            cashAccounts.find(
+              (account) =>
+                account.code === 'CASH_AVAILABLE' &&
+                hasSufficientAvailable(account),
+            ) ??
+            cashAccounts.find((account) => account.code === 'CASH_AVAILABLE'))
+          : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
       if (!cash)
         throw new NotFoundException({
           code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
@@ -331,46 +360,113 @@ export class WalletMovementService {
       });
     });
     if (type === 'DEPOSIT' && this.config.providerMode !== 'local') {
-      if (!this.bankLinks) throw new ConflictException({ code: 'STRIPE_PROVIDER_UNAVAILABLE', message: 'Bank funding is not configured.' });
+      if (!this.bankLinks)
+        throw new ConflictException({
+          code: 'STRIPE_PROVIDER_UNAVAILABLE',
+          message: 'Bank funding is not configured.',
+        });
       try {
-        const external = await this.bankLinks.createDepositPayment({ userId: actor.userId, movementId: movement.id, amountMinor: amountText });
+        const external = await this.bankLinks.createDepositPayment({
+          userId: actor.userId,
+          movementId: movement.id,
+          amountMinor: amountText,
+        });
         const providerHash = this.crypto.hash(external.providerReference);
         await this.db.$transaction(async (db) => {
-          const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
-          await db.moneyMovement.update({ where: { id: movement.id }, data: {
-            externalAccountId: external.externalAccountId,
-            status: external.status,
-            providerReferenceCiphertext: this.crypto.encrypt(external.providerReference, `movement:${movement.id}`),
-            providerReferenceHash: providerHash,
-            encryptionKeyVersion: this.crypto.keyVersion,
-            failureCode: external.failureCode ?? null,
-            version: { increment: 1 },
-          } });
-          await db.moneyMovementHistory.create({ data: { id: randomUUID(), movementId: movement.id, fromStatus: current.status, toStatus: external.status, reasonCode: 'STRIPE_PAYMENT_INTENT_CREATED' } });
+          const current = await db.moneyMovement.findUniqueOrThrow({
+            where: { id: movement.id },
+          });
+          await db.moneyMovement.update({
+            where: { id: movement.id },
+            data: {
+              externalAccountId: external.externalAccountId,
+              status: external.status,
+              providerReferenceCiphertext: this.crypto.encrypt(
+                external.providerReference,
+                `movement:${movement.id}`,
+              ),
+              providerReferenceHash: providerHash,
+              encryptionKeyVersion: this.crypto.keyVersion,
+              failureCode: external.failureCode ?? null,
+              version: { increment: 1 },
+            },
+          });
+          await db.moneyMovementHistory.create({
+            data: {
+              id: randomUUID(),
+              movementId: movement.id,
+              fromStatus: current.status,
+              toStatus: external.status,
+              reasonCode: 'STRIPE_PAYMENT_INTENT_CREATED',
+            },
+          });
         });
       } catch (error) {
-        await this.failFromProvider({ movementId: movement.id, reasonCode: error instanceof Error ? error.message.slice(0, 64) : 'STRIPE_PROVIDER_ERROR', requestId });
+        await this.failFromProvider({
+          movementId: movement.id,
+          reasonCode:
+            error instanceof Error
+              ? error.message.slice(0, 64)
+              : 'STRIPE_PROVIDER_ERROR',
+          requestId,
+        });
         throw error;
       }
     }
     if (type === 'WITHDRAWAL' && this.config.providerMode !== 'local') {
-      const cashAccount = await this.db.financialAccount.findUnique({ where: { id: movement.cashAccountId }, select: { code: true } });
+      const cashAccount = await this.db.financialAccount.findUnique({
+        where: { id: movement.cashAccountId },
+        select: { code: true },
+      });
       if (cashAccount?.code !== 'COLLECTOR_PROCEEDS_AVAILABLE') {
-        await this.failFromProvider({ movementId: movement.id, reasonCode: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED', requestId });
-        throw new ConflictException({ code: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED', message: 'External withdrawals are currently available for collector proceeds only.' });
+        await this.failFromProvider({
+          movementId: movement.id,
+          reasonCode: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED',
+          requestId,
+        });
+        throw new ConflictException({
+          code: 'EXTERNAL_WITHDRAWAL_NOT_CONFIGURED',
+          message:
+            'External withdrawals are currently available for collector proceeds only.',
+        });
       }
       if (!this.connectPayouts) {
-        await this.failFromProvider({ movementId: movement.id, reasonCode: 'STRIPE_CONNECT_UNAVAILABLE', requestId });
-        throw new ConflictException({ code: 'STRIPE_CONNECT_UNAVAILABLE', message: 'Collector payouts are not configured.' });
+        await this.failFromProvider({
+          movementId: movement.id,
+          reasonCode: 'STRIPE_CONNECT_UNAVAILABLE',
+          requestId,
+        });
+        throw new ConflictException({
+          code: 'STRIPE_CONNECT_UNAVAILABLE',
+          message: 'Collector payouts are not configured.',
+        });
       }
       try {
-        await this.connectPayouts.createPayout({ userId: actor.userId, movementId: movement.id, amountMinor: amountText });
-        await this.processingFromProvider({ movementId: movement.id, requestId });
+        await this.connectPayouts.createPayout({
+          userId: actor.userId,
+          movementId: movement.id,
+          amountMinor: amountText,
+        });
+        await this.processingFromProvider({
+          movementId: movement.id,
+          requestId,
+        });
       } catch (error) {
         if (error instanceof ConnectPayoutExternalTransferError) {
-          await this.holdFromProvider({ movementId: movement.id, reasonCode: 'STRIPE_PAYOUT_REQUIRES_REVIEW', requestId });
+          await this.holdFromProvider({
+            movementId: movement.id,
+            reasonCode: 'STRIPE_PAYOUT_REQUIRES_REVIEW',
+            requestId,
+          });
         } else {
-          await this.failFromProvider({ movementId: movement.id, reasonCode: error instanceof Error ? error.message.slice(0, 64) : 'STRIPE_PAYOUT_FAILED', requestId });
+          await this.failFromProvider({
+            movementId: movement.id,
+            reasonCode:
+              error instanceof Error
+                ? error.message.slice(0, 64)
+                : 'STRIPE_PAYOUT_FAILED',
+            requestId,
+          });
         }
         throw error;
       }
@@ -383,15 +479,54 @@ export class WalletMovementService {
     );
   }
 
-  async processingFromProvider(input: { movementId: string; requestId: string }) {
+  async processingFromProvider(input: {
+    movementId: string;
+    requestId: string;
+  }) {
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
-      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: input.movementId } });
-      if (['SETTLED', 'FAILED', 'CANCELLED', 'RETURNED', 'REVERSED', 'MANUAL_REVIEW', 'HELD'].includes(current.status)) return this.safe(current, true);
+      const current = await db.moneyMovement.findUniqueOrThrow({
+        where: { id: input.movementId },
+      });
+      if (
+        [
+          'SETTLED',
+          'FAILED',
+          'CANCELLED',
+          'RETURNED',
+          'REVERSED',
+          'MANUAL_REVIEW',
+          'HELD',
+        ].includes(current.status)
+      )
+        return this.safe(current, true);
       if (current.status === 'PROCESSING') return this.safe(current, true);
-      const updated = await db.moneyMovement.update({ where: { id: current.id }, data: { status: 'PROCESSING', version: { increment: 1 } } });
-      await db.moneyMovementHistory.create({ data: { id: randomUUID(), movementId: current.id, fromStatus: current.status, toStatus: 'PROCESSING', reasonCode: 'PROVIDER_PROCESSING' } });
-      await createIdentityTransaction(db).audit.append({ id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: current.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'PROCESSING' }, createdAt: new Date() });
+      const updated = await db.moneyMovement.update({
+        where: { id: current.id },
+        data: { status: 'PROCESSING', version: { increment: 1 } },
+      });
+      await db.moneyMovementHistory.create({
+        data: {
+          id: randomUUID(),
+          movementId: current.id,
+          fromStatus: current.status,
+          toStatus: 'PROCESSING',
+          reasonCode: 'PROVIDER_PROCESSING',
+        },
+      });
+      await createIdentityTransaction(db).audit.append({
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'WALLET_MOVEMENT_UPDATED',
+        resourceType: 'money-movement',
+        resourceId: current.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: { status: 'PROCESSING' },
+        createdAt: new Date(),
+      });
       return this.safe(updated, false);
     });
   }
@@ -556,10 +691,16 @@ export class WalletMovementService {
   }) {
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
-      const movement = await db.moneyMovement.findUniqueOrThrow({ where: { id: input.movementId } });
-      if (['FAILED', 'CANCELLED'].includes(movement.status)) return this.safe(movement, true);
+      const movement = await db.moneyMovement.findUniqueOrThrow({
+        where: { id: input.movementId },
+      });
+      if (['FAILED', 'CANCELLED'].includes(movement.status))
+        return this.safe(movement, true);
       if (movement.status === 'SETTLED')
-        throw new ConflictException({ code: 'MOVEMENT_TERMINAL', message: 'A settled movement cannot fail.' });
+        throw new ConflictException({
+          code: 'MOVEMENT_TERMINAL',
+          message: 'A settled movement cannot fail.',
+        });
       if (movement.type === 'WITHDRAWAL' && movement.reservationId) {
         await this.ledger.releaseCashInTransaction(
           db,
@@ -570,13 +711,33 @@ export class WalletMovementService {
       }
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
-        data: { status: 'FAILED', failureCode: input.reasonCode, version: { increment: 1 } },
+        data: {
+          status: 'FAILED',
+          failureCode: input.reasonCode,
+          version: { increment: 1 },
+        },
       });
       await db.moneyMovementHistory.create({
-        data: { id: randomUUID(), movementId: updated.id, fromStatus: movement.status, toStatus: 'FAILED', reasonCode: input.reasonCode },
+        data: {
+          id: randomUUID(),
+          movementId: updated.id,
+          fromStatus: movement.status,
+          toStatus: 'FAILED',
+          reasonCode: input.reasonCode,
+        },
       });
       await createIdentityTransaction(db).audit.append({
-        id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'FAILED', reasonCode: input.reasonCode }, createdAt: new Date(),
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'WALLET_MOVEMENT_UPDATED',
+        resourceType: 'money-movement',
+        resourceId: updated.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: { status: 'FAILED', reasonCode: input.reasonCode },
+        createdAt: new Date(),
       });
       return this.safe(updated, false);
     });
@@ -646,7 +807,8 @@ export class WalletMovementService {
       const current = await db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       });
-      if (['MANUAL_REVIEW', 'HELD'].includes(current.status)) return this.safe(current, true);
+      if (['MANUAL_REVIEW', 'HELD'].includes(current.status))
+        return this.safe(current, true);
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
         data: {
@@ -656,7 +818,11 @@ export class WalletMovementService {
         },
       });
       const existingHold = await db.complianceHold.findFirst({
-        where: { movementId: updated.id, scope: 'EXTERNAL_MOVEMENT', status: 'ACTIVE' },
+        where: {
+          movementId: updated.id,
+          scope: 'EXTERNAL_MOVEMENT',
+          status: 'ACTIVE',
+        },
       });
       if (!existingHold) {
         const hold = await db.complianceHold.create({
@@ -679,7 +845,12 @@ export class WalletMovementService {
           requestId: input.requestId,
           sessionId: null,
           result: 'SUCCESS',
-          metadata: { source: 'PROVIDER', scope: hold.scope, reasonCode: hold.reasonCode, provider: 'STRIPE' },
+          metadata: {
+            source: 'PROVIDER',
+            scope: hold.scope,
+            reasonCode: hold.reasonCode,
+            provider: 'STRIPE',
+          },
           createdAt: new Date(),
         });
       }
@@ -710,7 +881,9 @@ export class WalletMovementService {
       });
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
-      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
+      const current = await db.moneyMovement.findUniqueOrThrow({
+        where: { id: movement.id },
+      });
       if (current.status === 'REVERSED') return this.safe(current, true);
       await this.ledger.reverseInTransaction(
         db,
@@ -752,7 +925,6 @@ export class WalletMovementService {
       });
       return this.safe(updated, false);
     });
-
   }
 
   /**
@@ -774,7 +946,9 @@ export class WalletMovementService {
       });
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
-      const current = await db.moneyMovement.findUniqueOrThrow({ where: { id: movement.id } });
+      const current = await db.moneyMovement.findUniqueOrThrow({
+        where: { id: movement.id },
+      });
       if (current.status === 'RETURNED') return this.safe(current, true);
       await this.ledger.reverseInTransaction(
         db,
@@ -786,32 +960,80 @@ export class WalletMovementService {
       );
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
-        data: { status: 'RETURNED', failureCode: input.reasonCode, version: { increment: 1 } },
+        data: {
+          status: 'RETURNED',
+          failureCode: input.reasonCode,
+          version: { increment: 1 },
+        },
       });
       await db.moneyMovementHistory.create({
-        data: { id: randomUUID(), movementId: updated.id, fromStatus: current.status, toStatus: 'RETURNED', reasonCode: input.reasonCode },
+        data: {
+          id: randomUUID(),
+          movementId: updated.id,
+          fromStatus: current.status,
+          toStatus: 'RETURNED',
+          reasonCode: input.reasonCode,
+        },
       });
-      const account = await db.financialAccount.findUnique({ where: { id: updated.cashAccountId }, include: { balance: true } });
+      const account = await db.financialAccount.findUnique({
+        where: { id: updated.cashAccountId },
+        include: { balance: true },
+      });
       if (account?.balance) {
-        const authority = accountAuthority(account.normalSide, account.balance.postedDebitMinor, account.balance.postedCreditMinor);
+        const authority = accountAuthority(
+          account.normalSide,
+          account.balance.postedDebitMinor,
+          account.balance.postedCreditMinor,
+        );
         const available = authority - account.balance.reservedMinor;
         if (available < 0n) {
           await db.complianceHold.create({
-            data: { id: randomUUID(), userId: updated.userId, movementId: updated.id, scope: 'ACCOUNT', reasonCode: 'RETURNED_FUNDS_DEFICIT', source: 'PROVIDER' },
+            data: {
+              id: randomUUID(),
+              userId: updated.userId,
+              movementId: updated.id,
+              scope: 'ACCOUNT',
+              reasonCode: 'RETURNED_FUNDS_DEFICIT',
+              source: 'PROVIDER',
+            },
           });
           await createIdentityTransaction(db).audit.append({
-            id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_RETURN_DEFICIT_DETECTED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { source: 'PROVIDER', availableMinor: available.toString(), reasonCode: input.reasonCode }, createdAt: new Date(),
+            id: randomUUID(),
+            actorUserId: null,
+            actorType: 'SYSTEM',
+            action: 'WALLET_RETURN_DEFICIT_DETECTED',
+            resourceType: 'money-movement',
+            resourceId: updated.id,
+            requestId: input.requestId,
+            sessionId: null,
+            result: 'SUCCESS',
+            metadata: {
+              source: 'PROVIDER',
+              availableMinor: available.toString(),
+              reasonCode: input.reasonCode,
+            },
+            createdAt: new Date(),
           });
         }
       }
       await createIdentityTransaction(db).audit.append({
-        id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'WALLET_MOVEMENT_UPDATED', resourceType: 'money-movement', resourceId: updated.id, requestId: input.requestId, sessionId: null, result: 'SUCCESS', metadata: { status: 'RETURNED', reasonCode: input.reasonCode }, createdAt: new Date(),
+        id: randomUUID(),
+        actorUserId: null,
+        actorType: 'SYSTEM',
+        action: 'WALLET_MOVEMENT_UPDATED',
+        resourceType: 'money-movement',
+        resourceId: updated.id,
+        requestId: input.requestId,
+        sessionId: null,
+        result: 'SUCCESS',
+        metadata: { status: 'RETURNED', reasonCode: input.reasonCode },
+        createdAt: new Date(),
       });
       return this.safe(updated, false);
     });
   }
 
-    /*
+  /*
     await this.ledger.reverse(
       this.providerActor(movement.userId, movement.id),
       movement.ledgerTransactionId,
@@ -965,7 +1187,16 @@ export class WalletMovementService {
   async list(userId: string, cursor?: string, limit = 20) {
     const rows = await this.db.moneyMovement.findMany({
       where: { userId, ...(cursor ? { id: { lt: cursor } } : {}) },
-      include: { externalAccount: { select: { institutionName: true, accountName: true, accountMask: true, accountType: true } } },
+      include: {
+        externalAccount: {
+          select: {
+            institutionName: true,
+            accountName: true,
+            accountMask: true,
+            accountType: true,
+          },
+        },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -985,7 +1216,11 @@ export class WalletMovementService {
     return BigInt(value);
   }
 
-  private async enforceWithdrawalLimits(db: Prisma.TransactionClient, userId: string, amount: bigint) {
+  private async enforceWithdrawalLimits(
+    db: Prisma.TransactionClient,
+    userId: string,
+    amount: bigint,
+  ) {
     const per = BigInt(this.config.withdrawalLimitPerMovementMinor);
     if (amount > per)
       throw new ConflictException({
@@ -1010,7 +1245,10 @@ export class WalletMovementService {
       },
       select: { amountMinor: true, createdAt: true },
     });
-    const { total24h, total7d } = calculateWithdrawalVelocity(movements, amount);
+    const { total24h, total7d } = calculateWithdrawalVelocity(
+      movements,
+      amount,
+    );
     if (
       total24h > BigInt(this.config.withdrawalLimit24hMinor) ||
       total7d > BigInt(this.config.withdrawalLimit7dMinor)
@@ -1115,7 +1353,12 @@ export class WalletMovementService {
       status: string;
       createdAt: Date;
       updatedAt: Date;
-      externalAccount?: { institutionName: string | null; accountName: string | null; accountMask: string | null; accountType: string } | null;
+      externalAccount?: {
+        institutionName: string | null;
+        accountName: string | null;
+        accountMask: string | null;
+        accountType: string;
+      } | null;
       failureCode?: string | null;
     },
     replayed: boolean,
@@ -1131,7 +1374,9 @@ export class WalletMovementService {
       replayed,
       sourceLabel: item.externalAccount
         ? `${item.externalAccount.institutionName ?? item.externalAccount.accountName ?? (item.externalAccount.accountType === 'bacs_debit' ? 'UK bank account' : 'Connected account')}${item.externalAccount.accountMask ? ` · •••• ${item.externalAccount.accountMask}` : ''}`
-        : item.type === 'WITHDRAWAL' ? 'GBP wallet → payout destination' : 'GBP wallet',
+        : item.type === 'WITHDRAWAL'
+          ? 'GBP wallet → payout destination'
+          : 'GBP wallet',
       reference: `WLT-${item.id.slice(0, 8).toUpperCase()}`,
     };
   }

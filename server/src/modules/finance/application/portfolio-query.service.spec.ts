@@ -21,7 +21,7 @@ describe('PortfolioQueryService holdings page projection', () => {
     const service = Object.create(PortfolioQueryService.prototype) as PortfolioQueryHarness;
     service.ledger = {
       walletForUser: jest.fn(async () => ({
-        currency: 'GBP',
+        currency: 'GBP' as const,
         totalMinor: '100000',
         reservedMinor: '25000',
         availableMinor: '75000',

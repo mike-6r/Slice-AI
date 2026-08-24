@@ -1,4 +1,7 @@
-import { calculateWithdrawalVelocity } from './wallet-movement.service';
+import {
+  calculateWithdrawalVelocity,
+  requiresDestinationScreening,
+} from './wallet-movement.service';
 
 describe('wallet movement risk controls', () => {
   it('calculates configured withdrawal windows without inventing a risk score', () => {
@@ -15,5 +18,11 @@ describe('wallet movement risk controls', () => {
 
     expect(totals.total24h).toBe(150n);
     expect(totals.total7d).toBe(400n);
+  });
+
+  it('does not send Stripe Connect bank payouts through blockchain destination screening', () => {
+    expect(requiresDestinationScreening('local')).toBe(true);
+    expect(requiresDestinationScreening('stripe_sandbox')).toBe(false);
+    expect(requiresDestinationScreening('stripe_live')).toBe(false);
   });
 });

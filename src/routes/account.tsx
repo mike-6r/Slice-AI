@@ -422,6 +422,7 @@ function capabilityRequirementLabel(value: string) {
     BANK_ACCOUNT_REQUIRED: "UK bank account required",
     PAYOUT_ACCOUNT_REQUIRED: "Payout account setup required",
     PAYOUT_ACCOUNT_REVIEW_REQUIRED: "Payout account review in progress",
+    COLLECTOR_PAYOUTS_REQUIRED: "Collector payout access only",
     TRADING_UNAVAILABLE: "Trading temporarily unavailable",
     DEPOSITS_UNAVAILABLE: "Deposits temporarily unavailable",
     WITHDRAWALS_UNAVAILABLE: "Withdrawals unavailable for this account",

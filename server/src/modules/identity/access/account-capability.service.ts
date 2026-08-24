@@ -27,10 +27,7 @@ export const accountCapabilities = [
 
 export type AccountCapability = (typeof accountCapabilities)[number];
 export type CapabilityStatus =
-  | 'AVAILABLE'
-  | 'ACTION_REQUIRED'
-  | 'TEMPORARILY_UNAVAILABLE'
-  | 'BLOCKED';
+  'AVAILABLE' | 'ACTION_REQUIRED' | 'TEMPORARILY_UNAVAILABLE' | 'BLOCKED';
 export type CapabilityReason =
   | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PHONE_VERIFICATION_REQUIRED'
@@ -40,6 +37,7 @@ export type CapabilityReason =
   | 'BANK_ACCOUNT_REQUIRED'
   | 'PAYOUT_ACCOUNT_REQUIRED'
   | 'PAYOUT_ACCOUNT_REVIEW_REQUIRED'
+  | 'COLLECTOR_PAYOUTS_REQUIRED'
   | 'TRADING_UNAVAILABLE'
   | 'DEPOSITS_UNAVAILABLE'
   | 'WITHDRAWALS_UNAVAILABLE'
@@ -253,7 +251,9 @@ export class AccountCapabilityService {
           'PHONE_VERIFICATION_REQUIRED',
           requirements,
         );
-      const twoFactor = Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt);
+      const twoFactor = Boolean(
+        user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt,
+      );
       needs('TWO_FACTOR_AUTHENTICATION', twoFactor);
       if (!twoFactor)
         return this.denied(capability, 'TWO_FACTOR_REQUIRED', requirements);
@@ -286,11 +286,20 @@ export class AccountCapabilityService {
       return this.denied(capability, 'BANK_ACCOUNT_REQUIRED', requirements);
     }
 
-    if (capability === 'WITHDRAW_FUNDS' && this.config.providerMode !== 'local') {
-      const collector = user.roleAssignments.some((assignment) => assignment.role === 'COLLECTOR');
+    if (
+      capability === 'WITHDRAW_FUNDS' &&
+      this.config.providerMode !== 'local'
+    ) {
+      const collector = user.roleAssignments.some(
+        (assignment) => assignment.role === 'COLLECTOR',
+      );
       if (!collector) {
         needs('PROVIDER_AVAILABILITY', false);
-        return this.denied(capability, 'WITHDRAWALS_UNAVAILABLE', requirements);
+        return this.denied(
+          capability,
+          'COLLECTOR_PAYOUTS_REQUIRED',
+          requirements,
+        );
       }
       const payout = user.externalConnectAccounts[0];
       const payoutReady = payout?.status === 'READY';
@@ -311,12 +320,12 @@ export class AccountCapabilityService {
   async require(actor: Actor, capability: AccountCapability): Promise<void> {
     const decision = await this.evaluate(actor.userId, capability);
     if (decision.allowed) return;
-      throw new ForbiddenException({
-        code: decision.reason,
-        message: customerMessage(decision.reason!),
-        capability,
-        status: decision.status,
-        requirements: decision.requirements,
+    throw new ForbiddenException({
+      code: decision.reason,
+      message: customerMessage(decision.reason!),
+      capability,
+      status: decision.status,
+      requirements: decision.requirements,
     });
   }
 
@@ -332,7 +341,11 @@ export class AccountCapabilityService {
       select: { id: true },
     });
     if (existing) {
-      return { status: 'APPROVED' as const, role: 'COLLECTOR' as const, granted: false };
+      return {
+        status: 'APPROVED' as const,
+        role: 'COLLECTOR' as const,
+        granted: false,
+      };
     }
     const assignment = await this.db.$transaction(async (db) => {
       const created = await db.roleAssignment.create({
@@ -373,7 +386,13 @@ export class AccountCapabilityService {
     capability: AccountCapability,
     requirements: Requirement[],
   ): CapabilityDecision {
-    return { allowed: true, capability, status: 'AVAILABLE', reason: null, requirements };
+    return {
+      allowed: true,
+      capability,
+      status: 'AVAILABLE',
+      reason: null,
+      requirements,
+    };
   }
   private denied(
     capability: AccountCapability,
@@ -405,8 +424,12 @@ function customerMessage(reason: CapabilityReason) {
       'Complete payout setup before withdrawing collector proceeds.',
     PAYOUT_ACCOUNT_REVIEW_REQUIRED:
       'Payout setup is still under review. You can withdraw once it is approved.',
-    TRADING_UNAVAILABLE: 'Trading is temporarily unavailable in this environment.',
-    DEPOSITS_UNAVAILABLE: 'Deposits are temporarily unavailable in this environment.',
+    COLLECTOR_PAYOUTS_REQUIRED:
+      'Withdrawals are currently supported for collector proceeds only.',
+    TRADING_UNAVAILABLE:
+      'Trading is temporarily unavailable in this environment.',
+    DEPOSITS_UNAVAILABLE:
+      'Deposits are temporarily unavailable in this environment.',
     WITHDRAWALS_UNAVAILABLE:
       'Withdrawals are available for collector proceeds only in this environment.',
     ACCOUNT_RESTRICTED: 'This action is unavailable for this account.',
@@ -433,7 +456,8 @@ function statusForReason(reason: CapabilityReason): CapabilityStatus {
   if (
     reason === 'ACCOUNT_RESTRICTED' ||
     reason === 'ACCOUNT_DEACTIVATED' ||
-    reason === 'ACCOUNT_DELETION_PENDING'
+    reason === 'ACCOUNT_DELETION_PENDING' ||
+    reason === 'COLLECTOR_PAYOUTS_REQUIRED'
   ) {
     return 'BLOCKED';
   }

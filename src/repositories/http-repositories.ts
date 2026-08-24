@@ -4849,7 +4849,8 @@ function fallbackCapabilityStatus(
   if (
     reason === "ACCOUNT_RESTRICTED" ||
     reason === "ACCOUNT_DEACTIVATED" ||
-    reason === "ACCOUNT_DELETION_PENDING"
+    reason === "ACCOUNT_DELETION_PENDING" ||
+    reason === "COLLECTOR_PAYOUTS_REQUIRED"
   ) {
     return "BLOCKED";
   }

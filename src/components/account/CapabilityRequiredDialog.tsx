@@ -33,6 +33,11 @@ const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; de
     title: "Payout setup is under review",
     detail: "You can withdraw collector proceeds after the payout account review is complete.",
   },
+  COLLECTOR_PAYOUTS_REQUIRED: {
+    title: "Withdrawals are for collector proceeds",
+    detail:
+      "This Stripe payout path is available to collector accounts with settled proceeds and a ready payout account.",
+  },
   TRADING_UNAVAILABLE: {
     title: "Trading is temporarily unavailable",
     detail: "Slice trading is currently unavailable in this environment.",
@@ -92,7 +97,10 @@ const actionHref: Partial<Record<NonNullable<AccountCapability["reason"]>, strin
 };
 
 const capabilityLabel = (value: AccountCapability["capability"]) =>
-  value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const requirementLabel = (value: string) => {
   const labels: Record<string, string> = {
@@ -167,7 +175,10 @@ export function CapabilityRequiredDialog({
         ) : null}
         <div className="mt-6 flex flex-wrap gap-3">
           {action && href ? (
-            <a href={href} className="primary-action px-4 py-2 text-sm font-semibold text-background">
+            <a
+              href={href}
+              className="primary-action px-4 py-2 text-sm font-semibold text-background"
+            >
               {action}
             </a>
           ) : null}
