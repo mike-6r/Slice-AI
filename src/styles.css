@@ -49827,7 +49827,7 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
     max-width: 1520px;
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    grid-template-rows: 430px 52px 200px 315px 160px;
+    grid-template-rows: 430px 52px 200px 390px 160px;
     gap: 16px;
     padding-bottom: 32px;
   }
