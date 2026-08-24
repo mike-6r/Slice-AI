@@ -121,10 +121,12 @@ rail. They remain available in the existing labelled reference surfaces.
 - Page-level horizontal overflow at the available browser viewport (1280px):
   none
 
-The live staging API currently returns zero similar assets for the Umbreon slug,
-so the panel is intentionally hidden rather than filled with fake cards. The
-full-width rail, one-result behavior, fixed card widths, and responsive media
-rules are implemented for when eligible comparable assets exist.
+The live staging API currently returns zero similar assets for the Umbreon slug.
+The page keeps the full-width panel visible and renders a truthful
+“No similar assets yet” empty state rather than leaving a blank area or filling
+the rail with fake cards. The full-width rail, one-result behavior, fixed card
+widths, and responsive media rules remain implemented for when eligible
+comparable assets exist.
 
 The browser surface used for this pass exposes a fixed 1280×720 viewport; the
 requested 1920×1080, 1440×900, 1280×800, 768×1024, and 390×844 breakpoints were

@@ -1848,7 +1848,6 @@ function SimilarAssets({
       window.removeEventListener("resize", updateControls);
     };
   }, [currentId, similarKey, isLoading]);
-  if (!isLoading && !isError && similar.length === 0) return null;
   const moveRail = (direction: -1 | 1) => {
     const rail = railRef.current;
     const firstCard = rail?.querySelector<HTMLElement>(".asset-similar-card");
@@ -1950,7 +1949,14 @@ function SimilarAssets({
             );
           })}
         </div>
-      ) : null}
+      ) : (
+        <div className="asset-similar-empty" role="status">
+          <div className="asset-similar-empty__copy">
+            <strong>No similar assets yet</strong>
+            <p>Comparable collectibles will appear here as more are published on Slice.</p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
