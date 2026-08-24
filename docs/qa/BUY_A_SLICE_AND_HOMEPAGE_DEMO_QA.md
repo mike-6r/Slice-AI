@@ -115,12 +115,13 @@ Staging browser checks after the final deployment:
 
 ## Staging deployment
 
-Source commits: `1a2d5e3`, `a0b0643`, `b5d8601`, `2cfc40d` (latest).
+Source commits: `1a2d5e3`, `a0b0643`, `b5d8601`, `2cfc40d`; final deployed
+release also includes the QA-report commit `6cbe4a1`.
 
-Active release: `/opt/slice/releases/20260824-2cfc40d`.
+Active release: `/opt/slice/releases/20260824-6cbe4a1`.
 
-- `/opt/slice/current`: PASS — points to `20260824-2cfc40d`.
-- `/opt/slice/app`: PASS — points to `20260824-2cfc40d`.
+- `/opt/slice/current`: PASS — points to `20260824-6cbe4a1`.
+- `/opt/slice/app`: PASS — points to `20260824-6cbe4a1`.
 - API `/ready`: PASS — PostgreSQL and Redis up.
 - SSR HTTP 200: PASS.
 - Frontend build: PASS with `VITE_APP_ENV=beta`, `VITE_DATA_SOURCE=api`,
