@@ -191,6 +191,8 @@ export function PriceChart({
   ];
   const activePoint = activeIndex === null ? null : pointsData[activeIndex];
   const activeCoordinates = activeIndex === null ? null : points[activeIndex];
+  const activeTooltipPlacement =
+    activeCoordinates && activeCoordinates[1] / height < 0.32 ? "below" : "above";
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
@@ -297,11 +299,12 @@ export function PriceChart({
       ) : null}
       {activePoint && activeCoordinates ? (
         <div
-          className="price-chart__tooltip"
+          className={`price-chart__tooltip price-chart__tooltip--${activeTooltipPlacement}`}
           style={{
-            left: `${(activeCoordinates[0] / width) * 100}%`,
-            top: `${Math.max(5, Math.min(66, (activeCoordinates[1] / height) * 100 - 8))}%`,
+            left: `${Math.max(10, Math.min(90, (activeCoordinates[0] / width) * 100))}%`,
+            top: `${activeTooltipPlacement === "below" ? Math.min(90, (activeCoordinates[1] / height) * 100 + 8) : Math.max(8, (activeCoordinates[1] / height) * 100 - 8)}%`,
           }}
+          data-placement={activeTooltipPlacement}
           role="status"
           aria-live="polite"
         >
@@ -323,9 +326,13 @@ export function PriceChart({
                 : `${activePoint.rangeChange >= 0 ? "+" : ""}${formatMoney(activePoint.rangeChange, currency)}${formatBps(activePoint.rangeChangeBps) ? ` (${formatBps(activePoint.rangeChangeBps)})` : ""}`}
             </span>
           ) : null}
-          {activePoint.source ? <span>{activePoint.source} reference</span> : null}
+          {activePoint.source ? (
+            <span className="price-chart__tooltip-source">{activePoint.source} reference</span>
+          ) : null}
           {activePoint.refreshedAt ? (
-            <span>Refreshed {formatTooltipDate(activePoint.refreshedAt)}</span>
+            <span className="price-chart__tooltip-date">
+              Refreshed {formatTooltipDate(activePoint.refreshedAt)}
+            </span>
           ) : null}
         </div>
       ) : null}
