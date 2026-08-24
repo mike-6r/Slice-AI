@@ -50643,6 +50643,45 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   }
 }
 
+/* Keep the public execution summary readable on narrow screens. The side is
+   intentionally omitted here because the public API does not expose it. */
+@media (max-width: 640px) {
+  .asset-detail-page .asset-recent-trades__table-wrap {
+    overflow-x: hidden;
+  }
+
+  .asset-detail-page .asset-recent-trades__table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .asset-detail-page .asset-recent-trades__table th,
+  .asset-detail-page .asset-recent-trades__table td {
+    overflow: hidden;
+    padding-inline: 0.45rem;
+    text-overflow: ellipsis;
+  }
+
+  .asset-detail-page .asset-recent-trades__table th:first-child,
+  .asset-detail-page .asset-recent-trades__table td:first-child {
+    width: 36%;
+  }
+
+  .asset-detail-page .asset-recent-trades__table th:nth-child(2),
+  .asset-detail-page .asset-recent-trades__table td:nth-child(2) {
+    display: none;
+  }
+
+  .asset-detail-page .asset-recent-trades__table th:nth-child(3),
+  .asset-detail-page .asset-recent-trades__table td:nth-child(3),
+  .asset-detail-page .asset-recent-trades__table th:nth-child(4),
+  .asset-detail-page .asset-recent-trades__table td:nth-child(4),
+  .asset-detail-page .asset-recent-trades__table th:nth-child(5),
+  .asset-detail-page .asset-recent-trades__table td:nth-child(5) {
+    width: 21.33%;
+  }
+}
+
 /* Reference-history interaction pass. Keep the established lower-row card,
    but make its source, controls, observations, and context readable inside
    the master 315px desktop cell. */
