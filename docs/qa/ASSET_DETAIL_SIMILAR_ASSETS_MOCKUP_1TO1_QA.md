@@ -105,9 +105,9 @@ rail. They remain available in the existing labelled reference surfaces.
 
 ## Browser QA / deployment
 
-- Runtime commit: `5851e9e`
-- Active deployment sync: `38d7a0a` (documentation-only)
-- Release: `/opt/slice/releases/20260823-38d7a0a`
+- Runtime commit: `882b34a`
+- Active deployment sync: `882b34a`
+- Release: `/opt/slice/releases/20260824-882b34a`
 - `/opt/slice/current`: points to the release above
 - `/opt/slice/app`: points to the release above
 - `slice-api.service`: active
@@ -116,6 +116,9 @@ rail. They remain available in the existing labelled reference surfaces.
 - `/ready`: PASS — PostgreSQL and Redis up
 - Public asset page: HTTP 200
 - Similar endpoint: HTTP 200 with the truthful sparse response `{ "items": [] }`
+- Browser rendering: the full-width panel remains visible with the
+  “No similar assets yet” empty state; the rendered empty state measured
+  1,180×86px at the available desktop viewport.
 - Browser console: only the standard React DevTools informational message; no
   application errors
 - Page-level horizontal overflow at the available browser viewport (1280px):
