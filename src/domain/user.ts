@@ -43,15 +43,28 @@ export type AccountCapabilityReason =
   | "TWO_FACTOR_REQUIRED"
   | "IDENTITY_VERIFICATION_REQUIRED"
   | "COMPLIANCE_REVIEW_REQUIRED"
+  | "BANK_ACCOUNT_REQUIRED"
+  | "PAYOUT_ACCOUNT_REQUIRED"
+  | "PAYOUT_ACCOUNT_REVIEW_REQUIRED"
+  | "TRADING_UNAVAILABLE"
+  | "DEPOSITS_UNAVAILABLE"
+  | "WITHDRAWALS_UNAVAILABLE"
   | "ACCOUNT_RESTRICTED"
   | "ACCOUNT_DEACTIVATED"
   | "ACCOUNT_DELETION_PENDING"
   | "ACCOUNT_REVIEW_REQUIRED"
   | "FEATURE_DISABLED";
 
+export type AccountCapabilityStatus =
+  | "AVAILABLE"
+  | "ACTION_REQUIRED"
+  | "TEMPORARILY_UNAVAILABLE"
+  | "BLOCKED";
+
 export interface AccountCapability {
   capability: AccountCapabilityName;
   allowed: boolean;
+  status: AccountCapabilityStatus;
   reason: AccountCapabilityReason | null;
   requirements: Array<{
     type: string;

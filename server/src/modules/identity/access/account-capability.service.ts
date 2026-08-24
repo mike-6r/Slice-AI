@@ -26,12 +26,23 @@ export const accountCapabilities = [
 ] as const;
 
 export type AccountCapability = (typeof accountCapabilities)[number];
+export type CapabilityStatus =
+  | 'AVAILABLE'
+  | 'ACTION_REQUIRED'
+  | 'TEMPORARILY_UNAVAILABLE'
+  | 'BLOCKED';
 export type CapabilityReason =
   | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PHONE_VERIFICATION_REQUIRED'
   | 'TWO_FACTOR_REQUIRED'
   | 'IDENTITY_VERIFICATION_REQUIRED'
   | 'COMPLIANCE_REVIEW_REQUIRED'
+  | 'BANK_ACCOUNT_REQUIRED'
+  | 'PAYOUT_ACCOUNT_REQUIRED'
+  | 'PAYOUT_ACCOUNT_REVIEW_REQUIRED'
+  | 'TRADING_UNAVAILABLE'
+  | 'DEPOSITS_UNAVAILABLE'
+  | 'WITHDRAWALS_UNAVAILABLE'
   | 'ACCOUNT_RESTRICTED'
   | 'ACCOUNT_DEACTIVATED'
   | 'ACCOUNT_DELETION_PENDING'
@@ -44,6 +55,9 @@ type Requirement = {
     | 'PHONE_VERIFICATION'
     | 'TWO_FACTOR_AUTHENTICATION'
     | 'IDENTITY_VERIFICATION'
+    | 'BANK_ACCOUNT'
+    | 'PAYOUT_ACCOUNT'
+    | 'PROVIDER_AVAILABILITY'
     | 'ACCOUNT_STATUS'
     | 'FEATURE_AVAILABILITY';
   satisfied: boolean;
@@ -52,6 +66,7 @@ type Requirement = {
 export type CapabilityDecision = {
   allowed: boolean;
   capability: AccountCapability;
+  status: CapabilityStatus;
   reason: CapabilityReason | null;
   requirements: Requirement[];
 };
@@ -90,6 +105,10 @@ export class AccountCapabilityService {
         twoFactor: { select: { enabledAt: true } },
         smsTwoFactor: { select: { enabledAt: true } },
         complianceCases: {
+          where: {
+            provider: providerForMode(this.config.providerMode),
+            type: 'KYC',
+          },
           select: { status: true },
           orderBy: { updatedAt: 'desc' },
         },
@@ -122,6 +141,29 @@ export class AccountCapabilityService {
             },
           },
           select: { id: true },
+          take: 1,
+        },
+        roleAssignments: {
+          where: { revokedAt: null },
+          select: { role: true },
+        },
+        externalFinancialAccounts: {
+          where: {
+            provider: providerForMode(this.config.providerMode),
+            currency: 'GBP',
+            accountType: 'bacs_debit',
+            status: 'CONNECTED',
+            isDefault: true,
+          },
+          select: { id: true },
+          take: 1,
+        },
+        externalConnectAccounts: {
+          where: {
+            provider: providerForMode(this.config.providerMode),
+            environment: environmentForMode(this.config.providerMode),
+          },
+          select: { status: true },
           take: 1,
         },
       },
@@ -200,7 +242,7 @@ export class AccountCapabilityService {
           : this.config.operationalFeatures.trading;
     needs('FEATURE_AVAILABILITY', feature);
     if (!feature)
-      return this.denied(capability, 'FEATURE_DISABLED', requirements);
+      return this.denied(capability, featureReason(capability), requirements);
 
     if (capability === 'WITHDRAW_FUNDS') {
       const phone = Boolean(user.phoneVerifiedAt);
@@ -234,17 +276,47 @@ export class AccountCapabilityService {
         requirements,
       );
     }
+
+    if (
+      capability === 'DEPOSIT_FUNDS' &&
+      this.config.providerMode !== 'local' &&
+      user.externalFinancialAccounts.length === 0
+    ) {
+      needs('BANK_ACCOUNT', false);
+      return this.denied(capability, 'BANK_ACCOUNT_REQUIRED', requirements);
+    }
+
+    if (capability === 'WITHDRAW_FUNDS' && this.config.providerMode !== 'local') {
+      const collector = user.roleAssignments.some((assignment) => assignment.role === 'COLLECTOR');
+      if (!collector) {
+        needs('PROVIDER_AVAILABILITY', false);
+        return this.denied(capability, 'WITHDRAWALS_UNAVAILABLE', requirements);
+      }
+      const payout = user.externalConnectAccounts[0];
+      const payoutReady = payout?.status === 'READY';
+      needs('PAYOUT_ACCOUNT', payoutReady);
+      if (!payoutReady) {
+        return this.denied(
+          capability,
+          payout?.status === 'UNDER_REVIEW'
+            ? 'PAYOUT_ACCOUNT_REVIEW_REQUIRED'
+            : 'PAYOUT_ACCOUNT_REQUIRED',
+          requirements,
+        );
+      }
+    }
     return this.allowed(capability, requirements);
   }
 
   async require(actor: Actor, capability: AccountCapability): Promise<void> {
     const decision = await this.evaluate(actor.userId, capability);
     if (decision.allowed) return;
-    throw new ForbiddenException({
-      code: decision.reason,
-      message: customerMessage(decision.reason!),
-      capability,
-      requirements: decision.requirements,
+      throw new ForbiddenException({
+        code: decision.reason,
+        message: customerMessage(decision.reason!),
+        capability,
+        status: decision.status,
+        requirements: decision.requirements,
     });
   }
 
@@ -301,14 +373,20 @@ export class AccountCapabilityService {
     capability: AccountCapability,
     requirements: Requirement[],
   ): CapabilityDecision {
-    return { allowed: true, capability, reason: null, requirements };
+    return { allowed: true, capability, status: 'AVAILABLE', reason: null, requirements };
   }
   private denied(
     capability: AccountCapability,
     reason: CapabilityReason,
     requirements: Requirement[],
   ): CapabilityDecision {
-    return { allowed: false, capability, reason, requirements };
+    return {
+      allowed: false,
+      capability,
+      status: statusForReason(reason),
+      reason,
+      requirements,
+    };
   }
 }
 
@@ -321,6 +399,16 @@ function customerMessage(reason: CapabilityReason) {
       'Identity verification is required to continue.',
     COMPLIANCE_REVIEW_REQUIRED:
       'This action is unavailable while verification is under review.',
+    BANK_ACCOUNT_REQUIRED:
+      'Connect a UK bank account before requesting a deposit.',
+    PAYOUT_ACCOUNT_REQUIRED:
+      'Complete payout setup before withdrawing collector proceeds.',
+    PAYOUT_ACCOUNT_REVIEW_REQUIRED:
+      'Payout setup is still under review. You can withdraw once it is approved.',
+    TRADING_UNAVAILABLE: 'Trading is temporarily unavailable in this environment.',
+    DEPOSITS_UNAVAILABLE: 'Deposits are temporarily unavailable in this environment.',
+    WITHDRAWALS_UNAVAILABLE:
+      'Withdrawals are available for collector proceeds only in this environment.',
     ACCOUNT_RESTRICTED: 'This action is unavailable for this account.',
     ACCOUNT_DEACTIVATED:
       'This action is unavailable for a deactivated account.',
@@ -331,4 +419,41 @@ function customerMessage(reason: CapabilityReason) {
     FEATURE_DISABLED: 'This feature is currently unavailable.',
   };
   return messages[reason];
+}
+
+function statusForReason(reason: CapabilityReason): CapabilityStatus {
+  if (
+    reason === 'TRADING_UNAVAILABLE' ||
+    reason === 'DEPOSITS_UNAVAILABLE' ||
+    reason === 'WITHDRAWALS_UNAVAILABLE' ||
+    reason === 'FEATURE_DISABLED'
+  ) {
+    return 'TEMPORARILY_UNAVAILABLE';
+  }
+  if (
+    reason === 'ACCOUNT_RESTRICTED' ||
+    reason === 'ACCOUNT_DEACTIVATED' ||
+    reason === 'ACCOUNT_DELETION_PENDING'
+  ) {
+    return 'BLOCKED';
+  }
+  return 'ACTION_REQUIRED';
+}
+
+function featureReason(capability: AccountCapability): CapabilityReason {
+  if (capability === 'PLACE_BUY_ORDER' || capability === 'PLACE_SELL_ORDER')
+    return 'TRADING_UNAVAILABLE';
+  if (capability === 'DEPOSIT_FUNDS') return 'DEPOSITS_UNAVAILABLE';
+  if (capability === 'WITHDRAW_FUNDS') return 'WITHDRAWALS_UNAVAILABLE';
+  return 'FEATURE_DISABLED';
+}
+
+function providerForMode(mode: AppConfig['providerMode']) {
+  if (mode === 'stripe_sandbox') return 'STRIPE_SANDBOX' as const;
+  if (mode === 'stripe_live') return 'STRIPE_LIVE' as const;
+  return 'LOCAL_TEST' as const;
+}
+
+function environmentForMode(mode: AppConfig['providerMode']) {
+  return mode === 'stripe_live' ? ('LIVE' as const) : ('SANDBOX' as const);
 }

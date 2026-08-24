@@ -111,6 +111,7 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.movements() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities });
   };
   const verification = useMutation({
     mutationFn: services.providers.startCompliance,
@@ -539,7 +540,7 @@ function MoveMoneyPanel({
     !capabilityBlocked && (!providerReady || (action === "DEPOSIT" && !bankAvailable));
   const disabledReason =
     capability && !capability.allowed
-      ? "Complete account setup to continue."
+      ? capabilityInlineReason(capability)
       : !providerReady
         ? "Complete verification to continue."
         : action === "DEPOSIT" && !bankAvailable
@@ -636,6 +637,29 @@ function MoveMoneyPanel({
       </div>
     </WalletPanel>
   );
+}
+
+function capabilityInlineReason(capability: AccountCapability) {
+  switch (capability.reason) {
+    case "IDENTITY_VERIFICATION_REQUIRED":
+      return "Identity verification required.";
+    case "COMPLIANCE_REVIEW_REQUIRED":
+      return "Verification is under review.";
+    case "BANK_ACCOUNT_REQUIRED":
+      return "Connect a UK bank account before requesting a deposit.";
+    case "PAYOUT_ACCOUNT_REQUIRED":
+      return "Complete payout setup before withdrawing collector proceeds.";
+    case "PAYOUT_ACCOUNT_REVIEW_REQUIRED":
+      return "Payout setup is still under review.";
+    case "DEPOSITS_UNAVAILABLE":
+      return "Deposits are temporarily unavailable in this environment.";
+    case "WITHDRAWALS_UNAVAILABLE":
+      return "Withdrawals are not available for this account in this environment.";
+    case "TRADING_UNAVAILABLE":
+      return "Trading is temporarily unavailable in this environment.";
+    default:
+      return "Complete the required account step to continue.";
+  }
 }
 
 function AccountStatusPanel({

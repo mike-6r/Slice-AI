@@ -3,6 +3,7 @@ import { AccountCapabilityService } from './account-capability.service';
 
 const config = (overrides: Partial<AppConfig> = {}) =>
   ({
+    providerMode: 'local',
     operationalFeatures: {
       trading: true,
       deposits: true,
@@ -20,6 +21,9 @@ const user = (overrides: Record<string, unknown> = {}) => ({
   complianceCases: [{ status: 'APPROVED' }],
   complianceHolds: [],
   deletionRequests: [],
+  roleAssignments: [],
+  externalFinancialAccounts: [],
+  externalConnectAccounts: [],
   ...overrides,
 });
 
@@ -145,7 +149,85 @@ describe('AccountCapabilityService', () => {
     );
     await expect(
       service.evaluate('user-1', 'PLACE_BUY_ORDER'),
-    ).resolves.toMatchObject({ allowed: false, reason: 'FEATURE_DISABLED' });
+    ).resolves.toMatchObject({
+      allowed: false,
+      status: 'TEMPORARILY_UNAVAILABLE',
+      reason: 'TRADING_UNAVAILABLE',
+    });
+  });
+
+  it('reports feature-specific funding availability without bypassing the kill switch', async () => {
+    const service = subject(
+      user(),
+      config({
+        providerMode: 'stripe_sandbox',
+        operationalFeatures: {
+          trading: true,
+          deposits: false,
+          withdrawals: false,
+          listing: true,
+          realtime: true,
+        },
+      }),
+    );
+    await expect(service.evaluate('user-1', 'DEPOSIT_FUNDS')).resolves.toMatchObject({
+      allowed: false,
+      status: 'TEMPORARILY_UNAVAILABLE',
+      reason: 'DEPOSITS_UNAVAILABLE',
+    });
+    await expect(service.evaluate('user-1', 'WITHDRAW_FUNDS')).resolves.toMatchObject({
+      allowed: false,
+      status: 'TEMPORARILY_UNAVAILABLE',
+      reason: 'WITHDRAWALS_UNAVAILABLE',
+    });
+  });
+
+  it('separates bank and payout setup from identity and security requirements', async () => {
+    const service = subject(
+      user(),
+      config({
+        providerMode: 'stripe_sandbox',
+        operationalFeatures: {
+          trading: true,
+          deposits: true,
+          withdrawals: true,
+          listing: true,
+          realtime: true,
+        },
+      }),
+    );
+    await expect(service.evaluate('user-1', 'DEPOSIT_FUNDS')).resolves.toMatchObject({
+      allowed: false,
+      reason: 'BANK_ACCOUNT_REQUIRED',
+      requirements: expect.arrayContaining([{ type: 'BANK_ACCOUNT', satisfied: false }]),
+    });
+    await expect(service.evaluate('user-1', 'WITHDRAW_FUNDS')).resolves.toMatchObject({
+      allowed: false,
+      reason: 'WITHDRAWALS_UNAVAILABLE',
+      requirements: expect.arrayContaining([{ type: 'PROVIDER_AVAILABILITY', satisfied: false }]),
+    });
+  });
+
+  it('uses the active provider KYC case instead of an approval from another provider', async () => {
+    const service = subject(
+      user({ complianceCases: [{ status: 'PENDING' }] }),
+      config({
+        providerMode: 'stripe_sandbox',
+        operationalFeatures: {
+          trading: true,
+          deposits: true,
+          withdrawals: true,
+          listing: true,
+          realtime: true,
+        },
+      }),
+    );
+    await expect(service.evaluate('user-1', 'PLACE_BUY_ORDER')).resolves.toMatchObject({
+      allowed: false,
+      status: 'ACTION_REQUIRED',
+      reason: 'COMPLIANCE_REVIEW_REQUIRED',
+      requirements: expect.arrayContaining([{ type: 'IDENTITY_VERIFICATION', satisfied: false }]),
+    });
   });
 
   it('does not expose internal compliance detail in the summary', async () => {

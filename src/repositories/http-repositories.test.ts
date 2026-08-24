@@ -63,6 +63,7 @@ describe("HTTP catalogue mapping", () => {
         {
           capability: "PLACE_BUY_ORDER",
           allowed: false,
+          status: "ACTION_REQUIRED",
           reason: "IDENTITY_VERIFICATION_REQUIRED",
           requirements: [
             { type: "EMAIL_VERIFICATION", satisfied: true },
@@ -79,6 +80,7 @@ describe("HTTP catalogue mapping", () => {
         {
           capability: "PLACE_BUY_ORDER",
           allowed: false,
+          status: "ACTION_REQUIRED",
           reason: "IDENTITY_VERIFICATION_REQUIRED",
           requirements: [
             { type: "EMAIL_VERIFICATION", satisfied: true },

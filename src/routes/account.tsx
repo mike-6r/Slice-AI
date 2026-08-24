@@ -367,8 +367,8 @@ function AccountAccessPanel({
                   <strong>{capabilityLabel(capability)}</strong>
                   <small>{capabilityRequirement(item)}</small>
                 </div>
-                <span className={item?.allowed ? "account-good" : "account-blocked"}>
-                  {item?.allowed ? "Available" : "Blocked"}
+                <span className={capabilityStatusClass(item?.status)}>
+                  {capabilityStatusLabel(item?.status)}
                 </span>
               </li>
             );
@@ -393,6 +393,9 @@ function capabilityRequirement(item: AccountCapability | undefined) {
   if (!item) return "Capability unavailable";
   if (item.allowed) return "No additional verification required";
 
+  if (item.reason && item.reason !== "FEATURE_DISABLED") {
+    return capabilityRequirementLabel(item.reason);
+  }
   const missing = item.requirements.filter((requirement) => !requirement.satisfied);
   if (missing.length) {
     return `${missing.map((requirement) => capabilityRequirementLabel(requirement.type)).join(" + ")} required`;
@@ -408,11 +411,20 @@ function capabilityRequirementLabel(value: string) {
     IDENTITY_VERIFICATION: "Identity verification",
     ACCOUNT_STATUS: "Active account",
     FEATURE_AVAILABILITY: "Feature availability",
+    BANK_ACCOUNT: "UK bank account",
+    PAYOUT_ACCOUNT: "Payout account",
+    PROVIDER_AVAILABILITY: "Provider availability",
     EMAIL_VERIFICATION_REQUIRED: "Email verification required",
     PHONE_VERIFICATION_REQUIRED: "Phone verification required",
     TWO_FACTOR_REQUIRED: "Two-factor authentication required",
     IDENTITY_VERIFICATION_REQUIRED: "Identity verification required",
     COMPLIANCE_REVIEW_REQUIRED: "Compliance review required",
+    BANK_ACCOUNT_REQUIRED: "UK bank account required",
+    PAYOUT_ACCOUNT_REQUIRED: "Payout account setup required",
+    PAYOUT_ACCOUNT_REVIEW_REQUIRED: "Payout account review in progress",
+    TRADING_UNAVAILABLE: "Trading temporarily unavailable",
+    DEPOSITS_UNAVAILABLE: "Deposits temporarily unavailable",
+    WITHDRAWALS_UNAVAILABLE: "Withdrawals unavailable for this account",
     ACCOUNT_RESTRICTED: "Account restricted",
     ACCOUNT_DEACTIVATED: "Account deactivated",
     ACCOUNT_DELETION_PENDING: "Account deletion pending",
@@ -426,6 +438,21 @@ function capabilityRequirementLabel(value: string) {
     .replace("two factor", "two-factor")
     .replace("identity verification", "identity verification")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function capabilityStatusLabel(status: AccountCapability["status"] | undefined) {
+  if (status === "AVAILABLE") return "Available";
+  if (status === "ACTION_REQUIRED") return "Action required";
+  if (status === "TEMPORARILY_UNAVAILABLE") return "Temporarily unavailable";
+  if (status === "BLOCKED") return "Blocked";
+  return "Unavailable";
+}
+
+function capabilityStatusClass(status: AccountCapability["status"] | undefined) {
+  if (status === "AVAILABLE") return "account-good";
+  if (status === "ACTION_REQUIRED") return "account-action-required";
+  if (status === "TEMPORARILY_UNAVAILABLE") return "account-temporarily-unavailable";
+  return "account-blocked";
 }
 
 function AccountSidebar() {

@@ -1272,7 +1272,13 @@ export const mockRepositories: AppRepositories = {
           "VIEW_PORTFOLIO",
           "MANAGE_PROFILE",
           "MANAGE_ACCOUNT_SECURITY",
-        ].map((capability) => ({ capability, allowed: true, reason: null, requirements: [] })),
+        ].map((capability) => ({
+          capability,
+          allowed: true,
+          status: "AVAILABLE" as const,
+          reason: null,
+          requirements: [],
+        })),
       } as import("@/data/repositories").AccountRepository extends {
         getCapabilities(): Promise<infer T>;
       }

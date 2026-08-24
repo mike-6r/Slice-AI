@@ -2259,6 +2259,21 @@
   font-size: 0.66rem;
   font-weight: 700;
 }
+.account-action-required,
+.account-temporarily-unavailable {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.account-action-required {
+  background: rgba(251, 191, 36, 0.12);
+  color: #f4c85c;
+}
+.account-temporarily-unavailable {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+}
 .account-security-row:last-child,
 .account-linked-row:last-child,
 .account-session-list li:last-child,
@@ -2999,7 +3014,9 @@ body:has(.collectors-page) .site-shell {
     padding: 0.5rem 0;
   }
   .account-access-list li > .account-good,
-  .account-access-list li > .account-blocked {
+  .account-access-list li > .account-blocked,
+  .account-access-list li > .account-action-required,
+  .account-access-list li > .account-temporarily-unavailable {
     grid-column: 2;
     justify-self: start;
   }

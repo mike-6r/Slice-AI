@@ -71,18 +71,21 @@ function renderAccount() {
       {
         capability: "PLACE_BUY_ORDER" as const,
         allowed: false,
+        status: "ACTION_REQUIRED" as const,
         reason: "EMAIL_VERIFICATION_REQUIRED" as const,
         requirements: [{ type: "EMAIL_VERIFICATION", satisfied: false }],
       },
       {
         capability: "DEPOSIT_FUNDS" as const,
         allowed: true,
+        status: "AVAILABLE" as const,
         reason: null,
         requirements: [{ type: "EMAIL_VERIFICATION", satisfied: true }],
       },
       {
         capability: "WITHDRAW_FUNDS" as const,
         allowed: false,
+        status: "ACTION_REQUIRED" as const,
         reason: "TWO_FACTOR_REQUIRED" as const,
         requirements: [
           { type: "EMAIL_VERIFICATION", satisfied: true },
@@ -181,7 +184,7 @@ describe("account UI", () => {
     expect(html).toContain("Place Buy Order");
     expect(html).toContain("Email verification required");
     expect(html).toContain("Two-factor authentication required");
-    expect(html).toContain("Blocked");
+    expect(html).toContain("Action required");
     expect(html).not.toContain("Complete account setup to unlock");
     expect(html).toContain("Order &amp; transaction updates");
     expect(html).toContain("Portfolio &amp; wallet activity");

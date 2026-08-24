@@ -4349,6 +4349,13 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                 "accountCapability.capability",
               ) as AccountCapability["capability"],
               allowed: booleanField(item.allowed, "accountCapability.allowed"),
+              status:
+                (typeof item.status === "string"
+                  ? item.status
+                  : fallbackCapabilityStatus(
+                      Boolean(item.allowed),
+                      reason as AccountCapability["reason"],
+                    )) as AccountCapability["status"],
               reason: reason as AccountCapability["reason"],
               requirements: item.requirements.map((requirement) => {
                 const requirementValue = objectField(requirement, "account capability requirement");
@@ -4764,4 +4771,27 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
     },
   };
+}
+
+function fallbackCapabilityStatus(
+  allowed: boolean,
+  reason: AccountCapability["reason"],
+): AccountCapability["status"] {
+  if (allowed) return "AVAILABLE";
+  if (
+    reason === "FEATURE_DISABLED" ||
+    reason === "TRADING_UNAVAILABLE" ||
+    reason === "DEPOSITS_UNAVAILABLE" ||
+    reason === "WITHDRAWALS_UNAVAILABLE"
+  ) {
+    return "TEMPORARILY_UNAVAILABLE";
+  }
+  if (
+    reason === "ACCOUNT_RESTRICTED" ||
+    reason === "ACCOUNT_DEACTIVATED" ||
+    reason === "ACCOUNT_DELETION_PENDING"
+  ) {
+    return "BLOCKED";
+  }
+  return "ACTION_REQUIRED";
 }

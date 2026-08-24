@@ -15,6 +15,7 @@ describe("CapabilityRequiredDialog", () => {
         decision={{
           capability: "PLACE_BUY_ORDER",
           allowed: false,
+          status: "ACTION_REQUIRED",
           reason: "IDENTITY_VERIFICATION_REQUIRED",
           requirements: [
             { type: "EMAIL_VERIFICATION", satisfied: true },
@@ -26,8 +27,9 @@ describe("CapabilityRequiredDialog", () => {
     );
 
     expect(html).toContain("Complete identity verification");
-    expect(html).toContain("Complete: email verification");
-    expect(html).toContain("Required: identity verification");
+    expect(html).toContain("Requested feature: Place Buy Order");
+    expect(html).toContain("✓ Email verification");
+    expect(html).toContain("Identity verification");
     expect(html).toContain("Continue identity verification");
     expect(html).not.toMatch(/case id|provider|hold|journal|account id/i);
   });
@@ -38,6 +40,7 @@ describe("CapabilityRequiredDialog", () => {
         decision={{
           capability: "PLACE_BUY_ORDER",
           allowed: false,
+          status: "ACTION_REQUIRED",
           reason: "EMAIL_VERIFICATION_REQUIRED",
           requirements: [{ type: "EMAIL_VERIFICATION", satisfied: false }],
         }}
@@ -46,5 +49,27 @@ describe("CapabilityRequiredDialog", () => {
     );
     expect(html).toContain("Verify email");
     expect(html).not.toContain("EMAIL_VERIFICATION_REQUIRED");
+  });
+
+  it("explains an intentionally unavailable funding feature without inventing setup work", () => {
+    const html = renderToStaticMarkup(
+      <CapabilityRequiredDialog
+        decision={{
+          capability: "DEPOSIT_FUNDS",
+          allowed: false,
+          status: "TEMPORARILY_UNAVAILABLE",
+          reason: "DEPOSITS_UNAVAILABLE",
+          requirements: [
+            { type: "EMAIL_VERIFICATION", satisfied: true },
+            { type: "FEATURE_AVAILABILITY", satisfied: false },
+          ],
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(html).toContain("Deposits are temporarily unavailable");
+    expect(html).toContain("No account step is missing");
+    expect(html).not.toContain("Feature availability");
+    expect(html).not.toContain("Continue setup");
   });
 });
