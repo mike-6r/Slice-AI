@@ -146,9 +146,9 @@ Active release: `/opt/slice/releases/20260824-2cfc40d`.
 | Ownership above fold | PASS |
 | CTA above fold | PASS |
 | Scrolling required to understand purchase | NO |
-| Trading fee uses backend authority | PASS — staging preview returned `0` | 
-| Sticky desktop panel | NOT USED — compact summary is the safer layout | 
-| Mobile purchase summary | PASS in responsive CSS implementation; viewport screenshot evidence pending | 
+| Trading fee uses backend authority | PASS — staging preview returned `0` |
+| Sticky desktop panel | NOT USED — compact summary is the safer layout |
+| Mobile purchase summary | PASS in responsive CSS implementation; viewport screenshot evidence pending |
 | Sell gross/fee/net/remaining | PASS |
 | Homepage reference source/currency | PASS — PriceCharting / USD |
 | Homepage demo math | PASS |
