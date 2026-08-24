@@ -137,6 +137,13 @@ export class PrismaCatalogueRepository implements CatalogueRepository {
           id: input.id,
           code: input.code,
           name: input.name,
+          displayName: input.displayName,
+          verificationMode: input.verificationMode,
+          supportsCertVerification: input.supportsCertVerification,
+          supportsAutomatedVerification: input.supportsAutomatedVerification,
+          officialVerificationUrl: input.officialVerificationUrl,
+          certificationFormat: input.certificationFormat,
+          gradeScaleVersion: input.gradeScaleVersion,
           status: input.status,
         },
       }),
@@ -144,7 +151,7 @@ export class PrismaCatalogueRepository implements CatalogueRepository {
   }
   async updateCompany(
     id: CatalogueId,
-    input: Partial<Pick<GradingCompany, 'name' | 'status'>>,
+    input: Partial<Pick<GradingCompany, 'name' | 'displayName' | 'verificationMode' | 'supportsCertVerification' | 'supportsAutomatedVerification' | 'officialVerificationUrl' | 'certificationFormat' | 'gradeScaleVersion' | 'status'>>,
   ) {
     return company(
       await this.db.gradingCompany.update({ where: { id }, data: input }),
@@ -162,10 +169,9 @@ export class PrismaCatalogueRepository implements CatalogueRepository {
     ).map(grade);
   }
   async findGrade(companyId: CatalogueId, value: string) {
-    const row = await this.db.gradeScaleEntry.findUnique({
-      where: {
-        companyId_grade: { companyId, grade: new Prisma.Decimal(value) },
-      },
+    const row = await this.db.gradeScaleEntry.findFirst({
+      where: { companyId, grade: new Prisma.Decimal(value), active: true },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
     return row ? grade(row) : null;
   }
@@ -182,6 +188,10 @@ export class PrismaCatalogueRepository implements CatalogueRepository {
           grade: new Prisma.Decimal(input.grade),
           label: input.label,
           conditionLabel: input.conditionLabel,
+          designation: input.designation ?? '',
+          legacy: input.legacy,
+          gradeEra: input.gradeEra,
+          scaleVersion: input.scaleVersion,
           sortOrder: input.sortOrder,
           active: input.active,
         },
@@ -302,6 +312,13 @@ function company(row: {
   id: string;
   code: string;
   name: string;
+  displayName: string;
+  verificationMode: string;
+  supportsCertVerification: boolean;
+  supportsAutomatedVerification: boolean;
+  officialVerificationUrl: string | null;
+  certificationFormat: string | null;
+  gradeScaleVersion: string;
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: Date;
   updatedAt: Date;
@@ -314,11 +331,16 @@ function grade(row: {
   grade: Prisma.Decimal;
   label: string;
   conditionLabel: string | null;
+  designation: string;
+  legacy: boolean;
+  gradeEra: string | null;
+  scaleVersion: string | null;
   sortOrder: number;
   active: boolean;
 }): GradeScaleEntry {
   return {
     ...row,
+    designation: row.designation || null,
     id: row.id as CatalogueId,
     companyId: row.companyId as CatalogueId,
     grade: row.grade.toFixed(2),

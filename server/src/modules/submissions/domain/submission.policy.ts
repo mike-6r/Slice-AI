@@ -65,8 +65,9 @@ export function assertRequiredSafeMedia(
     status: string;
     deletedAt?: Date | null;
   }>,
+  requiredSlots: ReadonlyArray<string> = REQUIRED_MEDIA_SLOTS,
 ) {
-  for (const slot of REQUIRED_MEDIA_SLOTS) {
+  for (const slot of requiredSlots) {
     if (
       !media.some(
         (item) =>

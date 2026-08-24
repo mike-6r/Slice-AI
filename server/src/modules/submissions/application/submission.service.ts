@@ -45,6 +45,11 @@ import {
   assertVerifiedMediaContent,
   REQUIRED_MEDIA_SLOTS,
 } from '../domain/submission.policy';
+import {
+  assertCertificationNumber,
+  compareCertificationIdentity,
+  normalizeCertificationNumber,
+} from '../domain/grading-certification';
 
 type Db = Prisma.TransactionClient;
 type DraftInput = {
@@ -75,6 +80,14 @@ const metadataAllowedKeys = new Set([
   'grader',
   'grade',
   'certificationNumber',
+  'designation',
+  'certificationVerificationStatus',
+  'certificationVerificationMode',
+  'officialVerificationUrl',
+  'certificationVerifiedGrade',
+  'certificationVerifiedLabel',
+  'certificationDesignation',
+  'certificationVerifiedAt',
   'details',
   'playerOrCharacter',
   'variant',
@@ -127,6 +140,16 @@ export class SubmissionService {
         await this.assertCollectorCapacity(actor, db);
         assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
+        const gradeReference = await this.assertGradeReference(
+          db,
+          input.declaredMetadata,
+          input.gradeScaleEntryId,
+        );
+        const normalizedCertificationNumber = gradeReference && isRecord(input.declaredMetadata)
+          ? input.declaredMetadata.certificationNumber
+            ? assertCertificationNumber(input.declaredMetadata.certificationNumber)
+            : null
+          : null;
         const submission = await db.assetSubmission.create({
           data: {
             id: randomUUID(),
@@ -135,10 +158,20 @@ export class SubmissionService {
             currentStep: input.currentStep ?? 1,
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
+            normalizedCertificationNumber,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
           },
           include: { media: true },
         });
+        if (gradeReference && normalizedCertificationNumber) {
+          await this.claimCertification(
+            db,
+            gradeReference.company.code,
+            normalizedCertificationNumber,
+            submission.id,
+            null,
+          );
+        }
         if (input.marketResearchId) {
           const research = await db.submissionMarketResearch.findFirst({
             where: {
@@ -281,6 +314,9 @@ export class SubmissionService {
       where: { id, ownerUserId: actor.userId },
       include: {
         media: { orderBy: { slot: 'asc' } },
+        certificationVerifications: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        },
         marketResearch: {
           orderBy: { collectedAt: 'desc' },
           include: { observations: { orderBy: { observedAt: 'desc' } } },
@@ -348,7 +384,13 @@ export class SubmissionService {
         await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${assetId} FOR UPDATE`;
         const submission = await db.assetSubmission.findUnique({
           where: { id: submissionId },
-          select: { id: true, status: true, assetId: true, ownerUserId: true },
+          select: {
+            id: true,
+            status: true,
+            assetId: true,
+            ownerUserId: true,
+            normalizedCertificationNumber: true,
+          },
         });
         if (!submission) this.notFound();
         if (submission!.status !== 'APPROVED') {
@@ -359,7 +401,12 @@ export class SubmissionService {
         }
         const asset = await db.asset.findUnique({
           where: { id: assetId },
-          select: { id: true },
+          select: {
+            id: true,
+            certificationNumber: true,
+            normalizedCertificationNumber: true,
+            gradeScaleEntry: { select: { company: { select: { code: true } } } },
+          },
         });
         if (!asset) this.notFound();
         if (submission!.assetId && submission!.assetId !== assetId) {
@@ -378,6 +425,18 @@ export class SubmissionService {
             code: 'ASSET_SUBMISSION_CONFLICT',
             message: 'The asset is already linked to another submission.',
           });
+        }
+        if (asset!.certificationNumber && asset!.gradeScaleEntry?.company.code) {
+          const normalized =
+            asset!.normalizedCertificationNumber ??
+            normalizeCertificationNumber(asset!.certificationNumber);
+          await this.claimCertification(
+            db,
+            asset!.gradeScaleEntry.company.code,
+            normalized,
+            submission!.id,
+            asset!.id,
+          );
         }
         const updated = await db.assetSubmission.update({
           where: { id: submissionId },
@@ -488,6 +547,35 @@ export class SubmissionService {
         }
         assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
+        const gradeReference = await this.assertGradeReference(
+          db,
+          input.declaredMetadata,
+          input.gradeScaleEntryId,
+        );
+        const normalizedCertificationNumber = gradeReference && isRecord(input.declaredMetadata)
+          ? input.declaredMetadata.certificationNumber
+            ? assertCertificationNumber(input.declaredMetadata.certificationNumber)
+            : null
+          : null;
+        await db.gradingCertificationClaim.updateMany({
+          where: {
+            submissionId: id,
+            status: 'SUBMISSION',
+            ...(normalizedCertificationNumber
+              ? { normalizedCertificationNumber: { not: normalizedCertificationNumber } }
+              : {}),
+          },
+          data: { status: 'RELEASED', submissionId: null },
+        });
+        if (gradeReference && normalizedCertificationNumber) {
+          await this.claimCertification(
+            db,
+            gradeReference.company.code,
+            normalizedCertificationNumber,
+            id,
+            null,
+          );
+        }
         if (input.marketResearchId) {
           const research = await db.submissionMarketResearch.findFirst({
             where: {
@@ -531,6 +619,7 @@ export class SubmissionService {
               : { currentStep: input.currentStep }),
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
+            normalizedCertificationNumber,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
             version: { increment: 1 },
           },
@@ -843,13 +932,52 @@ export class SubmissionService {
         });
         assertEditableStatus(submission.status);
         assertExpectedVersion(submission.version, version);
+        const gradeReference = await this.assertGradeReference(
+          db,
+          submission.declaredMetadata,
+          submission.gradeScaleEntryId,
+          true,
+        );
         assertSubmissionReady(
           submission.declaredMetadata,
           submission.preGrades[0] ?? null,
         );
         assertSubmissionTerms(submission.declaredMetadata);
-        assertRequiredSafeMedia(submission.media);
+        assertRequiredSafeMedia(
+          submission.media,
+          gradeReference ? [...REQUIRED_MEDIA_SLOTS, 'grading-label'] : REQUIRED_MEDIA_SLOTS,
+        );
         assertSubmissionMediaReady(submission.media);
+        if (gradeReference) {
+          const verification = await db.gradingCertificationVerification.findFirst({
+            where: { submissionId: id },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          });
+          if (verification?.status !== 'VERIFIED')
+            throw new UnprocessableEntityException({
+              code: 'CERTIFICATION_VERIFICATION_REQUIRED',
+              message:
+                'Verify the slab certification through the official lookup before submitting this graded card.',
+            });
+          const metadata = isRecord(submission.declaredMetadata)
+            ? submission.declaredMetadata
+            : {};
+          const normalized = normalizeCertificationNumber(
+            String(metadata.certificationNumber ?? ''),
+          );
+          if (!normalized || normalized !== submission.normalizedCertificationNumber)
+            throw new ConflictException({
+              code: 'CERTIFICATION_STATE_CONFLICT',
+              message: 'Refresh the certification verification before submitting.',
+            });
+          await this.claimCertification(
+            db,
+            gradeReference.company.code,
+            normalized,
+            id,
+            null,
+          );
+        }
         await this.assertReferences(db, { categoryId: submission.categoryId });
         const updated = await db.assetSubmission.update({
           where: { id },
@@ -906,6 +1034,10 @@ export class SubmissionService {
         )
           this.stateConflict();
         assertExpectedVersion(submission.version, version);
+        await db.gradingCertificationClaim.updateMany({
+          where: { submissionId: id, status: { not: 'ACTIVE' } },
+          data: { status: 'RELEASED', submissionId: null },
+        });
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -1124,6 +1256,9 @@ export class SubmissionService {
       where: { id },
       include: {
         media: { orderBy: { slot: 'asc' } },
+        certificationVerifications: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        },
         preGrades: { orderBy: { createdAt: 'desc' }, take: 20 },
         reviews: { orderBy: { createdAt: 'asc' } },
         marketResearch: {
@@ -1390,6 +1525,12 @@ export class SubmissionService {
           },
           include: { media: { orderBy: { slot: 'asc' } } },
         });
+        if (decision === 'REJECTED') {
+          await db.gradingCertificationClaim.updateMany({
+            where: { submissionId: id, status: { not: 'ACTIVE' } },
+            data: { status: 'RELEASED', submissionId: null },
+          });
+        }
         const review = await db.verificationReview.create({
           data: {
             id: randomUUID(),
@@ -1680,6 +1821,347 @@ export class SubmissionService {
     return db.assetSubmission.findUniqueOrThrow({ where: { id }, include });
   }
 
+  private async assertGradeReference(
+    db: Db,
+    rawMetadata: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+    gradeScaleEntryId: string | null | undefined,
+    required = false,
+  ) {
+    const metadata = isRecord(rawMetadata) ? rawMetadata : {};
+    const grader = stringMetadata(metadata.grader)?.trim() ?? '';
+    const rawCard = !grader || grader === 'Ungraded';
+    const hasGradeInput = Boolean(
+      metadata.grade || metadata.certificationNumber || gradeScaleEntryId,
+    );
+    if (rawCard) {
+      if (hasGradeInput) {
+        throw new UnprocessableEntityException({
+          code: 'RAW_CARD_GRADE_CONFLICT',
+          message: 'Raw / Ungraded cards cannot include a slab grade or certificate.',
+        });
+      }
+      return null;
+    }
+    if (!required && !hasGradeInput) return null;
+    if (!gradeScaleEntryId) {
+      throw new UnprocessableEntityException({
+        code: 'GRADE_SCALE_REQUIRED',
+        message: 'Choose an official grade from the selected grading company.',
+      });
+    }
+    const entry = await db.gradeScaleEntry.findUnique({
+      where: { id: gradeScaleEntryId },
+      include: { company: true },
+    });
+    if (!entry || !entry.active || entry.company.status !== 'ACTIVE') {
+      throw new UnprocessableEntityException({
+        code: 'GRADE_INVALID',
+        message: 'That company-specific grade is no longer available.',
+      });
+    }
+    if (entry.company.code !== grader) {
+      throw new UnprocessableEntityException({
+        code: 'GRADE_COMPANY_MISMATCH',
+        message: 'The selected grade does not belong to the selected company.',
+      });
+    }
+    const declaredGrade = String(metadata.grade ?? '').trim();
+    if (!declaredGrade || new Prisma.Decimal(declaredGrade).toFixed(2) !== entry.grade.toFixed(2)) {
+      throw new UnprocessableEntityException({
+        code: 'GRADE_INVALID',
+        message: 'Choose the exact grade shown on the selected company scale.',
+      });
+    }
+    const declaredDesignation = String(metadata.designation ?? '').trim();
+    if (entry.designation && entry.designation !== declaredDesignation) {
+      throw new UnprocessableEntityException({
+        code: 'GRADE_DESIGNATION_REQUIRED',
+        message: `Choose the ${entry.designation} designation for this numeric grade.`,
+      });
+    }
+    if (required) assertCertificationNumber(metadata.certificationNumber);
+    return entry;
+  }
+
+  private async claimCertification(
+    db: Db,
+    companyCode: string,
+    normalizedCertificationNumber: string,
+    submissionId: string | null,
+    assetId: string | null,
+  ) {
+    const existing = await db.gradingCertificationClaim.findUnique({
+      where: {
+        companyCode_normalizedCertificationNumber: {
+          companyCode,
+          normalizedCertificationNumber,
+        },
+      },
+    });
+    if (existing && existing.status !== 'RELEASED') {
+      if (existing.submissionId === submissionId && submissionId)
+        return db.gradingCertificationClaim.update({
+          where: { id: existing.id },
+          data: { assetId, status: assetId ? 'ACTIVE' : existing.status },
+        });
+      throw new ConflictException({
+        code: 'CERT_DUPLICATE_BLOCKED',
+        message: 'That certification number is already associated with an active Slice record.',
+      });
+    }
+    if (existing) {
+      return db.gradingCertificationClaim.update({
+        where: { id: existing.id },
+        data: { submissionId, assetId, status: assetId ? 'ACTIVE' : 'SUBMISSION' },
+      });
+    }
+    try {
+      return await db.gradingCertificationClaim.create({
+        data: {
+          id: randomUUID(),
+          companyCode,
+          normalizedCertificationNumber,
+          submissionId,
+          assetId,
+          status: assetId ? 'ACTIVE' : 'SUBMISSION',
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException({
+          code: 'CERT_DUPLICATE_BLOCKED',
+          message: 'That certification number is already associated with an active Slice record.',
+        });
+      throw error;
+    }
+  }
+
+  async verifyCertification(
+    actor: Actor,
+    id: string,
+    input: { certificationNumber: string },
+    requestId: string,
+    key: string,
+  ) {
+    await this.capabilities?.require(actor, 'LIST_ASSET');
+    return this.mutate(
+      actor,
+      `submission.certification-verify:${id}`,
+      'POST',
+      `/v1/submissions/${id}/certification/verify`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const submission = await this.ownerForUpdate(db, actor.userId, id, {
+          media: { orderBy: { slot: 'asc' } },
+          certificationVerifications: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
+        });
+        assertEditableStatus(submission.status);
+        const entry = await this.assertGradeReference(
+          db,
+          submission.declaredMetadata,
+          submission.gradeScaleEntryId,
+          true,
+        );
+        if (!entry) throw new UnprocessableEntityException({
+          code: 'CERTIFICATION_NOT_APPLICABLE',
+          message: 'Raw / Ungraded cards do not need certification verification.',
+        });
+        const normalized = assertCertificationNumber(input.certificationNumber);
+        await db.gradingCertificationClaim.updateMany({
+          where: { submissionId: id, status: 'SUBMISSION', normalizedCertificationNumber: { not: normalized } },
+          data: { status: 'RELEASED', submissionId: null },
+        });
+        await this.claimCertification(db, entry.company.code, normalized, id, null);
+        const verification = await db.gradingCertificationVerification.create({
+          data: {
+            id: randomUUID(),
+            submissionId: id,
+            requestedByUserId: actor.userId,
+            companyCode: entry.company.code,
+            certificationNumber: input.certificationNumber.trim(),
+            normalizedCertificationNumber: normalized,
+            status: 'MANUAL_REVIEW_REQUIRED',
+            verificationMode: entry.company.verificationMode,
+            officialVerificationUrl: entry.company.officialVerificationUrl,
+          },
+        });
+        const metadata = isRecord(submission.declaredMetadata)
+          ? submission.declaredMetadata
+          : {};
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            normalizedCertificationNumber: normalized,
+            declaredMetadata: jsonMetadata({
+              ...metadata,
+              certificationNumber: input.certificationNumber.trim(),
+              certificationVerificationStatus: 'MANUAL_REVIEW_REQUIRED',
+              certificationVerificationMode: entry.company.verificationMode,
+              officialVerificationUrl: entry.company.officialVerificationUrl ?? '',
+            }),
+            version: { increment: 1 },
+          },
+          include: {
+            media: { orderBy: { slot: 'asc' } },
+            certificationVerifications: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
+          },
+        });
+        await audit('CERT_VERIFICATION_REQUESTED', 'submission', id, {
+          verificationId: verification.id,
+          companyCode: entry.company.code,
+          verificationMode: entry.company.verificationMode,
+          status: verification.status,
+        });
+        await audit('CERT_MANUAL_REVIEW_REQUIRED', 'submission', id, {
+          verificationId: verification.id,
+        });
+        return {
+          ...ownerProjection(updated),
+          certificationVerification: certificationVerificationProjection(verification),
+          canSubmit: false,
+        };
+      },
+    );
+  }
+
+  manualVerifyCertification(
+    actor: Actor,
+    id: string,
+    input: {
+      verifiedIdentity: Record<string, unknown>;
+      verifiedGrade: string;
+      verifiedLabel?: string;
+      designation?: string;
+      subgrades?: Record<string, unknown>;
+      providerReference?: string;
+    },
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `submission.certification-manual-verify:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/certification/manual-verify`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const submission = await db.assetSubmission.findUnique({
+          where: { id },
+          include: {
+            media: { orderBy: { slot: 'asc' } },
+            certificationVerifications: {
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+            },
+          },
+        });
+        if (!submission) this.notFound();
+        const entry = await this.assertGradeReference(
+          db,
+          submission!.declaredMetadata,
+          submission!.gradeScaleEntryId,
+          true,
+        );
+        if (!entry) throw new UnprocessableEntityException({ code: 'CERTIFICATION_NOT_APPLICABLE', message: 'Certification is not applicable.' });
+        const latest = submission!.certificationVerifications[0];
+        if (!latest) throw new ConflictException({ code: 'CERTIFICATION_VERIFICATION_REQUIRED', message: 'Request an official certification lookup first.' });
+        const verifiedIdentity = input.verifiedIdentity;
+        const metadata = isRecord(submission!.declaredMetadata) ? submission!.declaredMetadata : {};
+        const comparison = compareCertificationIdentity(
+          {
+            year: stringMetadata(metadata.year),
+            set: stringMetadata(metadata.set),
+            cardNumber: stringMetadata(metadata.cardNumber),
+            name: stringMetadata(metadata.name),
+            variant: stringMetadata(metadata.variant),
+            language: stringMetadata(metadata.language),
+            companyCode: entry.company.code,
+            grade: entry.grade.toFixed(2),
+          },
+          {
+            year: stringMetadata(verifiedIdentity.year),
+            set: stringMetadata(verifiedIdentity.set),
+            cardNumber: stringMetadata(verifiedIdentity.cardNumber),
+            name: stringMetadata(verifiedIdentity.name),
+            variant: stringMetadata(verifiedIdentity.variant),
+            language: stringMetadata(verifiedIdentity.language),
+            companyCode: stringMetadata(verifiedIdentity.companyCode),
+            grade: input.verifiedGrade,
+          },
+        );
+        const gradeMatches = new Prisma.Decimal(input.verifiedGrade).toFixed(2) === entry.grade.toFixed(2);
+        const designationMatches =
+          !entry.designation ||
+          entry.designation === (input.designation ?? '') ||
+          (entry.company.code === 'BGS' &&
+            entry.grade.toFixed(2) === '10.00' &&
+            ['PRISTINE', 'BLACK_LABEL'].includes(input.designation ?? ''));
+        const status = comparison.status === 'MATCH' && gradeMatches && designationMatches ? 'VERIFIED' : 'MISMATCH';
+        const verification = await db.gradingCertificationVerification.update({
+          where: { id: latest.id },
+          data: {
+            status,
+            verifiedCard: verifiedIdentity as Prisma.InputJsonValue,
+            verifiedGrade: input.verifiedGrade,
+            verifiedLabel: input.verifiedLabel ?? entry.label,
+            designation: input.designation ?? null,
+            subgrades: input.subgrades as Prisma.InputJsonValue | undefined,
+            providerReference: input.providerReference?.trim() || null,
+            gradeEra: entry.gradeEra,
+            verifiedAt: status === 'VERIFIED' ? new Date() : null,
+          },
+        });
+        if (status === 'MISMATCH')
+          await audit('CERT_VERIFICATION_MISMATCH', 'submission', id, {
+            verificationId: verification.id,
+            mismatches: comparison.mismatches,
+          });
+        if (status === 'MISMATCH') {
+          const mismatchUpdated = await db.assetSubmission.update({
+            where: { id },
+            data: {
+              declaredMetadata: jsonMetadata({
+                ...metadata,
+                certificationVerificationStatus: 'MISMATCH',
+              }),
+              version: { increment: 1 },
+            },
+            include: {
+              media: { orderBy: { slot: 'asc' } },
+              certificationVerifications: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
+            },
+          });
+          return {
+            ...ownerProjection(mismatchUpdated),
+            certificationVerification: certificationVerificationProjection(verification),
+            canSubmit: false,
+          };
+        }
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            declaredMetadata: jsonMetadata({
+              ...metadata,
+              certificationVerificationStatus: 'VERIFIED',
+              certificationVerifiedGrade: input.verifiedGrade,
+              certificationVerifiedLabel: input.verifiedLabel ?? entry.label,
+              certificationDesignation: input.designation ?? '',
+              certificationVerifiedAt: new Date().toISOString(),
+            }),
+            version: { increment: 1 },
+          },
+          include: { media: { orderBy: { slot: 'asc' } }, certificationVerifications: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] } },
+        });
+        await audit('CERT_VERIFIED', 'submission', id, { verificationId: verification.id, companyCode: entry.company.code, grade: entry.grade.toFixed(2) });
+        return { ...ownerProjection(updated), certificationVerification: certificationVerificationProjection(verification), canSubmit: true };
+      },
+    );
+  }
+
   private async assertReferences(db: Db, input: DraftInput) {
     const category = await db.category.findFirst({
       where: { id: input.categoryId, status: 'ACTIVE' },
@@ -1828,6 +2310,37 @@ function mediaProjection(media: {
     updatedAt: media.updatedAt.toISOString(),
   };
 }
+function certificationVerificationProjection(verification: {
+  id: string;
+  companyCode: string;
+  certificationNumber: string;
+  normalizedCertificationNumber: string;
+  status: string;
+  verificationMode: string;
+  officialVerificationUrl: string | null;
+  verifiedGrade: string | null;
+  verifiedLabel: string | null;
+  designation: string | null;
+  gradeEra: string | null;
+  verifiedAt: Date | null;
+  createdAt: Date;
+}) {
+  return {
+    id: verification.id,
+    companyCode: verification.companyCode,
+    certificationNumber: verification.certificationNumber,
+    normalizedCertificationNumber: verification.normalizedCertificationNumber,
+    status: verification.status,
+    verificationMode: verification.verificationMode,
+    officialVerificationUrl: verification.officialVerificationUrl,
+    verifiedGrade: verification.verifiedGrade,
+    verifiedLabel: verification.verifiedLabel,
+    designation: verification.designation,
+    gradeEra: verification.gradeEra,
+    verifiedAt: verification.verifiedAt?.toISOString() ?? null,
+    createdAt: verification.createdAt.toISOString(),
+  };
+}
 function ownerProjection(submission: {
   id: string;
   status: string;
@@ -1854,6 +2367,21 @@ function ownerProjection(submission: {
     updatedAt: Date;
   }>;
   marketResearch?: ResearchRow[];
+  certificationVerifications?: Array<{
+    id: string;
+    companyCode: string;
+    certificationNumber: string;
+    normalizedCertificationNumber: string;
+    status: string;
+    verificationMode: string;
+    officialVerificationUrl: string | null;
+    verifiedGrade: string | null;
+    verifiedLabel: string | null;
+    designation: string | null;
+    gradeEra: string | null;
+    verifiedAt: Date | null;
+    createdAt: Date;
+  }>;
 }) {
   return {
     id: submission.id,
@@ -1872,6 +2400,9 @@ function ownerProjection(submission: {
     media: submission.media.map(mediaProjection),
     marketResearch: submission.marketResearch?.[0]
       ? marketResearchProjection(submission.marketResearch[0])
+      : null,
+    certificationVerification: submission.certificationVerifications?.[0]
+      ? certificationVerificationProjection(submission.certificationVerifications[0])
       : null,
   };
 }
@@ -2220,6 +2751,21 @@ type ReviewDetailRow = {
     createdAt: Date;
     updatedAt: Date;
   }>;
+  certificationVerifications: Array<{
+    id: string;
+    companyCode: string;
+    certificationNumber: string;
+    normalizedCertificationNumber: string;
+    status: string;
+    verificationMode: string;
+    officialVerificationUrl: string | null;
+    verifiedGrade: string | null;
+    verifiedLabel: string | null;
+    designation: string | null;
+    gradeEra: string | null;
+    verifiedAt: Date | null;
+    createdAt: Date;
+  }>;
 };
 function reviewDetailProjection(submission: ReviewDetailRow) {
   return {
@@ -2234,6 +2780,9 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       ? preGradeProjection(
           submission.preGrades.find((item) => !item.supersededAt)!,
         )
+      : null,
+    certificationVerification: submission.certificationVerifications[0]
+      ? certificationVerificationProjection(submission.certificationVerifications[0])
       : null,
     reviews: submission.reviews.map((review) => ({
       id: review.id,

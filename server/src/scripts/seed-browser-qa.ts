@@ -194,22 +194,26 @@ export async function seedBrowserQa(prisma: PrismaClient, redis: Redis) {
         status: 'ACTIVE',
       },
     });
-    await tx.gradeScaleEntry.upsert({
-      where: {
-        companyId_grade: {
+    const existingGrade = await tx.gradeScaleEntry.findFirst({
+      where: { companyId: BROWSER_QA.gradingCompanyId, grade: '10.00', designation: '' },
+    });
+    if (existingGrade) {
+      await tx.gradeScaleEntry.update({
+        where: { id: existingGrade.id },
+        data: { label: 'QA Gem Mint', active: true, sortOrder: 10 },
+      });
+    } else {
+      await tx.gradeScaleEntry.create({
+        data: {
+          id: BROWSER_QA.gradeId,
           companyId: BROWSER_QA.gradingCompanyId,
           grade: '10.00',
+          label: 'QA Gem Mint',
+          sortOrder: 10,
+          designation: '',
         },
-      },
-      update: { label: 'QA Gem Mint', active: true, sortOrder: 10 },
-      create: {
-        id: BROWSER_QA.gradeId,
-        companyId: BROWSER_QA.gradingCompanyId,
-        grade: '10.00',
-        label: 'QA Gem Mint',
-        sortOrder: 10,
-      },
-    });
+      });
+    }
 
     for (const [index, title] of [
       'QA Charizard Display Card',

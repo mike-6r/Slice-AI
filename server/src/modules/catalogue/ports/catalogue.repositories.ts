@@ -52,7 +52,7 @@ export interface CatalogueRepository {
   ): Promise<GradingCompany>;
   updateCompany(
     id: CatalogueId,
-    input: Partial<Pick<GradingCompany, 'name' | 'status'>>,
+    input: Partial<Pick<GradingCompany, 'name' | 'displayName' | 'verificationMode' | 'supportsCertVerification' | 'supportsAutomatedVerification' | 'officialVerificationUrl' | 'certificationFormat' | 'gradeScaleVersion' | 'status'>>,
   ): Promise<GradingCompany>;
   listGrades(
     code: string,

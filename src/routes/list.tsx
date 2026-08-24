@@ -41,6 +41,7 @@ import type {
   SubmissionMedia,
   RawCardPreGrade,
   RawCardVisualization,
+  CertificationVerification,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -90,6 +91,8 @@ type ListingForm = {
   language: string;
   grader: string;
   grade: string;
+  gradeScaleEntryId?: string;
+  designation?: string;
   certificationNumber: string;
   condition: string;
   details: string;
@@ -118,6 +121,8 @@ const blank: ListingForm = {
   language: "",
   grader: "",
   grade: "",
+  gradeScaleEntryId: "",
+  designation: "",
   certificationNumber: "",
   condition: "",
   details: "",
@@ -201,8 +206,9 @@ export function SubmissionPage() {
   );
   const metadata = metadataFromForm(form);
   const payloadFingerprint = JSON.stringify({
-    categoryId: form.categoryId,
-    metadata,
+      categoryId: form.categoryId,
+      gradeScaleEntryId: form.gradeScaleEntryId || null,
+      metadata,
   });
 
   const create = useMutation({
@@ -216,6 +222,7 @@ export function SubmissionPage() {
       const fingerprint = payloadFingerprint;
       const created = await services.repositories.submissions.createDraft({
         categoryId: form.categoryId,
+        gradeScaleEntryId: form.gradeScaleEntryId || null,
         currentStep: nextStep ?? 1,
         declaredMetadata: metadataOverride ?? metadata,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
@@ -253,6 +260,7 @@ export function SubmissionPage() {
       const updated = await services.repositories.submissions.updateDraft(draft.id, {
         version: version.current,
         categoryId: form.categoryId,
+        gradeScaleEntryId: form.gradeScaleEntryId || null,
         currentStep: nextStep ?? step,
         declaredMetadata: metadataOverride ?? metadata,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
@@ -381,6 +389,22 @@ export function SubmissionPage() {
     },
     onError: (error) => setLocalError(friendlyError(error)),
   });
+  const verifyCertification = useMutation({
+    mutationFn: () => {
+      if (!detail.data) throw new Error("Save your card details before verifying the certificate.");
+      return services.repositories.submissions.verifyCertification(
+        detail.data.id,
+        form.certificationNumber,
+      );
+    },
+    onSuccess: async (updated) => {
+      version.current = updated.version;
+      client.setQueryData(["submissions", draft?.id], updated);
+      setNotice("Certificate recorded. Staff must confirm it against the official grading-company lookup before submission.");
+      await detail.refetch();
+    },
+    onError: (error) => setLocalError(friendlyError(error)),
+  });
   const submit = useMutation({
     mutationFn: () => {
       if (!detail.data) throw new Error("Your draft is still loading.");
@@ -432,6 +456,8 @@ export function SubmissionPage() {
       language: text("language"),
       grader: text("grader") === "Ungraded" ? "" : text("grader"),
       grade: text("grader") && text("grader") !== "Ungraded" ? text("grade") : "",
+      gradeScaleEntryId: detail.data.gradeScaleEntryId ?? "",
+      designation: text("designation"),
       certificationNumber: text("certificationNumber"),
       condition: text("condition"),
       details: text("details"),
@@ -605,7 +631,7 @@ export function SubmissionPage() {
       }
     }
     if (step === 4 && !evidenceReady) {
-      const remaining = missingRequiredPhotoCount(submission);
+      const remaining = missingRequiredPhotoCount(submission, Boolean(form.grader && form.grader !== "Ungraded"));
       setLocalError(
         `Add the ${remaining} remaining required photo${remaining === 1 ? "" : "s"} to continue.`,
       );
@@ -708,10 +734,11 @@ export function SubmissionPage() {
 
   const selectedCategory = categories.data?.find((category) => category.id === form.categoryId);
   const submission = detail.data;
-  const evidenceReady = REQUIRED_SLOTS.every(
+  const gradedCard = Boolean(form.grader.trim() && form.grader !== "Ungraded");
+  const evidenceReady = requiredSlotsForGrading(gradedCard).every(
     (slot) => activeMedia(submission, slot)?.status === "SAFE",
   );
-  const gradedCard = Boolean(form.grader.trim() && form.grader !== "Ungraded");
+  const certificationVerified = detail.data?.certificationVerification?.status === "VERIFIED";
   const reviewReady = Boolean(
     form.categoryId &&
     form.name.trim() &&
@@ -722,7 +749,9 @@ export function SubmissionPage() {
     form.marketCheckStatus &&
     isValidPercent(form.offerIntentPercent) &&
     evidenceReady &&
-    (gradedCard || form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
+    (gradedCard
+      ? certificationVerified
+      : form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
     form.termsAcknowledged,
   );
   const submitted = submission?.status === "SUBMITTED";
@@ -734,6 +763,7 @@ export function SubmissionPage() {
     removeMedia.error ??
     submit.error ??
     runPreGrade.error;
+  const fullActionError = actionError ?? verifyCertification.error;
 
   if (submitted) {
     return <SubmissionReceived submission={submission} />;
@@ -769,9 +799,9 @@ export function SubmissionPage() {
             <Check aria-hidden="true" /> {notice}
           </p>
         ) : null}
-        {localError || actionError ? (
+        {localError || fullActionError ? (
           <p className="list-guided-error" role="alert">
-            <CircleAlert aria-hidden="true" /> {localError ?? friendlyError(actionError)}
+            <CircleAlert aria-hidden="true" /> {localError ?? friendlyError(fullActionError)}
           </p>
         ) : null}
 
@@ -796,6 +826,9 @@ export function SubmissionPage() {
               gradingCompanies={gradingCompanies.data ?? []}
               grades={gradeOptions.data ?? []}
               gradesLoading={gradeOptions.isLoading}
+              verification={detail.data?.certificationVerification ?? null}
+              verifyPending={verifyCertification.isPending}
+              onVerifyCertification={() => verifyCertification.mutate()}
             />
           ) : null}
           {step === 3 ? (
@@ -1123,12 +1156,18 @@ export function DetailsStep({
   gradingCompanies,
   grades,
   gradesLoading,
+  verification = null,
+  verifyPending = false,
+  onVerifyCertification = () => undefined,
 }: {
   form: ListingForm;
   onChange: <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => void;
   gradingCompanies: GradingCompanyOption[];
   grades: GradeOption[];
   gradesLoading: boolean;
+  verification?: CertificationVerification | null;
+  verifyPending?: boolean;
+  onVerifyCertification?: () => void;
 }) {
   const isUngraded = !form.grader || form.grader === "Ungraded";
   const hasCurrentCompany = gradingCompanies.some((company) => company.code === form.grader);
@@ -1243,7 +1282,10 @@ export function DetailsStep({
               value={isUngraded ? "" : form.grader}
               onChange={(event) => {
                 onChange("grader", event.target.value);
-                if (!event.target.value) onChange("grade", "");
+                onChange("grade", "");
+                onChange("gradeScaleEntryId", "");
+                onChange("designation", "");
+                onChange("certificationNumber", "");
               }}
             >
               <option value="">Raw / Ungraded</option>
@@ -1252,7 +1294,7 @@ export function DetailsStep({
               ) : null}
               {gradingCompanies.map((company) => (
                 <option key={company.code} value={company.code}>
-                  {company.name}
+                  {company.displayName ?? company.name}
                 </option>
               ))}
             </select>
@@ -1271,33 +1313,36 @@ export function DetailsStep({
               </select>
             ) : grades.length ? (
               <select
-                value={form.grade}
-                onChange={(event) => onChange("grade", event.target.value)}
+                value={form.gradeScaleEntryId ?? ""}
+                onChange={(event) => {
+                  const selected = grades.find((grade) => grade.id === event.target.value);
+                  onChange("gradeScaleEntryId", selected?.id ?? "");
+                  onChange("grade", selected?.grade ?? "");
+                  onChange("designation", selected?.designation ?? "");
+                  onChange("certificationNumber", "");
+                }}
                 aria-busy={gradesLoading}
               >
                 <option value="">{gradesLoading ? "Loading grades…" : "Choose a grade"}</option>
                 {grades.map((grade) => (
-                  <option key={grade.grade} value={grade.grade}>
+                  <option key={grade.id ?? `${grade.grade}-${grade.designation ?? ""}`} value={grade.id ?? grade.grade}>
                     {grade.label}
                     {grade.conditionLabel ? ` · ${grade.conditionLabel}` : ""}
+                    {grade.designation ? ` · ${grade.designation}` : ""}
+                    {grade.legacy ? " · Legacy" : ""}
                   </option>
                 ))}
               </select>
             ) : (
-              <input
-                type="number"
-                value={form.grade}
-                onChange={(event) => onChange("grade", event.target.value)}
-                placeholder="e.g. 9"
-                inputMode="decimal"
-                min={1}
-                max={10}
-                step={0.5}
-                disabled={gradesLoading}
-              />
+              <div className="list-scale-unavailable" role="status">
+                <Info aria-hidden="true" />
+                {gradesLoading
+                  ? "Loading this company's official scale…"
+                  : "This company's official scale is awaiting staff confirmation. Choose another company to continue."}
+              </div>
             )}
             <small className="list-field-help">
-              {isUngraded ? "Raw cards do not need a slab grade." : "Enter the assigned grade."}
+              {isUngraded ? "Raw cards do not need a slab grade." : "Choose the exact label shown on the slab."}
             </small>
           </label>
           <Input
@@ -1308,6 +1353,62 @@ export function DetailsStep({
             help="The overall condition of the card."
           />
         </div>
+        {!isUngraded ? (
+          <div className="list-certification-panel">
+            <label>
+              <span className="list-field-label">
+                Certification number
+                <TooltipHint label="Enter the number printed on the slab label. Slice checks it against the grading company's official lookup; it is never accepted as verified from typed text alone." />
+              </span>
+              <div className="list-certification-input">
+                <input
+                  value={form.certificationNumber}
+                  onChange={(event) => onChange("certificationNumber", event.target.value)}
+                  placeholder="Enter the slab certificate number"
+                  autoComplete="off"
+                  maxLength={80}
+                />
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={!form.certificationNumber.trim() || !form.gradeScaleEntryId || verifyPending}
+                  onClick={onVerifyCertification}
+                >
+                  {verifyPending ? "Checking…" : "Verify cert"}
+                </button>
+              </div>
+              <small className="list-field-help">
+                {verification?.status === "VERIFIED"
+                  ? "Verified against the official grading-company record."
+                  : "A staff reviewer completes the official lookup before a graded card can be submitted."}
+              </small>
+            </label>
+            {verification ? (
+              <div className={`list-certification-status list-certification-status--${verification.status.toLowerCase()}`} role="status">
+                <ShieldCheck aria-hidden="true" />
+                <div>
+                  <strong>
+                    {verification.status === "VERIFIED"
+                      ? "Certification verified"
+                      : verification.status === "MISMATCH"
+                        ? "Certification details need attention"
+                        : "Official lookup requested"}
+                  </strong>
+                  <span>
+                    {verification.status === "VERIFIED"
+                      ? `${verification.companyCode} ${verification.verifiedLabel ?? verification.verifiedGrade ?? "official grade"}`
+                      : "The typed number is recorded, but it is not treated as verified until the official record is reviewed."}
+                  </span>
+                  {verification.officialVerificationUrl ? (
+                    <a href={verification.officialVerificationUrl} target="_blank" rel="noreferrer">
+                      Open official lookup <ChevronRight aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -2058,12 +2159,21 @@ export function PhotosStep({
   onAdditionalSelect: (files: File[]) => void;
   onRemove: (entry: SubmissionMedia) => void;
 }) {
-  const remaining = missingRequiredPhotoCount(submission);
+  const requiredSlots = requiredSlotsForGrading(graded);
+  const remaining = missingRequiredPhotoCount(submission, graded);
+  const requiredPhotoConfig = graded
+    ? [
+        ...REQUIRED_PHOTO_CONFIG,
+        ["grading-label", "Grading label close-up", "Required for graded cards: make the company, grade, and certification number readable."] as const,
+      ]
+    : REQUIRED_PHOTO_CONFIG;
   const additional = activeMediaForSlot(submission, "additional-image");
   const optionalPreviewKeys = Object.keys(previews).filter((key) =>
     key.startsWith("additional-image:"),
   );
-  const optionalRoleSlots = OPTIONAL_SLOTS.filter(([slot]) => slot !== "additional-image");
+  const optionalRoleSlots = OPTIONAL_SLOTS.filter(
+    ([slot]) => slot !== "additional-image" && !(graded && slot === "grading-label"),
+  );
   return (
     <div className="list-step list-step--photos">
       <div className="list-photos-layout">
@@ -2078,14 +2188,18 @@ export function PhotosStep({
             <div className="list-photos-section__heading">
               <div>
                 <h3 id="required-photos-title">Required photos</h3>
-                <p>Front and back are required. Edge views can be added when they help show condition.</p>
+                <p>
+                  {graded
+                    ? "Front, back, and a readable grading label close-up are required."
+                    : "Front and back are required. Edge views can be added when they help show condition."}
+                </p>
               </div>
               <span className={remaining ? "list-photo-count" : "list-photo-count is-complete"}>
-                {REQUIRED_SLOTS.length - remaining} of {REQUIRED_SLOTS.length} added
+                {requiredSlots.length - remaining} of {requiredSlots.length} added
               </span>
             </div>
             <div className="list-required-photo-grid">
-              {REQUIRED_PHOTO_CONFIG.map(([slot, title, helper]) => (
+              {requiredPhotoConfig.map(([slot, title, helper]) => (
                 <PhotoTile
                   key={slot}
                   slot={slot}
@@ -3431,8 +3545,10 @@ export function ReviewStep({
     form.set.trim() &&
     form.cardNumber.trim(),
   );
-  const requiredReady = REQUIRED_SLOTS.flatMap((slot) => safeMediaForSlot(submission, slot));
-  const optionalReady = OPTIONAL_SLOTS.flatMap(([slot]) => safeMediaForSlot(submission, slot));
+  const requiredReady = requiredSlotsForGrading(graded).flatMap((slot) => safeMediaForSlot(submission, slot));
+  const optionalReady = OPTIONAL_SLOTS.filter(
+    ([slot]) => !(graded && slot === "grading-label"),
+  ).flatMap(([slot]) => safeMediaForSlot(submission, slot));
   const checklist = [
     { label: "Card details provided", complete: cardDetailsComplete },
     {
@@ -4008,11 +4124,12 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
     | "condition"
     | "grader"
     | "grade"
+    | "designation"
     | "certificationNumber"
     | "details"
     | "playerOrCharacter"
     | "variant";
-  const value = (key: TextField) => form[key].trim();
+  const value = (key: TextField) => (form[key] ?? "").trim();
   const optional = (key: TextField) => (value(key) ? { [key]: value(key) } : {});
   const expectedValueMinor = form.collectorExpectedValue
     ? majorToMinor(form.collectorExpectedValue)
@@ -4026,9 +4143,10 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
     ...optional("edition"),
     ...optional("language"),
     ...optional("condition"),
-    ...optional("grader"),
-    ...optional("grade"),
-    ...optional("certificationNumber"),
+  ...optional("grader"),
+  ...optional("grade"),
+  ...optional("designation"),
+  ...optional("certificationNumber"),
     ...optional("details"),
     ...optional("playerOrCharacter"),
     ...optional("variant"),
@@ -4072,8 +4190,14 @@ function safeMediaForSlot(submission: SubmissionDetail | undefined, slot: string
 function activeMediaForSlot(submission: SubmissionDetail | undefined, slot: string) {
   return submission?.media.filter((item) => item.slot === slot && item.status !== "DELETED") ?? [];
 }
-function missingRequiredPhotoCount(submission: SubmissionDetail | undefined) {
-  return REQUIRED_SLOTS.filter((slot) => activeMedia(submission, slot)?.status !== "SAFE").length;
+function requiredSlotsForGrading(graded: boolean) {
+  return graded ? (["front", "back", "grading-label"] as const) : REQUIRED_SLOTS;
+}
+
+function missingRequiredPhotoCount(submission: SubmissionDetail | undefined, graded = false) {
+  return requiredSlotsForGrading(graded).filter(
+    (slot) => activeMedia(submission, slot)?.status !== "SAFE",
+  ).length;
 }
 function photoStateLabel(status: SubmissionMedia["status"]) {
   switch (status) {

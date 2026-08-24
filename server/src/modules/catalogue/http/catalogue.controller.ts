@@ -85,6 +85,13 @@ const companyInput = z
       .trim()
       .regex(/^[A-Za-z0-9-]{2,16}$/),
     name: text(1, 120),
+    displayName: text(1, 120).optional(),
+    verificationMode: z.enum(['MANUAL_OFFICIAL_LOOKUP', 'OFFICIAL_API', 'APPROVED_MACHINE_LOOKUP', 'UNSUPPORTED']).optional(),
+    supportsCertVerification: z.boolean().optional(),
+    supportsAutomatedVerification: z.boolean().optional(),
+    officialVerificationUrl: z.string().url().nullable().optional(),
+    certificationFormat: optionalText(255),
+    gradeScaleVersion: text(1, 80).optional(),
     status: status.optional(),
   })
   .strict();

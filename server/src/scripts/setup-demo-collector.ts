@@ -1161,10 +1161,8 @@ async function ensureDemoGrades(
         where: { code: grading.companyCode },
       });
     }
-    let grade = await db.gradeScaleEntry.findUnique({
-      where: {
-        companyId_grade: { companyId: company.id, grade: grading.grade },
-      },
+    let grade = await db.gradeScaleEntry.findFirst({
+      where: { companyId: company.id, grade: grading.grade, designation: '' },
     });
     if (!grade) {
       await catalogue.createGrade(
@@ -1179,10 +1177,8 @@ async function ensureDemoGrades(
         `collector-grade-${randomUUID()}`,
         `collector-grade:${grading.companyCode}:${grading.grade}`,
       );
-      grade = await db.gradeScaleEntry.findUniqueOrThrow({
-        where: {
-          companyId_grade: { companyId: company.id, grade: grading.grade },
-        },
+      grade = await db.gradeScaleEntry.findFirstOrThrow({
+        where: { companyId: company.id, grade: grading.grade, designation: '' },
       });
     }
     ids.set(`${grading.companyCode}:${grading.grade}`, grade.id);

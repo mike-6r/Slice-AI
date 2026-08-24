@@ -124,14 +124,42 @@ export class CatalogueService {
     };
   }
   async companies() {
-    return (await this.catalogue.listCompanies()).map(({ code, name }) => ({
-      code,
-      name,
-    }));
+    return (await this.catalogue.listCompanies()).map(
+      ({
+        code,
+        name,
+        displayName,
+        verificationMode,
+        supportsCertVerification,
+        supportsAutomatedVerification,
+        officialVerificationUrl,
+        certificationFormat,
+        gradeScaleVersion,
+      }) => ({
+        code,
+        name,
+        displayName,
+        verificationMode,
+        supportsCertVerification,
+        supportsAutomatedVerification,
+        officialVerificationUrl,
+        certificationFormat,
+        gradeScaleVersion,
+      }),
+    );
   }
   async grades(code: string) {
     return (await this.catalogue.listGrades(code)).map(
-      ({ grade, label, conditionLabel }) => ({ grade, label, conditionLabel }),
+      ({ id, grade, label, conditionLabel, designation, legacy, gradeEra, scaleVersion }) => ({
+        id,
+        grade,
+        label,
+        conditionLabel,
+        designation,
+        legacy,
+        gradeEra,
+        scaleVersion,
+      }),
     );
   }
   async publishedAsset(slug: string) {
@@ -348,6 +376,13 @@ export class CatalogueService {
           id: randomUUID() as CatalogueId,
           code,
           name: input.name,
+          displayName: input.name,
+          verificationMode: 'MANUAL_OFFICIAL_LOOKUP',
+          supportsCertVerification: true,
+          supportsAutomatedVerification: false,
+          officialVerificationUrl: null,
+          certificationFormat: null,
+          gradeScaleVersion: 'unconfirmed-v1',
           status: input.status ?? 'ACTIVE',
         });
         await audit(
@@ -434,6 +469,10 @@ export class CatalogueService {
           grade: decimal(input.grade),
           label: input.label,
           conditionLabel: input.conditionLabel ?? null,
+          designation: null,
+          legacy: false,
+          gradeEra: null,
+          scaleVersion: null,
           sortOrder: input.sortOrder ?? 0,
           active: input.active ?? true,
         });

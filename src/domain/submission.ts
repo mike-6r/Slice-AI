@@ -33,6 +33,23 @@ export interface SubmissionDetail extends AssetSubmission {
   media: SubmissionMedia[];
   marketResearch: MarketResearchSnapshot | null;
   preGrade?: RawCardPreGrade | null;
+  certificationVerification?: CertificationVerification | null;
+}
+
+export interface CertificationVerification {
+  id: string;
+  companyCode: string;
+  certificationNumber: string;
+  normalizedCertificationNumber: string;
+  status: "MANUAL_REVIEW_REQUIRED" | "VERIFIED" | "MISMATCH" | "CERT_NOT_FOUND" | string;
+  verificationMode: "OFFICIAL_API" | "APPROVED_MACHINE_LOOKUP" | "MANUAL_OFFICIAL_LOOKUP" | "UNSUPPORTED" | string;
+  officialVerificationUrl: string | null;
+  verifiedGrade: string | null;
+  verifiedLabel: string | null;
+  designation: string | null;
+  gradeEra: string | null;
+  verifiedAt: ISODateTime | null;
+  createdAt: ISODateTime;
 }
 
 export type RawCardPreGradeStatus =
@@ -313,16 +330,29 @@ export interface SubmissionCategory {
 export interface GradingCompanyOption {
   code: string;
   name: string;
+  displayName?: string;
+  verificationMode?: string;
+  supportsCertVerification?: boolean;
+  supportsAutomatedVerification?: boolean;
+  officialVerificationUrl?: string | null;
+  certificationFormat?: string | null;
+  gradeScaleVersion?: string;
 }
 
 export interface GradeOption {
+  id?: string;
   grade: string;
   label: string;
   conditionLabel: string | null;
+  designation?: string | null;
+  legacy?: boolean;
+  gradeEra?: string | null;
+  scaleVersion?: string | null;
 }
 
 export interface CreateSubmissionDraft {
   categoryId: string;
+  gradeScaleEntryId?: string | null;
   currentStep?: number;
   declaredMetadata: {
     name: string;
@@ -335,6 +365,7 @@ export interface CreateSubmissionDraft {
     condition?: string;
     grader?: string;
     grade?: string;
+    designation?: string;
     certificationNumber?: string;
     details?: string;
     playerOrCharacter?: string;

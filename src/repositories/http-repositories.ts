@@ -65,6 +65,7 @@ import type {
   RawCardPreGrade,
   RawCardPreGradeResponse,
   SubmissionMedia,
+  CertificationVerification,
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
@@ -1165,6 +1166,27 @@ const mapSubmissionDetail = (raw: unknown): SubmissionDetail => {
     media: value.media.map(mapSubmissionMedia),
     marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
     preGrade: value.preGrade ? mapRawCardPreGrade(value.preGrade) : null,
+    certificationVerification: value.certificationVerification
+      ? mapCertificationVerification(value.certificationVerification)
+      : null,
+  };
+};
+const mapCertificationVerification = (raw: unknown): CertificationVerification => {
+  const value = objectField(raw, "certification verification");
+  return {
+    id: stringField(value.id, "certificationVerification.id"),
+    companyCode: stringField(value.companyCode, "certificationVerification.companyCode"),
+    certificationNumber: stringField(value.certificationNumber, "certificationVerification.certificationNumber"),
+    normalizedCertificationNumber: stringField(value.normalizedCertificationNumber, "certificationVerification.normalizedCertificationNumber"),
+    status: stringField(value.status, "certificationVerification.status"),
+    verificationMode: stringField(value.verificationMode, "certificationVerification.verificationMode"),
+    officialVerificationUrl: nullableString(value.officialVerificationUrl, "certificationVerification.officialVerificationUrl"),
+    verifiedGrade: nullableString(value.verifiedGrade, "certificationVerification.verifiedGrade"),
+    verifiedLabel: nullableString(value.verifiedLabel, "certificationVerification.verifiedLabel"),
+    designation: nullableString(value.designation, "certificationVerification.designation"),
+    gradeEra: nullableString(value.gradeEra, "certificationVerification.gradeEra"),
+    verifiedAt: nullableString(value.verifiedAt, "certificationVerification.verifiedAt") as ISODateTime | null,
+    createdAt: stringField(value.createdAt, "certificationVerification.createdAt") as ISODateTime,
   };
 };
 const mapRawCardPreGrade = (raw: unknown): RawCardPreGrade => {
@@ -3382,24 +3404,46 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async listGradingCompanies() {
         const body = await client.get<{
-          items: Array<{ code: string; name: string }>;
+          items: Array<{
+            code: string;
+            name: string;
+            displayName?: string;
+            verificationMode?: string;
+            supportsCertVerification?: boolean;
+            supportsAutomatedVerification?: boolean;
+            officialVerificationUrl?: string | null;
+            certificationFormat?: string | null;
+            gradeScaleVersion?: string;
+          }>;
         }>("/grading-companies");
         return body.items.map((item) => ({
           code: stringField(item.code, "gradingCompany.code"),
           name: stringField(item.name, "gradingCompany.name"),
+          displayName: typeof item.displayName === "string" ? item.displayName : item.name,
+          verificationMode: typeof item.verificationMode === "string" ? item.verificationMode : "MANUAL_OFFICIAL_LOOKUP",
+          supportsCertVerification: item.supportsCertVerification !== false,
+          supportsAutomatedVerification: item.supportsAutomatedVerification === true,
+          officialVerificationUrl: item.officialVerificationUrl ?? null,
+          certificationFormat: item.certificationFormat ?? null,
+          gradeScaleVersion: item.gradeScaleVersion ?? "unconfirmed-v1",
         }));
       },
       async listGrades(companyCode) {
         const body = await client.get<{
-          items: Array<{ grade: string; label: string; conditionLabel: string | null }>;
+          items: Array<{ id: string; grade: string; label: string; conditionLabel: string | null; designation?: string | null; legacy?: boolean; gradeEra?: string | null; scaleVersion?: string | null }>;
         }>(`/grading-companies/${encodeURIComponent(companyCode)}/grades`);
         return body.items.map((item) => ({
+          id: stringField(item.id, "grade.id"),
           grade: stringField(item.grade, "grade.grade"),
           label: stringField(item.label, "grade.label"),
           conditionLabel:
             item.conditionLabel === null
               ? null
               : stringField(item.conditionLabel, "grade.conditionLabel"),
+          designation: item.designation ?? null,
+          legacy: item.legacy === true,
+          gradeEra: item.gradeEra ?? null,
+          scaleVersion: item.scaleVersion ?? null,
         }));
       },
     },
@@ -3522,6 +3566,15 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           await client.request<unknown>(`/submissions/${id}`, {
             method: "PATCH",
             body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+        );
+      },
+      async verifyCertification(id, certificationNumber) {
+        return mapSubmissionDetail(
+          await client.request<unknown>(`/submissions/${id}/certification/verify`, {
+            method: "POST",
+            body: { certificationNumber },
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
         );

@@ -1238,13 +1238,20 @@ model CollectibleSet {
 }
 
 model GradingCompany {
-  id        String            @id @default(cuid())
-  code      String            @unique
-  name      String
-  status    CatalogueStatus   @default(ACTIVE)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  grades    GradeScaleEntry[]
+  id                            String            @id @default(cuid())
+  code                          String            @unique
+  name                          String
+  displayName                   String            @default("")
+  verificationMode              String            @default("MANUAL_OFFICIAL_LOOKUP")
+  supportsCertVerification      Boolean           @default(true)
+  supportsAutomatedVerification Boolean           @default(false)
+  officialVerificationUrl       String?
+  certificationFormat           String?
+  gradeScaleVersion             String            @default("unconfirmed-v1")
+  status                        CatalogueStatus   @default(ACTIVE)
+  createdAt                     DateTime          @default(now())
+  updatedAt                     DateTime          @updatedAt
+  grades                        GradeScaleEntry[]
 
   @@index([status, code])
 }
@@ -1255,64 +1262,70 @@ model GradeScaleEntry {
   grade          Decimal           @db.Decimal(4, 2)
   label          String
   conditionLabel String?
+  designation    String            @default("")
+  legacy         Boolean           @default(false)
+  gradeEra       String?
+  scaleVersion   String?
   sortOrder      Int               @default(0)
   active         Boolean           @default(true)
   company        GradingCompany    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   assets         Asset[]
   submissions    AssetSubmission[]
 
-  @@unique([companyId, grade])
+  @@unique([companyId, grade, designation])
   @@index([companyId, active, sortOrder, id])
 }
 
 model Asset {
-  id                       String                        @id @default(cuid())
-  publicId                 String                        @unique
-  slug                     String                        @unique
-  categoryId               String
-  setId                    String?
-  title                    String
-  shortName                String?
-  year                     Int?
-  manufacturer             String?
-  edition                  String?
-  cardNumber               String?
-  description              String?
-  gradeScaleEntryId        String?
-  certificationNumber      String?
-  status                   AssetCatalogueStatus          @default(DRAFT)
-  heroMediaId              String?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
-  publishedAt              DateTime?
-  category                 Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  collectibleSet           CollectibleSet?               @relation(fields: [setId], references: [id], onDelete: Restrict)
-  gradeScaleEntry          GradeScaleEntry?              @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
-  valuationPoints          AssetValuationPoint[]
-  marketSnapshots          AssetMarketSnapshot[]
-  marketProviderMappings   MarketProviderMapping[]
-  marketObservations       MarketObservation[]
-  marketRefreshJobs        MarketRefreshJob[]
-  watchlistItems           WatchlistItem[]
-  vaultPublicEvents        VaultPublicEvent[]
-  submissions              AssetSubmission[]
-  valuationEvidence        ValuationEvidence[]
-  valuationDecisions       ValuationDecision[]
-  custodyRecord            VaultCustodyRecord?
-  custodyEvents            CustodyEvent[]
-  insuranceCoverage        InsuranceCoverage[]
-  publication              AssetPublication?
-  ownershipSupply          OwnershipAssetSupply?
-  ownershipSupplyPolicy    OwnershipSupplyPolicy?
-  portfolioLots            PortfolioLot[]
-  tradingMarket            TradingMarket?
-  tradingOrders            TradingOrder[]
-  tradingExecutions        TradingExecution[]
-  discussionPosts          DiscussionPost[]
-  saleProposals            SaleProposal[]
-  controlledBetaBypass     ControlledBetaPhysicalBypass?
-  initialOffering          InitialOffering?
-  initialOfferingInventory InitialOfferingInventory[]
+  id                            String                        @id @default(cuid())
+  publicId                      String                        @unique
+  slug                          String                        @unique
+  categoryId                    String
+  setId                         String?
+  title                         String
+  shortName                     String?
+  year                          Int?
+  manufacturer                  String?
+  edition                       String?
+  cardNumber                    String?
+  description                   String?
+  gradeScaleEntryId             String?
+  certificationNumber           String?
+  normalizedCertificationNumber String?
+  status                        AssetCatalogueStatus          @default(DRAFT)
+  heroMediaId                   String?
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
+  publishedAt                   DateTime?
+  category                      Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet                CollectibleSet?               @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry               GradeScaleEntry?              @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  valuationPoints               AssetValuationPoint[]
+  marketSnapshots               AssetMarketSnapshot[]
+  marketProviderMappings        MarketProviderMapping[]
+  marketObservations            MarketObservation[]
+  marketRefreshJobs             MarketRefreshJob[]
+  watchlistItems                WatchlistItem[]
+  vaultPublicEvents             VaultPublicEvent[]
+  submissions                   AssetSubmission[]
+  valuationEvidence             ValuationEvidence[]
+  valuationDecisions            ValuationDecision[]
+  custodyRecord                 VaultCustodyRecord?
+  custodyEvents                 CustodyEvent[]
+  insuranceCoverage             InsuranceCoverage[]
+  publication                   AssetPublication?
+  ownershipSupply               OwnershipAssetSupply?
+  ownershipSupplyPolicy         OwnershipSupplyPolicy?
+  portfolioLots                 PortfolioLot[]
+  tradingMarket                 TradingMarket?
+  tradingOrders                 TradingOrder[]
+  tradingExecutions             TradingExecution[]
+  discussionPosts               DiscussionPost[]
+  saleProposals                 SaleProposal[]
+  controlledBetaBypass          ControlledBetaPhysicalBypass?
+  initialOffering               InitialOffering?
+  initialOfferingInventory      InitialOfferingInventory[]
+  certificationClaims           GradingCertificationClaim[]
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
@@ -1381,39 +1394,93 @@ model NotificationPreference {
 }
 
 model AssetSubmission {
-  id                   String                        @id @default(cuid())
-  ownerUserId          String
-  assetId              String?
-  status               SubmissionStatus              @default(DRAFT)
-  version              Int                           @default(1)
-  currentStep          Int                           @default(1)
-  categoryId           String
-  setId                String?
-  gradeScaleEntryId    String?
-  declaredMetadata     Json?
-  submittedAt          DateTime?
-  reviewedAt           DateTime?
-  reviewerId           String?
-  decisionCode         String?
-  decisionNote         String?
-  cancelledAt          DateTime?
-  createdAt            DateTime                      @default(now())
-  updatedAt            DateTime                      @updatedAt
-  owner                User                          @relation("SubmissionOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  asset                Asset?                        @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  category             Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  collectibleSet       CollectibleSet?               @relation(fields: [setId], references: [id], onDelete: Restrict)
-  gradeScaleEntry      GradeScaleEntry?              @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
-  media                SubmissionMedia[]
-  reviews              VerificationReview[]
-  marketResearch       SubmissionMarketResearch[]
-  intake               SubmissionIntake?
-  preGrades            RawCardPreGrade[]
-  controlledBetaBypass ControlledBetaPhysicalBypass?
+  id                            String                             @id @default(cuid())
+  ownerUserId                   String
+  assetId                       String?
+  status                        SubmissionStatus                   @default(DRAFT)
+  version                       Int                                @default(1)
+  currentStep                   Int                                @default(1)
+  categoryId                    String
+  setId                         String?
+  gradeScaleEntryId             String?
+  declaredMetadata              Json?
+  normalizedCertificationNumber String?
+  submittedAt                   DateTime?
+  reviewedAt                    DateTime?
+  reviewerId                    String?
+  decisionCode                  String?
+  decisionNote                  String?
+  cancelledAt                   DateTime?
+  createdAt                     DateTime                           @default(now())
+  updatedAt                     DateTime                           @updatedAt
+  owner                         User                               @relation("SubmissionOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  asset                         Asset?                             @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  category                      Category                           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  collectibleSet                CollectibleSet?                    @relation(fields: [setId], references: [id], onDelete: Restrict)
+  gradeScaleEntry               GradeScaleEntry?                   @relation(fields: [gradeScaleEntryId], references: [id], onDelete: Restrict)
+  media                         SubmissionMedia[]
+  reviews                       VerificationReview[]
+  marketResearch                SubmissionMarketResearch[]
+  intake                        SubmissionIntake?
+  preGrades                     RawCardPreGrade[]
+  controlledBetaBypass          ControlledBetaPhysicalBypass?
+  certificationVerifications    GradingCertificationVerification[]
+  certificationClaims           GradingCertificationClaim[]
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
+}
+
+/// A provider-backed or staff-confirmed certification lookup. Provider data is
+/// evidence only until a staff member confirms the identity and scale entry.
+/// Current companies deliberately use the official manual lookup mode; the
+/// schema is ready for an approved machine provider without pretending one is
+/// configured.
+model GradingCertificationVerification {
+  id                            String          @id @default(cuid())
+  submissionId                  String
+  requestedByUserId             String
+  companyCode                   String
+  certificationNumber           String
+  normalizedCertificationNumber String
+  status                        String
+  verificationMode              String
+  officialVerificationUrl       String?
+  providerReference             String?
+  verifiedCard                  Json?
+  verifiedGrade                 String?
+  verifiedLabel                 String?
+  designation                   String?
+  subgrades                     Json?
+  gradeEra                      String?
+  verifiedAt                    DateTime?
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+  submission                    AssetSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, createdAt, id])
+  @@index([companyCode, normalizedCertificationNumber, status])
+}
+
+/// One durable claim per company/certification number. Rejected or cancelled
+/// submissions release the claim by moving it to RELEASED, while history is
+/// retained in the verification and audit records.
+model GradingCertificationClaim {
+  id                            String           @id @default(cuid())
+  companyCode                   String
+  normalizedCertificationNumber String
+  submissionId                  String?
+  assetId                       String?
+  status                        String           @default("SUBMISSION")
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
+  submission                    AssetSubmission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  asset                         Asset?           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([companyCode, normalizedCertificationNumber])
+  @@index([submissionId, status])
+  @@index([assetId, status])
 }
 
 /// Provider-backed AI evidence for a raw card. This is supporting evidence

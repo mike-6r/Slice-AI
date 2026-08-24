@@ -404,18 +404,21 @@ export const mockRepositories: AppRepositories = {
     },
     async listGradingCompanies() {
       return [
-        { code: "PSA", name: "PSA" },
-        { code: "BGS", name: "BGS" },
-        { code: "CGC", name: "CGC" },
-        { code: "SGC", name: "SGC" },
+        { code: "PSA", name: "Professional Sports Authenticator", displayName: "PSA" },
+        { code: "BGS", name: "Beckett Grading Services", displayName: "Beckett (BGS)" },
+        { code: "BVG", name: "Beckett Vintage Grading", displayName: "Beckett (BVG)" },
+        { code: "BCCG", name: "Beckett Collector's Club Grading", displayName: "Beckett (BCCG)" },
+        { code: "CGC", name: "CGC Cards", displayName: "CGC Cards" },
+        { code: "SGC", name: "Sportscard Guaranty", displayName: "SGC" },
+        { code: "TAG", name: "TAG Grading", displayName: "TAG" },
+        { code: "ACE", name: "ACE Grading", displayName: "ACE" },
       ];
     },
     async listGrades() {
       return [
-        { grade: "10.00", label: "10", conditionLabel: "Gem Mint" },
-        { grade: "9.50", label: "9.5", conditionLabel: "Gem Mint" },
-        { grade: "9.00", label: "9", conditionLabel: "Mint" },
-        { grade: "8.00", label: "8", conditionLabel: "Near Mint-Mint" },
+        { id: "mock-grade-10", grade: "10.00", label: "GEM-MT", conditionLabel: "Gem Mint" },
+        { id: "mock-grade-9", grade: "9.00", label: "MINT", conditionLabel: "Mint" },
+        { id: "mock-grade-8", grade: "8.00", label: "NM-MT", conditionLabel: "Near Mint-Mint" },
       ];
     },
   },
@@ -440,7 +443,7 @@ export const mockRepositories: AppRepositories = {
         currentStep: input.currentStep ?? 1,
         categoryId: input.categoryId,
         setId: null,
-        gradeScaleEntryId: null,
+        gradeScaleEntryId: input.gradeScaleEntryId ?? null,
         declaredMetadata: input.declaredMetadata,
         submittedAt: null,
         reviewedAt: null,
@@ -488,6 +491,11 @@ export const mockRepositories: AppRepositories = {
     },
     async runPreGrade() {
       throw new Error("AI Pre-Grade requires the API service.");
+    },
+    async verifyCertification(id) {
+      const draft = submissionDrafts.find((item) => item.id === id);
+      if (!draft) throw new Error("Submission not found");
+      return { ...draft, media: [], marketResearch: null, certificationVerification: null };
     },
   },
   reviews: {

@@ -115,6 +115,7 @@ export interface SubmissionRepository {
   cancel(id: string, version: number): Promise<SubmissionDetail>;
   getPreGrade(id: string): Promise<RawCardPreGradeResponse>;
   runPreGrade(id: string): Promise<RawCardPreGradeResponse["current"]>;
+  verifyCertification(id: string, certificationNumber: string): Promise<SubmissionDetail>;
 }
 export interface SubmissionReviewRepository {
   listQueue(input?: {

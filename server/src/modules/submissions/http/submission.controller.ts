@@ -134,6 +134,21 @@ const marketResearch = z
   .strict();
 const marketResearchAttach = z.object({ submissionId: id }).strict();
 const marketResearchPromotion = z.object({ assetId: id }).strict();
+const certificationVerification = z
+  .object({
+    certificationNumber: z.string().trim().min(3).max(80),
+  })
+  .strict();
+const manualCertificationVerification = z
+  .object({
+    verifiedIdentity: z.record(z.unknown()),
+    verifiedGrade: z.string().trim().regex(/^\d{1,2}(?:\.\d{1,2})?$/),
+    verifiedLabel: z.string().trim().max(120).optional(),
+    designation: z.string().trim().max(80).optional(),
+    subgrades: z.record(z.unknown()).optional(),
+    providerReference: z.string().trim().max(255).optional(),
+  })
+  .strict();
 
 @Controller()
 export class SubmissionController {
@@ -331,6 +346,24 @@ export class SubmissionController {
         req.actor!,
         submissionId,
         parse(draftPatch, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('submissions/:id/certification/verify')
+  @UseGuards(AccessTokenGuard)
+  verifyCertification(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.verifyCertification(
+        req.actor!,
+        submissionId,
+        parse(certificationVerification, body),
         req.requestId ?? 'unknown',
         key!,
       ),
@@ -535,6 +568,25 @@ export class SubmissionController {
         req.actor!,
         submissionId,
         parse(identityCorrection, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/certification/manual-verify')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  manualVerifyCertification(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.manualVerifyCertification(
+        req.actor!,
+        submissionId,
+        parse(manualCertificationVerification, body),
         req.requestId ?? 'unknown',
         key!,
       ),

@@ -42,6 +42,13 @@ export type GradingCompany = {
   id: CatalogueId;
   code: string;
   name: string;
+  displayName: string;
+  verificationMode: string;
+  supportsCertVerification: boolean;
+  supportsAutomatedVerification: boolean;
+  officialVerificationUrl: string | null;
+  certificationFormat: string | null;
+  gradeScaleVersion: string;
   status: CatalogueStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +59,10 @@ export type GradeScaleEntry = {
   grade: string;
   label: string;
   conditionLabel: string | null;
+  designation: string | null;
+  legacy: boolean;
+  gradeEra: string | null;
+  scaleVersion: string | null;
   sortOrder: number;
   active: boolean;
 };
@@ -84,10 +95,21 @@ export type PublicSet = Pick<
   CollectibleSet,
   'slug' | 'name' | 'manufacturer' | 'releaseYear' | 'edition'
 >;
-export type PublicGradingCompany = Pick<GradingCompany, 'code' | 'name'>;
+export type PublicGradingCompany = Pick<
+  GradingCompany,
+  | 'code'
+  | 'name'
+  | 'displayName'
+  | 'verificationMode'
+  | 'supportsCertVerification'
+  | 'supportsAutomatedVerification'
+  | 'officialVerificationUrl'
+  | 'certificationFormat'
+  | 'gradeScaleVersion'
+>;
 export type PublicGrade = Pick<
   GradeScaleEntry,
-  'grade' | 'label' | 'conditionLabel'
+  'id' | 'grade' | 'label' | 'conditionLabel' | 'designation' | 'legacy' | 'gradeEra' | 'scaleVersion'
 >;
 /** Intentionally metadata-only; SD-001 forbids an implied authoritative price contract. */
 export type PublicCatalogueAsset = {

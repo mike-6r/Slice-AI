@@ -35,6 +35,54 @@
   --shadow-card: var(--shadow-soft);
 }
 
+/* Professional certification verification block in List > Step 2. */
+.list-certification-panel {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--border-subtle, #263449) 78%, #67e8c7 22%);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface-raised, #101827) 88%, #67e8c7 12%);
+}
+.list-certification-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+.list-certification-status {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(245, 158, 11, 0.09);
+  color: var(--text-primary, #f8fafc);
+}
+.list-certification-status > svg { flex: 0 0 auto; color: #fbbf24; }
+.list-certification-status > div { display: grid; gap: 0.2rem; }
+.list-certification-status span { color: var(--text-subtle, #9aa8bc); font-size: 0.85rem; }
+.list-certification-status a { display: inline-flex; align-items: center; gap: 0.2rem; color: #8ef3d4; font-size: 0.82rem; }
+.list-certification-status--verified { background: rgba(34, 197, 94, 0.1); }
+.list-certification-status--verified > svg { color: #86efac; }
+.list-certification-status--mismatch { background: rgba(239, 68, 68, 0.1); }
+.list-certification-status--mismatch > svg { color: #fca5a5; }
+.list-scale-unavailable {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 2.8rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px dashed var(--border-subtle, #263449);
+  border-radius: 0.65rem;
+  color: var(--text-subtle, #9aa8bc);
+  font-size: 0.82rem;
+}
+@media (max-width: 640px) {
+  .list-certification-input { grid-template-columns: 1fr; }
+  .list-certification-input .button-secondary { width: 100%; }
+}
+
 /* Wallet visual reconstruction pass: compact hierarchy, intentional density, and
    content-sized surfaces. Keep this final layer narrow so legacy page styles do not
    recreate the oversized card wall. */
