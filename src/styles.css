@@ -50527,12 +50527,12 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 16px;
-    height: 315px;
-    min-height: 315px;
+    height: auto;
+    min-height: 390px;
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid > * {
-    height: 315px;
-    min-height: 315px;
+    height: auto;
+    min-height: 390px;
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-price-panel {
     grid-column: span 5;
@@ -50548,6 +50548,9 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-price-panel {
     grid-template-rows: 42px minmax(0, 1fr) 78px;
+  }
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid > .asset-external-panel {
+    overflow: visible;
   }
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid .asset-chart-stage,
   .asset-detail-page .asset-redesign > .asset-detail-lower-grid .asset-chart-stage.is-empty {
