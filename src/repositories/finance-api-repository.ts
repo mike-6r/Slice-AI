@@ -30,6 +30,8 @@ const minor = (value: unknown, field: string): GbpMinorUnits => {
     throw new Error(`Invalid GBP minor-unit field: ${field}.`);
   return value;
 };
+const optionalMinor = (value: unknown, field: string) =>
+  value === undefined ? undefined : value === null ? null : minor(value, field);
 const count = (value: unknown, field: string) => {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
     throw new Error(`Invalid wallet count field: ${field}.`);
@@ -327,6 +329,20 @@ export const mapPerformance = (raw: unknown): PortfolioPerformance => {
         valueMinor: minor(point.valueMinor, "performance.valueMinor"),
         currency: "GBP" as const,
         freshness: nullableString(point.freshness) ?? "UNAVAILABLE",
+        cashValueMinor: optionalMinor(point.cashValueMinor, "performance.cashValueMinor"),
+        holdingsValueMinor: optionalMinor(
+          point.holdingsValueMinor,
+          "performance.holdingsValueMinor",
+        ),
+        reservedValueMinor: optionalMinor(
+          point.reservedValueMinor,
+          "performance.reservedValueMinor",
+        ),
+        costBasisMinor: optionalMinor(point.costBasisMinor, "performance.costBasisMinor"),
+        unrealisedPnlMinor: optionalMinor(
+          point.unrealisedPnlMinor,
+          "performance.unrealisedPnlMinor",
+        ),
       };
     }),
     periodChangeMinor:

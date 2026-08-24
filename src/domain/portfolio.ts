@@ -135,6 +135,11 @@ export interface PortfolioPerformancePoint {
   valueMinor: GbpMinorUnits;
   currency: "GBP";
   freshness: string;
+  cashValueMinor?: GbpMinorUnits | null;
+  holdingsValueMinor?: GbpMinorUnits | null;
+  reservedValueMinor?: GbpMinorUnits | null;
+  costBasisMinor?: GbpMinorUnits | null;
+  unrealisedPnlMinor?: GbpMinorUnits | null;
 }
 export interface PortfolioPerformance {
   range: PortfolioPerformanceRange;

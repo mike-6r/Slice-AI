@@ -1647,7 +1647,12 @@ function PortfolioPerformancePanel({
     <PortfolioPanel
       title="Account value history"
       className="portfolio-panel--hero-performance"
-      header={<PerformancePeriods active={range} onChange={onRangeChange} />}
+      header={
+        <div className="portfolio-performance-header">
+          <span className="portfolio-performance-hint">Hover or focus a point for details</span>
+          <PerformancePeriods active={range} onChange={onRangeChange} />
+        </div>
+      }
     >
       {query.isLoading ? (
         <ChartSkeleton />
@@ -1671,7 +1676,13 @@ function PortfolioPerformancePanel({
               </p>
             ) : null}
           </div>
-          <PerformanceChart query={performance} hasPortfolioData={query.data.holdings.length > 0} />
+          <PerformanceChart
+            query={performance}
+            hasPortfolioData={
+              query.data.totalAccountValueMinor !== undefined &&
+              query.data.totalAccountValueMinor !== null
+            }
+          />
           <dl className="portfolio-performance-periods">
             <div>
               <dt>Holdings value</dt>
@@ -1708,7 +1719,7 @@ function PortfolioPerformancePanel({
             <div>
               <dt>All-time high</dt>
               <dd>
-                {query.data.holdings.length > 0 && performance.data?.points.length
+                {performance.data?.points.length
                   ? formatPortfolioMoney(
                       performance.data.points.reduce(
                         (max, point) =>
@@ -1758,6 +1769,7 @@ function PerformanceChart({
   hasPortfolioData: boolean;
 }) {
   const points = hasPortfolioData ? (query.data?.points ?? []) : [];
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (query.isLoading) return <ChartSkeleton />;
   if (query.isError) {
     return (
@@ -1790,31 +1802,110 @@ function PerformanceChart({
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = Math.max(1, max - min);
-  const line = points
-    .map(
-      (point, index) =>
-        `${(index / (points.length - 1)) * 100},${100 - ((Number(point.valueMinor) - min) / span) * 84 - 8}`,
-    )
-    .join(" ");
+  const chartPoints = points.map((point, index) => ({
+    point,
+    index,
+    x: (index / (points.length - 1)) * 100,
+    y: 100 - ((Number(point.valueMinor) - min) / span) * 84 - 8,
+  }));
+  const line = chartPoints.map(({ x, y }) => `${x},${y}`).join(" ");
+  const activePoint = activeIndex === null ? null : chartPoints[activeIndex] ?? null;
   const direction = query.data?.direction ?? "NEUTRAL";
   return (
     <div
       className={`portfolio-performance-chart portfolio-performance-chart--${direction.toLowerCase()}`}
     >
-      <svg
-        viewBox="0 0 100 100"
-        role="img"
-        aria-label="Portfolio value over the selected period"
-        preserveAspectRatio="none"
-      >
-        <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
-      </svg>
+      <div className="portfolio-performance-chart__plot">
+        <svg
+          viewBox="0 0 100 100"
+          role="img"
+          aria-label="Portfolio value over the selected period"
+          preserveAspectRatio="none"
+        >
+          {[8, 50, 92].map((y) => (
+            <line
+              key={y}
+              x1="0"
+              x2="100"
+              y1={y}
+              y2={y}
+              className="portfolio-performance-chart__grid-line"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
+          {chartPoints.map(({ point, index, x, y }) => (
+            <circle
+              key={`${point.timestamp}-${index}`}
+              cx={x}
+              cy={y}
+              r={activeIndex === index ? 2.5 : 1.35}
+              tabIndex={0}
+              role="button"
+              aria-label={`Portfolio value ${formatPortfolioMoney(point.valueMinor)} on ${formatPerformancePointDate(point.timestamp)}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onFocus={() => setActiveIndex(index)}
+              onBlur={() => setActiveIndex(null)}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+        {activePoint ? (
+          <div
+            className={`portfolio-performance-tooltip${activePoint.x > 82 ? " is-left" : ""}${activePoint.x < 18 ? " is-right" : ""}${activePoint.y < 28 ? " is-below" : ""}`}
+            style={{ left: `${activePoint.x}%`, top: `${activePoint.y}%` }}
+            role="status"
+          >
+            <time>{formatPerformancePointDate(activePoint.point.timestamp)}</time>
+            <strong>{formatPortfolioMoney(activePoint.point.valueMinor)}</strong>
+            <span>Account value</span>
+            <dl>
+              {activePoint.point.holdingsValueMinor !== undefined && activePoint.point.holdingsValueMinor !== null ? (
+                <div>
+                  <dt>Collectibles</dt>
+                  <dd>{formatPortfolioMoney(activePoint.point.holdingsValueMinor)}</dd>
+                </div>
+              ) : null}
+              {activePoint.point.cashValueMinor !== undefined && activePoint.point.cashValueMinor !== null ? (
+                <div>
+                  <dt>Available cash</dt>
+                  <dd>{formatPortfolioMoney(activePoint.point.cashValueMinor)}</dd>
+                </div>
+              ) : null}
+              {activePoint.point.reservedValueMinor !== undefined && activePoint.point.reservedValueMinor !== null ? (
+                <div>
+                  <dt>Reserved cash</dt>
+                  <dd>{formatPortfolioMoney(activePoint.point.reservedValueMinor)}</dd>
+                </div>
+              ) : null}
+              {activePoint.point.unrealisedPnlMinor !== undefined && activePoint.point.unrealisedPnlMinor !== null ? (
+                <div>
+                  <dt>Unrealised P/L</dt>
+                  <dd>{formatSignedPortfolioMoney(activePoint.point.unrealisedPnlMinor)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        ) : null}
+      </div>
       <div className="portfolio-performance-chart__legend">
         <span>{formatPortfolioMoney(points[0]!.valueMinor)}</span>
         <span>{formatPortfolioMoney(points.at(-1)!.valueMinor)}</span>
       </div>
     </div>
   );
+}
+
+function formatPerformancePointDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown snapshot time";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function AllocationPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {

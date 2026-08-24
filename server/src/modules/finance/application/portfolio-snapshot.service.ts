@@ -36,7 +36,17 @@ export class PortfolioSnapshotService {
   async performanceForUser(userId: string, range: PortfolioPerformanceRange = '1M') {
     const from = new Date(Date.now() - ranges[range] * 86_400_000);
     const points = await this.db.portfolioSnapshot.findMany({ where: { userId, bucketStart: { gte: from } }, orderBy: [{ bucketStart: 'asc' }, { id: 'asc' }], take: 500 });
-    const series = points.map((point) => ({ timestamp: point.bucketStart.toISOString(), valueMinor: point.portfolioMarketValueMinor.toString(), currency: point.currency, freshness: point.marketDataFreshness }));
+    const series = points.map((point) => ({
+      timestamp: point.bucketStart.toISOString(),
+      valueMinor: point.portfolioMarketValueMinor.toString(),
+      currency: point.currency,
+      freshness: point.marketDataFreshness,
+      cashValueMinor: point.cashValueMinor.toString(),
+      holdingsValueMinor: point.holdingsMarketValueMinor.toString(),
+      reservedValueMinor: point.reservedValueMinor.toString(),
+      costBasisMinor: point.costBasisMinor.toString(),
+      unrealisedPnlMinor: point.unrealizedPnlMinor.toString(),
+    }));
     const first = points[0];
     const last = points.at(-1);
     if (!first || !last) return { range, points: series, periodChangeMinor: null, periodChangeBps: null, netCashFlowMinor: '0', direction: 'NEUTRAL', freshness: 'UNAVAILABLE' };
