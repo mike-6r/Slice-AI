@@ -1,8 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient } from "./http-client";
+import { ApiClient, resolveApiOrigin } from "./http-client";
 import { session } from "@/auth/session";
 
 describe("ApiClient", () => {
+  it("ignores an unexpanded deployment origin placeholder", () => {
+    expect(resolveApiOrigin("$APP_PUBLIC_URL", "https://staging.slice.test")).toBe(
+      "https://staging.slice.test",
+    );
+    expect(resolveApiOrigin("https://api.slice.test", "https://staging.slice.test")).toBe(
+      "https://api.slice.test",
+    );
+  });
+
   afterEach(() => {
     session.clear();
     vi.unstubAllGlobals();

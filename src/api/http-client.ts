@@ -20,9 +20,27 @@ type QueryValue = string | number | boolean | undefined | null;
 // The public staging/production web server proxies `/api` on the same origin.
 // Falling back to the browser origin prevents a misconfigured client build
 // from trying to refresh against the end user's own localhost.
-const configuredApiOrigin = import.meta.env.VITE_API_BASE_URL?.trim();
+/**
+ * Resolve the API origin without allowing an unexpanded deployment placeholder
+ * to become a runtime URL. The staging build is same-origin, so the browser
+ * origin is a safe fallback when the deployment environment omits the Vite
+ * variable or passes a shell placeholder literally.
+ */
+export const resolveApiOrigin = (
+  configuredOrigin: string | undefined,
+  browserOrigin: string | undefined,
+  fallback = "http://127.0.0.1:3001",
+) => {
+  const trimmed = configuredOrigin?.trim();
+  const isUnexpandedPlaceholder = Boolean(trimmed && /^\$[A-Z_][A-Z0-9_]*$/.test(trimmed));
+  return (!isUnexpandedPlaceholder && trimmed) || browserOrigin || fallback;
+};
+
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-export const API_ORIGIN = configuredApiOrigin || browserApiOrigin || "http://127.0.0.1:3001";
+export const API_ORIGIN = resolveApiOrigin(
+  import.meta.env.VITE_API_BASE_URL,
+  browserApiOrigin,
+);
 
 const parseBody = async (response: Response): Promise<unknown> => {
   const text = await response.text();
