@@ -24,8 +24,8 @@ export function marketSnapshotPriority(item: {
   hasInitialOffering: boolean;
   hasExternalReference: boolean;
 }) {
-  if (item.hasLastTrade) return 0;
   if (item.hasInitialOffering) return 1;
+  if (item.hasLastTrade) return 0;
   if (item.hasExternalReference) return 2;
   return 3;
 }

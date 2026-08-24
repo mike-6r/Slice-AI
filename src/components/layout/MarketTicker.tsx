@@ -5,6 +5,23 @@ import { formatPercent } from "@/lib/format";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { useMarketSnapshot } from "@/queries/hooks";
 
+function formatReferenceMoney(amountMinor: number, currency: string) {
+  const locale =
+    currency === "GBP"
+      ? "en-GB"
+      : currency === "CAD"
+        ? "en-CA"
+        : currency === "EUR"
+          ? "en-IE"
+          : "en-US";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amountMinor / 100);
+}
+
 /**
  * A compact window into the same persisted market projections used by the
  * asset page and marketplace. It never falls back to editorial showcase data.
@@ -56,7 +73,7 @@ function SnapshotItem({ item }: { item: MarketSnapshotItem }) {
       : "Last trade"
     : null;
   const referenceLabel = reference
-    ? `${reference.source === "PRICECHARTING" ? "PC" : reference.source} ${formatMoney(reference.amount.amount, reference.amount.currency)}`
+    ? `${reference.source === "PRICECHARTING" ? "PC" : reference.source} ${formatReferenceMoney(reference.amount.amount, reference.amount.currency)} ${reference.amount.currency}`
     : null;
   const label = [
     item.title,
