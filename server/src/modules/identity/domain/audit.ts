@@ -173,6 +173,7 @@ const metadataKeys: Record<string, readonly string[]> = {
   DISTRIBUTION_PREPARED: ['netMinor'],
   DISTRIBUTION_POSTED: ['netMinor'],
   COMPLIANCE_SESSION_STARTED: ['provider'],
+  IDENTITY_VERIFICATION_UPDATED: ['source', 'provider', 'identityState'],
   BANK_CONNECTION_CONNECTED: ['provider', 'accountCount'],
   COMPLIANCE_DECISION_RECORDED: ['status', 'reasonCode'],
   WALLET_MOVEMENT_CREATED: ['type', 'amountMinor'],

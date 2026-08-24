@@ -105,6 +105,15 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows provider identity refresh audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('IDENTITY_VERIFICATION_UPDATED', {
+        source: 'PROVIDER',
+        provider: 'STRIPE_SANDBOX',
+        identityState: 'REQUIRES_INPUT',
+      }),
+    ).not.toThrow();
+  });
   it('identifies idempotency conflicts', () => {
     const f = fingerprintRequest('POST', '/signup', {
       email: 'a@example.test',
