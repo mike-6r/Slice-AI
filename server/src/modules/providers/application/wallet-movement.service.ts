@@ -235,6 +235,12 @@ export class WalletMovementService {
         return { movement: existingAfterLock, reused: true };
       if (type === 'WITHDRAWAL')
         await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
+      if (type === 'DEPOSIT') {
+        // New accounts do not need a ledger row until they use cash. Lock the
+        // user while lazily provisioning it so concurrent first deposits cannot
+        // race past the composite account uniqueness constraint.
+        await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.userId} FOR UPDATE`;
+      }
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
@@ -253,7 +259,7 @@ export class WalletMovementService {
         const authority = balance.postedCreditMinor - balance.postedDebitMinor;
         return authority - balance.reservedMinor >= amountMinor;
       };
-      const cash =
+      let cash =
         type === 'WITHDRAWAL'
           ? (cashAccounts.find(
               (account) =>
@@ -267,6 +273,20 @@ export class WalletMovementService {
             ) ??
             cashAccounts.find((account) => account.code === 'CASH_AVAILABLE'))
           : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
+      if (!cash && type === 'DEPOSIT') {
+        cash = await db.financialAccount.create({
+          data: {
+            id: randomUUID(),
+            ownerType: 'USER',
+            ownerUserId: actor.userId,
+            accountType: 'LIABILITY',
+            code: 'CASH_AVAILABLE',
+            currency: 'GBP',
+            normalSide: 'CREDIT',
+          },
+          include: { balance: true },
+        });
+      }
       if (!cash)
         throw new NotFoundException({
           code: 'FINANCIAL_ACCOUNT_NOT_FOUND',
