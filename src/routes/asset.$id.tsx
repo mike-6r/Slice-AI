@@ -819,7 +819,12 @@ function TrustItem({ icon, title, copy }: { icon: ReactNode; title: string; copy
   return (
     <article className="asset-trust-item">
       <span className="asset-trust-item__icon">{icon}</span>
-      <div>
+      <div
+        className="asset-trust-item__content"
+        tabIndex={0}
+        aria-label={`${title}: ${copy}`}
+        data-tooltip={copy}
+      >
         <h2>{title}</h2>
         <p>{copy}</p>
       </div>

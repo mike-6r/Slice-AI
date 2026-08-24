@@ -34403,6 +34403,49 @@ body:has(.asset-detail-page) .main-navigation > div.hidden {
 .asset-detail-page .asset-trust-item h2 { margin: 0; color: #f0fbfb; font-size: 1.1rem; line-height: 1.25; }
 .asset-detail-page .asset-trust-item p { margin: 0.55rem 0 0; color: rgb(182 207 209 / 0.72); font-size: 0.9rem; line-height: 1.5; }
 
+/* Keep the strip compact while making every truncated explanation readable on
+   hover or keyboard focus. The full copy comes from the same projection as the
+   visible text, so the tooltip never invents a second description. */
+.asset-detail-page .asset-trust-item__content {
+  position: relative;
+  min-width: 0;
+  outline: none;
+}
+.asset-detail-page .asset-trust-item__content::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  border: 1px solid rgb(88 235 194 / 0.58);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  background: linear-gradient(145deg, rgb(5 25 30 / 0.99), rgb(3 15 20 / 0.99));
+  box-shadow: 0 0.9rem 2rem rgb(0 0 0 / 0.42), 0 0 0 1px rgb(2 12 16 / 0.9);
+  color: #e8f7f3;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  opacity: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  visibility: hidden;
+  white-space: normal;
+}
+.asset-detail-page .asset-trust-item__content:hover::after,
+.asset-detail-page .asset-trust-item__content:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+.asset-detail-page .asset-trust-item:last-child .asset-trust-item__content::after {
+  right: 0;
+  left: auto;
+}
+
 @media (max-width: 1100px) and (min-width: 901px) {
   .asset-detail-page .asset-reference-identity { padding: 2rem; }
   .asset-detail-page .asset-reference-identity h1 { font-size: clamp(2.2rem, 3.7vw, 3.2rem); }
