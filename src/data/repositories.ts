@@ -203,6 +203,15 @@ export type AdminUserSummary = {
   email: string;
   primaryType: "INVESTOR" | "COLLECTOR" | "STAFF" | "ADMIN";
   accountStatus: string;
+  accountStateReason: string | null;
+  financialState: string;
+  financialExceptionCount: number | null;
+  financialAmountMinor: string | null;
+  bacsHeldMinor: string | null;
+  complianceState: string;
+  complianceReason: string | null;
+  payoutState: string;
+  payoutReason: string | null;
   roles: Array<{
     id: string;
     role: string;
@@ -225,8 +234,10 @@ export type AdminAccountsSummary = {
   staff: number;
   admins: number;
   suspended: number;
+  pendingReview: number;
   activeUsers: number;
   restricted: number;
+  financialExceptions: number | null;
   pastDueMemberships: number;
   trialingMemberships: number;
 };
@@ -1410,6 +1421,9 @@ export interface AdminRepository {
     type?: string;
     membershipPlan?: string;
     membershipStatus?: string;
+    financialState?: string;
+    complianceState?: string;
+    payoutState?: string;
     joinedFrom?: string;
     joinedTo?: string;
     lastActiveWindow?: string;

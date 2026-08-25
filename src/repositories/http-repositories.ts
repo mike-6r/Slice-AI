@@ -1820,6 +1820,18 @@ const mapAdminUser = (raw: unknown): AdminUserSummary => {
     email: stringField(value.email, "admin user.email"),
     primaryType,
     accountStatus: stringField(value.accountStatus, "admin user.accountStatus"),
+    accountStateReason: nullableString(value.accountStateReason, "admin user.accountStateReason"),
+    financialState: stringField(value.financialState ?? "UNAVAILABLE", "admin user.financialState"),
+    financialExceptionCount:
+      value.financialExceptionCount === null || value.financialExceptionCount === undefined
+        ? null
+        : Number(value.financialExceptionCount),
+    financialAmountMinor: nullableString(value.financialAmountMinor, "admin user.financialAmountMinor"),
+    bacsHeldMinor: nullableString(value.bacsHeldMinor, "admin user.bacsHeldMinor"),
+    complianceState: stringField(value.complianceState ?? "UNAVAILABLE", "admin user.complianceState"),
+    complianceReason: nullableString(value.complianceReason, "admin user.complianceReason"),
+    payoutState: stringField(value.payoutState ?? "SETUP_REQUIRED", "admin user.payoutState"),
+    payoutReason: nullableString(value.payoutReason, "admin user.payoutReason"),
     roles,
     createdAt: stringField(value.createdAt, "admin user.createdAt"),
     lastActivityAt: nullableString(value.lastActivityAt, "admin user.lastActivityAt"),
@@ -3413,8 +3425,13 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           staff: Number(summary.staff ?? 0),
           admins: Number(summary.admins ?? 0),
           suspended: Number(summary.suspended ?? 0),
+          pendingReview: Number(summary.pendingReview ?? 0),
           activeUsers: Number(summary.activeUsers ?? 0),
           restricted: Number(summary.restricted ?? 0),
+          financialExceptions:
+            summary.financialExceptions === null || summary.financialExceptions === undefined
+              ? null
+              : Number(summary.financialExceptions),
           pastDueMemberships: Number(summary.pastDueMemberships ?? 0),
           trialingMemberships: Number(summary.trialingMemberships ?? 0),
         },

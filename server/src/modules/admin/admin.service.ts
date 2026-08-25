@@ -3013,6 +3013,9 @@ export class AdminService {
       type?: string;
       membershipPlan?: string;
       membershipStatus?: string;
+      financialState?: string;
+      complianceState?: string;
+      payoutState?: string;
       joinedFrom?: string;
       joinedTo?: string;
       lastActiveWindow?: string;
@@ -3025,6 +3028,14 @@ export class AdminService {
     },
   ) {
     await this.authorization.authorize(actor, 'users.read');
+    const policyActor = {
+      actorType: 'USER' as const,
+      userId: actor.userId,
+      accountStatus: actor.status,
+      roles: actor.roles as never,
+    };
+    const financeAccess = evaluatePolicy({ actor: policyActor, action: 'finance.read' }).allowed;
+    const complianceAccess = evaluatePolicy({ actor: policyActor, action: 'compliance.read' }).allowed;
     const staffRoles = [
       'SUPPORT',
       'COMPLIANCE_ANALYST',
@@ -3058,6 +3069,7 @@ export class AdminService {
             Date.now() - Number(input.lastActiveWindow) * 24 * 60 * 60 * 1000,
           )
         : undefined;
+    const whereAnd: Prisma.UserWhereInput[] = [];
     const where: Prisma.UserWhereInput = {
       ...(input.status ? { accountStatus: input.status as never } : {}),
       ...(joinedFrom || joinedTo
@@ -3114,6 +3126,52 @@ export class AdminService {
           }
         : {}),
     };
+    const financialExceptionWhere: Prisma.UserWhereInput = {
+      OR: [
+        { financialDeficits: { some: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } } } },
+        { moneyMovements: { some: { type: 'DEPOSIT', status: { in: ['RETURNED', 'MANUAL_REVIEW'] } } } },
+        { externalFinancialAccounts: { some: { riskState: { in: ['SHARED_INSTRUMENT_REVIEW', 'MANUAL_REVIEW_REQUIRED'] } } } },
+        { bankWithdrawalHoldUntil: { gt: new Date() } },
+      ],
+    };
+    if (input.financialState === 'CLEAR') whereAnd.push({ NOT: financialExceptionWhere });
+    if (input.financialState === 'FINANCIAL_DEFICIT') {
+      whereAnd.push({ financialDeficits: { some: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } } } });
+    } else if (input.financialState === 'RETURNED_DEPOSIT') {
+      whereAnd.push({ moneyMovements: { some: { type: 'DEPOSIT', status: 'RETURNED' } } });
+    } else if (input.financialState === 'MANUAL_REVIEW') {
+      whereAnd.push({
+        OR: [
+          { moneyMovements: { some: { type: 'DEPOSIT', status: 'MANUAL_REVIEW' } } },
+          { externalFinancialAccounts: { some: { riskState: { in: ['SHARED_INSTRUMENT_REVIEW', 'MANUAL_REVIEW_REQUIRED'] } } } },
+        ],
+      });
+    } else if (input.financialState === 'WITHDRAWAL_HOLD') {
+      whereAnd.push({ bankWithdrawalHoldUntil: { gt: new Date() } });
+    } else if (input.financialState === 'BANK_CLEARING') {
+      whereAnd.push({ moneyMovements: { some: { type: 'DEPOSIT', status: 'HELD', cashAccount: { code: 'BACS_RISK_HOLD' } } } });
+    }
+    if (input.complianceState === 'VERIFIED') {
+      whereAnd.push({ complianceCases: { some: { OR: [{ status: 'APPROVED' }, { identityState: 'VERIFIED' }] } } });
+    } else if (input.complianceState === 'REVIEW_REQUIRED') {
+      whereAnd.push({ complianceCases: { some: { status: { in: ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] } } } });
+    } else if (input.complianceState === 'INCOMPLETE') {
+      whereAnd.push({ complianceCases: { some: { status: { in: ['NOT_STARTED', 'EXPIRED'] } } } });
+    } else if (input.complianceState === 'RESTRICTED') {
+      whereAnd.push({ complianceCases: { some: { status: 'SUSPENDED' } } });
+    }
+    if (input.payoutState === 'READY') {
+      whereAnd.push({ externalConnectAccounts: { some: { status: 'READY', payoutsEnabled: true, transfersCapability: 'active' } } });
+    } else if (input.payoutState === 'RESTRICTED') {
+      whereAnd.push({ externalConnectAccounts: { some: { status: { in: ['UNDER_REVIEW', 'RESTRICTED', 'DISABLED'] } } } });
+    } else if (input.payoutState === 'SETUP_REQUIRED') {
+      whereAnd.push({
+        OR: [
+          { externalConnectAccounts: { none: {} } },
+          { externalConnectAccounts: { some: { status: { in: ['NOT_STARTED', 'ACTION_REQUIRED'] } } } },
+        ],
+      });
+    }
     const roleFilters: Prisma.UserWhereInput[] = [];
     if (input.role)
       roleFilters.push({
@@ -3136,7 +3194,8 @@ export class AdminService {
         roleAssignments: { some: { role: 'ADMIN', revokedAt: null } },
       });
     else if (input.type === 'INVESTOR') roleFilters.push(investorCapability);
-    if (roleFilters.length) where.AND = roleFilters;
+    whereAnd.push(...roleFilters);
+    if (whereAnd.length) where.AND = whereAnd;
     const direction = input.sortDirection ?? 'desc';
     const orderBy: Prisma.UserOrderByWithRelationInput[] =
       input.sort === 'lastActive'
@@ -3159,6 +3218,8 @@ export class AdminService {
       investorUsers,
       staffAssignments,
       adminAssignments,
+      pendingReviewUsers,
+      financialExceptionUsers,
     ] = await Promise.all([
       this.db.user.findMany({
         where,
@@ -3173,6 +3234,7 @@ export class AdminService {
           accountStatus: true,
           createdAt: true,
           lastLoginAt: true,
+          bankWithdrawalHoldUntil: true,
           profile: { select: { displayName: true, publicUsername: true } },
           collectorSubscriptions: {
             where: { status: { notIn: ['CANCELLED', 'EXPIRED'] } },
@@ -3189,6 +3251,33 @@ export class AdminService {
               scopeId: true,
               createdAt: true,
             },
+          },
+          financialDeficits: {
+            where: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } },
+            select: { amountMinor: true, recoveredMinor: true, status: true },
+          },
+          moneyMovements: {
+            where: {
+              type: 'DEPOSIT',
+              OR: [
+                { status: { in: ['RETURNED', 'MANUAL_REVIEW'] } },
+                { status: 'HELD', cashAccount: { code: 'BACS_RISK_HOLD' } },
+              ],
+            },
+            select: { amountMinor: true, status: true, cashAccount: { select: { code: true } } },
+          },
+          externalFinancialAccounts: {
+            select: { riskState: true },
+          },
+          complianceCases: {
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 5,
+            select: { status: true, identityState: true, type: true, updatedAt: true },
+          },
+          externalConnectAccounts: {
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { status: true, detailsSubmitted: true, payoutsEnabled: true, transfersCapability: true },
           },
         },
       }),
@@ -3215,6 +3304,8 @@ export class AdminService {
         distinct: ['userId'],
         select: { userId: true },
       }),
+      this.db.user.count({ where: { accountStatus: 'PENDING_REVIEW' } }),
+      financeAccess ? this.db.user.count({ where: financialExceptionWhere }) : Promise.resolve(null),
     ]);
     const items = users.map((user) => {
       const roleNames = user.roleAssignments.map(
@@ -3227,6 +3318,64 @@ export class AdminService {
           : roleNames.includes('COLLECTOR')
             ? 'COLLECTOR'
             : 'INVESTOR';
+      const hasDeficit = user.financialDeficits.length > 0;
+      const hasReturnedDeposit = user.moneyMovements.some((movement) => movement.status === 'RETURNED');
+      const hasManualReview = user.moneyMovements.some((movement) => movement.status === 'MANUAL_REVIEW');
+      const hasBacsHold = user.moneyMovements.some(
+        (movement) => movement.status === 'HELD' && movement.cashAccount.code === 'BACS_RISK_HOLD',
+      );
+      const hasSharedInstrumentReview = user.externalFinancialAccounts.some((account) =>
+        ['SHARED_INSTRUMENT_REVIEW', 'MANUAL_REVIEW_REQUIRED'].includes(account.riskState),
+      );
+      const hasWithdrawalHold = Boolean(user.bankWithdrawalHoldUntil && user.bankWithdrawalHoldUntil > new Date());
+      const financialExceptionCount = [
+        hasDeficit,
+        hasReturnedDeposit,
+        hasManualReview,
+        hasSharedInstrumentReview,
+        hasWithdrawalHold,
+      ].filter(Boolean).length;
+      const financialState = hasDeficit
+        ? 'FINANCIAL_DEFICIT'
+        : hasReturnedDeposit
+          ? 'RETURNED_DEPOSIT'
+          : hasManualReview || hasSharedInstrumentReview
+            ? 'MANUAL_REVIEW'
+            : hasWithdrawalHold
+              ? 'WITHDRAWAL_HOLD'
+              : hasBacsHold
+                ? 'BANK_CLEARING'
+                : 'CLEAR';
+      const outstandingDeficitMinor = user.financialDeficits.reduce(
+        (total, item) => total + item.amountMinor - item.recoveredMinor,
+        0n,
+      );
+      const bacsHeldMinor = user.moneyMovements
+        .filter((movement) => movement.status === 'HELD' && movement.cashAccount.code === 'BACS_RISK_HOLD')
+        .reduce((total, item) => total + item.amountMinor, 0n);
+      const latestCompliance = user.complianceCases[0] ?? null;
+      const hasComplianceReview = user.complianceCases.some((item) =>
+        ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'].includes(item.status),
+      );
+      const complianceState = latestCompliance
+        ? latestCompliance.status === 'SUSPENDED'
+          ? 'RESTRICTED'
+          : latestCompliance.status === 'APPROVED' || latestCompliance.identityState === 'VERIFIED'
+            ? 'VERIFIED'
+            : hasComplianceReview
+              ? 'REVIEW_REQUIRED'
+              : ['NOT_STARTED', 'EXPIRED'].includes(latestCompliance.status)
+                ? 'INCOMPLETE'
+                : 'REVIEW_REQUIRED'
+        : 'INCOMPLETE';
+      const payout = user.externalConnectAccounts[0] ?? null;
+      const payoutState = payout
+        ? payout.status === 'READY' && payout.payoutsEnabled && payout.transfersCapability === 'active'
+          ? 'READY'
+          : ['UNDER_REVIEW', 'RESTRICTED', 'DISABLED'].includes(payout.status)
+            ? 'RESTRICTED'
+            : 'SETUP_REQUIRED'
+        : 'SETUP_REQUIRED';
       return {
         id: user.id,
         displayName: user.profile?.displayName ?? 'Unnamed user',
@@ -3240,6 +3389,28 @@ export class AdminService {
         })),
         createdAt: user.createdAt.toISOString(),
         lastActivityAt: user.lastLoginAt?.toISOString() ?? null,
+        accountStateReason:
+          user.accountStatus === 'PENDING_REVIEW'
+            ? complianceState === 'REVIEW_REQUIRED' || complianceState === 'INCOMPLETE'
+              ? 'Compliance review'
+              : financialExceptionCount > 0
+                ? 'Financial review'
+                : 'Staff review'
+            : user.accountStatus === 'RESTRICTED'
+              ? financialState === 'FINANCIAL_DEFICIT'
+                ? 'Financial deficit'
+                : 'Manual review'
+              : user.accountStatus === 'SUSPENDED'
+                ? 'Suspended account'
+                : null,
+        financialState: financeAccess ? financialState : financialExceptionCount > 0 ? 'FINANCIAL_REVIEW' : 'UNAVAILABLE',
+        financialExceptionCount: financeAccess ? financialExceptionCount : null,
+        financialAmountMinor: financeAccess ? outstandingDeficitMinor.toString() : null,
+        bacsHeldMinor: financeAccess ? bacsHeldMinor.toString() : null,
+        complianceState: complianceAccess ? complianceState : user.complianceCases.length > 0 ? 'REVIEW' : 'UNAVAILABLE',
+        complianceReason: complianceAccess && latestCompliance && hasComplianceReview ? latestCompliance.type : null,
+        payoutState,
+        payoutReason: payoutState === 'READY' ? null : payout ? 'Payout setup requires attention' : 'Payout setup not started',
         membership: user.collectorSubscriptions[0]
           ? {
               plan: user.collectorSubscriptions[0].plan.code,
@@ -3262,8 +3433,10 @@ export class AdminService {
         staff: staffAssignments.length,
         admins: adminAssignments.length,
         activeUsers,
+        pendingReview: pendingReviewUsers,
         restricted,
         suspended,
+        financialExceptions: financialExceptionUsers,
         pastDueMemberships,
         trialingMemberships,
       },
