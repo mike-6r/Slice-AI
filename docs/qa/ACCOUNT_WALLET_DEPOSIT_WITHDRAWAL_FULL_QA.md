@@ -54,7 +54,7 @@ At the time of the authenticated audit:
 - Deposit Funds: AVAILABLE
 - Withdraw Funds: BLOCKED — `PAYOUT_ACCOUNT_REQUIRED`
 - Exact next action: `SET_UP_PAYOUTS`
-- Generic setup dead-end: FIXED in source; pending deployment verification
+- Generic setup dead-end: PASS — deployed Account Center now shows `Set up withdrawals` and links to `/wallet`
 
 ### Bank
 
@@ -128,5 +128,19 @@ PASS for the read-only state display:
 5. Verify the deployed Account Center link and all nextAction routes in the authenticated browser at desktop and 390px mobile widths.
 
 ## Status
+
+## Deployment
+
+- Commit: `0194a0f`
+- Release: `/opt/slice/releases/20260825-0194a0f`
+- `/opt/slice/current`: `/opt/slice/releases/20260825-0194a0f`
+- `/opt/slice/app`: `/opt/slice/releases/20260825-0194a0f`
+- API service: active
+- Web service: active
+- Health: PASS — HTTP 200
+- Ready: PASS — HTTP 200
+- Public site: PASS — HTTP 200
+- Public market assets: PASS — HTTP 200
+- Browser console/network errors after deploy: none observed
 
 Financial release gate: **NO-GO / QA BLOCKED** until the disposable normal-user provider journey reaches real sandbox-confirmed deposit and withdrawal final states. The implementation does not claim provider success without provider evidence.
