@@ -1209,6 +1209,7 @@ export const mockRepositories: AppRepositories = {
       return {
         currency: "GBP" as const,
         walletAvailableMinor: "0",
+        tradeAvailableMinor: "0",
         customerEligibleMinor: "0",
         withdrawableMinor: "0",
         settlingMinor: "0",
@@ -1216,6 +1217,7 @@ export const mockRepositories: AppRepositories = {
         grossMinor: "0",
         feeMinor: "0",
         netPayoutMinor: "0",
+        maturityStatus: "NOT_AVAILABLE" as const,
         customerEligibilityStatus: "INSUFFICIENT_CASH" as const,
         providerLiquidityStatus: "NOT_APPLICABLE" as const,
         nextAvailabilityAt: null,

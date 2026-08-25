@@ -12,6 +12,7 @@ export type ProviderLiquidityStatus =
 export type WithdrawalPreflightProjection = {
   currency: 'GBP';
   walletAvailableMinor: string;
+  tradeAvailableMinor: string;
   customerEligibleMinor: string;
   withdrawableMinor: string;
   settlingMinor: string;
@@ -19,6 +20,7 @@ export type WithdrawalPreflightProjection = {
   grossMinor: string;
   feeMinor: string;
   netPayoutMinor: string;
+  maturityStatus: 'MATURED' | 'PARTIALLY_SETTLING' | 'SETTLING' | 'NOT_AVAILABLE';
   customerEligibilityStatus:
     'AVAILABLE' | 'MATURITY_PENDING' | 'INSUFFICIENT_CASH';
   providerLiquidityStatus: ProviderLiquidityStatus;
@@ -117,6 +119,14 @@ export class WithdrawalPreflightService {
     // liquidity is reported independently so a treasury shortfall is never
     // mislabeled as a customer's funds still settling.
     const settlingMinor = maturityPendingMinor;
+    const maturityStatus =
+      maturityPendingMinor > 0n
+        ? customerEligibleMinor > 0n
+          ? 'PARTIALLY_SETTLING'
+          : 'SETTLING'
+        : customerEligibleMinor > 0n
+          ? 'MATURED'
+          : 'NOT_AVAILABLE';
     const customerEligibilityStatus =
       grossMinor > customerEligibleMinor
         ? maturityPendingMinor > 0n
@@ -131,6 +141,10 @@ export class WithdrawalPreflightService {
     return {
       currency: 'GBP',
       walletAvailableMinor: walletAvailableMinor.toString(),
+      // The current Slice policy has one internal cash pool for investing and
+      // trading. Keep the action-specific field explicit in the contract so a
+      // future trade hold cannot silently reuse withdrawal eligibility.
+      tradeAvailableMinor: walletAvailableMinor.toString(),
       customerEligibleMinor: customerEligibleMinor.toString(),
       withdrawableMinor: withdrawableMinor.toString(),
       settlingMinor: settlingMinor.toString(),
@@ -138,6 +152,7 @@ export class WithdrawalPreflightService {
       grossMinor: grossMinor.toString(),
       feeMinor: feeMinor.toString(),
       netPayoutMinor: netPayoutMinor.toString(),
+      maturityStatus,
       customerEligibilityStatus,
       providerLiquidityStatus,
       nextAvailabilityAt:
@@ -426,6 +441,7 @@ export class WithdrawalPreflightService {
   ): ProviderLiquidityStatus {
     if (snapshot.status === 'NOT_APPLICABLE') return 'NOT_APPLICABLE';
     if (snapshot.status === 'UNAVAILABLE') return 'UNAVAILABLE';
+    if (snapshot.availableMinor < 0n) return 'INSUFFICIENT';
     return capacityMinor >= providerAmountMinor ? 'AVAILABLE' : 'INSUFFICIENT';
   }
 

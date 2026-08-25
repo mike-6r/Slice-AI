@@ -119,7 +119,7 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("Movement history");
     expect(html).toContain("Wallet insights");
     expect(html).toContain("Settlement timeline");
-    expect(html).toContain("Total wallet balance");
+    expect(html).toContain("Available to trade");
     expect(html).not.toContain("bank-private");
     expect(html).not.toContain("movement-private");
     expect(html).not.toMatch(/accessToken|itemId|provider payload|journal|reservation/i);

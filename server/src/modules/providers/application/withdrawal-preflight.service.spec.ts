@@ -107,6 +107,8 @@ describe('WithdrawalPreflightService', () => {
     expect(projection.withdrawableMinor).toBe('0');
     expect(projection.providerLiquidityStatus).toBe('INSUFFICIENT');
     expect(projection.walletAvailableMinor).toBe('19171');
+    expect(projection.tradeAvailableMinor).toBe('19171');
+    expect(projection.maturityStatus).toBe('MATURED');
     expect(projection.settlingMinor).toBe('0');
   });
 
@@ -123,6 +125,8 @@ describe('WithdrawalPreflightService', () => {
     expect(projection.walletAvailableMinor).toBe('10000');
     expect(projection.withdrawableMinor).toBe('0');
     expect(projection.settlingMinor).toBe('10000');
+    expect(projection.tradeAvailableMinor).toBe('10000');
+    expect(projection.maturityStatus).toBe('SETTLING');
     expect(projection.customerEligibilityStatus).toBe('MATURITY_PENDING');
     expect(projection.nextAvailabilityAt).toBe('2026-09-01T00:00:00.000Z');
   });
@@ -141,6 +145,19 @@ describe('WithdrawalPreflightService', () => {
     expect(projection.feeMinor).toBe('125');
     expect(projection.netPayoutMinor).toBe('4875');
     expect(projection.withdrawableMinor).toBe('5000');
+  });
+
+  it('does not report a negative provider balance as available for an overview check', async () => {
+    const { service: preflight } = service({
+      availableMinor: -1,
+      walletAvailableMinor: '0',
+      walletWithdrawableMinor: '0',
+    });
+
+    const projection = await preflight.forUser('user-1', '0', false, now);
+
+    expect(projection.providerLiquidityStatus).toBe('INSUFFICIENT');
+    expect(projection.maturityStatus).toBe('NOT_AVAILABLE');
   });
 
   it('rejects a provider reservation when available balance is insufficient', async () => {

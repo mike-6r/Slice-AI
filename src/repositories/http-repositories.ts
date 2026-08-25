@@ -1091,6 +1091,7 @@ const mapWithdrawalPreflight = (raw: unknown): WithdrawalPreflight => {
   return {
     currency: "GBP",
     walletAvailableMinor: stringField(value.walletAvailableMinor, "preflight.walletAvailableMinor"),
+    tradeAvailableMinor: stringField(value.tradeAvailableMinor, "preflight.tradeAvailableMinor"),
     customerEligibleMinor: stringField(
       value.customerEligibleMinor,
       "preflight.customerEligibleMinor",
@@ -1101,6 +1102,13 @@ const mapWithdrawalPreflight = (raw: unknown): WithdrawalPreflight => {
     grossMinor: stringField(value.grossMinor, "preflight.grossMinor"),
     feeMinor: stringField(value.feeMinor, "preflight.feeMinor"),
     netPayoutMinor: stringField(value.netPayoutMinor, "preflight.netPayoutMinor"),
+    maturityStatus: ["MATURED", "PARTIALLY_SETTLING", "SETTLING", "NOT_AVAILABLE"].includes(
+      String(value.maturityStatus),
+    )
+      ? (value.maturityStatus as WithdrawalPreflight["maturityStatus"])
+      : (() => {
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid preflight.maturityStatus.");
+        })(),
     customerEligibilityStatus: eligibilityStatus,
     providerLiquidityStatus: providerStatus,
     nextAvailabilityAt: nullableString(

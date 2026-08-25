@@ -17,6 +17,14 @@ The withdrawal projection therefore keeps three concepts separate:
 | Withdrawal maturity | Provider balance-transaction `available_on` evidence for settled provider-backed deposits | Customer cash that may be released for external withdrawal after provider settlement. |
 | Payout liquidity | Stripe platform `balance.available` GBP minus active internal payout reservations | Provider funds available now for a Connect transfer. `balance.pending` never counts. |
 
+The customer preview also exposes `tradeAvailableMinor` separately from
+`withdrawableMinor` and a `maturityStatus`. Slice currently has one internal
+cash pool for investing and trading, so `tradeAvailableMinor` equals posted
+cash after active reservations. It is still an explicit action-specific
+projection; future trading holds must not silently reuse withdrawal maturity.
+`maturityStatus` is `MATURED`, `PARTIALLY_SETTLING`, `SETTLING`, or
+`NOT_AVAILABLE`.
+
 `settlingMinor` is the customer-specific maturity bucket. A platform-wide
 liquidity shortfall is reported through `providerLiquidityStatus` and a
 customer-friendly message, not mislabeled as the customer's deposit still
@@ -83,6 +91,20 @@ success/settlement workflow. External withdrawal additionally requires provider
 available liquidity/maturity. This pass does not change trading behavior or
 invent a Bacs return-risk policy. The Bacs risk decision remains a separate
 product, fraud, and release-gate decision.
+
+## Cash-source maturity policy
+
+| Cash source | Internal Slice use | External withdrawal maturity |
+| --- | --- | --- |
+| Settled Bacs deposit with provider `available_on` in the future | Available under the existing internal settlement/risk policy | Not eligible; remains in the customer settling bucket until the authoritative timestamp |
+| Settled Bacs deposit with provider `available_on` reached | Available | Eligible, subject to cash reservations, account controls, and platform payout liquidity |
+| Settled secondary-sale or Collector proceeds | Available after existing Slice settlement and ledger controls | Eligible under the existing settled-proceeds policy; still subject to payout readiness, reservations, and platform liquidity |
+| Missing provider maturity evidence | Available only according to existing internal settlement policy | Not promoted by guesswork; reconciliation review is required |
+
+The projection is recalculated from the ledger and stored provider evidence on
+each request, with a short provider-balance cache. A provider re-read or
+reconciliation therefore promotes matured funds without a user action; no
+fixed timer or manual balance patch is used.
 
 ## Release gate
 

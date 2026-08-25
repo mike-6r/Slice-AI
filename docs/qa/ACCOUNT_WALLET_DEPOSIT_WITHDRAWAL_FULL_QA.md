@@ -626,9 +626,9 @@ fund that transfer, so the provider-to-Connect transfer → Connect payout →
 webhook → final ledger reconciliation chain cannot be truthfully completed
 yet.
 
-The Wallet still correctly projects withdrawal capability as Available because
-Connect requirements/capabilities are ready and Slice cash is posted. That is
-distinct from the Stripe platform's available-liquidity gate. The prior
+The Wallet now keeps Slice cash and withdrawal eligibility separate. Connect
+requirements/capabilities are ready and Slice cash is posted, but provider
+liquidity still gates external execution. The prior
 observed failed £50.00 movement remains a safe 'FAILED' record: its £1.25
 Slice fee was not booked, its reservation was released, no customer ledger
 debit occurred, and no Stripe transfer or payout reference exists. It is not
@@ -691,8 +691,8 @@ withdrawal fee.
 ### Backend hardening
 
 - `GET /api/v1/me/wallet/withdrawal-preflight` returns authoritative wallet,
-  eligibility, maturity, fee, net payout, provider status, and expected
-  availability fields.
+  trade availability, eligibility, maturity status, fee, net payout, provider
+  status, and expected availability fields.
 - Stripe balance transaction evidence is persisted on provider-backed
   movements: balance transaction reference, gross, fee, net, GBP currency,
   `available_on`, and hashed source reference.
@@ -706,7 +706,7 @@ withdrawal fee.
 ### UI and Admin Finance
 
 - Wallet now labels Available cash, Available to withdraw, Settling for
-  withdrawal, Reserved cash, and Total wallet balance separately.
+  withdrawal, Reserved cash, and Available to trade separately.
 - Customer copy does not expose Stripe negative balances or raw provider
   errors. It explains that funds are settling or bank withdrawals are
   temporarily unavailable, with an expected date only when safely attributable
@@ -734,6 +734,8 @@ not faked.
 | Provider maturity timestamp used when evidence exists | PASS — focused tests |
 | Concurrent payout-liquidity reservation | PASS — advisory-lock reservation path implemented; integration requires staging DB run |
 | Customer-safe liquidity/maturity copy | PASS |
+| Explicit trade availability and maturity status | PASS — backend contract and Wallet projection |
+| Negative provider balance cannot pass zero-amount preflight | PASS — focused test |
 | Admin provider/liability projection | PASS — API/UI contract implemented |
 | Controlled £50 withdrawal | NOT YET AVAILABLE — provider available GBP was insufficient |
 | Umbreon / Charizard / trading state | UNCHANGED |

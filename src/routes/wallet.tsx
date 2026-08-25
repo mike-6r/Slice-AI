@@ -423,9 +423,9 @@ function WalletKpis({
       />
       <WalletKpi
         icon={Layers3}
-        label="Total wallet balance"
-        value={formatWalletMoney(cash.totalMinor)}
-        detail="Across all cash states"
+        label="Available to trade"
+        value={formatWalletMoney(withdrawal.data?.tradeAvailableMinor ?? cash.availableMinor)}
+        detail="Available for Slice investing and trading"
         featured
       />
     </section>
