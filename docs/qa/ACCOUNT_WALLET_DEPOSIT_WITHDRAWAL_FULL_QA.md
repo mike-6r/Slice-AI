@@ -346,6 +346,54 @@ the current provider identity/bank data.
   Connect account remains provider-restricted by the keyed-identity document
   requirement. No financial mutation was attempted by this implementation.
 
+#### Full staging withdrawal-setup audit after release `7fcff4a`
+
+Browser audit date: 2026-08-25. The authenticated Wallet session loaded the
+new release successfully. `Update payout details` opened a fresh Account Link
+for the existing Connect account; no second account was created. Stripe hosted
+the existing information on a `Review and confirm` screen. The account owner
+confirmed the already-present review screen without editing identity fields or
+uploading a document, and Stripe returned to Slice.
+
+The return-state read remained restricted. The live provider read showed:
+
+- existing test Connect account present, country `GB`;
+- contact email and contact phone present;
+- provider payout capability status `active`;
+- provider transfer capability status `active`;
+- one requirement awaiting user action;
+- requirement `identity.individual.documents.primary_verification`;
+- provider error `verification_failed_keyed_identity`;
+- the requirement impacts both `stripe_balance.payouts` and
+  `stripe_balance.stripe_transfers` with an `eventually_due` deadline.
+
+Slice synchronized that provider result as:
+
+- `status=RESTRICTED`;
+- `detailsSubmitted=false`;
+- `payoutsEnabled=true`;
+- `transfersCapability=active`;
+- `currentlyDueCount=1`;
+- `pendingVerificationCount=1`;
+- `hasValidationErrors=true`.
+
+The withdrawal UI correctly explains that the payout account is the next
+requirement. All existing account gates were complete in the dialog: email,
+service availability, phone, two-factor authentication, and identity. A £1.00
+withdrawal preview calculated £0.02 Slice fee and £0.98 estimated payout, but
+the backend capability gate stopped the request before any movement was
+created. The account still has one settled £100.00 deposit and zero withdrawal
+movements; no cash was reserved and no Stripe transfer or payout was created.
+
+**Diagnosis:** the setup button and Slice backend are functioning. The block is
+Stripe's unresolved keyed-identity verification requirement. The user must
+review/correct the keyed identity in Stripe's hosted flow and complete the
+primary verification-document step if Stripe presents it. Slice must not
+invent, edit, or upload that identity evidence. After Stripe clears the
+requirement, return to Slice and refresh Wallet; readiness should only change
+after a fresh provider read proves there are no current requirements or
+validation errors.
+
 ### Withdrawal
 
 - Withdrawable cash shown by wallet: £91.71 existing fixture
@@ -384,7 +432,7 @@ PASS for the read-only state display:
 
 ## Automated validation
 
-- Backend full suite: PASS — 326 tests
+- Backend full suite: PASS — 327 tests
 - Backend Connect payout focused suite: PASS — 6 tests
 - Frontend full suite: PASS — 155 tests
 - Frontend typecheck: PASS
@@ -405,16 +453,16 @@ PASS for the read-only state display:
 
 ## Status
 
-Current task status: **PREFILL IMPLEMENTED / FINANCIAL QA BLOCKED** by the provider's keyed-identity verification requirement and the normal recent-auth gate. The customer disclosure and deployed Wallet handoff are browser-verified; no financial E2E result is claimed yet.
+Current task status: **ONE-TIME PAYOUT SETUP IMPLEMENTED / FINANCIAL QA BLOCKED** by the provider's keyed-identity verification requirement and the normal recent-auth gate. The customer disclosure and deployed Wallet handoff are browser-verified; no financial E2E result is claimed yet.
 
 Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the authorized £1.00 deposit**. Wallet still correctly shows payout setup restricted after Stripe return. No new financial movement was created.
 
 ## Deployment
 
-- Application commit: `ee0af9e`
-- Release: `/opt/slice/releases/20260825-ee0af9e`
-- `/opt/slice/current`: `/opt/slice/releases/20260825-ee0af9e`
-- `/opt/slice/app`: `/opt/slice/releases/20260825-ee0af9e`
+- Application commit: `7fcff4a`
+- Release: `/opt/slice/releases/20260825-7fcff4a`
+- `/opt/slice/current`: `/opt/slice/releases/20260825-7fcff4a`
+- `/opt/slice/app`: `/opt/slice/releases/20260825-7fcff4a`
 - API service: active
 - Web service: active
 - Health: PASS — HTTP 200
@@ -423,7 +471,7 @@ Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the author
 - Public market assets: PASS — HTTP 200
 - Browser console errors after deploy: none observed
 - Browser provider handoff: PASS — fresh hosted link reached Stripe Sandbox; no API/network error observed in the Slice page
-- Browser prefill disclosure: PASS — deployed Wallet rendered the verified-data reuse explanation and `Set up withdrawals` CTA
-- Provider/database mutations during this prefill implementation QA: none from the final browser check; no new account, bank, movement, order, trade, or balance state was created
+- Browser prefill disclosure: PASS — the existing authenticated Wallet QA rendered the verified-data reuse explanation and `Set up withdrawals` CTA; the new release preserves that copy and adds the one-time setup/review flow
+- Provider/database mutations during this implementation: no financial/provider mutation; no new account, bank, movement, order, trade, or balance state was created. VPS migration check reported no pending migrations.
 
 Financial release gate: **NO-GO / QA BLOCKED** until the disposable normal-user provider journey reaches real sandbox-confirmed deposit and withdrawal final states. The implementation does not claim provider success without provider evidence.
