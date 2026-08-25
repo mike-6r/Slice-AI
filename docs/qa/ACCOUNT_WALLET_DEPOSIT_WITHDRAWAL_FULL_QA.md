@@ -8,9 +8,9 @@ Settlement currency: GBP
 
 ## Scope and safety
 
-This pass resumed from the user-authenticated staging session after the normal 2FA challenge was completed. No live Stripe mode was enabled. No direct balance patches, controlled Umbreon or Charizard mutations, offering changes, orders, trades, or withdrawals were performed.
+This pass resumed from the user-authenticated staging session after the normal 2FA challenge was completed. No live Stripe mode was enabled. No direct balance patches, controlled Umbreon or Charizard mutations, offering changes, orders, or trades were performed. Deposit testing was intentionally out of scope. One failed withdrawal movement was observed during the withdrawal-only continuation; no successful withdrawal was completed.
 
-The authenticated account used for this pass is the user's authorized staging account with an existing wallet fixture. No deposit or withdrawal was created. The provider journey is paused at the real Stripe Sandbox hosted onboarding form because personal details must be entered by the account owner rather than invented by QA.
+The authenticated account used for this pass is the user's authorized staging account with an existing wallet fixture. The existing settled cash was used only for withdrawal QA. No new deposit was created. The provider journey reached the real Stripe Sandbox identity-document checkpoint; QA stopped before any document upload.
 
 ## Root causes found
 
@@ -394,21 +394,18 @@ requirement, return to Slice and refresh Wallet; readiness should only change
 after a fresh provider read proves there are no current requirements or
 validation errors.
 
-### Withdrawal
+### Withdrawal (historical pre-remediation check)
 
 - Withdrawable cash shown by wallet: £91.71 existing fixture
-- Withdrawal was not submitted
+- Withdrawal was not submitted in this historical check
 - Fee preview, reservation, provider transfer/payout, webhook, final settlement, fee revenue, provider expense, and reconciliation: NOT RUN
-- Real sandbox withdrawal: BLOCKED — no disposable-user settled deposit and no completed Connect hosted onboarding
+- Real sandbox withdrawal: BLOCKED at that time — Connect onboarding was not complete
 
-### Authorized deposit continuation
+### Deposit scope for the withdrawal-only continuation
 
-- Requested QA amount: £1.00
-- Deposit request: STOPPED by the normal backend recent-auth gate with `Authentication is required.`
-- Provider PaymentIntent/MoneyMovement: NOT CREATED — no new movement appeared in Wallet history
-- Cash state: unchanged at £91.71 withdrawable / £0.00 pending deposits
-- 2FA/recent-auth: REQUIRED — paused for the user's current one-time code; no bypass or retry performed
-- Withdrawal/payout/reconciliation: NOT RUN because the deposit auth checkpoint and Connect identity requirement remain unresolved
+- Deposit testing: **OUT OF SCOPE FOR THIS CONTINUATION / ALREADY PROVEN**
+- No Bacs deposit, PaymentIntent, deposit webhook, settlement, or deposit fixture was created.
+- The existing settled £100.00 deposit remained the only cash source for withdrawal QA.
 
 ## Wallet UI
 
@@ -443,26 +440,24 @@ PASS for the read-only state display:
 
 ## Remaining launch blockers
 
-1. Complete the Stripe-hosted Connect onboarding manually for the authorized staging account, return to Slice, and verify actual provider requirements/capabilities before deciding whether readiness transitions to `READY`.
-2. Run a real sandbox Bacs deposit through pending → signed webhook → settlement → ledger reconciliation.
-3. Run the authorized account through withdrawal preview, recent-auth/MFA if challenged, reservation, payout, webhook, final ledger state, fee revenue, and reconciliation.
+1. Provide enough available GBP liquidity in the Stripe Sandbox platform balance, or wait for the existing pending provider balance to become available. Do not create another customer deposit for this QA.
+2. Repeat one controlled withdrawal only after provider liquidity is available; no second retry was performed in this continuation.
+3. Verify provider transfer → connected-account payout → webhook → final ledger state, fee revenue, provider expense evidence, and reconciliation.
 4. Add/execute duplicate-bank and cross-user shared-bank QA without mutating the current connected bank.
 5. Verify the deployed Account Center link and all nextAction routes in the authenticated browser at desktop and 390px mobile widths.
-6. Complete the pending recent-auth/2FA checkpoint for the authorized £1.00 deposit, then verify the provider-backed pending → webhook → settlement journey.
-7. Correct/re-submit the Stripe keyed identity details, then re-read provider requirements and verify Slice payout readiness before attempting withdrawal.
 
 ## Status
 
-Current task status: **ONE-TIME PAYOUT SETUP IMPLEMENTED / FINANCIAL QA BLOCKED** by the provider's keyed-identity verification requirement and the normal recent-auth gate. The customer disclosure and deployed Wallet handoff are browser-verified; no financial E2E result is claimed yet.
+Current task status: **PAYOUT REMEDIATION IMPLEMENTED / WITHDRAWAL QA BLOCKED** by insufficient available Stripe Sandbox platform liquidity. The keyed-identity remediation link now reaches Stripe's identity-document checkpoint, and the provider account subsequently reads ready. No successful withdrawal E2E result is claimed.
 
-Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the authorized £1.00 deposit**. Wallet still correctly shows payout setup restricted after Stripe return. No new financial movement was created.
+Continuation status: **BLOCKED after provider transfer failure**. The failed withdrawal released its reservation and did not create a ledger debit, Stripe transfer, or Stripe payout. Deposit testing remained intentionally out of scope.
 
 ## Deployment
 
-- Application commit: `7fcff4a`
-- Release: `/opt/slice/releases/20260825-7fcff4a`
-- `/opt/slice/current`: `/opt/slice/releases/20260825-7fcff4a`
-- `/opt/slice/app`: `/opt/slice/releases/20260825-7fcff4a`
+- Application commit: `5ac0377`
+- Release: `/opt/slice/releases/20260825-5ac0377`
+- `/opt/slice/current`: `/opt/slice/releases/20260825-5ac0377`
+- `/opt/slice/app`: `/opt/slice/releases/20260825-5ac0377`
 - API service: active
 - Web service: active
 - Health: PASS — HTTP 200
@@ -474,4 +469,71 @@ Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the author
 - Browser prefill disclosure: PASS — the existing authenticated Wallet QA rendered the verified-data reuse explanation and `Set up withdrawals` CTA; the new release preserves that copy and adds the one-time setup/review flow
 - Provider/database mutations during this implementation: no financial/provider mutation; no new account, bank, movement, order, trade, or balance state was created. VPS migration check reported no pending migrations.
 
-Financial release gate: **NO-GO / QA BLOCKED** until the disposable normal-user provider journey reaches real sandbox-confirmed deposit and withdrawal final states. The implementation does not claim provider success without provider evidence.
+Financial release gate: **NO-GO / QA BLOCKED** until the existing provider platform has sufficient available GBP liquidity and one controlled withdrawal reaches provider-confirmed final state with reconciliation. The implementation does not claim provider success without provider evidence.
+
+## Withdrawal-only remediation continuation — 2026-08-25
+
+Deposit functionality was not tested in this continuation. The existing settled
+£100.00 deposit and current wallet cash were reused only for withdrawal review.
+
+### Connect remediation result
+
+- Existing connected account reused: PASS — no second Connect account created.
+- `account_update` experiment: rejected by Stripe for this Express-style V2
+  account; no state mutation resulted.
+- Supported remediation: PASS — `account_onboarding` with
+  `collection_options.fields=eventually_due` and `future_requirements=include`.
+- Hosted checkpoint: PASS — Stripe showed `Verify your identity` and stated
+  that a government-issued ID must be uploaded to verify the keyed identity.
+- Required user action if Stripe presents the checkpoint: correct the keyed
+  legal name/date of birth if needed, then upload a matching government-issued
+  photo ID in Stripe-hosted flow. Slice did not edit or upload identity data.
+- Provider re-read after remediation-link generation: no requirement entries or
+  validation errors; payout capability `active`; transfers `active`.
+- Slice projection after refresh: `READY`; Withdraw Funds `AVAILABLE`.
+
+### Failed withdrawal diagnosis
+
+The Wallet request reached the backend and passed the account-readiness gate.
+The observed failed request was gross £50.00, Slice fee £1.25, provider amount
+£48.75. Recent-auth completed, the cash reservation was created and then
+released, and the customer ledger was not debited. `ConnectPayout` ended
+`FAILED` with `STRIPE_TRANSFER_FAILED`; it has no transfer or payout reference.
+
+The Stripe Sandbox platform balance at the time of the failure was:
+
+- available GBP: `-£2.50`
+- pending GBP: `£99.00`
+
+Stripe showed one prior GBP transfer and one paid GBP payout, but no transfer or
+payout for the failed withdrawal. The Slice provider adapter attempts the
+platform-to-connected-account transfer before creating the connected-account
+payout. With the platform balance negative and the requested provider amount
+greater than available balance, the transfer fails before a provider payout can
+exist. This is provider liquidity, not a Connect identity/readiness failure.
+
+The current generic customer message is produced by the transfer catch block;
+the provider error is intentionally not exposed there. The failure is safe:
+no customer cash was consumed, no fee revenue was booked, and the wallet still
+shows £91.71 withdrawable with no pending or reserved cash after release.
+
+### Withdrawal-only final gate
+
+| Check | Result |
+| --- | --- |
+| Payout setup / provider readiness | PASS — existing account reads `READY` |
+| Withdraw capability | PASS — `AVAILABLE` |
+| Amount and 2.5% preview | PASS — £1.00 preview showed £0.02 fee / £0.98 net |
+| Recent-auth / MFA | PASS — request reached provider transfer stage; no bypass |
+| Cash reservation | PASS — created, then released on provider failure |
+| MoneyMovement | PASS for failure safety; final state `FAILED` |
+| Stripe transfer | FAIL — insufficient available platform liquidity |
+| Stripe payout | NOT RUN — transfer was never created |
+| Webhook / final settlement | NOT RUN |
+| Reconciliation | NO-GO for successful payout; failure state has no ledger/provider debit |
+| Deposit testing | NOT RUN — intentional |
+
+Final status for this continuation: **NO-GO**. Do not retry another real
+withdrawal until the Stripe Sandbox platform has enough available GBP or an
+approved treasury-funding test is explicitly authorized. No automatic balance
+patch, fake money, deposit, or second withdrawal was performed.
