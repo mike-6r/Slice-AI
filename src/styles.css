@@ -55019,3 +55019,65 @@ select[multiple] {
     padding-left: 0;
   }
 }
+
+/* Portfolio overview final grid correction. Keep the compact holdings card
+   beside performance while activity and orders occupy the space directly
+   beneath it instead of leaving an empty stretched column. */
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  grid-template-areas:
+    "holdings performance"
+    "bottom performance"
+    "bottom allocation";
+  grid-template-rows: auto auto auto;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+  grid-area: holdings;
+  align-self: start;
+}
+
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-content
+  > .portfolio-panel--hero-performance {
+  grid-area: performance;
+}
+
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-content
+  > .portfolio-panel--allocation {
+  grid-area: allocation;
+  align-self: start;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-overview-bottom {
+  grid-area: bottom;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-self: start;
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-areas:
+      "holdings"
+      "performance"
+      "allocation"
+      "bottom";
+    grid-template-rows: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved
+    .portfolio-overview-content
+    > .portfolio-overview-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .portfolio-page.portfolio-page--approved
+    .portfolio-overview-content
+    > .portfolio-overview-bottom {
+    grid-template-columns: 1fr;
+  }
+}

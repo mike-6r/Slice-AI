@@ -330,13 +330,13 @@ export function Portfolio() {
                 onRangeChange={setPerformanceRange}
               />
               <AllocationPanel query={displaySummaryQuery} />
-            </section>
-            <section
-              className="portfolio-overview-bottom"
-              aria-label="Your Slice activity and discovery"
-            >
-              <ActivityPanel query={transactions} compact />
-              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+              <section
+                className="portfolio-overview-bottom"
+                aria-label="Your Slice activity and discovery"
+              >
+                <ActivityPanel query={transactions} compact />
+                <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+              </section>
             </section>
             <section className="portfolio-overview-discovery" aria-label="Explore the market">
               <MarketWatchPanel query={market} />
@@ -1531,7 +1531,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
         detail={
           unrealisedPercent === null
             ? "Available once cost history is complete"
-            : `${unrealisedPercent} vs. settled cost`
+            : `${unrealisedPercent}% vs. settled cost`
         }
       />
     </section>
