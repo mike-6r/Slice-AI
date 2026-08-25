@@ -1065,7 +1065,12 @@ const mapConnectPayoutSetup = (raw: unknown): ConnectPayoutSetup => {
             hasDisabledReason: Boolean((summary as Record<string, unknown>).hasDisabledReason),
           },
     onboardingUrl: nullableString(value.onboardingUrl, "connect.onboardingUrl"),
-    expiresAt: nullableString(value.expiresAt, "connect.expiresAt") as ISODateTime | null,
+    expiresAt:
+      value.expiresAt === null
+        ? null
+        : typeof value.expiresAt === "number" && Number.isFinite(value.expiresAt)
+          ? (new Date(value.expiresAt * 1000).toISOString() as ISODateTime)
+          : (nullableString(value.expiresAt, "connect.expiresAt") as ISODateTime),
   };
 };
 const mapFeePolicy = (raw: unknown): FeePolicy => {

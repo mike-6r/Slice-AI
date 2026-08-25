@@ -180,10 +180,10 @@ describe('StripeConnectPayoutService', () => {
           },
           accountLinks: {
             create: jest
-              .fn<() => Promise<{ url: string; expires_at: string }>>()
+              .fn<() => Promise<{ url: string; expires_at: number }>>()
               .mockResolvedValue({
                 url: 'https://connect.stripe.test/onboarding',
-                expires_at: '2026-08-25T04:00:00.000Z',
+                expires_at: 1770000000,
               }),
           },
         },
@@ -248,6 +248,7 @@ describe('StripeConnectPayoutService', () => {
       ),
     ).resolves.toMatchObject({
       onboardingUrl: 'https://connect.stripe.test/onboarding',
+      expiresAt: new Date(1770000000 * 1000).toISOString(),
       status: 'ACTION_REQUIRED',
     });
     expect(stripe.v2.core.accounts.create).toHaveBeenCalledWith(

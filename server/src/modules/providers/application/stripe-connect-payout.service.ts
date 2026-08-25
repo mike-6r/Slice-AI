@@ -700,7 +700,13 @@ export class StripeConnectPayoutService {
         },
         { idempotencyKey },
       );
-      return { url: link.url, expiresAt: link.expires_at };
+      return {
+        url: link.url,
+        expiresAt:
+          typeof link.expires_at === 'number'
+            ? new Date(link.expires_at * 1000).toISOString()
+            : new Date(link.expires_at).toISOString(),
+      };
     }
     const link = await stripe.accountLinks.create(
       {
