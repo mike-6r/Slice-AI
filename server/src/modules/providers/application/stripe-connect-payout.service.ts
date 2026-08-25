@@ -635,7 +635,7 @@ export class StripeConnectPayoutService {
         null;
       for await (const account of stripe.v2.core.accounts.list({
         applied_configurations: ['recipient'],
-        limit: 100,
+        limit: 20,
       })) {
         if (
           account.metadata?.slice_user_id === row.userId &&
