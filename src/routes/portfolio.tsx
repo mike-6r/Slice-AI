@@ -260,83 +260,104 @@ export function Portfolio() {
   return (
     <main className="portfolio-page portfolio-page--approved">
       <div className="page-shell portfolio-shell">
-        <PortfolioHeading
-          query={displaySummaryQuery}
-          tab={tab}
-          holdingSearch={holdingSearch}
-          holdingFilter={holdingFilter}
-          holdingSort={holdingSort}
-          categories={categories}
-          onHoldingSearchChange={(value) => {
-            void navigate({
-              search: (current) => ({
-                ...current,
-                tab,
-                holdingsSearch: value || undefined,
-                holdingsPage: 1,
-              }),
-              replace: true,
-            });
-          }}
-          onHoldingFilterChange={(value) => {
-            void navigate({
-              search: (current) => ({
-                ...current,
-                tab,
-                holdingsCategory: value === "ALL" ? undefined : value,
-                holdingsPage: 1,
-              }),
-              replace: true,
-            });
-          }}
-          onHoldingSortChange={(value) => {
-            void navigate({
-              search: (current) => ({ ...current, tab, holdingsSort: value, holdingsPage: 1 }),
-              replace: true,
-            });
-          }}
-        />
-        <PortfolioTabs active={tab} />
-        {tab === "holdings" ? (
-          <HoldingsKpis query={displaySummaryQuery} />
-        ) : tab === "overview" ? (
-          <PortfolioKpis query={displaySummaryQuery} />
-        ) : null}
+        {tab === "overview" ? (
+          <section className="portfolio-overview-intro" aria-label="Portfolio summary">
+            <PortfolioHeading
+              query={displaySummaryQuery}
+              performance={performance}
+              tab={tab}
+              holdingSearch={holdingSearch}
+              holdingFilter={holdingFilter}
+              holdingSort={holdingSort}
+              categories={categories}
+              onHoldingSearchChange={() => undefined}
+              onHoldingFilterChange={() => undefined}
+              onHoldingSortChange={() => undefined}
+            />
+            <PortfolioKpis query={displaySummaryQuery} performance={performance} />
+          </section>
+        ) : (
+          <>
+            <PortfolioHeading
+              query={displaySummaryQuery}
+              performance={performance}
+              tab={tab}
+              holdingSearch={holdingSearch}
+              holdingFilter={holdingFilter}
+              holdingSort={holdingSort}
+              categories={categories}
+              onHoldingSearchChange={(value) => {
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    tab,
+                    holdingsSearch: value || undefined,
+                    holdingsPage: 1,
+                  }),
+                  replace: true,
+                });
+              }}
+              onHoldingFilterChange={(value) => {
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    tab,
+                    holdingsCategory: value === "ALL" ? undefined : value,
+                    holdingsPage: 1,
+                  }),
+                  replace: true,
+                });
+              }}
+              onHoldingSortChange={(value) => {
+                void navigate({
+                  search: (current) => ({ ...current, tab, holdingsSort: value, holdingsPage: 1 }),
+                  replace: true,
+                });
+              }}
+            />
+            <PortfolioTabs active={tab} />
+            {tab === "holdings" ? <HoldingsKpis query={displaySummaryQuery} /> : null}
+          </>
+        )}
         {tab === "overview" ? (
           <>
             <section className="portfolio-overview-content" aria-label="Portfolio overview">
-              <HoldingsPanel
-                summary={displaySummaryQuery}
-                query={displayHoldingsQuery}
-                categories={categories}
-                filter={holdingFilter}
-                onFilterChange={(value) =>
-                  void navigate({
-                    search: (current) => ({
-                      ...current,
-                      tab: "overview",
-                      holdingsCategory: value === "ALL" ? undefined : value,
-                    }),
-                    replace: true,
-                  })
-                }
-                visibleHoldings={visibleHoldings?.slice(0, 5)}
-                compact
-              />
-              <PortfolioPerformancePanel
-                query={displaySummaryQuery}
-                performance={performance}
-                range={performanceRange}
-                onRangeChange={setPerformanceRange}
-              />
-              <AllocationPanel query={displaySummaryQuery} />
-              <section
-                className="portfolio-overview-bottom"
-                aria-label="Your Slice activity and discovery"
-              >
-                <ActivityPanel query={transactions} compact />
-                <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
-              </section>
+              <div className="portfolio-overview-column portfolio-overview-column--left">
+                <HoldingsPanel
+                  summary={displaySummaryQuery}
+                  query={displayHoldingsQuery}
+                  categories={categories}
+                  filter={holdingFilter}
+                  onFilterChange={(value) =>
+                    void navigate({
+                      search: (current) => ({
+                        ...current,
+                        tab: "overview",
+                        holdingsCategory: value === "ALL" ? undefined : value,
+                      }),
+                      replace: true,
+                    })
+                  }
+                  visibleHoldings={visibleHoldings?.slice(0, 5)}
+                  compact
+                />
+                <section
+                  className="portfolio-overview-bottom"
+                  aria-label="Your Slice activity and discovery"
+                >
+                  <ActivityPanel query={transactions} compact />
+                  <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+                </section>
+              </div>
+              <div className="portfolio-overview-column portfolio-overview-column--right">
+                <PortfolioPerformancePanel
+                  query={displaySummaryQuery}
+                  performance={performance}
+                  range={performanceRange}
+                  onRangeChange={setPerformanceRange}
+                />
+                <AllocationPanel query={displaySummaryQuery} />
+              </div>
             </section>
             <section className="portfolio-overview-discovery" aria-label="Explore the market">
               <MarketWatchPanel query={market} />
@@ -1316,25 +1337,44 @@ function RecentOrdersPanel({
       ) : query.isError ? (
         <PanelError message="Unable to load orders." retry={() => void query.refetch()} />
       ) : items.length ? (
-        <div className="portfolio-recent-orders">
-          {items.map((order) => {
-            const holding = holdingByAsset.get(order.assetId);
-            return (
-              <div key={order.id} className="portfolio-recent-order">
-                <OrderAssetIdentity order={order} holding={holding} />
-                <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>{order.side}</span>
-                <span>
-                  {order.requestedOwnershipPercent
-                    ? `${order.requestedOwnershipPercent}%`
-                    : `${order.originalUnits} units`}
-                </span>
-                <span>{formatPortfolioMoney(order.limitPriceMinor)}</span>
-                <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
-                  {formatPortfolioOrderStatus(order)}
-                </span>
-              </div>
-            );
-          })}
+        <div className="portfolio-recent-orders-table-wrap">
+          <table className="portfolio-recent-orders-table">
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Side</th>
+                <th>Slices</th>
+                <th>Price / slice</th>
+                <th>Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((order) => {
+                const holding = holdingByAsset.get(order.assetId);
+                return (
+                  <tr key={order.id}>
+                    <td>
+                      <OrderAssetIdentity order={order} holding={holding} />
+                    </td>
+                    <td>
+                      <span className={order.side === "BUY" ? "is-buy" : "is-sell"}>
+                        {order.side}
+                      </span>
+                    </td>
+                    <td>{order.originalUnits}</td>
+                    <td>{formatPortfolioMoney(order.limitPriceMinor)}</td>
+                    <td>{formatPortfolioMoney(orderNotionalMinor(order))}</td>
+                    <td>
+                      <span className={`portfolio-order-status is-${order.status.toLowerCase()}`}>
+                        {formatPortfolioOrderStatus(order)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <PanelEmpty message="You don't have any recent orders." />
@@ -1352,6 +1392,7 @@ function formatPortfolioOrderStatus(order: TradingOrderView) {
 
 function PortfolioHeading({
   query,
+  performance,
   tab,
   holdingSearch,
   holdingFilter,
@@ -1362,6 +1403,7 @@ function PortfolioHeading({
   onHoldingSortChange,
 }: {
   query: UseQueryResult<PortfolioSummary>;
+  performance: UseQueryResult<PortfolioPerformance>;
   tab: PortfolioTab;
   holdingSearch: string;
   holdingFilter: HoldingFilter;
@@ -1379,7 +1421,7 @@ function PortfolioHeading({
   const isOverview = tab === "overview";
   return (
     <header className="portfolio-heading">
-      <div>
+      <div className="portfolio-heading__copy">
         <p className="page-kicker">Portfolio</p>
         <div className="portfolio-heading__title-row">
           <h1>
@@ -1403,6 +1445,7 @@ function PortfolioHeading({
                 : "Your balances, collectibles, orders and account activity in one place."}
         </p>
       </div>
+      {isOverview ? <PortfolioHeroSparkline query={performance} /> : null}
       {isHoldings ? (
         <div className="portfolio-heading__controls">
           <label className="portfolio-holdings-search">
@@ -1448,11 +1491,6 @@ function PortfolioHeading({
         <span className="portfolio-heading__orders-spacer" aria-hidden="true" />
       ) : (
         <div className="portfolio-heading__overview-actions">
-          {isOverview ? (
-            <Link to="/marketplace" className="portfolio-heading__market-link">
-              Explore collectibles <ArrowRight aria-hidden="true" />
-            </Link>
-          ) : null}
           <div className="portfolio-heading__freshness" aria-live="polite">
             <span>Last marked</span>
             <strong>{markedAt ? formatDateTime(markedAt) : "Unavailable"}</strong>
@@ -1464,7 +1502,43 @@ function PortfolioHeading({
   );
 }
 
-function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+function PortfolioHeroSparkline({ query }: { query: UseQueryResult<PortfolioPerformance> }) {
+  const points = query.data?.points ?? [];
+  if (points.length < 2) return <div className="portfolio-heading__sparkline" aria-hidden="true" />;
+  const values = points.map((point) => Number(point.valueMinor));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  const line = values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * 100;
+      const y = 94 - ((value - min) / span) * 75;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <div className="portfolio-heading__sparkline" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="portfolio-heading-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="#27dfb4" stopOpacity="0.26" />
+            <stop offset="1" stopColor="#27dfb4" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={`0,100 ${line} 100,100`} fill="url(#portfolio-heading-fill)" />
+        <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+}
+
+function PortfolioKpis({
+  query,
+  performance,
+}: {
+  query: UseQueryResult<PortfolioSummary>;
+  performance: UseQueryResult<PortfolioPerformance>;
+}) {
   if (query.isLoading) return <KpiSkeletons />;
   if (query.isError || !query.data)
     return (
@@ -1483,6 +1557,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
   const unrealisedPercent =
     summary.unrealisedPnlPercent ??
     (valuation ? percentageOf(valuation.unrealisedValueMinor, valuation.investedCostMinor) : null);
+  const performancePoints = performance.data?.points ?? [];
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
@@ -1494,15 +1569,14 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
             : portfolioValueLabel(summary)
         }
         icon={Layers3}
+        sparkline={performancePoints.map((point) => point.valueMinor)}
         detail={
-          summary.valuationStatus === "FULL" ? (
-            <>
-              Cash {formatPortfolioMoney(availableCash)} · Reserved{" "}
-              {formatPortfolioMoney(reservedCash)}
-            </>
-          ) : (
-            valuationDescription(summary.valuationStatus)
-          )
+          summary.valuationStatus === "FULL"
+            ? performance.data?.periodChangeMinor !== null &&
+              performance.data?.periodChangeMinor !== undefined
+              ? `${formatSignedPortfolioMoney(performance.data.periodChangeMinor)} ${performance.data.periodChangeBps !== null && performance.data.periodChangeBps !== undefined ? `(${formatSignedBps(performance.data.periodChangeBps)})` : ""} ${performance.data.range}`
+              : `Cash ${formatPortfolioMoney(availableCash)} · Reserved ${formatPortfolioMoney(reservedCash)}`
+            : valuationDescription(summary.valuationStatus)
         }
       />
       <PortfolioKpi
@@ -1513,7 +1587,8 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
             : formatPortfolioMoney(summary.estimatedHoldingsValueMinor)
         }
         icon={Landmark}
-        detail={`Across ${summary.holdings.length} position${summary.holdings.length === 1 ? "" : "s"}`}
+        sparkline={performancePoints.map((point) => point.holdingsValueMinor ?? "0")}
+        detail={`Across ${summary.holdings.length} asset${summary.holdings.length === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
         label="Unrealised P/L"
@@ -1521,6 +1596,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
           valuation ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor) : "Unavailable"
         }
         icon={ChartNoAxesCombined}
+        sparkline={performancePoints.map((point) => point.unrealisedPnlMinor ?? "0")}
         tone={
           valuation
             ? BigInt(valuation.unrealisedValueMinor) >= 0n
@@ -1529,9 +1605,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
             : undefined
         }
         detail={
-          unrealisedPercent === null
-            ? "Available once cost history is complete"
-            : `${unrealisedPercent}% vs. settled cost`
+          unrealisedPercent === null ? "Available once cost history is complete" : unrealisedPercent
         }
       />
     </section>
@@ -1618,6 +1692,7 @@ function PortfolioKpi({
   value,
   detail,
   icon,
+  sparkline,
   tone,
   className = "",
 }: {
@@ -1625,6 +1700,7 @@ function PortfolioKpi({
   value: string;
   detail: ReactNode;
   icon: LucideIcon;
+  sparkline?: string[];
   tone?: "positive" | "negative";
   className?: string;
 }) {
@@ -1636,7 +1712,32 @@ function PortfolioKpi({
         <strong className={tone ? `is-${tone}` : undefined}>{value}</strong>
         <span>{detail}</span>
       </div>
+      {sparkline && sparkline.length > 1 ? <KpiSparkline values={sparkline} /> : null}
     </article>
+  );
+}
+
+function KpiSparkline({ values }: { values: string[] }) {
+  const numeric = values.map(Number);
+  const min = Math.min(...numeric);
+  const max = Math.max(...numeric);
+  const span = Math.max(1, max - min);
+  const line = numeric
+    .map((value, index) => {
+      const x = (index / (numeric.length - 1)) * 100;
+      const y = 90 - ((value - min) / span) * 70;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      className="portfolio-kpi__sparkline"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
@@ -3315,7 +3416,7 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
       }
     >
       {query.isLoading ? (
-        <RowsSkeleton rows={3} />
+        <RowsSkeleton rows={4} />
       ) : query.isError ? (
         <PanelError
           message="We couldn't load market highlights."
@@ -3323,7 +3424,7 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
         />
       ) : query.data?.length ? (
         <ul className="portfolio-market-watch">
-          {query.data.slice(0, 3).map((asset) => {
+          {query.data.slice(0, 4).map((asset) => {
             const media = asset.media.find((item) => item.kind === "image");
             const marketValue = asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
             const marketValueLabel = asset.sliceValuation
@@ -3507,15 +3608,15 @@ function formatSignedBps(value: number) {
 }
 function transactionLabel(item: PortfolioTransaction) {
   const type = item.type.toLowerCase();
-  if (type.includes("fund") || type.includes("deposit")) return "Funds added";
-  if (type.includes("withdraw")) return "Funds withdrawn";
+  if (type.includes("fund") || type.includes("deposit")) return "Deposit";
+  if (type.includes("withdraw")) return "Withdrawal";
   if (type.includes("reservation")) return "Buy order placed";
   if (type.includes("release")) return "Reservation released";
   if (type.includes("reversal")) return "Transaction reversed";
   if (type.includes("refund")) return "Marketplace refund";
   if (type.includes("fee")) return "Marketplace fee";
   if (type.includes("settle") || type.includes("trade") || type.includes("execution"))
-    return item.side === "CREDIT" ? "Sell completed" : "Buy trade settled";
+    return item.side === "CREDIT" ? "Sell order filled" : "Buy order filled";
   return item.side === "CREDIT" ? "Account credit" : "Account debit";
 }
 function transactionDetail(item: PortfolioTransaction) {

@@ -132,7 +132,7 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("Safe asset");
     expect(html).toContain("20");
     expect(html).toContain("Recent activity");
-    expect(html).toContain("Funds added");
+    expect(html).toContain("Deposit");
     expect(html).toContain("Reserved cash");
     expect(html).toContain("Total value (GBP)");
     expect(html).toContain("No portfolio performance history is available for this period.");
