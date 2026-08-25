@@ -192,6 +192,40 @@ CTA and prior hosted-link reachability remain verified. The next checkpoint
 is the account owner's action in Stripe-hosted onboarding; no financial flow
 may proceed before that checkpoint clears.
 
+#### Authorized hosted-flow checkpoint
+
+The account owner authorized the Wallet action on 2026-08-25. The existing
+account's `Set up withdrawals` action was invoked; it returned
+`Continue to Stripe` and a fresh Stripe-hosted Account Link. The link opened
+the existing account in Stripe Sandbox at the `Review and confirm` screen.
+No second Connect account was created.
+
+The hosted screen showed the existing individual identity, personal-details,
+email, and payout-bank sections. No document-upload form or separate
+correction instruction was visible before confirmation. QA stopped before
+clicking `Confirm`, editing identity details, or uploading a document.
+
+The authorized prefill path supplied only the already-verified missing
+contact phone to the existing provider account; the provider now reports
+contact and individual phone presence as true, while the existing email and
+country remained protected. No legal name, date of birth, address, or bank
+value was changed by Slice.
+
+The post-link read-only provider refresh still reports
+`verification_failed_keyed_identity` on
+`identity.individual.documents.primary_verification`, awaiting action from
+the user, with payouts and transfers active but restricted by the requirement.
+Slice refreshed at `2026-08-25T15:18:00.556Z` and remains `RESTRICTED` with
+`detailsSubmitted=false`, `currentlyDueCount=1`,
+`pendingVerificationCount=1`, and `hasValidationErrors=true`.
+
+**User action required:** on Stripe's hosted flow, review the keyed identity
+fields. If any field is incorrect, correct it there. If Stripe presents the
+document step after confirmation, provide a primary identity document whose
+name and date of birth match the keyed identity. Slice did not enter, edit,
+or upload any identity data. Financial QA remains blocked until Stripe clears
+the requirement and a fresh provider read proves readiness.
+
 ### Connect onboarding data reuse / prefill
 
 Audit date: 2026-08-25. This section covers the safe prefill change made after the post-onboarding provider-state check. Stripe remains the verification authority; Slice only supplies verified contact data where the current Stripe Accounts v2 contract allows it.
