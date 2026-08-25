@@ -537,3 +537,121 @@ Final status for this continuation: **NO-GO**. Do not retry another real
 withdrawal until the Stripe Sandbox platform has enough available GBP or an
 approved treasury-funding test is explicitly authorized. No automatic balance
 patch, fake money, deposit, or second withdrawal was performed.
+
+## Provider Money Lifecycle Reconciliation — 2026-08-25
+
+This section records the authorized Stripe Sandbox deposit continuation after
+the Connect readiness remediation. It does not claim a successful withdrawal
+where Stripe did not provide enough available platform liquidity.
+
+### Opening provider snapshot
+
+Before the new deposit, the Stripe Sandbox platform balance was:
+
+- available GBP: **-£2.50**;
+- pending GBP: **£99.00**;
+- Connect reserved GBP: **£0.00**.
+
+The negative available amount is explainable by the existing provider
+transactions: prior charge net **+£96.65**, prior platform transfer
+**-£100.00**, two application-fee credits of **+£3.00** each, prior paid payout
+**-£2.65**, and two provider-fee debits of **-£1.25** each. This reconciles to
+**-£2.50** and was not patched by Slice.
+
+The existing connected GB payout account was re-read before the deposit:
+payout capability 'active', transfers capability 'active', and no current
+requirements/errors after the hosted remediation refresh. Slice projected the
+account as 'READY' and Withdraw Funds as 'AVAILABLE'.
+
+### Authorized deposit
+
+One new **£100.00** deposit was requested through the authenticated Wallet UI
+using the existing connected Bacs funding setup. No second deposit was
+requested.
+
+- Slice reference: WLT-047C8642;
+- PaymentIntent: pi_3U8NczGqKVy64D3s1lS2MQSG, 'succeeded';
+- charge/payment record: py_3U8NczGqKVy64D3s1efnCqNK, 'succeeded';
+- Stripe balance transaction: txn_3U8NczGqKVy64D3s1LWFjeGD;
+- provider gross: **£100.00**;
+- provider fee: **£1.00**;
+- provider net: **£99.00**;
+- provider available_on: **2026-09-01 00:00 UTC**.
+
+Slice requested the configured bacs_debit rail and used the existing
+connected Bacs funding setup. Stripe Sandbox reported the resulting balance
+transaction under its card source category; this is provider reporting
+behavior observed in test mode, not a frontend conversion or a substituted
+funding rail.
+
+The Slice movement became 'SETTLED', retained its provider reference, and has
+a linked ledger transaction. The signed provider webhook path processed the
+deposit lifecycle ('payment_intent.processing' followed by
+'payment_intent.succeeded') without a duplicate Slice movement. The Wallet UI
+showed the movement as Completed after refresh. This proves the Slice credit
+was driven by provider confirmation, not a manual balance patch.
+
+The provider dashboard still reported the deposit in the platform pending
+balance at the time of this QA: available remained **-£2.50**, pending became
+**£198.00**. Therefore the Slice policy currently makes cash spendable after
+the configured provider-success confirmation, while Stripe's external
+balance availability remains later (available_on). That timing distinction
+must remain explicit in production policy and reconciliation.
+
+### Slice ledger and wallet projection
+
+Before this continuation the authenticated wallet showed **£91.71**
+withdrawable cash. After the settled deposit it showed:
+
+- withdrawable cash: **£191.71**;
+- pending deposits: **£0.00**;
+- pending withdrawals: **£0.00**;
+- reserved cash: **£0.00**;
+- total wallet balance: **£191.71**;
+- settled deposits: **£200.00** total;
+- settled withdrawals: **£0.00** total.
+
+The new movement credited **£100.00** to Slice cash with no Slice fee. The
+Stripe evidence separately explains the **£1.00** provider processing cost;
+it is not presented as Slice fee revenue. The customer-facing wallet and
+provider records are therefore directionally reconciled for the deposit, with
+the pending-to-available timing caveat above.
+
+### Withdrawal and payout gate
+
+No new withdrawal was submitted in this continuation. A recommended gross
+withdrawal of **£50.00** would require a provider transfer of **£48.75** after
+the Slice 2.5% fee. The current provider available balance of **-£2.50** cannot
+fund that transfer, so the provider-to-Connect transfer → Connect payout →
+webhook → final ledger reconciliation chain cannot be truthfully completed
+yet.
+
+The Wallet still correctly projects withdrawal capability as Available because
+Connect requirements/capabilities are ready and Slice cash is posted. That is
+distinct from the Stripe platform's available-liquidity gate. The prior
+observed failed £50.00 movement remains a safe 'FAILED' record: its £1.25
+Slice fee was not booked, its reservation was released, no customer ledger
+debit occurred, and no Stripe transfer or payout reference exists. It is not
+counted as a successful withdrawal for this lifecycle.
+
+### Lifecycle result
+
+| Lifecycle check | Result |
+| --- | --- |
+| Stripe Sandbox only / live mode disabled | PASS |
+| Opening Stripe balance explained | PASS — available -£2.50 reconciles |
+| New deposit provider confirmation | PASS — PaymentIntent/charge succeeded |
+| Signed webhook → Slice settlement | PASS — movement settled and ledger-linked |
+| Slice wallet credit | PASS — £100.00, no Slice fee |
+| Provider fee separated | PASS — £1.00 provider fee, not Slice revenue |
+| Stripe balance availability | PENDING — £99.00 net available on 2026-09-01 |
+| Connect readiness | PASS — payouts/transfers active, no current requirements |
+| New withdrawal | NOT RUN — provider available balance insufficient |
+| Transfer → payout → final reconciliation | NOT PROVEN — blocked at provider liquidity |
+| Umbreon / Charizard / controlled economics | UNCHANGED |
+
+Final provider money lifecycle gate: **NO-GO** until Stripe Sandbox has
+sufficient available GBP and one controlled withdrawal produces provider
+transfer, connected-account payout, signed webhook, fee/cost evidence, and
+final Slice reconciliation. No fake provider event, balance patch, automatic
+settlement, or second withdrawal was performed.
