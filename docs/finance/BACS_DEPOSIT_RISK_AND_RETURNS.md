@@ -1,6 +1,6 @@
 # Bacs Deposit Risk and Returns
 
-Status: implemented in the repository; staging deployment is gated on the validation listed below.
+Status: implemented and deployed to staging in release `09f4cdd`; the validation listed below passed.
 
 This document records Slice's current GBP-only Bacs Direct Debit risk model. It does not set a commercial hold period or a market-finality policy.
 
