@@ -55651,3 +55651,242 @@ select[multiple] {
     min-height: 8.5rem;
   }
 }
+
+/* Listing workspace spacing pass: keep the guided flow readable at desktop
+   widths and let the photo evidence controls use the space they need. */
+.list-guided-shell {
+  width: min(calc(100% - 3rem), 82rem);
+}
+.list-guided-heading {
+  margin-bottom: 1.75rem;
+}
+.list-guided-card {
+  border-radius: 1.15rem;
+}
+.list-step {
+  padding: clamp(1.75rem, 3vw, 3rem);
+}
+.list-step--market {
+  max-width: none;
+}
+.list-step--photos {
+  padding: 0;
+}
+.list-photos-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 22rem);
+  gap: 1.5rem;
+}
+.list-photos-heading {
+  padding: 1.75rem 1.5rem 0.35rem;
+}
+.list-photos-heading > p:last-child {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.list-photos-section {
+  margin: 1.25rem 1.5rem 0;
+  padding: 1.15rem;
+  border-radius: 0.85rem;
+}
+.list-photos-section__heading h3 {
+  font-size: 1rem;
+}
+.list-photos-section__heading p {
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.list-required-photo-grid {
+  gap: 0.9rem;
+  margin-top: 1.05rem;
+}
+.list-photo-tile > header {
+  min-height: 4.2rem;
+  padding: 0.8rem 0.85rem 0.55rem;
+}
+.list-photo-tile h4 {
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+.list-photo-tile > header span {
+  margin-top: 0.35rem;
+  font-size: 0.62rem;
+}
+.list-photo-tile > header small {
+  max-width: 6rem;
+  font-size: 0.66rem;
+}
+.list-photo-tile__preview,
+.list-photo-tile__preview img {
+  min-height: 12.5rem;
+  height: 12.5rem;
+}
+.list-photo-tile__preview svg {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+.list-photo-tile__preview strong {
+  max-width: 11rem;
+  font-size: 0.75rem;
+}
+.list-photo-tile > p {
+  min-height: 4.1rem;
+  padding: 0.7rem 0.85rem 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+.list-photo-tile__actions {
+  min-height: 3.65rem;
+  padding: 0.65rem 0.85rem 0.85rem;
+}
+.list-photo-tile__actions label {
+  min-height: 2.55rem;
+  padding-inline: 0.65rem;
+  font-size: 0.72rem;
+}
+.list-photo-login-hint {
+  min-height: 3.65rem;
+  padding: 0.65rem 0.85rem 0.85rem;
+  font-size: 0.7rem;
+}
+.list-additional-upload-row {
+  grid-template-columns: minmax(15rem, 0.95fr) minmax(0, 1.05fr);
+  gap: 1rem;
+  margin-top: 1.05rem;
+}
+.list-additional-dropzone {
+  min-height: 11rem;
+  padding: 1.1rem;
+  border-radius: 0.75rem;
+}
+.list-additional-dropzone strong {
+  font-size: 0.8rem;
+}
+.list-additional-dropzone > span:not(.list-additional-dropzone__icon) {
+  font-size: 0.72rem;
+}
+.list-additional-dropzone small {
+  font-size: 0.66rem;
+}
+.list-photo-examples {
+  gap: 0.65rem;
+}
+.list-photo-examples span {
+  min-height: 4.5rem;
+  padding: 0.75rem;
+  font-size: 0.7rem;
+}
+.list-optional-role-grid {
+  gap: 0.7rem;
+  margin-top: 1.05rem;
+}
+.list-optional-role {
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border-radius: 0.65rem;
+}
+.list-optional-role__copy {
+  gap: 0.6rem;
+}
+.list-optional-role__copy > svg,
+.list-optional-role__copy img {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+.list-optional-role__copy strong {
+  font-size: 0.7rem;
+}
+.list-optional-role__copy small {
+  font-size: 0.63rem;
+}
+.list-optional-role__actions label {
+  font-size: 0.68rem;
+}
+.list-photo-info-bar,
+.list-photo-context {
+  margin-inline: 1.5rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.list-photo-rail {
+  gap: 1rem;
+  padding: 1.75rem 1.5rem 0 0;
+}
+.list-photo-rail-card {
+  padding: 1.15rem;
+  border-radius: 0.85rem;
+}
+.list-photo-rail-card h3 {
+  font-size: 0.9rem;
+}
+.list-photo-rail-card p,
+.list-photo-rail-card li {
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.list-photo-tip strong {
+  font-size: 0.74rem;
+}
+.list-photo-tip small {
+  font-size: 0.68rem;
+}
+.list-photo-rail-card--help .button-secondary {
+  min-height: 2.7rem;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 1080px) {
+  .list-photos-layout {
+    grid-template-columns: 1fr;
+  }
+  .list-photo-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 1.5rem 1.25rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .list-guided-shell {
+    width: min(calc(100% - 1.5rem), 82rem);
+  }
+  .list-required-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .list-photo-rail {
+    grid-template-columns: 1fr;
+  }
+  .list-additional-upload-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .list-guided-shell {
+    width: calc(100% - 1rem);
+  }
+  .list-step {
+    padding: 1.15rem;
+  }
+  .list-photos-heading {
+    padding: 1.35rem 1rem 0.25rem;
+  }
+  .list-photos-section {
+    margin-inline: 1rem;
+    padding: 0.85rem;
+  }
+  .list-required-photo-grid {
+    grid-template-columns: 1fr;
+  }
+  .list-photo-tile__preview,
+  .list-photo-tile__preview img {
+    min-height: 13rem;
+    height: 13rem;
+  }
+  .list-photo-info-bar,
+  .list-photo-context {
+    margin-inline: 1rem;
+  }
+  .list-photo-rail {
+    padding-inline: 1rem;
+  }
+}
