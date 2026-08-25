@@ -217,11 +217,13 @@ function PayoutSetupPanel({
   refreshWallet: () => void;
   onCreate: () => Promise<ConnectPayoutSetup>;
 }) {
+  const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
   const onboarding = useMutation({
     mutationFn: onCreate,
     onSuccess: (result) => {
       refreshWallet();
-      if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+      setOnboardingUrl(result.onboardingUrl);
+      if (!result.onboardingUrl) toast.error("Payout setup did not return a secure provider link.");
     },
     onError: () => toast.error("Payout setup could not be started."),
   });
@@ -240,7 +242,23 @@ function PayoutSetupPanel({
       <div className="wallet-panel__body">
         <StatusPill status={status} />
         <p className="mt-3 text-sm text-slate-600">{detail}</p>
-        {!ready ? (
+        {!ready && onboardingUrl ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-medium text-slate-700">
+              Your secure payout setup is ready to continue.
+            </p>
+            <a
+              className="wallet-verify-button"
+              href={onboardingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Continue to Stripe
+              <ArrowRight aria-hidden="true" />
+            </a>
+          </div>
+        ) : null}
+        {!ready && !onboardingUrl ? (
           <button
             className="wallet-verify-button mt-4"
             type="button"
