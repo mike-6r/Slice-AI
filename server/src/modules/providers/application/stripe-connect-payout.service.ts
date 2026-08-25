@@ -271,6 +271,7 @@ export class StripeConnectPayoutService {
     });
     let accountMode: 'v2' | 'legacy' = 'v2';
     if (!row) {
+      const connectAccountRowId = randomUUID();
       const account = await stripe.v2.core.accounts.create(
         {
           contact_email: user.email,
@@ -302,13 +303,13 @@ export class StripeConnectPayoutService {
       try {
         row = await this.db.externalConnectAccount.create({
           data: {
-            id: randomUUID(),
+            id: connectAccountRowId,
             userId: actor.userId,
             provider,
             environment,
             externalAccountIdCiphertext: this.crypto.encrypt(
               account.id,
-              `connect-account:${account.id}`,
+              `connect-account:${connectAccountRowId}`,
             ),
             externalAccountIdHash: this.crypto.hash(account.id),
             encryptionKeyVersion: this.crypto.keyVersion,

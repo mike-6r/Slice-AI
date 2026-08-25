@@ -198,7 +198,9 @@ describe('StripeConnectPayoutService', () => {
     const findConnect = jest.fn<() => Promise<null>>().mockResolvedValue(null);
     const createConnect = jest
       .fn<
-        () => Promise<{
+        (input: {
+          data: { id: string; externalAccountIdCiphertext: string };
+        }) => Promise<{
           id: string;
           status: string;
           requirementsSummary: Record<string, unknown>;
@@ -222,10 +224,11 @@ describe('StripeConnectPayoutService', () => {
         create: createConnect,
       },
     };
+    const encrypt = jest.fn().mockReturnValue('ciphertext');
     const service = new StripeConnectPayoutService(
       db as never,
       {
-        encrypt: jest.fn().mockReturnValue('ciphertext'),
+        encrypt,
         decrypt: jest.fn().mockReturnValue('acct_v2_test'),
         hash: jest.fn().mockReturnValue('hash'),
         keyVersion: 'v1',
@@ -267,6 +270,11 @@ describe('StripeConnectPayoutService', () => {
         },
       }),
       { idempotencyKey: 'slice-connect-account:SANDBOX:u-1' },
+    );
+    const rowId = createConnect.mock.calls[0][0].data.id;
+    expect(encrypt).toHaveBeenCalledWith(
+      'acct_v2_test',
+      `connect-account:${rowId}`,
     );
     expect(stripe.v2.core.accountLinks.create).toHaveBeenCalledWith(
       expect.objectContaining({
