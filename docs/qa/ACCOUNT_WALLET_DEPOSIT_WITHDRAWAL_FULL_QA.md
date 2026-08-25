@@ -92,12 +92,48 @@ At the time of the authenticated audit:
 - Connect account provider state: NOT YET VERIFIED — must be read after hosted onboarding return/refresh
 - Capability refresh: PASS at API level — the wallet refreshed its payout status request; readiness remained correctly blocked
 
+### Post-onboarding provider-state continuation
+
+After the user completed the Stripe-hosted form and returned to Slice, the live Stripe Sandbox account was read directly in test mode and the Slice projection was refreshed.
+
+Provider account state:
+
+- Object: `v2.core.account`
+- Environment: `STRIPE_SANDBOX` / Sandbox
+- Payout capability: `active` (`payoutsEnabled=true`)
+- Transfers capability: `active`
+- Requirements: one `eventually_due` identity requirement, `identity.individual.documents.primary_verification`
+- Provider validation error: `verification_failed_keyed_identity` — keyed identity information could not be verified
+- Provider `detailsSubmitted`: `false`
+- Provider country/default currency: not returned on the v2 object projection
+
+Slice projection after provider refresh:
+
+- Status: `RESTRICTED`
+- `currentlyDueCount`: 1
+- `pendingVerificationCount`: 1
+- `hasValidationErrors`: true
+- `payoutsEnabled`: true
+- `transfersCapability`: `active`
+- Withdraw capability: BLOCKED — Account Center displayed `PAYOUT_ACCOUNT_REQUIRED` / `SET_UP_PAYOUTS`
+
+This is not a stale frontend-only state. Stripe has active payout/transfer capability flags but an unresolved keyed-identity validation error; Slice correctly keeps the payout account restricted until the provider requirement is cleared.
+
 ### Withdrawal
 
 - Withdrawable cash shown by wallet: £91.71 existing fixture
 - Withdrawal was not submitted
 - Fee preview, reservation, provider transfer/payout, webhook, final settlement, fee revenue, provider expense, and reconciliation: NOT RUN
 - Real sandbox withdrawal: BLOCKED — no disposable-user settled deposit and no completed Connect hosted onboarding
+
+### Authorized deposit continuation
+
+- Requested QA amount: £1.00
+- Deposit request: STOPPED by the normal backend recent-auth gate with `Authentication is required.`
+- Provider PaymentIntent/MoneyMovement: NOT CREATED — no new movement appeared in Wallet history
+- Cash state: unchanged at £91.71 withdrawable / £0.00 pending deposits
+- 2FA/recent-auth: REQUIRED — paused for the user's current one-time code; no bypass or retry performed
+- Withdrawal/payout/reconciliation: NOT RUN because the deposit auth checkpoint and Connect identity requirement remain unresolved
 
 ## Wallet UI
 
@@ -135,10 +171,14 @@ PASS for the read-only state display:
 3. Run the authorized account through withdrawal preview, recent-auth/MFA if challenged, reservation, payout, webhook, final ledger state, fee revenue, and reconciliation.
 4. Add/execute duplicate-bank and cross-user shared-bank QA without mutating the current connected bank.
 5. Verify the deployed Account Center link and all nextAction routes in the authenticated browser at desktop and 390px mobile widths.
+6. Complete the pending recent-auth/2FA checkpoint for the authorized £1.00 deposit, then verify the provider-backed pending → webhook → settlement journey.
+7. Correct/re-submit the Stripe keyed identity details, then re-read provider requirements and verify Slice payout readiness before attempting withdrawal.
 
 ## Status
 
-Current task status: **BLOCKED at the user-entered Stripe Sandbox personal-details checkpoint**. The customer handoff defect is fixed and browser-verified; no financial E2E result is claimed yet.
+Current task status: **BLOCKED by the provider's keyed-identity verification requirement and the normal recent-auth gate**. The customer handoff defect is fixed and browser-verified; no financial E2E result is claimed yet.
+
+Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the authorized £1.00 deposit**. A clean browser screenshot captured Wallet Withdraw still restricted after Stripe return. No new financial movement was created.
 
 ## Deployment
 
