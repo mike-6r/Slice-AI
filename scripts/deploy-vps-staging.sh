@@ -24,6 +24,15 @@ VITE_APP_ENV="${frontend_app_env}" \
   VITE_API_BASE_URL="${api_url}" \
   npm run build
 
+if [[ ! -f "${release_dir}/apps/discord-bot/package.json" ]]; then
+  echo "Release directory does not contain the Discord bot package." >&2
+  exit 1
+fi
+
+cd "${release_dir}/apps/discord-bot"
+npm ci
+npm run build
+
 cd server
 npm ci
 npx prisma generate
