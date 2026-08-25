@@ -10,7 +10,7 @@ Settlement currency: GBP
 
 This pass resumed from the user-authenticated staging session after the normal 2FA challenge was completed. No live Stripe mode was enabled. No direct balance patches, controlled Umbreon or Charizard mutations, offering changes, orders, trades, or withdrawals were performed.
 
-The authenticated account used for the UI audit is an admin account with an existing staging wallet fixture. It is not a disposable normal USER, so the real deposit/settlement/withdrawal acceptance path remains blocked rather than being claimed as passed.
+The authenticated account used for this pass is the user's authorized staging account with an existing wallet fixture. No deposit or withdrawal was created. The provider journey is paused at the real Stripe Sandbox hosted onboarding form because personal details must be entered by the account owner rather than invented by QA.
 
 ## Root causes found
 
@@ -18,6 +18,8 @@ The authenticated account used for the UI audit is an admin account with an exis
 2. The capability response exposed `allowed`, `status`, `reason`, and `requirements`, but not an authoritative `nextAction`, so the frontend had to guess the remediation route.
 3. The frontend had no customer-facing mapping for `BANK_CHANGE_WITHDRAWAL_HOLD`.
 4. The connected-bank view currently shows one connected/default bank row and one disconnected historical row with the same masked account. This was observed and not altered.
+5. The visible Wallet payout control was rendered by `AccountStatusPanel`; the earlier handoff patch had been placed in an unused payout panel, so the live button discarded the returned Account Link after refetching. The live render path now preserves the returned link, shows a clear `Continue to Stripe` CTA, and surfaces request errors.
+6. Connect Account Link expiry was normalized across Stripe v2 string timestamps and legacy numeric timestamps before frontend contract mapping.
 
 ## Fix implemented
 
@@ -33,6 +35,8 @@ The backend capability authority now returns `nextAction` for each actionable bl
 | Account restriction/review | View account status | Account |
 
 The dialog now explains the bank-change withdrawal hold and links to wallet status.
+
+The Wallet payout control now keeps the secure hosted link visible after a successful HTTP 201 response. A fresh browser check showed the user-facing message `Your secure payout setup is ready to continue.` and a `Continue to Stripe` link. The fresh link opened Stripe Sandbox hosted onboarding, advanced through Stripe's built-in test-phone and test-code helpers, and reached the Personal details form. No personal details were entered or submitted.
 
 ## Runtime evidence
 
@@ -71,16 +75,21 @@ At the time of the authenticated audit:
 - Rail: Bacs Direct Debit
 - Product fee: 0%
 - Capability: PASS for the audited account
-- Create/pending/webhook/settlement/reconciliation: NOT RUN in this pass
-- Real sandbox deposit: BLOCKED — requires a disposable normal USER and a supported Bacs settlement test; the authenticated account has an existing wallet fixture and was not used for a new deposit
+- Create/pending/webhook/settlement/reconciliation: NOT RUN — Connect onboarding is not complete
+- Real sandbox deposit: NOT RUN — explicitly authorized for this account, but held until hosted Connect onboarding and provider capability state are verified
 
 ### Payout setup
 
 - Investor/USER-level policy: PASS in backend policy; Collector role is not required
 - Connect onboarding request: PASS — staging returned HTTP 201
 - Connect account creation/reuse path: PASS — request completed without an API error
-- Stripe-hosted onboarding completion: BLOCKED at manual hosted checkpoint — the returned provider handoff did not become a visible in-app navigation in the authenticated browser session
-- Payout readiness: BLOCKED — account still showed payout setup required after the request
+- Visible customer handoff: PASS — Wallet now retains and displays `Continue to Stripe` after the response
+- Stripe-hosted onboarding reachability: PASS — fresh Account Link opened Stripe Sandbox hosted onboarding
+- Stripe test-phone/test-code helpers: PASS — Stripe Sandbox advanced to the personal-details step
+- Stripe-hosted onboarding completion: BLOCKED — manual checkpoint requires the account owner's legal name, date of birth, and home address
+- Payout readiness: BLOCKED — account still showed payout setup required because onboarding was not submitted
+- Return URL / refresh URL: NOT RUN to completion — the manual form was not submitted
+- Connect account provider state: NOT YET VERIFIED — must be read after hosted onboarding return/refresh
 - Capability refresh: PASS at API level — the wallet refreshed its payout status request; readiness remained correctly blocked
 
 ### Withdrawal
@@ -121,26 +130,29 @@ PASS for the read-only state display:
 
 ## Remaining launch blockers
 
-1. Complete the Stripe-hosted Connect onboarding manually for a disposable normal USER, return to Slice, and verify readiness transitions to `READY`.
+1. Complete the Stripe-hosted Connect onboarding manually for the authorized staging account, return to Slice, and verify actual provider requirements/capabilities before deciding whether readiness transitions to `READY`.
 2. Run a real sandbox Bacs deposit through pending → signed webhook → settlement → ledger reconciliation.
-3. Run the same disposable USER through withdrawal preview, recent-auth/MFA, reservation, payout, webhook, final ledger state, fee revenue, and reconciliation.
+3. Run the authorized account through withdrawal preview, recent-auth/MFA if challenged, reservation, payout, webhook, final ledger state, fee revenue, and reconciliation.
 4. Add/execute duplicate-bank and cross-user shared-bank QA without mutating the current connected bank.
 5. Verify the deployed Account Center link and all nextAction routes in the authenticated browser at desktop and 390px mobile widths.
 
 ## Status
 
+Current task status: **BLOCKED at the user-entered Stripe Sandbox personal-details checkpoint**. The customer handoff defect is fixed and browser-verified; no financial E2E result is claimed yet.
+
 ## Deployment
 
-- Commit: `0194a0f`
-- Release: `/opt/slice/releases/20260825-0194a0f`
-- `/opt/slice/current`: `/opt/slice/releases/20260825-0194a0f`
-- `/opt/slice/app`: `/opt/slice/releases/20260825-0194a0f`
+- Commit: `becfbfa`
+- Release: `/opt/slice/releases/20260825-becfbfa`
+- `/opt/slice/current`: `/opt/slice/releases/20260825-becfbfa`
+- `/opt/slice/app`: `/opt/slice/releases/20260825-becfbfa`
 - API service: active
 - Web service: active
 - Health: PASS — HTTP 200
 - Ready: PASS — HTTP 200
 - Public site: PASS — HTTP 200
 - Public market assets: PASS — HTTP 200
-- Browser console/network errors after deploy: none observed
+- Browser console errors after deploy: none observed
+- Browser provider handoff: PASS — fresh hosted link reached Stripe Sandbox; no API/network error observed in the Slice page
 
 Financial release gate: **NO-GO / QA BLOCKED** until the disposable normal-user provider journey reaches real sandbox-confirmed deposit and withdrawal final states. The implementation does not claim provider success without provider evidence.
