@@ -268,7 +268,7 @@ function PayoutSetupPanel({
             {onboarding.isPending
               ? "Opening secure setup…"
               : status === "NOT_STARTED"
-                ? "Set up payouts"
+                ? "Set up withdrawals"
                 : "Continue setup"}
             <ArrowRight aria-hidden="true" />
           </button>
@@ -1106,53 +1106,63 @@ function AccountStatusPanel({
             ) : null}
             {verification.error ? <InlineError error={verification.error} /> : null}
             {connectPayout.data && connectPayout.data.status !== "READY" ? (
-              onboardingUrl ? (
-                <div className="wallet-payout-handoff">
-                  <p className="wallet-payout-handoff__message">
-                    Your secure payout setup is ready to continue.
-                  </p>
-                  <a
+              <>
+                <p className="wallet-payout-prefill-note">
+                  We’ll reuse the verified account information we already have where possible.
+                  Stripe may still ask you to review or confirm certain details and your payout
+                  bank.
+                </p>
+                {onboardingUrl ? (
+                  <div className="wallet-payout-handoff">
+                    <p className="wallet-payout-handoff__message">
+                      Your secure payout setup is ready to continue.
+                    </p>
+                    <a
+                      className="wallet-verify-button wallet-verify-button--secondary"
+                      href={onboardingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ArrowUpFromLine aria-hidden="true" />
+                      Continue to Stripe
+                      <ArrowRight aria-hidden="true" />
+                    </a>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
                     className="wallet-verify-button wallet-verify-button--secondary"
-                    href={onboardingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    disabled={onboardingPending || connectPayout.isFetching}
+                    onClick={() => {
+                      setOnboardingPending(true);
+                      setOnboardingError(null);
+                      void onCreateConnect()
+                        .then((result) => {
+                          setOnboardingUrl(result.onboardingUrl);
+                          if (!result.onboardingUrl) {
+                            toast.error("Payout setup did not return a secure provider link.");
+                          }
+                          return connectPayout.refetch();
+                        })
+                        .catch((error: unknown) => {
+                          const normalized =
+                            error instanceof Error
+                              ? error
+                              : new Error("Unable to open payout setup.");
+                          setOnboardingError(normalized);
+                          toast.error(normalized.message);
+                        })
+                        .finally(() => setOnboardingPending(false));
+                    }}
                   >
                     <ArrowUpFromLine aria-hidden="true" />
-                    Continue to Stripe
+                    {onboardingPending || connectPayout.isFetching
+                      ? "Preparing payout setup…"
+                      : "Set up withdrawals"}
                     <ArrowRight aria-hidden="true" />
-                  </a>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="wallet-verify-button wallet-verify-button--secondary"
-                  disabled={onboardingPending || connectPayout.isFetching}
-                  onClick={() => {
-                    setOnboardingPending(true);
-                    setOnboardingError(null);
-                    void onCreateConnect()
-                      .then((result) => {
-                        setOnboardingUrl(result.onboardingUrl);
-                        if (!result.onboardingUrl) {
-                          toast.error("Payout setup did not return a secure provider link.");
-                        }
-                        return connectPayout.refetch();
-                      })
-                      .catch((error: unknown) => {
-                        const normalized = error instanceof Error ? error : new Error("Unable to open payout setup.");
-                        setOnboardingError(normalized);
-                        toast.error(normalized.message);
-                      })
-                      .finally(() => setOnboardingPending(false));
-                  }}
-                >
-                  <ArrowUpFromLine aria-hidden="true" />
-                  {onboardingPending || connectPayout.isFetching
-                    ? "Preparing payout setup…"
-                    : "Continue payout setup"}
-                  <ArrowRight aria-hidden="true" />
-                </button>
-              )
+                  </button>
+                )}
+              </>
             ) : null}
             {onboardingError ? <InlineError error={onboardingError} /> : null}
           </>

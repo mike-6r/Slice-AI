@@ -119,6 +119,68 @@ Slice projection after provider refresh:
 
 This is not a stale frontend-only state. Stripe has active payout/transfer capability flags but an unresolved keyed-identity validation error; Slice correctly keeps the payout account restricted until the provider requirement is cleared.
 
+### Connect onboarding data reuse / prefill
+
+Audit date: 2026-08-25. This section covers the safe prefill change made after the post-onboarding provider-state check. Stripe remains the verification authority; Slice only supplies verified contact data where the current Stripe Accounts v2 contract allows it.
+
+#### Slice identity authority
+
+| Field | Slice state | Reuse decision |
+| --- | --- | --- |
+| Legal first name | UNAVAILABLE — `UserProfile.displayName` is a public/user-entered label, not a legal identity record | Not sent; never split or promoted to a legal name |
+| Legal last name | UNAVAILABLE | Not sent |
+| Date of birth | UNAVAILABLE — the compliance record stores provider state and safe references, not DOB | Not sent |
+| Residential address | UNAVAILABLE — no address fields are stored in Slice compliance/profile records | Not sent |
+| Country | USER_ENTERED — `UserProfile.countryCode`; current staging account is `GB` | Used for the new-account country only after compatibility validation; non-GB values fail with `IDENTITY_MISMATCH_REVIEW` rather than being mapped to GB |
+| Phone | VERIFIED — `User.phoneE164` with `phoneVerifiedAt` | Sent as Connect contact/individual phone when present and verified |
+| Email | VERIFIED — `User.email` with `emailVerifiedAt` | Sent as Connect contact email and individual email when verified |
+| Verification status/source | VERIFIED — Slice compliance state is backed by Stripe Identity in Sandbox | Used as a capability/input gate only; never treated as proof that Connect requirements are complete |
+
+The Slice schema does not retain raw Stripe Identity legal values. Discord birthday data and public profile display names are unrelated and are deliberately not used for financial onboarding.
+
+#### Connect payload and existing-account behavior
+
+The new Accounts v2 recipient payload now supplies:
+
+- `contact_email` from the Slice account;
+- `contact_phone` only when the Slice phone is verified;
+- `identity.country` from the compatible Slice profile country (`GB` in the current GBP product);
+- `identity.entity_type=individual`;
+- `identity.individual.email` and `identity.individual.phone` only when their Slice verification timestamps are present;
+- `identity` in the response include list so provider state can be inspected without persisting raw values.
+
+Legal name, DOB, address, business profile, support profile, and company fields are not fabricated or derived from unrelated profile data. Normal consumer users remain individual recipients; no company/business representation was added.
+
+For an existing Accounts v2 account, the service retrieves provider identity fields and:
+
+- returns `IDENTITY_MISMATCH_REVIEW` when provider country, email, or phone conflicts with verified Slice data;
+- updates only missing contact/individual email or phone fields, with a stable idempotency key;
+- never overwrites an existing provider value, including provider-verified identity fields;
+- requests the provider requirements/configuration again after a safe update so Slice status cannot regress from an incomplete response.
+
+The current authorized account was inspected read-only after hosted onboarding. Stripe reported provider-side name, address, and email fields, but no date of birth or phone field; Slice did not overwrite or copy those provider values. No Connect update was invoked during this audit.
+
+#### Funding bank and payout bank
+
+The existing Bacs funding relationship remains a Stripe Customer + PaymentMethod + Mandate. A Connect payout bank is an external account on the connected account. Stripe does not expose an approved direct-reuse path in the current implementation. Raw account numbers, sort codes, masked values, or bank credentials are not extracted or copied. The payout bank therefore still requires confirmation through Stripe-hosted onboarding.
+
+#### Customer disclosure
+
+Wallet now shows `Set up withdrawals` with this concise disclosure before the handoff:
+
+> We’ll reuse the verified account information we already have where possible. Stripe may still ask you to review or confirm certain details and your payout bank.
+
+The disclosure describes prefill, not verification completion, and preserves Stripe's hosted review and verification steps.
+
+#### Prefill test result and root cause
+
+- New-account payload contract test: PASS — verified email/phone are included and no unavailable identity fields are generated.
+- Existing-account safe-update contract test: PASS — only missing verified phone is updated; legal name/DOB/address are absent from the update.
+- Current authorized account provider comparison: PASS read-only — provider identity and requirements were inspected without creating a second account or changing the current account.
+- Hosted-form prefill visual proof after this code change: NOT YET RUN — the current account already has provider-side name/address values from the previous hosted flow, and creating a second connected account solely for visual proof would create an unnecessary duplicate account. A disposable test user/account is required for a clean before/after visual comparison.
+
+Root cause of the earlier duplicate/example identity fields: the payout service previously sent only the contact email and a hard-coded GB country. It did not pass permitted individual email/phone fields, and Slice has no safely reusable legal name, DOB, or address record. Stripe therefore remained responsible for collecting those fields in hosted onboarding; this was not a frontend cache or a verification bypass.
+
 ### Withdrawal
 
 - Withdrawable cash shown by wallet: £91.71 existing fixture
@@ -157,12 +219,14 @@ PASS for the read-only state display:
 
 ## Automated validation
 
-- Backend account capability focused suite: PASS — 12 tests
-- Frontend Account Center and capability dialog tests: PASS — 5 tests
+- Backend full suite: PASS — 326 tests
+- Backend Connect payout focused suite: PASS — 6 tests
+- Frontend full suite: PASS — 155 tests
 - Frontend typecheck: PASS
 - Backend typecheck: PASS
 - Frontend production build: PASS
 - Backend production build: PASS
+- Targeted frontend lint for the changed Wallet and repository test files: PASS
 
 ## Remaining launch blockers
 

@@ -12674,6 +12674,27 @@ body:has(.collectors-page) .site-shell {
   gap: 0.4rem;
   margin-top: 0.72rem;
 }
+.wallet-payout-prefill-note {
+  margin: 0.72rem 0 0;
+  border: 1px solid rgba(27, 217, 161, 0.15);
+  border-radius: 0.42rem;
+  padding: 0.62rem 0.7rem;
+  background: rgba(9, 176, 137, 0.06);
+  color: #aab9b7;
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+.wallet-payout-handoff {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.6rem;
+}
+.wallet-payout-handoff__message {
+  margin: 0;
+  color: #dbe5e2;
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
 .wallet-verify-button svg {
   width: 0.9rem;
   height: 0.9rem;

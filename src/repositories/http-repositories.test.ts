@@ -73,6 +73,7 @@ describe("HTTP catalogue mapping", () => {
           allowed: false,
           status: "ACTION_REQUIRED",
           reason: "IDENTITY_VERIFICATION_REQUIRED",
+          nextAction: null,
           requirements: [
             { type: "EMAIL_VERIFICATION", satisfied: true },
             { type: "IDENTITY_VERIFICATION", satisfied: false },
@@ -90,6 +91,7 @@ describe("HTTP catalogue mapping", () => {
           allowed: false,
           status: "ACTION_REQUIRED",
           reason: "IDENTITY_VERIFICATION_REQUIRED",
+          nextAction: null,
           requirements: [
             { type: "EMAIL_VERIFICATION", satisfied: true },
             { type: "IDENTITY_VERIFICATION", satisfied: false },

@@ -51,6 +51,20 @@ type ConnectAccountSnapshot = {
 type V2ConnectAccount = {
   object?: string;
   id: string;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  identity?: {
+    country?: string | null;
+    entity_type?: string | null;
+    individual?: {
+      email?: string | null;
+      phone?: string | null;
+      given_name?: string | null;
+      surname?: string | null;
+      date_of_birth?: unknown;
+      address?: unknown;
+    } | null;
+  } | null;
   requirements?: {
     entries?: Array<{
       awaiting_action_from?: string;
@@ -84,6 +98,45 @@ type ConnectAccountRow = {
   environment: 'SANDBOX' | 'LIVE';
   externalAccountIdCiphertext: string;
 };
+
+type ConnectOnboardingUser = {
+  email: string;
+  emailVerifiedAt: Date | null;
+  phoneE164: string | null;
+  phoneVerifiedAt: Date | null;
+  profile: { countryCode: string } | null;
+};
+
+type ConnectOnboardingSeed = {
+  country: string;
+  verifiedEmail: string | null;
+  verifiedPhone: string | null;
+};
+
+function connectOnboardingSeed(user: ConnectOnboardingUser) {
+  const country = user.profile?.countryCode?.trim().toUpperCase();
+  if (!country || country !== 'GB') {
+    throw new ConflictException({
+      code: 'IDENTITY_MISMATCH_REVIEW',
+      message:
+        'Payout setup needs review because your Slice identity country is not supported for GBP payouts.',
+    });
+  }
+  return {
+    country,
+    verifiedEmail: user.emailVerifiedAt ? user.email : null,
+    verifiedPhone:
+      user.phoneVerifiedAt && user.phoneE164 ? user.phoneE164 : null,
+  } satisfies ConnectOnboardingSeed;
+}
+
+function normalized(value: string | null | undefined) {
+  return value?.trim().toLowerCase() || null;
+}
+
+function normalizedPhone(value: string | null | undefined) {
+  return value?.replace(/[^\d+]/g, '') || null;
+}
 
 export function mapConnectAccountStatus(
   account: Pick<
@@ -261,8 +314,15 @@ export class StripeConnectPayoutService {
     const environment = this.stripeFactory.environment();
     const user = await this.db.user.findUniqueOrThrow({
       where: { id: actor.userId },
-      select: { email: true },
+      select: {
+        email: true,
+        emailVerifiedAt: true,
+        phoneE164: true,
+        phoneVerifiedAt: true,
+        profile: { select: { countryCode: true } },
+      },
     });
+    const onboardingSeed = connectOnboardingSeed(user);
     let row = await this.db.externalConnectAccount.findUnique({
       where: {
         provider_environment_userId: {
@@ -278,6 +338,9 @@ export class StripeConnectPayoutService {
       const account = await stripe.v2.core.accounts.create(
         {
           contact_email: user.email,
+          ...(onboardingSeed.verifiedPhone
+            ? { contact_phone: onboardingSeed.verifiedPhone }
+            : {}),
           dashboard: 'express',
           defaults: {
             currency: 'gbp',
@@ -286,7 +349,22 @@ export class StripeConnectPayoutService {
               losses_collector: 'application',
             },
           },
-          identity: { country: 'GB', entity_type: 'individual' },
+          identity: {
+            country: onboardingSeed.country,
+            entity_type: 'individual',
+            ...(onboardingSeed.verifiedEmail || onboardingSeed.verifiedPhone
+              ? {
+                  individual: {
+                    ...(onboardingSeed.verifiedEmail
+                      ? { email: onboardingSeed.verifiedEmail }
+                      : {}),
+                    ...(onboardingSeed.verifiedPhone
+                      ? { phone: onboardingSeed.verifiedPhone }
+                      : {}),
+                  },
+                }
+              : {}),
+          },
           configuration: {
             recipient: {
               capabilities: {
@@ -294,7 +372,11 @@ export class StripeConnectPayoutService {
               },
             },
           },
-          include: ['configuration.recipient', 'requirements'],
+          include: [
+            'configuration.recipient',
+            'requirements',
+            'identity',
+          ],
           metadata: {
             slice_user_id: actor.userId,
             slice_environment: environment,
@@ -344,6 +426,18 @@ export class StripeConnectPayoutService {
           await this.resolveExternalAccountId(stripe, row),
         );
         accountMode = resolved.mode;
+        if (resolved.mode === 'v2') {
+          const prefilled = await this.prefillExistingV2Account(
+            stripe,
+            resolved.account,
+            environment,
+            actor.userId,
+            onboardingSeed,
+          );
+          row = await this.syncAccount(row.id, prefilled.snapshot);
+        } else {
+          row = await this.syncAccount(row.id, resolved.snapshot);
+        }
       }
     } else {
       const resolved = await this.retrieveAccount(
@@ -351,7 +445,18 @@ export class StripeConnectPayoutService {
         await this.resolveExternalAccountId(stripe, row),
       );
       accountMode = resolved.mode;
-      row = await this.syncAccount(row.id, resolved.snapshot);
+      if (resolved.mode === 'v2') {
+        const prefilled = await this.prefillExistingV2Account(
+          stripe,
+          resolved.account,
+          environment,
+          actor.userId,
+          onboardingSeed,
+        );
+        row = await this.syncAccount(row.id, prefilled.snapshot);
+      } else {
+        row = await this.syncAccount(row.id, resolved.snapshot);
+      }
     }
     const externalAccountId = await this.resolveExternalAccountId(stripe, row);
     const link = await this.createAccountLink(
@@ -596,11 +701,16 @@ export class StripeConnectPayoutService {
       const account = await stripe.v2.core.accounts.retrieve(
         externalAccountId,
         {
-          include: ['configuration.recipient', 'requirements'],
+          include: [
+            'configuration.recipient',
+            'requirements',
+            'identity',
+          ],
         },
       );
       return {
         mode: 'v2' as const,
+        account: account as unknown as V2ConnectAccount,
         snapshot: v2AccountSnapshot(account as unknown as V2ConnectAccount),
       };
     } catch (error) {
@@ -612,9 +722,97 @@ export class StripeConnectPayoutService {
       const account = await stripe.accounts.retrieve(externalAccountId);
       return {
         mode: 'legacy' as const,
+        account,
         snapshot: legacyAccountSnapshot(account),
       };
     }
+  }
+
+  private async prefillExistingV2Account(
+    stripe: Stripe,
+    account: V2ConnectAccount,
+    environment: 'SANDBOX' | 'LIVE',
+    userId: string,
+    seed: ConnectOnboardingSeed,
+  ) {
+    const providerIdentity = account.identity;
+    if (
+      providerIdentity?.country &&
+      providerIdentity.country.toUpperCase() !== seed.country
+    ) {
+      throw new ConflictException({
+        code: 'IDENTITY_MISMATCH_REVIEW',
+        message:
+          'Payout setup needs review because the connected account identity does not match your Slice identity.',
+      });
+    }
+
+    const individual = providerIdentity?.individual;
+    if (
+      seed.verifiedEmail &&
+      ((account.contact_email &&
+        normalized(account.contact_email) !== normalized(seed.verifiedEmail)) ||
+        (individual?.email &&
+          normalized(individual.email) !== normalized(seed.verifiedEmail)))
+    ) {
+      throw new ConflictException({
+        code: 'IDENTITY_MISMATCH_REVIEW',
+        message:
+          'Payout setup needs review because the connected account identity does not match your Slice identity.',
+      });
+    }
+    if (
+      seed.verifiedPhone &&
+      ((account.contact_phone &&
+        normalizedPhone(account.contact_phone) !==
+          normalizedPhone(seed.verifiedPhone)) ||
+        (individual?.phone &&
+          normalizedPhone(individual.phone) !==
+            normalizedPhone(seed.verifiedPhone)))
+    ) {
+      throw new ConflictException({
+        code: 'IDENTITY_MISMATCH_REVIEW',
+        message:
+          'Payout setup needs review because the connected account identity does not match your Slice identity.',
+      });
+    }
+
+    const update: {
+      contact_email?: string;
+      contact_phone?: string;
+      identity?: { individual?: { email?: string; phone?: string } };
+    } = {};
+    const individualUpdate: { email?: string; phone?: string } = {};
+    if (seed.verifiedEmail && !account.contact_email && !individual?.email) {
+      update.contact_email = seed.verifiedEmail;
+      individualUpdate.email = seed.verifiedEmail;
+    }
+    if (seed.verifiedPhone && !account.contact_phone && !individual?.phone) {
+      update.contact_phone = seed.verifiedPhone;
+      individualUpdate.phone = seed.verifiedPhone;
+    }
+    if (Object.keys(individualUpdate).length > 0) {
+      update.identity = { individual: individualUpdate };
+    }
+    if (Object.keys(update).length === 0) {
+      return { account, snapshot: v2AccountSnapshot(account) };
+    }
+
+    const updated = await stripe.v2.core.accounts.update(
+      account.id,
+      {
+        ...update,
+        include: ['configuration.recipient', 'requirements', 'identity'],
+      },
+      {
+        idempotencyKey: `slice-connect-account-prefill:${environment}:${userId}`,
+      },
+    );
+    const updatedAccount = updated as unknown as V2ConnectAccount;
+    return {
+      account: updatedAccount,
+      snapshot: v2AccountSnapshot(updatedAccount),
+    };
   }
 
   private async resolveExternalAccountId(

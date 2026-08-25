@@ -193,8 +193,22 @@ describe('StripeConnectPayoutService', () => {
       },
     };
     const findUser = jest
-      .fn<() => Promise<{ email: string }>>()
-      .mockResolvedValue({ email: 'collector@example.com' });
+      .fn<
+        () => Promise<{
+          email: string;
+          emailVerifiedAt: Date;
+          phoneE164: string;
+          phoneVerifiedAt: Date;
+          profile: { countryCode: string };
+        }>
+      >()
+      .mockResolvedValue({
+        email: 'collector@example.com',
+        emailVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+        phoneE164: '+447700900123',
+        phoneVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+        profile: { countryCode: 'GB' },
+      });
     const findConnect = jest.fn<() => Promise<null>>().mockResolvedValue(null);
     const createConnect = jest
       .fn<
@@ -253,6 +267,8 @@ describe('StripeConnectPayoutService', () => {
     });
     expect(stripe.v2.core.accounts.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        contact_email: 'collector@example.com',
+        contact_phone: '+447700900123',
         dashboard: 'express',
         defaults: {
           currency: 'gbp',
@@ -261,7 +277,14 @@ describe('StripeConnectPayoutService', () => {
             losses_collector: 'application',
           },
         },
-        identity: { country: 'GB', entity_type: 'individual' },
+        identity: {
+          country: 'GB',
+          entity_type: 'individual',
+          individual: {
+            email: 'collector@example.com',
+            phone: '+447700900123',
+          },
+        },
         configuration: {
           recipient: {
             capabilities: {
@@ -283,6 +306,137 @@ describe('StripeConnectPayoutService', () => {
         use_case: expect.objectContaining({ type: 'account_onboarding' }),
       }),
       { idempotencyKey: 'slice-connect-onboarding:SANDBOX:u-1:req-1' },
+    );
+  });
+
+  it('fills only missing verified contact fields on an existing v2 account', async () => {
+    const providerAccount = {
+      object: 'v2.core.account',
+      id: 'acct_existing',
+      contact_email: 'collector@example.com',
+      identity: {
+        country: 'GB',
+        entity_type: 'individual',
+        individual: { email: 'collector@example.com' },
+      },
+      requirements: { entries: [{ awaiting_action_from: 'user' }] },
+      configuration: {
+        recipient: {
+          capabilities: {
+            stripe_balance: {
+              payouts: { status: 'pending' },
+              stripe_transfers: { status: 'pending' },
+            },
+          },
+        },
+      },
+    };
+    const updatedAccount = {
+      ...providerAccount,
+      contact_phone: '+447700900123',
+      identity: {
+        ...providerAccount.identity,
+        individual: {
+          ...providerAccount.identity.individual,
+          phone: '+447700900123',
+        },
+      },
+    };
+    const stripe = {
+      v2: {
+        core: {
+          accounts: {
+            retrieve: jest
+              .fn<() => Promise<unknown>>()
+              .mockResolvedValue(providerAccount),
+            update: jest
+              .fn<
+                (
+                  id: string,
+                  params: Record<string, unknown>,
+                  options: Record<string, string>,
+                ) => Promise<unknown>
+              >()
+              .mockResolvedValue(updatedAccount),
+          },
+          accountLinks: {
+            create: jest
+              .fn<() => Promise<{ url: string; expires_at: number }>>()
+              .mockResolvedValue({
+                url: 'https://connect.stripe.test/existing',
+                expires_at: 1770000000,
+              }),
+          },
+        },
+      },
+      accounts: { retrieve: jest.fn() },
+    };
+    const row = {
+      id: 'slice-connect-existing',
+      userId: 'u-1',
+      provider: 'STRIPE_SANDBOX',
+      environment: 'SANDBOX',
+      externalAccountIdCiphertext: 'ciphertext',
+      status: 'ACTION_REQUIRED',
+      requirementsSummary: {
+        currentlyDueCount: 1,
+        pastDueCount: 0,
+        pendingVerificationCount: 0,
+        hasValidationErrors: false,
+        hasDisabledReason: false,
+      },
+    };
+    const findUser = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      email: 'collector@example.com',
+      emailVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+      phoneE164: '+447700900123',
+      phoneVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+      profile: { countryCode: 'GB' },
+    });
+    const sync = jest
+      .fn<(input: { data: Record<string, unknown> }) => Promise<unknown>>()
+      .mockImplementation(async ({ data }) => ({ ...row, ...data }));
+    const service = new StripeConnectPayoutService(
+      {
+        user: { findUniqueOrThrow: findUser },
+        externalConnectAccount: {
+          findUnique: jest
+            .fn<() => Promise<unknown>>()
+            .mockResolvedValue(row),
+          update: sync,
+        },
+      } as never,
+      {
+        encrypt: jest.fn(),
+        decrypt: jest.fn().mockReturnValue('acct_existing'),
+        hash: jest.fn().mockReturnValue('hash'),
+        keyVersion: 'v1',
+      } as never,
+      {
+        get: () => stripe,
+        provider: () => 'STRIPE_SANDBOX',
+        environment: () => 'SANDBOX',
+      } as never,
+      { appPublicUrl: 'https://staging.slicecollectable.com' } as never,
+    );
+
+    await expect(
+      service.createOnboardingLink(
+        { roles: ['USER'], userId: 'u-1' } as never,
+        'req-existing',
+      ),
+    ).resolves.toMatchObject({ onboardingUrl: 'https://connect.stripe.test/existing' });
+    expect(stripe.v2.core.accounts.update).toHaveBeenCalledWith(
+      'acct_existing',
+      expect.objectContaining({
+        contact_phone: '+447700900123',
+        identity: { individual: { phone: '+447700900123' } },
+        include: ['configuration.recipient', 'requirements', 'identity'],
+      }),
+      { idempotencyKey: 'slice-connect-account-prefill:SANDBOX:u-1' },
+    );
+    expect(stripe.v2.core.accounts.update.mock.calls[0][1]).not.toHaveProperty(
+      'identity.individual.given_name',
     );
   });
 });
