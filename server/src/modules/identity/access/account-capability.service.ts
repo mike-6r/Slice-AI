@@ -49,6 +49,19 @@ export type CapabilityReason =
   | 'ACCOUNT_REVIEW_REQUIRED'
   | 'FEATURE_DISABLED';
 
+export type CapabilityNextAction =
+  | 'VERIFY_EMAIL'
+  | 'VERIFY_PHONE'
+  | 'ENABLE_TWO_FACTOR'
+  | 'VERIFY_IDENTITY'
+  | 'VIEW_IDENTITY_STATUS'
+  | 'CONNECT_BANK'
+  | 'VIEW_WALLET'
+  | 'SET_UP_PAYOUTS'
+  | 'VIEW_PAYOUT_STATUS'
+  | 'OPEN_WALLET'
+  | 'VIEW_ACCOUNT_STATUS';
+
 type Requirement = {
   type:
     | 'EMAIL_VERIFICATION'
@@ -70,6 +83,7 @@ export type CapabilityDecision = {
   capability: AccountCapability;
   status: CapabilityStatus;
   reason: CapabilityReason | null;
+  nextAction: CapabilityNextAction | null;
   requirements: Requirement[];
 };
 
@@ -424,6 +438,7 @@ export class AccountCapabilityService {
       capability,
       status: 'AVAILABLE',
       reason: null,
+      nextAction: null,
       requirements,
     };
   }
@@ -437,9 +452,31 @@ export class AccountCapabilityService {
       capability,
       status: statusForReason(reason),
       reason,
+      nextAction: nextActionForReason(reason),
       requirements,
     };
   }
+}
+
+function nextActionForReason(reason: CapabilityReason): CapabilityNextAction | null {
+  const actions: Partial<Record<CapabilityReason, CapabilityNextAction>> = {
+    EMAIL_VERIFICATION_REQUIRED: 'VERIFY_EMAIL',
+    PHONE_VERIFICATION_REQUIRED: 'VERIFY_PHONE',
+    TWO_FACTOR_REQUIRED: 'ENABLE_TWO_FACTOR',
+    IDENTITY_VERIFICATION_REQUIRED: 'VERIFY_IDENTITY',
+    COMPLIANCE_REVIEW_REQUIRED: 'VIEW_IDENTITY_STATUS',
+    BANK_ACCOUNT_REQUIRED: 'CONNECT_BANK',
+    BANK_CHANGE_WITHDRAWAL_HOLD: 'VIEW_WALLET',
+    PAYOUT_ACCOUNT_REQUIRED: 'SET_UP_PAYOUTS',
+    PAYOUT_ACCOUNT_REVIEW_REQUIRED: 'VIEW_PAYOUT_STATUS',
+    COLLECTOR_PAYOUTS_REQUIRED: 'SET_UP_PAYOUTS',
+    NO_WITHDRAWABLE_BALANCE: 'OPEN_WALLET',
+    ACCOUNT_RESTRICTED: 'VIEW_ACCOUNT_STATUS',
+    ACCOUNT_DEACTIVATED: 'VIEW_ACCOUNT_STATUS',
+    ACCOUNT_DELETION_PENDING: 'VIEW_ACCOUNT_STATUS',
+    ACCOUNT_REVIEW_REQUIRED: 'VIEW_ACCOUNT_STATUS',
+  };
+  return actions[reason] ?? null;
 }
 
 function customerMessage(reason: CapabilityReason) {

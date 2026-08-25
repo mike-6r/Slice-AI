@@ -4731,6 +4731,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                     reason as AccountCapability["reason"],
                   )) as AccountCapability["status"],
               reason: reason as AccountCapability["reason"],
+              nextAction:
+                item.nextAction === undefined
+                  ? null
+                  : (nullableString(item.nextAction, "accountCapability.nextAction") as AccountCapability["nextAction"]),
               requirements: item.requirements.map((requirement) => {
                 const requirementValue = objectField(requirement, "account capability requirement");
                 return {

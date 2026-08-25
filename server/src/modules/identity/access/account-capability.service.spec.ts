@@ -86,7 +86,10 @@ describe('AccountCapabilityService', () => {
         'user-1',
         'PLACE_SELL_ORDER',
       ),
-    ).resolves.toMatchObject({ reason: 'IDENTITY_VERIFICATION_REQUIRED' });
+    ).resolves.toMatchObject({
+      reason: 'IDENTITY_VERIFICATION_REQUIRED',
+      nextAction: 'VERIFY_IDENTITY',
+    });
   });
 
   it('gives account restrictions priority over verified state and roles', async () => {
@@ -211,6 +214,7 @@ describe('AccountCapabilityService', () => {
     ).resolves.toMatchObject({
       allowed: false,
       reason: 'BANK_ACCOUNT_REQUIRED',
+      nextAction: 'CONNECT_BANK',
       requirements: expect.arrayContaining([
         { type: 'BANK_ACCOUNT', satisfied: false },
       ]),
@@ -221,6 +225,7 @@ describe('AccountCapabilityService', () => {
       allowed: false,
       status: 'ACTION_REQUIRED',
       reason: 'PAYOUT_ACCOUNT_REQUIRED',
+      nextAction: 'SET_UP_PAYOUTS',
       requirements: expect.arrayContaining([
         { type: 'PAYOUT_ACCOUNT', satisfied: false },
       ]),

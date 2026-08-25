@@ -28,6 +28,7 @@ import { useSession } from "@/auth/use-session";
 import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
 import type {
   AccountCapability,
+  AccountCapabilityNextAction,
   BankConnection,
   ComplianceSummary,
   ComplianceSession,
@@ -375,9 +376,14 @@ function AccountAccessPanel({
           })}
         </ul>
       ) : null}
-      <Link to="/onboarding" className="account-panel-link">
-        Continue account setup
-      </Link>
+      {(() => {
+        const next = nextAccountSetupAction(query.data?.capabilities ?? []);
+        return (
+          <a href={next.href} className="account-panel-link">
+            {next.label}
+          </a>
+        );
+      })()}
     </Panel>
   );
 }
@@ -420,6 +426,7 @@ function capabilityRequirementLabel(value: string) {
     IDENTITY_VERIFICATION_REQUIRED: "Identity verification required",
     COMPLIANCE_REVIEW_REQUIRED: "Compliance review required",
     BANK_ACCOUNT_REQUIRED: "UK bank account required",
+    BANK_CHANGE_WITHDRAWAL_HOLD: "Withdrawal security hold",
     PAYOUT_ACCOUNT_REQUIRED: "Payout account setup required",
     PAYOUT_ACCOUNT_REVIEW_REQUIRED: "Payout account review in progress",
     COLLECTOR_PAYOUTS_REQUIRED: "Payout setup required",
@@ -440,6 +447,49 @@ function capabilityRequirementLabel(value: string) {
     .replace("two factor", "two-factor")
     .replace("identity verification", "identity verification")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function nextAccountSetupAction(capabilities: AccountCapability[]) {
+  const priority = ["PLACE_BUY_ORDER", "DEPOSIT_FUNDS", "WITHDRAW_FUNDS"] as const;
+  const blocked = priority
+    .map((capability) => capabilities.find((item) => item.capability === capability))
+    .find((item) => item && !item.allowed);
+  const action = blocked?.nextAction ?? fallbackNextAction(blocked?.reason ?? null);
+  const actions: Record<AccountCapabilityNextAction, { href: string; label: string }> = {
+    VERIFY_EMAIL: { href: "/account#security", label: "Continue security setup" },
+    VERIFY_PHONE: { href: "/account#security", label: "Continue security setup" },
+    ENABLE_TWO_FACTOR: { href: "/account#security", label: "Continue security setup" },
+    VERIFY_IDENTITY: { href: "/account#identity", label: "Continue identity verification" },
+    VIEW_IDENTITY_STATUS: { href: "/account#identity", label: "View verification status" },
+    CONNECT_BANK: { href: "/wallet", label: "Connect a bank account" },
+    VIEW_WALLET: { href: "/wallet", label: "View wallet status" },
+    SET_UP_PAYOUTS: { href: "/wallet", label: "Set up withdrawals" },
+    VIEW_PAYOUT_STATUS: { href: "/wallet", label: "View payout status" },
+    OPEN_WALLET: { href: "/wallet", label: "Open wallet" },
+    VIEW_ACCOUNT_STATUS: { href: "/account#overview", label: "View account status" },
+  };
+  return action ? actions[action] : { href: "/account#access" as const, label: "Review account setup" };
+}
+
+function fallbackNextAction(reason: AccountCapability["reason"]): AccountCapabilityNextAction | null {
+  const actions: Partial<Record<NonNullable<AccountCapability["reason"]>, AccountCapabilityNextAction>> = {
+    EMAIL_VERIFICATION_REQUIRED: "VERIFY_EMAIL",
+    PHONE_VERIFICATION_REQUIRED: "VERIFY_PHONE",
+    TWO_FACTOR_REQUIRED: "ENABLE_TWO_FACTOR",
+    IDENTITY_VERIFICATION_REQUIRED: "VERIFY_IDENTITY",
+    COMPLIANCE_REVIEW_REQUIRED: "VIEW_IDENTITY_STATUS",
+    BANK_ACCOUNT_REQUIRED: "CONNECT_BANK",
+    BANK_CHANGE_WITHDRAWAL_HOLD: "VIEW_WALLET",
+    PAYOUT_ACCOUNT_REQUIRED: "SET_UP_PAYOUTS",
+    PAYOUT_ACCOUNT_REVIEW_REQUIRED: "VIEW_PAYOUT_STATUS",
+    COLLECTOR_PAYOUTS_REQUIRED: "SET_UP_PAYOUTS",
+    NO_WITHDRAWABLE_BALANCE: "OPEN_WALLET",
+    ACCOUNT_RESTRICTED: "VIEW_ACCOUNT_STATUS",
+    ACCOUNT_DEACTIVATED: "VIEW_ACCOUNT_STATUS",
+    ACCOUNT_DELETION_PENDING: "VIEW_ACCOUNT_STATUS",
+    ACCOUNT_REVIEW_REQUIRED: "VIEW_ACCOUNT_STATUS",
+  };
+  return reason ? actions[reason] ?? null : null;
 }
 
 function capabilityStatusLabel(status: AccountCapability["status"] | undefined) {

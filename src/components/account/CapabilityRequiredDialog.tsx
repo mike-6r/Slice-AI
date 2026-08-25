@@ -25,6 +25,10 @@ const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; de
     title: "Connect a bank account to deposit",
     detail: "A verified UK bank mandate is required before Slice can request a GBP deposit.",
   },
+  BANK_CHANGE_WITHDRAWAL_HOLD: {
+    title: "Withdrawals are temporarily held",
+    detail: "For security, withdrawals remain paused after a connected bank change until the configured hold ends.",
+  },
   PAYOUT_ACCOUNT_REQUIRED: {
     title: "Complete payout setup to withdraw",
     detail: "Eligible cash can be withdrawn after the connected payout account is ready.",
@@ -83,6 +87,7 @@ const actionLabel: Partial<Record<NonNullable<AccountCapability["reason"]>, stri
   IDENTITY_VERIFICATION_REQUIRED: "Continue identity verification",
   COMPLIANCE_REVIEW_REQUIRED: "View verification status",
   BANK_ACCOUNT_REQUIRED: "Connect a bank account",
+  BANK_CHANGE_WITHDRAWAL_HOLD: "View wallet status",
   PAYOUT_ACCOUNT_REQUIRED: "Continue payout setup",
   PAYOUT_ACCOUNT_REVIEW_REQUIRED: "View payout status",
   ACCOUNT_REVIEW_REQUIRED: "View account status",
@@ -95,6 +100,7 @@ const actionHref: Partial<Record<NonNullable<AccountCapability["reason"]>, strin
   IDENTITY_VERIFICATION_REQUIRED: "/account#identity",
   COMPLIANCE_REVIEW_REQUIRED: "/account#identity",
   BANK_ACCOUNT_REQUIRED: "/wallet",
+  BANK_CHANGE_WITHDRAWAL_HOLD: "/wallet",
   PAYOUT_ACCOUNT_REQUIRED: "/wallet",
   PAYOUT_ACCOUNT_REVIEW_REQUIRED: "/wallet",
   ACCOUNT_REVIEW_REQUIRED: "/account",

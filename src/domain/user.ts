@@ -44,6 +44,7 @@ export type AccountCapabilityReason =
   | "IDENTITY_VERIFICATION_REQUIRED"
   | "COMPLIANCE_REVIEW_REQUIRED"
   | "BANK_ACCOUNT_REQUIRED"
+  | "BANK_CHANGE_WITHDRAWAL_HOLD"
   | "PAYOUT_ACCOUNT_REQUIRED"
   | "PAYOUT_ACCOUNT_REVIEW_REQUIRED"
   | "COLLECTOR_PAYOUTS_REQUIRED"
@@ -57,6 +58,19 @@ export type AccountCapabilityReason =
   | "ACCOUNT_REVIEW_REQUIRED"
   | "FEATURE_DISABLED";
 
+export type AccountCapabilityNextAction =
+  | "VERIFY_EMAIL"
+  | "VERIFY_PHONE"
+  | "ENABLE_TWO_FACTOR"
+  | "VERIFY_IDENTITY"
+  | "VIEW_IDENTITY_STATUS"
+  | "CONNECT_BANK"
+  | "VIEW_WALLET"
+  | "SET_UP_PAYOUTS"
+  | "VIEW_PAYOUT_STATUS"
+  | "OPEN_WALLET"
+  | "VIEW_ACCOUNT_STATUS";
+
 export type AccountCapabilityStatus =
   "AVAILABLE" | "ACTION_REQUIRED" | "TEMPORARILY_UNAVAILABLE" | "BLOCKED";
 
@@ -65,6 +79,7 @@ export interface AccountCapability {
   allowed: boolean;
   status: AccountCapabilityStatus;
   reason: AccountCapabilityReason | null;
+  nextAction?: AccountCapabilityNextAction | null;
   requirements: Array<{
     type: string;
     satisfied: boolean;
