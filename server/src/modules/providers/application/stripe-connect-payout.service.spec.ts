@@ -426,6 +426,22 @@ describe('StripeConnectPayoutService', () => {
         'req-existing',
       ),
     ).resolves.toMatchObject({ onboardingUrl: 'https://connect.stripe.test/existing' });
+    expect(stripe.v2.core.accountLinks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account: 'acct_existing',
+        use_case: expect.objectContaining({
+          type: 'account_update',
+          account_update: expect.objectContaining({
+            configurations: ['recipient'],
+            collection_options: {
+              fields: 'currently_due',
+              future_requirements: 'include',
+            },
+          }),
+        }),
+      }),
+      { idempotencyKey: 'slice-connect-onboarding:SANDBOX:u-1:req-existing' },
+    );
     expect(stripe.v2.core.accounts.update).toHaveBeenCalledWith(
       'acct_existing',
       expect.objectContaining({
