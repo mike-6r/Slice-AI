@@ -4,14 +4,24 @@
 
 Phase 4C — implementation complete locally; controlled Stripe sandbox execution remains blocked until Stripe test credentials and a configured UK Connect test recipient are available.
 
-### Credentialed staging gate update — 2026-08-19
+### Credentialed staging gate update — 2026-08-25
 
-The staging VPS remains on `/opt/slice/releases/20260818-dd2c7cb` with
-`PROVIDER_MODE=local`. No Stripe credential variables are present in the
-protected environment, so Connect account creation, onboarding, payout, and
-webhook execution were not attempted. No deployment or staging business
-mutation was made. The current HTTPS provider webhook route is already shared
-with the Connect and payout handlers; a second route was not created.
+Staging is configured with `PROVIDER_MODE=stripe_sandbox`, a valid `sk_test_`
+credential, and `https://staging.slicecollectable.com` as the public origin.
+The platform credential was checked with a read-only Stripe account request
+(HTTP 200). The Connect onboarding repair is deployed at
+`/opt/slice/releases/20260824-43f65d2`; `/opt/slice/current` and
+`/opt/slice/app` point to the same release. API health/readiness and the local
+web root passed after restart.
+
+The regression was introduced by switching new-account creation to Stripe
+Accounts v2 recipient configuration. New users failed before Slice could
+persist `ExternalConnectAccount`, producing the generic HTTP 500. New users
+now use the established Express Connect v1 account/account-link contract;
+existing v2 rows remain readable through the retrieval compatibility path.
+No Connect account was created by this repair or by the read-only credential
+check. The existing HTTPS provider webhook route remains shared with Connect
+and payout handlers; a second route was not created.
 
 ## Scope and authority
 
@@ -47,12 +57,12 @@ The mapping is one-to-one from `MoneyMovement` to `ConnectPayout`. Transfer and 
 - Prisma schema validation/generation: PASS
 - Server typecheck: PASS
 - Connect status mapping tests: PASS
-- Existing server suite: PASS — 60 suites, 247 tests
+- Existing server suite: PASS — 74 suites, 322 tests
 - Frontend suite/typecheck/build: PASS — 36 files, 126 tests; production build PASS
 - Server typecheck/build/lint: PASS
 - Frontend typecheck and touched-file lint: PASS
-- Stripe sandbox API execution: BLOCKED — no sandbox credentials configured on
-  staging; provider mode remains `local`
+- Stripe sandbox credential reachability: PASS — read-only account request HTTP 200
+- Stripe Connect onboarding execution: pending a fresh authenticated browser retry
 - Live payout execution: NOT RUN / fail-closed
 
 ## Controlled sandbox checklist
@@ -69,8 +79,9 @@ The following must be run only with disposable Stripe sandbox data and explicit 
 - reconciliation with matching and deliberately discrepant provider references
 - confirmation that no investor-only deposit/purchase flow creates a Connect account
 
-Until that run is complete, Phase 4C is not release-ready and should not be
-pushed or deployed.
+Until the controlled onboarding, payout, and webhook run is complete, Phase 4C
+remains not release-ready for real-money launch. Live payout execution remains
+not run and fail-closed.
 
 ## Data-safety assertion
 
