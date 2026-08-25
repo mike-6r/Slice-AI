@@ -57,10 +57,7 @@ export const Route = createFileRoute("/list")({
   component: SubmissionPage,
 });
 
-const REQUIRED_SLOTS = [
-  "front",
-  "back",
-] as const;
+const REQUIRED_SLOTS = ["front", "back"] as const;
 const AI_REQUIRED_SLOTS = ["front", "back"] as const;
 const REQUIRED_PHOTO_CONFIG = [
   ["front", "Front", "Entire front of the card or slab."],
@@ -206,9 +203,9 @@ export function SubmissionPage() {
   );
   const metadata = metadataFromForm(form);
   const payloadFingerprint = JSON.stringify({
-      categoryId: form.categoryId,
-      gradeScaleEntryId: form.gradeScaleEntryId || null,
-      metadata,
+    categoryId: form.categoryId,
+    gradeScaleEntryId: form.gradeScaleEntryId || null,
+    metadata,
   });
 
   const create = useMutation({
@@ -400,7 +397,9 @@ export function SubmissionPage() {
     onSuccess: async (updated) => {
       version.current = updated.version;
       client.setQueryData(["submissions", draft?.id], updated);
-      setNotice("Certificate recorded. Staff must confirm it against the official grading-company lookup before submission.");
+      setNotice(
+        "Certificate recorded. Staff must confirm it against the official grading-company lookup before submission.",
+      );
       await detail.refetch();
     },
     onError: (error) => setLocalError(friendlyError(error)),
@@ -631,7 +630,10 @@ export function SubmissionPage() {
       }
     }
     if (step === 4 && !evidenceReady) {
-      const remaining = missingRequiredPhotoCount(submission, Boolean(form.grader && form.grader !== "Ungraded"));
+      const remaining = missingRequiredPhotoCount(
+        submission,
+        Boolean(form.grader && form.grader !== "Ungraded"),
+      );
       setLocalError(
         `Add the ${remaining} remaining required photo${remaining === 1 ? "" : "s"} to continue.`,
       );
@@ -1325,7 +1327,10 @@ export function DetailsStep({
               >
                 <option value="">{gradesLoading ? "Loading grades…" : "Choose a grade"}</option>
                 {grades.map((grade) => (
-                  <option key={grade.id ?? `${grade.grade}-${grade.designation ?? ""}`} value={grade.id ?? grade.grade}>
+                  <option
+                    key={grade.id ?? `${grade.grade}-${grade.designation ?? ""}`}
+                    value={grade.id ?? grade.grade}
+                  >
                     {grade.label}
                     {grade.conditionLabel ? ` · ${grade.conditionLabel}` : ""}
                     {grade.designation ? ` · ${grade.designation}` : ""}
@@ -1342,7 +1347,9 @@ export function DetailsStep({
               </div>
             )}
             <small className="list-field-help">
-              {isUngraded ? "Raw cards do not need a slab grade." : "Choose the exact label shown on the slab."}
+              {isUngraded
+                ? "Raw cards do not need a slab grade."
+                : "Choose the exact label shown on the slab."}
             </small>
           </label>
           <Input
@@ -1355,6 +1362,16 @@ export function DetailsStep({
         </div>
         {!isUngraded ? (
           <div className="list-certification-panel">
+            <div className="list-certification-panel__header">
+              <span className="list-certification-panel__icon" aria-hidden="true">
+                <ShieldCheck />
+              </span>
+              <div>
+                <strong>Certificate verification</strong>
+                <p>Confirm the number printed on the slab.</p>
+              </div>
+              <span className="list-certification-panel__badge">Required for graded cards</span>
+            </div>
             <label>
               <span className="list-field-label">
                 Certification number
@@ -1364,27 +1381,33 @@ export function DetailsStep({
                 <input
                   value={form.certificationNumber}
                   onChange={(event) => onChange("certificationNumber", event.target.value)}
-                  placeholder="Enter the slab certificate number"
+                  placeholder="Enter the number from the slab"
                   autoComplete="off"
                   maxLength={80}
+                  aria-describedby="certification-number-help"
                 />
                 <button
                   type="button"
                   className="button-secondary"
-                  disabled={!form.certificationNumber.trim() || !form.gradeScaleEntryId || verifyPending}
+                  disabled={
+                    !form.certificationNumber.trim() || !form.gradeScaleEntryId || verifyPending
+                  }
                   onClick={onVerifyCertification}
                 >
                   {verifyPending ? "Checking…" : "Verify cert"}
                 </button>
               </div>
-              <small className="list-field-help">
+              <small id="certification-number-help" className="list-field-help">
                 {verification?.status === "VERIFIED"
                   ? "Verified against the official grading-company record."
                   : "A staff reviewer completes the official lookup before a graded card can be submitted."}
               </small>
             </label>
             {verification ? (
-              <div className={`list-certification-status list-certification-status--${verification.status.toLowerCase()}`} role="status">
+              <div
+                className={`list-certification-status list-certification-status--${verification.status.toLowerCase()}`}
+                role="status"
+              >
                 <ShieldCheck aria-hidden="true" />
                 <div>
                   <strong>
@@ -2164,7 +2187,11 @@ export function PhotosStep({
   const requiredPhotoConfig = graded
     ? [
         ...REQUIRED_PHOTO_CONFIG,
-        ["grading-label", "Grading label close-up", "Required for graded cards: make the company, grade, and certification number readable."] as const,
+        [
+          "grading-label",
+          "Grading label close-up",
+          "Required for graded cards: make the company, grade, and certification number readable.",
+        ] as const,
       ]
     : REQUIRED_PHOTO_CONFIG;
   const additional = activeMediaForSlot(submission, "additional-image");
@@ -2227,7 +2254,9 @@ export function PhotosStep({
                 <h3 id="additional-photos-title">
                   Additional photos <small>(optional)</small>
                 </h3>
-                <p>Add optional edge views or extra photos that show condition or unique details.</p>
+                <p>
+                  Add optional edge views or extra photos that show condition or unique details.
+                </p>
               </div>
             </div>
             <div className="list-additional-upload-row">
@@ -3545,7 +3574,9 @@ export function ReviewStep({
     form.set.trim() &&
     form.cardNumber.trim(),
   );
-  const requiredReady = requiredSlotsForGrading(graded).flatMap((slot) => safeMediaForSlot(submission, slot));
+  const requiredReady = requiredSlotsForGrading(graded).flatMap((slot) =>
+    safeMediaForSlot(submission, slot),
+  );
   const optionalReady = OPTIONAL_SLOTS.filter(
     ([slot]) => !(graded && slot === "grading-label"),
   ).flatMap(([slot]) => safeMediaForSlot(submission, slot));
@@ -4143,10 +4174,10 @@ function metadataFromForm(form: ListingForm): CreateSubmissionDraft["declaredMet
     ...optional("edition"),
     ...optional("language"),
     ...optional("condition"),
-  ...optional("grader"),
-  ...optional("grade"),
-  ...optional("designation"),
-  ...optional("certificationNumber"),
+    ...optional("grader"),
+    ...optional("grade"),
+    ...optional("designation"),
+    ...optional("certificationNumber"),
     ...optional("details"),
     ...optional("playerOrCharacter"),
     ...optional("variant"),
