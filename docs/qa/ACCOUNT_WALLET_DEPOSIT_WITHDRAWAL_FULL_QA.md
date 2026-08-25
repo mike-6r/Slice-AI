@@ -119,6 +119,79 @@ Slice projection after provider refresh:
 
 This is not a stale frontend-only state. Stripe has active payout/transfer capability flags but an unresolved keyed-identity validation error; Slice correctly keeps the payout account restricted until the provider requirement is cleared.
 
+### Existing Connect keyed identity remediation
+
+Audit date: 2026-08-25. This continuation reused the existing Stripe Sandbox
+Connect account `acct_1U8JaiGqKVJOvmNB`. No second account was created, and no
+Connect account, bank, balance, movement, journal, ownership, order, trade, or
+withdrawal state was mutated during this audit.
+
+#### Read-only provider evidence
+
+The existing v2 account was retrieved directly from Stripe Sandbox with
+`identity`, `requirements`, `future_requirements`, and
+`configuration.recipient` included. The safe projection was:
+
+- Account object: `v2.core.account`.
+- Legacy `details_submitted`, `charges_enabled`, and `payouts_enabled` fields:
+  not exposed on this v2 object; they are not used as readiness evidence for
+  this account type.
+- Recipient `stripe_balance.payouts`: `active` with no status details.
+- Recipient `stripe_balance.stripe_transfers`: `active` with no status details.
+- `requirements.entries`: one entry awaiting action from `user`:
+  `identity.individual.documents.primary_verification`.
+- Requirement impact: restricts `stripe_balance.payouts` and
+  `stripe_balance.stripe_transfers` for the recipient configuration.
+- Requirement deadline: `eventually_due`.
+- `future_requirements.entries`: empty.
+- Full safe provider error: `verification_failed_keyed_identity` — the
+  person's keyed-in identity information could not be verified; Stripe says
+  to correct the errors or upload a document that matches the identity fields,
+  such as name and date of birth.
+
+This is the exact provider blocker. It is not an API outage, a missing bank
+funding relationship, a stale browser label, or evidence that Slice may invent
+or directly patch legal identity data.
+
+#### Slice projection after the provider read
+
+The existing `ExternalConnectAccount` row was read after the provider audit:
+
+- Status: `RESTRICTED`.
+- `detailsSubmitted`: `false` (Slice's v2 safe projection because the
+  requirement has a user action and validation error).
+- `payoutsEnabled`: `true`.
+- `transfersCapability`: `active`.
+- `currentlyDueCount`: `1`.
+- `pendingVerificationCount`: `1` (the requirement deadline is
+  `eventually_due` and the provider is awaiting user action).
+- `hasValidationErrors`: `true`.
+- Provider-to-Slice sync: PASS — the row was last synced at
+  `2026-08-25T14:55:06.526Z`.
+
+Slice correctly does not transition to `READY` merely because Stripe reports
+the capability statuses as active. Its v2 readiness rule also requires no
+validation errors or user-action requirements.
+
+#### Supported remediation path
+
+The existing implementation uses the Stripe-hosted v2 Account Link with the
+recipient onboarding configuration, collects currently due fields, and
+includes future requirements. Slice does not collect KYC documents, guess a
+legal name or date of birth, or copy the funding bank into the payout account.
+The provider's returned error identifies the required user action: review or
+correct the keyed identity in Stripe-hosted onboarding and upload a matching
+primary identity document if Stripe requests it. After the user returns,
+Slice must retrieve the provider account again and only then decide whether
+the account is `READY`.
+
+The fresh-link/browser action was intentionally not initiated in this
+read-only continuation because it would transmit the account's verified
+contact data to Stripe and open a sensitive hosted flow. The existing Wallet
+CTA and prior hosted-link reachability remain verified. The next checkpoint
+is the account owner's action in Stripe-hosted onboarding; no financial flow
+may proceed before that checkpoint clears.
+
 ### Connect onboarding data reuse / prefill
 
 Audit date: 2026-08-25. This section covers the safe prefill change made after the post-onboarding provider-state check. Stripe remains the verification authority; Slice only supplies verified contact data where the current Stripe Accounts v2 contract allows it.
