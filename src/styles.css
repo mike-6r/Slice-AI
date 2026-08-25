@@ -54219,6 +54219,26 @@ html,
   }
 }
 
+/* Keep the Similar Assets rail below the full market-data row. The desktop
+   page grid used to reserve a 390px track while the chart/data panels had a
+   560px minimum, which let the next grid row paint over the chart. */
+@media (min-width: 1280px) {
+  .asset-detail-page .asset-redesign {
+    grid-template-rows: 430px 52px 200px minmax(560px, auto) auto;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-detail-lower-grid {
+    height: auto;
+    min-height: 560px;
+  }
+
+  .asset-detail-page .asset-redesign > .asset-similar-section {
+    grid-row: auto !important;
+    height: auto !important;
+    min-height: 0;
+  }
+}
+
 /* Mobile chrome must be a continuous, opaque stacking surface. The ticker
    carries the generated `bg-surface/60` utility, which lets scrolled content
    show through it even though the parent navigation is sticky. */
