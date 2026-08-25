@@ -33,7 +33,7 @@ cd "${release_dir}/apps/discord-bot"
 npm ci
 npm run build
 
-cd server
+cd "${release_dir}/server"
 npm ci
 npx prisma generate
 npx prisma validate
