@@ -1,8 +1,8 @@
 # Slice Initial Financial Launch Policy — Activation QA
 
 Date: 2026-08-25  
-Application commit: `0f63b7e`  
-Staging release: `/opt/slice/releases/20260825-0f63b7e`
+Application commit: `045f863`  
+Staging release: `/opt/slice/releases/20260825-045f863`
 
 ## Decision
 
