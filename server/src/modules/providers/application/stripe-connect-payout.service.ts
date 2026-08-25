@@ -78,6 +78,12 @@ type V2ConnectRequirementEntry = {
     restricts_capabilities?: Array<{ deadline?: { status?: string } }>;
   };
 };
+type ConnectAccountRow = {
+  id: string;
+  userId: string;
+  environment: 'SANDBOX' | 'LIVE';
+  externalAccountIdCiphertext: string;
+};
 
 export function mapConnectAccountStatus(
   account: Pick<
@@ -238,10 +244,7 @@ export class StripeConnectPayoutService {
     const stripe = this.stripeFactory.get();
     const resolved = await this.retrieveAccount(
       stripe,
-      this.crypto.decrypt(
-        row.externalAccountIdCiphertext,
-        `connect-account:${row.id}`,
-      ),
+      await this.resolveExternalAccountId(stripe, row),
     );
     const updated = await this.syncAccount(row.id, resolved.snapshot);
     return {
@@ -338,28 +341,19 @@ export class StripeConnectPayoutService {
         });
         const resolved = await this.retrieveAccount(
           stripe,
-          this.crypto.decrypt(
-            row.externalAccountIdCiphertext,
-            `connect-account:${row.id}`,
-          ),
+          await this.resolveExternalAccountId(stripe, row),
         );
         accountMode = resolved.mode;
       }
     } else {
       const resolved = await this.retrieveAccount(
         stripe,
-        this.crypto.decrypt(
-          row.externalAccountIdCiphertext,
-          `connect-account:${row.id}`,
-        ),
+        await this.resolveExternalAccountId(stripe, row),
       );
       accountMode = resolved.mode;
       row = await this.syncAccount(row.id, resolved.snapshot);
     }
-    const externalAccountId = this.crypto.decrypt(
-      row.externalAccountIdCiphertext,
-      `connect-account:${row.id}`,
-    );
+    const externalAccountId = await this.resolveExternalAccountId(stripe, row);
     const link = await this.createAccountLink(
       stripe,
       accountMode,
@@ -398,10 +392,7 @@ export class StripeConnectPayoutService {
         code: 'CONNECT_PAYOUT_NOT_READY',
         message: 'Complete payout setup before withdrawing available cash.',
       });
-    const externalAccountId = this.crypto.decrypt(
-      account.externalAccountIdCiphertext,
-      `connect-account:${account.id}`,
-    );
+    const externalAccountId = await this.resolveExternalAccountId(stripe, account);
     const amount = BigInt(input.amountMinor);
     if (amount > BigInt(Number.MAX_SAFE_INTEGER))
       throw new ConflictException({
@@ -623,6 +614,53 @@ export class StripeConnectPayoutService {
         mode: 'legacy' as const,
         snapshot: legacyAccountSnapshot(account),
       };
+    }
+  }
+
+  private async resolveExternalAccountId(
+    stripe: Stripe,
+    row: ConnectAccountRow,
+  ) {
+    try {
+      return this.crypto.decrypt(
+        row.externalAccountIdCiphertext,
+        `connect-account:${row.id}`,
+      );
+    } catch (error) {
+      // A prior release encrypted one-time Connect rows with the provider ID
+      // as the AAD instead of the persisted row ID. Recover only by matching
+      // Slice-owned metadata, then immediately rewrite the ciphertext using
+      // the canonical row-scoped context. No account IDs are guessed.
+      let recovered: { id: string; metadata?: Record<string, string> } | null =
+        null;
+      for await (const account of stripe.v2.core.accounts.list({
+        applied_configurations: ['recipient'],
+        limit: 100,
+      })) {
+        if (
+          account.metadata?.slice_user_id === row.userId &&
+          account.metadata?.slice_environment === row.environment
+        ) {
+          recovered = account as unknown as {
+            id: string;
+            metadata?: Record<string, string>;
+          };
+          break;
+        }
+      }
+      if (!recovered) throw error;
+      await this.db.externalConnectAccount.update({
+        where: { id: row.id },
+        data: {
+          externalAccountIdCiphertext: this.crypto.encrypt(
+            recovered.id,
+            `connect-account:${row.id}`,
+          ),
+          externalAccountIdHash: this.crypto.hash(recovered.id),
+          encryptionKeyVersion: this.crypto.keyVersion,
+        },
+      });
+      return recovered.id;
     }
   }
 
