@@ -136,10 +136,16 @@ export interface PortfolioPerformancePoint {
   currency: "GBP";
   freshness: string;
   cashValueMinor?: GbpMinorUnits | null;
+  /** Cash available after active reservations. */
+  availableCashMinor?: GbpMinorUnits | null;
   holdingsValueMinor?: GbpMinorUnits | null;
   reservedValueMinor?: GbpMinorUnits | null;
   costBasisMinor?: GbpMinorUnits | null;
   unrealisedPnlMinor?: GbpMinorUnits | null;
+  /** External cash movement since the first point in the selected range. */
+  netExternalCashFlowMinor?: GbpMinorUnits | null;
+  /** Account-value change after removing external cash movement. */
+  cashFlowAdjustedChangeMinor?: GbpMinorUnits | null;
 }
 export interface PortfolioPerformance {
   range: PortfolioPerformanceRange;

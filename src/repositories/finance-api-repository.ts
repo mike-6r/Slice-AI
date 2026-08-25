@@ -330,6 +330,10 @@ export const mapPerformance = (raw: unknown): PortfolioPerformance => {
         currency: "GBP" as const,
         freshness: nullableString(point.freshness) ?? "UNAVAILABLE",
         cashValueMinor: optionalMinor(point.cashValueMinor, "performance.cashValueMinor"),
+        availableCashMinor: optionalMinor(
+          point.availableCashMinor,
+          "performance.availableCashMinor",
+        ),
         holdingsValueMinor: optionalMinor(
           point.holdingsValueMinor,
           "performance.holdingsValueMinor",
@@ -342,6 +346,14 @@ export const mapPerformance = (raw: unknown): PortfolioPerformance => {
         unrealisedPnlMinor: optionalMinor(
           point.unrealisedPnlMinor,
           "performance.unrealisedPnlMinor",
+        ),
+        netExternalCashFlowMinor: optionalMinor(
+          point.netExternalCashFlowMinor,
+          "performance.netExternalCashFlowMinor",
+        ),
+        cashFlowAdjustedChangeMinor: optionalMinor(
+          point.cashFlowAdjustedChangeMinor,
+          "performance.cashFlowAdjustedChangeMinor",
         ),
       };
     }),

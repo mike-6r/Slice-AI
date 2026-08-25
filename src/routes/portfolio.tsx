@@ -46,6 +46,8 @@ import type {
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
+import { formatDisplayMoney } from "@/currency/currency-presentation";
+import { getCurrencyPresentation } from "@/currency/currency-store";
 import { queryKeys } from "@/queries/keys";
 import {
   PORTFOLIO_EMPTY_STATES,
@@ -333,8 +335,10 @@ export function Portfolio() {
               className="portfolio-overview-bottom"
               aria-label="Your Slice activity and discovery"
             >
-              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
               <ActivityPanel query={transactions} compact />
+              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
+            </section>
+            <section className="portfolio-overview-discovery" aria-label="Explore the market">
               <MarketWatchPanel query={market} />
             </section>
           </>
@@ -784,7 +788,7 @@ function PortfolioOrdersExperience({
                       order={order}
                       holding={holdingByAsset.get(order.assetId)}
                       asset={resolveOrderAsset(order, assetById, assetBySlug)}
-          onSelect={setSelectedOrder}
+                      onSelect={setSelectedOrder}
                     />
                   ))}
                 </tbody>
@@ -1114,9 +1118,7 @@ function OrderDetailDialog({
           ×
         </button>
         <p className="page-kicker">Order details</p>
-        <h2 id="portfolio-order-dialog-title">
-          {orderAssetTitle(order, holding, asset)}
-        </h2>
+        <h2 id="portfolio-order-dialog-title">{orderAssetTitle(order, holding, asset)}</h2>
         <OrderAssetIdentity order={order} holding={holding} asset={asset} />
         <dl className="portfolio-order-detail-grid">
           <div>
@@ -1380,10 +1382,14 @@ function PortfolioHeading({
       <div>
         <p className="page-kicker">Portfolio</p>
         <div className="portfolio-heading__title-row">
-          <h1>{isHoldings ? "Holdings" : isOrders ? "Orders" : isActivity ? "Activity" : "Portfolio"}</h1>
+          <h1>
+            {isHoldings ? "Holdings" : isOrders ? "Orders" : isActivity ? "Activity" : "Portfolio"}
+          </h1>
           {isHoldings ? (
             <span className="portfolio-heading__count">
-              {query.isLoading ? "Loading positions" : `${holdingsCount} position${holdingsCount === 1 ? "" : "s"}`}
+              {query.isLoading
+                ? "Loading positions"
+                : `${holdingsCount} position${holdingsCount === 1 ? "" : "s"}`}
             </span>
           ) : null}
         </div>
@@ -1471,8 +1477,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 
   const summary = query.data;
   const valuation = derivePortfolioValuationSnapshot(summary);
-  const totalAccountValue =
-    summary.totalAccountValueMinor ?? summary.estimatedPortfolioValueMinor;
+  const totalAccountValue = summary.totalAccountValueMinor ?? summary.estimatedPortfolioValueMinor;
   const availableCash = summary.availableCashMinor ?? summary.cash.availableMinor;
   const reservedCash = summary.reservedCashMinor ?? summary.cash.reservedMinor;
   const unrealisedPercent =
@@ -1481,26 +1486,24 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
   return (
     <section className="portfolio-kpis" aria-label="Portfolio summary">
       <PortfolioKpi
-        label="Total account value"
-        value={totalAccountValue !== null && summary.valuationStatus === "FULL" ? formatPortfolioMoney(totalAccountValue) : portfolioValueLabel(summary)}
+        className="portfolio-summary-kpi--primary"
+        label="Total portfolio value"
+        value={
+          totalAccountValue !== null && summary.valuationStatus === "FULL"
+            ? formatPortfolioMoney(totalAccountValue)
+            : portfolioValueLabel(summary)
+        }
         icon={Layers3}
         detail={
-          summary.valuationStatus === "FULL"
-            ? "Cash, reservations and holdings"
-            : valuationDescription(summary.valuationStatus)
+          summary.valuationStatus === "FULL" ? (
+            <>
+              Cash {formatPortfolioMoney(availableCash)} · Reserved{" "}
+              {formatPortfolioMoney(reservedCash)}
+            </>
+          ) : (
+            valuationDescription(summary.valuationStatus)
+          )
         }
-      />
-      <PortfolioKpi
-        label="Available cash"
-        value={formatPortfolioMoney(availableCash)}
-        icon={WalletCards}
-        detail="Ready to use"
-      />
-      <PortfolioKpi
-        label="Reserved cash"
-        value={formatPortfolioMoney(reservedCash)}
-        icon={Wallet}
-        detail="Held for open activity"
       />
       <PortfolioKpi
         label="Holdings value"
@@ -1525,7 +1528,11 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
               : "negative"
             : undefined
         }
-        detail={unrealisedPercent === null ? "Available once cost history is complete" : `${unrealisedPercent} vs. open cost`}
+        detail={
+          unrealisedPercent === null
+            ? "Available once cost history is complete"
+            : `${unrealisedPercent} vs. settled cost`
+        }
       />
     </section>
   );
@@ -1534,7 +1541,7 @@ function PortfolioKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
 function KpiSkeletons() {
   return (
     <section className="portfolio-kpis" aria-label="Loading portfolio summary">
-      {[0, 1, 2, 3, 4].map((item) => (
+      {[0, 1, 2].map((item) => (
         <article key={item} className="portfolio-summary-kpi portfolio-summary-kpi--loading">
           <div className="customer-skeleton size-11" />
           <div className="min-w-0 flex-1">
@@ -1612,15 +1619,17 @@ function PortfolioKpi({
   detail,
   icon,
   tone,
+  className = "",
 }: {
   label: string;
   value: string;
-  detail: string;
+  detail: ReactNode;
   icon: LucideIcon;
   tone?: "positive" | "negative";
+  className?: string;
 }) {
   return (
-    <article className="portfolio-summary-kpi">
+    <article className={`portfolio-summary-kpi ${className}`}>
       <KpiIconTile icon={icon} />
       <div className="portfolio-kpi__content">
         <p>{label}</p>
@@ -1642,14 +1651,16 @@ function PortfolioPerformancePanel({
   range: PortfolioPerformanceRange;
   onRangeChange: (range: PortfolioPerformanceRange) => void;
 }) {
-  const valuation = query.data ? derivePortfolioValuationSnapshot(query.data) : null;
+  const selectedChange = performance.data?.periodChangeMinor ?? null;
+  const hasExternalCashFlow =
+    performance.data?.netCashFlowMinor !== undefined && performance.data.netCashFlowMinor !== "0";
   return (
     <PortfolioPanel
-      title="Account value history"
+      title="Portfolio performance"
       className="portfolio-panel--hero-performance"
       header={
         <div className="portfolio-performance-header">
-          <span className="portfolio-performance-hint">Hover or focus a point for details</span>
+          <span className="portfolio-performance-hint">Account value over time</span>
           <PerformancePeriods active={range} onChange={onRangeChange} />
         </div>
       }
@@ -1661,18 +1672,23 @@ function PortfolioPerformancePanel({
       ) : (
         <div className="portfolio-performance-hero">
           <div className="portfolio-performance-hero__value">
-            <span>Total account value</span>
+            <span>Total value ({query.data.currency})</span>
             <strong>
-              {query.data.totalAccountValueMinor !== undefined && query.data.totalAccountValueMinor !== null
+              {query.data.totalAccountValueMinor !== undefined &&
+              query.data.totalAccountValueMinor !== null
                 ? formatPortfolioMoney(query.data.totalAccountValueMinor)
                 : portfolioValueLabel(query.data)}
             </strong>
-            {valuation ? (
-              <p
-                className={BigInt(valuation.unrealisedValueMinor) >= 0n ? "is-credit" : "is-debit"}
-              >
-                {formatSignedPortfolioMoney(valuation.unrealisedValueMinor)}{" "}
-                <small>unrealised</small>
+            {selectedChange !== null ? (
+              <p className={BigInt(selectedChange) >= 0n ? "is-credit" : "is-debit"}>
+                {formatSignedPortfolioMoney(selectedChange)}{" "}
+                {performance.data?.periodChangeBps !== null &&
+                performance.data?.periodChangeBps !== undefined
+                  ? `(${formatSignedBps(performance.data.periodChangeBps)}) `
+                  : null}
+                <small>
+                  {hasExternalCashFlow ? `${range} after cash flows` : `${range} change`}
+                </small>
               </p>
             ) : null}
           </div>
@@ -1693,43 +1709,23 @@ function PortfolioPerformancePanel({
               </dd>
             </div>
             <div>
-              <dt>Available cash</dt>
+              <dt>Cash</dt>
               <dd>
-                {formatPortfolioMoney(query.data.availableCashMinor ?? query.data.cash.availableMinor)}
+                {formatPortfolioMoney(
+                  query.data.availableCashMinor ?? query.data.cash.availableMinor,
+                )}
               </dd>
             </div>
-            <div>
-              <dt>Reserved cash</dt>
-              <dd>{formatPortfolioMoney(query.data.reservedCashMinor ?? query.data.cash.reservedMinor)}</dd>
-            </div>
-            <div>
-              <dt>Change after cash flows</dt>
-              <dd
-                className={
-                  performance.data && BigInt(performance.data.periodChangeMinor ?? "0") < 0n
-                    ? "is-debit"
-                    : "is-credit"
-                }
-              >
-                {performance.data?.periodChangeMinor !== null && performance.data?.periodChangeMinor !== undefined
-                  ? formatSignedPortfolioMoney(performance.data.periodChangeMinor)
-                  : "Unavailable"}
-            </dd>
-            </div>
-            <div>
-              <dt>All-time high</dt>
-              <dd>
-                {performance.data?.points.length
-                  ? formatPortfolioMoney(
-                      performance.data.points.reduce(
-                        (max, point) =>
-                          BigInt(point.valueMinor) > BigInt(max) ? point.valueMinor : max,
-                        performance.data.points[0]!.valueMinor,
-                      ),
-                    )
-                  : "Insufficient history"}
-              </dd>
-            </div>
+            {(query.data.reservedCashMinor ?? query.data.cash.reservedMinor) !== "0" ? (
+              <div>
+                <dt>Reserved cash</dt>
+                <dd>
+                  {formatPortfolioMoney(
+                    query.data.reservedCashMinor ?? query.data.cash.reservedMinor,
+                  )}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </div>
       )}
@@ -1809,7 +1805,7 @@ function PerformanceChart({
     y: 100 - ((Number(point.valueMinor) - min) / span) * 84 - 8,
   }));
   const line = chartPoints.map(({ x, y }) => `${x},${y}`).join(" ");
-  const activePoint = activeIndex === null ? null : chartPoints[activeIndex] ?? null;
+  const activePoint = activeIndex === null ? null : (chartPoints[activeIndex] ?? null);
   const direction = query.data?.direction ?? "NEUTRAL";
   return (
     <div
@@ -1861,28 +1857,49 @@ function PerformanceChart({
             <strong>{formatPortfolioMoney(activePoint.point.valueMinor)}</strong>
             <span>Account value</span>
             <dl>
-              {activePoint.point.holdingsValueMinor !== undefined && activePoint.point.holdingsValueMinor !== null ? (
+              {activePoint.point.holdingsValueMinor !== undefined &&
+              activePoint.point.holdingsValueMinor !== null ? (
                 <div>
                   <dt>Collectibles</dt>
                   <dd>{formatPortfolioMoney(activePoint.point.holdingsValueMinor)}</dd>
                 </div>
               ) : null}
-              {activePoint.point.cashValueMinor !== undefined && activePoint.point.cashValueMinor !== null ? (
+              {(activePoint.point.availableCashMinor ?? activePoint.point.cashValueMinor) !==
+                undefined &&
+              (activePoint.point.availableCashMinor ?? activePoint.point.cashValueMinor) !==
+                null ? (
                 <div>
-                  <dt>Available cash</dt>
-                  <dd>{formatPortfolioMoney(activePoint.point.cashValueMinor)}</dd>
+                  <dt>Cash</dt>
+                  <dd>
+                    {formatPortfolioMoney(
+                      activePoint.point.availableCashMinor ??
+                        activePoint.point.cashValueMinor ??
+                        "0",
+                    )}
+                  </dd>
                 </div>
               ) : null}
-              {activePoint.point.reservedValueMinor !== undefined && activePoint.point.reservedValueMinor !== null ? (
+              {activePoint.point.reservedValueMinor !== undefined &&
+              activePoint.point.reservedValueMinor !== null ? (
                 <div>
                   <dt>Reserved cash</dt>
                   <dd>{formatPortfolioMoney(activePoint.point.reservedValueMinor)}</dd>
                 </div>
               ) : null}
-              {activePoint.point.unrealisedPnlMinor !== undefined && activePoint.point.unrealisedPnlMinor !== null ? (
+              {activePoint.point.unrealisedPnlMinor !== undefined &&
+              activePoint.point.unrealisedPnlMinor !== null ? (
                 <div>
                   <dt>Unrealised P/L</dt>
                   <dd>{formatSignedPortfolioMoney(activePoint.point.unrealisedPnlMinor)}</dd>
+                </div>
+              ) : null}
+              {activePoint.point.cashFlowAdjustedChangeMinor !== undefined &&
+              activePoint.point.cashFlowAdjustedChangeMinor !== null ? (
+                <div>
+                  <dt>After cash flows</dt>
+                  <dd>
+                    {formatSignedPortfolioMoney(activePoint.point.cashFlowAdjustedChangeMinor)}
+                  </dd>
                 </div>
               ) : null}
             </dl>
@@ -1890,8 +1907,45 @@ function PerformanceChart({
         ) : null}
       </div>
       <div className="portfolio-performance-chart__legend">
-        <span>{formatPortfolioMoney(points[0]!.valueMinor)}</span>
-        <span>{formatPortfolioMoney(points.at(-1)!.valueMinor)}</span>
+        <div>
+          <i className="is-holdings" aria-hidden="true" />
+          <span>
+            Holdings
+            <strong>
+              {formatPortfolioMoney(points.at(-1)!.holdingsValueMinor ?? "0")} (
+              {sharePercent(points.at(-1)!.holdingsValueMinor ?? "0", points.at(-1)!.valueMinor) ??
+                "—"}
+              )
+            </strong>
+          </span>
+        </div>
+        <div>
+          <i className="is-cash" aria-hidden="true" />
+          <span>
+            Cash
+            <strong>
+              {formatPortfolioMoney(
+                points.at(-1)!.availableCashMinor ?? points.at(-1)!.cashValueMinor ?? "0",
+              )}{" "}
+              (
+              {sharePercent(
+                points.at(-1)!.availableCashMinor ?? points.at(-1)!.cashValueMinor ?? "0",
+                points.at(-1)!.valueMinor,
+              ) ?? "—"}
+              )
+            </strong>
+            {points.at(-1)!.reservedValueMinor && points.at(-1)!.reservedValueMinor !== "0" ? (
+              <small>
+                Reserved {formatPortfolioMoney(points.at(-1)!.reservedValueMinor ?? "0")}
+              </small>
+            ) : null}
+          </span>
+        </div>
+        <div className="portfolio-performance-chart__legend-total">
+          <span>
+            Total<strong>{formatPortfolioMoney(points.at(-1)!.valueMinor)}</strong>
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1911,20 +1965,20 @@ function formatPerformancePointDate(value: string) {
 function AllocationPanel({ query }: { query: UseQueryResult<PortfolioSummary> }) {
   if (query.isLoading)
     return (
-      <PortfolioPanel title="Allocation by asset class" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Allocation" className="portfolio-panel--allocation">
         <ChartSkeleton />
       </PortfolioPanel>
     );
   if (query.isError || !query.data)
     return (
-      <PortfolioPanel title="Allocation by asset class" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Allocation" className="portfolio-panel--allocation">
         <PanelError message={PORTFOLIO_ERROR_STATES.summary} retry={() => void query.refetch()} />
       </PortfolioPanel>
     );
   const rows = deriveCategoryAllocation(query.data);
   if (!rows)
     return (
-      <PortfolioPanel title="Allocation by asset class" className="portfolio-panel--allocation">
+      <PortfolioPanel title="Allocation" className="portfolio-panel--allocation">
         <AllocationEmpty
           message={
             query.data.holdings.length
@@ -1934,26 +1988,33 @@ function AllocationPanel({ query }: { query: UseQueryResult<PortfolioSummary> })
         />
       </PortfolioPanel>
     );
-  const gradient = allocationGradient(rows.map((row) => row.percentageBps));
   return (
     <PortfolioPanel
-      title="Allocation by asset class"
+      title="Allocation"
       className="portfolio-panel--allocation"
-      header={<span className="portfolio-panel__status">Collectibles only</span>}
+      header={<span className="portfolio-panel__status">Holdings only</span>}
     >
       <div className="portfolio-allocation">
+        <p className="portfolio-allocation__note">
+          Collectible holdings only. Cash is shown above.
+        </p>
         <div
-          className="portfolio-donut"
-          style={{ background: gradient }}
+          className="portfolio-allocation-bar"
           role="img"
           aria-label="Allocation by asset category using authoritative marked values"
         >
-          <div>
-            <strong>{formatPortfolioMoney(query.data.estimatedHoldingsValueMinor ?? "0")}</strong>
-            <span>Holdings value</span>
-          </div>
+          {rows.map((row, index) => (
+            <span
+              key={row.label}
+              style={{
+                flexBasis: `${Math.max(row.percentageBps / 100, 0.5)}%`,
+                backgroundColor: ALLOCATION_COLOURS[index % ALLOCATION_COLOURS.length],
+              }}
+              title={`${row.label}: ${formatBps(row.percentageBps)}`}
+            />
+          ))}
         </div>
-        <div className="portfolio-allocation-table">
+        <div className="portfolio-allocation-table" aria-label="Allocation details">
           {rows.map((row, index) => (
             <div key={row.label} className="portfolio-allocation-table__row">
               <span>
@@ -2121,7 +2182,10 @@ function HoldingCard({ holding }: { holding: PortfolioHolding }) {
       </div>
       <div className="portfolio-holding-card__body">
         <h3>{holdingDisplayLabel(holding)}</h3>
-        <p>{[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") || "Collectible"}</p>
+        <p>
+          {[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") ||
+            "Collectible"}
+        </p>
         <dl>
           <div>
             <dt>Ownership</dt>
@@ -2292,6 +2356,11 @@ function HoldingsPanel({
         <RowsSkeleton rows={5} />
       ) : query.isError ? (
         <PanelError message={PORTFOLIO_ERROR_STATES.holdings} retry={() => void query.refetch()} />
+      ) : compact ? (
+        <CompactHoldingsList
+          holdings={visibleHoldings ?? []}
+          hasAnyHoldings={Boolean(query.data?.length)}
+        />
       ) : (
         <div className="portfolio-table-wrap portfolio-table-wrap--holdings" tabIndex={0}>
           <table className="portfolio-table portfolio-table--holdings">
@@ -2339,6 +2408,98 @@ function HoldingsPanel({
         </div>
       )}
     </PortfolioPanel>
+  );
+}
+
+function CompactHoldingsList({
+  holdings,
+  hasAnyHoldings,
+}: {
+  holdings: PortfolioHolding[];
+  hasAnyHoldings: boolean;
+}) {
+  if (!holdings.length) {
+    return (
+      <PortfolioEmptyState
+        className="portfolio-empty-state--table"
+        icon={<Landmark aria-hidden="true" />}
+        message={
+          hasAnyHoldings ? "No holdings match this filter." : "You don't own any Slices yet."
+        }
+        detail={
+          hasAnyHoldings
+            ? "Try another category."
+            : "Explore the market to find a collectible to own."
+        }
+        action={
+          !hasAnyHoldings ? (
+            <Link to="/marketplace" className="portfolio-empty-state__link">
+              Explore the market <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : undefined
+        }
+      />
+    );
+  }
+  return (
+    <div className="portfolio-compact-holdings">
+      {holdings.map((holding) => {
+        const valuation = deriveHoldingValuation(holding);
+        const ownership = holding.totalUnits
+          ? `${holding.userOwnershipPercent ?? ownershipPercent(holding.ownedUnits, holding.totalUnits)}%`
+          : "Unavailable";
+        return (
+          <article key={holding.assetId} className="portfolio-compact-holding">
+            <div className="portfolio-compact-holding__identity">
+              <HoldingIdentity holding={holding} />
+            </div>
+            <dl className="portfolio-compact-holding__metrics">
+              <div>
+                <dt>Ownership</dt>
+                <dd>{ownership}</dd>
+                <small>
+                  {holding.ownedUnits} {holding.ownedUnits === "1" ? "Slice" : "Slices"}
+                </small>
+              </div>
+              <div>
+                <dt>Current value</dt>
+                <dd>
+                  {holding.estimatedValueMinor !== null
+                    ? formatPortfolioMoney(holding.estimatedValueMinor)
+                    : "Unavailable"}
+                </dd>
+              </div>
+              <div
+                className={
+                  valuation && BigInt(valuation.unrealisedValueMinor) < 0n ? "is-debit" : undefined
+                }
+              >
+                <dt>Unrealised P/L</dt>
+                <dd>
+                  {valuation
+                    ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor)
+                    : "Unavailable"}
+                </dd>
+                <small>
+                  {holding.unrealisedPnlPercent
+                    ? `${holding.unrealisedPnlPercent}%`
+                    : "Compared with cost"}
+                </small>
+              </div>
+            </dl>
+            {holding.slug ? (
+              <Link
+                to="/asset/$id"
+                params={{ id: holding.slug }}
+                className="portfolio-compact-holding__action"
+              >
+                View asset <ArrowRight aria-hidden="true" />
+              </Link>
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -2434,13 +2595,17 @@ function HoldingRow({ holding }: { holding: PortfolioHolding }) {
 function HoldingIdentity({ holding }: { holding: PortfolioHolding }) {
   return (
     <>
-      <span className={`portfolio-asset__icon${holding.thumbnailUrl ? "" : " is-placeholder"}`} aria-hidden="true">
+      <span
+        className={`portfolio-asset__icon${holding.thumbnailUrl ? "" : " is-placeholder"}`}
+        aria-hidden="true"
+      >
         {holding.thumbnailUrl ? <img src={holding.thumbnailUrl} alt="" /> : <Layers3 />}
       </span>
       <span className="portfolio-asset__copy">
         <strong title={holdingDisplayLabel(holding)}>{holdingDisplayLabel(holding)}</strong>
         <small>
-          {[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") || "Collectible"}
+          {[holding.category, holding.setName, holding.grade].filter(Boolean).join(" · ") ||
+            "Collectible"}
         </small>
       </span>
     </>
@@ -3034,7 +3199,9 @@ function activityAsset(
   return {
     slug,
     title: asset?.details.title ?? summary?.title ?? holding?.title ?? "Collectible",
-    category: friendlyActivityCategory(asset?.details.category ?? summary?.category ?? holding?.category),
+    category: friendlyActivityCategory(
+      asset?.details.category ?? summary?.category ?? holding?.category,
+    ),
     grade: asset?.grade ? `${asset.grade.company} ${asset.grade.label}` : (holding?.grade ?? null),
     mediaUrl: media,
   };
@@ -3158,6 +3325,10 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
         <ul className="portfolio-market-watch">
           {query.data.slice(0, 3).map((asset) => {
             const media = asset.media.find((item) => item.kind === "image");
+            const marketValue = asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
+            const marketValueLabel = asset.sliceValuation
+              ? "Slice valuation"
+              : "External reference";
             return (
               <li key={asset.id}>
                 <span className="portfolio-market-watch__thumb" aria-hidden="true">
@@ -3169,11 +3340,17 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
                 </span>
                 <span className="portfolio-market-watch__value">
                   <strong>
-                    {asset.market?.estimatedMarketValue
-                      ? formatPortfolioMoney(String(asset.market.estimatedMarketValue.amount))
-                      : "Guide unavailable"}
+                    {marketValue
+                      ? formatDisplayMoney(
+                          marketValue.amount,
+                          marketValue.currency,
+                          getCurrencyPresentation().currency,
+                          getCurrencyPresentation().rates,
+                          { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                        )
+                      : "Value unavailable"}
                   </strong>
-                  <small>Market guide</small>
+                  <small>{marketValueLabel}</small>
                 </span>
               </li>
             );
@@ -3303,23 +3480,16 @@ function PortfolioAccessRequired() {
 }
 
 const ALLOCATION_COLOURS = ["#23d9b4", "#8a64e9", "#f4bc28", "#3d7fe6", "#8791a1"];
-function allocationGradient(bps: number[]) {
-  let cursor = 0;
-  return `conic-gradient(${bps
-    .map((value, index) => {
-      const next = cursor + value / 100;
-      const result = `${ALLOCATION_COLOURS[index % ALLOCATION_COLOURS.length]} ${cursor}% ${next}%`;
-      cursor = next;
-      return result;
-    })
-    .join(", ")})`;
-}
 function percentageOf(value: string, total: string) {
   const numerator = BigInt(value);
   const denominator = BigInt(total);
   if (denominator <= 0n) return null;
   const sign = numerator > 0n ? "+" : "";
   return `${sign}${(Number((numerator * 10_000n) / denominator) / 100).toFixed(2)}%`;
+}
+function sharePercent(value: string, total: string) {
+  const percentage = percentageOf(value, total);
+  return percentage?.replace(/^\+/, "");
 }
 function ownershipPercent(units: string, total: string) {
   const denominator = BigInt(total);
@@ -3331,6 +3501,9 @@ function ownershipPercent(units: string, total: string) {
 }
 function formatBps(value: number) {
   return `${(value / 100).toFixed(2)}%`;
+}
+function formatSignedBps(value: number) {
+  return `${value > 0 ? "+" : ""}${formatBps(value)}`;
 }
 function transactionLabel(item: PortfolioTransaction) {
   const type = item.type.toLowerCase();
