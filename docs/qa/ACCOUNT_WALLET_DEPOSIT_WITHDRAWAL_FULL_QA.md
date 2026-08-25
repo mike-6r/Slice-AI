@@ -791,3 +791,17 @@ Umbreon, Charizard, or other financial mutation was run for this hardening
 pass. Stripe Sandbox did not provide an official Bacs return fixture in the
 available QA state, so real return E2E is **NOT AVAILABLE**; provider-contract
 tests and the signed WebhookInbox paths are the automated evidence instead.
+
+## Financial launch policy finalization
+
+The launch-policy audit and owner decision register are now maintained in
+`docs/finance/FINANCIAL_LAUNCH_POLICY.md`. The implementation remains
+fail-closed while hold duration, deposit limits, first-deposit policy,
+market-finality wording, sale-proceeds recovery, and dual-control adjustment
+policy await explicit approval.
+
+This pass added durable, idempotent customer financial notifications for Bacs
+clearing/release/return/review, deficit creation and recovery, and account
+restriction changes. Mandatory in-app delivery uses the existing notification
+worker; email uses the existing transactional email provider and bounded retry
+worker. No financial provider or ledger mutation was created for this pass.

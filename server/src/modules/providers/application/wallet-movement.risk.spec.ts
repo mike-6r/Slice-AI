@@ -2,6 +2,7 @@ import {
   calculateWithdrawalVelocity,
   calculateDepositVelocity,
   requiresDestinationScreening,
+  depositLimitMessage,
   WalletMovementService,
 } from './wallet-movement.service';
 
@@ -22,6 +23,13 @@ describe('wallet movement risk controls', () => {
     expect(totals.rolling7dTotal).toBe(350n);
     expect(totals.dailyCount).toBe(1);
     expect(totals.rapidCount).toBe(0);
+  });
+  it('returns customer-safe copy for every deposit limit reason', () => {
+    expect(depositLimitMessage('DEPOSIT_LIMIT_EXCEEDED')).toBe('This deposit would exceed your current bank funding limit.');
+    expect(depositLimitMessage('DEPOSIT_DAILY_LIMIT_EXCEEDED')).toBe('You’ve reached your current daily bank funding limit.');
+    expect(depositLimitMessage('DEPOSIT_ROLLING_LIMIT_EXCEEDED')).toBe('This deposit would exceed your current rolling bank funding limit.');
+    expect(depositLimitMessage('DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED')).toBe('You’ve reached the current number of bank deposits allowed today.');
+    expect(depositLimitMessage('DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED')).toBe('Please wait a little before trying another bank deposit.');
   });
   it('calculates configured withdrawal windows without inventing a risk score', () => {
     const now = new Date('2026-08-18T12:00:00.000Z');

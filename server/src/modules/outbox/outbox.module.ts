@@ -16,11 +16,13 @@ import { OutboxOperationsController } from './http/outbox-operations.controller'
 import { NotificationModule } from '../notifications/notification.module';
 import { AuthModule } from '../identity/auth/auth.module';
 import { AccessControlModule } from '../identity/access/access-control.module';
+import { EmailDeliveryModule } from '../identity/email-delivery/email-delivery.module';
+import { EmailNotificationTransport } from './application/email-notification.transport';
 
 @Module({
-  imports: [NotificationModule, AuthModule, AccessControlModule],
+  imports: [NotificationModule, AuthModule, AccessControlModule, EmailDeliveryModule],
   controllers: [OutboxOperationsController],
-  providers: [OutboxWriter, OutboxOperationsService, NotificationDeliveryService, NotificationRoutingService, NotificationChannelCapabilityRegistry, InAppNotificationTransport, NotificationTransportRegistry, NotificationDeliveryWorkerRepository, NotificationDeliveryWorkerService, DiscordNotificationDeliveryService, OutboxHandlerRegistry, OutboxWorkerRepository, OutboxWorkerService],
+  providers: [OutboxWriter, OutboxOperationsService, NotificationDeliveryService, NotificationRoutingService, NotificationChannelCapabilityRegistry, InAppNotificationTransport, EmailNotificationTransport, NotificationTransportRegistry, NotificationDeliveryWorkerRepository, NotificationDeliveryWorkerService, DiscordNotificationDeliveryService, OutboxHandlerRegistry, OutboxWorkerRepository, OutboxWorkerService],
   exports: [OutboxWriter, OutboxWorkerRepository, OutboxWorkerService, DiscordNotificationDeliveryService],
 })
 export class OutboxModule {}

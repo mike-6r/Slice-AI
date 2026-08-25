@@ -10,9 +10,10 @@ import { PortfolioSnapshotService } from './application/portfolio-snapshot.servi
 import { PortfolioSnapshotWorker } from './application/portfolio-snapshot.worker';
 import { SubmissionStorageModule } from '../submissions/submission-storage.module';
 import { PlatformRevenueSettlementService } from './application/platform-revenue-settlement.service';
+import { OutboxModule } from '../outbox/outbox.module';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, SubmissionStorageModule],
+  imports: [AuthModule, AccessControlModule, SubmissionStorageModule, OutboxModule],
   controllers: [FinanceController],
   providers: [
     FinancialLedgerService,

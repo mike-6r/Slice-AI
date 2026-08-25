@@ -43,3 +43,14 @@ export function securityNotificationEmail(input: {
     `${input.detail}\n\nIf this was not you, sign in to Slice and review your security settings immediately.`,
   );
 }
+
+export function financialNotificationEmail(input: {
+  title: string;
+  detail: string;
+}) {
+  return layout(
+    input.title,
+    `<p style="font-size:15px;line-height:1.6;color:#c7d5cc">${escapeHtml(input.detail)}</p><p style="font-size:13px;line-height:1.6;color:#91a39a">You can review your Wallet and account notifications in Slice for the current status and next steps.</p>`,
+    `${input.detail}\n\nYou can review your Wallet and account notifications in Slice for the current status and next steps.`,
+  );
+}

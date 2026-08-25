@@ -14,6 +14,8 @@ import { RecentAuthService } from '../../identity/access/recent-auth.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
 import { financeTestFailurePoint } from './finance-test-failure-injection';
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
+import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
+import { financialNotificationEvent, financialNotificationKind, formatGbpMinor } from '../../outbox/domain/domain-event';
 import {
   accountAuthority,
   validateBalancedJournal,
@@ -43,6 +45,7 @@ export class FinancialLedgerService {
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
     @Optional() @Inject(APP_CONFIG) private readonly config?: AppConfig,
+    @Optional() private readonly outbox: OutboxWriter = new OutboxWriter(),
   ) {}
 
   /**
@@ -200,6 +203,20 @@ export class FinancialLedgerService {
         },
         createdAt: now,
       });
+      await this.outbox.append(db, financialNotificationEvent({
+        kind: financialNotificationKind.depositReleased,
+        title: 'Bank deposit ready to use',
+        body: `Your ${formatGbpMinor(movement.amountMinor)} bank deposit has cleared and is now available to use for Slice trading.`,
+        resourceType: 'money-movement',
+        resourceId: movement.id,
+        aggregateType: 'money-movement',
+        aggregateId: movement.id,
+        amountMinor: movement.amountMinor.toString(),
+        actorUserId: movement.userId,
+        correlationId: requestId,
+        occurredAt: now,
+        eventSuffix: 'released',
+      }));
       await this.recoverDeficitInTransaction(db, movement.userId, requestId, actor);
       void updated;
       return true;
@@ -260,7 +277,7 @@ export class FinancialLedgerService {
       where: { sourceMovementId: movementId },
     });
     if (existing) return deficitMinor;
-    await db.financialDeficit.create({
+    const deficit = await db.financialDeficit.create({
       data: {
         id: randomUUID(),
         userId,
@@ -278,6 +295,7 @@ export class FinancialLedgerService {
         status: 'ACTIVE',
       },
     });
+    let holdCreated = false;
     if (!existingHold) {
       await db.complianceHold.create({
         data: {
@@ -289,6 +307,7 @@ export class FinancialLedgerService {
           source: 'PROVIDER_RETURN',
         },
       });
+      holdCreated = true;
     }
     await createIdentityTransaction(db).audit.append({
       id: randomUUID(),
@@ -303,6 +322,36 @@ export class FinancialLedgerService {
       metadata: { amountMinor: deficitMinor.toString(), reasonCode },
       createdAt: new Date(),
     });
+    await this.outbox.append(db, financialNotificationEvent({
+      kind: financialNotificationKind.deficitCreated,
+      title: 'Outstanding balance created',
+      body: `A returned bank deposit left an outstanding Slice balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until this balance is resolved. You can recover it with a verified bank deposit after that deposit clears.`,
+      resourceType: 'financial-deficit',
+      resourceId: deficit.id,
+      aggregateType: 'financial-deficit',
+      aggregateId: deficit.id,
+      amountMinor: deficitMinor.toString(),
+      outstandingMinor: deficitMinor.toString(),
+      actorUserId: userId,
+      correlationId: requestId,
+      eventSuffix: 'created',
+    }));
+    if (holdCreated) {
+      await this.outbox.append(db, financialNotificationEvent({
+        kind: financialNotificationKind.restrictionsApplied,
+        title: 'Some account actions are temporarily restricted',
+        body: 'Buying, listings, offers, and withdrawals are temporarily restricted while your outstanding Slice balance is resolved. You can still sign in, view your portfolio and history, contact support, and use an approved recovery path.',
+        resourceType: 'account',
+        resourceId: userId,
+        aggregateType: 'account',
+        aggregateId: userId,
+        amountMinor: deficitMinor.toString(),
+        outstandingMinor: deficitMinor.toString(),
+        actorUserId: userId,
+        correlationId: requestId,
+        eventSuffix: `deficit:${deficit.id}`,
+      }));
+    }
     return deficitMinor;
   }
 
@@ -411,7 +460,7 @@ export class FinancialLedgerService {
     );
     const recoveredMinor = deficit.recoveredMinor + recovery;
     const recovered = recoveredMinor >= deficit.amountMinor;
-    await db.financialDeficit.update({
+    const updatedDeficit = await db.financialDeficit.update({
       where: { id: deficit.id },
       data: {
         recoveredMinor,
@@ -424,6 +473,38 @@ export class FinancialLedgerService {
         where: { movementId: deficit.sourceMovementId, reasonCode: 'RETURNED_FUNDS_DEFICIT', status: 'ACTIVE' },
         data: { status: 'RELEASED', releasedAt: new Date() },
       });
+    }
+    await this.outbox.append(db, financialNotificationEvent({
+      kind: recovered ? financialNotificationKind.deficitResolved : financialNotificationKind.deficitPartiallyRecovered,
+      title: recovered ? 'Outstanding balance resolved' : 'Outstanding balance partially recovered',
+      body: recovered
+        ? `Your outstanding Slice balance has been fully recovered. The temporary financial restrictions on your account have been removed.`
+        : `${formatGbpMinor(recovery)} has been applied to your outstanding Slice balance. ${formatGbpMinor(updatedDeficit.amountMinor - updatedDeficit.recoveredMinor)} remains outstanding, so buying and withdrawals remain temporarily restricted.`,
+      resourceType: 'financial-deficit',
+      resourceId: updatedDeficit.id,
+      aggregateType: 'financial-deficit',
+      aggregateId: updatedDeficit.id,
+      amountMinor: recovery.toString(),
+      outstandingMinor: (updatedDeficit.amountMinor - updatedDeficit.recoveredMinor).toString(),
+      actorUserId: userId,
+      correlationId: requestId,
+      eventSuffix: updatedDeficit.recoveredMinor.toString(),
+    }));
+    if (recovered) {
+      await this.outbox.append(db, financialNotificationEvent({
+        kind: financialNotificationKind.restrictionsRemoved,
+        title: 'Account financial restrictions removed',
+        body: 'Your outstanding Slice balance has been resolved. Buying and withdrawals are available again subject to the usual account, identity, and provider checks.',
+        resourceType: 'account',
+        resourceId: userId,
+        aggregateType: 'account',
+        aggregateId: userId,
+        amountMinor: recovery.toString(),
+        outstandingMinor: '0',
+        actorUserId: userId,
+        correlationId: requestId,
+        eventSuffix: `deficit:${updatedDeficit.id}`,
+      }));
     }
     return recovery;
   }

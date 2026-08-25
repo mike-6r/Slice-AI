@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   passwordResetEmail,
+  financialNotificationEmail,
   securityNotificationEmail,
   verificationEmail,
 } from './transactional-email.templates';
@@ -25,7 +26,8 @@ export type TransactionalEmailType =
   | 'EMAIL_VERIFICATION'
   | 'PASSWORD_RESET'
   | 'PASSWORD_CHANGED'
-  | 'SECURITY_NOTIFICATION';
+  | 'SECURITY_NOTIFICATION'
+  | 'FINANCIAL_NOTIFICATION';
 
 @Injectable()
 export class LocalTestTransactionalEmailProvider implements TransactionalEmailProvider {
@@ -212,6 +214,20 @@ export class TransactionalEmailService {
       this.logger.warn(`Transactional security email failed for ${input.event}: ${safeErrorCode(error)}`);
       return false;
     }
+  }
+
+  async sendFinancialNotification(input: { userId: string; title: string; detail: string; idempotencyKey: string }) {
+    const user = await this.db.user.findUnique({ where: { id: input.userId }, select: { email: true } });
+    if (!user) return false;
+    const template = financialNotificationEmail({ title: input.title, detail: input.detail });
+    await this.send({
+      userId: input.userId,
+      to: user.email,
+      type: 'FINANCIAL_NOTIFICATION',
+      ...template,
+      idempotencyKey: input.idempotencyKey,
+    });
+    return true;
   }
 
   private requireEnabled() {

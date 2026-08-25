@@ -18,17 +18,26 @@ export class InAppNotificationTransport implements NotificationTransport {
       ? delivery.payload as Record<string, unknown>
       : {};
     const isSubmissionReceived = payload.eventType === 'submission.submitted';
-    const title = isSubmissionReceived ? 'We received your collectible submission.' : delivery.topic;
-    const body = isSubmissionReceived
-      ? 'Your submission is private and ready for Slice team review.'
-      : 'You have a new account notification.';
-    const resourceId = typeof payload.submissionId === 'string' ? payload.submissionId : delivery.id;
+    const title = typeof payload.title === 'string'
+      ? payload.title
+      : isSubmissionReceived ? 'We received your collectible submission.' : delivery.topic;
+    const body = typeof payload.body === 'string'
+      ? payload.body
+      : isSubmissionReceived
+        ? 'Your submission is private and ready for Slice team review.'
+        : 'You have a new account notification.';
+    const resourceType = typeof payload.resourceType === 'string'
+      ? payload.resourceType
+      : isSubmissionReceived ? 'submission' : 'notification-delivery';
+    const resourceId = typeof payload.resourceId === 'string'
+      ? payload.resourceId
+      : typeof payload.submissionId === 'string' ? payload.submissionId : delivery.id;
     let notification;
     let created = false;
     try {
       notification = await this.db.notification.create({ data: {
         deliveryId: delivery.deliveryId, userId, type: delivery.topic, title,
-        body, resourceType: isSubmissionReceived ? 'submission' : 'notification-delivery', resourceId,
+        body, resourceType, resourceId,
       } });
       created = true;
     } catch (error) {

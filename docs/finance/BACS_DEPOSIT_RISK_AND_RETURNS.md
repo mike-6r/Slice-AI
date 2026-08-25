@@ -1,8 +1,8 @@
 # Bacs Deposit Risk and Returns
 
-Status: implemented and deployed to staging in release `09f4cdd`; the validation listed below passed.
+Status: implemented and deployed to staging in the current release; the validation listed below passed. Launch policy finalization is documented in `docs/finance/FINANCIAL_LAUNCH_POLICY.md` and remains pending owner approval.
 
-This document records Slice's current GBP-only Bacs Direct Debit risk model. It does not set a commercial hold period or a market-finality policy.
+This document records Slice's current GBP-only Bacs Direct Debit risk model. It does not silently set a commercial hold period, deposit limits, first-deposit rule, or market-finality policy.
 
 ## Current State
 
@@ -38,6 +38,12 @@ Stripe provider success and a Stripe balance transaction's `available_on` are di
 The policy is fail-closed until Product/Risk configures `BACS_INTERNAL_TRADE_HOLD_DAYS`. When omitted, Bacs-confirmed value remains visible in `BACS_RISK_HOLD` indefinitely; Slice does not invent 3-, 5-, or 7-day behavior. When configured, release is based on `providerAvailableOn + configured days`, performed lazily by wallet, trading, and provider-evidence reads. The release is transactional, idempotent, auditable, and moves the exact amount to `CASH_AVAILABLE`.
 
 The policy currently has one explicit release control. Account age, successful deposit history, previous returns, identity/phone/MFA state, amount, shared-instrument signal, bank-change state, and admin flags remain available inputs for a future explainable rule set, but no opaque fraud score or silent first-deposit rule was introduced.
+
+The exact launch-policy proposal, including Conservative/Balanced/Fast hold
+options, Conservative/Balanced/High-limit deposit profiles, first-deposit
+rules, sale-proceeds treatment, configuration ownership, and release gates is
+in `docs/finance/FINANCIAL_LAUNCH_POLICY.md`. No proposed values are enabled
+by this pass.
 
 ## Irreversible Actions and Finality
 
@@ -99,15 +105,25 @@ Finance staff can read `GET /api/v1/admin/finance/bacs-risk`, which exposes safe
 
 Wallet copy describes bank clearing without using fraud language or promising immediate spendability. A Bacs activity row is `Clearing` while risk-held, `Completed` only after release, and `Reversed`/`Needs review` for corresponding provider states. The deposit form discloses that funds may remain held before they can be used or withdrawn.
 
+Provider-confirmed clearing, release, return, manual review, deficit creation,
+partial/full recovery, and restriction changes append deterministic mandatory
+financial notification events inside the same transaction. Existing durable
+in-app delivery and transactional email delivery consume those events with
+event/channel/destination idempotency. Email/provider failure is retried or
+dead-lettered and cannot roll back the financial journal. Customer copy shows
+the actual GBP amount and next action without Stripe codes, fraud labels, or
+full bank details. Deposit limit blocks use customer-safe semantic wording.
+
 ## Recovery and Treasury
 
 The explicit receivable is a platform asset and is balanced against the customer's cash reclassification. The account restriction blocks new purchases, listings/offers, withdrawals, and other exposure-increasing actions while allowing read-only access and a verified deposit recovery path. Existing provider expense, customer liability, reconciliation, and revenue journals are not reclassified by this task. Finance must still define long-term risk-reserve economics and any dual-control manual recovery workflow.
 
 ## Remaining Product Policy Decisions
 
-1. Select the production Bacs internal-use hold duration/rule; do not deploy a number by inference.
+1. Approve the production Bacs internal-use hold duration/rule; no number is deployed by inference.
 2. Decide whether first deposits, new accounts, and high-risk signals receive separate configurable holds.
-3. Set deposit max/daily/rolling/count/rapid limits for the launch market.
-4. Define market finality and who bears a buyer's returned-debit loss; no seller clawback is active.
-5. Define whether and when sale proceeds or a dual-control finance adjustment can cure a deficit.
-6. Define user notification templates and support/collections handling for returns and deficits.
+3. Approve deposit max/daily/rolling/count/rapid limits for the launch market.
+4. Approve the platform market-finality policy and who bears a buyer's returned-debit loss; no seller clawback is active.
+5. Decide whether and when sale proceeds can cure a deficit; the recommended launch path is future verified deposits only.
+6. Approve a dual-control manual adjustment workflow before any deficit reduction or material restriction release by staff.
+7. Approve notification/support/collections operations and configure production email monitoring separately from staging.

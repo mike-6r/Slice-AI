@@ -22,7 +22,7 @@ import type { TransactionScreeningProvider } from '../domain/provider.types';
 import { moneyMovementProviderCode } from '../domain/money-movement-provider';
 import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
-import { movementSettledEvent } from '../../outbox/domain/domain-event';
+import { financialNotificationEvent, financialNotificationKind, formatGbpMinor, movementSettledEvent } from '../../outbox/domain/domain-event';
 import { feeForBps, WITHDRAWAL_FEE_BPS } from '../../finance/domain/fee-policy';
 import { BankConnectionService } from './external-provider-boundaries';
 import {
@@ -85,6 +85,17 @@ export function calculateDepositVelocity(
       ? 0
       : movements.filter((item) => item.createdAt.getTime() >= rapidSince).length,
   };
+}
+
+export type DepositLimitCode = 'DEPOSIT_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_LIMIT_EXCEEDED' | 'DEPOSIT_ROLLING_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED' | 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
+export function depositLimitMessage(code: DepositLimitCode): string {
+  switch (code) {
+    case 'DEPOSIT_LIMIT_EXCEEDED': return 'This deposit would exceed your current bank funding limit.';
+    case 'DEPOSIT_DAILY_LIMIT_EXCEEDED': return 'You’ve reached your current daily bank funding limit.';
+    case 'DEPOSIT_ROLLING_LIMIT_EXCEEDED': return 'This deposit would exceed your current rolling bank funding limit.';
+    case 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED': return 'You’ve reached the current number of bank deposits allowed today.';
+    case 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED': return 'Please wait a little before trying another bank deposit.';
+  }
 }
 
 /**
@@ -835,19 +846,36 @@ export class WalletMovementService {
         },
         createdAt: new Date(),
       });
-      await this.outbox.append(
-        db,
-        movementSettledEvent({
-          movementId: updated.id,
-          type: updated.type,
+      if (riskHeld) {
+        await this.outbox.append(db, financialNotificationEvent({
+          kind: financialNotificationKind.depositClearing,
+          title: 'Bank deposit clearing',
+          body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit was confirmed and is clearing. It is visible in your Wallet, but it cannot be used for trading or withdrawals until Slice releases it under the current risk policy.`,
+          resourceType: 'money-movement',
+          resourceId: updated.id,
+          aggregateType: 'money-movement',
+          aggregateId: updated.id,
           amountMinor: updated.amountMinor.toString(),
-          currency: 'GBP',
-          status: 'SETTLED',
           actorUserId: updated.userId,
           correlationId: input.requestId,
           occurredAt: updated.settledAt!,
-        }),
-      );
+          eventSuffix: 'clearing',
+        }));
+      } else {
+        await this.outbox.append(
+          db,
+          movementSettledEvent({
+            movementId: updated.id,
+            type: updated.type,
+            amountMinor: updated.amountMinor.toString(),
+            currency: 'GBP',
+            status: 'SETTLED',
+            actorUserId: updated.userId,
+            correlationId: input.requestId,
+            occurredAt: updated.settledAt!,
+          }),
+        );
+      }
       return this.safe(updated, false);
     });
   }
@@ -1042,6 +1070,21 @@ export class WalletMovementService {
           reasonCode: input.reasonCode,
         },
       });
+      if (updated.type === 'DEPOSIT') {
+        await this.outbox.append(db, financialNotificationEvent({
+          kind: financialNotificationKind.depositUnderReview,
+          title: 'Bank deposit under review',
+          body: `Your ${formatGbpMinor(updated.amountMinor)} bank deposit is under review. It cannot be used for trading or withdrawals until the review is complete. We will notify you when the status changes.`,
+          resourceType: 'money-movement',
+          resourceId: updated.id,
+          aggregateType: 'money-movement',
+          aggregateId: updated.id,
+          amountMinor: updated.amountMinor.toString(),
+          actorUserId: updated.userId,
+          correlationId: input.requestId,
+          eventSuffix: 'review',
+        }));
+      }
       return this.safe(updated, false);
     });
   }
@@ -1174,7 +1217,7 @@ export class WalletMovementService {
           reasonCode: input.reasonCode,
         },
       });
-      await this.ledger.recordReturnedFundsDeficitInTransaction(
+      const deficitMinor = await this.ledger.recordReturnedFundsDeficitInTransaction(
         db,
         updated.userId,
         updated.id,
@@ -1194,6 +1237,23 @@ export class WalletMovementService {
         metadata: { status: 'RETURNED', reasonCode: input.reasonCode },
         createdAt: new Date(),
       });
+      const returnBody = deficitMinor > 0n
+        ? `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Because some of those funds had already been used, your Slice account now has an outstanding balance of ${formatGbpMinor(deficitMinor)}. Buying and withdrawals are temporarily restricted until it is resolved.`
+        : `A ${formatGbpMinor(updated.amountMinor)} bank deposit was returned by your bank. Those funds are no longer available in Slice. If you think this is incorrect, please contact support.`;
+      await this.outbox.append(db, financialNotificationEvent({
+        kind: financialNotificationKind.depositReturned,
+        title: 'Bank deposit returned',
+        body: returnBody,
+        resourceType: 'money-movement',
+        resourceId: updated.id,
+        aggregateType: 'money-movement',
+        aggregateId: updated.id,
+        amountMinor: updated.amountMinor.toString(),
+        outstandingMinor: deficitMinor.toString(),
+        actorUserId: updated.userId,
+        correlationId: input.requestId,
+        eventSuffix: 'returned',
+      }));
       return this.safe(updated, false);
     });
   }
@@ -1433,7 +1493,7 @@ export class WalletMovementService {
     if (max !== undefined && amount > BigInt(max))
       throw new ConflictException({
         code: 'DEPOSIT_LIMIT_EXCEEDED',
-        message: 'This deposit exceeds the configured per-deposit limit.',
+        message: depositLimitMessage('DEPOSIT_LIMIT_EXCEEDED'),
       });
     const now = new Date();
     const dayStart = new Date(now);
@@ -1466,28 +1526,28 @@ export class WalletMovementService {
       if (velocity.dailyTotal + amount > BigInt(this.config.bacsDepositDailyLimitMinor))
         throw new ConflictException({
           code: 'DEPOSIT_DAILY_LIMIT_EXCEEDED',
-          message: 'This deposit would exceed the configured daily deposit limit.',
+          message: depositLimitMessage('DEPOSIT_DAILY_LIMIT_EXCEEDED'),
         });
     }
     if (this.config.bacsDepositRolling7dLimitMinor !== undefined) {
       if (velocity.rolling7dTotal + amount > BigInt(this.config.bacsDepositRolling7dLimitMinor))
         throw new ConflictException({
           code: 'DEPOSIT_ROLLING_LIMIT_EXCEEDED',
-          message: 'This deposit would exceed the configured rolling deposit limit.',
+          message: depositLimitMessage('DEPOSIT_ROLLING_LIMIT_EXCEEDED'),
         });
     }
     if (this.config.bacsDepositDailyCountLimit !== undefined) {
       if (velocity.dailyCount + 1 > this.config.bacsDepositDailyCountLimit)
         throw new ConflictException({
           code: 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED',
-          message: 'Too many deposits were attempted today.',
+          message: depositLimitMessage('DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED'),
         });
     }
     if (rapidSince && this.config.bacsDepositRapidCountLimit !== undefined) {
       if (velocity.rapidCount + 1 > this.config.bacsDepositRapidCountLimit)
         throw new ConflictException({
           code: 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED',
-          message: 'Please wait before trying another deposit.',
+          message: depositLimitMessage('DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED'),
         });
     }
   }

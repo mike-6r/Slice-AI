@@ -17,7 +17,7 @@ export type DomainEventEnvelope<TPayload extends SafeJson = SafeJson> = Readonly
 }>;
 
 /** Stable dotted lower-case contracts, never class names or persistence types. */
-export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', orderPartiallyFilled: 'order.partiallyfilled', orderFilled: 'order.filled', orderExpired: 'order.expired', movementSettled: 'movement.settled', submissionSubmitted: 'submission.submitted', submissionChangesRequested: 'submission.changesrequested', submissionApproved: 'submission.approved', shipmentTrackingAdded: 'shipment.trackingadded', shipmentInTransit: 'shipment.intransit', shipmentCarrierDelivered: 'shipment.carrierdelivered', intakeReceiptConfirmed: 'intake.receiptconfirmed', initialOfferingCreated: 'initialoffering.created', initialOfferingUpdated: 'initialoffering.updated', initialOfferingApproved: 'initialoffering.approved', initialOfferingChangesRequested: 'initialoffering.changesrequested', initialOfferingOpened: 'initialoffering.opened', initialOfferingPartiallyFilled: 'initialoffering.partiallyfilled', initialOfferingSoldOut: 'initialoffering.soldout', initialOfferingPaused: 'initialoffering.paused', initialOfferingCancelled: 'initialoffering.cancelled', initialOfferingExpired: 'initialoffering.expired', initialOfferingProceedsPosted: 'initialoffering.proceedsposted' } as const;
+export const eventType = { tradeCompleted: 'trade.completed', orderOpened: 'order.opened', orderCancelled: 'order.cancelled', orderPartiallyFilled: 'order.partiallyfilled', orderFilled: 'order.filled', orderExpired: 'order.expired', movementSettled: 'movement.settled', financialNotification: 'financial.notification', submissionSubmitted: 'submission.submitted', submissionChangesRequested: 'submission.changesrequested', submissionApproved: 'submission.approved', shipmentTrackingAdded: 'shipment.trackingadded', shipmentInTransit: 'shipment.intransit', shipmentCarrierDelivered: 'shipment.carrierdelivered', intakeReceiptConfirmed: 'intake.receiptconfirmed', initialOfferingCreated: 'initialoffering.created', initialOfferingUpdated: 'initialoffering.updated', initialOfferingApproved: 'initialoffering.approved', initialOfferingChangesRequested: 'initialoffering.changesrequested', initialOfferingOpened: 'initialoffering.opened', initialOfferingPartiallyFilled: 'initialoffering.partiallyfilled', initialOfferingSoldOut: 'initialoffering.soldout', initialOfferingPaused: 'initialoffering.paused', initialOfferingCancelled: 'initialoffering.cancelled', initialOfferingExpired: 'initialoffering.expired', initialOfferingProceedsPosted: 'initialoffering.proceedsposted' } as const;
 const eventTypePattern = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
 
 export function createDomainEvent<TPayload extends SafeJson>(input: Omit<DomainEventEnvelope<TPayload>, 'eventId' | 'occurredAt'> & { eventId?: string; occurredAt?: Date }): DomainEventEnvelope<TPayload> {
@@ -89,4 +89,63 @@ export function customerResourceEvent(input: CustomerResourcePayload & { eventTy
 export type MovementSettledPayload = { movementId: string; type: 'DEPOSIT' | 'WITHDRAWAL'; amountMinor: string; currency: 'GBP'; status: 'SETTLED' };
 export function movementSettledEvent(input: MovementSettledPayload & { correlationId: string; actorUserId: string; occurredAt: Date }): DomainEventEnvelope<MovementSettledPayload> {
   return createDomainEvent({ eventId: `movement.settled:${input.movementId}`, eventType: eventType.movementSettled, schemaVersion: 1, occurredAt: input.occurredAt, aggregate: { type: 'money-movement', id: input.movementId }, correlationId: input.correlationId, actorUserId: input.actorUserId, payload: { movementId: input.movementId, type: input.type, amountMinor: input.amountMinor, currency: 'GBP', status: 'SETTLED' } });
+}
+
+export const financialNotificationKind = {
+  depositClearing: 'DEPOSIT_CLEARING',
+  depositReleased: 'DEPOSIT_RELEASED',
+  depositReturned: 'DEPOSIT_RETURNED',
+  depositUnderReview: 'DEPOSIT_UNDER_REVIEW',
+  deficitCreated: 'DEFICIT_CREATED',
+  deficitPartiallyRecovered: 'DEFICIT_PARTIALLY_RECOVERED',
+  deficitResolved: 'DEFICIT_RESOLVED',
+  restrictionsApplied: 'ACCOUNT_RESTRICTIONS_APPLIED',
+  restrictionsRemoved: 'ACCOUNT_RESTRICTIONS_REMOVED',
+} as const;
+export type FinancialNotificationKind = typeof financialNotificationKind[keyof typeof financialNotificationKind];
+export type FinancialNotificationPayload = {
+  kind: FinancialNotificationKind;
+  title: string;
+  body: string;
+  currency: 'GBP';
+  resourceType: 'money-movement' | 'financial-deficit' | 'account';
+  resourceId: string;
+  amountMinor?: string;
+  outstandingMinor?: string;
+};
+
+export function financialNotificationEvent(input: Omit<FinancialNotificationPayload, 'currency'> & {
+  aggregateType: FinancialNotificationPayload['resourceType'];
+  aggregateId: string;
+  correlationId: string;
+  actorUserId: string;
+  occurredAt?: Date;
+  eventSuffix?: string;
+}): DomainEventEnvelope<FinancialNotificationPayload> {
+  return createDomainEvent({
+    eventId: `${eventType.financialNotification}:${input.kind}:${input.aggregateId}:${input.eventSuffix ?? 'v1'}`,
+    eventType: eventType.financialNotification,
+    schemaVersion: 1,
+    occurredAt: input.occurredAt,
+    aggregate: { type: input.aggregateType, id: input.aggregateId },
+    correlationId: input.correlationId,
+    actorUserId: input.actorUserId,
+    payload: {
+      kind: input.kind,
+      title: input.title,
+      body: input.body,
+      currency: 'GBP',
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      ...(input.amountMinor === undefined ? {} : { amountMinor: input.amountMinor }),
+      ...(input.outstandingMinor === undefined ? {} : { outstandingMinor: input.outstandingMinor }),
+    },
+  });
+}
+
+export function formatGbpMinor(value: bigint | string): string {
+  const minor = typeof value === 'bigint' ? value : BigInt(value);
+  const sign = minor < 0n ? '-' : '';
+  const absolute = minor < 0n ? -minor : minor;
+  return `${sign}£${absolute / 100n}.${(absolute % 100n).toString().padStart(2, '0')}`;
 }

@@ -1,6 +1,31 @@
 import { NotificationRoutingService } from './notification-routing.service';
 
 describe('NotificationRoutingService private order delivery', () => {
+  it('routes mandatory financial notices to in-app and email with stable private identity', () => {
+    const routes = new NotificationRoutingService().route({
+      id: 'row-finance-1',
+      eventId: 'financial.notification:DEPOSIT_RETURNED:movement-1:returned',
+      eventType: 'financial.notification',
+      schemaVersion: 1,
+      actorUserId: 'user-1',
+      occurredAt: new Date('2026-08-25T12:00:00.000Z'),
+      payload: {
+        kind: 'DEPOSIT_RETURNED',
+        title: 'Bank deposit returned',
+        body: 'A £100.00 bank deposit was returned by your bank.',
+        currency: 'GBP',
+        resourceType: 'money-movement',
+        resourceId: 'movement-1',
+        amountMinor: '10000',
+        outstandingMinor: '0',
+      },
+    } as never);
+    expect(routes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ channel: 'IN_APP', topic: 'FINANCIAL_ALERTS', mandatory: true, destinationKey: 'user:user-1' }),
+      expect.objectContaining({ channel: 'EMAIL', topic: 'FINANCIAL_ALERTS', mandatory: true, destinationKey: 'user:user-1' }),
+    ]));
+  });
+
   it('creates durable in-app and private Discord intents for a real order event', () => {
     const event = {
       id: 'row-1',

@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { OutboxEvent } from '@prisma/client';
-import { eventType, type CustomerResourcePayload, type MovementSettledPayload, type OrderLifecyclePayload, type TradeCompletedPayload } from '../domain/domain-event';
+import { eventType, type CustomerResourcePayload, type FinancialNotificationPayload, type MovementSettledPayload, type OrderLifecyclePayload, type TradeCompletedPayload } from '../domain/domain-event';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationRoutingService } from './notification-routing.service';
 
@@ -72,7 +72,7 @@ export class OutboxHandlerRegistry {
     @Optional() routing?: NotificationRoutingService,
     @Optional() deliveries?: NotificationDeliveryService,
   ) {
-    this.handlers = [new TradeCompletedOutboxHandler(routing, deliveries), ...[eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].map((type) => new RoutedPrivateOutboxHandler(type, isOrderPayload, routing, deliveries)), ...[eventType.submissionSubmitted, eventType.submissionChangesRequested, eventType.submissionApproved, eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].map((type) => new RoutedPrivateOutboxHandler(type, isResourcePayload, routing, deliveries)), new RoutedPrivateOutboxHandler(eventType.movementSettled, isMovementPayload, routing, deliveries)];
+    this.handlers = [new TradeCompletedOutboxHandler(routing, deliveries), ...[eventType.orderOpened, eventType.orderCancelled, eventType.orderPartiallyFilled, eventType.orderFilled, eventType.orderExpired].map((type) => new RoutedPrivateOutboxHandler(type, isOrderPayload, routing, deliveries)), ...[eventType.submissionSubmitted, eventType.submissionChangesRequested, eventType.submissionApproved, eventType.shipmentTrackingAdded, eventType.shipmentInTransit, eventType.shipmentCarrierDelivered, eventType.intakeReceiptConfirmed].map((type) => new RoutedPrivateOutboxHandler(type, isResourcePayload, routing, deliveries)), new RoutedPrivateOutboxHandler(eventType.movementSettled, isMovementPayload, routing, deliveries), new RoutedPrivateOutboxHandler(eventType.financialNotification, isFinancialPayload, routing, deliveries)];
   }
 
   /** A bounded registration seam for internal, idempotent future consumers. */
@@ -91,3 +91,4 @@ export class OutboxHandlerRegistry {
 function isOrderPayload(value: unknown): value is OrderLifecyclePayload { const p = value as Partial<OrderLifecyclePayload>; return typeof p?.orderId === 'string' && typeof p.assetId === 'string' && (p.side === 'BUY' || p.side === 'SELL') && typeof p.units === 'string' && ['OPEN', 'CANCELLED', 'PARTIALLY_FILLED', 'FILLED', 'EXPIRED'].includes(String(p.status)); }
 function isResourcePayload(value: unknown): value is CustomerResourcePayload { const p = value as Partial<CustomerResourcePayload>; return typeof p?.submissionId === 'string' && typeof p.status === 'string' && (p.intakeId === undefined || typeof p.intakeId === 'string'); }
 function isMovementPayload(value: unknown): value is MovementSettledPayload { const p = value as Partial<MovementSettledPayload>; return typeof p?.movementId === 'string' && (p.type === 'DEPOSIT' || p.type === 'WITHDRAWAL') && typeof p.amountMinor === 'string' && p.currency === 'GBP' && p.status === 'SETTLED'; }
+function isFinancialPayload(value: unknown): value is FinancialNotificationPayload { const p = value as Partial<FinancialNotificationPayload>; return typeof p?.kind === 'string' && typeof p.title === 'string' && typeof p.body === 'string' && p.currency === 'GBP' && ['money-movement', 'financial-deficit', 'account'].includes(String(p.resourceType)) && typeof p.resourceId === 'string' && (p.amountMinor === undefined || typeof p.amountMinor === 'string') && (p.outstandingMinor === undefined || typeof p.outstandingMinor === 'string'); }
