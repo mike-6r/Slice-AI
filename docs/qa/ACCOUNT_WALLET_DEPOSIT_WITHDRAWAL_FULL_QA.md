@@ -178,6 +178,7 @@ The disclosure describes prefill, not verification completion, and preserves Str
 - Existing-account safe-update contract test: PASS — only missing verified phone is updated; legal name/DOB/address are absent from the update.
 - Current authorized account provider comparison: PASS read-only — provider identity and requirements were inspected without creating a second account or changing the current account.
 - Hosted-form prefill visual proof after this code change: NOT YET RUN — the current account already has provider-side name/address values from the previous hosted flow, and creating a second connected account solely for visual proof would create an unnecessary duplicate account. A disposable test user/account is required for a clean before/after visual comparison.
+- Deployed Wallet disclosure/browser check: PASS — the live staging Wallet rendered `Set up withdrawals` and the exact prefill disclosure; no browser error or warning logs were observed. The button was not clicked, so no provider update or Account Link was created during this final read-only check.
 
 Root cause of the earlier duplicate/example identity fields: the payout service previously sent only the contact email and a hard-coded GB country. It did not pass permitted individual email/phone fields, and Slice has no safely reusable legal name, DOB, or address record. Stripe therefore remained responsible for collecting those fields in hosted onboarding; this was not a frontend cache or a verification bypass.
 
@@ -240,16 +241,16 @@ PASS for the read-only state display:
 
 ## Status
 
-Current task status: **BLOCKED by the provider's keyed-identity verification requirement and the normal recent-auth gate**. The customer handoff defect is fixed and browser-verified; no financial E2E result is claimed yet.
+Current task status: **PREFILL IMPLEMENTED / FINANCIAL QA BLOCKED** by the provider's keyed-identity verification requirement and the normal recent-auth gate. The customer disclosure and deployed Wallet handoff are browser-verified; no financial E2E result is claimed yet.
 
-Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the authorized £1.00 deposit**. A clean browser screenshot captured Wallet Withdraw still restricted after Stripe return. No new financial movement was created.
+Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the authorized £1.00 deposit**. Wallet still correctly shows payout setup restricted after Stripe return. No new financial movement was created.
 
 ## Deployment
 
-- Commit: `becfbfa`
-- Release: `/opt/slice/releases/20260825-becfbfa`
-- `/opt/slice/current`: `/opt/slice/releases/20260825-becfbfa`
-- `/opt/slice/app`: `/opt/slice/releases/20260825-becfbfa`
+- Application commit: `ee0af9e`
+- Release: `/opt/slice/releases/20260825-ee0af9e`
+- `/opt/slice/current`: `/opt/slice/releases/20260825-ee0af9e`
+- `/opt/slice/app`: `/opt/slice/releases/20260825-ee0af9e`
 - API service: active
 - Web service: active
 - Health: PASS — HTTP 200
@@ -258,5 +259,7 @@ Continuation status: **BLOCKED at the normal recent-auth/2FA gate for the author
 - Public market assets: PASS — HTTP 200
 - Browser console errors after deploy: none observed
 - Browser provider handoff: PASS — fresh hosted link reached Stripe Sandbox; no API/network error observed in the Slice page
+- Browser prefill disclosure: PASS — deployed Wallet rendered the verified-data reuse explanation and `Set up withdrawals` CTA
+- Provider/database mutations during this prefill implementation QA: none from the final browser check; no new account, bank, movement, order, trade, or balance state was created
 
 Financial release gate: **NO-GO / QA BLOCKED** until the disposable normal-user provider journey reaches real sandbox-confirmed deposit and withdrawal final states. The implementation does not claim provider success without provider evidence.
