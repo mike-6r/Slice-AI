@@ -29,6 +29,13 @@ const server = createServer(async (request, response) => {
     response.statusCode = webResponse.status;
     response.statusMessage = webResponse.statusText;
     webResponse.headers.forEach((value, name) => response.setHeader(name, value));
+    if ((webResponse.headers.get("content-type") ?? "").includes("text/html")) {
+      // HTML contains the current hashed asset manifest. Never let a browser
+      // keep an old shell that points at an obsolete client/auth bundle.
+      response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      response.setHeader("Pragma", "no-cache");
+      response.setHeader("Expires", "0");
+    }
 
     if (!webResponse.body || method === "HEAD") {
       response.end();

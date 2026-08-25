@@ -10,6 +10,12 @@ describe("ApiClient", () => {
     expect(resolveApiOrigin("https://api.slice.test", "https://staging.slice.test")).toBe(
       "https://api.slice.test",
     );
+    expect(resolveApiOrigin("http://127.0.0.1:3001", "https://staging.slice.test")).toBe(
+      "https://staging.slice.test",
+    );
+    expect(resolveApiOrigin("http://localhost:3001", "https://staging.slice.test")).toBe(
+      "https://staging.slice.test",
+    );
   });
 
   afterEach(() => {

@@ -33,14 +33,20 @@ export const resolveApiOrigin = (
 ) => {
   const trimmed = configuredOrigin?.trim();
   const isUnexpandedPlaceholder = Boolean(trimmed && /^\$[A-Z_][A-Z0-9_]*$/.test(trimmed));
-  return (!isUnexpandedPlaceholder && trimmed) || browserOrigin || fallback;
+  const isLoopbackOrigin = (() => {
+    if (!trimmed) return false;
+    try {
+      const hostname = new URL(trimmed).hostname.toLowerCase();
+      return hostname === "localhost" || hostname === "::1" || hostname.startsWith("127.");
+    } catch {
+      return false;
+    }
+  })();
+  return (!isUnexpandedPlaceholder && !isLoopbackOrigin && trimmed) || browserOrigin || fallback;
 };
 
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-export const API_ORIGIN = resolveApiOrigin(
-  import.meta.env.VITE_API_BASE_URL,
-  browserApiOrigin,
-);
+export const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_BASE_URL, browserApiOrigin);
 
 const parseBody = async (response: Response): Promise<unknown> => {
   const text = await response.text();
