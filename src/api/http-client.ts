@@ -31,6 +31,17 @@ export const resolveApiOrigin = (
   browserOrigin: string | undefined,
   fallback = "http://127.0.0.1:3001",
 ) => {
+  const isUsableOrigin = (value: string | undefined) => {
+    if (!value) return false;
+    try {
+      const parsed = new URL(value);
+      return (
+        (parsed.protocol === "http:" || parsed.protocol === "https:") && Boolean(parsed.hostname)
+      );
+    } catch {
+      return false;
+    }
+  };
   const trimmed = configuredOrigin?.trim();
   const isUnexpandedPlaceholder = Boolean(trimmed && /^\$[A-Z_][A-Z0-9_]*$/.test(trimmed));
   const isLoopbackOrigin = (() => {
@@ -42,7 +53,13 @@ export const resolveApiOrigin = (
       return false;
     }
   })();
-  return (!isUnexpandedPlaceholder && !isLoopbackOrigin && trimmed) || browserOrigin || fallback;
+  const usableConfiguredOrigin =
+    !isUnexpandedPlaceholder && !isLoopbackOrigin && isUsableOrigin(trimmed) ? trimmed : undefined;
+  return (
+    usableConfiguredOrigin ||
+    (isUsableOrigin(browserOrigin) ? browserOrigin : undefined) ||
+    fallback
+  );
 };
 
 const browserApiOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
