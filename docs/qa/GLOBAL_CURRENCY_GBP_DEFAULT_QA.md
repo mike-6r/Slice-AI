@@ -27,11 +27,14 @@ This QA covers the GBP-default display system and its read-only FX projection. I
 ## Automated verification
 
 - Frontend typecheck: PASS
-- Frontend currency presentation tests: PASS (4 tests)
+- Frontend focused currency/marketplace tests: PASS (6 files, 26 tests)
 - Server typecheck: PASS
 - Currency service tests: PASS (3 tests)
-- Required production build: pending final release check
-- Browser responsive visual pass at 390, 768, 1366, and 1920 pixels: pending staging verification
+- Frontend production build: PASS
+- Server production build: PASS
+- Staging health/readiness/homepage: PASS (HTTP 200)
+- Browser responsive visual pass at 390, 768, 1366, and 1920 pixels: PASS; no horizontal overflow observed and the currency selector remained GBP.
+- Staging FX endpoint: PASS via independent read-only request (HTTP 200, GBP base, Frankfurter snapshot). The in-app browser blocked direct JSON navigation with `ERR_BLOCKED_BY_CLIENT`, so that browser session correctly exercised the documented source-currency fallback rather than being used as evidence of a conversion failure.
 
 ## Manual browser checklist
 
