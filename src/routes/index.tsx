@@ -14,6 +14,7 @@ import {
 import { useState, type ReactNode } from "react";
 
 import { useSession } from "@/auth/use-session";
+import { useCurrency } from "@/currency/CurrencyProvider";
 import { isBetaEnvironment } from "@/config/environment";
 import { useTrendingAssets } from "@/queries/hooks";
 import { MarketAssetCard } from "@/components/marketplace/MarketAssetCard";
@@ -21,6 +22,7 @@ import { toMarketplaceAsset } from "@/components/marketplace/market-api-presenta
 import { FeaturedMarketHero } from "@/components/home/FeaturedMarketHero";
 import {
   HOMEPAGE_FEATURED_ASSET,
+  HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
   HOMEPAGE_TRENDING_ASSETS,
   showcaseDestination,
@@ -85,6 +87,7 @@ const howSliceWorks = [
 
 function HomePage() {
   const { isAuthenticated } = useSession();
+  const { formatMoney } = useCurrency();
   const trending = useTrendingAssets();
 
   return (
@@ -232,13 +235,15 @@ function HomePage() {
                   <div className="approved-home__asset-price">
                     <div>
                       <small>External reference</small>
-                      <b>{asset.displayPrice}</b>
+                      <b>{formatMoney(asset.displayPriceMinor, asset.displayPriceCurrency)}</b>
                     </div>
                     <span className="is-neutral">Reference example</span>
                   </div>
                   <div className="approved-home__illustrative-terms">
                     <span>Slice economics</span>
-                    <small>{asset.displaySlicePrice} · illustrative terms</small>
+                    <small>
+                      {formatMoney(asset.displaySlicePriceMinor, "GBP")} · illustrative terms
+                    </small>
                   </div>
                 </div>
               </ShowcaseAssetLink>
@@ -311,6 +316,7 @@ function LiveAssetCards({ assets }: { assets: import("@/domain").Asset[] }) {
 }
 
 function LegacyOwnershipWorks() {
+  const { formatMoney } = useCurrency();
   return (
     <section className="page-shell approved-home__ownership" aria-labelledby="ownership-heading">
       <SectionHeading
@@ -325,7 +331,9 @@ function LegacyOwnershipWorks() {
           </span>
           <div>
             <small>Whole collectible</small>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation}</strong>
+            <strong>
+              {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuationMinor, "GBP")}
+            </strong>
             <p>1999 Charizard</p>
           </div>
         </div>
@@ -335,7 +343,7 @@ function LegacyOwnershipWorks() {
           </span>
           <small>
             Divided into {HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices} at{" "}
-            {HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice} each
+            {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")} each
           </small>
         </div>
         <div className="approved-home__ownership-stage is-slice">
@@ -347,7 +355,8 @@ function LegacyOwnershipWorks() {
             <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership}</strong>
             <p>
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSlices} ·{" "}
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment} example purchase
+              {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestmentMinor, "GBP")} example
+              purchase
             </p>
           </div>
         </div>
@@ -358,13 +367,13 @@ function LegacyOwnershipWorks() {
           </div>
           <div>
             <dt>Price per Slice</dt>
-            <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice}</dd>
+            <dd>{formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")}</dd>
           </div>
           <div>
             <dt>Example purchase</dt>
             <dd>
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSlices} ·{" "}
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
+              {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestmentMinor, "GBP")}
             </dd>
           </div>
           <div>
@@ -376,8 +385,8 @@ function LegacyOwnershipWorks() {
       <aside className="approved-home__ownership-explainer">
         <strong>What am I actually buying?</strong>
         <p>
-          You’re purchasing Slices that represent a percentage interest in the collectible listed
-          on Slice. Your position, cost basis and ownership percentage are tracked in your portfolio.
+          You’re purchasing Slices that represent a percentage interest in the collectible listed on
+          Slice. Your position, cost basis and ownership percentage are tracked in your portfolio.
         </p>
       </aside>
     </section>
@@ -385,6 +394,7 @@ function LegacyOwnershipWorks() {
 }
 
 function OwnershipWorks() {
+  const { formatMoney, formatSourceMoney } = useCurrency();
   if (isBetaEnvironment) {
     const featuredImage = HOMEPAGE_FEATURED_ASSET.image;
     const featuredTitle = HOMEPAGE_FEATURED_ASSET.title;
@@ -493,11 +503,16 @@ function OwnershipWorks() {
             <dl className="approved-home__ownership-structure">
               <div>
                 <dt>Whole collectible reference</dt>
-                <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.externalReferenceValue}</dd>
+                <dd>
+                  {formatMoney(HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD, "USD")}
+                  <small>
+                    Source: {formatSourceMoney(HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD, "USD")} USD
+                  </small>
+                </dd>
               </div>
               <div>
                 <dt>Price per Slice</dt>
-                <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice}</dd>
+                <dd>{formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")}</dd>
               </div>
             </dl>
             <p>
@@ -514,7 +529,7 @@ function OwnershipWorks() {
             <small>3. Example ownership</small>
             <strong>
               {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSlices} ·{" "}
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestment}
+              {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestmentMinor, "GBP")}
             </strong>
             <p>{HOMEPAGE_OWNERSHIP_EXAMPLE.exampleOwnership} ownership · illustrative</p>
           </div>
@@ -541,11 +556,12 @@ function OwnershipFlowArrow({ label }: { label: string }) {
 }
 
 function TradingEducation({ compact = false }: { compact?: boolean }) {
+  const { formatMoney } = useCurrency();
   const [buySlices, setBuySlices] = useState(25);
   const [buyReviewed, setBuyReviewed] = useState(false);
   const [sellReviewed, setSellReviewed] = useState(false);
   const ownership = ((buySlices / HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlicesCount) * 100).toFixed(2);
-  const investment = `£${(buySlices * HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceGbp).toFixed(2)}`;
+  const investment = formatMoney(buySlices * HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP");
 
   return (
     <section
@@ -575,7 +591,7 @@ function TradingEducation({ compact = false }: { compact?: boolean }) {
           <dl className="approved-home__trade-price">
             <div>
               <dt>Price per Slice</dt>
-              <dd>{HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice}</dd>
+              <dd>{formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP")}</dd>
             </div>
             <div>
               <dt>Select Slices</dt>
@@ -636,7 +652,10 @@ function TradingEducation({ compact = false }: { compact?: boolean }) {
             </div>
           </dl>
           <div className="approved-home__trade-result">
-            <strong>Estimated proceeds: {HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSellProceeds}</strong>
+            <strong>
+              Estimated proceeds:{" "}
+              {formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.exampleSellProceedsMinor, "GBP")}
+            </strong>
             <span>Remaining position: {HOMEPAGE_OWNERSHIP_EXAMPLE.remainingSlices}</span>
           </div>
           <div className="approved-home__trade-example-footer">

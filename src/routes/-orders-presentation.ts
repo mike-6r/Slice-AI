@@ -1,5 +1,5 @@
 import type { OrderBook, TradingOrderView } from "@/domain";
-import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export const ORDER_EMPTY_STATES = {
@@ -40,7 +40,10 @@ export function ordersForSide(items: TradingOrderView[], side: OrderSideFilter) 
 /** Presentation-only GBP formatting. All money inputs remain integer minor-unit strings. */
 export function formatOrderMoney(value: string) {
   const { currency, rates } = getCurrencyPresentation();
-  return formatAuthoritativeMoney(value, "GBP", currency, rates);
+  return formatDisplayMoney(value, "GBP", currency, rates, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function orderNotionalMinor(order: TradingOrderView, units = order.originalUnits) {

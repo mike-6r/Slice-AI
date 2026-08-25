@@ -175,6 +175,9 @@ function OrdersHeading() {
       <p className="page-kicker">Orders</p>
       <h1>Your Orders</h1>
       <p>Track, manage and view all your buy and sell orders across the marketplace.</p>
+      <small>
+        Slice orders and fees settle in GBP; displayed values follow your currency preference.
+      </small>
     </header>
   );
 }

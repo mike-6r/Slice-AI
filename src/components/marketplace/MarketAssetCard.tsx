@@ -9,25 +9,6 @@ import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marketplace-layout";
 
-function formatReferenceMoney(
-  amountMinor: number,
-  currency: NonNullable<MarketplaceAsset["marketReference"]>["currency"],
-) {
-  const locale =
-    currency === "GBP"
-      ? "en-GB"
-      : currency === "CAD"
-        ? "en-CA"
-        : currency === "EUR"
-          ? "en-IE"
-          : "en-US";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(amountMinor / 100);
-}
-
 function marketStatusPresentation(asset: MarketplaceAsset) {
   if (asset.marketLifecycle) {
     return {
@@ -112,7 +93,12 @@ function AssetVisual({ asset }: { asset: MarketplaceAsset }) {
 }
 
 function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
-  const { formatMoney } = useCurrency();
+  const {
+    currency: displayCurrency,
+    ratesAvailable,
+    formatMoney,
+    formatSourceMoney,
+  } = useCurrency();
   const valuation = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
   const valuationCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
   const valuationLabel =
@@ -133,10 +119,7 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
         {asset.marketReference ? (
           <>
             <strong>
-              {formatReferenceMoney(
-                asset.marketReference.amountMinor,
-                asset.marketReference.currency,
-              )}
+              {formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)}
               <span
                 className="market-card-info"
                 tabIndex={0}
@@ -149,6 +132,9 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
             </strong>
             <small>
               {asset.marketReference.source ?? "External reference"}
+              {displayCurrency !== asset.marketReference.currency && ratesAvailable
+                ? ` · source ${formatSourceMoney(asset.marketReference.amountMinor, asset.marketReference.currency)} ${asset.marketReference.currency}`
+                : ""}
               {asset.marketReference.context ? ` · ${asset.marketReference.context}` : ""}
             </small>
             {asset.marketReference.movement30dBps !== undefined ? (

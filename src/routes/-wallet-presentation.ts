@@ -1,12 +1,15 @@
 import type { WalletMovementView } from "@/domain";
-import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 
 export type WalletMovementFilter = "ALL" | "DEPOSIT" | "WITHDRAWAL";
 
 export function formatWalletMoney(value: string) {
   const { currency, rates } = getCurrencyPresentation();
-  return formatAuthoritativeMoney(value, "GBP", currency, rates);
+  return formatDisplayMoney(value, "GBP", currency, rates, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function parseWalletGbp(value: string) {

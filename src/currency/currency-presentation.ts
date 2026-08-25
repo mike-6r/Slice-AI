@@ -27,19 +27,80 @@ export function formatDisplayMoney(
   rates: CurrencyRates | null | undefined,
   options: Intl.NumberFormatOptions = {},
 ) {
-  const rate = exchangeRate(sourceCurrency, targetCurrency, rates);
-  const displayCurrency = rate === null ? sourceCurrency : targetCurrency;
-  if (rate === 1 && sourceCurrency === targetCurrency) {
-    return formatExactMinorCurrency(valueInMinorUnits, displayCurrency, options);
+  const convertedMinor = convertMinorForDisplay(
+    valueInMinorUnits,
+    sourceCurrency,
+    targetCurrency,
+    rates,
+  );
+  const displayCurrency = convertedMinor === null ? sourceCurrency : targetCurrency;
+  return formatExactMinorCurrency(
+    convertedMinor ?? valueInMinorUnits,
+    displayCurrency,
+    withFiatDefaults(options),
+  );
+}
+
+/**
+ * Convert minor units with integer arithmetic. Rates arrive as provider
+ * decimals, but the conversion is reduced to a rational number before the
+ * final minor-unit rounding so display values are deterministic and never
+ * depend on a binary floating-point multiplication.
+ */
+export function convertMinorForDisplay(
+  valueInMinorUnits: number | string | bigint,
+  sourceCurrency: SupportedCurrency,
+  targetCurrency: SupportedCurrency,
+  rates: CurrencyRates | null | undefined,
+): bigint | null {
+  let minor: bigint;
+  try {
+    minor = BigInt(valueInMinorUnits);
+  } catch {
+    return null;
   }
-  const sourceAmount = Number(valueInMinorUnits) / 100;
-  const displayAmount = rate === null ? sourceAmount : sourceAmount * rate;
-  return new Intl.NumberFormat(currencyLocales[displayCurrency], {
-    style: "currency",
-    currency: displayCurrency,
-    maximumFractionDigits: 0,
+  if (sourceCurrency === targetCurrency) return minor;
+  if (!rates || rates.baseCurrency !== "GBP") return null;
+  const sourceRate = decimalFraction(rates.rates[sourceCurrency]);
+  const targetRate = decimalFraction(rates.rates[targetCurrency]);
+  if (!sourceRate || !targetRate) return null;
+  return roundRatio(
+    minor * targetRate.numerator * sourceRate.denominator,
+    sourceRate.numerator * targetRate.denominator,
+  );
+}
+
+function withFiatDefaults(options: Intl.NumberFormatOptions) {
+  const maximumFractionDigits = options.maximumFractionDigits ?? 2;
+  return {
+    minimumFractionDigits: options.minimumFractionDigits ?? Math.min(2, maximumFractionDigits),
+    maximumFractionDigits,
     ...options,
-  }).format(displayAmount);
+  };
+}
+
+function decimalFraction(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const [mantissa, exponentText] = value.toString().toLowerCase().split("e");
+  const exponent = exponentText ? Number(exponentText) : 0;
+  const [whole, fraction = ""] = mantissa!.split(".");
+  const digits = `${whole}${fraction}`.replace(/^\+/, "");
+  if (!/^\d+$/.test(digits)) return null;
+  const scale = fraction.length - exponent;
+  if (scale >= 0) {
+    return { numerator: BigInt(digits), denominator: 10n ** BigInt(scale) };
+  }
+  return { numerator: BigInt(digits) * 10n ** BigInt(-scale), denominator: 1n };
+}
+
+function roundRatio(numerator: bigint, denominator: bigint) {
+  if (denominator <= 0n) return 0n;
+  const negative = numerator < 0n;
+  const absolute = negative ? -numerator : numerator;
+  const quotient = absolute / denominator;
+  const remainder = absolute % denominator;
+  const rounded = quotient + (remainder * 2n >= denominator ? 1n : 0n);
+  return negative ? -rounded : rounded;
 }
 
 /** Keep authoritative same-currency values exact, even beyond Number's safe integer range. */
@@ -49,7 +110,7 @@ function formatExactMinorCurrency(
   options: Intl.NumberFormatOptions,
 ) {
   const minor = BigInt(valueInMinorUnits);
-  const fractionDigits = Math.min(2, options.maximumFractionDigits ?? 2);
+  const fractionDigits = Math.min(2, Math.max(0, options.maximumFractionDigits ?? 2));
   const roundingUnit = 10n ** BigInt(2 - fractionDigits);
   const absoluteMinor = minor < 0n ? -minor : minor;
   const roundedMinor = ((absoluteMinor + roundingUnit / 2n) / roundingUnit) * roundingUnit;

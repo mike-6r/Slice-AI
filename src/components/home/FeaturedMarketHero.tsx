@@ -4,10 +4,12 @@ import type { ReactNode } from "react";
 
 import {
   HOMEPAGE_FEATURED_ASSET,
+  HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
   showcaseDestination,
   type HomepageShowcaseAsset,
 } from "@/data/homepage-showcase";
+import { useCurrency } from "@/currency/CurrencyProvider";
 
 /**
  * Editorial homepage showcase. The card is the visual anchor for the
@@ -16,6 +18,12 @@ import {
  */
 export function FeaturedMarketHero() {
   const featured = HOMEPAGE_FEATURED_ASSET;
+  const { formatMoney, formatSourceMoney } = useCurrency();
+  const externalReference = formatMoney(HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD, "USD");
+  const externalSource = formatSourceMoney(HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD, "USD");
+  const sliceValuation = formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuationMinor, "GBP");
+  const slicePrice = formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.slicePriceMinor, "GBP");
+  const exampleInvestment = formatMoney(HOMEPAGE_OWNERSHIP_EXAMPLE.exampleInvestmentMinor, "GBP");
 
   return (
     <section
@@ -49,15 +57,14 @@ export function FeaturedMarketHero() {
         <div className="charizard-showcase__market-card">
           <div className="charizard-showcase__value">
             <span>External market reference</span>
-            <strong>{featured.displayPrice}</strong>
-            <b>PriceCharting PSA 10 guide · USD</b>
+            <strong>{externalReference}</strong>
+            <b>PriceCharting PSA 10 guide · source {externalSource} USD</b>
           </div>
           <div className="charizard-showcase__value charizard-showcase__value--slice">
             <span>Illustrative Slice offering</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.illustrativeValuation}</strong>
+            <strong>{sliceValuation}</strong>
             <b>
-              {HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices} · {HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice} per
-              Slice
+              {HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices} · {slicePrice} per Slice
             </b>
           </div>
         </div>
@@ -69,11 +76,11 @@ export function FeaturedMarketHero() {
           </div>
           <div>
             <span>Price per Slice</span>
-            <strong>{HOMEPAGE_OWNERSHIP_EXAMPLE.slicePrice}</strong>
+            <strong>{slicePrice}</strong>
           </div>
           <div>
             <span>Example buy</span>
-            <strong>25 · £250</strong>
+            <strong>25 · {exampleInvestment}</strong>
           </div>
         </div>
 

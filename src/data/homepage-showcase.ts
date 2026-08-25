@@ -14,7 +14,10 @@ export type HomepageShowcaseAsset = Readonly<{
   grade: string;
   image: string;
   displayPrice: string;
+  displayPriceMinor: number;
+  displayPriceCurrency: "GBP" | "USD" | "CAD" | "EUR";
   displaySlicePrice: string;
+  displaySlicePriceMinor: number;
   displayMovement: string;
   displayAvailability: string;
   movementTone: "positive" | "negative";
@@ -28,6 +31,7 @@ export type ShowcaseDestination =
 
 // PriceCharting PSA 10 guide. Keep this external reference in its source currency.
 export const HOMEPAGE_FEATURED_PSA10_VALUE_USD = "$343,098.00 USD";
+export const HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD = 34_309_800;
 
 /**
  * Homepage-owned example terms used to explain the Slice experience. These
@@ -40,6 +44,10 @@ export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
   totalSlicesCount: 1000,
   availableSlices: "1,000 Slices",
   slicePrice: "£10.00",
+  illustrativeValuationMinor: 1_000_000,
+  slicePriceMinor: 1_000,
+  exampleInvestmentMinor: 25_000,
+  exampleSellProceedsMinor: 5_000,
   slicePriceGbp: 10,
   exampleSlices: "25 Slices",
   exampleInvestment: "£250.00",
@@ -60,7 +68,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: umbreonImage,
     displayPrice: "£1,950",
+    displayPriceMinor: 195_000,
+    displayPriceCurrency: "GBP",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "32.0%",
     movementTone: "positive",
@@ -75,7 +86,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: pikachuImage,
     displayPrice: "US$470",
+    displayPriceMinor: 47_000,
+    displayPriceCurrency: "USD",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "41.0%",
     movementTone: "positive",
@@ -90,7 +104,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: charizardImage,
     displayPrice: "US$399.99",
+    displayPriceMinor: 39_999,
+    displayPriceCurrency: "USD",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "52.0%",
     movementTone: "positive",
@@ -105,7 +122,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "BGS 9.5 · Mint",
     image: wembanyamaImage,
     displayPrice: "US$215",
+    displayPriceMinor: 21_500,
+    displayPriceCurrency: "USD",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "60.0%",
     movementTone: "positive",
@@ -120,7 +140,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: bedardImage,
     displayPrice: "CA$750",
+    displayPriceMinor: 75_000,
+    displayPriceCurrency: "CAD",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "47.0%",
     movementTone: "positive",
@@ -135,7 +158,10 @@ const catalogue: readonly HomepageShowcaseAsset[] = [
     grade: "PSA 10 · Gem Mint",
     image: stroudImage,
     displayPrice: "US$550",
+    displayPriceMinor: 55_000,
+    displayPriceCurrency: "USD",
     displaySlicePrice: "Illustrative from £10 / Slice",
+    displaySlicePriceMinor: 1_000,
     displayMovement: "Reference example",
     displayAvailability: "38.0%",
     movementTone: "positive",
@@ -156,7 +182,10 @@ export const HOMEPAGE_FEATURED_ASSET: HomepageShowcaseAsset = {
   grade: "PSA 10 · Gem Mint",
   image: charizardBaseSetImage,
   displayPrice: HOMEPAGE_FEATURED_PSA10_VALUE_USD,
+  displayPriceMinor: HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD,
+  displayPriceCurrency: "USD",
   displaySlicePrice: "£10 / Slice",
+  displaySlicePriceMinor: 1_000,
   displayMovement: "External reference",
   displayAvailability: "100%",
   realAssetId: "slice-demo-charizard-base-set-1st-edition",

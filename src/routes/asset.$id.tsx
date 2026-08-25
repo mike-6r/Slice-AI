@@ -27,20 +27,15 @@ import {
 } from "@/components/marketplace/market-api-presentation";
 import { marketCategoryPresentation } from "@/components/marketplace/marketplace-presentation";
 import { resolveMarketplaceMedia } from "@/components/marketplace/marketplace-layout";
-import { formatAuthoritativeMoney } from "@/currency/currency-presentation";
+import { asSupportedCurrency, convertMinorForDisplay } from "@/currency/currency-presentation";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/finance";
-import {
-  formatAvailability,
-  formatMinorAmount,
-  formatPricePerUnit,
-} from "@/lib/market-presentation";
+import { formatAvailability } from "@/lib/market-presentation";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
 import type { MarketLifecycleProjection, SliceGrade } from "@/domain";
-import type { SupportedCurrency } from "@/data/repositories";
 
 export const Route = createFileRoute("/asset/$id")({
   head: () => ({ meta: [{ title: "Asset | Slice" }] }),
@@ -76,13 +71,6 @@ const HOW_IT_WORKS_STEPS = [
     icon: PieChart,
   },
 ] as const;
-
-function formatSourceReference(
-  valueInMinorUnits: number | string | bigint,
-  currency: SupportedCurrency,
-) {
-  return `${formatAuthoritativeMoney(valueInMinorUnits, currency, currency, null)} ${currency}`;
-}
 
 type ExternalReferenceProjection = {
   movement24hBps?: number | null;
@@ -199,7 +187,7 @@ function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecyclePro
 }
 
 function AssetPage() {
-  useCurrency();
+  const { currency: selectedCurrency, rates, formatMoney, formatSourceMoney } = useCurrency();
   const { id } = Route.useParams();
   const services = useAppServices();
   const queryClient = useQueryClient();
@@ -319,16 +307,22 @@ function AssetPage() {
     history.source === "PRICECHARTING" ||
     (history.source === undefined && Boolean(externalReference));
   const referenceHistory = hasReferenceHistory ? history : [];
+  const historySourceCurrency =
+    asSupportedCurrency(
+      history.currency ??
+        referenceHistory[0]?.value.currency ??
+        asset.marketReference?.currency ??
+        currentValueCurrency,
+    ) ?? "GBP";
   const historyCurrency =
-    history.currency ??
-    referenceHistory[0]?.value.currency ??
-    asset.marketReference?.currency ??
-    currentValueCurrency;
+    convertMinorForDisplay(1, historySourceCurrency, selectedCurrency, rates) === null
+      ? historySourceCurrency
+      : selectedCurrency;
   const referenceMoveLabel =
     hasReferenceHistory &&
     history.percentageChangeBps !== null &&
     history.percentageChangeBps !== undefined
-      ? `${formatPercent(history.percentageChangeBps / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${history.absoluteChange ? ` (${formatAuthoritativeMoney(history.absoluteChange.amount, history.absoluteChange.currency, history.absoluteChange.currency, null)})` : ""}`
+      ? `${formatPercent(history.percentageChangeBps / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${history.absoluteChange ? ` (${formatMoney(history.absoluteChange.amount, history.absoluteChange.currency)})` : ""}`
       : "Not available";
   const historyStartingValue = history.startingValue ?? referenceHistory[0]?.value ?? null;
   const historyLatestValue = history.latestValue ?? referenceHistory.at(-1)?.value ?? null;
@@ -340,7 +334,6 @@ function AssetPage() {
   const watched = watchlistQuery.data?.assetIds.includes(asset.id as never) ?? false;
   const watchlistError = toggleWatchlist.isError;
   const category = marketCategoryPresentation(asset.category);
-  const displayCurrency = ownershipSummaryQuery.data?.currency ?? currentValueCurrency ?? "GBP";
   const condition = asset.conditionLabel ?? asset.grade ?? "Raw / Ungraded";
   const handleWatch = () => {
     if (!isAuthenticated) {
@@ -418,7 +411,7 @@ function AssetPage() {
                 <strong>
                   {currentValue === undefined
                     ? "Unavailable"
-                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
+                    : formatMoney(currentValue, currentValueCurrency ?? "GBP")}
                 </strong>
                 {sliceValuationAt ? <small>Approved {formatDate(sliceValuationAt)}</small> : null}
               </div>
@@ -426,13 +419,20 @@ function AssetPage() {
                 <span className="asset-section-label">External reference</span>
                 <strong>
                   {asset.marketReference
-                    ? formatSourceReference(
-                        asset.marketReference.amountMinor,
-                        asset.marketReference.currency,
-                      )
+                    ? formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)
                     : "Unavailable"}
                 </strong>
                 <small>{asset.marketReference?.source ?? "No external reference"}</small>
+                {asset.marketReference && selectedCurrency !== asset.marketReference.currency ? (
+                  <small>
+                    Source:{" "}
+                    {formatSourceMoney(
+                      asset.marketReference.amountMinor,
+                      asset.marketReference.currency,
+                    )}{" "}
+                    {asset.marketReference.currency}
+                  </small>
+                ) : null}
                 {assetQuery.data.market?.reference ? (
                   <small className="asset-reference-freshness">
                     {assetQuery.data.market.reference.lastRefreshedAt
@@ -468,7 +468,6 @@ function AssetPage() {
               tradesLoading={tradesQuery.isLoading}
               tradesError={tradesQuery.isError}
               retryTrades={() => void tradesQuery.refetch()}
-              currency={displayCurrency}
             />
           )}
         </section>
@@ -543,7 +542,15 @@ function AssetPage() {
                 <PriceChart
                   className="asset-price-chart"
                   data={referenceHistory.map((point) => ({
-                    value: point.value.amount / 100,
+                    value:
+                      Number(
+                        convertMinorForDisplay(
+                          point.value.amount,
+                          asSupportedCurrency(point.value.currency) ?? historySourceCurrency,
+                          selectedCurrency,
+                          rates,
+                        ) ?? BigInt(point.value.amount),
+                      ) / 100,
                     timestamp: point.timestamp,
                     source: point.source,
                     previousChange:
@@ -551,14 +558,30 @@ function AssetPage() {
                         ? undefined
                         : point.changeFromPrevious === null
                           ? null
-                          : point.changeFromPrevious.amount / 100,
+                          : Number(
+                              convertMinorForDisplay(
+                                point.changeFromPrevious.amount,
+                                asSupportedCurrency(point.changeFromPrevious.currency) ??
+                                  historySourceCurrency,
+                                selectedCurrency,
+                                rates,
+                              ) ?? BigInt(point.changeFromPrevious.amount),
+                            ) / 100,
                     previousChangeBps: point.changeFromPreviousBps,
                     rangeChange:
                       point.changeFromRangeStart === undefined
                         ? undefined
                         : point.changeFromRangeStart === null
                           ? null
-                          : point.changeFromRangeStart.amount / 100,
+                          : Number(
+                              convertMinorForDisplay(
+                                point.changeFromRangeStart.amount,
+                                asSupportedCurrency(point.changeFromRangeStart.currency) ??
+                                  historySourceCurrency,
+                                selectedCurrency,
+                                rates,
+                              ) ?? BigInt(point.changeFromRangeStart.amount),
+                            ) / 100,
                     rangeChangeBps: point.changeFromRangeStartBps,
                     refreshedAt: history.lastRefreshedAt,
                   }))}
@@ -571,11 +594,10 @@ function AssetPage() {
               ) : referenceHistory.length === 1 ? (
                 <div className="asset-single-history">
                   <strong>
-                    {formatAuthoritativeMoney(
+                    {formatMoney(
                       referenceHistory[0]!.value.amount,
-                      historyCurrency,
-                      historyCurrency,
-                      null,
+                      asSupportedCurrency(referenceHistory[0]!.value.currency) ??
+                        historySourceCurrency,
                     )}
                   </strong>
                   <span>{formatDate(referenceHistory[0]!.timestamp)}</span>
@@ -600,11 +622,9 @@ function AssetPage() {
                 label="Starting value"
                 value={
                   historyStartingValue
-                    ? formatAuthoritativeMoney(
+                    ? formatMoney(
                         historyStartingValue.amount,
-                        historyCurrency,
-                        historyCurrency,
-                        null,
+                        asSupportedCurrency(historyStartingValue.currency) ?? historySourceCurrency,
                       )
                     : "Not available"
                 }
@@ -613,11 +633,9 @@ function AssetPage() {
                 label="Latest value"
                 value={
                   historyLatestValue
-                    ? formatAuthoritativeMoney(
+                    ? formatMoney(
                         historyLatestValue.amount,
-                        historyCurrency,
-                        historyCurrency,
-                        null,
+                        asSupportedCurrency(historyLatestValue.currency) ?? historySourceCurrency,
                       )
                     : "Not available"
                 }
@@ -632,22 +650,18 @@ function AssetPage() {
               <span>
                 <b>High</b>
                 {history.highValue
-                  ? formatAuthoritativeMoney(
+                  ? formatMoney(
                       history.highValue.amount,
-                      history.highValue.currency,
-                      history.highValue.currency,
-                      null,
+                      asSupportedCurrency(history.highValue.currency) ?? historySourceCurrency,
                     )
                   : "Not available"}
               </span>
               <span>
                 <b>Low</b>
                 {history.lowValue
-                  ? formatAuthoritativeMoney(
+                  ? formatMoney(
                       history.lowValue.amount,
-                      history.lowValue.currency,
-                      history.lowValue.currency,
-                      null,
+                      asSupportedCurrency(history.lowValue.currency) ?? historySourceCurrency,
                     )
                   : "Not available"}
               </span>
@@ -741,10 +755,17 @@ function AssetPage() {
               <div className="asset-external-panel__value">
                 <span>{asset.marketReference.source ?? "External market"}</span>
                 <strong>
-                  {formatSourceReference(
-                    asset.marketReference.amountMinor,
-                    asset.marketReference.currency,
-                  )}
+                  {formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)}
+                  {selectedCurrency !== asset.marketReference.currency ? (
+                    <small>
+                      Source:{" "}
+                      {formatSourceMoney(
+                        asset.marketReference.amountMinor,
+                        asset.marketReference.currency,
+                      )}{" "}
+                      {asset.marketReference.currency}
+                    </small>
+                  ) : null}
                 </strong>
                 <small>{asset.marketReference.context ?? "Observed reference"}</small>
               </div>
@@ -765,7 +786,7 @@ function AssetPage() {
                 <dd>
                   {currentValue === undefined
                     ? "—"
-                    : formatCurrency(currentValue, { currency: currentValueCurrency })}
+                    : formatMoney(currentValue, currentValueCurrency ?? "GBP")}
                 </dd>
               </div>
             </dl>
@@ -1470,7 +1491,6 @@ function TradingPanel({
   tradesLoading,
   tradesError,
   retryTrades,
-  currency,
 }: {
   book: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["orderBook"]>> | undefined;
   isLoading: boolean;
@@ -1491,7 +1511,6 @@ function TradingPanel({
   tradesLoading: boolean;
   tradesError: boolean;
   retryTrades: () => void;
-  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   const bids = book?.bids ?? [];
   const asks = book?.asks ?? [];
@@ -1528,7 +1547,7 @@ function TradingPanel({
       <div className="asset-trading-summary">
         <Stat
           label="Price per Slice"
-          value={slicePrice === null ? "Unavailable" : formatPricePerUnit(slicePrice, currency)}
+          value={slicePrice === null ? "Unavailable" : formatCurrency(Number(slicePrice))}
         />
         <Stat
           label="Slices available"
@@ -1686,19 +1705,19 @@ function TradingPanel({
               <span>Price</span>
               <span>Orders</span>
             </div>
-            <OrderRows rows={asks} kind="ask" currency={currency} />
+            <OrderRows rows={asks} kind="ask" />
             <div className="asset-spread-row">
               <span>Spread</span>
               <strong>
                 {bids[0] && asks[0]
                   ? formatCurrency(
                       Math.max(asks[0].pricePerUnit.amount - bids[0].pricePerUnit.amount, 0),
-                      { currency },
+                      {},
                     )
                   : "Unavailable"}
               </strong>
             </div>
-            <OrderRows rows={bids} kind="bid" currency={currency} />
+            <OrderRows rows={bids} kind="bid" />
           </details>
         </>
       )}
@@ -1707,7 +1726,6 @@ function TradingPanel({
         isLoading={tradesLoading}
         isError={tradesError}
         retry={retryTrades}
-        currency={currency}
       />
     </section>
   );
@@ -1716,11 +1734,9 @@ function TradingPanel({
 function OrderRows({
   rows,
   kind,
-  currency,
 }: {
   rows: Array<{ pricePerUnit: { amount: number }; units: number; orderCount: number }>;
   kind: "ask" | "bid";
-  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   return (
     <ul className={`asset-order-rows is-${kind}`}>
@@ -1729,7 +1745,7 @@ function OrderRows({
           <li key={`${kind}-${row.pricePerUnit.amount}-${row.units}`}>
             <span>{kind === "ask" ? "Ask" : "Bid"}</span>
             <strong>{row.units}</strong>
-            <em>{formatCurrency(row.pricePerUnit.amount, { currency })}</em>
+            <em>{formatCurrency(row.pricePerUnit.amount)}</em>
             <small>{row.orderCount}</small>
           </li>
         ))
@@ -1754,13 +1770,11 @@ function RecentTrades({
   isLoading,
   isError,
   retry,
-  currency,
 }: {
   trades: Awaited<ReturnType<ReturnType<typeof useAppServices>["market"]["recentTrades"]>>;
   isLoading: boolean;
   isError: boolean;
   retry: () => void;
-  currency: "GBP" | "USD" | "CAD" | "EUR";
 }) {
   return (
     <section className="asset-recent-trades">
@@ -1797,10 +1811,8 @@ function RecentTrades({
                     —
                   </td>
                   <td>{formatSliceCount(trade.units)}</td>
-                  <td className="is-up">
-                    {formatPricePerUnit(trade.pricePerUnit.amount, currency)}
-                  </td>
-                  <td>{formatTradeTotal(trade.units, trade.pricePerUnit.amount, currency)}</td>
+                  <td className="is-up">{formatCurrency(trade.pricePerUnit.amount)}</td>
+                  <td>{formatTradeTotal(trade.units, trade.pricePerUnit.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1976,7 +1988,7 @@ function similarPriceLabel(type: MarketplaceSimilarAsset["displayPrice"]["type"]
 
 function formatSimilarPrice(price: MarketplaceSimilarAsset["displayPrice"]) {
   if (!price.amount) return "Unavailable";
-  const amount = formatMinorAmount(price.amount.amount, price.amount.currency);
+  const amount = formatCurrency(price.amount.amount, { currency: price.amount.currency });
   return price.type === "LAST_EXECUTION" || price.type === "INITIAL_OFFERING"
     ? `${amount} / Slice`
     : amount;
@@ -2105,14 +2117,10 @@ function formatBasisPointPercent(value: bigint) {
   return `${whole}.${remainder.toString().padStart(2, "0").replace(/0+$/, "")}`;
 }
 
-function formatTradeTotal(
-  units: string | number,
-  priceMinor: number,
-  currency: "GBP" | "USD" | "CAD" | "EUR",
-) {
+function formatTradeTotal(units: string | number, priceMinor: number) {
   try {
     const totalMinor = BigInt(units) * BigInt(priceMinor);
-    return formatMinorAmount(totalMinor, currency);
+    return formatCurrency(totalMinor);
   } catch {
     return "Unavailable";
   }

@@ -20,7 +20,7 @@ export function CurrencySelector({ className = "" }: { className?: string }) {
         ))}
       </select>
       {!ratesAvailable && currency !== "GBP" ? (
-        <small>Showing GBP until live FX is available.</small>
+        <small>Live conversion is unavailable, so source values remain shown.</small>
       ) : null}
       {preferenceError ? <small role="status">{preferenceError}</small> : null}
     </label>

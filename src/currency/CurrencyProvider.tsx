@@ -22,6 +22,7 @@ import {
 import { setCurrencyPresentation } from "./currency-store";
 
 const storageKey = "slice.display-currency";
+const cookieKey = "slice_display_currency";
 type CurrencyContextValue = {
   currency: SupportedCurrency;
   rates: CurrencyRates | null;
@@ -29,6 +30,11 @@ type CurrencyContextValue = {
   setCurrency: (currency: SupportedCurrency) => void;
   preferenceError: string | null;
   formatMoney: (
+    valueInMinorUnits: number | string | bigint,
+    sourceCurrency?: SupportedCurrency,
+    options?: Intl.NumberFormatOptions,
+  ) => string;
+  formatSourceMoney: (
     valueInMinorUnits: number | string | bigint,
     sourceCurrency?: SupportedCurrency,
     options?: Intl.NumberFormatOptions,
@@ -44,12 +50,31 @@ const CurrencyContext = createContext<CurrencyContextValue>({
   preferenceError: null,
   formatMoney: (amount, source = "GBP", options = {}) =>
     formatDisplayMoney(amount, source, "GBP", null, options),
+  formatSourceMoney: (amount, source = "GBP", options = {}) =>
+    formatDisplayMoney(amount, source, source, null, options),
   formatAuthoritativeGbp: (amount) => formatAuthoritativeMoney(amount, "GBP", "GBP", null),
 });
 
 function browserCurrency() {
   if (typeof window === "undefined") return "GBP" as const;
-  return asSupportedCurrency(window.localStorage.getItem(storageKey)) ?? "GBP";
+  const cookieValue = document.cookie
+    .split(";")
+    .map((item) => {
+      const [key, value] = item.trim().split("=", 2);
+      return key === cookieKey ? value : null;
+    })
+    .find((value): value is string => Boolean(value));
+  return (
+    asSupportedCurrency(cookieValue) ??
+    asSupportedCurrency(window.localStorage.getItem(storageKey)) ??
+    "GBP"
+  );
+}
+
+function persistBrowserCurrency(currency: SupportedCurrency) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(storageKey, currency);
+  document.cookie = `${cookieKey}=${currency}; Max-Age=31536000; Path=/; SameSite=Lax`;
 }
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
@@ -82,7 +107,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       const saved = preferences.data.preferredCurrency;
       persistedCurrency.current = saved;
       if (!pendingCurrency.current) setCurrencyState(saved);
-      window.localStorage.setItem(storageKey, saved);
+      persistBrowserCurrency(saved);
       return;
     }
     if (!isAuthenticated) {
@@ -98,7 +123,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       if (next === currency || next === pendingCurrency.current) return;
       setCurrencyState(next);
       setPreferenceError(null);
-      if (typeof window !== "undefined") window.localStorage.setItem(storageKey, next);
+      persistBrowserCurrency(next);
       if (!isAuthenticated) {
         persistedCurrency.current = next;
         return;
@@ -125,15 +150,13 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
             });
             pendingCurrency.current = null;
             setCurrencyState(saved.preferredCurrency);
-            if (typeof window !== "undefined")
-              window.localStorage.setItem(storageKey, saved.preferredCurrency);
+            persistBrowserCurrency(saved.preferredCurrency);
           },
           onError: () => {
             if (pendingCurrency.current !== next) return;
             pendingCurrency.current = null;
             setCurrencyState(persistedCurrency.current);
-            if (typeof window !== "undefined")
-              window.localStorage.setItem(storageKey, persistedCurrency.current);
+            persistBrowserCurrency(persistedCurrency.current);
             setPreferenceError("Unable to save your display currency. Please try again.");
           },
         },
@@ -150,6 +173,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       preferenceError,
       formatMoney: (amount, source = "GBP", options = {}) =>
         formatDisplayMoney(amount, source, currency, rates.data, options),
+      formatSourceMoney: (amount, source = "GBP", options = {}) =>
+        formatDisplayMoney(amount, source, source, rates.data, options),
       formatAuthoritativeGbp: (amount) =>
         formatAuthoritativeMoney(amount, "GBP", currency, rates.data),
     }),

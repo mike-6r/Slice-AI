@@ -32,23 +32,29 @@ export class CurrencyService {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5_000);
-      const response = await fetch(
-        'https://api.frankfurter.dev/v2/rates?base=GBP&quotes=USD,CAD,EUR',
-        { signal: controller.signal, headers: { accept: 'application/json' } },
-      );
-      clearTimeout(timeout);
-      if (!response.ok)
-        throw new Error(`FX provider returned ${response.status}`);
-      const raw: unknown = await response.json();
-      const snapshot = this.parse(raw);
       try {
-        await this.cache.set(key, JSON.stringify(snapshot), {
-          ttlSeconds: CACHE_TTL_SECONDS,
-        });
-      } catch {
-        // Redis is an acceleration layer. A live provider result remains safe to return.
+        const response = await fetch(
+          'https://api.frankfurter.dev/v2/rates?base=GBP&quotes=USD,CAD,EUR',
+          {
+            signal: controller.signal,
+            headers: { accept: 'application/json' },
+          },
+        );
+        if (!response.ok)
+          throw new Error(`FX provider returned ${response.status}`);
+        const raw: unknown = await response.json();
+        const snapshot = this.parse(raw);
+        try {
+          await this.cache.set(key, JSON.stringify(snapshot), {
+            ttlSeconds: CACHE_TTL_SECONDS,
+          });
+        } catch {
+          // Redis is an acceleration layer. A live provider result remains safe to return.
+        }
+        return { ...snapshot, cached: false };
+      } finally {
+        clearTimeout(timeout);
       }
-      return { ...snapshot, cached: false };
     } catch {
       throw new ServiceUnavailableException({
         code: 'FX_RATES_UNAVAILABLE',

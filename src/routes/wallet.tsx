@@ -896,6 +896,10 @@ function MoveMoneyPanel({
               placeholder="£0.00"
             />
           </label>
+          <p className="wallet-move-currency-note">
+            Deposits and withdrawals settle in GBP. Any converted value shown below is for display
+            only.
+          </p>
           {action === "WITHDRAWAL" ? (
             <p>
               Withdrawals use your verified payout account. Slice does not collect bank details in

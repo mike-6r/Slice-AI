@@ -325,6 +325,10 @@ export function TradingOrderForm({
             {action} order {formatStatus(result.status)}
           </h1>
           <p>Slice returned the authoritative order state below.</p>
+          <p className="text-sm text-muted">
+            Settlement currency: GBP. Any other currency shown in your account is a display-only
+            equivalent.
+          </p>
           <dl className="trading-summary-grid">
             <Cell label="Slices" value={result.originalUnits} />
             <Cell label="Filled" value={result.filledUnits} />
@@ -429,7 +433,11 @@ export function TradingOrderForm({
               </div>
               <fieldset className="trading-input-mode">
                 <legend>Choose quantity</legend>
-                <div className="trading-input-mode__tabs" role="tablist" aria-label="Order input mode">
+                <div
+                  className="trading-input-mode__tabs"
+                  role="tablist"
+                  aria-label="Order input mode"
+                >
                   <button
                     type="button"
                     className={inputMode === "SLICES" ? "is-active" : ""}
@@ -456,7 +464,9 @@ export function TradingOrderForm({
               {inputMode === "SLICES" ? (
                 <>
                   <label className="trading-field-label" htmlFor="trading-slice-quantity">
-                    {side === "BUY" ? "How many Slices would you like?" : "How many Slices would you like to sell?"}
+                    {side === "BUY"
+                      ? "How many Slices would you like?"
+                      : "How many Slices would you like to sell?"}
                   </label>
                   <input
                     id="trading-slice-quantity"
@@ -609,8 +619,8 @@ export function TradingOrderForm({
               </section>
               <p className="trading-field-help">
                 1. Choose your ownership&nbsp;&nbsp; 2. Review your order&nbsp;&nbsp; 3. Filled
-                    Slices appear in your Portfolio. Orders may remain open until matching
-                liquidity is available.
+                Slices appear in your Portfolio. Orders may remain open until matching liquidity is
+                available.
               </p>
               <details className="trading-advanced-settings">
                 <summary>Advanced order settings</summary>
@@ -778,6 +788,10 @@ export function TradingOrderForm({
                   </span>
                 </p>
               </div>
+              <p className="trading-settlement-disclosure">
+                Settlement currency: GBP. Display equivalents are informational; Slice orders and
+                fees settle in GBP.
+              </p>
               <p className="trading-fee-disclosure">
                 This is an estimated {review?.feeRole?.toLowerCase() ?? "settlement"} fee based on
                 the current order book. A limit order can partially cross and rest; Slice records
@@ -833,10 +847,7 @@ export function TradingOrderForm({
               </dl>
             ) : (
               <dl className="trading-context-list">
-                <ContextRow
-                  label="Slices owned"
-                  value={settledOwned.toLocaleString("en-GB")}
-                />
+                <ContextRow label="Slices owned" value={settledOwned.toLocaleString("en-GB")} />
                 <ContextRow
                   label="Reserved in open orders"
                   value={reservedOwned.toLocaleString("en-GB")}
@@ -923,11 +934,7 @@ function PurchaseSummary({
       : (BigInt(gross) - BigInt(fee)).toString();
   const finalValue = side === "BUY" ? buyTotal : sellNet;
   const formatValue = (value: string | null | undefined) =>
-    value === null || value === undefined
-      ? loading
-        ? "Checking…"
-        : "—"
-      : formatGbpMinor(value);
+    value === null || value === undefined ? (loading ? "Checking…" : "—") : formatGbpMinor(value);
   const formatSlices = (value: string | null | undefined) =>
     value === null || value === undefined
       ? "— Slices"
@@ -1011,6 +1018,11 @@ function PurchaseSummary({
           </strong>
         </div>
       </div>
+
+      <p className="trading-settlement-disclosure">
+        Final settlement currency: GBP. Values above follow your display preference when live FX is
+        available.
+      </p>
 
       <button
         type="submit"

@@ -1,4 +1,4 @@
-export type MinorUnits = number;
+export type MinorUnits = number | string | bigint;
 import { asSupportedCurrency, formatDisplayMoney } from "@/currency/currency-presentation";
 import { getCurrencyPresentation } from "@/currency/currency-store";
 

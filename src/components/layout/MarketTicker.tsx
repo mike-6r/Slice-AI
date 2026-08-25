@@ -5,23 +5,6 @@ import { formatPercent } from "@/lib/format";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { useMarketSnapshot } from "@/queries/hooks";
 
-function formatReferenceMoney(amountMinor: number, currency: string) {
-  const locale =
-    currency === "GBP"
-      ? "en-GB"
-      : currency === "CAD"
-        ? "en-CA"
-        : currency === "EUR"
-          ? "en-IE"
-          : "en-US";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amountMinor / 100);
-}
-
 /**
  * A compact window into the same persisted market projections used by the
  * asset page and marketplace. It never falls back to editorial showcase data.
@@ -30,7 +13,7 @@ export function MarketTicker() {
   const market = useMarketSnapshot();
   const snapshot = market.data;
   const items = snapshot?.items ?? [];
-  const status = market.isError ? "DELAYED" : snapshot?.status ?? "UNAVAILABLE";
+  const status = market.isError ? "DELAYED" : (snapshot?.status ?? "UNAVAILABLE");
 
   return (
     <div className="market-tape border-b border-border bg-surface/60">
@@ -60,7 +43,12 @@ export function MarketTicker() {
 }
 
 function SnapshotItem({ item }: { item: MarketSnapshotItem }) {
-  const { formatMoney } = useCurrency();
+  const {
+    currency: displayCurrency,
+    ratesAvailable,
+    formatMoney,
+    formatSourceMoney,
+  } = useCurrency();
   const slicePrice = item.sliceMarketPrice;
   const reference = item.externalReference;
   const movement = reference?.movement24hBps;
@@ -73,12 +61,17 @@ function SnapshotItem({ item }: { item: MarketSnapshotItem }) {
       : "Last trade"
     : null;
   const referenceLabel = reference
-    ? `${reference.source === "PRICECHARTING" ? "PC" : reference.source} ${formatReferenceMoney(reference.amount.amount, reference.amount.currency)} ${reference.amount.currency}`
+    ? `${reference.source === "PRICECHARTING" ? "PC" : reference.source} ${formatMoney(reference.amount.amount, reference.amount.currency)}`
     : null;
+  const referenceSourceLabel =
+    reference && displayCurrency !== reference.amount.currency && ratesAvailable
+      ? `source ${formatSourceMoney(reference.amount.amount, reference.amount.currency)} ${reference.amount.currency}`
+      : null;
   const label = [
     item.title,
     priceLabel && priceKind ? `${priceLabel}, ${priceKind}` : priceLabel,
     referenceLabel,
+    referenceSourceLabel,
     movement === null || movement === undefined ? null : `${formatPercent(movement / 100)} 24h`,
   ]
     .filter(Boolean)
@@ -103,9 +96,12 @@ function SnapshotItem({ item }: { item: MarketSnapshotItem }) {
         {reference ? (
           <span
             className="market-tape__reference text-subtle"
-            title={`${reference.source} external reference in ${reference.amount.currency}`}
+            title={`${reference.source} external reference${referenceSourceLabel ? `; ${referenceSourceLabel}` : ` in ${reference.amount.currency}`}`}
           >
             {referenceLabel}
+            {referenceSourceLabel ? (
+              <small className="ml-1 text-muted">({referenceSourceLabel})</small>
+            ) : null}
           </span>
         ) : null}
         {movement !== null && movement !== undefined ? (

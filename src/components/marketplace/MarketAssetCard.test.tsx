@@ -19,7 +19,14 @@ vi.mock("@/providers/AppServicesProvider", () => ({
   useAppServices: () => ({ ownership: { toggleWatchlist: vi.fn() } }),
 }));
 vi.mock("@/currency/CurrencyProvider", () => ({
-  useCurrency: () => ({ formatMoney: (amount: number) => `£${(amount / 100).toFixed(2)}` }),
+  useCurrency: () => ({
+    currency: "GBP",
+    ratesAvailable: false,
+    formatMoney: (amount: number, source = "GBP") =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency: source }).format(amount / 100),
+    formatSourceMoney: (amount: number, source = "GBP") =>
+      new Intl.NumberFormat("en-US", { style: "currency", currency: source }).format(amount / 100),
+  }),
 }));
 
 import { MarketAssetCard, MarketDetailedRow } from "./MarketAssetCard";
