@@ -5,9 +5,10 @@ import { TradingService } from './application/trading.service';
 import { TradingController } from './http/trading.controller';
 import { OutboxModule } from '../outbox/outbox.module';
 import { SubmissionStorageModule } from '../submissions/submission-storage.module';
+import { FinanceModule } from '../finance/finance.module';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, OutboxModule, SubmissionStorageModule],
+  imports: [AuthModule, AccessControlModule, OutboxModule, SubmissionStorageModule, FinanceModule],
   controllers: [TradingController],
   providers: [TradingService],
   exports: [TradingService],

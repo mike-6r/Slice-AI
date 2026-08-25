@@ -77,6 +77,10 @@ export class WithdrawalPreflightService {
     const netPayoutMinor = grossMinor - feeMinor;
     const wallet = await this.ledger.walletForUser(userId);
     const walletAvailableMinor = maxZero(BigInt(wallet.availableMinor));
+    const tradeAvailableMinor = maxZero(
+      BigInt(wallet.tradeAvailableMinor ?? wallet.availableMinor),
+    );
+    const riskHeldMinor = maxZero(BigInt(wallet.riskHeldMinor ?? '0'));
     const postedWithdrawableMinor = maxZero(
       BigInt(wallet.withdrawableMinor ?? wallet.availableMinor),
     );
@@ -118,9 +122,9 @@ export class WithdrawalPreflightService {
     // Settling is the customer-specific maturity bucket only. Provider-wide
     // liquidity is reported independently so a treasury shortfall is never
     // mislabeled as a customer's funds still settling.
-    const settlingMinor = maturityPendingMinor;
+    const settlingMinor = riskHeldMinor + maturityPendingMinor;
     const maturityStatus =
-      maturityPendingMinor > 0n
+      settlingMinor > 0n
         ? customerEligibleMinor > 0n
           ? 'PARTIALLY_SETTLING'
           : 'SETTLING'
@@ -144,7 +148,7 @@ export class WithdrawalPreflightService {
       // The current Slice policy has one internal cash pool for investing and
       // trading. Keep the action-specific field explicit in the contract so a
       // future trade hold cannot silently reuse withdrawal eligibility.
-      tradeAvailableMinor: walletAvailableMinor.toString(),
+      tradeAvailableMinor: tradeAvailableMinor.toString(),
       customerEligibleMinor: customerEligibleMinor.toString(),
       withdrawableMinor: withdrawableMinor.toString(),
       settlingMinor: settlingMinor.toString(),
@@ -157,7 +161,7 @@ export class WithdrawalPreflightService {
       providerLiquidityStatus,
       nextAvailabilityAt:
         earliestDate(
-          maturityPendingMinor > 0n
+          settlingMinor > 0n
             ? await this.nextMovementAvailability(userId, now)
             : null,
           snapshot.nextAvailabilityAt,
@@ -269,7 +273,9 @@ export class WithdrawalPreflightService {
           where: {
             ownerType: 'USER',
             currency: 'GBP',
-            code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
+            code: {
+              in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE', 'BACS_RISK_HOLD'],
+            },
           },
           include: { balance: true },
         }),
@@ -294,7 +300,8 @@ export class WithdrawalPreflightService {
         : 0n;
       const available = maxZero(gross - (account.balance?.reservedMinor ?? 0n));
       customerCashLiabilityMinor += maxZero(gross);
-      withdrawalEligibleLiabilityMinor += available;
+      if (account.code !== 'BACS_RISK_HOLD')
+        withdrawalEligibleLiabilityMinor += available;
     }
     const settlingMinor = maxZero(settling._sum.amountMinor ?? 0n);
     withdrawalEligibleLiabilityMinor = maxZero(
@@ -415,7 +422,7 @@ export class WithdrawalPreflightService {
   }
 
   private async nextMovementAvailability(userId: string, now: Date) {
-    const row = await this.db.moneyMovement.findFirst({
+    const settled = await this.db.moneyMovement.findFirst({
       where: {
         userId,
         type: 'DEPOSIT',
@@ -425,7 +432,19 @@ export class WithdrawalPreflightService {
       orderBy: { providerAvailableOn: 'asc' },
       select: { providerAvailableOn: true },
     });
-    return row?.providerAvailableOn ?? null;
+    if (this.config.bacsInternalTradeHoldDays === undefined)
+      return settled?.providerAvailableOn ?? null;
+    const held = await this.db.moneyMovement.findMany({
+      where: { userId, type: 'DEPOSIT', status: 'HELD', providerAvailableOn: { not: null } },
+      select: { providerAvailableOn: true },
+    });
+    const heldAt = held
+      .map((item) => item.providerAvailableOn
+        ? new Date(item.providerAvailableOn.getTime() + this.config.bacsInternalTradeHoldDays! * 86_400_000)
+        : null)
+      .filter((item): item is Date => Boolean(item && item > now))
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+    return earliestDate(settled?.providerAvailableOn ?? null, heldAt);
   }
 
   private providerCapacity(snapshot: BalanceSnapshot, activeMinor: bigint) {

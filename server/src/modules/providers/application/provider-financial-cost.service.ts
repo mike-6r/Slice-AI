@@ -52,6 +52,13 @@ export class ProviderFinancialCostService {
             ? new Date(balanceTransaction.available_on * 1000)
             : null,
       });
+      // Evidence may satisfy an explicitly configured Bacs internal-use
+      // policy. The policy service remains fail-closed when unset; provider
+      // available_on is never treated as a universal return-risk guarantee.
+      await this.ledger.releaseMaturedBacsDepositsForMovement(
+        input.movementId,
+        input.requestId,
+      );
       return this.observeBalanceTransaction({
         ...source,
         relatedMovementId: input.movementId,

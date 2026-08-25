@@ -390,10 +390,19 @@ function WalletKpis({
   return (
     <section className="wallet-kpis" aria-label="Cash summary">
       <WalletKpi
-        icon={WalletCards}
-        label="Available cash"
-        value={formatWalletMoney(cash.availableMinor)}
-        detail="Cash available inside Slice"
+        icon={Layers3}
+        label="Available to trade"
+        value={formatWalletMoney(
+          withdrawal.data?.tradeAvailableMinor ?? cash.tradeAvailableMinor ?? cash.availableMinor,
+        )}
+        detail="Available for Slice investing and trading"
+        featured
+      />
+      <WalletKpi
+        icon={Clock3}
+        label="Bank deposit clearing"
+        value={formatWalletMoney(cash.riskHeldMinor ?? "0")}
+        detail="Recent Bacs cash held while the bank debit clears"
       />
       <WalletKpi
         icon={ArrowDownToLine}
@@ -420,13 +429,6 @@ function WalletKpis({
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
         detail={countDetail(cash.pendingWithdrawalCount, "withdrawal", "Orders and withdrawals")}
-      />
-      <WalletKpi
-        icon={Layers3}
-        label="Available to trade"
-        value={formatWalletMoney(withdrawal.data?.tradeAvailableMinor ?? cash.availableMinor)}
-        detail="Available for Slice investing and trading"
-        featured
       />
       <WalletKpi
         icon={BanknoteArrowDown}
@@ -1062,8 +1064,9 @@ function MoveMoneyPanel({
             </p>
           ) : (
             <p>
-              Bacs deposits remain pending until Stripe confirms settlement. They never add
-              provisional cash.
+              Bacs deposits can remain held while the bank debit clears. Held cash is visible in
+              your total, but cannot be used to buy or withdraw until Slice&apos;s configured risk
+              policy releases it.
             </p>
           )}
           {feePolicy.data && action === "WITHDRAWAL" && parseWalletGbp(amount) ? (
@@ -2107,6 +2110,7 @@ function friendlyStatus(status: string) {
     SETTLED: "Completed",
     CANCELLED: "Canceled",
     MANUAL_REVIEW: "Needs review",
+    HELD: "Clearing",
     REVERSED: "Reversed",
   };
   if (labels[status]) return labels[status];

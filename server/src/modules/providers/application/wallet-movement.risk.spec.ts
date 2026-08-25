@@ -1,10 +1,28 @@
 import {
   calculateWithdrawalVelocity,
+  calculateDepositVelocity,
   requiresDestinationScreening,
   WalletMovementService,
 } from './wallet-movement.service';
 
 describe('wallet movement risk controls', () => {
+  it('calculates configurable deposit velocity windows without a hidden threshold', () => {
+    const now = new Date('2026-08-25T12:00:00.000Z');
+    const totals = calculateDepositVelocity(
+      [
+        { amountMinor: 100n, createdAt: new Date('2026-08-25T10:00:00.000Z') },
+        { amountMinor: 250n, createdAt: new Date('2026-08-24T11:59:59.000Z') },
+        { amountMinor: 900n, createdAt: new Date('2026-08-17T12:00:01.000Z') },
+      ],
+      now,
+      3_600,
+    );
+
+    expect(totals.dailyTotal).toBe(100n);
+    expect(totals.rolling7dTotal).toBe(350n);
+    expect(totals.dailyCount).toBe(1);
+    expect(totals.rapidCount).toBe(0);
+  });
   it('calculates configured withdrawal windows without inventing a risk score', () => {
     const now = new Date('2026-08-18T12:00:00.000Z');
     const totals = calculateWithdrawalVelocity(

@@ -23,7 +23,6 @@ import { moneyMovementProviderCode } from '../domain/money-movement-provider';
 import { providerTestFailurePoint } from './provider-test-failure-injection';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { movementSettledEvent } from '../../outbox/domain/domain-event';
-import { accountAuthority } from '../../finance/domain/journal';
 import { feeForBps, WITHDRAWAL_FEE_BPS } from '../../finance/domain/fee-policy';
 import { BankConnectionService } from './external-provider-boundaries';
 import {
@@ -60,6 +59,31 @@ export function calculateWithdrawalVelocity(
     total24h: movements
       .filter((item) => item.createdAt.getTime() >= since24h)
       .reduce((total, item) => total + item.amountMinor, amount),
+  };
+}
+
+export function calculateDepositVelocity(
+  movements: ReadonlyArray<{ amountMinor: bigint; createdAt: Date }>,
+  now = new Date(),
+  rapidWindowSeconds?: number,
+) {
+  const dayStart = new Date(now);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const since7d = now.getTime() - 7 * 86_400_000;
+  const rapidSince = rapidWindowSeconds === undefined
+    ? null
+    : now.getTime() - rapidWindowSeconds * 1000;
+  return {
+    dailyTotal: movements
+      .filter((item) => item.createdAt >= dayStart)
+      .reduce((total, item) => total + item.amountMinor, 0n),
+    rolling7dTotal: movements
+      .filter((item) => item.createdAt.getTime() >= since7d)
+      .reduce((total, item) => total + item.amountMinor, 0n),
+    dailyCount: movements.filter((item) => item.createdAt >= dayStart).length,
+    rapidCount: rapidSince === null
+      ? 0
+      : movements.filter((item) => item.createdAt.getTime() >= rapidSince).length,
   };
 }
 
@@ -234,7 +258,7 @@ export class WalletMovementService {
       // Serialize withdrawal intents per user before reading velocity totals.
       // This prevents concurrent requests from both passing the same window
       // without inventing a new threshold or risk score.
-      if (type === 'WITHDRAWAL') {
+      if (type === 'WITHDRAWAL' || type === 'DEPOSIT') {
         const existingBeforeLock = await db.moneyMovement.findUnique({
           where: {
             userId_type_idempotencyKeyHash: {
@@ -246,7 +270,10 @@ export class WalletMovementService {
         });
         if (existingBeforeLock)
           return { movement: existingBeforeLock, reused: true };
-        await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`}))`;
+        const lockKey = type === 'WITHDRAWAL'
+          ? `WALLET_WITHDRAWAL_VELOCITY:${actor.userId}`
+          : `WALLET_DEPOSIT_VELOCITY:${actor.userId}`;
+        await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
       }
       const existingAfterLock = await db.moneyMovement.findUnique({
         where: {
@@ -261,17 +288,25 @@ export class WalletMovementService {
         return { movement: existingAfterLock, reused: true };
       if (type === 'WITHDRAWAL')
         await this.enforceWithdrawalLimits(db, actor.userId, amountMinor);
+      if (type === 'DEPOSIT')
+        await this.enforceDepositLimits(db, actor.userId, amountMinor);
       if (type === 'DEPOSIT') {
         // New accounts do not need a ledger row until they use cash. Lock the
         // user while lazily provisioning it so concurrent first deposits cannot
         // race past the composite account uniqueness constraint.
         await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.userId} FOR UPDATE`;
       }
+      const bacsRiskHold =
+        type === 'DEPOSIT' && this.ledger.bacsRiskHoldEnabled();
       const cashAccounts = await db.financialAccount.findMany({
         where: {
           ownerType: 'USER',
           ownerUserId: actor.userId,
-          code: { in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'] },
+          code: {
+            in: bacsRiskHold
+              ? ['BACS_RISK_HOLD']
+              : ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE'],
+          },
           currency: 'GBP',
           status: 'ACTIVE',
         },
@@ -298,21 +333,15 @@ export class WalletMovementService {
                 hasSufficientAvailable(account),
             ) ??
             cashAccounts.find((account) => account.code === 'CASH_AVAILABLE'))
-          : cashAccounts.find((account) => account.code === 'CASH_AVAILABLE');
-      if (!cash && type === 'DEPOSIT') {
-        cash = await db.financialAccount.create({
-          data: {
-            id: randomUUID(),
-            ownerType: 'USER',
-            ownerUserId: actor.userId,
-            accountType: 'LIABILITY',
-            code: 'CASH_AVAILABLE',
-            currency: 'GBP',
-            normalSide: 'CREDIT',
-          },
-          include: { balance: true },
-        });
-      }
+          : cashAccounts.find((account) =>
+              account.code === (bacsRiskHold ? 'BACS_RISK_HOLD' : 'CASH_AVAILABLE'),
+            );
+      if (!cash && type === 'DEPOSIT')
+        cash = await this.ledger.depositCashAccount(
+          db,
+          actor.userId,
+          bacsRiskHold,
+        );
       if (!cash && type === 'WITHDRAWAL')
         throw new ConflictException({
           code: 'NO_WITHDRAWABLE_BALANCE',
@@ -651,8 +680,10 @@ export class WalletMovementService {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
       const movement = await db.moneyMovement.findUniqueOrThrow({
         where: { id: input.movementId },
+        include: { cashAccount: { select: { code: true } } },
       });
-      if (movement.status === 'SETTLED') return this.safe(movement, true);
+      if (['SETTLED', 'HELD'].includes(movement.status))
+        return this.safe(movement, true);
       if (
         !['PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW'].includes(
           movement.status,
@@ -687,6 +718,9 @@ export class WalletMovementService {
       const providerAmountMinor =
         movement.providerAmountMinor ?? movement.amountMinor;
       const actor = this.providerActor(movement.userId, movement.id);
+      const riskHeld =
+        movement.type === 'DEPOSIT' &&
+        movement.cashAccount.code === 'BACS_RISK_HOLD';
       const journal = await this.ledger.postInTransaction(
         db,
         actor,
@@ -753,9 +787,9 @@ export class WalletMovementService {
       });
       if (current.status === 'SETTLED') return this.safe(current, true);
       const transitioned = await db.moneyMovement.updateMany({
-        where: { id: movement.id, status: { not: 'SETTLED' } },
+        where: { id: movement.id, status: { notIn: ['SETTLED', 'HELD'] } },
         data: {
-          status: 'SETTLED',
+          status: riskHeld ? 'HELD' : 'SETTLED',
           ledgerTransactionId: journal.transactionId,
           providerReferenceCiphertext: this.crypto.encrypt(
             input.providerReference,
@@ -764,7 +798,7 @@ export class WalletMovementService {
           providerReferenceHash: referenceHash,
           encryptionKeyVersion: this.crypto.keyVersion,
           settledAt: new Date(),
-          failureCode: null,
+          failureCode: riskHeld ? 'BACS_RETURN_RISK_HOLD' : null,
           version: { increment: 1 },
         },
       });
@@ -777,8 +811,10 @@ export class WalletMovementService {
           id: randomUUID(),
           movementId: updated.id,
           fromStatus: current.status,
-          toStatus: 'SETTLED',
-          reasonCode: 'PROVIDER_CONFIRMED',
+          toStatus: updated.status,
+          reasonCode: riskHeld
+            ? 'PROVIDER_CONFIRMED_BACS_RISK_HELD'
+            : 'PROVIDER_CONFIRMED',
         },
       });
       await createIdentityTransaction(db).audit.append({
@@ -791,7 +827,12 @@ export class WalletMovementService {
         requestId: input.requestId,
         sessionId: null,
         result: 'SUCCESS',
-        metadata: { status: 'SETTLED', reasonCode: 'PROVIDER_CONFIRMED' },
+        metadata: {
+          status: 'SETTLED',
+          reasonCode: riskHeld
+            ? 'PROVIDER_CONFIRMED_BACS_RISK_HELD'
+            : 'PROVIDER_CONFIRMED',
+        },
         createdAt: new Date(),
       });
       await this.outbox.append(
@@ -816,6 +857,17 @@ export class WalletMovementService {
     reasonCode: string;
     requestId: string;
   }) {
+    const preflight = await this.db.moneyMovement.findUnique({
+      where: { id: input.movementId },
+      select: { status: true },
+    });
+    if (preflight?.status === 'HELD') {
+      return this.returnFromProvider({
+        movementId: input.movementId,
+        reasonCode: input.reasonCode,
+        requestId: input.requestId,
+      });
+    }
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${input.movementId} FOR UPDATE`;
       const movement = await db.moneyMovement.findUniqueOrThrow({
@@ -925,16 +977,16 @@ export class WalletMovementService {
     requestId: string;
   }) {
     const movement = await this.lockMovement(input.movementId);
-    if (movement.status === 'SETTLED')
+    if (['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'].includes(movement.status))
       throw new ConflictException({
         code: 'MOVEMENT_TERMINAL',
-        message: 'A settled movement cannot be held.',
+        message: 'A terminal movement cannot be held.',
       });
     return this.db.$transaction(async (db) => {
       const current = await db.moneyMovement.findUniqueOrThrow({
         where: { id: movement.id },
       });
-      if (['MANUAL_REVIEW', 'HELD'].includes(current.status))
+      if (current.status === 'MANUAL_REVIEW')
         return this.safe(current, true);
       const updated = await db.moneyMovement.update({
         where: { id: movement.id },
@@ -1066,10 +1118,10 @@ export class WalletMovementService {
   }) {
     const movement = await this.lockMovement(input.movementId);
     if (movement.status === 'RETURNED') return this.safe(movement, true);
-    if (movement.status !== 'SETTLED' || !movement.ledgerTransactionId)
+    if (!['SETTLED', 'HELD', 'MANUAL_REVIEW'].includes(movement.status) || !movement.ledgerTransactionId)
       throw new ConflictException({
         code: 'MOVEMENT_RETURN_UNAVAILABLE',
-        message: 'Only settled movements can be returned.',
+        message: 'Only provider-confirmed movements can be returned.',
       });
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movement.id} FOR UPDATE`;
@@ -1077,6 +1129,26 @@ export class WalletMovementService {
         where: { id: movement.id },
       });
       if (current.status === 'RETURNED') return this.safe(current, true);
+      await this.ledger.protectReturnedFundsReservationsInTransaction(
+        db,
+        current.userId,
+        current.id,
+        input.requestId,
+      );
+      const release = await db.journalTransaction.findUnique({
+        where: { correlationId: `bacs-risk-release:${movement.id}` },
+        select: { id: true, status: true, reversal: { select: { id: true } } },
+      });
+      if (release && release.status !== 'REVERSED' && !release.reversal) {
+        await this.ledger.reverseInTransaction(
+          db,
+          this.providerActor(movement.userId, movement.id),
+          release.id,
+          'BACS_RISK_HOLD_RELEASE_REVERSED',
+          input.requestId,
+          `provider-movement:${movement.id}:release-return`,
+        );
+      }
       await this.ledger.reverseInTransaction(
         db,
         this.providerActor(movement.userId, movement.id),
@@ -1102,47 +1174,13 @@ export class WalletMovementService {
           reasonCode: input.reasonCode,
         },
       });
-      const account = await db.financialAccount.findUnique({
-        where: { id: updated.cashAccountId },
-        include: { balance: true },
-      });
-      if (account?.balance) {
-        const authority = accountAuthority(
-          account.normalSide,
-          account.balance.postedDebitMinor,
-          account.balance.postedCreditMinor,
-        );
-        const available = authority - account.balance.reservedMinor;
-        if (available < 0n) {
-          await db.complianceHold.create({
-            data: {
-              id: randomUUID(),
-              userId: updated.userId,
-              movementId: updated.id,
-              scope: 'ACCOUNT',
-              reasonCode: 'RETURNED_FUNDS_DEFICIT',
-              source: 'PROVIDER',
-            },
-          });
-          await createIdentityTransaction(db).audit.append({
-            id: randomUUID(),
-            actorUserId: null,
-            actorType: 'SYSTEM',
-            action: 'WALLET_RETURN_DEFICIT_DETECTED',
-            resourceType: 'money-movement',
-            resourceId: updated.id,
-            requestId: input.requestId,
-            sessionId: null,
-            result: 'SUCCESS',
-            metadata: {
-              source: 'PROVIDER',
-              availableMinor: available.toString(),
-              reasonCode: input.reasonCode,
-            },
-            createdAt: new Date(),
-          });
-        }
-      }
+      await this.ledger.recordReturnedFundsDeficitInTransaction(
+        db,
+        updated.userId,
+        updated.id,
+        input.requestId,
+        input.reasonCode,
+      );
       await createIdentityTransaction(db).audit.append({
         id: randomUUID(),
         actorUserId: null,
@@ -1384,6 +1422,74 @@ export class WalletMovementService {
         code: 'MOVEMENT_LIMIT_EXCEEDED',
         message: 'Withdrawal exceeds the configured velocity limit.',
       });
+  }
+
+  private async enforceDepositLimits(
+    db: Prisma.TransactionClient,
+    userId: string,
+    amount: bigint,
+  ) {
+    const max = this.config.bacsDepositMaxMinor;
+    if (max !== undefined && amount > BigInt(max))
+      throw new ConflictException({
+        code: 'DEPOSIT_LIMIT_EXCEEDED',
+        message: 'This deposit exceeds the configured per-deposit limit.',
+      });
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const since7d = new Date(now.getTime() - 7 * 86_400_000);
+    const rapidSince = this.config.bacsDepositRapidWindowSeconds === undefined
+      ? null
+      : new Date(now.getTime() - this.config.bacsDepositRapidWindowSeconds * 1000);
+    if (
+      this.config.bacsDepositDailyLimitMinor === undefined &&
+      this.config.bacsDepositRolling7dLimitMinor === undefined &&
+      this.config.bacsDepositDailyCountLimit === undefined &&
+      (rapidSince === null || this.config.bacsDepositRapidCountLimit === undefined)
+    ) return;
+    const rows = await db.moneyMovement.findMany({
+      where: {
+        userId,
+        type: 'DEPOSIT',
+        status: { notIn: ['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'] },
+        createdAt: { gte: this.config.bacsDepositDailyLimitMinor !== undefined || this.config.bacsDepositDailyCountLimit !== undefined ? dayStart : since7d },
+      },
+      select: { amountMinor: true, createdAt: true },
+    });
+    const velocity = calculateDepositVelocity(
+      rows,
+      now,
+      this.config.bacsDepositRapidWindowSeconds,
+    );
+    if (this.config.bacsDepositDailyLimitMinor !== undefined) {
+      if (velocity.dailyTotal + amount > BigInt(this.config.bacsDepositDailyLimitMinor))
+        throw new ConflictException({
+          code: 'DEPOSIT_DAILY_LIMIT_EXCEEDED',
+          message: 'This deposit would exceed the configured daily deposit limit.',
+        });
+    }
+    if (this.config.bacsDepositRolling7dLimitMinor !== undefined) {
+      if (velocity.rolling7dTotal + amount > BigInt(this.config.bacsDepositRolling7dLimitMinor))
+        throw new ConflictException({
+          code: 'DEPOSIT_ROLLING_LIMIT_EXCEEDED',
+          message: 'This deposit would exceed the configured rolling deposit limit.',
+        });
+    }
+    if (this.config.bacsDepositDailyCountLimit !== undefined) {
+      if (velocity.dailyCount + 1 > this.config.bacsDepositDailyCountLimit)
+        throw new ConflictException({
+          code: 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED',
+          message: 'Too many deposits were attempted today.',
+        });
+    }
+    if (rapidSince && this.config.bacsDepositRapidCountLimit !== undefined) {
+      if (velocity.rapidCount + 1 > this.config.bacsDepositRapidCountLimit)
+        throw new ConflictException({
+          code: 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED',
+          message: 'Please wait before trying another deposit.',
+        });
+    }
   }
 
   private async lockMovement(id: string) {

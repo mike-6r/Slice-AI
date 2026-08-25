@@ -142,8 +142,7 @@ export class AccountCapabilityService {
               ],
             },
           },
-          select: { id: true },
-          take: 1,
+          select: { id: true, reasonCode: true, scope: true },
         },
         deletionRequests: {
           where: {
@@ -298,7 +297,22 @@ export class AccountCapabilityService {
     const pending = user.complianceCases.some((item) =>
       ['PENDING', 'REVIEW'].includes(item.status),
     );
-    const held = user.complianceHolds.length > 0;
+    const deficitHold = user.complianceHolds.some(
+      (hold) => hold.reasonCode === 'RETURNED_FUNDS_DEFICIT',
+    );
+    const held = user.complianceHolds.length > 0 &&
+      !(capability === 'DEPOSIT_FUNDS' &&
+        deficitHold &&
+        user.complianceHolds.every(
+          (hold) => hold.reasonCode === 'RETURNED_FUNDS_DEFICIT',
+        ));
+    // A returned-funds deficit must stop new exposure and withdrawals, but a
+    // verified future deposit is a supported recovery path. That deposit is
+    // still routed into BACS_RISK_HOLD and cannot itself be spent.
+    if (deficitHold && capability !== 'DEPOSIT_FUNDS') {
+      needs('IDENTITY_VERIFICATION', false);
+      return this.denied(capability, 'COMPLIANCE_REVIEW_REQUIRED', requirements);
+    }
     needs('IDENTITY_VERIFICATION', approved && !held);
     if (!approved || held) {
       return this.denied(

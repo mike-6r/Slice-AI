@@ -230,6 +230,24 @@ const configSchema = z.object({
     .min(0)
     .max(720)
     .default(0),
+  // Bacs return risk is not proven over by provider success or available_on
+  // alone. An omitted value therefore fails closed: funds remain in the
+  // BACS_RISK_HOLD account until an explicit product policy is configured.
+  BACS_INTERNAL_TRADE_HOLD_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(365)
+    .optional(),
+  // Deposit velocity controls are intentionally unset until Risk/Product sets
+  // explicit GBP policy. When configured, each limit is enforced inside the
+  // per-user transaction lock; missing values do not invent a business limit.
+  BACS_DEPOSIT_MAX_MINOR: z.coerce.number().int().min(100).max(50_000_000).optional(),
+  BACS_DEPOSIT_DAILY_LIMIT_MINOR: z.coerce.number().int().min(100).max(100_000_000).optional(),
+  BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR: z.coerce.number().int().min(100).max(500_000_000).optional(),
+  BACS_DEPOSIT_DAILY_COUNT_LIMIT: z.coerce.number().int().min(1).max(100).optional(),
+  BACS_DEPOSIT_RAPID_WINDOW_SECONDS: z.coerce.number().int().min(1).max(86_400).optional(),
+  BACS_DEPOSIT_RAPID_COUNT_LIMIT: z.coerce.number().int().min(1).max(100).optional(),
   OUTBOX_WORKER_ENABLED: z.enum(['true', 'false']).default('false'),
   OUTBOX_WORKER_ID: z.string().min(1).max(128).optional(),
   OUTBOX_POLL_INTERVAL_MS: z.coerce
@@ -439,6 +457,13 @@ export type AppConfig = {
   withdrawalLimit24hMinor: number;
   withdrawalLimit7dMinor: number;
   bankChangeWithdrawalHoldHours: number;
+  bacsInternalTradeHoldDays?: number;
+  bacsDepositMaxMinor?: number;
+  bacsDepositDailyLimitMinor?: number;
+  bacsDepositRolling7dLimitMinor?: number;
+  bacsDepositDailyCountLimit?: number;
+  bacsDepositRapidWindowSeconds?: number;
+  bacsDepositRapidCountLimit?: number;
   outboxWorkerEnabled: boolean;
   outboxWorkerId?: string;
   outboxPollIntervalMs: number;
@@ -877,6 +902,13 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     withdrawalLimit24hMinor: parsed.WITHDRAWAL_LIMIT_24H_MINOR,
     withdrawalLimit7dMinor: parsed.WITHDRAWAL_LIMIT_7D_MINOR,
     bankChangeWithdrawalHoldHours: parsed.BANK_CHANGE_WITHDRAWAL_HOLD_HOURS,
+    bacsInternalTradeHoldDays: parsed.BACS_INTERNAL_TRADE_HOLD_DAYS,
+    bacsDepositMaxMinor: parsed.BACS_DEPOSIT_MAX_MINOR,
+    bacsDepositDailyLimitMinor: parsed.BACS_DEPOSIT_DAILY_LIMIT_MINOR,
+    bacsDepositRolling7dLimitMinor: parsed.BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR,
+    bacsDepositDailyCountLimit: parsed.BACS_DEPOSIT_DAILY_COUNT_LIMIT,
+    bacsDepositRapidWindowSeconds: parsed.BACS_DEPOSIT_RAPID_WINDOW_SECONDS,
+    bacsDepositRapidCountLimit: parsed.BACS_DEPOSIT_RAPID_COUNT_LIMIT,
     outboxWorkerEnabled: parsed.OUTBOX_WORKER_ENABLED === 'true',
     outboxWorkerId: parsed.OUTBOX_WORKER_ID,
     outboxPollIntervalMs: parsed.OUTBOX_POLL_INTERVAL_MS,

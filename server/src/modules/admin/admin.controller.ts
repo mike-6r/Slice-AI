@@ -342,6 +342,12 @@ export class AdminController {
     return this.admin.financeDashboard(request.actor!);
   }
 
+  @Get('finance/bacs-risk')
+  @RequirePermission('finance.read')
+  bacsRisk(@Req() request: AuthenticatedRequest) {
+    return this.admin.bacsRiskDashboard(request.actor!);
+  }
+
   @Get('finance/records')
   @RequirePermission('finance.read')
   financeRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {

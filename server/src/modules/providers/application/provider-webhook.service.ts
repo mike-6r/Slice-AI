@@ -192,8 +192,9 @@ export class ProviderWebhookService {
     }
     if (type === 'account.updated') return;
     const isPaymentIntentEvent = type.startsWith('payment_intent.');
-    const isBacsReturnEvent = type === 'charge.dispute.created' || type === 'charge.dispute.funds_withdrawn' || type === 'charge.refunded';
-    if (!isPaymentIntentEvent && !isBacsReturnEvent) return;
+    const isBacsReturnEvent = type === 'charge.dispute.funds_withdrawn' || type === 'charge.refunded';
+    const isBacsDisputeEvent = type === 'charge.dispute.created';
+    if (!isPaymentIntentEvent && !isBacsReturnEvent && !isBacsDisputeEvent) return;
     const paymentIntentId = isPaymentIntentEvent ? this.text(payload.id) : this.providerObjectId(payload.payment_intent);
     if (!paymentIntentId) return;
     const metadata = (payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}) as Record<string, unknown>;
@@ -201,7 +202,15 @@ export class ProviderWebhookService {
     if (!movementId) return;
     const current = await this.db.moneyMovement.findUnique({ where: { id: movementId }, select: { status: true, provider: true } });
     if (!current || current.provider !== provider) return;
-    if (['SETTLED', 'FAILED', 'CANCELLED', 'RETURNED', 'REVERSED', 'MANUAL_REVIEW', 'HELD'].includes(current.status)) return;
+    const returnLike =
+      isBacsReturnEvent ||
+      (type === 'payment_intent.payment_failed' && ['HELD', 'MANUAL_REVIEW'].includes(current.status));
+    if (['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'].includes(current.status)) return;
+    if (['SETTLED', 'FAILED', 'CANCELLED', 'RETURNED', 'REVERSED', 'MANUAL_REVIEW'].includes(current.status) && !returnLike) return;
+    if (isBacsDisputeEvent) {
+      await this.movements.holdFromProvider({ movementId, reasonCode: 'STRIPE_BACS_DISPUTE_REVIEW', requestId });
+      return;
+    }
     if (isBacsReturnEvent) {
       const returnedAmount = typeof payload.amount === 'number'
         ? payload.amount
@@ -220,7 +229,11 @@ export class ProviderWebhookService {
       await this.providerCosts.observePaymentIntent({ movementId, paymentIntentId, requestId });
     } else if (type === 'payment_intent.payment_failed') {
       const error = payload.last_payment_error && typeof payload.last_payment_error === 'object' ? (payload.last_payment_error as Record<string, unknown>).code : undefined;
-      await this.movements.failFromProvider({ movementId, reasonCode: this.text(error) ?? 'STRIPE_PAYMENT_FAILED', requestId });
+      if (['HELD', 'MANUAL_REVIEW'].includes(current.status)) {
+        await this.movements.returnFromProvider({ movementId, reasonCode: this.text(error) ?? 'STRIPE_PAYMENT_FAILED_AFTER_CONFIRMATION', requestId });
+      } else {
+        await this.movements.failFromProvider({ movementId, reasonCode: this.text(error) ?? 'STRIPE_PAYMENT_FAILED', requestId });
+      }
     } else if (type === 'payment_intent.canceled') {
       await this.movements.cancelFromProvider({ movementId, reasonCode: 'STRIPE_PAYMENT_CANCELED', requestId });
     }

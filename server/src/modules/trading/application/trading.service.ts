@@ -38,6 +38,7 @@ import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { isBetaFixtureSlug } from '../../../config/beta-policy';
 import { calculateInitialOfferingSettlement } from '../../initial-offering/domain/initial-offering';
 import { OBJECT_STORAGE, type ObjectStoragePort } from '../../submissions/ports/submission-storage.ports';
+import { FinancialLedgerService } from '../../finance/application/financial-ledger.service';
 
 export { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
 import {
@@ -83,6 +84,7 @@ export class TradingService {
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly capabilities?: AccountCapabilityService,
     @Optional() @Inject(OBJECT_STORAGE) private readonly storage?: ObjectStoragePort,
+    @Optional() private readonly ledger?: FinancialLedgerService,
   ) {}
 
   async preview(actor: Actor, input: OrderInput) {
@@ -356,6 +358,10 @@ export class TradingService {
   }
 
   async place(actor: Actor, input: OrderInput, requestId: string, key: string) {
+    await this.ledger?.releaseMaturedBacsDepositsForUser(
+      actor.userId,
+      requestId,
+    );
     await this.capabilities?.require(
       actor,
       input.side === 'BUY' ? 'PLACE_BUY_ORDER' : 'PLACE_SELL_ORDER',
@@ -1425,6 +1431,23 @@ export class TradingService {
       : null;
     if (sell.principalType === 'INITIAL_OFFERING' && (!initialOffering || (initialOffering.status !== 'OPEN' && initialOffering.status !== 'PARTIALLY_FILLED') || price !== initialOffering.pricePerUnitMinor))
       throw conflict('INITIAL_OFFERING_SETTLEMENT_INVALID', 'Initial offering terms are not available for settlement.');
+    const buyerUserId = buy.userId;
+    if (!buyerUserId)
+      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
+    const returnedFundsHold = await db.complianceHold.findFirst({
+      where: {
+        userId: buyerUserId,
+        scope: 'ACCOUNT',
+        status: 'ACTIVE',
+        reasonCode: { in: ['RETURNED_FUNDS_DEFICIT', 'RETURNED_FUNDS_RESERVATION_REVIEW'] },
+      },
+      select: { id: true },
+    });
+    if (returnedFundsHold)
+      throw conflict(
+        'FINANCIAL_REVIEW_REQUIRED',
+        'This account is temporarily restricted while a returned bank deposit is reviewed.',
+      );
     const buyerFee = initialOffering
       ? 0n
       : feeMinor(gross, buyIsMaker ? market.makerFeeBps : market.takerFeeBps);
@@ -1433,9 +1456,7 @@ export class TradingService {
       : feeMinor(gross, buyIsMaker ? market.takerFeeBps : market.makerFeeBps);
     const sequence = market.nextExecutionSequence;
     const correlationId = `trade:${market.assetId}:${sequence}`;
-    if (!buy.userId)
-      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
-    await this.settleOwnership(db, market.assetId, sell, buy.userId, units, correlationId);
+    await this.settleOwnership(db, market.assetId, sell, buyerUserId, units, correlationId);
     await tradingTestFailurePoint('execution.after-ownership');
     await this.settleCash(db, buy, sell, units, gross, buyerFee, sellerFee, market.takerFeeBps, correlationId, initialOffering);
     await tradingTestFailurePoint('execution.after-cash');
@@ -1446,7 +1467,7 @@ export class TradingService {
     }
     await this.createBuyerLot(
       db,
-      buy.userId,
+      buyerUserId,
       market.assetId,
       units,
       gross + buyerFee,

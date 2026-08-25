@@ -3527,6 +3527,145 @@ export class AdminService {
     };
   }
 
+  async bacsRiskDashboard(actor: Actor) {
+    await this.authorization.authorize(actor, 'finance.read');
+    const [held, returned, deficits, sharedInstrumentReviews] = await Promise.all([
+      this.db.moneyMovement.findMany({
+        where: { type: 'DEPOSIT', status: 'HELD' },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: 50,
+        select: {
+          id: true,
+          userId: true,
+          amountMinor: true,
+          currency: true,
+          status: true,
+          provider: true,
+          providerAvailableOn: true,
+          failureCode: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { email: true, profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
+      this.db.moneyMovement.findMany({
+        where: { type: 'DEPOSIT', status: 'RETURNED' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+        select: {
+          id: true,
+          userId: true,
+          amountMinor: true,
+          currency: true,
+          status: true,
+          provider: true,
+          providerAvailableOn: true,
+          failureCode: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { email: true, profile: { select: { displayName: true, publicUsername: true } } } },
+          financialDeficit: { select: { amountMinor: true, recoveredMinor: true, status: true } },
+        },
+      }),
+      this.db.financialDeficit.findMany({
+        where: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 50,
+        select: {
+          id: true,
+          userId: true,
+          sourceMovementId: true,
+          currency: true,
+          amountMinor: true,
+          recoveredMinor: true,
+          status: true,
+          reasonCode: true,
+          createdAt: true,
+          user: { select: { email: true, profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
+      this.db.bankInstrumentIdentity.count({ where: { riskState: 'SHARED_INSTRUMENT_REVIEW' } }),
+    ]);
+    const person = (user: { email: string; profile: { displayName: string | null; publicUsername: string | null } | null }) => ({
+      email: user.email,
+      displayName: user.profile?.displayName ?? 'Unnamed user',
+      username: user.profile?.publicUsername ?? null,
+    });
+    const heldAmountMinor = held.reduce((total, item) => total + item.amountMinor, 0n);
+    const openDeficitMinor = deficits.reduce(
+      (total, item) => total + item.amountMinor - item.recoveredMinor,
+      0n,
+    );
+    return {
+      currency: 'GBP',
+      policy: {
+        tradeHoldDays: this.config.bacsInternalTradeHoldDays ?? null,
+        tradeHoldConfigured: this.config.bacsInternalTradeHoldDays !== undefined,
+        depositVelocityConfigured: Boolean(
+          this.config.bacsDepositMaxMinor ??
+          this.config.bacsDepositDailyLimitMinor ??
+          this.config.bacsDepositRolling7dLimitMinor ??
+          this.config.bacsDepositDailyCountLimit ??
+          this.config.bacsDepositRapidCountLimit,
+        ),
+      },
+      summary: {
+        heldDepositCount: held.length,
+        heldAmountMinor: heldAmountMinor.toString(),
+        returnedDepositCount: returned.length,
+        openDeficitCount: deficits.length,
+        openDeficitMinor: openDeficitMinor.toString(),
+        sharedInstrumentReviewCount: sharedInstrumentReviews,
+      },
+      heldDeposits: held.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        user: person(item.user),
+        amountMinor: item.amountMinor.toString(),
+        currency: item.currency,
+        provider: item.provider,
+        providerStatus: item.status,
+        providerAvailableOn: item.providerAvailableOn?.toISOString() ?? null,
+        holdReason: item.failureCode ?? 'BACS_RETURN_RISK_HOLD',
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      returnedDeposits: returned.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        user: person(item.user),
+        amountMinor: item.amountMinor.toString(),
+        currency: item.currency,
+        provider: item.provider,
+        providerStatus: item.status,
+        providerAvailableOn: item.providerAvailableOn?.toISOString() ?? null,
+        reasonCode: item.failureCode,
+        deficit: item.financialDeficit
+          ? {
+              amountMinor: item.financialDeficit.amountMinor.toString(),
+              recoveredMinor: item.financialDeficit.recoveredMinor.toString(),
+              status: item.financialDeficit.status,
+            }
+          : null,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      deficits: deficits.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        user: person(item.user),
+        sourceMovementId: item.sourceMovementId,
+        currency: item.currency,
+        amountMinor: item.amountMinor.toString(),
+        recoveredMinor: item.recoveredMinor.toString(),
+        outstandingMinor: (item.amountMinor - item.recoveredMinor).toString(),
+        status: item.status,
+        reasonCode: item.reasonCode,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    };
+  }
+
   async financeDashboard(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
     const platformRevenue = await this.platformRevenue.projection();

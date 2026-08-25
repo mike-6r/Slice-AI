@@ -139,6 +139,15 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
     ...(body.withdrawableMinor !== undefined
       ? { withdrawableMinor: minor(body.withdrawableMinor, "wallet.withdrawableMinor") }
       : {}),
+    ...(body.tradeAvailableMinor !== undefined
+      ? { tradeAvailableMinor: minor(body.tradeAvailableMinor, "wallet.tradeAvailableMinor") }
+      : {}),
+    ...(body.riskHeldMinor !== undefined
+      ? { riskHeldMinor: minor(body.riskHeldMinor, "wallet.riskHeldMinor") }
+      : {}),
+    ...(body.riskHeldDepositCount !== undefined
+      ? { riskHeldDepositCount: count(body.riskHeldDepositCount, "wallet.riskHeldDepositCount") }
+      : {}),
     ...(body.withdrawableSources !== undefined
       ? {
           withdrawableSources: Array.isArray(body.withdrawableSources)

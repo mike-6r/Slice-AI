@@ -198,6 +198,12 @@ enum CashReservationStatus {
   EXPIRED
 }
 
+enum FinancialDeficitStatus {
+  OPEN
+  PARTIALLY_RECOVERED
+  RECOVERED
+}
+
 enum ProviderLiquidityReservationStatus {
   ACTIVE
   CONSUMED
@@ -865,6 +871,7 @@ model User {
   externalConnectAccounts             ExternalConnectAccount[]
   moneyMovements                      MoneyMovement[]
   complianceHolds                     ComplianceHold[]
+  financialDeficits                   FinancialDeficit[]
   providerIncidents                   ProviderIncident[]                 @relation("ProviderIncidentOwner")
   discordAccountLink                  DiscordAccountLink?
   discordOAuthStates                  DiscordOAuthState[]
@@ -2389,6 +2396,27 @@ model CashReservation {
   @@index([accountId, status, expiresAt])
 }
 
+/// A returned bank debit can leave Slice with a customer recovery obligation
+/// after the funded cash has already been spent. This is an explicit,
+/// append-only state; ownership is not silently confiscated.
+model FinancialDeficit {
+  id              String               @id @default(cuid())
+  userId          String
+  sourceMovementId String               @unique
+  currency        String
+  amountMinor     BigInt
+  recoveredMinor  BigInt               @default(0)
+  status          FinancialDeficitStatus @default(OPEN)
+  reasonCode      String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  resolvedAt      DateTime?
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sourceMovement  MoneyMovement        @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt, id])
+}
+
 model PortfolioLot {
   id              String             @id @default(cuid())
   userId          String
@@ -2681,6 +2709,7 @@ model MoneyMovement {
   providerLiquidityReservation ProviderLiquidityReservation?
   history                     MoneyMovementHistory[]
   holds                       ComplianceHold[]
+  financialDeficit            FinancialDeficit?
   providerCosts               ProviderFinancialCost[]
 
   @@unique([userId, type, idempotencyKeyHash])

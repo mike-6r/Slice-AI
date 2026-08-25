@@ -745,3 +745,49 @@ not faked.
 The release remains **NO-GO** for successful withdrawal E2E until actual Stripe
 Sandbox available GBP is sufficient. Do not retry the real withdrawal or create
 test money solely to manufacture that state.
+
+## Bacs deposit risk hardening
+
+This pass addresses the separate Bacs return/fraud question. A signed
+`payment_intent.succeeded` event is now provider confirmation only: for the
+Stripe Bacs rail it posts one journal into the user `BACS_RISK_HOLD` account
+and marks the movement `HELD`. The amount is visible in total wallet cash and
+the bank-clearing projection, but it is excluded from `tradeAvailableMinor`,
+withdrawable sources, cash reservations, order affordability, and execution.
+
+`providerAvailableOn` is retained as provider evidence. It is not treated as a
+universal return-risk guarantee. Slice releases a held deposit only when the
+explicit `BACS_INTERNAL_TRADE_HOLD_DAYS` policy is configured and
+`providerAvailableOn + policy` has matured. When that environment value is
+omitted, the held state remains fail-closed; no arbitrary 3/5/7-day period is
+invented.
+
+Provider returns/refunds and `charge.dispute.funds_withdrawn` reverse the
+settlement exactly once. A dispute-created event moves a provider-confirmed
+movement to manual review rather than silently confiscating cash or ownership.
+Active cash reservations are placed into account review and execution
+re-checks returned-funds holds, so a return racing a buy cannot spend stale
+reserved cash without a financial review.
+Partial/ambiguous return amounts fail closed for reconciliation. If a return
+leaves the customer's cash negative, the existing journal is preserved and a
+balanced `CUSTOMER_DEFICIT_RECEIVABLE`, `FinancialDeficit`, and account hold
+record the recovery obligation. Unrelated Collector/seller proceeds are not
+automatically taken. Future verified Bacs cash can recover the deficit only
+after it has itself passed the configured release policy.
+
+Configured deposit velocity controls are supported by environment values for
+per-deposit, daily, rolling-seven-day, daily-count, and rapid-attempt limits.
+They are intentionally unset until Product/Risk sets launch values. Existing
+shared-bank review and bank-change withdrawal-hold controls remain unchanged.
+
+The read-only finance route `GET /api/v1/admin/finance/bacs-risk` exposes held
+deposits, provider availability evidence, returns, deficits/recovery, and the
+shared-instrument review count without bank details. Wallet copy distinguishes
+bank-clearing cash from trade and withdrawal cash; a risk-held activity is
+shown as `Clearing`, not failed or completed.
+
+No Stripe sandbox deposit, return, withdrawal, offering purchase, ownership,
+Umbreon, Charizard, or other financial mutation was run for this hardening
+pass. Stripe Sandbox did not provide an official Bacs return fixture in the
+available QA state, so real return E2E is **NOT AVAILABLE**; provider-contract
+tests and the signed WebhookInbox paths are the automated evidence instead.

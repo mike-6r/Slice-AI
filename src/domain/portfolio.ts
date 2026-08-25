@@ -17,6 +17,11 @@ export interface PortfolioCashSummary {
   withdrawalReservedMinor?: GbpMinorUnits;
   /** Posted GBP cash that is eligible for an external withdrawal. */
   withdrawableMinor?: GbpMinorUnits;
+  /** Posted GBP cash that is eligible for orders and executions. */
+  tradeAvailableMinor?: GbpMinorUnits;
+  /** Provider-confirmed Bacs cash held while return risk is unresolved. */
+  riskHeldMinor?: GbpMinorUnits;
+  riskHeldDepositCount?: number;
   withdrawableSources?: Array<{
     code: string;
     availableMinor: GbpMinorUnits;
