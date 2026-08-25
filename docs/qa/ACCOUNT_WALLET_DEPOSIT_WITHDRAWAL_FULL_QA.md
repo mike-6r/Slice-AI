@@ -705,8 +705,8 @@ withdrawal fee.
 
 ### UI and Admin Finance
 
-- Wallet now labels Available cash, Available to withdraw, Settling for
-  withdrawal, Reserved cash, and Available to trade separately.
+- Wallet now labels Available cash, Available to trade, Available to withdraw,
+  Settling for withdrawal, Reserved cash, and Total wallet balance separately.
 - Customer copy does not expose Stripe negative balances or raw provider
   errors. It explains that funds are settling or bank withdrawals are
   temporarily unavailable, with an expected date only when safely attributable
@@ -736,6 +736,8 @@ not faked.
 | Customer-safe liquidity/maturity copy | PASS |
 | Explicit trade availability and maturity status | PASS — backend contract and Wallet projection |
 | Negative provider balance cannot pass zero-amount preflight | PASS — focused test |
+| Zero liquidity, exact fee-adjusted capacity, balance refresh, existing reservations | PASS — 8 focused preflight tests |
+| Wallet total balance shown separately from action-specific cash | PASS — 155 frontend tests |
 | Admin provider/liability projection | PASS — API/UI contract implemented |
 | Controlled £50 withdrawal | NOT YET AVAILABLE — provider available GBP was insufficient |
 | Umbreon / Charizard / trading state | UNCHANGED |

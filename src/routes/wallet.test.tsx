@@ -112,7 +112,7 @@ describe("Document 016 wallet UI", () => {
   it("renders authoritative cash, safe bank data, settled movement insights, and customer-safe activity", () => {
     const html = renderWallet();
     expect(html).toContain("<h1>Wallet</h1>");
-    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(5);
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(6);
     expect(html).toContain("£125.00");
     expect(html).toContain("Safe Bank");
     expect(html).toContain("•••• 1234");
@@ -120,6 +120,7 @@ describe("Document 016 wallet UI", () => {
     expect(html).toContain("Wallet insights");
     expect(html).toContain("Settlement timeline");
     expect(html).toContain("Available to trade");
+    expect(html).toContain("Total wallet balance");
     expect(html).not.toContain("bank-private");
     expect(html).not.toContain("movement-private");
     expect(html).not.toMatch(/accessToken|itemId|provider payload|journal|reservation/i);

@@ -45119,7 +45119,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 /* Wallet page final composition overrides. */
 .wallet-kpis {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 .wallet-kpi--featured {
   border-color: rgba(37, 218, 166, 0.56);
@@ -45458,7 +45458,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   line-height: 1.4;
 }
 .wallet-kpis {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.62rem;
 }
 .wallet-kpi {

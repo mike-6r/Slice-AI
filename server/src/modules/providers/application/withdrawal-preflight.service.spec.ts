@@ -7,6 +7,7 @@ function service(options?: {
   pendingMinor?: number;
   walletAvailableMinor?: string;
   walletWithdrawableMinor?: string;
+  activeReservationMinor?: bigint;
   maturityMinor?: bigint;
   maturityAt?: Date;
 }) {
@@ -15,6 +16,7 @@ function service(options?: {
     pendingMinor: 0,
     walletAvailableMinor: '10000',
     walletWithdrawableMinor: '10000',
+    activeReservationMinor: 0n,
     maturityMinor: 0n,
     maturityAt: new Date('2026-09-01T00:00:00.000Z'),
     ...options,
@@ -33,7 +35,9 @@ function service(options?: {
         }),
     },
     providerLiquidityReservation: {
-      aggregate: jest.fn().mockResolvedValue({ _sum: { amountMinor: 0n } }),
+      aggregate: jest.fn().mockResolvedValue({
+        _sum: { amountMinor: optionsWithDefaults.activeReservationMinor },
+      }),
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest
         .fn()
@@ -44,7 +48,9 @@ function service(options?: {
       callback({
         $executeRaw: jest.fn(),
         providerLiquidityReservation: {
-          aggregate: jest.fn().mockResolvedValue({ _sum: { amountMinor: 0n } }),
+          aggregate: jest.fn().mockResolvedValue({
+            _sum: { amountMinor: optionsWithDefaults.activeReservationMinor },
+          }),
           findUnique: jest.fn().mockResolvedValue(null),
           create: jest
             .fn()
@@ -145,6 +151,43 @@ describe('WithdrawalPreflightService', () => {
     expect(projection.feeMinor).toBe('125');
     expect(projection.netPayoutMinor).toBe('4875');
     expect(projection.withdrawableMinor).toBe('5000');
+    expect(projection.customerEligibleMinor).toBe('10000');
+  });
+
+  it('blocks a non-zero withdrawal when provider available GBP is exactly zero', async () => {
+    const { service: preflight } = service({ availableMinor: 0 });
+
+    const projection = await preflight.forUser('user-1', '1', false, now);
+
+    expect(projection.providerLiquidityStatus).toBe('INSUFFICIENT');
+    expect(projection.withdrawableMinor).toBe('0');
+  });
+
+  it('refreshes provider liquidity when the balance changes', async () => {
+    const { service: preflight, stripe } = service({ availableMinor: 100_000 });
+
+    await preflight.forUser('user-1', '5000', false, now);
+    stripe.balance.retrieve.mockResolvedValue({
+      available: [{ amount: 0, currency: 'gbp' }],
+      pending: [{ amount: 100_000, currency: 'gbp' }],
+    });
+
+    const projection = await preflight.forUser('user-1', '5000', true, now);
+
+    expect(projection.providerLiquidityStatus).toBe('INSUFFICIENT');
+    expect(projection.withdrawableMinor).toBe('0');
+  });
+
+  it('subtracts existing provider-liquidity reservations before allowing a payout', async () => {
+    const { service: preflight } = service({
+      availableMinor: 10_000,
+      activeReservationMinor: 6_000n,
+    });
+
+    const projection = await preflight.forUser('user-1', '5000', false, now);
+
+    expect(projection.providerLiquidityStatus).toBe('INSUFFICIENT');
+    expect(projection.withdrawableMinor).toBe('4102');
   });
 
   it('does not report a negative provider balance as available for an overview check', async () => {

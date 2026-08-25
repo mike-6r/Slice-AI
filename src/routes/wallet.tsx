@@ -428,6 +428,12 @@ function WalletKpis({
         detail="Available for Slice investing and trading"
         featured
       />
+      <WalletKpi
+        icon={BanknoteArrowDown}
+        label="Total wallet balance"
+        value={formatWalletMoney(cash.totalMinor)}
+        detail="Across all cash states"
+      />
     </section>
   );
 }
