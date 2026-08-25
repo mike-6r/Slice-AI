@@ -250,7 +250,13 @@ describe('StripeConnectPayoutService', () => {
     expect(stripe.v2.core.accounts.create).toHaveBeenCalledWith(
       expect.objectContaining({
         dashboard: 'express',
-        defaults: { currency: 'gbp' },
+        defaults: {
+          currency: 'gbp',
+          responsibilities: {
+            fees_collector: 'application',
+            losses_collector: 'application',
+          },
+        },
         identity: { country: 'GB', entity_type: 'individual' },
         configuration: {
           recipient: {
