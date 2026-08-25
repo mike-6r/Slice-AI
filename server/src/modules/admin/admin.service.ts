@@ -18,6 +18,7 @@ import { OBJECT_STORAGE, type ObjectStoragePort } from '../submissions/ports/sub
 import { OwnershipPolicyService } from '../ownership/application/ownership-policy.service';
 import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
 import { PlatformRevenueSettlementService } from '../finance/application/platform-revenue-settlement.service';
+import { WithdrawalPreflightService } from '../providers/application/withdrawal-preflight.service';
 
 type AdminAttention = {
   id: string;
@@ -166,6 +167,7 @@ export class AdminService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     private readonly ownershipPolicy: OwnershipPolicyService,
     private readonly platformRevenue: PlatformRevenueSettlementService,
+    private readonly withdrawalPreflight: WithdrawalPreflightService,
   ) {}
 
   async setCollectorFeatured(
@@ -3528,6 +3530,7 @@ export class AdminService {
   async financeDashboard(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
     const platformRevenue = await this.platformRevenue.projection();
+    const payoutLiquidity = await this.withdrawalPreflight.adminProjection();
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
     const historyStart = new Date(dayStart);
@@ -3695,6 +3698,7 @@ export class AdminService {
         providerCostsPendingEvidence: platformRevenue.pendingProviderCostCount,
       },
       platformRevenue,
+      payoutLiquidity,
       overview: {
         totalVolumeMinor: totalVolume.toString(),
         buyVolumeMinor: executions

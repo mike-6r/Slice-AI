@@ -40,6 +40,7 @@ import type {
   WalletMovementPage,
   WalletMovementType,
   WalletMovementView,
+  WithdrawalPreflight,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
@@ -106,6 +107,20 @@ export function Wallet() {
     queryFn: services.providers.feePolicy,
     enabled: isAuthenticated,
   });
+  const withdrawalOverview = useQuery({
+    queryKey: queryKeys.providers.withdrawalPreflight(),
+    queryFn: () => services.providers.withdrawalPreflight(),
+    enabled: isAuthenticated,
+  });
+  const requestedWithdrawalMinor = parseWalletGbp(amount);
+  const withdrawalPreflight = useQuery({
+    queryKey: queryKeys.providers.withdrawalPreflight(requestedWithdrawalMinor ?? "0"),
+    queryFn: () =>
+      services.providers.withdrawalPreflight({
+        amountMinor: requestedWithdrawalMinor ?? "0",
+      }),
+    enabled: isAuthenticated && action === "WITHDRAWAL" && Boolean(requestedWithdrawalMinor),
+  });
   const capabilities = useQuery({
     queryKey: queryKeys.account.capabilities,
     queryFn: services.account.capabilities,
@@ -119,6 +134,7 @@ export function Wallet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.bankConnections });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.connectPayoutSetup });
     void queryClient.invalidateQueries({ queryKey: queryKeys.providers.feePolicy });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.providers.withdrawalPreflight() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities });
   };
   const verification = useMutation({
@@ -189,7 +205,7 @@ export function Wallet() {
     <main className="wallet-page">
       <div className="page-shell wallet-shell">
         <WalletHeading />
-        <WalletKpis query={portfolio} />
+        <WalletKpis query={portfolio} withdrawal={withdrawalOverview} />
         <section className="wallet-row wallet-row--primary" aria-label="Wallet access and actions">
           <ConnectedBankPanel query={banks} refreshWallet={refreshWallet} />
           <MoveMoneyPanel
@@ -205,6 +221,7 @@ export function Wallet() {
                 item.capability === (action === "DEPOSIT" ? "DEPOSIT_FUNDS" : "WITHDRAW_FUNDS"),
             )}
             feePolicy={feePolicy}
+            withdrawalPreflight={withdrawalPreflight}
             onCapabilityRequired={setCapabilityDialog}
             onReviewWithdrawal={setWithdrawalReviewAmount}
           />
@@ -349,7 +366,13 @@ function WalletHeading() {
   );
 }
 
-function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
+function WalletKpis({
+  query,
+  withdrawal,
+}: {
+  query: UseQueryResult<PortfolioSummary>;
+  withdrawal: UseQueryResult<WithdrawalPreflight>;
+}) {
   if (query.isLoading) return <WalletKpiSkeletons />;
   if (query.isError || !query.data) {
     return (
@@ -368,27 +391,35 @@ function WalletKpis({ query }: { query: UseQueryResult<PortfolioSummary> }) {
     <section className="wallet-kpis" aria-label="Cash summary">
       <WalletKpi
         icon={WalletCards}
-        label="Withdrawable cash"
-        value={formatWalletMoney(cash.withdrawableMinor ?? cash.availableMinor)}
-        detail="Posted cash not reserved"
+        label="Available cash"
+        value={formatWalletMoney(cash.availableMinor)}
+        detail="Cash available inside Slice"
       />
       <WalletKpi
         icon={ArrowDownToLine}
-        label="Pending deposits"
-        value={formatWalletMoney(cash.pendingMinor ?? "0")}
-        detail={countDetail(cash.pendingDepositCount, "deposit", "processing")}
+        label="Available to withdraw"
+        value={formatWalletMoney(withdrawal.data?.withdrawableMinor ?? "0")}
+        detail={
+          withdrawal.data?.providerLiquidityStatus === "AVAILABLE"
+            ? "Eligible for bank payout"
+            : "Provider liquidity check required"
+        }
       />
       <WalletKpi
-        icon={ArrowUpFromLine}
-        label="Pending withdrawals"
-        value={formatWalletMoney(cash.pendingWithdrawalMinor ?? "0")}
-        detail={countDetail(cash.pendingWithdrawalCount, "withdrawal", "pending")}
+        icon={Clock3}
+        label="Settling for withdrawal"
+        value={formatWalletMoney(withdrawal.data?.settlingMinor ?? "0")}
+        detail={
+          withdrawal.data?.nextAvailabilityAt
+            ? "Expected after " + formatShortDate(withdrawal.data.nextAvailabilityAt)
+            : "Provider maturity and liquidity"
+        }
       />
       <WalletKpi
         icon={LockKeyhole}
         label="Reserved cash"
         value={formatWalletMoney(cash.reservedMinor)}
-        detail="Reserved for orders"
+        detail={countDetail(cash.pendingWithdrawalCount, "withdrawal", "Orders and withdrawals")}
       />
       <WalletKpi
         icon={Layers3}
@@ -894,6 +925,7 @@ function MoveMoneyPanel({
   movement,
   capability,
   feePolicy,
+  withdrawalPreflight,
   onCapabilityRequired,
   onReviewWithdrawal,
 }: {
@@ -906,6 +938,7 @@ function MoveMoneyPanel({
   movement: ReturnType<typeof useMutation<WalletMovementView, Error, WalletMovementRequest>>;
   capability: AccountCapability | undefined;
   feePolicy: UseQueryResult<FeePolicy>;
+  withdrawalPreflight: UseQueryResult<WithdrawalPreflight>;
   onCapabilityRequired: (decision: AccountCapability) => void;
   onReviewWithdrawal: (amount: string) => void;
 }) {
@@ -928,6 +961,33 @@ function MoveMoneyPanel({
   const fundingBankLabel = fundingBank
     ? `${fundingBank.institutionName ?? fundingBank.accountName ?? "Connected bank"}${fundingBank.accountMask ? ` · •••• ${fundingBank.accountMask}` : ""}`
     : "Connect a UK bank first";
+  const requestedAmountMinor = parseWalletGbp(amount);
+  const withdrawalBlocked =
+    action === "WITHDRAWAL" &&
+    Boolean(requestedAmountMinor) &&
+    (withdrawalPreflight.isError ||
+      withdrawalPreflight.isLoading ||
+      withdrawalPreflight.data?.customerEligibilityStatus !== "AVAILABLE" ||
+      withdrawalPreflight.data?.providerLiquidityStatus !== "AVAILABLE" ||
+      BigInt(withdrawalPreflight.data?.withdrawableMinor ?? "0") <
+        BigInt(requestedAmountMinor ?? "0"));
+  const withdrawalBlockReason =
+    action !== "WITHDRAWAL" || !requestedAmountMinor
+      ? null
+      : withdrawalPreflight.isError
+        ? "We couldn't verify payout liquidity. Try again shortly."
+        : withdrawalPreflight.isLoading
+          ? "Checking provider settlement and payout liquidity…"
+          : withdrawalPreflight.data?.customerEligibilityStatus === "MATURITY_PENDING"
+            ? "Funds are settling. Expected withdrawal availability: " +
+              formatShortDate(withdrawalPreflight.data.nextAvailabilityAt)
+            : withdrawalPreflight.data?.providerLiquidityStatus !== "AVAILABLE"
+              ? "Bank withdrawals are temporarily unavailable while provider settlement completes" +
+                (withdrawalPreflight.data?.nextAvailabilityAt
+                  ? "; expected after " +
+                    formatShortDate(withdrawalPreflight.data.nextAvailabilityAt)
+                  : ".")
+              : "The requested amount is above your current withdrawal eligibility.";
   return (
     <WalletPanel title="Move money" icon={<ArrowDownToLine />} className="wallet-panel--move">
       <div className="wallet-panel__body">
@@ -1018,7 +1078,7 @@ function MoveMoneyPanel({
                 : ""}
             </p>
           ) : null}
-          <button type="submit" disabled={domainBlocked || movement.isPending}>
+          <button type="submit" disabled={domainBlocked || withdrawalBlocked || movement.isPending}>
             {movement.isPending
               ? "Submitting…"
               : action === "DEPOSIT"
@@ -1028,7 +1088,9 @@ function MoveMoneyPanel({
           </button>
         </form>
         <p className={disabledReason ? "wallet-move-note is-locked" : "wallet-move-note"}>
-          {disabledReason ?? "Your request will appear in wallet history once it is accepted."}
+          {disabledReason ??
+            withdrawalBlockReason ??
+            "Your request will appear in wallet history once it is accepted."}
         </p>
         {movement.error ? <InlineError error={movement.error} /> : null}
         {movement.data ? (
@@ -2053,4 +2115,15 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return "provider confirmation";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "provider confirmation";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
 }

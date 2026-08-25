@@ -17,6 +17,7 @@ import { StripeConnectPayoutService } from './application/stripe-connect-payout.
 import { StripeIdentityVerificationService } from './application/stripe-identity.service';
 import { CollectorMembershipService } from './application/collector-membership.service';
 import { ProviderFinancialCostService } from './application/provider-financial-cost.service';
+import { WithdrawalPreflightService } from './application/withdrawal-preflight.service';
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
@@ -36,6 +37,7 @@ import { ProvidersController } from './http/providers.controller';
     StripeIdentityVerificationService,
     CollectorMembershipService,
     ProviderFinancialCostService,
+    WithdrawalPreflightService,
   ],
   exports: [
     ProviderCryptoService,
@@ -51,6 +53,7 @@ import { ProvidersController } from './http/providers.controller';
     StripeIdentityVerificationService,
     CollectorMembershipService,
     ProviderFinancialCostService,
+    WithdrawalPreflightService,
   ],
 })
 export class ProvidersModule {}

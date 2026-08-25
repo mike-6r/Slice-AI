@@ -1205,6 +1205,23 @@ export const mockRepositories: AppRepositories = {
     async refreshConnectOnboarding() {
       throw new Error("Connect payout setup is unavailable in explicit mock mode.");
     },
+    async getWithdrawalPreflight() {
+      return {
+        currency: "GBP" as const,
+        walletAvailableMinor: "0",
+        customerEligibleMinor: "0",
+        withdrawableMinor: "0",
+        settlingMinor: "0",
+        reservedMinor: "0",
+        grossMinor: "0",
+        feeMinor: "0",
+        netPayoutMinor: "0",
+        customerEligibilityStatus: "INSUFFICIENT_CASH" as const,
+        providerLiquidityStatus: "NOT_APPLICABLE" as const,
+        nextAvailabilityAt: null,
+        checkedAt: now(),
+      };
+    },
     async listMovements() {
       return { items: [], nextCursor: null };
     },

@@ -441,6 +441,57 @@ export function AdminFinanceTrading({
               is implied.
             </p>
           </section>
+          <section
+            className={`admin-finance-side-card${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
+          >
+            <div className="admin-finance-side-heading">
+              <h3>Payout liquidity</h3>
+              <span>{titleCase(dashboard?.payoutLiquidity?.providerLiquidityStatus)}</span>
+            </div>
+            <div className="admin-finance-side-grid">
+              <Metric
+                label="Stripe available"
+                value={money(dashboard?.payoutLiquidity?.providerAvailableMinor)}
+                tone={dashboard?.payoutLiquidity?.warning ? "gold" : "green"}
+              />
+              <Metric
+                label="Stripe pending"
+                value={money(dashboard?.payoutLiquidity?.providerPendingMinor)}
+                tone="purple"
+              />
+              <Metric
+                label="Withdrawal liabilities"
+                value={money(dashboard?.payoutLiquidity?.withdrawalEligibleLiabilityMinor)}
+                tone="cyan"
+              />
+              <Metric
+                label="Settling for withdrawal"
+                value={money(dashboard?.payoutLiquidity?.settlingMinor)}
+                tone="gold"
+              />
+              <Metric
+                label="Payout liquidity coverage"
+                value={formatCoverage(dashboard?.payoutLiquidity?.payoutLiquidityCoverageBps)}
+                tone={dashboard?.payoutLiquidity?.warning ? "gold" : "green"}
+              />
+              <Metric
+                label="Reserved for payouts"
+                value={money(dashboard?.payoutLiquidity?.activeReservationMinor)}
+                tone="blue"
+              />
+            </div>
+            <p
+              className={`admin-finance-muted${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
+            >
+              {dashboard?.payoutLiquidity?.warning
+                ? dashboard.payoutLiquidity.nextAvailabilityAt
+                  ? `Provider liquidity is below eligible withdrawal liabilities. Expected availability: ${date(dashboard.payoutLiquidity.nextAvailabilityAt)}.`
+                  : "Provider liquidity is below eligible withdrawal liabilities. Review before approving payouts."
+                : dashboard?.payoutLiquidity?.providerLiquidityStatus === "NOT_APPLICABLE"
+                  ? "No external payout rail is configured in this environment."
+                  : "Available provider liquidity is sufficient for eligible withdrawals."}
+            </p>
+          </section>
           <section className="admin-finance-side-card">
             <div className="admin-finance-side-heading">
               <h3>Recent Activity</h3>
@@ -547,6 +598,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: s
       {tone ? <em className={tone}>•</em> : null}
     </div>
   );
+}
+function formatCoverage(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return `${(value / 100).toFixed(2)}%`;
 }
 function QuickAction({
   label,

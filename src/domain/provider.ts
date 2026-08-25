@@ -63,6 +63,28 @@ export interface ConnectPayoutSetup {
   expiresAt: ISODateTime | null;
 }
 
+export type ProviderLiquidityStatus =
+  | "AVAILABLE"
+  | "INSUFFICIENT"
+  | "UNAVAILABLE"
+  | "NOT_APPLICABLE";
+
+export interface WithdrawalPreflight {
+  currency: "GBP";
+  walletAvailableMinor: string;
+  customerEligibleMinor: string;
+  withdrawableMinor: string;
+  settlingMinor: string;
+  reservedMinor: string;
+  grossMinor: string;
+  feeMinor: string;
+  netPayoutMinor: string;
+  customerEligibilityStatus: "AVAILABLE" | "MATURITY_PENDING" | "INSUFFICIENT_CASH";
+  providerLiquidityStatus: ProviderLiquidityStatus;
+  nextAvailabilityAt: ISODateTime | null;
+  checkedAt: ISODateTime;
+}
+
 /** Backend-authoritative fee disclosure used before customer actions. */
 export interface FeePolicy {
   currency: "GBP";

@@ -39,6 +39,19 @@ export class ProviderFinancialCostService {
       const balanceTransactionId = objectId(charge.balance_transaction);
       if (!balanceTransactionId) return this.pending({ ...source, relatedMovementId: input.movementId });
       const balanceTransaction = await this.stripeFactory.get().balanceTransactions.retrieve(balanceTransactionId);
+      await this.persistPaymentEvidence({
+        movementId: input.movementId,
+        chargeId,
+        balanceTransactionId,
+        grossMinor: balanceTransaction.amount,
+        feeMinor: balanceTransaction.fee,
+        netMinor: balanceTransaction.net,
+        currency: balanceTransaction.currency,
+        availableOn:
+          typeof balanceTransaction.available_on === 'number'
+            ? new Date(balanceTransaction.available_on * 1000)
+            : null,
+      });
       return this.observeBalanceTransaction({
         ...source,
         relatedMovementId: input.movementId,
@@ -54,6 +67,43 @@ export class ProviderFinancialCostService {
         failureCode: safeError(error),
       });
     }
+  }
+
+  private async persistPaymentEvidence(input: {
+    movementId: string;
+    chargeId: string;
+    balanceTransactionId: string;
+    grossMinor: number;
+    feeMinor: number;
+    netMinor: number;
+    currency: string;
+    availableOn: Date | null;
+  }) {
+    if (
+      !Number.isSafeInteger(input.grossMinor) ||
+      !Number.isSafeInteger(input.feeMinor) ||
+      !Number.isSafeInteger(input.netMinor) ||
+      input.currency.toLowerCase() !== 'gbp'
+    )
+      return;
+    await this.db.moneyMovement.updateMany({
+      where: {
+        id: input.movementId,
+        provider: this.stripeFactory.provider(),
+      },
+      data: {
+        providerBalanceTransactionIdCiphertext: this.crypto.encrypt(
+          input.balanceTransactionId,
+          'movement-balance-transaction:' + input.movementId,
+        ),
+        providerBalanceTransactionIdHash: this.crypto.hash(input.balanceTransactionId),
+        providerFeeMinor: BigInt(input.feeMinor),
+        providerNetMinor: BigInt(input.netMinor),
+        providerAvailableOn: input.availableOn,
+        providerCurrency: input.currency.toLowerCase(),
+        providerSourceReferenceHash: this.crypto.hash(input.chargeId),
+      },
+    });
   }
 
   async observePayoutForExternalId(input: {

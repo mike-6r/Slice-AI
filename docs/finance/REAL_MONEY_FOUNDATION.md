@@ -57,6 +57,14 @@ provider result is pending, the amount is reserved but not permanently spent.
   not invent a balance: it records a returned-funds deficit and applies the
   existing account hold model for review.
 
+External withdrawal eligibility is a separate projection from internal cash.
+The wallet reads provider-backed maturity evidence (`available_on`) and the
+Stripe platform's available GBP balance; pending provider balance is never
+treated as payout liquidity. See
+[`PROVIDER_LIQUIDITY_AND_WITHDRAWAL_MATURITY.md`](PROVIDER_LIQUIDITY_AND_WITHDRAWAL_MATURITY.md)
+for the customer-liability, provider-expense, concurrency-reservation, and
+admin-finance model.
+
 ## Reconciliation and safety
 
 Reconciliation compares every provider movement with its journal, amount,

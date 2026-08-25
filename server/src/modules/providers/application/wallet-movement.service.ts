@@ -30,6 +30,7 @@ import {
   ConnectPayoutExternalTransferError,
   StripeConnectPayoutService,
 } from './stripe-connect-payout.service';
+import { WithdrawalPreflightService } from './withdrawal-preflight.service';
 
 type MovementType = 'DEPOSIT' | 'WITHDRAWAL';
 
@@ -80,6 +81,8 @@ export class WalletMovementService {
     @Optional() private readonly capabilities?: AccountCapabilityService,
     @Optional() private readonly bankLinks?: BankConnectionService,
     @Optional() private readonly connectPayouts?: StripeConnectPayoutService,
+    @Optional()
+    private readonly withdrawalPreflight?: WithdrawalPreflightService,
   ) {
     this.screening =
       config.providerMode === 'local'
@@ -196,7 +199,8 @@ export class WalletMovementService {
     key: string,
   ) {
     const amountMinor = this.amount(amountText);
-    const sliceFeeMinor = type === 'WITHDRAWAL' ? feeForBps(amountMinor, WITHDRAWAL_FEE_BPS) : 0n;
+    const sliceFeeMinor =
+      type === 'WITHDRAWAL' ? feeForBps(amountMinor, WITHDRAWAL_FEE_BPS) : 0n;
     const providerAmountMinor = amountMinor - sliceFeeMinor;
     await this.compliance.requireIdentityApproved(
       actor.userId,
@@ -213,6 +217,18 @@ export class WalletMovementService {
       },
     });
     if (existing) return this.safe(existing, true);
+    if (type === 'WITHDRAWAL' && this.config.providerMode !== 'local') {
+      if (!this.withdrawalPreflight)
+        throw new ConflictException({
+          code: 'PROVIDER_LIQUIDITY_UNAVAILABLE',
+          message:
+            "Your funds are still settling with our payment provider and aren't ready for bank withdrawal yet.",
+        });
+      await this.withdrawalPreflight.assertWithdrawalCanStart(
+        actor.userId,
+        amountText,
+      );
+    }
 
     const movementResult = await this.db.$transaction(async (db) => {
       // Serialize withdrawal intents per user before reading velocity totals.
@@ -335,11 +351,21 @@ export class WalletMovementService {
     const movement = movementResult.movement;
     if (movementResult.reused) return this.safe(movement, true);
 
+    let providerLiquidityReservationId: string | null = null;
+    let providerLiquidityConsumed = false;
+    let cashReservationId: string | null = null;
     if (type === 'WITHDRAWAL') {
       try {
         await providerTestFailurePoint(
           'movement.withdrawal.before-reservation',
         );
+        if (this.config.providerMode !== 'local') {
+          providerLiquidityReservationId =
+            await this.withdrawalPreflight!.reserveProviderLiquidity(
+              movement.id,
+              (movement.providerAmountMinor ?? movement.amountMinor).toString(),
+            );
+        }
         const reservation = await this.ledger.reserveCash(
           actor,
           {
@@ -351,14 +377,27 @@ export class WalletMovementService {
           requestId,
           `provider-movement:${movement.id}:reserve`,
         );
+        cashReservationId = reservation.reservationId;
         await this.db.moneyMovement.update({
           where: { id: movement.id },
           data: { reservationId: reservation.reservationId },
         });
       } catch (error) {
+        await this.withdrawalPreflight?.releaseProviderLiquidity(
+          providerLiquidityReservationId,
+        );
         // Preserve append-only lifecycle history while making the failed intent
-        // permanently non-spendable. There is no reservation to release here.
+        // permanently non-spendable. If the movement-link update failed after
+        // cash reservation, release that reservation in the same transaction.
         await this.db.$transaction(async (db) => {
+          if (cashReservationId) {
+            await this.ledger.releaseCashInTransaction(
+              db,
+              this.providerActor(actor.userId, movement.id),
+              cashReservationId,
+              requestId,
+            );
+          }
           await db.moneyMovement.update({
             where: { id: movement.id },
             data: {
@@ -481,24 +520,54 @@ export class WalletMovementService {
           message: 'Payouts are not configured.',
         });
       }
+      let providerOperationStarted = false;
       try {
         await this.connectPayouts.createPayout({
           userId: actor.userId,
           movementId: movement.id,
-          amountMinor: (movement.providerAmountMinor ?? movement.amountMinor).toString(),
+          amountMinor: (
+            movement.providerAmountMinor ?? movement.amountMinor
+          ).toString(),
         });
+        providerOperationStarted = true;
+        await this.withdrawalPreflight?.consumeProviderLiquidity(
+          providerLiquidityReservationId,
+        );
+        providerLiquidityConsumed = true;
         await this.processingFromProvider({
           movementId: movement.id,
           requestId,
         });
       } catch (error) {
-        if (error instanceof ConnectPayoutExternalTransferError) {
+        if (
+          error instanceof ConnectPayoutExternalTransferError ||
+          providerOperationStarted
+        ) {
+          // Once a provider transfer/payout may exist, keep the movement and
+          // reservation in review even if our own post-provider persistence
+          // failed. Releasing capacity here could allow a duplicate payout.
+          try {
+            await this.withdrawalPreflight?.consumeProviderLiquidity(
+              providerLiquidityReservationId,
+            );
+            providerLiquidityConsumed = true;
+          } catch {
+            // An active reservation is safer than releasing unknown provider
+            // exposure. Reconciliation can resolve it after the provider read.
+          }
           await this.holdFromProvider({
             movementId: movement.id,
-            reasonCode: 'STRIPE_PAYOUT_REQUIRES_REVIEW',
+            reasonCode:
+              error instanceof ConnectPayoutExternalTransferError
+                ? 'STRIPE_PAYOUT_REQUIRES_REVIEW'
+                : 'PROVIDER_STATE_RECONCILIATION_REQUIRED',
             requestId,
           });
         } else {
+          if (!providerLiquidityConsumed)
+            await this.withdrawalPreflight?.releaseProviderLiquidity(
+              providerLiquidityReservationId,
+            );
           await this.failFromProvider({
             movementId: movement.id,
             reasonCode:
@@ -611,10 +680,12 @@ export class WalletMovementService {
       }
       await providerTestFailurePoint('movement.complete.before-journal');
       const clearing = await this.clearingAccount();
-      const withdrawalFeeAccount = movement.type === 'WITHDRAWAL' && movement.sliceFeeMinor > 0n
-        ? await this.withdrawalFeeAccount(db)
-        : null;
-      const providerAmountMinor = movement.providerAmountMinor ?? movement.amountMinor;
+      const withdrawalFeeAccount =
+        movement.type === 'WITHDRAWAL' && movement.sliceFeeMinor > 0n
+          ? await this.withdrawalFeeAccount(db)
+          : null;
+      const providerAmountMinor =
+        movement.providerAmountMinor ?? movement.amountMinor;
       const actor = this.providerActor(movement.userId, movement.id);
       const journal = await this.ledger.postInTransaction(
         db,
@@ -655,11 +726,13 @@ export class WalletMovementService {
                     amountMinor: providerAmountMinor.toString(),
                   },
                   ...(withdrawalFeeAccount
-                    ? [{
-                        accountId: withdrawalFeeAccount,
-                        side: 'CREDIT' as const,
-                        amountMinor: movement.sliceFeeMinor.toString(),
-                      }]
+                    ? [
+                        {
+                          accountId: withdrawalFeeAccount,
+                          side: 'CREDIT' as const,
+                          amountMinor: movement.sliceFeeMinor.toString(),
+                        },
+                      ]
                     : []),
                 ],
         },
@@ -1447,7 +1520,9 @@ export class WalletMovementService {
       type: item.type,
       amountMinor: item.amountMinor.toString(),
       sliceFeeMinor: (item.sliceFeeMinor ?? 0n).toString(),
-      providerAmountMinor: (item.providerAmountMinor ?? item.amountMinor).toString(),
+      providerAmountMinor: (
+        item.providerAmountMinor ?? item.amountMinor
+      ).toString(),
       currency: item.currency,
       status: item.status,
       createdAt: item.createdAt.toISOString(),

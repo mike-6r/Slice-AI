@@ -9,9 +9,10 @@ import { SubmissionsModule } from '../submissions/submissions.module';
 import { OwnershipModule } from '../ownership/ownership.module';
 import { MarketModule } from '../market/market.module';
 import { FinanceModule } from '../finance/finance.module';
+import { ProvidersModule } from '../providers/providers.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, FinanceModule],
+  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, FinanceModule, ProvidersModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

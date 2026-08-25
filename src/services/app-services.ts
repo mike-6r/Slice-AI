@@ -151,6 +151,8 @@ export class ProviderService {
   refreshConnectOnboarding = () => this.repositories.providers.refreshConnectOnboarding();
   movements = (input?: { cursor?: string; limit?: number }) =>
     this.repositories.providers.listMovements(input);
+  withdrawalPreflight = (input?: { amountMinor?: string }) =>
+    this.repositories.providers.getWithdrawalPreflight(input);
   createDeposit = (amountMinor: string) => this.repositories.providers.createDeposit(amountMinor);
   createWithdrawal = (input: {
     amountMinor: string;

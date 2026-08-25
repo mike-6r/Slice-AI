@@ -429,7 +429,7 @@ PASS for the read-only state display:
 
 ## Automated validation
 
-- Backend full suite: PASS — 327 tests
+- Backend full suite: PASS — 331 tests
 - Backend Connect payout focused suite: PASS — 6 tests
 - Frontend full suite: PASS — 155 tests
 - Frontend typecheck: PASS
@@ -655,3 +655,89 @@ sufficient available GBP and one controlled withdrawal produces provider
 transfer, connected-account payout, signed webhook, fee/cost evidence, and
 final Slice reconciliation. No fake provider event, balance patch, automatic
 settlement, or second withdrawal was performed.
+
+## Provider liquidity / withdrawal maturity hardening — 2026-08-25
+
+This implementation closes the projection mismatch identified above. It does
+not claim that the previously unavailable Stripe balance has become available,
+and it does not create a deposit, withdrawal, transfer, payout, order, trade,
+or balance patch.
+
+### Root cause and corrected authorities
+
+The former wallet projection treated posted GBP customer cash as externally
+withdrawable after Connect readiness. That was incomplete: the prior £100
+deposit had a successful PaymentIntent and a settled Slice movement, while its
+Stripe balance transaction had provider net £99.00 and `available_on` 1 Sep
+2026. Stripe platform available GBP was -£2.50 while pending GBP was £198.00.
+The £50 attempt therefore reached a provider transfer that Stripe could not
+fund.
+
+The corrected projection now keeps these values separate:
+
+- Available cash: posted Slice customer GBP after active cash reservations;
+- Available to withdraw: customer-matured cash capped by provider-funded gross
+  payout capacity;
+- Settling for withdrawal: only the customer-specific provider maturity bucket;
+- Provider liquidity: Stripe available GBP less active internal payout
+  reservations; pending GBP is excluded;
+- Customer liability: remains the full posted customer amount, independent of
+  Stripe's provider fee.
+
+The £1 provider fee on the £100 deposit remains Slice provider expense. It is
+not deducted from the customer's £100 liability or used as a fake customer
+withdrawal fee.
+
+### Backend hardening
+
+- `GET /api/v1/me/wallet/withdrawal-preflight` returns authoritative wallet,
+  eligibility, maturity, fee, net payout, provider status, and expected
+  availability fields.
+- Stripe balance transaction evidence is persisted on provider-backed
+  movements: balance transaction reference, gross, fee, net, GBP currency,
+  `available_on`, and hashed source reference.
+- Before a Stripe transfer, the backend refreshes available GBP and takes a
+  PostgreSQL advisory-lock-protected `ProviderLiquidityReservation` so
+  concurrent withdrawals cannot reserve the same provider liquidity.
+- Provider insufficiency blocks before transfer creation. A provider failure
+  releases the provider reservation and preserves the existing customer cash
+  reservation/ledger failure safety.
+
+### UI and Admin Finance
+
+- Wallet now labels Available cash, Available to withdraw, Settling for
+  withdrawal, Reserved cash, and Total wallet balance separately.
+- Customer copy does not expose Stripe negative balances or raw provider
+  errors. It explains that funds are settling or bank withdrawals are
+  temporarily unavailable, with an expected date only when safely attributable
+  to provider evidence.
+- Admin Finance now shows customer cash liabilities, withdrawal-eligible
+  liabilities, Stripe available/pending GBP, settling cash, active payout
+  reservations, payout-liquidity coverage, and an operational warning.
+
+### Read-only current-case result
+
+Using the last observed staging provider evidence, the new projection must not
+claim that a £50 withdrawal is executable while Stripe available GBP is
+-£2.50 and pending GBP is £198.00. No new withdrawal was attempted during this
+hardening pass. A successful sandbox withdrawal remains gated until Stripe
+actually reports enough available GBP; the calendar and provider balance are
+not faked.
+
+### Hardening gate
+
+| Check | Result |
+| --- | --- |
+| Customer liability remains full GBP amount | PASS — no provider fee deduction |
+| Pending Stripe balance excluded from payout liquidity | PASS |
+| Negative/insufficient provider balance blocks before transfer | PASS — focused tests |
+| Provider maturity timestamp used when evidence exists | PASS — focused tests |
+| Concurrent payout-liquidity reservation | PASS — advisory-lock reservation path implemented; integration requires staging DB run |
+| Customer-safe liquidity/maturity copy | PASS |
+| Admin provider/liability projection | PASS — API/UI contract implemented |
+| Controlled £50 withdrawal | NOT YET AVAILABLE — provider available GBP was insufficient |
+| Umbreon / Charizard / trading state | UNCHANGED |
+
+The release remains **NO-GO** for successful withdrawal E2E until actual Stripe
+Sandbox available GBP is sufficient. Do not retry the real withdrawal or create
+test money solely to manufacture that state.

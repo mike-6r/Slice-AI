@@ -534,6 +534,7 @@ export class StripeConnectPayoutService {
         },
       });
     let transferId: string;
+    let transferCreated = false;
     try {
       if (payout.externalTransferIdCiphertext)
         transferId = this.crypto.decrypt(
@@ -557,6 +558,7 @@ export class StripeConnectPayoutService {
           },
         );
         transferId = transfer.id;
+        transferCreated = true;
         await this.db.connectPayout.update({
           where: { id: payout.id },
           data: {
@@ -573,6 +575,23 @@ export class StripeConnectPayoutService {
       }
     } catch (error) {
       void error;
+      if (transferCreated) {
+        try {
+          await this.db.connectPayout.update({
+            where: { id: payout.id },
+            data: {
+              status: 'MANUAL_REVIEW',
+              failureCode: 'STRIPE_TRANSFER_STATE_UNKNOWN',
+            },
+          });
+        } catch {
+          // Preserve the external-effect signal even if persistence is also
+          // unavailable; the movement must remain held for reconciliation.
+        }
+        throw new ConnectPayoutExternalTransferError(
+          'The platform transfer was created but Slice needs to reconcile its provider state.',
+        );
+      }
       await this.db.connectPayout.update({
         where: { id: payout.id },
         data: { status: 'FAILED', failureCode: 'STRIPE_TRANSFER_FAILED' },

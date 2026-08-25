@@ -43,6 +43,7 @@ import type {
   ComplianceSession,
   ComplianceSummary,
   ConnectPayoutSetup,
+  WithdrawalPreflight,
   FeePolicy,
   TradingExecution,
   TradingExecutionPage,
@@ -1071,6 +1072,42 @@ const mapConnectPayoutSetup = (raw: unknown): ConnectPayoutSetup => {
         : typeof value.expiresAt === "number" && Number.isFinite(value.expiresAt)
           ? (new Date(value.expiresAt * 1000).toISOString() as ISODateTime)
           : (nullableString(value.expiresAt, "connect.expiresAt") as ISODateTime),
+  };
+};
+const mapWithdrawalPreflight = (raw: unknown): WithdrawalPreflight => {
+  const value = objectField(raw, "withdrawal preflight");
+  const providerStatus = ["AVAILABLE", "INSUFFICIENT", "UNAVAILABLE", "NOT_APPLICABLE"].includes(
+    String(value.providerLiquidityStatus),
+  )
+    ? (value.providerLiquidityStatus as WithdrawalPreflight["providerLiquidityStatus"])
+    : null;
+  const eligibilityStatus = ["AVAILABLE", "MATURITY_PENDING", "INSUFFICIENT_CASH"].includes(
+    String(value.customerEligibilityStatus),
+  )
+    ? (value.customerEligibilityStatus as WithdrawalPreflight["customerEligibilityStatus"])
+    : null;
+  if (value.currency !== "GBP" || !providerStatus || !eligibilityStatus)
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid withdrawal preflight from service.");
+  return {
+    currency: "GBP",
+    walletAvailableMinor: stringField(value.walletAvailableMinor, "preflight.walletAvailableMinor"),
+    customerEligibleMinor: stringField(
+      value.customerEligibleMinor,
+      "preflight.customerEligibleMinor",
+    ),
+    withdrawableMinor: stringField(value.withdrawableMinor, "preflight.withdrawableMinor"),
+    settlingMinor: stringField(value.settlingMinor, "preflight.settlingMinor"),
+    reservedMinor: stringField(value.reservedMinor, "preflight.reservedMinor"),
+    grossMinor: stringField(value.grossMinor, "preflight.grossMinor"),
+    feeMinor: stringField(value.feeMinor, "preflight.feeMinor"),
+    netPayoutMinor: stringField(value.netPayoutMinor, "preflight.netPayoutMinor"),
+    customerEligibilityStatus: eligibilityStatus,
+    providerLiquidityStatus: providerStatus,
+    nextAvailabilityAt: nullableString(
+      value.nextAvailabilityAt,
+      "preflight.nextAvailabilityAt",
+    ) as ISODateTime | null,
+    checkedAt: stringField(value.checkedAt, "preflight.checkedAt") as ISODateTime,
   };
 };
 const mapFeePolicy = (raw: unknown): FeePolicy => {
@@ -2538,6 +2575,56 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
                   "admin external settlement.destination",
                 ),
               },
+            };
+          })()
+        : undefined,
+    payoutLiquidity:
+      value.payoutLiquidity &&
+      typeof value.payoutLiquidity === "object" &&
+      !Array.isArray(value.payoutLiquidity)
+        ? (() => {
+            const liquidity = objectField(value.payoutLiquidity, "admin payout liquidity");
+            const status = String(liquidity.providerLiquidityStatus);
+            if (!["AVAILABLE", "INSUFFICIENT", "UNAVAILABLE", "NOT_APPLICABLE"].includes(status)) {
+              throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid payout liquidity status.");
+            }
+            return {
+              currency: "GBP" as const,
+              providerMode: stringField(liquidity.providerMode, "payout liquidity.providerMode"),
+              providerAvailableMinor: nullableString(
+                liquidity.providerAvailableMinor,
+                "payout liquidity.providerAvailableMinor",
+              ),
+              providerPendingMinor: nullableString(
+                liquidity.providerPendingMinor,
+                "payout liquidity.providerPendingMinor",
+              ),
+              customerCashLiabilityMinor: mapMinor(
+                liquidity.customerCashLiabilityMinor,
+                "payout liquidity.customerCashLiabilityMinor",
+              ),
+              withdrawalEligibleLiabilityMinor: mapMinor(
+                liquidity.withdrawalEligibleLiabilityMinor,
+                "payout liquidity.withdrawalEligibleLiabilityMinor",
+              ),
+              settlingMinor: mapMinor(liquidity.settlingMinor, "payout liquidity.settlingMinor"),
+              activeReservationMinor: mapMinor(
+                liquidity.activeReservationMinor,
+                "payout liquidity.activeReservationMinor",
+              ),
+              payoutLiquidityCoverageBps:
+                liquidity.payoutLiquidityCoverageBps === null ||
+                liquidity.payoutLiquidityCoverageBps === undefined
+                  ? null
+                  : Number(liquidity.payoutLiquidityCoverageBps),
+              providerLiquidityStatus: status as
+                "AVAILABLE" | "INSUFFICIENT" | "UNAVAILABLE" | "NOT_APPLICABLE",
+              nextAvailabilityAt: nullableString(
+                liquidity.nextAvailabilityAt,
+                "payout liquidity.nextAvailabilityAt",
+              ),
+              checkedAt: stringField(liquidity.checkedAt, "payout liquidity.checkedAt"),
+              warning: Boolean(liquidity.warning),
             };
           })()
         : undefined,
@@ -4476,6 +4563,13 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async listMovements(input) {
         return mapMovementPage(await client.get<unknown>("/wallet/movements", input));
       },
+      async getWithdrawalPreflight(input) {
+        return mapWithdrawalPreflight(
+          await client.get<unknown>("/wallet/withdrawal-preflight", {
+            amountMinor: input?.amountMinor ?? "0",
+          }),
+        );
+      },
       async createDeposit(amountMinor) {
         return mapMovement(
           await client.request<unknown>("/wallet/deposits", {
@@ -4739,7 +4833,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
               nextAction:
                 item.nextAction === undefined
                   ? null
-                  : (nullableString(item.nextAction, "accountCapability.nextAction") as AccountCapability["nextAction"]),
+                  : (nullableString(
+                      item.nextAction,
+                      "accountCapability.nextAction",
+                    ) as AccountCapability["nextAction"]),
               requirements: item.requirements.map((requirement) => {
                 const requirementValue = objectField(requirement, "account capability requirement");
                 return {

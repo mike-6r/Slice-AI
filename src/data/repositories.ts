@@ -33,6 +33,7 @@ import type {
   BankConnection,
   BankConnectionCheckoutSession,
   ConnectPayoutSetup,
+  WithdrawalPreflight,
   FeePolicy,
   PriceAlert,
   SaleProposal,
@@ -526,6 +527,21 @@ export type AdminFinanceDashboard = {
     knownProviderCostsMinor: string;
     pendingProviderCostCount: number;
     externalSettlement: { status: string; destination: string | null };
+  };
+  payoutLiquidity?: {
+    currency: "GBP";
+    providerMode: string;
+    providerAvailableMinor: string | null;
+    providerPendingMinor: string | null;
+    customerCashLiabilityMinor: string;
+    withdrawalEligibleLiabilityMinor: string;
+    settlingMinor: string;
+    activeReservationMinor: string;
+    payoutLiquidityCoverageBps: number | null;
+    providerLiquidityStatus: "AVAILABLE" | "INSUFFICIENT" | "UNAVAILABLE" | "NOT_APPLICABLE";
+    nextAvailabilityAt: string | null;
+    checkedAt: string;
+    warning: boolean;
   };
   overview: {
     totalVolumeMinor: string;
@@ -1780,6 +1796,7 @@ export interface ProviderRepository {
   getFeePolicy(): Promise<FeePolicy>;
   createConnectOnboarding(): Promise<ConnectPayoutSetup>;
   refreshConnectOnboarding(): Promise<ConnectPayoutSetup>;
+  getWithdrawalPreflight(input?: { amountMinor?: string }): Promise<WithdrawalPreflight>;
   listMovements(input?: { cursor?: string; limit?: number }): Promise<WalletMovementPage>;
   createDeposit(amountMinor: string): Promise<WalletMovementView>;
   createWithdrawal(input: {

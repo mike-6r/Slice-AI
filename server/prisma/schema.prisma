@@ -198,6 +198,12 @@ enum CashReservationStatus {
   EXPIRED
 }
 
+enum ProviderLiquidityReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+}
+
 enum PortfolioLotStatus {
   OPEN
   CLOSED
@@ -2651,6 +2657,13 @@ model MoneyMovement {
   provider                    ProviderCode
   providerReferenceCiphertext String?
   providerReferenceHash       String?
+  providerBalanceTransactionIdCiphertext String?
+  providerBalanceTransactionIdHash       String?
+  providerFeeMinor            BigInt?
+  providerNetMinor            BigInt?
+  providerAvailableOn         DateTime?
+  providerCurrency            String?
+  providerSourceReferenceHash String?
   encryptionKeyVersion        String?
   idempotencyKeyHash          String
   reservationId               String?                   @unique
@@ -2665,15 +2678,34 @@ model MoneyMovement {
   cashAccount                 FinancialAccount          @relation("MovementCashAccount", fields: [cashAccountId], references: [id], onDelete: Restrict)
   ledgerTransaction           JournalTransaction?       @relation("MovementJournal", fields: [ledgerTransactionId], references: [id], onDelete: Restrict)
   connectPayout               ConnectPayout?
+  providerLiquidityReservation ProviderLiquidityReservation?
   history                     MoneyMovementHistory[]
   holds                       ComplianceHold[]
   providerCosts               ProviderFinancialCost[]
 
   @@unique([userId, type, idempotencyKeyHash])
   @@unique([provider, providerReferenceHash])
+  @@unique([provider, providerBalanceTransactionIdHash])
   @@index([userId, createdAt, id])
   @@index([provider, status, updatedAt])
+  @@index([provider, providerAvailableOn, status])
   @@index([status, createdAt, id])
+}
+
+model ProviderLiquidityReservation {
+  id                       String                              @id @default(cuid())
+  movementId               String                              @unique
+  provider                 ProviderCode
+  environment              ExternalProviderEnvironment
+  currency                 String
+  amountMinor              BigInt
+  status                   ProviderLiquidityReservationStatus @default(ACTIVE)
+  providerBalanceCheckedAt DateTime
+  createdAt                DateTime                            @default(now())
+  updatedAt                DateTime                            @updatedAt
+  movement                 MoneyMovement                       @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@index([provider, environment, currency, status, createdAt, id])
 }
 
 model ConnectPayout {
