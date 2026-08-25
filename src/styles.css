@@ -55237,7 +55237,10 @@ select[multiple] {
   line-height: 1;
 }
 
-.portfolio-page.portfolio-page--approved .portfolio-overview-intro .portfolio-heading__copy > p:last-child {
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-intro
+  .portfolio-heading__copy
+  > p:last-child {
   max-width: 22rem;
   margin-top: 0.55rem;
   color: #8e9da9;
@@ -55284,9 +55287,7 @@ select[multiple] {
   padding: 1rem;
 }
 
-.portfolio-page.portfolio-page--approved
-  .portfolio-overview-intro
-  .portfolio-summary-kpi--primary {
+.portfolio-page.portfolio-page--approved .portfolio-overview-intro .portfolio-summary-kpi--primary {
   border-color: rgba(36, 220, 177, 0.32);
   background:
     radial-gradient(circle at 100% 0%, rgba(37, 223, 180, 0.18), transparent 48%),
@@ -55389,7 +55390,9 @@ select[multiple] {
   min-height: 14rem;
 }
 
-.portfolio-page.portfolio-page--approved .portfolio-overview-content .portfolio-panel--hero-performance {
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-content
+  .portfolio-panel--hero-performance {
   min-height: 22rem;
 }
 
@@ -55445,11 +55448,16 @@ select[multiple] {
   background: rgba(8, 17, 23, 0.58);
 }
 
-.portfolio-page.portfolio-page--approved .portfolio-overview-discovery .portfolio-market-watch li:first-child {
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-discovery
+  .portfolio-market-watch
+  li:first-child {
   border-top: 1px solid rgba(128, 158, 173, 0.15);
 }
 
-.portfolio-page.portfolio-page--approved .portfolio-overview-discovery .portfolio-market-watch__thumb {
+.portfolio-page.portfolio-page--approved
+  .portfolio-overview-discovery
+  .portfolio-market-watch__thumb {
   width: 2.15rem;
   height: 2.65rem;
 }
@@ -55550,11 +55558,96 @@ select[multiple] {
     max-width: 80%;
   }
 
-  .portfolio-page.portfolio-page--approved .portfolio-overview-content .portfolio-panel--hero-performance {
+  .portfolio-page.portfolio-page--approved
+    .portfolio-overview-content
+    .portfolio-panel--hero-performance {
     min-height: 19rem;
   }
 
-  .portfolio-page.portfolio-page--approved .portfolio-overview-discovery .portfolio-market-watch li {
+  .portfolio-page.portfolio-page--approved
+    .portfolio-overview-discovery
+    .portfolio-market-watch
+    li {
     grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  }
+}
+
+/* Step 3 final layout pass: give the market workspace a balanced desktop
+   grid and keep provider/collector imagery inside a stable card frame. */
+.list-step--market {
+  max-width: 70rem;
+}
+.list-market-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(19rem, 0.8fr);
+  gap: 1.15rem;
+  margin-top: 1.35rem;
+}
+.list-market-main,
+.list-market-aside {
+  gap: 0.85rem;
+  align-content: start;
+}
+.list-market-summary,
+.list-market-panel,
+.list-market-help-card {
+  min-width: 0;
+}
+.list-market-summary__body {
+  grid-template-columns: minmax(7.25rem, 8.5rem) minmax(0, 1fr);
+  gap: 1.1rem;
+}
+.list-market-summary__thumb {
+  aspect-ratio: 0.72;
+  min-height: 9.75rem;
+  overflow: hidden;
+  padding: 0.45rem;
+}
+.list-market-summary__thumb.is-image {
+  align-content: space-between;
+  border-style: solid;
+  border-color: rgba(49, 220, 174, 0.28);
+  background: rgba(2, 9, 14, 0.85);
+}
+.list-market-summary__thumb img {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  object-fit: contain;
+  border-radius: 0.38rem;
+}
+.list-market-summary__thumb.is-image small {
+  max-width: none;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1120px) {
+  .list-market-layout {
+    grid-template-columns: minmax(0, 1.1fr) minmax(17rem, 0.9fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .list-market-layout {
+    grid-template-columns: 1fr;
+  }
+  .list-market-aside {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .list-market-aside {
+    grid-template-columns: 1fr;
+  }
+  .list-market-summary__body {
+    grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr);
+    gap: 0.8rem;
+  }
+  .list-market-summary__thumb {
+    min-height: 8.5rem;
   }
 }

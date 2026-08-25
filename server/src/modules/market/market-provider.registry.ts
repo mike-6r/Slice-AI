@@ -121,6 +121,7 @@ export class PriceChartingProvider implements MarketDataProvider {
         conditionKey: reference.conditionKey,
         exactGrader: reference.exactGrader,
         sourceCurrency: product.currency,
+        ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
       },
     }));
   }
@@ -278,6 +279,7 @@ function parseProduct(
     stringValue(row['currency-code']) ??
     'USD'
   ).toUpperCase();
+  const imageUrl = firstImageUrl(row);
   const references = CONDITION_FIELDS.flatMap(
     ([conditionKey, label, grader, grade, exactGrader]) => {
       const amountMinor = integerAmount(row[conditionKey]);
@@ -294,6 +296,7 @@ function parseProduct(
     year,
     upc: stringValue(row.upc) ?? null,
     currency,
+    imageUrl,
     references,
   };
 }
@@ -366,6 +369,46 @@ function integerAmount(value: unknown): bigint | null {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function firstImageUrl(row: Record<string, unknown>) {
+  for (const key of [
+    'image-url',
+    'image_url',
+    'imageUrl',
+    'image',
+    'thumbnail-url',
+    'thumbnail_url',
+    'thumbnailUrl',
+    'thumbnail',
+    'cover-image',
+    'cover_image',
+    'box-art',
+    'box_art',
+  ]) {
+    const value = imageUrlValue(row[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function imageUrlValue(value: unknown): string | undefined {
+  const candidate =
+    typeof value === 'string'
+      ? value.trim()
+      : isRecord(value) && typeof value.url === 'string'
+        ? value.url.trim()
+        : '';
+  if (!candidate) return undefined;
+  const normalized = candidate.startsWith('//')
+    ? `https:${candidate}`
+    : candidate;
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

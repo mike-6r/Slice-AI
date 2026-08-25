@@ -1330,6 +1330,8 @@ const mapMarketResearch = (raw: unknown): MarketResearchSnapshot => {
       sales: sales as MarketResearchSnapshot["snapshot"]["sales"],
       listings: listings as MarketResearchSnapshot["snapshot"]["listings"],
       priceGuides: priceGuides as MarketResearchSnapshot["snapshot"]["priceGuides"],
+      referenceImageUrl:
+        typeof snapshot.referenceImageUrl === "string" ? snapshot.referenceImageUrl : null,
       exactCompCount: Number(snapshot.exactCompCount),
       strongCompCount: Number(snapshot.strongCompCount),
       rejectedCompCount: Number(snapshot.rejectedCompCount),
@@ -3524,6 +3526,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                     reference.originalTitle,
                     "referenceImport.originalTitle",
                   ),
+                  ...(typeof reference.imageUrl === "string"
+                    ? { imageUrl: reference.imageUrl }
+                    : {}),
                   ...(price
                     ? {
                         observedAskingPrice: (() => {

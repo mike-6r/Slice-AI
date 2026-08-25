@@ -281,6 +281,7 @@ describe("Document 010 list asset UI", () => {
           latestMinor: "16250",
           latestAt: "2025-05-09T10:42:00.000Z",
         },
+        referenceImageUrl: "https://cdn.pricecharting.test/umbreon.jpg",
         exactCompCount: 2,
         strongCompCount: 0,
         rejectedCompCount: 0,
@@ -326,6 +327,8 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain("You’d keep 75%");
     expect(html).toContain("Market references guide the review");
     expect(html).toContain("View source");
+    expect(html).toContain('alt="Umbreon VMAX PriceCharting reference image"');
+    expect(html).toContain("PriceCharting reference image");
   });
 
   it("keeps the no-match path available and exposes optional reviewer context", () => {

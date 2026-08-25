@@ -838,6 +838,7 @@ export function SubmissionPage() {
               ready={marketReady}
               form={form}
               category={selectedCategory?.name ?? "Collectible card"}
+              submission={submission}
               research={marketResearch}
               pending={checkMarket.isPending}
               onCheck={() => checkMarket.mutate()}
@@ -1591,6 +1592,7 @@ export function MarketStep({
   ready,
   form,
   category,
+  submission,
   research,
   pending,
   onCheck,
@@ -1600,6 +1602,7 @@ export function MarketStep({
   ready: boolean;
   form: ListingForm;
   category: string;
+  submission?: SubmissionDetail;
   research: MarketResearchSnapshot | null;
   pending: boolean;
   onCheck: () => void;
@@ -1616,6 +1619,16 @@ export function MarketStep({
   const reference = research ? marketReference(research) : null;
   const hasReference = Boolean(reference);
   const identity = [form.name, form.set, form.cardNumber].filter(Boolean).join(" · ");
+  const uploadedFront = safeMediaForSlot(submission, "front")[0];
+  const uploadedImage = uploadedFront?.previewUrl ?? null;
+  const providerImage =
+    research?.snapshot.referenceImageUrl ?? form.customerReference?.imageUrl ?? null;
+  const displayImage = uploadedImage || providerImage;
+  const displayImageLabel = uploadedImage
+    ? "Uploaded front photo"
+    : providerImage
+      ? "PriceCharting reference image"
+      : "Card image not uploaded";
   const grader = form.grader
     ? `${form.grader}${form.grade ? ` ${form.grade}` : ""}`
     : "Raw / Ungraded";
@@ -1640,9 +1653,27 @@ export function MarketStep({
               <span className="list-market-status">Private draft</span>
             </div>
             <div className="list-market-summary__body">
-              <div className="list-market-summary__thumb" aria-label="Card photo added in Step 4">
-                <FileImage aria-hidden="true" />
-                <small>Photos in Step 4</small>
+              <div
+                className={`list-market-summary__thumb${displayImage ? " is-image" : ""}`}
+                aria-label={displayImageLabel}
+              >
+                {displayImage ? (
+                  <img
+                    src={displayImage}
+                    alt={`${form.name || "Collectible"} ${
+                      uploadedImage ? "uploaded front photo" : "PriceCharting reference image"
+                    }`}
+                  />
+                ) : (
+                  <FileImage aria-hidden="true" />
+                )}
+                <small>
+                  {uploadedImage
+                    ? "Uploaded front photo"
+                    : providerImage
+                      ? "PriceCharting reference image"
+                      : "Upload photos in Step 4"}
+                </small>
               </div>
               <dl className="list-market-summary__details">
                 <Metric label="Category" value={category} />

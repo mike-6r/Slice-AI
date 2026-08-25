@@ -58,12 +58,17 @@ describe('TrustedReferenceImportService', () => {
       upc: null,
       releaseDate: '1999-01-09',
       currency: 'USD',
+      imageUrl: 'https://cdn.pricecharting.test/charizard.jpg',
       references: [],
     });
     const live = new TrustedReferenceImportService({
       get: () => ({
         getProduct,
-        health: async () => ({ configured: true, status: 'UP', detail: 'test' }),
+        health: async () => ({
+          configured: true,
+          status: 'UP',
+          detail: 'test',
+        }),
       }),
     } as never);
 
@@ -73,6 +78,9 @@ describe('TrustedReferenceImportService', () => {
 
     expect(getProduct).toHaveBeenCalledWith('715593');
     expect(result.customerReference?.externalReferenceId).toBe('715593');
+    expect(result.customerReference?.imageUrl).toBe(
+      'https://cdn.pricecharting.test/charizard.jpg',
+    );
     expect(result.status).toBe('MATCH_FOUND');
   });
 

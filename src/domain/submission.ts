@@ -42,7 +42,8 @@ export interface CertificationVerification {
   certificationNumber: string;
   normalizedCertificationNumber: string;
   status: "MANUAL_REVIEW_REQUIRED" | "VERIFIED" | "MISMATCH" | "CERT_NOT_FOUND" | string;
-  verificationMode: "OFFICIAL_API" | "APPROVED_MACHINE_LOOKUP" | "MANUAL_OFFICIAL_LOOKUP" | "UNSUPPORTED" | string;
+  verificationMode:
+    "OFFICIAL_API" | "APPROVED_MACHINE_LOOKUP" | "MANUAL_OFFICIAL_LOOKUP" | "UNSUPPORTED" | string;
   officialVerificationUrl: string | null;
   verifiedGrade: string | null;
   verifiedLabel: string | null;
@@ -108,6 +109,7 @@ export interface MarketResearchSnapshot {
     sales: MarketResearchRange | null;
     listings: MarketResearchRange | null;
     priceGuides?: MarketResearchRange | null;
+    referenceImageUrl?: string | null;
     exactCompCount: number;
     strongCompCount: number;
     rejectedCompCount: number;
@@ -393,6 +395,7 @@ export interface CustomerReference {
   externalReferenceId: string | null;
   normalizedUrl: string;
   originalTitle: string | null;
+  imageUrl?: string | null;
   observedAskingPrice?: { amountMinor: string; currency: string };
   importedAt: ISODateTime;
   matchQuality: "MATCH_FOUND" | "PARTIAL_MATCH";

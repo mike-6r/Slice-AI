@@ -57,6 +57,7 @@ type Observation = {
   grader?: string;
   grade?: string;
   variant?: string;
+  referenceImageUrl?: string;
 };
 type MatchedObservation = Observation & {
   matchQuality: 'EXACT' | 'STRONG' | 'WEAK' | 'REJECTED';
@@ -326,7 +327,12 @@ export class CollectibleMarketResearchService {
       classifyObservation(identity, item),
     );
     const now = new Date();
-    const aggregate = aggregateSnapshot(classified, now);
+    const previousImageUrl =
+      isRecord(record.snapshot) &&
+      typeof record.snapshot.referenceImageUrl === 'string'
+        ? record.snapshot.referenceImageUrl
+        : undefined;
+    const aggregate = aggregateSnapshot(classified, now, previousImageUrl);
     const updated = await this.db.$transaction(async (db) => {
       await db.submissionMarketResearch.update({
         where: { id: researchId },
@@ -873,6 +879,9 @@ function providerObservationToResearch(
     grader: observation.grader,
     grade: observation.grade,
     variant: undefined,
+    ...(typeof observation.provenance?.imageUrl === 'string'
+      ? { referenceImageUrl: observation.provenance.imageUrl }
+      : {}),
   };
 }
 function hashIdentity(identity: Identity) {
@@ -890,6 +899,10 @@ function hashIdentity(identity: Identity) {
 }
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function identityCompatibleWithAsset(
@@ -991,7 +1004,11 @@ function cardNumberMatches(cardNumber: string, haystack: string) {
   const numerator = normalize(cardNumber.split('/')[0] ?? '');
   return numerator.length >= 2 && haystack.includes(numerator);
 }
-function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
+function aggregateSnapshot(
+  observations: MatchedObservation[],
+  now: Date,
+  fallbackReferenceImageUrl?: string,
+) {
   const exactSales = observations.filter(
     (o) =>
       o.observationType === 'SALE' && o.included && o.matchQuality === 'EXACT',
@@ -1065,6 +1082,11 @@ function aggregateSnapshot(observations: MatchedObservation[], now: Date) {
       rejectedCompCount: observations.filter(
         (o) => o.matchQuality === 'REJECTED',
       ).length,
+      referenceImageUrl:
+        observations.find((o) => o.included && o.referenceImageUrl)
+          ?.referenceImageUrl ??
+        fallbackReferenceImageUrl ??
+        null,
       updatedAt: now.toISOString(),
     },
   };

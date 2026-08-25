@@ -13,7 +13,11 @@ export type MarketIdentity = {
 
 export type ProviderObservation = {
   providerExternalId: string;
-  observationType: 'COMPLETED_SALE' | 'ACTIVE_LISTING' | 'PRICE_GUIDE' | 'OTHER_APPROVED_REFERENCE';
+  observationType:
+    | 'COMPLETED_SALE'
+    | 'ACTIVE_LISTING'
+    | 'PRICE_GUIDE'
+    | 'OTHER_APPROVED_REFERENCE';
   priceMinor: bigint;
   currency: string;
   title: string;
@@ -44,6 +48,7 @@ export type PriceChartingProduct = {
   year: number | null;
   upc: string | null;
   currency: string;
+  imageUrl: string | null;
   references: PriceChartingConditionReference[];
 };
 
@@ -55,7 +60,11 @@ export type MarketProductCandidate = Pick<
 export interface MarketDataProvider {
   readonly providerId: string;
   supports(category: string): boolean;
-  health(): Promise<{ configured: boolean; status: 'UP' | 'UNAVAILABLE'; detail: string }>;
+  health(): Promise<{
+    configured: boolean;
+    status: 'UP' | 'UNAVAILABLE';
+    detail: string;
+  }>;
   fetchObservations(
     identity: MarketIdentity,
     providerExternalId: string,

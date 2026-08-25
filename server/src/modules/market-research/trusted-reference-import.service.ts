@@ -15,6 +15,7 @@ type CustomerReference = {
   externalReferenceId: string | null;
   normalizedUrl: string;
   originalTitle: string | null;
+  imageUrl?: string | null;
   importedAt: string;
   matchQuality: 'MATCH_FOUND' | 'PARTIAL_MATCH';
   extractedIdentity: ImportedIdentity;
@@ -114,7 +115,9 @@ const priceChartingProductIds: Record<string, string> = {
  */
 @Injectable()
 export class TrustedReferenceImportService {
-  constructor(@Optional() private readonly providers?: MarketProviderRegistry) {}
+  constructor(
+    @Optional() private readonly providers?: MarketProviderRegistry,
+  ) {}
 
   identify(rawUrl: string): ReferenceImport {
     const parsed = parseTrustedUrl(rawUrl);
@@ -143,7 +146,9 @@ export class TrustedReferenceImportService {
       parsed.pathname.slice('/game/'.length).replace(/\/+$/, ''),
     ).toLowerCase();
     const providerProductId =
-      parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ?? priceChartingProductIds[key] ?? key;
+      parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ??
+      priceChartingProductIds[key] ??
+      key;
     const identity = priceChartingCards[key];
     if (!identity) {
       const partial = partialIdentity(key);
@@ -171,7 +176,8 @@ export class TrustedReferenceImportService {
     const originalTitle = `${identity.year} ${identity.set} ${identity.name} #${identity.cardNumber}`;
     return {
       status: 'MATCH_FOUND',
-      message: 'PriceCharting found this exact product. Check the details, then continue.',
+      message:
+        'PriceCharting found this exact product. Check the details, then continue.',
       provider: 'PriceCharting',
       identity,
       customerReference: {
@@ -215,7 +221,9 @@ export class TrustedReferenceImportService {
         identity,
         customerReference: {
           ...imported.customerReference,
-          originalTitle: product.title || imported.customerReference.originalTitle,
+          originalTitle:
+            product.title || imported.customerReference.originalTitle,
+          ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
           extractedIdentity: identity,
         },
       };
@@ -223,7 +231,8 @@ export class TrustedReferenceImportService {
       return {
         ...imported,
         status: 'PROVIDER_UNAVAILABLE',
-        message: 'PriceCharting is temporarily unavailable. You can enter the card manually.',
+        message:
+          'PriceCharting is temporarily unavailable. You can enter the card manually.',
       };
     }
   }

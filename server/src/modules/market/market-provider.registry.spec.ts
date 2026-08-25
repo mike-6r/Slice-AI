@@ -32,6 +32,7 @@ describe('PriceChartingProvider', () => {
           'console-name': 'Evolving Skies',
           'release-date': '2021-08-27',
           currency: 'USD',
+          'image-url': 'https://cdn.pricecharting.test/umbreon.jpg',
           'loose-price': 10000,
           'manual-only-price': 50000,
         }),
@@ -48,6 +49,7 @@ describe('PriceChartingProvider', () => {
     expect(requestUrl).toContain('t=provider-token');
     expect(product.providerProductId).toBe('123');
     expect(product.currency).toBe('USD');
+    expect(product.imageUrl).toBe('https://cdn.pricecharting.test/umbreon.jpg');
     expect(product.references).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
