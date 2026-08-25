@@ -269,29 +269,30 @@ export class StripeConnectPayoutService {
         },
       },
     });
-    // Keep new staging/production onboarding on the established Express
-    // Connect contract. Existing v2 rows remain readable through
-    // retrieveAccount, but creating v2 recipient accounts currently fails for
-    // this Connect platform before Slice can persist its mapping.
-    let accountMode: 'v2' | 'legacy' = 'legacy';
+    let accountMode: 'v2' | 'legacy' = 'v2';
     if (!row) {
-      const account = await stripe.accounts.create(
+      const account = await stripe.v2.core.accounts.create(
         {
-          type: 'express',
-          country: 'GB',
-          email: user.email,
-          default_currency: 'gbp',
-          capabilities: { transfers: { requested: true } },
+          contact_email: user.email,
+          dashboard: 'express',
+          defaults: { currency: 'gbp' },
+          identity: { country: 'GB', entity_type: 'individual' },
+          configuration: {
+            recipient: {
+              capabilities: {
+                stripe_balance: { stripe_transfers: { requested: true } },
+              },
+            },
+          },
+          include: ['configuration.recipient', 'requirements'],
           metadata: {
             slice_user_id: actor.userId,
             slice_environment: environment,
           },
         },
-        {
-          idempotencyKey: `slice-connect-account:${environment}:${actor.userId}`,
-        },
+        { idempotencyKey: `slice-connect-account:${environment}:${actor.userId}` },
       );
-      const snapshot = legacyAccountSnapshot(account);
+      const snapshot = v2AccountSnapshot(account as unknown as V2ConnectAccount);
       try {
         row = await this.db.externalConnectAccount.create({
           data: {

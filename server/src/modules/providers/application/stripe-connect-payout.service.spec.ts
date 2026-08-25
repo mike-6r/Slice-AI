@@ -155,29 +155,41 @@ describe('StripeConnectPayoutService', () => {
     ).resolves.toMatchObject({ status: 'NOT_STARTED' });
   });
 
-  it('creates a legacy Express Connect account for new payout onboarding', async () => {
+  it('creates an Accounts v2 recipient account for new payout onboarding', async () => {
     const account = {
-      id: 'acct_express_test',
-      details_submitted: false,
-      payouts_enabled: false,
-      requirements: {
-        currently_due: ['individual.verification.document'],
-        past_due: [],
-        pending_verification: [],
-        errors: [],
-        disabled_reason: null,
+      object: 'v2.core.account',
+      id: 'acct_v2_test',
+      requirements: { entries: [{ awaiting_action_from: 'user' }] },
+      configuration: {
+        recipient: {
+          capabilities: {
+            stripe_balance: {
+              payouts: { status: 'pending' },
+              stripe_transfers: { status: 'pending' },
+            },
+          },
+        },
       },
-      capabilities: { transfers: 'inactive' },
     } as never;
     const stripe = {
-      accounts: {
-        create: jest.fn().mockResolvedValue(account),
-        retrieve: jest.fn(),
+      v2: {
+        core: {
+          accounts: {
+            create: jest.fn().mockResolvedValue(account),
+            retrieve: jest.fn(),
+          },
+          accountLinks: {
+            create: jest
+              .fn<() => Promise<{ url: string; expires_at: string }>>()
+              .mockResolvedValue({
+                url: 'https://connect.stripe.test/onboarding',
+                expires_at: '2026-08-25T04:00:00.000Z',
+              }),
+          },
+        },
       },
-      accountLinks: {
-        create: jest
-          .fn<() => Promise<{ url: string }>>()
-          .mockResolvedValue({ url: 'https://connect.stripe.test/onboarding' }),
+      accounts: {
+        retrieve: jest.fn(),
       },
     };
     const findUser = jest
@@ -214,7 +226,7 @@ describe('StripeConnectPayoutService', () => {
       db as never,
       {
         encrypt: jest.fn().mockReturnValue('ciphertext'),
-        decrypt: jest.fn().mockReturnValue('acct_express_test'),
+        decrypt: jest.fn().mockReturnValue('acct_v2_test'),
         hash: jest.fn().mockReturnValue('hash'),
         keyVersion: 'v1',
       } as never,
@@ -235,19 +247,25 @@ describe('StripeConnectPayoutService', () => {
       onboardingUrl: 'https://connect.stripe.test/onboarding',
       status: 'ACTION_REQUIRED',
     });
-    expect(stripe.accounts.create).toHaveBeenCalledWith(
+    expect(stripe.v2.core.accounts.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'express',
-        country: 'GB',
-        default_currency: 'gbp',
-        capabilities: { transfers: { requested: true } },
+        dashboard: 'express',
+        defaults: { currency: 'gbp' },
+        identity: { country: 'GB', entity_type: 'individual' },
+        configuration: {
+          recipient: {
+            capabilities: {
+              stripe_balance: { stripe_transfers: { requested: true } },
+            },
+          },
+        },
       }),
       { idempotencyKey: 'slice-connect-account:SANDBOX:u-1' },
     );
-    expect(stripe.accountLinks.create).toHaveBeenCalledWith(
+    expect(stripe.v2.core.accountLinks.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        account: 'acct_express_test',
-        type: 'account_onboarding',
+        account: 'acct_v2_test',
+        use_case: expect.objectContaining({ type: 'account_onboarding' }),
       }),
       { idempotencyKey: 'slice-connect-onboarding:SANDBOX:u-1:req-1' },
     );
