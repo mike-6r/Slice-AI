@@ -430,11 +430,11 @@ describe('StripeConnectPayoutService', () => {
       expect.objectContaining({
         account: 'acct_existing',
         use_case: expect.objectContaining({
-          type: 'account_update',
-          account_update: expect.objectContaining({
+          type: 'account_onboarding',
+          account_onboarding: expect.objectContaining({
             configurations: ['recipient'],
             collection_options: {
-              fields: 'currently_due',
+              fields: 'eventually_due',
               future_requirements: 'include',
             },
           }),

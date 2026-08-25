@@ -113,7 +113,7 @@ type ConnectOnboardingSeed = {
   verifiedPhone: string | null;
 };
 
-type ConnectAccountLinkType = 'account_onboarding' | 'account_update';
+type ConnectAccountLinkFields = 'currently_due' | 'eventually_due';
 
 function connectOnboardingSeed(user: ConnectOnboardingUser) {
   const country = user.profile?.countryCode?.trim().toUpperCase();
@@ -335,7 +335,7 @@ export class StripeConnectPayoutService {
       },
     });
     let accountMode: 'v2' | 'legacy' = 'v2';
-    let accountLinkType: ConnectAccountLinkType = 'account_onboarding';
+    let accountLinkFields: ConnectAccountLinkFields = 'currently_due';
     if (!row) {
       const connectAccountRowId = randomUUID();
       const account = await stripe.v2.core.accounts.create(
@@ -429,8 +429,7 @@ export class StripeConnectPayoutService {
           await this.resolveExternalAccountId(stripe, row),
         );
         accountMode = resolved.mode;
-        accountLinkType =
-          resolved.mode === 'v2' ? 'account_update' : 'account_onboarding';
+        accountLinkFields = resolved.mode === 'v2' ? 'eventually_due' : 'currently_due';
         if (resolved.mode === 'v2') {
           const prefilled = await this.prefillExistingV2Account(
             stripe,
@@ -450,8 +449,7 @@ export class StripeConnectPayoutService {
         await this.resolveExternalAccountId(stripe, row),
       );
       accountMode = resolved.mode;
-      accountLinkType =
-        resolved.mode === 'v2' ? 'account_update' : 'account_onboarding';
+      accountLinkFields = resolved.mode === 'v2' ? 'eventually_due' : 'currently_due';
       if (resolved.mode === 'v2') {
         const prefilled = await this.prefillExistingV2Account(
           stripe,
@@ -469,7 +467,7 @@ export class StripeConnectPayoutService {
     const link = await this.createAccountLink(
       stripe,
       accountMode,
-      accountLinkType,
+      accountLinkFields,
       externalAccountId,
       environment,
       actor.userId,
@@ -873,7 +871,7 @@ export class StripeConnectPayoutService {
   private async createAccountLink(
     stripe: Stripe,
     mode: 'v2' | 'legacy',
-    type: ConnectAccountLinkType,
+    fields: ConnectAccountLinkFields,
     externalAccountId: string,
     environment: 'SANDBOX' | 'LIVE',
     userId: string,
@@ -890,32 +888,21 @@ export class StripeConnectPayoutService {
     const idempotencyKey = `slice-connect-onboarding:${environment}:${userId}:${requestId}`;
     if (mode === 'v2') {
       const collectionOptions = {
-        fields: 'currently_due' as const,
+        fields,
         future_requirements: 'include' as const,
       };
       const link = await stripe.v2.core.accountLinks.create(
         {
           account: externalAccountId,
-          use_case:
-            type === 'account_update'
-              ? {
-                  type,
-                  account_update: {
-                    configurations: ['recipient'],
-                    refresh_url: refreshUrl,
-                    return_url: returnUrl,
-                    collection_options: collectionOptions,
-                  },
-                }
-              : {
-                  type,
-                  account_onboarding: {
-                    configurations: ['recipient'],
-                    refresh_url: refreshUrl,
-                    return_url: returnUrl,
-                    collection_options: collectionOptions,
-                  },
-                },
+          use_case: {
+            type: 'account_onboarding',
+            account_onboarding: {
+              configurations: ['recipient'],
+              refresh_url: refreshUrl,
+              return_url: returnUrl,
+              collection_options: collectionOptions,
+            },
+          },
         },
         { idempotencyKey },
       );
@@ -930,7 +917,7 @@ export class StripeConnectPayoutService {
     const link = await stripe.accountLinks.create(
       {
         account: externalAccountId,
-        type,
+        type: 'account_onboarding',
         refresh_url: refreshUrl,
         return_url: returnUrl,
         collection_options: {
