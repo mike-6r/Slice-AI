@@ -1,6 +1,9 @@
 # Bacs Deposit Risk and Returns
 
-Status: implemented and deployed to staging in the current release; the validation listed below passed. Launch policy finalization is documented in `docs/finance/FINANCIAL_LAUNCH_POLICY.md` and remains pending owner approval.
+Status: implemented and deployed to staging; the owner-approved initial
+financial launch policy is active in staging as of 2026-08-25. Production
+configuration remains separate and must fail closed if approved values are
+missing or malformed.
 
 This document records Slice's current GBP-only Bacs Direct Debit risk model. It does not silently set a commercial hold period, deposit limits, first-deposit rule, or market-finality policy.
 
@@ -35,15 +38,20 @@ Stripe provider success and a Stripe balance transaction's `available_on` are di
 
 ## Internal Use Policy
 
-The policy is fail-closed until Product/Risk configures `BACS_INTERNAL_TRADE_HOLD_DAYS`. When omitted, Bacs-confirmed value remains visible in `BACS_RISK_HOLD` indefinitely; Slice does not invent 3-, 5-, or 7-day behavior. When configured, release is based on `providerAvailableOn + configured days`, performed lazily by wallet, trading, and provider-evidence reads. The release is transactional, idempotent, auditable, and moves the exact amount to `CASH_AVAILABLE`.
+The approved initial policy configures `BACS_INTERNAL_TRADE_HOLD_DAYS=7`.
+Release is exactly `providerAvailableOn + 7 days`, performed lazily by wallet,
+trading, and provider-evidence reads. If the approved value is omitted or
+malformed, startup/config health fails closed rather than disabling the hold.
+The release is transactional, idempotent, auditable, and moves the exact
+amount to `CASH_AVAILABLE`.
 
 The policy currently has one explicit release control. Account age, successful deposit history, previous returns, identity/phone/MFA state, amount, shared-instrument signal, bank-change state, and admin flags remain available inputs for a future explainable rule set, but no opaque fraud score or silent first-deposit rule was introduced.
 
-The exact launch-policy proposal, including Conservative/Balanced/Fast hold
-options, Conservative/Balanced/High-limit deposit profiles, first-deposit
-rules, sale-proceeds treatment, configuration ownership, and release gates is
-in `docs/finance/FINANCIAL_LAUNCH_POLICY.md`. No proposed values are enabled
-by this pass.
+The exact launch-policy record, including the approved Conservative hold and
+deposit profile, first-deposit rules, sale-proceeds treatment, configuration
+ownership, and release gates is in
+`docs/finance/FINANCIAL_LAUNCH_POLICY.md`. The approved staging values are
+enabled; production is not modified.
 
 ## Irreversible Actions and Finality
 
@@ -53,7 +61,7 @@ by this pass.
 - Withdrawals create external provider effects and remain governed by existing maturity/liquidity and payout controls.
 - No user-to-user cash transfer path was found in the current authority.
 
-If a returned deposit leaves the customer's cash account negative, Slice posts a balanced `CUSTOMER_DEFICIT_RECEIVABLE` reclassification, creates a `FinancialDeficit`, and creates an account compliance hold. Seller proceeds are deliberately not used to cover that shortfall without an explicit market-finality policy. Recovery is currently supported from a future verified deposit after it is released; a future dual-control finance adjustment or sale-proceeds policy is not silently enabled.
+If a returned deposit leaves the customer's cash account negative, Slice posts a balanced `CUSTOMER_DEFICIT_RECEIVABLE` reclassification, creates a `FinancialDeficit`, and creates an account compliance hold. Seller proceeds are deliberately not used to cover that shortfall. Recovery is supported from a future verified deposit after it is released, or through the separately authorized dual-control finance adjustment workflow; sale-proceeds auto-offset remains disabled.
 
 ## Trade Safety
 
@@ -116,14 +124,10 @@ full bank details. Deposit limit blocks use customer-safe semantic wording.
 
 ## Recovery and Treasury
 
-The explicit receivable is a platform asset and is balanced against the customer's cash reclassification. The account restriction blocks new purchases, listings/offers, withdrawals, and other exposure-increasing actions while allowing read-only access and a verified deposit recovery path. Existing provider expense, customer liability, reconciliation, and revenue journals are not reclassified by this task. Finance must still define long-term risk-reserve economics and any dual-control manual recovery workflow.
+The explicit receivable is a platform asset and is balanced against the customer's cash reclassification. The account restriction blocks new purchases, listings/offers, withdrawals, and other exposure-increasing actions while allowing read-only access and a verified deposit recovery path. Existing provider expense, customer liability, reconciliation, and revenue journals are not reclassified by this task. Finance must still define long-term risk-reserve economics. Manual recovery is available only through the dual-control workflow and its balanced `ADMIN_CORRECTION` journal template.
 
 ## Remaining Product Policy Decisions
 
-1. Approve the production Bacs internal-use hold duration/rule; no number is deployed by inference.
-2. Decide whether first deposits, new accounts, and high-risk signals receive separate configurable holds.
-3. Approve deposit max/daily/rolling/count/rapid limits for the launch market.
-4. Approve the platform market-finality policy and who bears a buyer's returned-debit loss; no seller clawback is active.
-5. Decide whether and when sale proceeds can cure a deficit; the recommended launch path is future verified deposits only.
-6. Approve a dual-control manual adjustment workflow before any deficit reduction or material restriction release by staff.
-7. Approve notification/support/collections operations and configure production email monitoring separately from staging.
+1. Configure the already-approved Bacs hold and limit values independently in production.
+2. Decide whether first deposits, new accounts, and high-risk signals receive separate configurable holds; none may shorten seven days.
+3. Complete production notification/support/collections operations and monitor mandatory finance email failures separately from staging.

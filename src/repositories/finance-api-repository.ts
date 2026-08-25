@@ -1,5 +1,6 @@
 import type { PortfolioRepository } from "@/data/repositories";
 import type {
+  BacsRiskHeldDeposit,
   GbpMinorUnits,
   PortfolioCashSummary,
   PortfolioHolding,
@@ -147,6 +148,23 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
       : {}),
     ...(body.riskHeldDepositCount !== undefined
       ? { riskHeldDepositCount: count(body.riskHeldDepositCount, "wallet.riskHeldDepositCount") }
+      : {}),
+    ...(body.riskHeldDeposits !== undefined
+      ? {
+          riskHeldDeposits: Array.isArray(body.riskHeldDeposits)
+            ? body.riskHeldDeposits.map((rawDeposit): BacsRiskHeldDeposit => {
+                const deposit = object(rawDeposit);
+                return {
+                  id: requiredString(deposit.id, "wallet.riskHeldDeposits.id"),
+                  amountMinor: minor(deposit.amountMinor, "wallet.riskHeldDeposits.amountMinor"),
+                  providerAvailableOn: nullableString(deposit.providerAvailableOn) as BacsRiskHeldDeposit["providerAvailableOn"],
+                  expectedReleaseAt: nullableString(deposit.expectedReleaseAt) as BacsRiskHeldDeposit["expectedReleaseAt"],
+                };
+              })
+            : (() => {
+                throw new Error("Invalid held-deposit response.");
+              })(),
+        }
       : {}),
     ...(body.withdrawableSources !== undefined
       ? {

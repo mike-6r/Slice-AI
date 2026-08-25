@@ -4,6 +4,13 @@ import type { ISODateTime } from "./common";
 export type GbpMinorUnits = string;
 export type PortfolioValuationStatus = "FULL" | "PARTIAL" | "UNAVAILABLE";
 
+export interface BacsRiskHeldDeposit {
+  id: string;
+  amountMinor: GbpMinorUnits;
+  providerAvailableOn: ISODateTime | null;
+  expectedReleaseAt: ISODateTime | null;
+}
+
 export interface PortfolioCashSummary {
   currency: "GBP";
   totalMinor: GbpMinorUnits;
@@ -22,6 +29,7 @@ export interface PortfolioCashSummary {
   /** Provider-confirmed Bacs cash held while return risk is unresolved. */
   riskHeldMinor?: GbpMinorUnits;
   riskHeldDepositCount?: number;
+  riskHeldDeposits?: BacsRiskHeldDeposit[];
   withdrawableSources?: Array<{
     code: string;
     availableMinor: GbpMinorUnits;

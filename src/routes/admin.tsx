@@ -331,7 +331,7 @@ function AdminConsole() {
     ],
     executions: ["SETTLED", "FAILED"],
     reconciliation: ["RECONCILED", "MISMATCH"],
-    adjustments: [],
+    adjustments: ["DRAFT", "PENDING_APPROVAL", "APPROVED", "APPLIED", "REJECTED"],
   };
   const financeStatus = financeStatuses[financeTab]?.includes(reviewStatus ?? "")
     ? reviewStatus

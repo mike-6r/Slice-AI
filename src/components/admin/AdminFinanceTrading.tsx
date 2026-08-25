@@ -77,7 +77,7 @@ const statuses: Record<FinanceTab, string[]> = {
   ],
   executions: ["SETTLED", "FAILED"],
   reconciliation: ["RECONCILED", "MISMATCH"],
-  adjustments: [],
+  adjustments: ["DRAFT", "PENDING_APPROVAL", "APPROVED", "APPLIED", "REJECTED"],
 };
 
 const money = (minor: unknown, currency = "GBP") => {
@@ -188,13 +188,6 @@ export function AdminFinanceTrading({
 
   const table = useMemo(() => {
     const rows = records?.items ?? [];
-    if (activeTab === "adjustments")
-      return (
-        <EmptyState
-          title="Adjustments are not configured"
-          detail="No adjustment model or compensating-journal workflow is connected in this environment."
-        />
-      );
     if (!rows.length && !recordsLoading)
       return (
         <EmptyState
@@ -354,7 +347,7 @@ export function AdminFinanceTrading({
           ) : (
             table
           )}
-          {!failed && activeTab !== "adjustments" && records ? (
+          {!failed && records ? (
             <FinancePagination info={pageInfo} update={update} />
           ) : null}
         </div>
@@ -735,7 +728,16 @@ function FinanceHeader({ tab }: { tab: FinanceTab }) {
       "Created",
       "Actions",
     ],
-    adjustments: [],
+    adjustments: [
+      "Request",
+      "User",
+      "Amount",
+      "Status",
+      "Before outstanding",
+      "After outstanding",
+      "Initiated",
+      "Applied",
+    ],
   } as Record<FinanceTab, string[]>;
   return (
     <tr>
@@ -850,6 +852,22 @@ function FinanceRow({
               Inspect
             </button>
           </td>
+        </>
+      ) : null}
+      {tab === "adjustments" ? (
+        <>
+          <td>{text(row.id)}</td>
+          <td>
+            <FinanceIdentity value={value("user")} onOpen={(id) => openUser(id)} />
+          </td>
+          <td>{money(value("amountMinor"), text(value("currency")))}</td>
+          <td>
+            <Status value={value("status")} />
+          </td>
+          <td>{money(value("beforeOutstandingMinor"), text(value("currency")))}</td>
+          <td>{money(value("afterOutstandingMinor"), text(value("currency")))}</td>
+          <td>{date(value("requestedAt"))}</td>
+          <td>{date(value("appliedAt"))}</td>
         </>
       ) : null}
     </tr>

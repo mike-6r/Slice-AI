@@ -24,6 +24,14 @@ import {
 
 type Db = Prisma.TransactionClient;
 
+export function bacsReleaseAt(providerAvailableOn: Date, holdDays: number) {
+  return new Date(providerAvailableOn.getTime() + holdDays * 86_400_000);
+}
+
+export function isBacsReleaseEligible(providerAvailableOn: Date, holdDays: number, now: Date) {
+  return now.getTime() >= bacsReleaseAt(providerAvailableOn, holdDays).getTime();
+}
+
 type PostJournalInput = Readonly<{
   type:
     | 'DEMO_FUNDING'
@@ -141,7 +149,6 @@ export class FinancialLedgerService {
   ) {
     const holdDays = this.config?.bacsInternalTradeHoldDays;
     if (holdDays === undefined) return false;
-    const maturedBefore = new Date(now.getTime() - holdDays * 86_400_000);
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM "MoneyMovement" WHERE id = ${movementId} FOR UPDATE`;
       const movement = await db.moneyMovement.findUnique({
@@ -154,7 +161,7 @@ export class FinancialLedgerService {
         movement.status !== 'HELD' ||
         movement.cashAccount.code !== 'BACS_RISK_HOLD' ||
         !movement.providerAvailableOn ||
-        movement.providerAvailableOn > maturedBefore
+        !isBacsReleaseEligible(movement.providerAvailableOn, holdDays, now)
       )
         return false;
       const cash = await this.depositCashAccount(db, movement.userId, false);
@@ -509,7 +516,7 @@ export class FinancialLedgerService {
     return recovery;
   }
 
-  private async deficitReceivableAccount(db: Db) {
+  async deficitReceivableAccount(db: Db) {
     const existing = await db.financialAccount.findFirst({
       where: { ownerType: 'PLATFORM', code: 'CUSTOMER_DEFICIT_RECEIVABLE', currency: 'GBP' },
     });
@@ -668,7 +675,7 @@ export class FinancialLedgerService {
       orderBy: { code: 'asc' },
     });
     const accountIds = accounts.map((account) => account.id);
-    const [pendingMovements, reservations] = await Promise.all([
+    const [pendingMovements, reservations, heldDeposits] = await Promise.all([
       this.db.moneyMovement.findMany({
         where: {
           userId,
@@ -682,6 +689,11 @@ export class FinancialLedgerService {
             select: { purposeType: true, amountMinor: true },
           })
         : Promise.resolve([]),
+      this.db.moneyMovement.findMany({
+        where: { userId, type: 'DEPOSIT', status: 'HELD', cashAccount: { code: 'BACS_RISK_HOLD' } },
+        orderBy: [{ providerAvailableOn: 'asc' }, { id: 'asc' }],
+        select: { id: true, amountMinor: true, providerAvailableOn: true, createdAt: true },
+      }),
     ]);
     const pendingDeposits = pendingMovements.filter((movement) => movement.type === 'DEPOSIT');
     const pendingWithdrawals = pendingMovements.filter((movement) => movement.type === 'WITHDRAWAL');
@@ -778,6 +790,14 @@ export class FinancialLedgerService {
       riskHeldDepositCount: accounts.some((account) => account.code === 'BACS_RISK_HOLD')
         ? await this.db.moneyMovement.count({ where: { userId, type: 'DEPOSIT', status: { in: ['HELD', 'MANUAL_REVIEW'] }, cashAccount: { code: 'BACS_RISK_HOLD' } } })
         : 0,
+      riskHeldDeposits: heldDeposits.map((movement) => ({
+        id: movement.id,
+        amountMinor: movement.amountMinor.toString(),
+        providerAvailableOn: movement.providerAvailableOn?.toISOString() ?? null,
+        expectedReleaseAt: movement.providerAvailableOn && this.config?.bacsInternalTradeHoldDays !== undefined
+          ? bacsReleaseAt(movement.providerAvailableOn, this.config.bacsInternalTradeHoldDays).toISOString()
+          : null,
+      })),
       withdrawableSources,
       collectorProceedsMinor: collectorProceedsMinor.toString(),
       collectorProceedsReservedMinor: (proceedsBalance?.reservedMinor ?? 0n).toString(),

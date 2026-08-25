@@ -3529,7 +3529,7 @@ export class AdminService {
 
   async bacsRiskDashboard(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
-    const [held, returned, deficits, sharedInstrumentReviews] = await Promise.all([
+    const [held, returned, deficits, sharedInstrumentReviews, recentDeposits] = await Promise.all([
       this.db.moneyMovement.findMany({
         where: { type: 'DEPOSIT', status: 'HELD' },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
@@ -3585,6 +3585,16 @@ export class AdminService {
         },
       }),
       this.db.bankInstrumentIdentity.count({ where: { riskState: 'SHARED_INSTRUMENT_REVIEW' } }),
+      this.db.moneyMovement.findMany({
+        where: {
+          type: 'DEPOSIT',
+          status: { notIn: ['FAILED', 'CANCELLED', 'RETURNED', 'REVERSED'] },
+          createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 5_000,
+        select: { userId: true, amountMinor: true, createdAt: true },
+      }),
     ]);
     const person = (user: { email: string; profile: { displayName: string | null; publicUsername: string | null } | null }) => ({
       email: user.email,
@@ -3596,6 +3606,24 @@ export class AdminService {
       (total, item) => total + item.amountMinor - item.recoveredMinor,
       0n,
     );
+    const utilizationNow = new Date();
+    const utilizationDayStart = new Date(utilizationNow);
+    utilizationDayStart.setUTCHours(0, 0, 0, 0);
+    const utilizationRapidStart = this.config.bacsDepositRapidWindowSeconds === undefined
+      ? null
+      : new Date(utilizationNow.getTime() - this.config.bacsDepositRapidWindowSeconds * 1_000);
+    const utilization = new Map<string, { dailyAmount: bigint; rollingAmount: bigint; dailyCount: number; rapidCount: number; attemptCount: number }>();
+    for (const deposit of recentDeposits) {
+      const current = utilization.get(deposit.userId) ?? { dailyAmount: 0n, rollingAmount: 0n, dailyCount: 0, rapidCount: 0, attemptCount: 0 };
+      current.attemptCount += 1;
+      current.rollingAmount += deposit.amountMinor;
+      if (deposit.createdAt >= utilizationDayStart) {
+        current.dailyAmount += deposit.amountMinor;
+        current.dailyCount += 1;
+      }
+      if (utilizationRapidStart && deposit.createdAt >= utilizationRapidStart) current.rapidCount += 1;
+      utilization.set(deposit.userId, current);
+    }
     return {
       currency: 'GBP',
       policy: {
@@ -3608,6 +3636,15 @@ export class AdminService {
           this.config.bacsDepositDailyCountLimit ??
           this.config.bacsDepositRapidCountLimit,
         ),
+        depositLimits: {
+          currency: 'GBP',
+          maxPerDepositMinor: this.config.bacsDepositMaxMinor?.toString() ?? null,
+          dailyAmountMinor: this.config.bacsDepositDailyLimitMinor?.toString() ?? null,
+          rolling7dAmountMinor: this.config.bacsDepositRolling7dLimitMinor?.toString() ?? null,
+          dailyCount: this.config.bacsDepositDailyCountLimit ?? null,
+          rapidWindowSeconds: this.config.bacsDepositRapidWindowSeconds ?? null,
+          rapidCount: this.config.bacsDepositRapidCountLimit ?? null,
+        },
       },
       summary: {
         heldDepositCount: held.length,
@@ -3617,6 +3654,14 @@ export class AdminService {
         openDeficitMinor: openDeficitMinor.toString(),
         sharedInstrumentReviewCount: sharedInstrumentReviews,
       },
+      depositLimitUtilization: [...utilization.entries()].map(([userId, value]) => ({
+        userId,
+        attemptCount7d: value.attemptCount,
+        dailyAmountMinor: value.dailyAmount.toString(),
+        rolling7dAmountMinor: value.rollingAmount.toString(),
+        dailyCount: value.dailyCount,
+        rapidCount: value.rapidCount,
+      })),
       heldDeposits: held.map((item) => ({
         id: item.id,
         userId: item.userId,
@@ -3810,6 +3855,14 @@ export class AdminService {
     };
     const buyInitiated = executions.filter((execution) => execution.takerOrder?.side === 'BUY').length;
     const sellInitiated = executions.filter((execution) => execution.takerOrder?.side === 'SELL').length;
+    const financialEmailNotifications = await this.db.notificationDelivery.groupBy({
+      by: ['status'],
+      where: { topic: 'FINANCIAL_ALERTS', channel: 'EMAIL', mandatory: true },
+      _count: true,
+    });
+    const financialEmailNotificationStatus = Object.fromEntries(
+      financialEmailNotifications.map((row) => [row.status, row._count]),
+    );
     return {
       currency: 'GBP',
       kpis: {
@@ -3838,6 +3891,11 @@ export class AdminService {
       },
       platformRevenue,
       payoutLiquidity,
+      financialNotificationOperations: {
+        mandatoryEmail: financialEmailNotificationStatus,
+        failedMandatoryEmail: (financialEmailNotificationStatus.FAILED ?? 0) + (financialEmailNotificationStatus.DEAD_LETTER ?? 0),
+        retryBacklog: (financialEmailNotificationStatus.PENDING ?? 0) + (financialEmailNotificationStatus.PROCESSING ?? 0),
+      },
       overview: {
         totalVolumeMinor: totalVolume.toString(),
         buyVolumeMinor: executions
@@ -3887,7 +3945,42 @@ export class AdminService {
     const skip = (input.page - 1) * input.pageSize;
     const take = input.pageSize;
     if (input.tab === 'adjustments') {
-      return { tab: input.tab, items: [], pagination: { page: input.page, pageSize: take, total: 0, totalPages: 0 } };
+      const where: Prisma.FinancialAdjustmentRequestWhereInput = {
+        ...(input.status ? { status: input.status as never } : {}),
+        ...(input.q ? { OR: [
+          { id: { contains: input.q, mode: 'insensitive' } },
+          { deficitId: { contains: input.q, mode: 'insensitive' } },
+          { userId: { contains: input.q, mode: 'insensitive' } },
+          { reason: { contains: input.q, mode: 'insensitive' } },
+        ] } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        this.db.financialAdjustmentRequest.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip, take }),
+        this.db.financialAdjustmentRequest.count({ where }),
+      ]);
+      const userIds = [...new Set(rows.flatMap((row) => [row.userId, row.initiatorUserId, ...(row.approverUserId ? [row.approverUserId] : [])]))];
+      const users = await this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, email: true, profile: { select: { displayName: true, publicUsername: true } } } });
+      const byId = new Map(users.map((user) => [user.id, user]));
+      return this.financePage(input, total, rows.map((row) => ({
+        id: row.id,
+        kind: 'adjustment',
+        status: row.status,
+        user: this.financePerson(byId.get(row.userId)),
+        initiator: this.financePerson(byId.get(row.initiatorUserId)),
+        approver: this.financePerson(row.approverUserId ? byId.get(row.approverUserId) : undefined),
+        deficitId: row.deficitId,
+        amountMinor: row.amountMinor.toString(),
+        currency: row.currency,
+        reason: row.reason,
+        beforeOutstandingMinor: row.beforeOutstandingMinor.toString(),
+        afterOutstandingMinor: row.afterOutstandingMinor?.toString() ?? null,
+        restrictionReleased: row.restrictionReleased,
+        journalTransactionId: row.journalTransactionId,
+        requestedAt: row.requestedAt.toISOString(),
+        approvedAt: row.approvedAt?.toISOString() ?? null,
+        appliedAt: row.appliedAt?.toISOString() ?? null,
+        rejectedAt: row.rejectedAt?.toISOString() ?? null,
+      })));
     }
     if (input.tab === 'wallets') {
       const where: Prisma.FinancialAccountWhereInput = {
@@ -3964,6 +4057,12 @@ export class AdminService {
       this.db.financialReconciliationRun.count({ where }),
     ]);
     return this.financePage(input, total, rows.map((run) => ({ id: run.id, kind: 'reconciliation', reference: run.id, scope: run.scope, status: run.status, expectedMinor: run.debitMinor.toString(), observedMinor: run.creditMinor.toString(), differenceMinor: (run.debitMinor - run.creditMinor).toString(), currency: run.currency, createdAt: run.createdAt.toISOString(), actions: ['Inspect'] })));
+  }
+
+  private financePerson(user: { id: string; email: string; profile: { displayName: string | null; publicUsername: string | null } | null } | undefined) {
+    return user
+      ? { id: user.id, displayName: user.profile?.displayName ?? 'Unnamed user', username: user.profile?.publicUsername ?? null, email: user.email }
+      : { id: null, displayName: 'Unknown user', username: null, email: null };
   }
 
   private financePage(input: { tab: string; page: number; pageSize: number }, total: number, items: Array<Record<string, unknown>>) {

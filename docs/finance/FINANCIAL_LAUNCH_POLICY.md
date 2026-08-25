@@ -1,12 +1,12 @@
 # Slice Financial Launch Policy
 
-Status: **READY FOR POLICY APPROVAL**
+Status: **OWNER APPROVED — INITIAL LAUNCH POLICY ACTIVATED (2026-08-25)**
 
-This is the authoritative launch-policy proposal for the current GBP Slice
-ledger and Stripe Bacs Direct Debit funding rail. It records current code
-semantics and proposes owner decisions. It does not silently enable any new
-commercial limit, hold duration, FX behavior, recovery method, or production
-configuration.
+This is the authoritative launch policy for the current GBP Slice ledger and
+Stripe Bacs Direct Debit funding rail. The owner approved the conservative
+initial policy on 2026-08-25. The approved values are activated in staging;
+production remains a separately configured environment and is not changed by
+this pass. No FX behavior or real financial/provider activity is enabled.
 
 ## Current State
 
@@ -49,7 +49,7 @@ transactional, idempotent `CASH_RELEASE` journal moves the exact amount from
 `BACS_RISK_HOLD` to `CASH_AVAILABLE`. The duration reduces exposure; no finite
 period eliminates Bacs return or dispute risk.
 
-### Policy options — proposals only
+### Policy options and approved launch choice
 
 | Option | Proposed hold timing | Return/fraud exposure | Customer friction | Treasury exposure | Operational burden |
 | --- | --- | --- | --- | --- | --- |
@@ -57,11 +57,11 @@ period eliminates Bacs return or dispute risk.
 | Balanced | `providerAvailableOn + 5 days` | Moderate; not zero | Moderate delay | Moderate exposure | Moderate monitoring |
 | Fast | `providerAvailableOn + 3 days` | Highest of these options; not zero | Lowest delay | Highest provisional-spend exposure | Highest return/recovery pressure |
 
-Recommended initial launch proposal: **Conservative** for a high-value
-collectibles marketplace. This is an owner decision, not an enabled value.
-
-**OWNER APPROVAL REQUIRED: YES.** No proposed duration is configured in
-staging or production by this pass.
+Approved initial launch choice: **Conservative**, with
+`BACS_INTERNAL_TRADE_HOLD_DAYS=7`. Release is exactly
+`providerAvailableOn + 7 days`; there is no zero-day fallback. Staging is
+activated. Production must load the same approved value through its own
+controlled environment configuration or fail closed.
 
 ## First Deposit / New Account
 
@@ -84,7 +84,10 @@ Proposed policy matrix:
 Account age alone must not be treated as a fraud verdict. The exact extra
 hold/rule for new accounts and first deposits remains an owner decision.
 
-**OWNER APPROVAL REQUIRED: YES.**
+Approved initial launch choice: first deposits, new accounts, and established
+accounts use the same seven-day baseline. Existing explainable signals may
+route a deposit to continued clearing or manual review, but never shorten the
+approved hold.
 
 ## Deposit Limits
 
@@ -104,13 +107,11 @@ illustrative launch proposals in GBP minor units, not deployed values:
 | Balanced | 1,000,000 (£10,000) | 1,000,000 (£10,000) | 2,500,000 (£25,000) | 4 | 900s / 2 | Reasonable access with moderate exposure |
 | High-limit | 2,500,000 (£25,000) | 2,500,000 (£25,000) | 10,000,000 (£100,000) | 10 | 300s / 3 | Lowest friction but highest return and liquidity exposure |
 
-Recommended initial proposal: **Conservative**, because Slice handles
+Approved initial launch choice: **Conservative**, because Slice handles
 high-value collectibles and the Bacs rail can return after provider success.
-The owner must approve exact values, including whether all six controls are
-enabled together.
-
-**OWNER APPROVAL REQUIRED: YES.** No proposed limit is configured by this
-pass.
+The owner approved all six controls together in GBP minor units. The approved
+staging values are max `500000`, daily `500000`, rolling seven-day `1000000`,
+daily count `2`, rapid window `3600` seconds, and rapid count `1`.
 
 ### Customer limit UX
 
@@ -169,7 +170,7 @@ No opaque score is used and no provider code is shown to customers.
 | --- | --- | --- |
 | Future verified Bacs deposit after its own hold clears | Active | Active recovery path |
 | Eligible settled sale proceeds | Not active | Hold pending owner/accounting policy; do not automatically offset |
-| Manual finance adjustment | No supported dual-control deficit-cure workflow | Not available until dual control, recent auth, journal template, reason, and audit are implemented |
+| Manual finance adjustment | Supported only through the dual-control finance workflow | Finance initiator creates a draft, submits it, and a different recently authenticated Finance operator approves or rejects it; approval posts a balanced journal |
 | External collections/manual recovery | Not active | Separate support/collections policy required |
 
 No raw balance patch is permitted. Every active recovery is a balanced,
@@ -215,10 +216,15 @@ returned deposits, provider available/pending GBP, provider payout liquidity,
 reservations, and reconciliation information. These projections must be read
 together; a returned-deposit amount is not silently labeled GAAP loss.
 
-There is no supported one-admin manual deficit cure. A future adjustment path
-must require separate finance authority, recent authentication, a second
-approver, an immutable reason and journal template, idempotency, and audit
-evidence before it can reduce a deficit or release a material restriction.
+There is no supported one-admin manual deficit cure. The implemented workflow
+is `DRAFT → PENDING_APPROVAL → APPROVED → APPLIED` or `REJECTED` and requires
+Finance authority, recent authentication, a second approver, an immutable
+reason, a fixed GBP journal template, idempotency, audit evidence, and before /
+after projections. It can only reduce an explicitly identified open returned-
+funds deficit. It never accepts a raw balance patch and never uses Discord for
+approval. The supported admin surfaces are `GET /api/v1/admin/finance/adjustments`,
+`POST /api/v1/admin/finance/adjustments`, `POST /:id/submit`,
+`POST /:id/approve`, and `POST /:id/reject`.
 
 ## Treasury Exposure
 
@@ -242,18 +248,18 @@ registry for the current release.
 
 | Name | Unit | Default / absent behavior | Production value | Meaning | Security consequence | Last changed / authority |
 | --- | --- | --- | --- | --- | --- | --- |
-| `BACS_INTERNAL_TRADE_HOLD_DAYS` | days | absent = fail-closed indefinite Bacs hold | **UNSET** | Extra internal-use delay after provider availability | Prevents immediate spendability | 2026-08-25 implementation; Product/Risk/Finance approval |
-| `BACS_DEPOSIT_MAX_MINOR` | GBP minor | absent = no per-deposit threshold | **UNSET** | Maximum one deposit | Limits single-event exposure | 2026-08-25 audit; Product/Risk approval |
-| `BACS_DEPOSIT_DAILY_LIMIT_MINOR` | GBP minor | absent = no daily amount threshold | **UNSET** | UTC-day aggregate amount | Limits same-day exposure | 2026-08-25 audit; Product/Risk approval |
-| `BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR` | GBP minor | absent = no rolling amount threshold | **UNSET** | Rolling seven-day amount | Limits burst exposure across day boundaries | 2026-08-25 audit; Product/Risk approval |
-| `BACS_DEPOSIT_DAILY_COUNT_LIMIT` | deposits/day | absent = no daily count threshold | **UNSET** | UTC-day attempt count | Limits repeated funding attempts | 2026-08-25 audit; Product/Risk approval |
-| `BACS_DEPOSIT_RAPID_WINDOW_SECONDS` | seconds | only active with rapid count limit | **UNSET** | Short attempt window | Limits rapid attempts | 2026-08-25 audit; Product/Risk approval |
-| `BACS_DEPOSIT_RAPID_COUNT_LIMIT` | attempts/window | absent = no rapid threshold | **UNSET** | Attempt count within rapid window | Reduces automated retry/burst exposure | 2026-08-25 audit; Product/Risk approval |
+| `BACS_INTERNAL_TRADE_HOLD_DAYS` | days | absent = fail-closed indefinite Bacs hold | **7 staging / 7 production contract** | Extra internal-use delay after provider availability | Prevents immediate spendability | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_MAX_MINOR` | GBP minor | absent = no per-deposit threshold | **500000 staging / 500000 production contract** | Maximum one deposit | Limits single-event exposure | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_DAILY_LIMIT_MINOR` | GBP minor | absent = no daily amount threshold | **500000 staging / 500000 production contract** | UTC-day aggregate amount | Limits same-day exposure | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_ROLLING_7D_LIMIT_MINOR` | GBP minor | absent = no rolling amount threshold | **1000000 staging / 1000000 production contract** | Rolling seven-day amount | Limits burst exposure across day boundaries | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_DAILY_COUNT_LIMIT` | deposits/day | absent = no daily count threshold | **2 staging / 2 production contract** | UTC-day attempt count | Limits repeated funding attempts | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_RAPID_WINDOW_SECONDS` | seconds | only active with rapid count limit | **3600 staging / 3600 production contract** | Short attempt window | Limits rapid attempts | Owner approved 2026-08-25 |
+| `BACS_DEPOSIT_RAPID_COUNT_LIMIT` | attempts/window | absent = no rapid threshold | **1 staging / 1 production contract** | Attempt count within rapid window | Reduces automated retry/burst exposure | Owner approved 2026-08-25 |
 | `BANK_CHANGE_WITHDRAWAL_HOLD_HOURS` | hours | existing configured authority | Existing separately managed value | Hold after funding-bank change | Prevents immediate payout after destination/funding change | Existing policy; Product/Risk/Finance authority |
 | `RETURNED_FUNDS_DEFICIT` | account hold | created on unresolved returned-funds deficit | Active by ledger event | Blocks exposure-increasing actions while receivable is open | Prevents further unsupported exposure | Current code; Finance authority |
 | verified-deposit recovery | lifecycle rule | only after deposit clears under approved hold | Active | Applies positive unreserved available cash to oldest deficit | No raw balance patch | Current code; Finance authority |
-| sale-proceeds cure | policy rule | not implemented | **UNSET** | Whether future proceeds cure deficit | Avoids silent cross-account appropriation | Owner decision |
-| manual deficit adjustment | privileged workflow | not available | **UNSET** | Dual-control finance correction | Prevents one-admin silent erasure | Owner decision |
+| sale-proceeds cure | policy rule | not implemented | **DISABLED** | Whether future proceeds cure deficit | Avoids silent cross-account appropriation | Owner approved 2026-08-25 |
+| manual deficit adjustment | privileged workflow | dual-control workflow implemented | **ENABLED WITH DUAL CONTROL** | Finance correction | Prevents one-admin silent erasure | Owner approved 2026-08-25 |
 
 Critical absent values fail closed. Staging may use explicitly documented QA
 values in its own environment only; production values must be separately

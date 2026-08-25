@@ -402,7 +402,11 @@ function WalletKpis({
         icon={Clock3}
         label="Bank deposit clearing"
         value={formatWalletMoney(cash.riskHeldMinor ?? "0")}
-        detail="Recent Bacs cash held while the bank debit clears"
+        detail={
+          cash.riskHeldDeposits?.find((deposit) => deposit.expectedReleaseAt)?.expectedReleaseAt
+            ? "Expected after " + formatShortDate(cash.riskHeldDeposits.find((deposit) => deposit.expectedReleaseAt)!.expectedReleaseAt!)
+            : "Recent Bacs cash held while the bank debit clears"
+        }
       />
       <WalletKpi
         icon={ArrowDownToLine}

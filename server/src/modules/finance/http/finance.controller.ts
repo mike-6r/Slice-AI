@@ -24,6 +24,7 @@ import { RequirePermission } from '../../identity/access/permission.decorator';
 import { PortfolioSnapshotService, type PortfolioPerformanceRange } from '../application/portfolio-snapshot.service';
 import { currentFeePolicy } from '../domain/fee-policy';
 import { PlatformRevenueSettlementService } from '../application/platform-revenue-settlement.service';
+import { FinancialAdjustmentService } from '../application/financial-adjustment.service';
 
 const historyQuery = z
   .object({
@@ -47,6 +48,13 @@ const holdingsPageQuery = z.object({
 }).strict();
 const revenueSettlementRequestBody = z.object({ requestedAmountMinor: z.string().regex(/^\d+$/).optional() }).strict();
 const revenueSettlementApprovalBody = z.object({ settlementId: z.string().min(1) }).strict();
+const financialAdjustmentBody = z.object({
+  userId: z.string().min(1),
+  deficitId: z.string().min(1),
+  amountMinor: z.string().regex(/^\d+$/),
+  reason: z.string().trim().min(12).max(1_000),
+}).strict();
+const financialAdjustmentRejectionBody = z.object({ reason: z.string().trim().min(12).max(1_000) }).strict();
 
 @Controller()
 export class FinanceController {
@@ -57,6 +65,7 @@ export class FinanceController {
     private readonly limiter: ControlRateLimitService,
     private readonly snapshots: PortfolioSnapshotService,
     private readonly revenueSettlements: PlatformRevenueSettlementService,
+    private readonly financialAdjustments: FinancialAdjustmentService,
   ) {}
 
   /** Self-only, derived projection. No account IDs, counterparty data, or journal metadata. */
@@ -100,6 +109,63 @@ export class FinanceController {
   ) {
     this.parse(revenueSettlementApprovalBody, { settlementId: id });
     return this.write(req, key, () => this.revenueSettlements.approve(req.actor!, id, req.requestId ?? 'unknown', key!));
+  }
+
+  @Get('admin/finance/adjustments')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.read')
+  financialAdjustmentsList(
+    @Query('status') status: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.financialAdjustments.list(req.actor!, status);
+  }
+
+  @Post('admin/finance/adjustments')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  financialAdjustmentCreate(
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = this.parse(financialAdjustmentBody, body);
+    return this.write(req, key, () => this.financialAdjustments.create(req.actor!, input, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/finance/adjustments/:id/submit')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  financialAdjustmentSubmit(
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () => this.financialAdjustments.submit(req.actor!, id, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/finance/adjustments/:id/approve')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  financialAdjustmentApprove(
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () => this.financialAdjustments.approve(req.actor!, id, req.requestId ?? 'unknown', key!));
+  }
+
+  @Post('admin/finance/adjustments/:id/reject')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('finance.manage')
+  financialAdjustmentReject(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = this.parse(financialAdjustmentRejectionBody, body);
+    return this.write(req, key, () => this.financialAdjustments.reject(req.actor!, id, input.reason, req.requestId ?? 'unknown', key!));
   }
 
   @Get('me/wallet/transactions')

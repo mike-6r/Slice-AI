@@ -11,6 +11,7 @@ import { PortfolioSnapshotWorker } from './application/portfolio-snapshot.worker
 import { SubmissionStorageModule } from '../submissions/submission-storage.module';
 import { PlatformRevenueSettlementService } from './application/platform-revenue-settlement.service';
 import { OutboxModule } from '../outbox/outbox.module';
+import { FinancialAdjustmentService } from './application/financial-adjustment.service';
 
 @Module({
   imports: [AuthModule, AccessControlModule, SubmissionStorageModule, OutboxModule],
@@ -23,6 +24,7 @@ import { OutboxModule } from '../outbox/outbox.module';
     PortfolioSnapshotService,
     PortfolioSnapshotWorker,
     PlatformRevenueSettlementService,
+    FinancialAdjustmentService,
   ],
   exports: [
     FinancialLedgerService,
@@ -31,6 +33,7 @@ import { OutboxModule } from '../outbox/outbox.module';
     FinancialReconciliationService,
     PortfolioSnapshotService,
     PlatformRevenueSettlementService,
+    FinancialAdjustmentService,
   ],
 })
 export class FinanceModule {}

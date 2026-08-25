@@ -204,6 +204,14 @@ enum FinancialDeficitStatus {
   RECOVERED
 }
 
+enum FinancialAdjustmentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  APPLIED
+  REJECTED
+}
+
 enum ProviderLiquidityReservationStatus {
   ACTIVE
   CONSUMED
@@ -1080,18 +1088,18 @@ model TwoFactorLoginChallenge {
 /// from login challenges so an account-unlink proof can never be exchanged for
 /// a session.
 model TwoFactorActionChallenge {
-  id           String         @id @default(cuid())
+  id           String          @id @default(cuid())
   userId       String
-  tokenHash    String         @unique
+  tokenHash    String          @unique
   action       String
   method       TwoFactorMethod
   phoneE164    String?
   expiresAt    DateTime
   consumedAt   DateTime?
-  attemptCount Int            @default(0)
+  attemptCount Int             @default(0)
   lastSentAt   DateTime?
-  createdAt    DateTime       @default(now())
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, action, consumedAt, expiresAt])
 }
@@ -2400,21 +2408,56 @@ model CashReservation {
 /// after the funded cash has already been spent. This is an explicit,
 /// append-only state; ownership is not silently confiscated.
 model FinancialDeficit {
-  id              String               @id @default(cuid())
-  userId          String
-  sourceMovementId String               @unique
-  currency        String
-  amountMinor     BigInt
-  recoveredMinor  BigInt               @default(0)
-  status          FinancialDeficitStatus @default(OPEN)
-  reasonCode      String
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  resolvedAt      DateTime?
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  sourceMovement  MoneyMovement        @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
+  id               String                 @id @default(cuid())
+  userId           String
+  sourceMovementId String                 @unique
+  currency         String
+  amountMinor      BigInt
+  recoveredMinor   BigInt                 @default(0)
+  status           FinancialDeficitStatus @default(OPEN)
+  reasonCode       String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  resolvedAt       DateTime?
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sourceMovement   MoneyMovement          @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
 
   @@index([userId, status, createdAt, id])
+}
+
+/// Dual-control finance workflow for a narrowly scoped deficit adjustment.
+/// This is a proposal and journal reference, never a mutable balance patch.
+/// User and deficit identifiers are deliberately scalar so the workflow can
+/// preserve historical records even if an account is later restricted.
+model FinancialAdjustmentRequest {
+  id                           String                    @id @default(cuid())
+  userId                       String
+  deficitId                    String
+  initiatorUserId              String
+  approverUserId               String?
+  status                       FinancialAdjustmentStatus @default(DRAFT)
+  currency                     String                    @default("GBP")
+  amountMinor                  BigInt
+  reason                       String
+  idempotencyKeyHash           String                    @unique
+  requestHash                  String
+  submissionIdempotencyKeyHash String?                   @unique
+  approvalIdempotencyKeyHash   String?                   @unique
+  journalTransactionId         String?                   @unique
+  beforeOutstandingMinor       BigInt
+  afterOutstandingMinor        BigInt?
+  restrictionReleased          Boolean?
+  requestedAt                  DateTime                  @default(now())
+  approvedAt                   DateTime?
+  appliedAt                    DateTime?
+  rejectedAt                   DateTime?
+  rejectionReason              String?
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
+
+  @@index([status, createdAt, id])
+  @@index([userId, status, createdAt, id])
+  @@index([deficitId, status, createdAt, id])
 }
 
 model PortfolioLot {
@@ -2564,7 +2607,7 @@ model BacsSetupSession {
 }
 
 model ExternalFinancialAccount {
-  id                          String          @id @default(cuid())
+  id                          String                      @id @default(cuid())
   userId                      String
   provider                    ProviderCode
   environment                 ExternalProviderEnvironment @default(SANDBOX)
@@ -2584,15 +2627,15 @@ model ExternalFinancialAccount {
   status                      String
   ownershipStatus             String?
   instrumentIdentityId        String?
-  riskState                   BankRiskState   @default(CLEAR)
+  riskState                   BankRiskState               @default(CLEAR)
   riskReviewedAt              DateTime?
-  isDefault                   Boolean         @default(false)
+  isDefault                   Boolean                     @default(false)
   lastSyncedAt                DateTime?
-  createdAt                   DateTime        @default(now())
-  updatedAt                   DateTime        @updatedAt
-  user                        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  user                        User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
   movements                   MoneyMovement[]
-  instrumentIdentity          BankInstrumentIdentity? @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
+  instrumentIdentity          BankInstrumentIdentity?     @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
   securityEvents              BankSecurityEvent[]
 
   @@unique([provider, providerReferenceHash])
@@ -2605,17 +2648,17 @@ model ExternalFinancialAccount {
 /// A shared identity is reviewable rather than globally unique at the user
 /// level because legitimate shared household/business accounts exist.
 model BankInstrumentIdentity {
-  id                         String                        @id @default(cuid())
-  provider                   ProviderCode
-  environment                ExternalProviderEnvironment
-  instrumentFingerprintHash  String
-  accountLast4               String?
-  bankCountry                String?
-  riskState                  BankRiskState                 @default(CLEAR)
-  firstSeenAt                DateTime                      @default(now())
-  lastSeenAt                 DateTime                      @updatedAt
-  accounts                   ExternalFinancialAccount[]
-  securityEvents             BankSecurityEvent[]
+  id                        String                      @id @default(cuid())
+  provider                  ProviderCode
+  environment               ExternalProviderEnvironment
+  instrumentFingerprintHash String
+  accountLast4              String?
+  bankCountry               String?
+  riskState                 BankRiskState               @default(CLEAR)
+  firstSeenAt               DateTime                    @default(now())
+  lastSeenAt                DateTime                    @updatedAt
+  accounts                  ExternalFinancialAccount[]
+  securityEvents            BankSecurityEvent[]
 
   @@unique([provider, environment, instrumentFingerprintHash])
   @@index([riskState, lastSeenAt])
@@ -2635,8 +2678,8 @@ model BankSecurityEvent {
   metadata             Json?
   createdAt            DateTime                    @default(now())
   user                 User?                       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  externalAccount      ExternalFinancialAccount?  @relation(fields: [externalAccountId], references: [id], onDelete: SetNull)
-  instrumentIdentity   BankInstrumentIdentity?    @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
+  externalAccount      ExternalFinancialAccount?   @relation(fields: [externalAccountId], references: [id], onDelete: SetNull)
+  instrumentIdentity   BankInstrumentIdentity?     @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt, id])
   @@index([instrumentIdentityId, createdAt, id])
@@ -2668,49 +2711,49 @@ model ExternalConnectAccount {
 }
 
 model MoneyMovement {
-  id                          String                    @id @default(cuid())
-  userId                      String
-  externalAccountId           String?
-  cashAccountId               String
-  type                        MoneyMovementType
-  amountMinor                 BigInt
+  id                                     String                        @id @default(cuid())
+  userId                                 String
+  externalAccountId                      String?
+  cashAccountId                          String
+  type                                   MoneyMovementType
+  amountMinor                            BigInt
   /// Customer-entered gross amount. For withdrawals, this is the amount
   /// reserved/debited from the customer wallet.
-  sliceFeeMinor               BigInt                    @default(0)
+  sliceFeeMinor                          BigInt                        @default(0)
   /// Provider-facing amount. Deposits equal amountMinor; withdrawals are
   /// gross less Slice's disclosed withdrawal fee.
-  providerAmountMinor         BigInt?
-  currency                    String
-  status                      MoneyMovementStatus       @default(CREATED)
-  provider                    ProviderCode
-  providerReferenceCiphertext String?
-  providerReferenceHash       String?
+  providerAmountMinor                    BigInt?
+  currency                               String
+  status                                 MoneyMovementStatus           @default(CREATED)
+  provider                               ProviderCode
+  providerReferenceCiphertext            String?
+  providerReferenceHash                  String?
   providerBalanceTransactionIdCiphertext String?
   providerBalanceTransactionIdHash       String?
-  providerFeeMinor            BigInt?
-  providerNetMinor            BigInt?
-  providerAvailableOn         DateTime?
-  providerCurrency            String?
-  providerSourceReferenceHash String?
-  encryptionKeyVersion        String?
-  idempotencyKeyHash          String
-  reservationId               String?                   @unique
-  ledgerTransactionId         String?                   @unique
-  failureCode                 String?
-  version                     Int                       @default(1)
-  createdAt                   DateTime                  @default(now())
-  updatedAt                   DateTime                  @updatedAt
-  settledAt                   DateTime?
-  user                        User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  externalAccount             ExternalFinancialAccount? @relation(fields: [externalAccountId], references: [id], onDelete: Restrict)
-  cashAccount                 FinancialAccount          @relation("MovementCashAccount", fields: [cashAccountId], references: [id], onDelete: Restrict)
-  ledgerTransaction           JournalTransaction?       @relation("MovementJournal", fields: [ledgerTransactionId], references: [id], onDelete: Restrict)
-  connectPayout               ConnectPayout?
-  providerLiquidityReservation ProviderLiquidityReservation?
-  history                     MoneyMovementHistory[]
-  holds                       ComplianceHold[]
-  financialDeficit            FinancialDeficit?
-  providerCosts               ProviderFinancialCost[]
+  providerFeeMinor                       BigInt?
+  providerNetMinor                       BigInt?
+  providerAvailableOn                    DateTime?
+  providerCurrency                       String?
+  providerSourceReferenceHash            String?
+  encryptionKeyVersion                   String?
+  idempotencyKeyHash                     String
+  reservationId                          String?                       @unique
+  ledgerTransactionId                    String?                       @unique
+  failureCode                            String?
+  version                                Int                           @default(1)
+  createdAt                              DateTime                      @default(now())
+  updatedAt                              DateTime                      @updatedAt
+  settledAt                              DateTime?
+  user                                   User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  externalAccount                        ExternalFinancialAccount?     @relation(fields: [externalAccountId], references: [id], onDelete: Restrict)
+  cashAccount                            FinancialAccount              @relation("MovementCashAccount", fields: [cashAccountId], references: [id], onDelete: Restrict)
+  ledgerTransaction                      JournalTransaction?           @relation("MovementJournal", fields: [ledgerTransactionId], references: [id], onDelete: Restrict)
+  connectPayout                          ConnectPayout?
+  providerLiquidityReservation           ProviderLiquidityReservation?
+  history                                MoneyMovementHistory[]
+  holds                                  ComplianceHold[]
+  financialDeficit                       FinancialDeficit?
+  providerCosts                          ProviderFinancialCost[]
 
   @@unique([userId, type, idempotencyKeyHash])
   @@unique([provider, providerReferenceHash])
@@ -2722,17 +2765,17 @@ model MoneyMovement {
 }
 
 model ProviderLiquidityReservation {
-  id                       String                              @id @default(cuid())
-  movementId               String                              @unique
+  id                       String                             @id @default(cuid())
+  movementId               String                             @unique
   provider                 ProviderCode
   environment              ExternalProviderEnvironment
   currency                 String
   amountMinor              BigInt
   status                   ProviderLiquidityReservationStatus @default(ACTIVE)
   providerBalanceCheckedAt DateTime
-  createdAt                DateTime                            @default(now())
-  updatedAt                DateTime                            @updatedAt
-  movement                 MoneyMovement                       @relation(fields: [movementId], references: [id], onDelete: Restrict)
+  createdAt                DateTime                           @default(now())
+  updatedAt                DateTime                           @updatedAt
+  movement                 MoneyMovement                      @relation(fields: [movementId], references: [id], onDelete: Restrict)
 
   @@index([provider, environment, currency, status, createdAt, id])
 }

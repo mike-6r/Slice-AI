@@ -88,6 +88,27 @@ export function calculateDepositVelocity(
 }
 
 export type DepositLimitCode = 'DEPOSIT_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_LIMIT_EXCEEDED' | 'DEPOSIT_ROLLING_LIMIT_EXCEEDED' | 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED' | 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
+export type DepositLimitPolicy = Readonly<{
+  maxMinor?: number;
+  dailyLimitMinor?: number;
+  rolling7dLimitMinor?: number;
+  dailyCountLimit?: number;
+  rapidCountLimit?: number;
+}>;
+
+export function evaluateDepositLimits(
+  amount: bigint,
+  velocity: { dailyTotal: bigint; rolling7dTotal: bigint; dailyCount: number; rapidCount: number },
+  policy: DepositLimitPolicy,
+): DepositLimitCode | null {
+  if (policy.maxMinor !== undefined && amount > BigInt(policy.maxMinor)) return 'DEPOSIT_LIMIT_EXCEEDED';
+  if (policy.dailyLimitMinor !== undefined && velocity.dailyTotal + amount > BigInt(policy.dailyLimitMinor)) return 'DEPOSIT_DAILY_LIMIT_EXCEEDED';
+  if (policy.rolling7dLimitMinor !== undefined && velocity.rolling7dTotal + amount > BigInt(policy.rolling7dLimitMinor)) return 'DEPOSIT_ROLLING_LIMIT_EXCEEDED';
+  if (policy.dailyCountLimit !== undefined && velocity.dailyCount + 1 > policy.dailyCountLimit) return 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED';
+  if (policy.rapidCountLimit !== undefined && velocity.rapidCount + 1 > policy.rapidCountLimit) return 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED';
+  return null;
+}
+
 export function depositLimitMessage(code: DepositLimitCode): string {
   switch (code) {
     case 'DEPOSIT_LIMIT_EXCEEDED': return 'This deposit would exceed your current bank funding limit.';
@@ -1522,34 +1543,13 @@ export class WalletMovementService {
       now,
       this.config.bacsDepositRapidWindowSeconds,
     );
-    if (this.config.bacsDepositDailyLimitMinor !== undefined) {
-      if (velocity.dailyTotal + amount > BigInt(this.config.bacsDepositDailyLimitMinor))
-        throw new ConflictException({
-          code: 'DEPOSIT_DAILY_LIMIT_EXCEEDED',
-          message: depositLimitMessage('DEPOSIT_DAILY_LIMIT_EXCEEDED'),
-        });
-    }
-    if (this.config.bacsDepositRolling7dLimitMinor !== undefined) {
-      if (velocity.rolling7dTotal + amount > BigInt(this.config.bacsDepositRolling7dLimitMinor))
-        throw new ConflictException({
-          code: 'DEPOSIT_ROLLING_LIMIT_EXCEEDED',
-          message: depositLimitMessage('DEPOSIT_ROLLING_LIMIT_EXCEEDED'),
-        });
-    }
-    if (this.config.bacsDepositDailyCountLimit !== undefined) {
-      if (velocity.dailyCount + 1 > this.config.bacsDepositDailyCountLimit)
-        throw new ConflictException({
-          code: 'DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED',
-          message: depositLimitMessage('DEPOSIT_DAILY_COUNT_LIMIT_EXCEEDED'),
-        });
-    }
-    if (rapidSince && this.config.bacsDepositRapidCountLimit !== undefined) {
-      if (velocity.rapidCount + 1 > this.config.bacsDepositRapidCountLimit)
-        throw new ConflictException({
-          code: 'DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED',
-          message: depositLimitMessage('DEPOSIT_RAPID_ATTEMPT_LIMIT_EXCEEDED'),
-        });
-    }
+    const code = evaluateDepositLimits(amount, velocity, {
+      dailyLimitMinor: this.config.bacsDepositDailyLimitMinor,
+      rolling7dLimitMinor: this.config.bacsDepositRolling7dLimitMinor,
+      dailyCountLimit: this.config.bacsDepositDailyCountLimit,
+      rapidCountLimit: rapidSince ? this.config.bacsDepositRapidCountLimit : undefined,
+    });
+    if (code) throw new ConflictException({ code, message: depositLimitMessage(code) });
   }
 
   private async lockMovement(id: string) {
