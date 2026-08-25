@@ -109,7 +109,7 @@ Configured limits are checked in the locked create transaction and count only ac
 
 ## Admin and Customer UX
 
-Finance staff can read `GET /api/v1/admin/finance/bacs-risk`, which exposes safe GBP projections for held deposits, provider `available_on`, provider status, hold reason, returns, deficits/recovery, and shared-instrument review count. It does not expose bank details. Existing finance movement records also retain the provider/movement audit trail.
+Finance staff can read `GET /api/v1/admin/finance/bacs-risk`, which exposes safe GBP projections for held and manual-review deposits, provider `available_on`, provider status, hold/review reason, returns, configured limit utilization, deficits/recovery, and shared-instrument review count. It does not expose bank details. Existing finance movement records also retain the provider/movement audit trail.
 
 Wallet copy describes bank clearing without using fraud language or promising immediate spendability. A Bacs activity row is `Clearing` while risk-held, `Completed` only after release, and `Reversed`/`Needs review` for corresponding provider states. The deposit form discloses that funds may remain held before they can be used or withdrawn.
 

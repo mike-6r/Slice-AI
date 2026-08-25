@@ -3529,9 +3529,27 @@ export class AdminService {
 
   async bacsRiskDashboard(actor: Actor) {
     await this.authorization.authorize(actor, 'finance.read');
-    const [held, returned, deficits, sharedInstrumentReviews, recentDeposits] = await Promise.all([
+    const [held, manualReview, returned, deficits, sharedInstrumentReviews, recentDeposits] = await Promise.all([
       this.db.moneyMovement.findMany({
         where: { type: 'DEPOSIT', status: 'HELD' },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: 50,
+        select: {
+          id: true,
+          userId: true,
+          amountMinor: true,
+          currency: true,
+          status: true,
+          provider: true,
+          providerAvailableOn: true,
+          failureCode: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { email: true, profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
+      this.db.moneyMovement.findMany({
+        where: { type: 'DEPOSIT', status: 'MANUAL_REVIEW' },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: 50,
         select: {
@@ -3650,6 +3668,7 @@ export class AdminService {
         heldDepositCount: held.length,
         heldAmountMinor: heldAmountMinor.toString(),
         returnedDepositCount: returned.length,
+        manualReviewDepositCount: manualReview.length,
         openDeficitCount: deficits.length,
         openDeficitMinor: openDeficitMinor.toString(),
         sharedInstrumentReviewCount: sharedInstrumentReviews,
@@ -3672,6 +3691,19 @@ export class AdminService {
         providerStatus: item.status,
         providerAvailableOn: item.providerAvailableOn?.toISOString() ?? null,
         holdReason: item.failureCode ?? 'BACS_RETURN_RISK_HOLD',
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      manualReviewDeposits: manualReview.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        user: person(item.user),
+        amountMinor: item.amountMinor.toString(),
+        currency: item.currency,
+        provider: item.provider,
+        providerStatus: item.status,
+        providerAvailableOn: item.providerAvailableOn?.toISOString() ?? null,
+        reviewReason: item.failureCode ?? 'BACS_MANUAL_REVIEW',
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })),

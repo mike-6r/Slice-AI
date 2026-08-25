@@ -206,10 +206,11 @@ details, Stripe codes, or internal fraud classifications.
 ## Support / Admin Workflow
 
 `GET /api/v1/admin/finance/bacs-risk` is a finance-authorized, read-only safe
-projection of held and returned deposits, provider availability evidence,
-original movement IDs, deficits and recovery, account users, reason codes,
-and shared-instrument review count. Existing audit and movement-history rows
-provide the state timeline. It intentionally excludes full bank details.
+projection of held, manual-review, and returned deposits, provider
+availability evidence, original movement IDs, deficits and recovery, account
+users, reason codes, configured limit utilization, and shared-instrument review
+count. Existing audit and movement-history rows provide the state timeline. It
+intentionally excludes full bank details.
 
 Admin Finance separately exposes customer cash liability, provider expenses,
 returned deposits, provider available/pending GBP, provider payout liquidity,

@@ -29,8 +29,9 @@ the hold or invent a fallback.
 ## Implemented controls
 
 - Finance/admin projections expose the active hold authority, all six limits,
-  recent per-user limit utilization, held/returned deposits, release evidence,
-  deficits/recovery, payout liquidity, and mandatory finance-email backlog.
+  recent per-user limit utilization, held/manual-review/returned deposits,
+  release evidence, deficits/recovery, payout liquidity, and mandatory
+  finance-email backlog.
 - Wallet clearing now carries the authoritative expected release timestamp.
 - Deposit boundaries are pure, testable policy decisions: £5,000 is allowed,
   one penny above is blocked, and daily/rolling/count/rapid boundaries are
@@ -53,7 +54,7 @@ the hold or invent a fallback.
 | Backend lint | PASS |
 | Backend production build | PASS |
 | Backend full suite | PASS — 77 suites / 342 tests |
-| Focused launch-policy tests | PASS — 8 tests |
+| Focused launch-policy tests | PASS — 3 tests covering the approved boundary matrix |
 | Frontend typecheck | PASS |
 | Frontend full suite | PASS — 39 files / 155 tests |
 | Frontend production client + SSR build | PASS |
