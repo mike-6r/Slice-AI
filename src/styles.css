@@ -35,6 +35,57 @@
   --shadow-card: var(--shadow-soft);
 }
 
+/* Payout setup and normal withdrawal confirmation */
+.wallet-payout-setup-copy {
+  margin: 1rem 0 0;
+  color: var(--text-primary, #f5f7fb);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.wallet-withdrawal-review {
+  width: min(100%, 32rem);
+}
+
+.wallet-withdrawal-review__summary {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.25rem 0;
+}
+
+.wallet-withdrawal-review__summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.wallet-withdrawal-review__summary dt {
+  color: var(--text-muted, #9ba5b5);
+  font-size: 0.82rem;
+}
+
+.wallet-withdrawal-review__summary dd {
+  margin: 0;
+  color: var(--text-primary, #f5f7fb);
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .wallet-withdrawal-review__summary > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .wallet-withdrawal-review__summary dd {
+    text-align: left;
+  }
+}
+
 /* Professional certification verification block in List > Step 2. */
 .list-certification-panel {
   display: grid;

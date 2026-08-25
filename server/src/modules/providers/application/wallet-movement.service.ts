@@ -110,6 +110,13 @@ export class WalletMovementService {
     destinationReference = 'LOCAL_LOW_RISK',
     destinationChain?: string,
   ) {
+    // Refresh the provider projection before evaluating the capability. This
+    // prevents a previously READY Connect row from allowing a withdrawal
+    // after Stripe has added a requirement or restricted payouts. The refresh
+    // is read-only from Slice's financial perspective; no movement exists yet.
+    if (this.config.providerMode !== 'local' && this.connectPayouts) {
+      await this.connectPayouts.status(actor);
+    }
     await this.capabilities?.require(actor, 'WITHDRAW_FUNDS');
     this.recentAuth.require(actor);
     // Stripe-mode withdrawals use the verified Connect account as the payout

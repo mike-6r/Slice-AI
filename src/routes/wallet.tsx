@@ -59,6 +59,11 @@ export const Route = createFileRoute("/wallet")({
   component: Wallet,
 });
 
+type WalletMovementRequest = {
+  action: WalletMovementType;
+  amount: string;
+};
+
 export function Wallet() {
   useCurrency();
   const services = useAppServices();
@@ -68,6 +73,9 @@ export function Wallet() {
   const [action, setAction] = useState<WalletMovementType>("DEPOSIT");
   const [movementFilter, setMovementFilter] = useState<WalletMovementFilter>("ALL");
   const [capabilityDialog, setCapabilityDialog] = useState<AccountCapability | null>(null);
+  const [withdrawalReviewAmount, setWithdrawalReviewAmount] = useState<string | null>(null);
+  const [recentAuthAmount, setRecentAuthAmount] = useState<string | null>(null);
+  const [recentAuthPassword, setRecentAuthPassword] = useState("");
   const portfolio = useQuery({
     queryKey: queryKeys.portfolio.summary,
     queryFn: services.portfolio.portfolio,
@@ -127,15 +135,18 @@ export function Wallet() {
     },
   });
   const movement = useMutation({
-    mutationFn: async () => {
-      const amountMinor = parseWalletGbp(amount);
+    mutationFn: async ({
+      action: requestedAction,
+      amount: requestedAmount,
+    }: WalletMovementRequest) => {
+      const amountMinor = parseWalletGbp(requestedAmount);
       if (!amountMinor || BigInt(amountMinor) <= 0n) {
         throw new ApiError(
           "VALIDATION_ERROR",
           "Enter a positive GBP amount with no more than two decimal places.",
         );
       }
-      return action === "DEPOSIT"
+      return requestedAction === "DEPOSIT"
         ? services.providers.createDeposit(amountMinor)
         : services.providers.createWithdrawal({
             amountMinor,
@@ -145,6 +156,27 @@ export function Wallet() {
       setAmount("");
       refreshWallet();
       toast.success(`${result.type === "DEPOSIT" ? "Deposit" : "Withdrawal"} request created.`);
+    },
+    onError: (error, variables) => {
+      if (
+        variables.action === "WITHDRAWAL" &&
+        error instanceof ApiError &&
+        error.code === "RECENT_AUTH_REQUIRED"
+      ) {
+        setRecentAuthPassword("");
+        setRecentAuthAmount(variables.amount);
+      }
+    },
+  });
+  const recentAuth = useMutation({
+    mutationFn: (password: string) => services.repositories.account.confirmRecentAuth(password),
+    onSuccess: () => {
+      const retryAmount = recentAuthAmount;
+      setRecentAuthAmount(null);
+      setRecentAuthPassword("");
+      if (retryAmount) {
+        movement.mutate({ action: "WITHDRAWAL", amount: retryAmount });
+      }
     },
   });
 
@@ -174,6 +206,7 @@ export function Wallet() {
             )}
             feePolicy={feePolicy}
             onCapabilityRequired={setCapabilityDialog}
+            onReviewWithdrawal={setWithdrawalReviewAmount}
           />
           <AccountStatusPanel
             query={compliance}
@@ -203,6 +236,33 @@ export function Wallet() {
           decision={capabilityDialog}
           onClose={() => setCapabilityDialog(null)}
         />
+        {withdrawalReviewAmount ? (
+          <WithdrawalReviewDialog
+            amount={withdrawalReviewAmount}
+            feePolicy={feePolicy.data}
+            busy={movement.isPending}
+            onClose={() => setWithdrawalReviewAmount(null)}
+            onConfirm={() => {
+              const requestedAmount = withdrawalReviewAmount;
+              setWithdrawalReviewAmount(null);
+              movement.mutate({ action: "WITHDRAWAL", amount: requestedAmount });
+            }}
+          />
+        ) : null}
+        {recentAuthAmount ? (
+          <RecentAuthDialog
+            password={recentAuthPassword}
+            busy={recentAuth.isPending || movement.isPending}
+            error={recentAuth.error}
+            onPasswordChange={setRecentAuthPassword}
+            onClose={() => {
+              if (recentAuth.isPending || movement.isPending) return;
+              setRecentAuthAmount(null);
+              setRecentAuthPassword("");
+            }}
+            onConfirm={() => recentAuth.mutate(recentAuthPassword)}
+          />
+        ) : null}
       </div>
     </main>
   );
@@ -835,6 +895,7 @@ function MoveMoneyPanel({
   capability,
   feePolicy,
   onCapabilityRequired,
+  onReviewWithdrawal,
 }: {
   action: WalletMovementType;
   setAction: (value: WalletMovementType) => void;
@@ -842,10 +903,11 @@ function MoveMoneyPanel({
   setAmount: (value: string) => void;
   compliance: UseQueryResult<ComplianceSummary>;
   banks: UseQueryResult<BankConnection[]>;
-  movement: ReturnType<typeof useMutation<WalletMovementView, Error, void>>;
+  movement: ReturnType<typeof useMutation<WalletMovementView, Error, WalletMovementRequest>>;
   capability: AccountCapability | undefined;
   feePolicy: UseQueryResult<FeePolicy>;
   onCapabilityRequired: (decision: AccountCapability) => void;
+  onReviewWithdrawal: (amount: string) => void;
 }) {
   const providerReady = compliance.data?.status === "APPROVED";
   const bankAvailable = Boolean(banks.data?.some((bank) => bank.status === "CONNECTED"));
@@ -892,7 +954,16 @@ function MoveMoneyPanel({
               return;
             }
             if (domainBlocked) return;
-            movement.mutate();
+            if (action === "WITHDRAWAL") {
+              const amountMinor = parseWalletGbp(amount);
+              if (!amountMinor || BigInt(amountMinor) <= 0n) {
+                movement.mutate({ action: "WITHDRAWAL", amount });
+                return;
+              }
+              onReviewWithdrawal(amount);
+              return;
+            }
+            movement.mutate({ action: "DEPOSIT", amount });
           }}
         >
           {action === "DEPOSIT" ? (
@@ -968,6 +1039,183 @@ function MoveMoneyPanel({
         ) : null}
       </div>
     </WalletPanel>
+  );
+}
+
+function WithdrawalReviewDialog({
+  amount,
+  feePolicy,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  amount: string;
+  feePolicy: FeePolicy | undefined;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const amountMinor = parseWalletGbp(amount);
+  const feeMinor =
+    feePolicy && amountMinor
+      ? feeMinorForPolicy(amountMinor, feePolicy.withdrawal.sliceFeeBps)
+      : null;
+  const netMinor = feePolicy && amountMinor ? withdrawalNetMinor(feePolicy, amount) : null;
+  const canConfirm = Boolean(feePolicy && amountMinor && feeMinor !== null && netMinor !== null);
+  return (
+    <div className="wallet-bank-dialog-backdrop" role="presentation">
+      <section
+        className="wallet-bank-dialog wallet-withdrawal-review"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="withdrawal-review-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Review withdrawal</p>
+            <h2 id="withdrawal-review-title">Check the details before you continue</h2>
+          </div>
+          <button
+            type="button"
+            className="wallet-bank-dialog__close"
+            onClick={onClose}
+            disabled={busy}
+          >
+            ×
+          </button>
+        </header>
+        <p className="wallet-bank-dialog__intro">
+          Your withdrawal will be sent in GBP to your verified Stripe payout account. Slice will
+          reserve the gross amount until the provider confirms the payout.
+        </p>
+        <dl className="wallet-withdrawal-review__summary">
+          <div>
+            <dt>Withdrawal amount</dt>
+            <dd>{amountMinor ? formatWalletMoney(amountMinor) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Slice fee</dt>
+            <dd>{feeMinor !== null ? formatWalletMoney(feeMinor) : "Loading…"}</dd>
+          </div>
+          <div>
+            <dt>Estimated payout</dt>
+            <dd>{netMinor !== null ? formatWalletMoney(netMinor) : "Loading…"}</dd>
+          </div>
+          <div>
+            <dt>Currency</dt>
+            <dd>GBP</dd>
+          </div>
+        </dl>
+        <p className="wallet-bank-dialog__intro">
+          The exact fee is calculated by Slice’s GBP withdrawal policy. Provider fees, if any, are
+          separate.
+        </p>
+        <footer>
+          <button
+            type="button"
+            className="wallet-bank-dialog__secondary"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="wallet-bank-dialog__danger"
+            onClick={onConfirm}
+            disabled={!canConfirm || busy}
+          >
+            {busy ? "Submitting…" : "Request withdrawal"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function RecentAuthDialog({
+  password,
+  busy,
+  error,
+  onPasswordChange,
+  onClose,
+  onConfirm,
+}: {
+  password: string;
+  busy: boolean;
+  error: unknown;
+  onPasswordChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="wallet-bank-dialog-backdrop" role="presentation">
+      <section
+        className="wallet-bank-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="withdrawal-auth-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Security check</p>
+            <h2 id="withdrawal-auth-title">Confirm it’s really you</h2>
+          </div>
+          <button
+            type="button"
+            className="wallet-bank-dialog__close"
+            onClick={onClose}
+            disabled={busy}
+          >
+            ×
+          </button>
+        </header>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onConfirm();
+          }}
+        >
+          <p className="wallet-bank-dialog__intro">
+            For your protection, sign in again before we request this withdrawal. Your password is
+            sent securely to Slice and is not stored in the withdrawal request.
+          </p>
+          <label className="wallet-bank-dialog__field">
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              autoFocus
+              required
+            />
+          </label>
+          {error ? (
+            <p className="wallet-bank-dialog__error">
+              {error instanceof ApiError ? error.message : "Recent authentication failed."}
+            </p>
+          ) : null}
+          <footer>
+            <button
+              type="button"
+              className="wallet-bank-dialog__secondary"
+              onClick={onClose}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="wallet-bank-dialog__danger"
+              disabled={!password || busy}
+            >
+              {busy ? "Checking…" : "Confirm identity"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -1107,6 +1355,10 @@ function AccountStatusPanel({
             {verification.error ? <InlineError error={verification.error} /> : null}
             {connectPayout.data && connectPayout.data.status !== "READY" ? (
               <>
+                <p className="wallet-payout-setup-copy">
+                  Complete a one-time payout setup with Stripe so we can send withdrawals to your
+                  bank.
+                </p>
                 <p className="wallet-payout-prefill-note">
                   We’ll reuse the verified account information we already have where possible.
                   Stripe may still ask you to review or confirm certain details and your payout
@@ -1158,7 +1410,9 @@ function AccountStatusPanel({
                     <ArrowUpFromLine aria-hidden="true" />
                     {onboardingPending || connectPayout.isFetching
                       ? "Preparing payout setup…"
-                      : "Set up withdrawals"}
+                      : connectPayout.data.status === "RESTRICTED"
+                        ? "Update payout details"
+                        : "Set up withdrawals"}
                     <ArrowRight aria-hidden="true" />
                   </button>
                 )}

@@ -289,6 +289,63 @@ The disclosure describes prefill, not verification completion, and preserves Str
 
 Root cause of the earlier duplicate/example identity fields: the payout service previously sent only the contact email and a hard-coded GB country. It did not pass permitted individual email/phone fields, and Slice has no safely reusable legal name, DOB, or address record. Stripe therefore remained responsible for collecting those fields in hosted onboarding; this was not a frontend cache or a verification bypass.
 
+### One-time payout setup and repeat withdrawals
+
+Implementation date: 2026-08-25. This pass keeps the existing Connect account,
+the existing Stripe-hosted onboarding flow, GBP settlement, and the current
+backend fee authority. It does not create a second Connect account or alter
+the current provider identity/bank data.
+
+#### Readiness and setup state
+
+- The provider-backed payout projection is refreshed when Wallet reads payout
+  status, after the Stripe return path, and before a withdrawal capability is
+  evaluated.
+- A withdrawal cannot pass the backend capability gate using a stale `READY`
+  database row. If Stripe adds a requirement or restricts payouts, the live
+  provider snapshot is synchronized first and the withdrawal is denied before
+  a movement or reservation is created.
+- Before `READY`, Wallet shows the one-time explanation: “Complete a one-time
+  payout setup with Stripe so we can send withdrawals to your bank.” It also
+  explains that verified Slice information is reused where possible and that
+  Stripe may still request review or confirmation. A restricted account uses
+  `Update payout details`; a fresh setup uses `Set up withdrawals`.
+- When the provider projection is `READY`, the setup CTA disappears. Returning
+  to Wallet does not require another Stripe onboarding link; the persisted
+  provider status is the source of truth for normal withdrawal access.
+- The funding bank remains separate from the Connect payout destination. Slice
+  does not copy Bacs funding credentials into Connect or display the funding
+  bank as the payout bank.
+
+#### Normal withdrawal UX
+
+- Withdraw now opens a review step before submitting anything. The review
+  shows gross withdrawal amount, the authoritative Slice fee, estimated net
+  payout, GBP currency, and the verified Stripe payout destination.
+- The backend remains authoritative for the 2.5% withdrawal fee. For gross
+  amount `G`, Slice reduces customer cash by `G`, records the Slice fee as
+  `2.5% of G`, and sends `G - fee` to the provider.
+- If the existing recent-auth policy requires step-up, Wallet opens a normal
+  password confirmation dialog and retries the same withdrawal only after the
+  confirmation endpoint succeeds. No password or one-time code is stored in a
+  movement record. No MFA bypass was added.
+- Repeat withdrawals use the same normal review → recent-auth-if-needed →
+  request path. Stripe onboarding is not shown again unless the provider
+  projection leaves `READY` because of a new requirement, restriction, or
+  removed payout destination.
+
+#### Implementation QA
+
+- Provider refresh ordering test: PASS — Connect status refresh precedes the
+  withdrawal capability gate and recent-auth gate.
+- Frontend Wallet focused suite: PASS — 5 tests.
+- Frontend Wallet typecheck, targeted lint, and production build: PASS.
+- Backend typecheck, targeted lint, focused wallet risk suite, and production
+  build: PASS.
+- Real deposit/withdrawal/payout/reconciliation E2E: NOT RUN — the current
+  Connect account remains provider-restricted by the keyed-identity document
+  requirement. No financial mutation was attempted by this implementation.
+
 ### Withdrawal
 
 - Withdrawable cash shown by wallet: £91.71 existing fixture

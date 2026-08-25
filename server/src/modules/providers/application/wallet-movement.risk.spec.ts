@@ -1,6 +1,7 @@
 import {
   calculateWithdrawalVelocity,
   requiresDestinationScreening,
+  WalletMovementService,
 } from './wallet-movement.service';
 
 describe('wallet movement risk controls', () => {
@@ -24,5 +25,46 @@ describe('wallet movement risk controls', () => {
     expect(requiresDestinationScreening('local')).toBe(true);
     expect(requiresDestinationScreening('stripe_sandbox')).toBe(false);
     expect(requiresDestinationScreening('stripe_live')).toBe(false);
+  });
+
+  it('refreshes Connect readiness before the withdrawal capability gate', async () => {
+    const events: string[] = [];
+    const recentAuth = {
+      require: () => {
+        events.push('recent-auth');
+        throw new Error('stop before financial work');
+      },
+    };
+    const service = new WalletMovementService(
+      undefined as never,
+      undefined as never,
+      undefined as never,
+      recentAuth as never,
+      undefined as never,
+      { providerMode: 'stripe_sandbox' } as never,
+      undefined as never,
+      {
+        require: () => {
+          events.push('capability');
+        },
+      } as never,
+      undefined as never,
+      {
+        status: async () => {
+          events.push('connect-status');
+          return undefined;
+        },
+      } as never,
+    );
+
+    await expect(
+      service.createWithdrawal(
+        { userId: 'user-1', sessionId: 'session-1' } as never,
+        '1000',
+        'request-1',
+        'idempotency-1',
+      ),
+    ).rejects.toThrow('stop before financial work');
+    expect(events).toEqual(['connect-status', 'capability', 'recent-auth']);
   });
 });
