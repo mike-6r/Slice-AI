@@ -222,6 +222,14 @@ const configSchema = z.object({
     .min(100)
     .max(25_000_000)
     .default(2_500_000),
+  // Explicitly opt-in. Zero keeps the hold inactive until product policy
+  // chooses a duration; the application never invents one.
+  BANK_CHANGE_WITHDRAWAL_HOLD_HOURS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(720)
+    .default(0),
   OUTBOX_WORKER_ENABLED: z.enum(['true', 'false']).default('false'),
   OUTBOX_WORKER_ID: z.string().min(1).max(128).optional(),
   OUTBOX_POLL_INTERVAL_MS: z.coerce
@@ -430,6 +438,7 @@ export type AppConfig = {
   withdrawalLimitPerMovementMinor: number;
   withdrawalLimit24hMinor: number;
   withdrawalLimit7dMinor: number;
+  bankChangeWithdrawalHoldHours: number;
   outboxWorkerEnabled: boolean;
   outboxWorkerId?: string;
   outboxPollIntervalMs: number;
@@ -867,6 +876,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     withdrawalLimitPerMovementMinor: parsed.WITHDRAWAL_LIMIT_PER_MOVEMENT_MINOR,
     withdrawalLimit24hMinor: parsed.WITHDRAWAL_LIMIT_24H_MINOR,
     withdrawalLimit7dMinor: parsed.WITHDRAWAL_LIMIT_7D_MINOR,
+    bankChangeWithdrawalHoldHours: parsed.BANK_CHANGE_WITHDRAWAL_HOLD_HOURS,
     outboxWorkerEnabled: parsed.OUTBOX_WORKER_ENABLED === 'true',
     outboxWorkerId: parsed.OUTBOX_WORKER_ID,
     outboxPollIntervalMs: parsed.OUTBOX_POLL_INTERVAL_MS,

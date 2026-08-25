@@ -45,6 +45,7 @@ const config: AppConfig = {
   providersProductionEnabled: false,
   stripeLiveEnabled: false,
   stripeBankFundingRail: 'bacs_debit',
+  bankChangeWithdrawalHoldHours: 0,
   blockchainAnalysisApiBaseUrl: 'https://blockchainanalysis.io/api/v1',
   blockchainAnalysisRequestTimeoutMs: 10_000,
   providerWebhookToleranceSeconds: 300,

@@ -23,7 +23,7 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
   async deliver(input: {
     userId: string;
     phoneE164: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }): Promise<void> {
     void input.userId;
     void input.purpose;
@@ -42,7 +42,7 @@ export class TwilioVerifyPhoneDelivery implements PhoneVerificationDelivery {
     userId: string;
     phoneE164: string;
     code: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }): Promise<boolean> {
     void input.userId;
     void input.purpose;

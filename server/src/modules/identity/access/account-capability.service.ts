@@ -35,6 +35,7 @@ export type CapabilityReason =
   | 'IDENTITY_VERIFICATION_REQUIRED'
   | 'COMPLIANCE_REVIEW_REQUIRED'
   | 'BANK_ACCOUNT_REQUIRED'
+  | 'BANK_CHANGE_WITHDRAWAL_HOLD'
   | 'PAYOUT_ACCOUNT_REQUIRED'
   | 'PAYOUT_ACCOUNT_REVIEW_REQUIRED'
   | 'COLLECTOR_PAYOUTS_REQUIRED'
@@ -55,6 +56,7 @@ type Requirement = {
     | 'TWO_FACTOR_AUTHENTICATION'
     | 'IDENTITY_VERIFICATION'
     | 'BANK_ACCOUNT'
+    | 'BANK_CHANGE_WITHDRAWAL_HOLD'
     | 'PAYOUT_ACCOUNT'
     | 'PROVIDER_AVAILABILITY'
     | 'CASH_BALANCE'
@@ -101,6 +103,7 @@ export class AccountCapabilityService {
       select: {
         accountStatus: true,
         emailVerifiedAt: true,
+        bankWithdrawalHoldUntil: true,
         phoneVerifiedAt: true,
         twoFactor: { select: { enabledAt: true } },
         smsTwoFactor: { select: { enabledAt: true } },
@@ -306,6 +309,14 @@ export class AccountCapabilityService {
       capability === 'WITHDRAW_FUNDS' &&
       this.config.providerMode !== 'local'
     ) {
+      if (
+        this.config.bankChangeWithdrawalHoldHours > 0 &&
+        user.bankWithdrawalHoldUntil &&
+        user.bankWithdrawalHoldUntil > new Date()
+      ) {
+        needs('BANK_CHANGE_WITHDRAWAL_HOLD', false);
+        return this.denied(capability, 'BANK_CHANGE_WITHDRAWAL_HOLD', requirements);
+      }
       const payout = user.externalConnectAccounts[0];
       const payoutReady = payout?.status === 'READY';
       needs('PAYOUT_ACCOUNT', payoutReady);
@@ -442,6 +453,8 @@ function customerMessage(reason: CapabilityReason) {
       'This action is unavailable while verification is under review.',
     BANK_ACCOUNT_REQUIRED:
       'Connect a UK bank account before requesting a deposit.',
+    BANK_CHANGE_WITHDRAWAL_HOLD:
+      'Withdrawals are temporarily held after a connected bank change.',
     PAYOUT_ACCOUNT_REQUIRED:
       'Complete payout setup before withdrawing available cash.',
     PAYOUT_ACCOUNT_REVIEW_REQUIRED:

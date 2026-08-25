@@ -1024,6 +1024,14 @@ const mapBankConnection = (raw: unknown): import("@/domain").BankConnection => {
     accountType: stringField(value.accountType, "bankConnection.accountType"),
     currency: "GBP",
     status: value.status as import("@/domain").BankConnection["status"],
+    riskState: [
+      "CLEAR",
+      "SHARED_INSTRUMENT_REVIEW",
+      "DUPLICATE_INSTRUMENT_BLOCKED",
+      "MANUAL_REVIEW_REQUIRED",
+    ].includes(String(value.riskState))
+      ? (value.riskState as import("@/domain").BankConnection["riskState"])
+      : undefined,
     isDefault: Boolean(value.isDefault),
     updatedAt: stringField(value.updatedAt, "bankConnection.updatedAt") as ISODateTime,
   };
@@ -1176,16 +1184,31 @@ const mapCertificationVerification = (raw: unknown): CertificationVerification =
   return {
     id: stringField(value.id, "certificationVerification.id"),
     companyCode: stringField(value.companyCode, "certificationVerification.companyCode"),
-    certificationNumber: stringField(value.certificationNumber, "certificationVerification.certificationNumber"),
-    normalizedCertificationNumber: stringField(value.normalizedCertificationNumber, "certificationVerification.normalizedCertificationNumber"),
+    certificationNumber: stringField(
+      value.certificationNumber,
+      "certificationVerification.certificationNumber",
+    ),
+    normalizedCertificationNumber: stringField(
+      value.normalizedCertificationNumber,
+      "certificationVerification.normalizedCertificationNumber",
+    ),
     status: stringField(value.status, "certificationVerification.status"),
-    verificationMode: stringField(value.verificationMode, "certificationVerification.verificationMode"),
-    officialVerificationUrl: nullableString(value.officialVerificationUrl, "certificationVerification.officialVerificationUrl"),
+    verificationMode: stringField(
+      value.verificationMode,
+      "certificationVerification.verificationMode",
+    ),
+    officialVerificationUrl: nullableString(
+      value.officialVerificationUrl,
+      "certificationVerification.officialVerificationUrl",
+    ),
     verifiedGrade: nullableString(value.verifiedGrade, "certificationVerification.verifiedGrade"),
     verifiedLabel: nullableString(value.verifiedLabel, "certificationVerification.verifiedLabel"),
     designation: nullableString(value.designation, "certificationVerification.designation"),
     gradeEra: nullableString(value.gradeEra, "certificationVerification.gradeEra"),
-    verifiedAt: nullableString(value.verifiedAt, "certificationVerification.verifiedAt") as ISODateTime | null,
+    verifiedAt: nullableString(
+      value.verifiedAt,
+      "certificationVerification.verifiedAt",
+    ) as ISODateTime | null,
     createdAt: stringField(value.createdAt, "certificationVerification.createdAt") as ISODateTime,
   };
 };
@@ -3420,7 +3443,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           code: stringField(item.code, "gradingCompany.code"),
           name: stringField(item.name, "gradingCompany.name"),
           displayName: typeof item.displayName === "string" ? item.displayName : item.name,
-          verificationMode: typeof item.verificationMode === "string" ? item.verificationMode : "MANUAL_OFFICIAL_LOOKUP",
+          verificationMode:
+            typeof item.verificationMode === "string"
+              ? item.verificationMode
+              : "MANUAL_OFFICIAL_LOOKUP",
           supportsCertVerification: item.supportsCertVerification !== false,
           supportsAutomatedVerification: item.supportsAutomatedVerification === true,
           officialVerificationUrl: item.officialVerificationUrl ?? null,
@@ -3430,7 +3456,16 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async listGrades(companyCode) {
         const body = await client.get<{
-          items: Array<{ id: string; grade: string; label: string; conditionLabel: string | null; designation?: string | null; legacy?: boolean; gradeEra?: string | null; scaleVersion?: string | null }>;
+          items: Array<{
+            id: string;
+            grade: string;
+            label: string;
+            conditionLabel: string | null;
+            designation?: string | null;
+            legacy?: boolean;
+            gradeEra?: string | null;
+            scaleVersion?: string | null;
+          }>;
         }>(`/grading-companies/${encodeURIComponent(companyCode)}/grades`);
         return body.items.map((item) => ({
           id: stringField(item.id, "grade.id"),
@@ -4360,19 +4395,47 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid bank connections from service.");
         return value.items.map(mapBankConnection);
       },
-      async disconnectBankConnection(id) {
+      async requestBankDisconnectChallenge(id) {
         const value = objectField(
-          await client.request<unknown>(`/wallet/bank-accounts/${encodeURIComponent(id)}`, {
+          await client.request<unknown>(
+            `/wallet/bank-accounts/${encodeURIComponent(id)}/disconnect/challenge`,
+            {
+              method: "POST",
+            },
+          ),
+          "bank disconnect challenge",
+        );
+        return {
+          required: Boolean(value.required),
+          method: value.method === "TOTP" || value.method === "SMS" ? value.method : null,
+          challenge: nullableString(value.challenge, "bankDisconnect.challenge"),
+          phone: nullableString(value.phone, "bankDisconnect.phone"),
+          expiresAt: nullableString(value.expiresAt, "bankDisconnect.expiresAt"),
+        };
+      },
+      async disconnectBankConnection(input) {
+        const value = objectField(
+          await client.request<unknown>(`/wallet/bank-accounts/${encodeURIComponent(input.id)}`, {
             method: "DELETE",
+            body: { confirmed: true, mfaCode: input.mfaCode, mfaChallenge: input.mfaChallenge },
+            headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "bank disconnect",
         );
-        return { disconnected: Boolean(value.disconnected), replayed: Boolean(value.replayed) };
+        return {
+          disconnected: Boolean(value.disconnected),
+          replayed: Boolean(value.replayed),
+          pendingMovementCount:
+            value.pendingMovementCount === undefined
+              ? undefined
+              : Number(value.pendingMovementCount),
+        };
       },
       async setDefaultBankConnection(id) {
         const value = objectField(
           await client.request<unknown>(`/wallet/bank-accounts/${encodeURIComponent(id)}/default`, {
             method: "PATCH",
+            headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "bank selection",
         );

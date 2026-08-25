@@ -27722,6 +27722,161 @@ body:has(.collectors-page) footer > .site-shell > div:last-child {
   }
 }
 
+/* Bank-link security step-up dialog. The dialog is intentionally compact so
+   the destructive action stays clear on desktop and mobile alike. */
+.wallet-bank-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 6, 9, 0.78);
+  backdrop-filter: blur(10px);
+}
+.wallet-bank-dialog {
+  width: min(100%, 31rem);
+  border: 1px solid rgba(49, 219, 171, 0.25);
+  border-radius: 0.85rem;
+  background: linear-gradient(150deg, #18232b, #0d141a 78%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #e9f0f1;
+  padding: 1.15rem;
+}
+.wallet-bank-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wallet-bank-dialog h2 {
+  margin-top: 0.25rem;
+  font-size: 1.22rem;
+  letter-spacing: -0.035em;
+}
+.wallet-bank-dialog__close {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(158, 174, 194, 0.18);
+  border-radius: 0.4rem;
+  color: #aebbc1;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.wallet-bank-dialog__account {
+  margin-top: 0.95rem;
+  border: 1px solid rgba(158, 174, 194, 0.13);
+  border-radius: 0.45rem;
+  background: rgba(4, 10, 14, 0.35);
+  padding: 0.62rem 0.7rem;
+  color: #d9e6e6;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.wallet-bank-dialog__intro {
+  margin-top: 0.92rem;
+  color: #aab9bd;
+  font-size: 0.73rem;
+  line-height: 1.5;
+}
+.wallet-bank-dialog__consequences {
+  display: grid;
+  gap: 0.48rem;
+  margin-top: 0.85rem;
+  padding-left: 1.1rem;
+  color: #c4d0d2;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.wallet-bank-dialog__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  color: #e5eeee;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.wallet-bank-dialog__check input {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  accent-color: #18d5a7;
+}
+.wallet-bank-dialog__field {
+  display: grid;
+  gap: 0.38rem;
+  margin-top: 1rem;
+  color: #c9d6d8;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.wallet-bank-dialog__field input {
+  min-height: 2.65rem;
+  border: 1px solid rgba(158, 174, 194, 0.22);
+  border-radius: 0.46rem;
+  background: #0b1217;
+  padding: 0 0.7rem;
+  color: #eef7f7;
+  font-size: 0.84rem;
+}
+.wallet-bank-dialog__error {
+  margin-top: 0.75rem;
+  color: #ff9da4;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.wallet-bank-dialog > footer,
+.wallet-bank-dialog form > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+.wallet-bank-dialog__secondary,
+.wallet-bank-dialog__danger {
+  min-height: 2.45rem;
+  border-radius: 0.44rem;
+  padding: 0 0.85rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+.wallet-bank-dialog__secondary {
+  border: 1px solid rgba(158, 174, 194, 0.2);
+  color: #b9c7ca;
+}
+.wallet-bank-dialog__danger {
+  background: linear-gradient(135deg, #ff7a86, #e95268);
+  color: #27090e;
+}
+.wallet-bank-dialog__danger:disabled,
+.wallet-bank-dialog__secondary:disabled,
+.wallet-bank-dialog__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  .wallet-bank-dialog-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+  .wallet-bank-dialog {
+    width: 100%;
+    border-radius: 1rem 1rem 0 0;
+    padding: 1rem;
+  }
+  .wallet-bank-dialog > footer,
+  .wallet-bank-dialog form > footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .wallet-bank-dialog__secondary,
+  .wallet-bank-dialog__danger {
+    width: 100%;
+  }
+}
+
 .approved-home__illustrative-terms {
   display: grid;
   gap: 0.22rem;

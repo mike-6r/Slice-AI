@@ -57,6 +57,7 @@ import { EmailVerificationModule } from '../email-verification/email-verificatio
     AuthAbuseService,
     RecentAuthService,
     PASSWORD_HASHER,
+    TwoFactorService,
   ],
 })
 export class AuthModule {}

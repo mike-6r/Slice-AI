@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -25,6 +26,7 @@ import { TransactionalEmailService } from '../email-delivery/transactional-email
 const RECOVERY_CODE_COUNT = 8;
 const RECOVERY_CODE_BYTES = 10;
 type TwoFactorMethod = 'TOTP' | 'SMS';
+export type SensitiveAction = { kind: 'BANK_DISCONNECT' | 'BANK_DEFAULT_CHANGE'; resourceId: string };
 
 export type TwoFactorLoginChallenge = {
   requiresTwoFactor: true;
@@ -523,6 +525,138 @@ export class TwoFactorService {
     return { resendAvailableAt: new Date(now.getTime() + this.config.phoneVerificationResendSeconds * 1000).toISOString() };
   }
 
+  async beginSensitiveActionChallenge(
+    actor: Actor,
+    action: SensitiveAction,
+    ip: string,
+    requestId: string,
+  ) {
+    const actionKey = sensitiveActionKey(action);
+    this.recentAuth.require(actor);
+    await this.abuse.enforce('bank-mfa', ip, actor.userId);
+    const user = await this.db.user.findUniqueOrThrow({
+      where: { id: actor.userId },
+      select: {
+        phoneE164: true,
+        phoneVerifiedAt: true,
+        twoFactor: { select: { enabledAt: true } },
+        smsTwoFactor: { select: { enabledAt: true } },
+      },
+    });
+    const method: TwoFactorMethod | null = user.twoFactor?.enabledAt
+      ? 'TOTP'
+      : user.smsTwoFactor?.enabledAt
+        ? 'SMS'
+        : null;
+    if (method !== 'SMS') return { required: Boolean(method), method, challenge: null, phone: null, expiresAt: null };
+    this.requireSmsEnabled();
+    if (!user.phoneE164 || !user.phoneVerifiedAt) throw new ServiceUnavailableException({
+      code: 'MFA_UNAVAILABLE',
+      message: 'This account security method is temporarily unavailable.',
+    });
+    const rawChallenge = randomBytes(32).toString('base64url');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + this.config.twoFactorChallengeTtlSeconds * 1000);
+    await this.delivery.deliver({
+      userId: actor.userId,
+      phoneE164: user.phoneE164,
+      purpose: 'MFA_SENSITIVE_ACTION',
+    });
+    await this.db.withTransaction(async (tx) => {
+      await tx.twoFactorActionChallenge.deleteMany({
+        where: { userId: actor.userId, action: actionKey, OR: [{ consumedAt: { not: null } }, { expiresAt: { lte: now } }] },
+      });
+      await tx.twoFactorActionChallenge.create({
+        data: {
+          userId: actor.userId,
+          tokenHash: hashChallenge(rawChallenge),
+          action: actionKey,
+          method,
+          phoneE164: user.phoneE164,
+          expiresAt,
+          lastSentAt: now,
+        },
+      });
+      await this.audit(tx, 'TWO_FACTOR_SENSITIVE_CHALLENGE_SENT', actor.userId, actor.sessionId, requestId, now, { action: action.kind, resourceId: action.resourceId, method });
+    });
+    return {
+      required: true,
+      method,
+      challenge: rawChallenge,
+      phone: maskPhone(user.phoneE164),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  async verifySensitiveAction(
+    actor: Actor,
+    input: { action: SensitiveAction; code?: string; challenge?: string },
+    ip: string,
+    requestId: string,
+  ) {
+    const actionKey = sensitiveActionKey(input.action);
+    this.recentAuth.require(actor);
+    await this.abuse.enforce('bank-mfa', ip, actor.userId);
+    const user = await this.db.user.findUniqueOrThrow({
+      where: { id: actor.userId },
+      select: {
+        phoneE164: true,
+        phoneVerifiedAt: true,
+        twoFactor: { select: { enabledAt: true, secretCiphertext: true } },
+        smsTwoFactor: { select: { enabledAt: true, phoneE164: true } },
+      },
+    });
+    const method: TwoFactorMethod | null = user.twoFactor?.enabledAt
+      ? 'TOTP'
+      : user.smsTwoFactor?.enabledAt
+        ? 'SMS'
+        : null;
+    if (!method) return { verified: true, method: null };
+    if (!input.code) throw sensitiveMfaRequired(method);
+    if (method === 'TOTP') {
+      const valid = await this.isValidCode(this.crypto.decrypt(user.twoFactor!.secretCiphertext, actor.userId), input.code);
+      if (!valid) throw invalidCode();
+      await this.db.auditEvent.create({
+        data: {
+          id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'TWO_FACTOR_SENSITIVE_CHALLENGE_SUCCEEDED',
+          resourceType: 'user', resourceId: actor.userId, requestId, sessionId: actor.sessionId, result: 'SUCCESS',
+          metadata: { action: input.action.kind, resourceId: input.action.resourceId, method }, createdAt: new Date(),
+        },
+      });
+      return { verified: true, method };
+    }
+    this.requireSmsEnabled();
+    if (!input.challenge || !user.smsTwoFactor?.phoneE164 || !user.phoneVerifiedAt || user.phoneE164 !== user.smsTwoFactor.phoneE164)
+      throw sensitiveMfaRequired(method);
+    const tokenHash = hashChallenge(input.challenge);
+    const pending = await this.db.twoFactorActionChallenge.findUnique({ where: { tokenHash } });
+    const now = new Date();
+    if (!pending || pending.userId !== actor.userId || pending.action !== actionKey || pending.method !== 'SMS' || pending.consumedAt || pending.expiresAt <= now)
+      throw invalidCode();
+    const approved = await this.delivery.verify({
+      userId: actor.userId,
+      phoneE164: user.smsTwoFactor.phoneE164,
+      code: input.code,
+      purpose: 'MFA_SENSITIVE_ACTION',
+    });
+    const consumed = await this.db.withTransaction(async (tx) => {
+      const current = await tx.twoFactorActionChallenge.findUnique({ where: { id: pending.id } });
+      if (!current || current.consumedAt || current.expiresAt <= new Date()) return false;
+      if (!approved) {
+        const exhausted = current.attemptCount + 1 >= this.config.phoneVerificationMaxAttempts;
+        await tx.twoFactorActionChallenge.update({ where: { id: current.id }, data: { attemptCount: { increment: 1 }, consumedAt: exhausted ? new Date() : undefined } });
+        await this.audit(tx, 'TWO_FACTOR_SENSITIVE_CHALLENGE_FAILED', actor.userId, actor.sessionId, requestId, new Date(), { action: input.action.kind, resourceId: input.action.resourceId, method }, 'FAILURE');
+        return false;
+      }
+      const updated = await tx.twoFactorActionChallenge.updateMany({ where: { id: current.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
+      if (updated.count !== 1) return false;
+      await this.audit(tx, 'TWO_FACTOR_SENSITIVE_CHALLENGE_SUCCEEDED', actor.userId, actor.sessionId, requestId, new Date(), { action: input.action.kind, resourceId: input.action.resourceId, method });
+      return true;
+    });
+    if (!consumed) throw invalidCode();
+    return { verified: true, method };
+  }
+
   async verifyLoginChallenge(
     input: { challenge: string; code?: string; recoveryCode?: string },
     ip: string,
@@ -669,6 +803,10 @@ function hashChallenge(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function sensitiveActionKey(action: SensitiveAction) {
+  return `${action.kind}:${action.resourceId}`;
+}
+
 function generateRecoveryCodes() {
   return Array.from({ length: RECOVERY_CODE_COUNT }, () => {
     const value = randomBytes(RECOVERY_CODE_BYTES).toString('hex').toUpperCase();
@@ -680,6 +818,16 @@ function invalidCode() {
   return new UnauthorizedException({
     code: 'TWO_FACTOR_INVALID',
     message: 'The two-factor code is invalid or expired.',
+  });
+}
+
+function sensitiveMfaRequired(method: TwoFactorMethod) {
+  return new ForbiddenException({
+    code: 'MFA_REQUIRED',
+    message: method === 'TOTP'
+      ? 'Enter your authenticator code to continue.'
+      : 'Enter the SMS security code to continue.',
+    method,
   });
 }
 

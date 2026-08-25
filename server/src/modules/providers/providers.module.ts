@@ -3,6 +3,7 @@ import { AccessControlModule } from '../identity/access/access-control.module';
 import { AuthModule } from '../identity/auth/auth.module';
 import { FinanceModule } from '../finance/finance.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { EmailDeliveryModule } from '../identity/email-delivery/email-delivery.module';
 import { ProviderCryptoService } from './application/provider-crypto.service';
 import { ComplianceService } from './application/compliance.service';
 import { WalletMovementService } from './application/wallet-movement.service';
@@ -19,7 +20,7 @@ import { ProviderFinancialCostService } from './application/provider-financial-c
 import { ProvidersController } from './http/providers.controller';
 
 @Module({
-  imports: [AuthModule, AccessControlModule, FinanceModule, OutboxModule],
+  imports: [AuthModule, AccessControlModule, FinanceModule, OutboxModule, EmailDeliveryModule],
   controllers: [ProvidersController],
   providers: [
     ProviderCryptoService,

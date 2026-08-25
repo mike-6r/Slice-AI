@@ -27,6 +27,9 @@ const policies = {
   assetLifecycleMutation: { limit: 60, ttlSeconds: 3600 },
   tradingMutation: { limit: 120, ttlSeconds: 3600 },
   providerMutation: { limit: 30, ttlSeconds: 3600 },
+  bankLink: { limit: 12, ttlSeconds: 86_400 },
+  bankDisconnect: { limit: 12, ttlSeconds: 86_400 },
+  bankMfa: { limit: 10, ttlSeconds: 900 },
 } as const;
 export type ControlRatePolicy = keyof typeof policies;
 

@@ -16,6 +16,8 @@ const amount = z.object({ amountMinor: z.string().regex(/^\d+$/).max(32), destin
 const page = z.object({ cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 const hold = z.object({ userId: z.string().min(1), scope: z.enum(['FUNDING', 'WITHDRAWAL', 'TRADING_ELIGIBILITY', 'EXTERNAL_MOVEMENT', 'ACCOUNT']), reasonCode: z.string().min(1).max(64) }).strict();
 const bankConnectionComplete = z.object({ checkoutSessionId: z.string().min(1).max(256) }).strict();
+const bankDisconnect = z.object({ confirmed: z.literal(true), mfaCode: z.string().trim().min(4).max(32).optional(), mfaChallenge: z.string().trim().min(16).max(256).optional() }).strict();
+const bankRiskQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
 @Controller()
 export class ProvidersController {
   constructor(private readonly compliance: ComplianceService, private readonly movements: WalletMovementService, private readonly webhooks: ProviderWebhookService, private readonly reconciliation: ProviderReconciliationService, private readonly holds: ComplianceHoldService, private readonly bankLinks: BankConnectionService, private readonly connectPayouts: StripeConnectPayoutService, private readonly limiter: ControlRateLimitService) {}
@@ -38,10 +40,14 @@ export class ProvidersController {
   }
   @Get('wallet/bank-accounts') @UseGuards(AccessTokenGuard)
   bankAccounts(@Req() req: AuthenticatedRequest) { return this.bankLinks.list(req.actor!.userId); }
+  @Get('admin/providers/bank-risk') @UseGuards(AccessTokenGuard, PermissionGuard) @RequirePermission('provider.manage')
+  bankRisk(@Query() query: unknown) { return this.bankLinks.listRisk(this.parse(bankRiskQuery, query).limit); }
+  @Post('wallet/bank-accounts/:connectionId/disconnect/challenge') @UseGuards(AccessTokenGuard)
+  async disconnectChallenge(@Param('connectionId') connectionId: string, @Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.beginDisconnectChallenge(req.actor!, connectionId, req.ip ?? 'unknown', req.requestId ?? 'unknown'); }
   @Delete('wallet/bank-accounts/:connectionId') @UseGuards(AccessTokenGuard)
-  async disconnectBank(@Param('connectionId') connectionId: string, @Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.disconnect(req.actor!, connectionId, req.requestId ?? 'unknown'); }
+  async disconnectBank(@Param('connectionId') connectionId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { const input = this.parse(bankDisconnect, body); return this.write(req, key, () => this.bankLinks.disconnect(req.actor!, connectionId, input, req.requestId ?? 'unknown', req.ip ?? 'unknown')); }
   @Patch('wallet/bank-accounts/:connectionId/default') @UseGuards(AccessTokenGuard)
-  async defaultBank(@Param('connectionId') connectionId: string, @Req() req: AuthenticatedRequest) { await this.limit(req); return this.bankLinks.setDefault(req.actor!, connectionId); }
+  async defaultBank(@Param('connectionId') connectionId: string, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.bankLinks.setDefault(req.actor!, connectionId, req.requestId ?? 'unknown', req.ip ?? 'unknown')); }
   @Get('wallet/payouts/connect') @UseGuards(AccessTokenGuard)
   connectStatus(@Req() req: AuthenticatedRequest) { return this.connectPayouts.status(req.actor!); }
   @Post('wallet/payouts/connect/onboarding') @UseGuards(AccessTokenGuard)

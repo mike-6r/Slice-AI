@@ -1762,7 +1762,19 @@ export interface ProviderRepository {
     checkoutSessionId: string;
   }): Promise<{ connections: BankConnection[]; replayed: boolean }>;
   listBankConnections(): Promise<BankConnection[]>;
-  disconnectBankConnection(id: string): Promise<{ disconnected: boolean; replayed: boolean }>;
+  requestBankDisconnectChallenge(id: string): Promise<{
+    required: boolean;
+    method: "TOTP" | "SMS" | null;
+    challenge: string | null;
+    phone: string | null;
+    expiresAt: string | null;
+  }>;
+  disconnectBankConnection(input: {
+    id: string;
+    confirmed: true;
+    mfaCode?: string;
+    mfaChallenge?: string;
+  }): Promise<{ disconnected: boolean; replayed: boolean; pendingMovementCount?: number }>;
   setDefaultBankConnection(id: string): Promise<{ selected: boolean }>;
   getConnectPayoutSetup(): Promise<ConnectPayoutSetup>;
   getFeePolicy(): Promise<FeePolicy>;

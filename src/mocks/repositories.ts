@@ -1168,6 +1168,9 @@ export const mockRepositories: AppRepositories = {
     async listBankConnections() {
       return [];
     },
+    async requestBankDisconnectChallenge() {
+      return { required: false, method: null, challenge: null, phone: null, expiresAt: null };
+    },
     async disconnectBankConnection() {
       return { disconnected: true, replayed: false };
     },

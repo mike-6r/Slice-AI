@@ -62,6 +62,7 @@ export class AuthAbuseService {
       | 'two-factor-sms-login-send'
       | 'two-factor-sms-login-check'
       | 'two-factor-sms-login-resend'
+      | 'bank-mfa'
       | 'notification-preferences'
       | 'password-reset-request'
       | 'password-reset-confirm',
@@ -78,9 +79,11 @@ export class AuthAbuseService {
             ? 10
           : operation === 'preferences'
             ? 60
+            : operation === 'bank-mfa'
+              ? 10
             : 5;
     const ttlSeconds =
-      operation === 'login' || operation === 'refresh-failure' ? 900 : 3600;
+      operation === 'login' || operation === 'refresh-failure' || operation === 'bank-mfa' ? 900 : 3600;
     const keys = [this.cache.key(`auth-${operation}-ip`, hash(ip))];
     if (accountHint)
       keys.push(this.cache.key(`auth-${operation}-account`, hash(accountHint)));

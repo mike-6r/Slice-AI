@@ -135,8 +135,14 @@ export class ProviderService {
   completeBankLink = (input: { checkoutSessionId: string }) =>
     this.repositories.providers.completeBankLink(input);
   bankConnections = () => this.repositories.providers.listBankConnections();
-  disconnectBankConnection = (id: string) =>
-    this.repositories.providers.disconnectBankConnection(id);
+  requestBankDisconnectChallenge = (id: string) =>
+    this.repositories.providers.requestBankDisconnectChallenge(id);
+  disconnectBankConnection = (input: {
+    id: string;
+    confirmed: true;
+    mfaCode?: string;
+    mfaChallenge?: string;
+  }) => this.repositories.providers.disconnectBankConnection(input);
   setDefaultBankConnection = (id: string) =>
     this.repositories.providers.setDefaultBankConnection(id);
   connectPayoutSetup = () => this.repositories.providers.getConnectPayoutSetup();

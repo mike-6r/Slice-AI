@@ -443,64 +443,366 @@ function BankConnectionRow({
   refreshWallet: () => void;
 }) {
   const services = useAppServices();
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnectStage, setDisconnectStage] = useState<"confirm" | "recent-auth" | "mfa">(
+    "confirm",
+  );
+  const [confirmed, setConfirmed] = useState(false);
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState<string | undefined>();
+  const [mfaMethod, setMfaMethod] = useState<"TOTP" | "SMS" | null>(null);
+  const [mfaPhone, setMfaPhone] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
+
+  const closeDisconnect = (force = false) => {
+    if (!force && (disconnectMutation.isPending || recentAuth.isPending || challenge.isPending))
+      return;
+    setDisconnectOpen(false);
+    setDisconnectStage("confirm");
+    setConfirmed(false);
+    setPassword("");
+    setMfaCode("");
+    setMfaChallenge(undefined);
+    setMfaMethod(null);
+    setMfaPhone(null);
+    setFlowError(null);
+  };
   const action = useMutation({
-    mutationFn: async (kind: "default" | "disconnect") => {
-      if (kind === "default") await services.providers.setDefaultBankConnection(connection.id);
-      else await services.providers.disconnectBankConnection(connection.id);
+    mutationFn: () => services.providers.setDefaultBankConnection(connection.id),
+    onSuccess: () => {
+      refreshWallet();
+      toast.success("Default funding account updated.");
     },
-    onSuccess: (_result, kind) => {
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : "Bank account action failed."),
+  });
+  const challenge = useMutation({
+    mutationFn: () => services.providers.requestBankDisconnectChallenge(connection.id),
+    onSuccess: (result) => {
+      setMfaMethod(result.method);
+      setMfaChallenge(result.challenge ?? undefined);
+      setMfaPhone(result.phone);
+      setDisconnectStage("mfa");
+    },
+    onError: (error) =>
+      setFlowError(
+        error instanceof ApiError ? error.message : "Security verification is unavailable.",
+      ),
+  });
+  const disconnectMutation = useMutation({
+    mutationFn: (input: { mfaCode?: string; mfaChallenge?: string }) =>
+      services.providers.disconnectBankConnection({ id: connection.id, confirmed: true, ...input }),
+    onSuccess: (result) => {
       refreshWallet();
       toast.success(
-        kind === "default" ? "Default funding account updated." : "Bank disconnected safely.",
+        result.pendingMovementCount
+          ? `Bank disconnected. ${result.pendingMovementCount} pending movement${result.pendingMovementCount === 1 ? "" : "s"} will continue safely.`
+          : "Bank disconnected safely.",
       );
+      closeDisconnect(true);
     },
-    onError: () => toast.error("Bank account action failed."),
+    onError: (error) => {
+      if (!(error instanceof ApiError)) {
+        setFlowError("We could not disconnect this bank safely. Please try again.");
+        return;
+      }
+      if (error.code === "RECENT_AUTH_REQUIRED") {
+        setDisconnectStage("recent-auth");
+        setFlowError(null);
+      } else if (error.code === "MFA_REQUIRED") {
+        setFlowError(null);
+        challenge.mutate();
+      } else if (error.code === "BANK_DEFAULT_REPLACEMENT_REQUIRED") {
+        setFlowError("Make another connected bank the default before disconnecting this one.");
+      } else {
+        setFlowError(error.message);
+      }
+    },
   });
+  const recentAuth = useMutation({
+    mutationFn: () => services.repositories.account.confirmRecentAuth(password),
+    onSuccess: () => {
+      setPassword("");
+      setFlowError(null);
+      disconnectMutation.mutate({
+        mfaCode: mfaCode || undefined,
+        mfaChallenge,
+      });
+    },
+    onError: (error) =>
+      setFlowError(error instanceof ApiError ? error.message : "Recent authentication failed."),
+  });
+  const beginDisconnect = () => {
+    setDisconnectOpen(true);
+    setDisconnectStage("confirm");
+    setConfirmed(false);
+    setFlowError(null);
+  };
   const label = connection.institutionName ?? connection.accountName ?? "Connected account";
   return (
-    <li className="wallet-bank-card">
-      <span className="wallet-bank-icon">
-        <Landmark aria-hidden="true" />
-      </span>
-      <div>
-        <strong>{label}</strong>
-        <p>
-          {connection.accountType === "bacs_debit" ? "UK bank account" : connection.accountType}
-          {connection.accountMask ? ` · •••• ${connection.accountMask}` : ""}
-        </p>
-      </div>
-      <aside>
-        <StatusPill status={connection.status} />
-        <small>{connection.isDefault ? "Default funding account" : "Connected bank"}</small>
-        <div className="wallet-bank-actions">
-          {!connection.isDefault && connection.status === "CONNECTED" ? (
-            <button
-              type="button"
-              onClick={() => action.mutate("default")}
-              disabled={action.isPending}
-            >
-              Make default
-            </button>
-          ) : null}
-          {connection.status === "CONNECTED" ? (
-            <button
-              type="button"
-              onClick={() => action.mutate("disconnect")}
-              disabled={action.isPending}
-            >
-              Disconnect
-            </button>
-          ) : null}
-        </div>
-      </aside>
-      <div className="wallet-bank-card__meta">
-        <span>
-          <BadgeCheck aria-hidden="true" />
-          {connection.accountName ?? "Account holder"}
+    <>
+      <li className="wallet-bank-card">
+        <span className="wallet-bank-icon">
+          <Landmark aria-hidden="true" />
         </span>
-        <span>Funding via Bacs Direct Debit · Managed securely by Stripe</span>
-      </div>
-    </li>
+        <div>
+          <strong>{label}</strong>
+          <p>
+            {connection.accountType === "bacs_debit" ? "UK bank account" : connection.accountType}
+            {connection.accountMask ? ` · •••• ${connection.accountMask}` : ""}
+          </p>
+        </div>
+        <aside>
+          <StatusPill status={connection.status} />
+          <small>{connection.isDefault ? "Default funding account" : "Connected bank"}</small>
+          <div className="wallet-bank-actions">
+            {!connection.isDefault && connection.status === "CONNECTED" ? (
+              <button type="button" onClick={() => action.mutate()} disabled={action.isPending}>
+                {action.isPending ? "Updating…" : "Make default"}
+              </button>
+            ) : null}
+            {connection.status === "CONNECTED" ? (
+              <button
+                type="button"
+                onClick={beginDisconnect}
+                disabled={disconnectMutation.isPending}
+              >
+                Disconnect
+              </button>
+            ) : null}
+          </div>
+        </aside>
+        <div className="wallet-bank-card__meta">
+          <span>
+            <BadgeCheck aria-hidden="true" />
+            {connection.accountName ?? "Account holder"}
+          </span>
+          <span>Funding via Bacs Direct Debit · Managed securely by Stripe</span>
+        </div>
+      </li>
+      {disconnectOpen ? (
+        <BankDisconnectDialog
+          label={label}
+          mask={connection.accountMask}
+          stage={disconnectStage}
+          confirmed={confirmed}
+          setConfirmed={setConfirmed}
+          password={password}
+          setPassword={setPassword}
+          mfaCode={mfaCode}
+          setMfaCode={setMfaCode}
+          mfaMethod={mfaMethod}
+          mfaPhone={mfaPhone}
+          flowError={
+            flowError ?? (challenge.error instanceof ApiError ? challenge.error.message : null)
+          }
+          busy={disconnectMutation.isPending || recentAuth.isPending || challenge.isPending}
+          onClose={closeDisconnect}
+          onConfirm={() => disconnectMutation.mutate({})}
+          onRecentAuth={() => recentAuth.mutate()}
+          onMfa={() => disconnectMutation.mutate({ mfaCode, mfaChallenge })}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function BankDisconnectDialog({
+  label,
+  mask,
+  stage,
+  confirmed,
+  setConfirmed,
+  password,
+  setPassword,
+  mfaCode,
+  setMfaCode,
+  mfaMethod,
+  mfaPhone,
+  flowError,
+  busy,
+  onClose,
+  onConfirm,
+  onRecentAuth,
+  onMfa,
+}: {
+  label: string;
+  mask?: string | null;
+  stage: "confirm" | "recent-auth" | "mfa";
+  confirmed: boolean;
+  setConfirmed: (value: boolean) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  mfaCode: string;
+  setMfaCode: (value: string) => void;
+  mfaMethod: "TOTP" | "SMS" | null;
+  mfaPhone: string | null;
+  flowError: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  onRecentAuth: () => void;
+  onMfa: () => void;
+}) {
+  return (
+    <div className="wallet-bank-dialog-backdrop" role="presentation">
+      <section
+        className="wallet-bank-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bank-disconnect-title"
+      >
+        <header>
+          <div>
+            <p className="page-kicker">Bank security</p>
+            <h2 id="bank-disconnect-title">
+              {stage === "confirm"
+                ? "Disconnect this bank account?"
+                : stage === "recent-auth"
+                  ? "Confirm it’s really you"
+                  : "Verify this bank change"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="wallet-bank-dialog__close"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </header>
+        <p className="wallet-bank-dialog__account">
+          {label} {mask ? `· •••• ${mask}` : ""}
+        </p>
+        {stage === "confirm" ? (
+          <>
+            <p className="wallet-bank-dialog__intro">
+              Disconnecting removes this account from new deposits. Slice keeps your movement
+              history safe and does not cancel anything already processing.
+            </p>
+            <ul className="wallet-bank-dialog__consequences">
+              <li>No new deposits can use this account.</li>
+              <li>Pending deposits continue to settle normally.</li>
+              <li>Withdrawals and payouts are not cancelled.</li>
+              <li>You’ll need another verified bank before depositing again.</li>
+            </ul>
+            <label className="wallet-bank-dialog__check">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              <span>I understand these consequences and want to disconnect this bank.</span>
+            </label>
+            {flowError ? <p className="wallet-bank-dialog__error">{flowError}</p> : null}
+            <footer>
+              <button
+                type="button"
+                className="wallet-bank-dialog__secondary"
+                onClick={onClose}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="wallet-bank-dialog__danger"
+                onClick={onConfirm}
+                disabled={!confirmed || busy}
+              >
+                {busy ? "Checking…" : "Continue"}
+              </button>
+            </footer>
+          </>
+        ) : null}
+        {stage === "recent-auth" ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onRecentAuth();
+            }}
+          >
+            <p className="wallet-bank-dialog__intro">
+              For your protection, sign in again before changing a connected bank account.
+            </p>
+            <label className="wallet-bank-dialog__field">
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoFocus
+                required
+              />
+            </label>
+            {flowError ? <p className="wallet-bank-dialog__error">{flowError}</p> : null}
+            <footer>
+              <button
+                type="button"
+                className="wallet-bank-dialog__secondary"
+                onClick={onClose}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="wallet-bank-dialog__danger"
+                disabled={!password || busy}
+              >
+                {busy ? "Checking…" : "Confirm identity"}
+              </button>
+            </footer>
+          </form>
+        ) : null}
+        {stage === "mfa" ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onMfa();
+            }}
+          >
+            <p className="wallet-bank-dialog__intro">
+              {mfaMethod === "SMS"
+                ? `Enter the security code sent to ${mfaPhone ?? "your verified phone"}.`
+                : "Enter the current code from your authenticator app."}
+            </p>
+            <label className="wallet-bank-dialog__field">
+              {mfaMethod === "SMS" ? "SMS security code" : "Authenticator code"}
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                autoFocus
+                required
+              />
+            </label>
+            {flowError ? <p className="wallet-bank-dialog__error">{flowError}</p> : null}
+            <footer>
+              <button
+                type="button"
+                className="wallet-bank-dialog__secondary"
+                onClick={onClose}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="wallet-bank-dialog__danger"
+                disabled={!mfaCode || busy}
+              >
+                {busy ? "Verifying…" : "Verify and disconnect"}
+              </button>
+            </footer>
+          </form>
+        ) : null}
+      </section>
+    </div>
   );
 }
 

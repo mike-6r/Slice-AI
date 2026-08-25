@@ -31,6 +31,11 @@ export interface BankConnection {
   accountType: string;
   currency: "GBP";
   status: "CONNECTED" | "DISCONNECTED" | "EXPIRED";
+  riskState?:
+    | "CLEAR"
+    | "SHARED_INSTRUMENT_REVIEW"
+    | "DUPLICATE_INSTRUMENT_BLOCKED"
+    | "MANUAL_REVIEW_REQUIRED";
   isDefault: boolean;
   updatedAt: ISODateTime;
 }

@@ -361,6 +361,13 @@ enum ExternalProviderEnvironment {
   LIVE
 }
 
+enum BankRiskState {
+  CLEAR
+  SHARED_INSTRUMENT_REVIEW
+  DUPLICATE_INSTRUMENT_BLOCKED
+  MANUAL_REVIEW_REQUIRED
+}
+
 enum ConnectAccountStatus {
   NOT_STARTED
   ACTION_REQUIRED
@@ -804,6 +811,7 @@ model User {
   normalizedEmail                     String                             @unique
   passwordHash                        String
   emailVerifiedAt                     DateTime?
+  bankWithdrawalHoldUntil             DateTime?
   phoneE164                           String?                            @unique
   phoneVerifiedAt                     DateTime?
   accountStatus                       AccountStatus                      @default(PENDING_REVIEW)
@@ -844,6 +852,7 @@ model User {
   complianceCases                     ComplianceCase[]
   complianceDecisions                 ComplianceDecision[]               @relation("ComplianceDecisionActor")
   externalFinancialAccounts           ExternalFinancialAccount[]
+  bankSecurityEvents                  BankSecurityEvent[]
   externalProviderCustomers           ExternalProviderCustomer[]
   financialConnectionSessions         FinancialConnectionSession[]
   bacsSetupSessions                   BacsSetupSession[]
@@ -861,6 +870,7 @@ model User {
   smsTwoFactor                        UserSmsTwoFactor?
   twoFactorRecoveryCodes              TwoFactorRecoveryCode[]
   twoFactorLoginChallenges            TwoFactorLoginChallenge[]
+  sensitiveActionChallenges           TwoFactorActionChallenge[]
   deletionRequests                    AccountDeletionRequest[]
   consentAcceptances                  ConsentAcceptance[]
   collectorSubscriptions              CollectorSubscription[]
@@ -1051,6 +1061,26 @@ model TwoFactorLoginChallenge {
   user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, consumedAt, expiresAt])
+}
+
+/// Short-lived MFA proofs for sensitive actions. This is deliberately separate
+/// from login challenges so an account-unlink proof can never be exchanged for
+/// a session.
+model TwoFactorActionChallenge {
+  id           String         @id @default(cuid())
+  userId       String
+  tokenHash    String         @unique
+  action       String
+  method       TwoFactorMethod
+  phoneE164    String?
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int            @default(0)
+  lastSentAt   DateTime?
+  createdAt    DateTime       @default(now())
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action, consumedAt, expiresAt])
 }
 
 /// Minimal Slice-owned Discord identity link. OAuth tokens are intentionally not retained.
@@ -2503,6 +2533,7 @@ model ExternalFinancialAccount {
   id                          String          @id @default(cuid())
   userId                      String
   provider                    ProviderCode
+  environment                 ExternalProviderEnvironment @default(SANDBOX)
   providerReferenceCiphertext String
   providerReferenceHash       String
   encryptionKeyVersion        String
@@ -2518,16 +2549,64 @@ model ExternalFinancialAccount {
   accountType                 String
   status                      String
   ownershipStatus             String?
+  instrumentIdentityId        String?
+  riskState                   BankRiskState   @default(CLEAR)
+  riskReviewedAt              DateTime?
   isDefault                   Boolean         @default(false)
   lastSyncedAt                DateTime?
   createdAt                   DateTime        @default(now())
   updatedAt                   DateTime        @updatedAt
   user                        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
   movements                   MoneyMovement[]
+  instrumentIdentity          BankInstrumentIdentity? @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
+  securityEvents              BankSecurityEvent[]
 
   @@unique([provider, providerReferenceHash])
+  @@index([provider, environment, instrumentIdentityId])
   @@index([userId, provider, itemReferenceHash])
   @@index([userId, provider, status])
+}
+
+/// Provider-issued stable identity, stored only as a keyed application hash.
+/// A shared identity is reviewable rather than globally unique at the user
+/// level because legitimate shared household/business accounts exist.
+model BankInstrumentIdentity {
+  id                         String                        @id @default(cuid())
+  provider                   ProviderCode
+  environment                ExternalProviderEnvironment
+  instrumentFingerprintHash  String
+  accountLast4               String?
+  bankCountry                String?
+  riskState                  BankRiskState                 @default(CLEAR)
+  firstSeenAt                DateTime                      @default(now())
+  lastSeenAt                 DateTime                      @updatedAt
+  accounts                   ExternalFinancialAccount[]
+  securityEvents             BankSecurityEvent[]
+
+  @@unique([provider, environment, instrumentFingerprintHash])
+  @@index([riskState, lastSeenAt])
+}
+
+/// Append-only bank lifecycle and fraud signals. Metadata is limited to safe
+/// projections; raw account/routing values and credentials never belong here.
+model BankSecurityEvent {
+  id                   String                      @id @default(cuid())
+  userId               String?
+  externalAccountId    String?
+  instrumentIdentityId String?
+  provider             ProviderCode
+  environment          ExternalProviderEnvironment
+  eventType            String
+  ipHash               String?
+  metadata             Json?
+  createdAt            DateTime                    @default(now())
+  user                 User?                       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  externalAccount      ExternalFinancialAccount?  @relation(fields: [externalAccountId], references: [id], onDelete: SetNull)
+  instrumentIdentity   BankInstrumentIdentity?    @relation(fields: [instrumentIdentityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])
+  @@index([instrumentIdentityId, createdAt, id])
+  @@index([eventType, createdAt])
 }
 
 model ExternalConnectAccount {

@@ -179,8 +179,9 @@ export class TransactionalEmailService {
 
   async sendSecurityNotification(input: {
     userId: string;
-    event: 'PASSWORD_CHANGED' | 'EMAIL_VERIFIED' | 'PHONE_CHANGED' | 'PHONE_REMOVED' | 'MFA_ENABLED' | 'MFA_DISABLED';
+    event: 'PASSWORD_CHANGED' | 'EMAIL_VERIFIED' | 'PHONE_CHANGED' | 'PHONE_REMOVED' | 'MFA_ENABLED' | 'MFA_DISABLED' | 'BANK_LINKED' | 'BANK_RELINKED' | 'BANK_DISCONNECTED' | 'BANK_DEFAULT_CHANGED';
     idempotencyKey: string;
+    last4?: string;
   }) {
     const user = await this.db.user.findUnique({ where: { id: input.userId }, select: { email: true } });
     if (!user) return false;
@@ -191,6 +192,10 @@ export class TransactionalEmailService {
       PHONE_REMOVED: { subject: 'Your Slice phone number was removed', detail: 'Your verified phone number was removed.' },
       MFA_ENABLED: { subject: 'Slice two-factor authentication enabled', detail: 'Two-factor authentication was enabled for your Slice account.' },
       MFA_DISABLED: { subject: 'Slice two-factor authentication disabled', detail: 'Two-factor authentication was disabled for your Slice account.' },
+      BANK_LINKED: { subject: 'A bank account was connected to Slice', detail: `A bank account${input.last4 ? ` ending in ${input.last4}` : ''} was connected to your Slice account.` },
+      BANK_RELINKED: { subject: 'A bank account was reconnected to Slice', detail: `A bank account${input.last4 ? ` ending in ${input.last4}` : ''} was reconnected to your Slice account.` },
+      BANK_DISCONNECTED: { subject: 'A bank account was disconnected from Slice', detail: `A bank account${input.last4 ? ` ending in ${input.last4}` : ''} was disconnected from your Slice account. If you did not do this, secure your account.` },
+      BANK_DEFAULT_CHANGED: { subject: 'Your Slice funding bank changed', detail: `A bank account${input.last4 ? ` ending in ${input.last4}` : ''} was made your default funding account.` },
     };
     const template = securityNotificationEmail({
       title: copy[input.event].subject,

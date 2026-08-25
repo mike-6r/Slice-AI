@@ -25,13 +25,13 @@ export type PhoneVerificationDelivery = {
   deliver(input: {
     userId: string;
     phoneE164: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }): Promise<void>;
   verify(input: {
     userId: string;
     phoneE164: string;
     code: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }): Promise<boolean>;
 };
 export const PHONE_VERIFICATION_DELIVERY = Symbol(
@@ -47,7 +47,7 @@ export class LocalTestPhoneDelivery implements PhoneVerificationDelivery {
   async deliver(input: {
     userId: string;
     phoneE164: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }) {
     this.codes.set(
       this.key(input),
@@ -59,7 +59,7 @@ export class LocalTestPhoneDelivery implements PhoneVerificationDelivery {
     userId: string;
     phoneE164: string;
     code: string;
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN';
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION';
   }) {
     return this.codes.get(this.key(input)) === input.code;
   }
@@ -68,7 +68,7 @@ export class LocalTestPhoneDelivery implements PhoneVerificationDelivery {
   codeForTest(
     userId: string,
     phoneE164: string,
-    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' = 'PHONE',
+    purpose: 'PHONE' | 'MFA_ENROLLMENT' | 'MFA_LOGIN' | 'MFA_SENSITIVE_ACTION' = 'PHONE',
   ) {
     return this.codes.get(this.key({ userId, phoneE164, purpose }));
   }
