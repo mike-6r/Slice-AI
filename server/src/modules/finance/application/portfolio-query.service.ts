@@ -120,8 +120,8 @@ export class PortfolioQueryService {
             media: {
               where: { status: 'SAFE', deletedAt: null },
               orderBy: { slot: 'asc' },
-              take: 1,
-              select: { objectKey: true },
+              take: 2,
+              select: { slot: true, objectKey: true },
             },
           },
         },
@@ -191,7 +191,10 @@ export class PortfolioQueryService {
         sliceValuation?.currency === 'GBP'
           ? sliceValuation.amountMinor
           : mark?.estimatedMarketValueMinor;
-      const thumbnailUrl = await this.safeThumbnailUrl(asset.submissions[0]?.media[0]?.objectKey);
+      const media = asset.submissions[0]?.media ?? [];
+      const frontMedia =
+        media.find((item) => item.slot.toLowerCase() === 'front') ?? media[0];
+      const thumbnailUrl = await this.safeThumbnailUrl(frontMedia?.objectKey);
       const estimated =
         supply && valuationMinor
           ? (valuationMinor * position.settledUnits) / supply

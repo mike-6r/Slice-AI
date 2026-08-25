@@ -59,6 +59,26 @@ export const HOMEPAGE_OWNERSHIP_EXAMPLE = {
   minimumPurchase: "Illustrative · 1 Slice · £10",
 } as const;
 
+/**
+ * Owner-provided teaching examples for the landing page only. These are not
+ * persisted offering terms and must never be used as financial authority.
+ */
+export const HOMEPAGE_SLICE_SHARE_EXAMPLES = {
+  definition: "1 Slice Share = 1% ownership",
+  examples: [
+    {
+      collectibleValueMinor: 100_000,
+      oneSliceSharePriceMinor: 1_000,
+      ownership: "1%",
+    },
+    {
+      collectibleValueMinor: 35_000,
+      oneSliceSharePriceMinor: 350,
+      ownership: "1%",
+    },
+  ],
+} as const;
+
 const catalogue: readonly HomepageShowcaseAsset[] = [
   {
     showcaseKey: "umbreon-vmax-moonbreon",

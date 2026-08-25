@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
+import { evaluatePolicy } from '../identity/domain/policy';
 import {
   collectorUsageForMany,
 } from '../collector-workspace/collector-entitlements';
@@ -1182,8 +1183,11 @@ export class AdminService {
     const [
       submissions,
       compliance,
+      complianceCases,
       supportTickets,
       payments,
+      failedPayouts,
+      pendingAdjustments,
       alerts,
       activeUsers,
       collectorUsers,
@@ -1227,11 +1231,32 @@ export class AdminService {
           status: { in: ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] },
         },
       }),
+      this.db.complianceCase.findMany({
+        where: {
+          status: { in: ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'] },
+        },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: 8,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
       this.db.discordTicket.count({
         where: { status: { in: ['OPEN', 'CLAIMED', 'WAITING_USER', 'WAITING_STAFF', 'ESCALATED'] } },
       }),
       this.db.moneyMovement.count({
         where: { status: { in: ['FAILED', 'MANUAL_REVIEW', 'HELD'] } },
+      }),
+      this.db.moneyMovement.count({
+        where: { type: 'WITHDRAWAL', status: { in: ['FAILED', 'RETURNED'] } },
+      }),
+      this.db.financialAdjustmentRequest.count({
+        where: { status: 'PENDING_APPROVAL' },
       }),
       this.db.providerIncident.count({ where: { status: 'OPEN' } }),
       this.db.user.count({ where: { accountStatus: 'ACTIVE' } }),
@@ -1302,6 +1327,7 @@ export class AdminService {
         select: {
           id: true,
           status: true,
+          updatedAt: true,
           media: { select: { status: true } },
           intake: {
             select: {
@@ -1503,6 +1529,7 @@ export class AdminService {
       vaultReady: 0,
       marketLive: 0,
     };
+    const pipelineAges = new Map<keyof typeof pipeline, Date[]>();
     for (const row of pipelineRows) {
       const publication = row.asset?.publication?.status;
       const custody = row.asset?.custodyRecord?.status;
@@ -1522,6 +1549,9 @@ export class AdminService {
       else if (shipment || row.intake?.status) stage = 'shipping';
       else stage = 'accepted';
       pipeline[stage] += 1;
+      const dates = pipelineAges.get(stage) ?? [];
+      dates.push(row.updatedAt);
+      pipelineAges.set(stage, dates);
     }
     const missingEvidence = pipelineRows.filter(
       (row) =>
@@ -1695,6 +1725,180 @@ export class AdminService {
         section: 'payments',
       },
     ].filter((item) => item.count > 0);
+    const refreshedAt = new Date().toISOString();
+    const financeAccess = evaluatePolicy({
+      actor: {
+        actorType: 'USER',
+        userId: actor.userId,
+        accountStatus: actor.status,
+        roles: actor.roles as never,
+      },
+      action: 'finance.read',
+    }).allowed;
+    let financeDashboard: Awaited<ReturnType<AdminService['financeDashboard']>> | null = null;
+    let bacsDashboard: Awaited<ReturnType<AdminService['bacsRiskDashboard']>> | null = null;
+    let financeError: string | null = null;
+    if (financeAccess) {
+      try {
+        [financeDashboard, bacsDashboard] = await Promise.all([
+          this.financeDashboard(actor),
+          this.bacsRiskDashboard(actor),
+        ]);
+      } catch {
+        financeError = 'Finance projection unavailable. Open Finance for a detailed retry.';
+      }
+    }
+    const payoutLiquidity = financeDashboard?.payoutLiquidity ?? null;
+    const openDeficitsCount = bacsDashboard?.summary.openDeficitCount ?? null;
+    const openDeficitsMinor = bacsDashboard?.summary.openDeficitMinor ?? null;
+    const returnsManualReviewCount = bacsDashboard
+      ? bacsDashboard.summary.returnedDepositCount + bacsDashboard.summary.manualReviewDepositCount
+      : null;
+    const liquidityWarning = payoutLiquidity?.providerLiquidityStatus === 'INSUFFICIENT';
+    const financeRiskCount = financeDashboard && bacsDashboard
+      ? bacsDashboard.summary.heldDepositCount +
+        bacsDashboard.summary.manualReviewDepositCount +
+        bacsDashboard.summary.returnedDepositCount +
+        bacsDashboard.summary.openDeficitCount +
+        bacsDashboard.summary.sharedInstrumentReviewCount +
+        failedPayouts +
+        (liquidityWarning ? 1 : 0) +
+        financeDashboard.kpis.reconciliationMismatches +
+        pendingAdjustments +
+        (financeDashboard.financialNotificationOperations.failedMandatoryEmail > 0 ? 1 : 0)
+      : null;
+    const staffDecisionCount =
+      pendingReviews + changesRequested + deliveredAwaitingReceipt + compliance +
+      (financeAccess ? pendingAdjustments : 0);
+    const needsActionCount =
+      attentionGroups.reduce((total, item) => total + item.count, 0) +
+      pendingAdjustments +
+      failedPayouts;
+    const platformIncidentCount = systemHealth.filter((item) =>
+      ['DEGRADED', 'UNAVAILABLE'].includes(item.status.toUpperCase()),
+    ).length;
+    const pipelineDetails = [
+      ['draft', 'Draft', 'moderation'],
+      ['submitted', 'Submitted', 'moderation'],
+      ['inReview', 'Review', 'moderation'],
+      ['accepted', 'Accepted', 'intake'],
+      ['shipping', 'Shipping', 'intake'],
+      ['received', 'Received', 'intake'],
+      ['verified', 'Verified', 'assetOperations'],
+      ['valued', 'Valued', 'valuations'],
+      ['vaultReady', 'Vault Ready', 'custody'],
+      ['marketLive', 'Live', 'collectibles'],
+    ] as const;
+    const detailedPipeline = pipelineDetails.map(([id, label, target]) => {
+      const dates = [...(pipelineAges.get(id) ?? [])].sort((a, b) => a.getTime() - b.getTime());
+      const oldestAt = dates[0]?.toISOString() ?? null;
+      return {
+        id,
+        label,
+        count: pipeline[id],
+        oldestAt,
+        oldestAge: oldestAt ? ageLabel(new Date(oldestAt)) : null,
+        overdueCount: null,
+        target,
+      };
+    });
+    const priorityWork = [
+      ...needsAttention.map((item) => ({
+        id: item.id,
+        severity: item.severity,
+        type: item.type.toUpperCase(),
+        title: item.subject,
+        context: item.reason,
+        age: item.age,
+        owner: item.waitingOn === 'COLLECTOR' ? item.collector : 'Slice staff',
+        actionLabel: item.waitingOn === 'COLLECTOR' ? 'Open collector' : 'Review',
+        target: item.target,
+        reference: item.id,
+      })),
+      ...complianceCases.map((item) => ({
+        id: `compliance-${item.id}`,
+        severity: 'HIGH',
+        type: 'COMPLIANCE',
+        title: item.user.profile?.displayName
+          ? `Compliance case · ${item.user.profile.displayName}`
+          : `Compliance case · ${item.id.slice(0, 8)}`,
+        context: `${item.type.replaceAll('_', ' ')} · ${item.status.replaceAll('_', ' ')}`,
+        age: ageLabel(item.updatedAt),
+        owner: 'Compliance',
+        actionLabel: 'Open case',
+        target: 'compliance',
+        reference: item.id,
+      })),
+      ...(failedPayouts > 0
+        ? [{
+            id: 'failed-payouts',
+            severity: 'HIGH',
+            type: 'PAYOUT',
+            title: 'Failed or returned payouts',
+            context: `${failedPayouts} payout operation${failedPayouts === 1 ? '' : 's'} need review.`,
+            age: 'Current',
+            owner: 'Finance',
+            actionLabel: 'Open finance',
+            target: 'payments',
+            reference: null,
+          }]
+        : []),
+      ...(pendingAdjustments > 0
+        ? [{
+            id: 'finance-adjustments',
+            severity: 'HIGH',
+            type: 'DUAL CONTROL',
+            title: 'Finance adjustments awaiting approval',
+            context: `${pendingAdjustments} dual-control decision${pendingAdjustments === 1 ? '' : 's'} pending.`,
+            age: 'Current',
+            owner: 'Finance',
+            actionLabel: 'Open finance',
+            target: 'payments',
+            reference: null,
+          }]
+        : []),
+      ...(financeRiskCount && financeRiskCount > 0 && financeDashboard && bacsDashboard
+        ? [{
+            id: 'finance-exceptions',
+            severity: 'HIGH',
+            type: 'FINANCE REVIEW',
+            title: 'Financial exceptions require review',
+            context: `${financeRiskCount} active finance exception${financeRiskCount === 1 ? '' : 's'} across Bacs, payouts, deficits, or reconciliation.`,
+            age: 'Current',
+            owner: 'Finance',
+            actionLabel: 'Open finance',
+            target: 'payments',
+            reference: null,
+          }]
+        : []),
+      ...(alerts > 0
+        ? [{
+            id: 'provider-incidents',
+            severity: 'HIGH',
+            type: 'PROVIDER INCIDENT',
+            title: 'Provider incidents are open',
+            context: `${alerts} provider incident${alerts === 1 ? '' : 's'} require integration review.`,
+            age: 'Current',
+            owner: 'Platform',
+            actionLabel: 'Open incidents',
+            target: 'integrations',
+            reference: null,
+          }]
+        : []),
+    ].sort((left, right) => {
+      const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>;
+      return (rank[left.severity] ?? 4) - (rank[right.severity] ?? 4);
+    }).slice(0, 12);
+    const meaningfulActivity = activityRows
+      .filter((row) => /ACCEPT|REJECT|PAYOUT|DEPOSIT|DEFICIT|ADJUSTMENT|COMPLIANCE|BANK|CUSTODY|PROVIDER|WEBHOOK|RECONCIL/i.test(row.action))
+      .map((row) => ({
+        id: row.id,
+        title: activityTitle(row.action),
+        summary: `${activityResource(row.resourceType)}${row.resourceId ? ` · ${row.resourceId.slice(0, 8)}` : ''}`,
+        actor: row.actor?.profile?.displayName ?? null,
+        occurredAt: row.createdAt.toISOString(),
+        target: row.resourceType.toLowerCase().includes('finance') || row.action.includes('PAYOUT') ? 'payments' : 'health',
+      }));
     return {
       kpis: {
         totalUsers: activeUsers,
@@ -1760,7 +1964,79 @@ export class AdminService {
         alerts,
       },
       needsAttention,
-      generatedAt: new Date().toISOString(),
+      controlCenter: {
+        summary: {
+          needsAction: {
+            count: needsActionCount,
+            subtitle: needsActionCount ? 'High-priority items require attention.' : 'No active work requires attention.',
+            severity: needsActionCount ? 'WARNING' : 'HEALTHY',
+            target: 'moderation',
+          },
+          financialRisk: {
+            count: financeRiskCount,
+            subtitle: financeAccess
+              ? (financeRiskCount ? 'Financial exceptions detected.' : 'No active financial exceptions.')
+              : 'Finance visibility requires finance.read.',
+            severity: !financeAccess ? 'LIMITED' : financeRiskCount ? 'CRITICAL' : 'HEALTHY',
+            target: 'payments',
+            access: financeAccess ? 'FULL' : 'LIMITED',
+          },
+          staffDecisions: {
+            count: staffDecisionCount,
+            subtitle: staffDecisionCount ? 'Authorized decisions are waiting.' : 'No staff decisions are waiting.',
+            severity: staffDecisionCount ? 'WARNING' : 'HEALTHY',
+            target: 'moderation',
+          },
+          platformIncidents: {
+            count: platformIncidentCount,
+            subtitle: platformIncidentCount ? 'Platform components are degraded.' : 'No degraded components reported.',
+            severity: platformIncidentCount ? 'CRITICAL' : 'HEALTHY',
+            target: 'health',
+          },
+        },
+        priorityWork,
+        platformHealth: systemHealth.map((item) => ({
+          name: item.name,
+          status: ['BETA_DISABLED', 'NOT_CONFIGURED'].includes(item.status)
+            ? 'Unknown'
+            : item.status,
+          summary: ['BETA_DISABLED', 'NOT_CONFIGURED'].includes(item.status)
+            ? 'Telemetry unavailable in this environment.'
+            : item.summary,
+          lastCheckedAt: refreshedAt,
+        })),
+        financialOperations: {
+          available: Boolean(financeDashboard && bacsDashboard),
+          access: financeAccess ? 'FULL' : 'LIMITED',
+          message: financeError ?? (financeAccess ? null : 'Finance visibility requires finance.read.'),
+          currency: 'GBP',
+          customerCashLiabilityMinor: payoutLiquidity?.customerCashLiabilityMinor ?? null,
+          bacsRiskHeldMinor: bacsDashboard?.summary.heldAmountMinor ?? null,
+          withdrawalEligibleMinor: payoutLiquidity?.withdrawalEligibleLiabilityMinor ?? null,
+          providerAvailableMinor: payoutLiquidity?.providerAvailableMinor ?? null,
+          providerPendingMinor: payoutLiquidity?.providerPendingMinor ?? null,
+          payoutLiquidityCoverageBps: payoutLiquidity?.payoutLiquidityCoverageBps ?? null,
+          openDeficitsCount,
+          openDeficitsMinor,
+          returnsManualReviewCount,
+          dualControlApprovals: financeAccess ? pendingAdjustments : null,
+          providerLiquidityStatus: payoutLiquidity?.providerLiquidityStatus ?? null,
+          warning: payoutLiquidity ? payoutLiquidity.warning || liquidityWarning : null,
+        },
+        pipeline: detailedPipeline,
+        importantActivity: meaningfulActivity,
+        openCases: complianceCases.map((item) => ({
+          id: item.id,
+          type: item.type,
+          severity: 'HIGH',
+          subject: item.user.profile?.displayName ?? `User ${item.id.slice(0, 8)}`,
+          age: ageLabel(item.updatedAt),
+          owner: 'Compliance',
+          nextAction: 'Review case decision',
+        })),
+        lastRefreshedAt: refreshedAt,
+      },
+      generatedAt: refreshedAt,
     };
   }
 

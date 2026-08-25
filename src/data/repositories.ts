@@ -60,6 +60,7 @@ import type {
   WalletMovementView,
   WalletTransaction,
   AccountCapability,
+  IdentityDetailsProjection,
   Watchlist,
   MarketLifecycleProjection,
 } from "@/domain";
@@ -684,7 +685,86 @@ export type AdminOperationsOverview = {
     waitingOn: "COLLECTOR" | "SLICE";
     target: "reviews" | "intake" | "valuations" | "custody";
   }>;
+  controlCenter?: AdminControlCenter;
   generatedAt: string;
+};
+
+export type AdminControlCenter = {
+  summary: {
+    needsAction: { count: number; subtitle: string; severity: string; target: string };
+    financialRisk: {
+      count: number | null;
+      subtitle: string;
+      severity: string;
+      target: string;
+      access: "FULL" | "LIMITED";
+    };
+    staffDecisions: { count: number; subtitle: string; severity: string; target: string };
+    platformIncidents: { count: number; subtitle: string; severity: string; target: string };
+  };
+  priorityWork: Array<{
+    id: string;
+    severity: string;
+    type: string;
+    title: string;
+    context: string;
+    age: string;
+    owner: string | null;
+    actionLabel: string;
+    target: string;
+    reference: string | null;
+  }>;
+  platformHealth: Array<{
+    name: string;
+    status: string;
+    summary: string;
+    lastCheckedAt: string | null;
+  }>;
+  financialOperations: {
+    available: boolean;
+    access: "FULL" | "LIMITED";
+    message: string | null;
+    currency: "GBP";
+    customerCashLiabilityMinor: string | null;
+    bacsRiskHeldMinor: string | null;
+    withdrawalEligibleMinor: string | null;
+    providerAvailableMinor: string | null;
+    providerPendingMinor: string | null;
+    payoutLiquidityCoverageBps: number | null;
+    openDeficitsCount: number | null;
+    openDeficitsMinor: string | null;
+    returnsManualReviewCount: number | null;
+    dualControlApprovals: number | null;
+    providerLiquidityStatus: string | null;
+    warning: boolean | null;
+  };
+  pipeline: Array<{
+    id: string;
+    label: string;
+    count: number;
+    oldestAt: string | null;
+    oldestAge: string | null;
+    overdueCount: number | null;
+    target: string;
+  }>;
+  importantActivity: Array<{
+    id: string;
+    title: string;
+    summary: string;
+    actor: string | null;
+    occurredAt: string;
+    target: string;
+  }>;
+  openCases: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    subject: string;
+    age: string;
+    owner: string | null;
+    nextAction: string;
+  }>;
+  lastRefreshedAt: string;
 };
 
 export type AdminIntakeRow = {
@@ -1773,6 +1853,7 @@ export interface WalletRepository {
 export interface ProviderRepository {
   getCompliance(): Promise<ComplianceSummary>;
   startCompliance(): Promise<ComplianceSession>;
+  getIdentityDetails(): Promise<IdentityDetailsProjection>;
   createBankLinkCheckout(): Promise<BankConnectionCheckoutSession>;
   completeBankLink(input: {
     checkoutSessionId: string;

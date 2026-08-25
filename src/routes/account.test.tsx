@@ -35,8 +35,15 @@ const banks: BankConnection[] = [
     updatedAt: "2026-08-09T00:00:00.000Z" as never,
   },
 ];
+const disconnectedBank: BankConnection = {
+  ...banks[0],
+  id: "disconnected-bank-id",
+  institutionName: "Old Bank",
+  status: "DISCONNECTED",
+  isDefault: false,
+};
 
-function renderAccount() {
+function renderAccount(bankConnections: BankConnection[] = banks) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(queryKeys.user.current, {
     id: "private-user-id",
@@ -56,7 +63,7 @@ function renderAccount() {
     },
   });
   client.setQueryData(queryKeys.providers.compliance, compliance);
-  client.setQueryData(queryKeys.providers.bankConnections, banks);
+  client.setQueryData(queryKeys.providers.bankConnections, bankConnections);
   client.setQueryData(queryKeys.account.email, {
     verified: true,
     verifiedAt: "2026-08-09T00:00:00.000Z",
@@ -130,7 +137,7 @@ function renderAccount() {
     providers: {
       ...mockRepositories.providers,
       getCompliance: async () => compliance,
-      listBankConnections: async () => banks,
+      listBankConnections: async () => bankConnections,
     },
   };
   return renderToStaticMarkup(
@@ -177,6 +184,9 @@ describe("account UI", () => {
     const html = renderAccount();
     expect(html).toContain("Account Center");
     expect(html).toContain("Slice Collector");
+    expect(html).toContain("More account details");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("Verified identity");
     expect(html).toContain("Safe Bank");
     expect(html).toContain("•••• 1234");
     expect(html).toContain("Two-factor auth");
@@ -205,5 +215,12 @@ describe("account UI", () => {
     expect(html).toContain("Not enabled");
     expect(html).toContain("Loading account data");
     expect(html).not.toContain("Account unavailable");
+  });
+
+  it("keeps disconnected bank records out of linked accounts", () => {
+    const html = renderAccount([...banks, disconnectedBank]);
+
+    expect(html).toContain("Safe Bank");
+    expect(html).not.toContain("Old Bank");
   });
 });

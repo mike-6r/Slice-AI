@@ -6,6 +6,7 @@ import {
   HOMEPAGE_FEATURED_ASSET,
   HOMEPAGE_FEATURED_PSA10_VALUE_MINOR_USD,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
+  HOMEPAGE_SLICE_SHARE_EXAMPLES,
   showcaseDestination,
   type HomepageShowcaseAsset,
 } from "@/data/homepage-showcase";
@@ -66,6 +67,25 @@ export function FeaturedMarketHero() {
             <b>
               {HOMEPAGE_OWNERSHIP_EXAMPLE.totalSlices} · {slicePrice} per Slice
             </b>
+          </div>
+        </div>
+
+        <div className="charizard-showcase__share-math" aria-label="Slice Share pricing examples">
+          <div className="charizard-showcase__share-math-heading">
+            <span>Simple percentage example</span>
+            <strong>{HOMEPAGE_SLICE_SHARE_EXAMPLES.definition}</strong>
+            <small>Collectible value ÷ 100 gives the price of one 1% Slice Share.</small>
+          </div>
+          <div className="charizard-showcase__share-math-examples">
+            {HOMEPAGE_SLICE_SHARE_EXAMPLES.examples.map((example) => (
+              <div key={example.collectibleValueMinor}>
+                <span>{formatSourceMoney(example.collectibleValueMinor, "GBP")} card</span>
+                <strong>
+                  {formatSourceMoney(example.oneSliceSharePriceMinor, "GBP")} / Slice Share
+                </strong>
+                <small>{example.ownership} ownership</small>
+              </div>
+            ))}
           </div>
         </div>
 

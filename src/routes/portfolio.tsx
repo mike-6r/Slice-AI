@@ -1240,7 +1240,7 @@ function OrderAssetIdentity({
   asset?: Asset;
 }) {
   const slug = holding?.slug ?? order.assetSlug ?? order.assetSummary?.slug;
-  const media = asset?.media.find((item) => item.kind === "image");
+  const media = frontAssetMedia(asset);
   const title = orderAssetTitle(order, holding, asset);
   const thumbnailUrl = media?.url ?? order.assetSummary?.thumbnailUrl ?? holding?.thumbnailUrl;
   const category = holding?.category ?? order.assetSummary?.category;
@@ -1265,6 +1265,11 @@ function OrderAssetIdentity({
   ) : (
     <div className="portfolio-order-asset">{content}</div>
   );
+}
+
+function frontAssetMedia(asset?: Asset) {
+  const images = asset?.media.filter((item) => item.kind === "image") ?? [];
+  return images.find((item) => /\bfront\b/i.test(item.alt)) ?? images[0];
 }
 
 function orderAssetTitle(order: TradingOrderView, holding?: PortfolioHolding, asset?: Asset) {
@@ -1799,6 +1804,7 @@ function PortfolioPerformancePanel({
               query.data.totalAccountValueMinor !== undefined &&
               query.data.totalAccountValueMinor !== null
             }
+            hasExternalCashFlow={hasExternalCashFlow}
           />
           <dl className="portfolio-performance-periods">
             <div>
@@ -1861,9 +1867,11 @@ function PerformancePeriods({
 function PerformanceChart({
   query,
   hasPortfolioData,
+  hasExternalCashFlow,
 }: {
   query: UseQueryResult<PortfolioPerformance>;
   hasPortfolioData: boolean;
+  hasExternalCashFlow: boolean;
 }) {
   const points = hasPortfolioData ? (query.data?.points ?? []) : [];
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -1898,28 +1906,48 @@ function PerformanceChart({
   const values = points.map((point) => Number(point.valueMinor));
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = Math.max(1, max - min);
+  const rawSpan = Math.max(1, max - min);
+  const domainPadding = rawSpan * 0.12;
+  const domainMin = Math.max(0, min - domainPadding);
+  const domainMax = max + domainPadding;
+  const domainSpan = Math.max(1, domainMax - domainMin);
   const chartPoints = points.map((point, index) => ({
     point,
     index,
     x: (index / (points.length - 1)) * 100,
-    y: 100 - ((Number(point.valueMinor) - min) / span) * 84 - 8,
+    y: 90 - ((Number(point.valueMinor) - domainMin) / domainSpan) * 80,
   }));
   const line = chartPoints.map(({ x, y }) => `${x},${y}`).join(" ");
+  const area = `${line} 100,100 0,100`;
   const activePoint = activeIndex === null ? null : (chartPoints[activeIndex] ?? null);
   const direction = query.data?.direction ?? "NEUTRAL";
+  const chartTone = hasExternalCashFlow ? "neutral" : direction.toLowerCase();
+  const axisValues = [domainMax, domainMin + domainSpan / 2, domainMin];
   return (
-    <div
-      className={`portfolio-performance-chart portfolio-performance-chart--${direction.toLowerCase()}`}
-    >
+    <div className={`portfolio-performance-chart portfolio-performance-chart--${chartTone}`}>
       <div className="portfolio-performance-chart__plot">
+        <div className="portfolio-performance-chart__axis" aria-hidden="true">
+          {axisValues.map((value, index) => (
+            <span key={`${value}-${index}`}>
+              {formatPortfolioMoney(Math.round(value).toString())}
+            </span>
+          ))}
+        </div>
         <svg
           viewBox="0 0 100 100"
           role="img"
-          aria-label="Portfolio value over the selected period"
+          aria-label={`Portfolio value over the selected period${
+            hasExternalCashFlow ? "; includes external cash flows" : ""
+          }`}
           preserveAspectRatio="none"
         >
-          {[8, 50, 92].map((y) => (
+          <defs>
+            <linearGradient id="portfolio-performance-area" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[10, 50, 90].map((y) => (
             <line
               key={y}
               x1="0"
@@ -1930,6 +1958,7 @@ function PerformanceChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          <polygon points={area} className="portfolio-performance-chart__area" />
           <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
           {chartPoints.map(({ point, index, x, y }) => (
             <circle
@@ -1950,7 +1979,7 @@ function PerformanceChart({
         </svg>
         {activePoint ? (
           <div
-            className={`portfolio-performance-tooltip${activePoint.x > 82 ? " is-left" : ""}${activePoint.x < 18 ? " is-right" : ""}${activePoint.y < 28 ? " is-below" : ""}`}
+            className={`portfolio-performance-tooltip${activePoint.x > 82 ? " is-left" : ""}${activePoint.x < 18 ? " is-right" : ""}${activePoint.y < 28 ? " is-below" : ""}${activePoint.y > 76 ? " is-above" : ""}`}
             style={{ left: `${activePoint.x}%`, top: `${activePoint.y}%` }}
             role="status"
           >
@@ -3293,7 +3322,7 @@ function activityAsset(
   if (!asset && !holding && !summary) return undefined;
   const slug = asset?.slug ?? summary?.slug ?? holding?.slug ?? null;
   const media =
-    asset?.media.find((item) => item.kind === "image")?.url ??
+    frontAssetMedia(asset)?.url ??
     summary?.thumbnailUrl ??
     holding?.thumbnailUrl ??
     null;
@@ -3425,7 +3454,7 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
       ) : query.data?.length ? (
         <ul className="portfolio-market-watch">
           {query.data.slice(0, 4).map((asset) => {
-            const media = asset.media.find((item) => item.kind === "image");
+            const media = frontAssetMedia(asset);
             const marketValue = asset.sliceValuation?.amount ?? asset.market?.estimatedMarketValue;
             const marketValueLabel = asset.sliceValuation
               ? "Slice valuation"

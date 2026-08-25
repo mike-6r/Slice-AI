@@ -102,6 +102,147 @@ describe("HTTP catalogue mapping", () => {
     expect(get).toHaveBeenCalledWith("/me/capabilities");
   });
 
+  it("maps verified identity details without accepting document data", async () => {
+    const get = vi.fn().mockResolvedValue({
+      available: true,
+      verifiedAt: "2026-08-20T10:00:00.000Z",
+      details: {
+        fullName: "Michael Fultz",
+        email: "povnu@example.com",
+        phone: null,
+        dateOfBirth: "1988-06-12",
+        idNumber: "must-not-map",
+        address: {
+          line1: "1 Slice Street",
+          line2: null,
+          city: "London",
+          region: "England",
+          postalCode: "SW1A 1AA",
+          countryCode: "GB",
+        },
+      },
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(repositories.providers.getIdentityDetails()).resolves.toEqual({
+      available: true,
+      verifiedAt: "2026-08-20T10:00:00.000Z",
+      details: {
+        fullName: "Michael Fultz",
+        email: "povnu@example.com",
+        phone: null,
+        dateOfBirth: "1988-06-12",
+        address: {
+          line1: "1 Slice Street",
+          line2: null,
+          city: "London",
+          region: "England",
+          postalCode: "SW1A 1AA",
+          countryCode: "GB",
+        },
+      },
+    });
+    expect(get).toHaveBeenCalledWith("/me/compliance/identity-details");
+  });
+
+  it("maps the admin control-center projection without turning restricted finance into zeros", async () => {
+    const get = vi.fn().mockResolvedValue({
+      kpis: {
+        totalUsers: 4,
+        collectors: 2,
+        investors: 1,
+        activeListings: 1,
+        openOrders: 0,
+        needsAttention: 2,
+      },
+      pipeline: [],
+      attentionGroups: [],
+      recentActivity: [],
+      systemHealth: [],
+      accountMix: { collectors: 2, investors: 1, staff: 1, admins: 1, overlapping: true },
+      memberships: { starter: 0, pro: 0, elite: 0, trialing: 0, pastDue: 0, mrrMinor: "0" },
+      support: { available: true, message: "No open support tickets.", open: 0 },
+      counts: {
+        pendingReviews: 0,
+        collectorActionsWaiting: 0,
+        acceptedAwaitingVault: 0,
+        shipmentsInTransit: 0,
+        deliveredAwaitingReceipt: 0,
+        verificationQueue: 0,
+        valuationQueue: 0,
+        vaultReady: 0,
+        marketplaceReady: 1,
+        compliance: 0,
+        payments: 0,
+        alerts: 0,
+      },
+      needsAttention: [],
+      controlCenter: {
+        summary: {
+          needsAction: {
+            count: 2,
+            subtitle: "Needs review.",
+            severity: "WARNING",
+            target: "moderation",
+          },
+          financialRisk: {
+            count: null,
+            subtitle: "Finance visibility requires finance.read.",
+            severity: "LIMITED",
+            target: "payments",
+            access: "LIMITED",
+          },
+          staffDecisions: {
+            count: 0,
+            subtitle: "None waiting.",
+            severity: "HEALTHY",
+            target: "moderation",
+          },
+          platformIncidents: {
+            count: 0,
+            subtitle: "No incidents.",
+            severity: "HEALTHY",
+            target: "health",
+          },
+        },
+        priorityWork: [],
+        platformHealth: [],
+        financialOperations: {
+          available: false,
+          access: "LIMITED",
+          message: "Finance visibility requires finance.read.",
+          currency: "GBP",
+          customerCashLiabilityMinor: null,
+          bacsRiskHeldMinor: null,
+          withdrawalEligibleMinor: null,
+          providerAvailableMinor: null,
+          providerPendingMinor: null,
+          payoutLiquidityCoverageBps: null,
+          openDeficitsCount: null,
+          openDeficitsMinor: null,
+          returnsManualReviewCount: null,
+          dualControlApprovals: null,
+          providerLiquidityStatus: null,
+          warning: null,
+        },
+        pipeline: [],
+        importantActivity: [],
+        openCases: [],
+        lastRefreshedAt: "2026-08-25T00:00:00.000Z",
+      },
+      generatedAt: "2026-08-25T00:00:00.000Z",
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(repositories.admin.getOperationsOverview()).resolves.toMatchObject({
+      controlCenter: {
+        summary: { financialRisk: { count: null, access: "LIMITED" } },
+        financialOperations: { available: false, providerAvailableMinor: null },
+      },
+    });
+    expect(get).toHaveBeenCalledWith("/admin/operations/overview");
+  });
+
   it("maps public market fields without inventing a generic price or ownership", () => {
     const asset = mapMarketAsset(dto);
     expect(asset.sliceValuation).toMatchObject({
@@ -122,6 +263,18 @@ describe("HTTP catalogue mapping", () => {
         slug: "slice-demo-collector",
       },
     });
+  });
+
+  it("keeps the approved front image ahead of the card back", () => {
+    const asset = mapMarketAsset({
+      ...dto,
+      media: [
+        { id: "back", slot: "back", url: "https://example.com/back.jpg", alt: "Card back" },
+        { id: "front", slot: "front", url: "https://example.com/front.jpg", alt: "Card front" },
+      ],
+    });
+
+    expect(asset.media[0]).toMatchObject({ id: "front", url: "https://example.com/front.jpg" });
   });
 
   it("keeps Slice Grade supporting evidence separate from official grading", () => {

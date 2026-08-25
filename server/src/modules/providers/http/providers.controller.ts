@@ -26,6 +26,8 @@ export class ProvidersController {
   async start(@Req() req: AuthenticatedRequest) { await this.limit(req); return this.compliance.start(req.actor!, req.requestId ?? 'unknown'); }
   @Get('me/compliance') @UseGuards(AccessTokenGuard)
   self(@Req() req: AuthenticatedRequest) { return this.compliance.self(req.actor!.userId); }
+  @Get('me/compliance/identity-details') @UseGuards(AccessTokenGuard)
+  identityDetails(@Req() req: AuthenticatedRequest) { return this.compliance.identityDetails(req.actor!.userId); }
   @Post('wallet/deposits') @UseGuards(AccessTokenGuard)
   async deposit(@Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() req: AuthenticatedRequest) { return this.write(req, key, () => this.movements.createDeposit(req.actor!, this.parse(amount, body).amountMinor, req.requestId ?? 'unknown', key!)); }
   @Post('wallet/withdrawals') @UseGuards(AccessTokenGuard)

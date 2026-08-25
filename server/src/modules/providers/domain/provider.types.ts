@@ -5,10 +5,30 @@ export type IdentityVerificationState = 'NOT_STARTED' | 'REQUIRES_INPUT' | 'PROC
 export type RiskDecision = 'ALLOW' | 'MANUAL_REVIEW' | 'BLOCK';
 export type NormalizedMovementStatus = 'CREATED' | 'PENDING_PROVIDER' | 'PROCESSING' | 'SETTLED' | 'FAILED' | 'CANCELLED' | 'RETURNED' | 'REVERSED' | 'MANUAL_REVIEW' | 'HELD';
 
+/**
+ * Customer-safe identity fields returned only after a verified session. This
+ * deliberately excludes document images, document numbers, raw provider
+ * payloads, and provider references.
+ */
+export interface VerifiedIdentityDetails {
+  fullName: string | null;
+  email: string | null;
+  phone: string | null;
+  dateOfBirth: string | null;
+  address: {
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    countryCode: string | null;
+  } | null;
+}
+
 /** SDK DTOs remain inside adapters; this is the sole provider-neutral contract. */
 export interface IdentityVerificationProvider {
   createSession(input: { userId: string; requestId: string; idempotencyKey?: string }): Promise<{ providerReference: string; sessionUrl: string | null; status: NormalizedComplianceStatus; identityState?: IdentityVerificationState }>;
-  getIdentityVerification?(verificationId: string): Promise<{ status: NormalizedComplianceStatus; sessionUrl: string | null; identityState?: IdentityVerificationState; safeFailureCode?: string | null }>;
+  getIdentityVerification?(verificationId: string): Promise<{ status: NormalizedComplianceStatus; sessionUrl: string | null; identityState?: IdentityVerificationState; safeFailureCode?: string | null; verifiedDetails?: VerifiedIdentityDetails | null }>;
 }
 export interface TransactionScreeningProvider {
   screen(input: { address: string; currency: string; chain?: string; from?: string }): Promise<{ decision: RiskDecision; providerReference: string; reasonCode: string }>;

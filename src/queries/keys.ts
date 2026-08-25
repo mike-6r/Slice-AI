@@ -52,6 +52,7 @@ export const queryKeys = {
   wallet: (userId: string) => ["wallet", userId] as const,
   providers: {
     compliance: ["providers", "compliance"] as const,
+    identityDetails: ["providers", "identity-details"] as const,
     bankConnections: ["providers", "bank-connections"] as const,
     connectPayoutSetup: ["providers", "connect-payout-setup"] as const,
     feePolicy: ["providers", "fee-policy"] as const,

@@ -697,8 +697,8 @@ export class TradingService {
                 media: {
                   where: { status: 'SAFE', deletedAt: null },
                   orderBy: { slot: 'asc' },
-                  take: 1,
-                  select: { objectKey: true },
+                  take: 2,
+                  select: { slot: true, objectKey: true },
                 },
               },
             },
@@ -997,8 +997,8 @@ export class TradingService {
                 media: {
                   where: { status: 'SAFE', deletedAt: null },
                   orderBy: { slot: 'asc' },
-                  take: 1,
-                  select: { objectKey: true },
+                  take: 2,
+                  select: { slot: true, objectKey: true },
                 },
               },
             },
@@ -1106,8 +1106,8 @@ export class TradingService {
                 media: {
                   where: { status: 'SAFE', deletedAt: null },
                   orderBy: { slot: 'asc' },
-                  take: 1,
-                  select: { objectKey: true },
+                  take: 2,
+                  select: { slot: true, objectKey: true },
                 },
               },
             },
@@ -2119,9 +2119,12 @@ export class TradingService {
     title: string;
     category: { name: string };
     collectibleSet: { name: string } | null;
-    submissions: Array<{ media: Array<{ objectKey: string }> }>;
+    submissions: Array<{ media: Array<{ slot: string; objectKey: string }> }>;
   }) {
-    const objectKey = asset.submissions[0]?.media[0]?.objectKey;
+    const media = asset.submissions[0]?.media ?? [];
+    const frontMedia =
+      media.find((item) => item.slot.toLowerCase() === 'front') ?? media[0];
+    const objectKey = frontMedia?.objectKey;
     const thumbnailUrl = objectKey && this.storage
       ? await this.storage
           .createPrivateDownloadUrl(objectKey, new Date(Date.now() + 5 * 60_000))

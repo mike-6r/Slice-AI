@@ -877,7 +877,7 @@ function AdminConsole() {
           ) : null}
         </header>
         {section === "control" ? (
-          <ControlCenter
+          <ControlCenterRevamp
             reviews={reviewItems}
             operations={operationItems}
             attentionOperations={attentionOperations}
@@ -1935,6 +1935,55 @@ function ControlCenter({
       </div>
     </div>
   );
+}
+
+function ControlCenterRevamp({
+  loading,
+  failed,
+  retry,
+  select,
+  operational,
+}: Parameters<typeof ControlCenter>[0]) {
+  if (loading) return <AdminState title="Loading Control Center" detail="Reading safe operational projections." />;
+  if (failed) return <AdminState title="Control Center unavailable" detail="Operational reads could not be loaded safely." retry={retry} />;
+  const center = operational?.controlCenter;
+  if (!center) return <AdminState title="Control Center projection needs refresh" detail="This release does not include the operational control-center projection yet." retry={retry} />;
+  const open = (target: string) => select(controlCenterSection(target));
+  const summaryCards = [
+    { key: "needsAction", label: "Needs Action", icon: AlertTriangle, item: center.summary.needsAction },
+    { key: "financialRisk", label: "Financial Risk", icon: WalletCards, item: center.summary.financialRisk },
+    { key: "staffDecisions", label: "Staff Decisions", icon: ClipboardCheck, item: center.summary.staffDecisions },
+    { key: "platformIncidents", label: "Platform Incidents", icon: HeartPulse, item: center.summary.platformIncidents },
+  ] as const;
+  return (
+    <div className="admin-console-content admin-control-center">
+      <section className="admin-console-heading admin-console-heading--overview">
+        <div><p className="admin-console-eyebrow">Control Center</p><h2>Operate Slice with clarity.</h2><span>A compact view of human decisions, customer-money risk, platform health, and pipeline pressure.</span></div>
+        <div className="admin-overview-heading-meta"><span className="admin-live-badge"><CheckCircle2 aria-hidden="true" /> Read-only projection</span><small>Last refreshed {age(center.lastRefreshedAt)}</small></div>
+      </section>
+      <div className="admin-quick-actions-bar" aria-label="Quick actions">
+        <span>Quick actions</span>
+        <button type="button" onClick={() => select("moderation")}><ClipboardCheck aria-hidden="true" /> Review queue <ArrowRight aria-hidden="true" /></button>
+        <button type="button" onClick={() => select("intake")}><Inbox aria-hidden="true" /> Intake board <ArrowRight aria-hidden="true" /></button>
+        <button type="button" onClick={() => select("users")}><Users aria-hidden="true" /> Accounts <ArrowRight aria-hidden="true" /></button>
+        <button type="button" onClick={() => select("health", "audit")}><FileClock aria-hidden="true" /> Audit log <ArrowRight aria-hidden="true" /></button>
+      </div>
+      <div className="admin-control-summary-grid">
+        {summaryCards.map(({ key, label, icon: Icon, item }) => <button type="button" className={`admin-control-summary admin-control-summary--${item.severity.toLowerCase()}`} key={key} onClick={() => open(item.target)}><span className="admin-control-summary-icon"><Icon aria-hidden="true" /></span><span className="admin-control-summary-copy"><small>{label}</small><strong>{item.count ?? "—"}</strong><em>{item.subtitle}</em></span><ArrowRight aria-hidden="true" /></button>)}
+      </div>
+      <div className="admin-control-workspace-grid">
+        <section className="admin-panel admin-control-queue"><AdminPanelHeading title="Priority work queue" action="View full queue" onClick={() => open("moderation")} />{center.priorityWork.length ? <div className="admin-priority-list">{center.priorityWork.slice(0, 8).map((item) => <article className="admin-priority-row" key={item.id}><span className={`admin-priority-severity is-${item.severity.toLowerCase()}`} aria-label={`${item.severity} severity`} /><div className="admin-priority-type">{item.type}</div><div className="admin-priority-main"><strong title={item.title}>{item.title}</strong><small>{item.context}</small></div><div className="admin-priority-age">{item.age}</div><div className="admin-priority-owner">{item.owner ?? "Unassigned"}</div><button type="button" onClick={() => open(item.target)}>{item.actionLabel}</button></article>)}</div> : <AdminEmpty detail="No priority work is waiting." />}</section>
+        <section className="admin-panel admin-control-health"><AdminPanelHeading title="Platform health" action="Platform operations" onClick={() => open("health")} /><div className="admin-status-list">{center.platformHealth.length ? center.platformHealth.map((item) => <StatusRow key={item.name} label={item.name === "Payment Provider" ? "Stripe provider" : item.name} status={item.status} summary={item.summary} icon={item.name === "Database" ? Database : item.name === "Market data" ? Globe2 : item.name === "Webhooks" ? Activity : Gauge} />) : <AdminEmpty detail="Telemetry unavailable." />}</div><div className="admin-control-health-footer"><span>Open incidents</span><strong>{center.summary.platformIncidents.count}</strong><small>Projection health, not a guarantee of availability.</small></div></section>
+      </div>
+      <section className="admin-panel admin-finance-band"><AdminPanelHeading title="Financial operations · GBP" action="Open Finance" onClick={() => open("payments")} />{center.financialOperations.access === "LIMITED" ? <p className="admin-finance-limited">{center.financialOperations.message}</p> : null}<div className="admin-finance-grid"><ControlFinanceMetric label="Customer cash liabilities" value={center.financialOperations.customerCashLiabilityMinor} /><ControlFinanceMetric label="Bacs risk-held" value={center.financialOperations.bacsRiskHeldMinor} /><ControlFinanceMetric label="Withdrawal-eligible" value={center.financialOperations.withdrawalEligibleMinor} /><ControlFinanceMetric label="Stripe available" value={center.financialOperations.providerAvailableMinor} /><ControlFinanceMetric label="Stripe pending" value={center.financialOperations.providerPendingMinor} /><ControlFinanceMetric label="Open deficits" value={center.financialOperations.openDeficitsMinor} detail={center.financialOperations.openDeficitsCount === null ? undefined : `${center.financialOperations.openDeficitsCount} open`} /><ControlFinanceMetric label="Returns / manual review" value={center.financialOperations.returnsManualReviewCount === null ? null : String(center.financialOperations.returnsManualReviewCount)} count /><ControlFinanceMetric label="Dual-control approvals" value={center.financialOperations.dualControlApprovals === null ? null : String(center.financialOperations.dualControlApprovals)} count /></div>{center.financialOperations.warning ? <div className="admin-finance-warning"><AlertTriangle aria-hidden="true" /> Payout liquidity is below eligible withdrawals. <button type="button" onClick={() => open("payments")}>Open Finance <ArrowRight aria-hidden="true" /></button></div> : null}</section>
+      <section className="admin-panel admin-pipeline-panel"><AdminPanelHeading title="Asset lifecycle pipeline" /><div className="admin-pipeline-detailed">{center.pipeline.map((stage) => <button type="button" className={stage.overdueCount ? "is-bottleneck" : ""} key={stage.id} onClick={() => open(stage.target)}><span>{stage.label}</span><strong>{stage.count}</strong><small>{stage.oldestAge ? `Oldest ${stage.oldestAge}` : "No active items"}</small>{stage.overdueCount !== null ? <em>{stage.overdueCount} overdue</em> : null}</button>)}</div></section>
+      <div className="admin-control-lower-grid"><section className="admin-panel"><AdminPanelHeading title="Important activity" action="View audit log" onClick={() => open("health")} />{center.importantActivity.length ? <div className="admin-control-activity-list">{center.importantActivity.slice(0, 6).map((item) => <button type="button" key={item.id} onClick={() => open(item.target)}><Activity aria-hidden="true" /><span><strong>{item.title}</strong><small>{item.summary}{item.actor ? ` · by ${item.actor}` : ""}</small></span><time>{age(item.occurredAt)}</time></button>)}</div> : <AdminEmpty detail="No important recent activity." />}</section><section className="admin-panel"><AdminPanelHeading title="Open cases" action="Open compliance" onClick={() => open("compliance")} />{center.openCases.length ? <div className="admin-control-cases">{center.openCases.slice(0, 5).map((item) => <button type="button" key={item.id} onClick={() => open("compliance")}><span><small>{sentence(item.type)} · {item.severity}</small><strong>{item.subject}</strong><em>{item.age} · {item.nextAction}</em></span><ArrowRight aria-hidden="true" /></button>)}</div> : <AdminEmpty detail="No open compliance cases." />}</section></div>
+    </div>
+  );
+}
+
+function ControlFinanceMetric({ label, value, detail, count = false }: { label: string; value: string | null; detail?: string; count?: boolean }) {
+  return <div className="admin-finance-metric"><span>{label}</span><strong>{value === null ? "Unavailable" : count ? value : `£${formatMinor(value)}`}</strong><small>{detail ?? (value === null ? "Not exposed to this role" : "Authoritative projection")}</small></div>;
 }
 
 type ReviewQueueFilters = {
@@ -4730,6 +4779,23 @@ function adminAttentionSection(target: string): AdminSection {
   if (target === "intake") return "intake";
   if (target === "valuations" || target === "custody") return "assetOperations";
   return "control";
+}
+
+function controlCenterSection(target: string): AdminSection {
+  const sections: Record<string, AdminSection> = {
+    moderation: "moderation",
+    reviews: "moderation",
+    intake: "intake",
+    valuations: "assetOperations",
+    custody: "assetOperations",
+    assetOperations: "assetOperations",
+    collectibles: "collectibles",
+    compliance: "compliance",
+    payments: "payments",
+    integrations: "integrations",
+    health: "health",
+  };
+  return sections[target] ?? "control";
 }
 
 function adminAttentionLabel(item: { type: string; waitingOn: string }) {

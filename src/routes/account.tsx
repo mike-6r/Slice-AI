@@ -8,6 +8,8 @@ import {
   Clock3,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   KeyRound,
   Landmark,
   LockKeyhole,
@@ -32,6 +34,7 @@ import type {
   BankConnection,
   ComplianceSummary,
   ComplianceSession,
+  IdentityDetailsProjection,
 } from "@/domain";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { CurrencySelector } from "@/currency/CurrencySelector";
@@ -602,6 +605,7 @@ function ProfilePanel({
 }) {
   const { repositories } = useAppServices();
   const [editing, setEditing] = useState(false);
+  const [showAccountDetails, setShowAccountDetails] = useState(false);
   const [displayName, setDisplayName] = useState(user.profile.displayName);
   const [username, setUsername] = useState(user.profile.username ?? "");
   const nextUsernameChange = usernameChangeEligibleAt(user.profile.usernameChangedAt);
@@ -612,6 +616,12 @@ function ProfilePanel({
       onUpdated();
       setEditing(false);
     },
+  });
+  const identityDetails = useQuery<IdentityDetailsProjection>({
+    queryKey: queryKeys.providers.identityDetails,
+    queryFn: repositories.providers.getIdentityDetails,
+    enabled: showAccountDetails,
+    staleTime: 60_000,
   });
   return (
     <Panel
@@ -684,19 +694,79 @@ function ProfilePanel({
               />
               <Definition label="Email" value={user.email} />
             </dl>
-            <details className="account-profile-more">
-              <summary>More account details</summary>
-              <dl>
-                <Definition label="Phone" value="Manage in Security" muted />
-                <Definition label="Member since" value={memberSinceLabel(user.createdAt)} />
-                <Definition label="Country" value={user.profile.countryCode} />
-                <Definition label="Timezone" value={user.profile.timezone} />
-              </dl>
-            </details>
+            <div className="account-profile-more">
+              <button
+                type="button"
+                className="account-profile-more-toggle"
+                aria-expanded={showAccountDetails}
+                aria-controls="account-profile-more-details"
+                onClick={() => setShowAccountDetails((visible) => !visible)}
+              >
+                <span>More account details</span>
+                {showAccountDetails ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+              </button>
+              {showAccountDetails ? (
+                <div id="account-profile-more-details" className="account-profile-more-content">
+                  <dl>
+                    <Definition label="Phone" value="Manage in Security" muted />
+                    <Definition label="Member since" value={memberSinceLabel(user.createdAt)} />
+                    <Definition label="Country" value={user.profile.countryCode} />
+                    <Definition label="Timezone" value={user.profile.timezone} />
+                  </dl>
+                  <section className="account-verified-details" aria-labelledby="account-verified-details-title">
+                    <div className="account-verified-details-heading">
+                      <div>
+                        <h3 id="account-verified-details-title">Verified identity</h3>
+                        <p>Only your verified profile details are shown here. ID images and document numbers are never displayed.</p>
+                      </div>
+                      <span className="account-verified-details-badge">Private</span>
+                    </div>
+                    {identityDetails.isLoading ? <p className="account-profile-detail-note">Loading verified details…</p> : null}
+                    {identityDetails.error ? <p className="account-form-error">{errorCopy(identityDetails.error, "Verified details are temporarily unavailable.")}</p> : null}
+                    {identityDetails.data?.available && identityDetails.data.details ? (
+                      <VerifiedIdentityFields details={identityDetails.data.details} />
+                    ) : null}
+                    {identityDetails.data && !identityDetails.data.available ? (
+                      <p className="account-profile-detail-note">Complete identity verification to make verified details available.</p>
+                    ) : null}
+                  </section>
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
       </div>
     </Panel>
+  );
+}
+
+function VerifiedIdentityFields({
+  details,
+}: {
+  details: IdentityDetailsProjection["details"] & object;
+}) {
+  return (
+    <div className="account-verified-details-fields">
+      <dl>
+        <Definition label="Legal name" value={details.fullName ?? "Not provided"} muted={!details.fullName} />
+        <Definition label="Verified email" value={details.email ?? "Not provided"} muted={!details.email} />
+        <Definition label="Verified phone" value={details.phone ?? "Not provided"} muted={!details.phone} />
+        <Definition label="Date of birth" value={details.dateOfBirth ?? "Not provided"} muted={!details.dateOfBirth} />
+        <Definition label="Verified country" value={details.address?.countryCode ?? "Not provided"} muted={!details.address?.countryCode} />
+      </dl>
+      <div className="account-verified-address">
+        <span className="account-verified-address-label">Verified address</span>
+        {details.address ? (
+          <address>
+            {[details.address.line1, details.address.line2, details.address.city, details.address.region, details.address.postalCode]
+              .filter(Boolean)
+              .map((line) => <span key={line}>{line}</span>)}
+          </address>
+        ) : (
+          <span className="account-profile-detail-note">Not provided</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1713,6 +1783,7 @@ function LinkedPanel({
     mutationFn: repositories.users.beginDiscordLink,
     onSuccess: ({ authorizationUrl }) => globalThis.location.assign(authorizationUrl),
   });
+  const connectedBanks = banks.data?.filter((bank) => bank.status === "CONNECTED") ?? [];
   return (
     <Panel
       id="linked"
@@ -1722,9 +1793,9 @@ function LinkedPanel({
     >
       {banks.isLoading ? (
         <Rows />
-      ) : banks.data?.length ? (
+      ) : connectedBanks.length ? (
         <ul className="account-linked-list">
-          {banks.data.map((bank) => (
+          {connectedBanks.map((bank) => (
             <li key={bank.id}>
               <Landmark aria-hidden="true" />
               <div>

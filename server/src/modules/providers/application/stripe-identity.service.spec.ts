@@ -70,4 +70,56 @@ describe('StripeIdentityVerificationService', () => {
       },
     });
   });
+
+  it('projects verified contact and address fields without exposing document data', async () => {
+    const retrieve = jest.fn().mockResolvedValue({
+      id: 'vs_test_verified',
+      status: 'verified',
+      livemode: false,
+      url: null,
+      verified_outputs: {
+        first_name: 'Michael',
+        last_name: 'Fultz',
+        email: 'povnu@example.com',
+        phone: '+441234567890',
+        dob: { day: 12, month: 6, year: 1988 },
+        id_number: 'MUST_NOT_LEAVE_ADAPTER',
+        address: {
+          line1: '1 Slice Street',
+          line2: 'Flat 2',
+          city: 'London',
+          state: 'England',
+          postal_code: 'SW1A 1AA',
+          country: 'gb',
+        },
+      },
+    });
+    const service = new StripeIdentityVerificationService(
+      {} as never,
+      { get: () => ({ identity: { verificationSessions: { retrieve } } }) } as never,
+      { providerMode: 'stripe_sandbox' } as never,
+    );
+
+    await expect(service.getIdentityVerification('vs_test_verified')).resolves.toEqual({
+      status: 'APPROVED',
+      identityState: 'VERIFIED',
+      sessionUrl: null,
+      safeFailureCode: null,
+      verifiedDetails: {
+        fullName: 'Michael Fultz',
+        email: 'povnu@example.com',
+        phone: '+441234567890',
+        dateOfBirth: '1988-06-12',
+        address: {
+          line1: '1 Slice Street',
+          line2: 'Flat 2',
+          city: 'London',
+          region: 'England',
+          postalCode: 'SW1A 1AA',
+          countryCode: 'GB',
+        },
+      },
+    });
+    expect(JSON.stringify(retrieve.mock.results[0]?.value)).not.toContain('MUST_NOT_LEAVE_ADAPTER');
+  });
 });

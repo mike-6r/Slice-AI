@@ -52,6 +52,13 @@ const connectedBanks: BankConnection[] = [
     updatedAt: "2026-08-09T00:00:00.000Z" as never,
   },
 ];
+const disconnectedBank: BankConnection = {
+  ...connectedBanks[0],
+  id: "bank-disconnected",
+  institutionName: "Old Bank",
+  status: "DISCONNECTED",
+  isDefault: false,
+};
 const settledMovement: WalletMovementPage = {
   items: [
     {
@@ -124,6 +131,14 @@ describe("Document 016 wallet UI", () => {
     expect(html).not.toContain("bank-private");
     expect(html).not.toContain("movement-private");
     expect(html).not.toMatch(/accessToken|itemId|provider payload|journal|reservation/i);
+  });
+
+  it("keeps disconnected bank records out of the customer-facing wallet list", () => {
+    const html = renderWallet({ banks: [...connectedBanks, disconnectedBank] });
+
+    expect(html).toContain("Safe Bank");
+    expect(html).not.toContain("Old Bank");
+    expect(html).toContain("wallet-bank-disconnect");
   });
 
   it("keeps an empty account visually complete with real zero balances and no fabricated provider state", () => {

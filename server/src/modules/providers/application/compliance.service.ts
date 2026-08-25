@@ -5,7 +5,7 @@ import type { Actor } from '../../identity/auth/auth.service';
 import { createIdentityTransaction } from '../../identity/persistence/prisma-identity.repositories';
 import { ProviderCryptoService } from './provider-crypto.service';
 import { LocalIdentityVerificationAdapter } from './local-provider.adapters';
-import type { IdentityVerificationProvider, IdentityVerificationState, NormalizedComplianceStatus } from '../domain/provider.types';
+import type { IdentityVerificationProvider, IdentityVerificationState, NormalizedComplianceStatus, VerifiedIdentityDetails } from '../domain/provider.types';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import {
   UnavailableExternalIdentityProvider,
@@ -207,6 +207,44 @@ export class ComplianceService {
       provider: this.provider(),
       expiresAt: item?.expiresAt?.toISOString() ?? null,
       updatedAt: item?.updatedAt.toISOString() ?? null,
+    };
+  }
+  /**
+   * Fetches a customer-safe identity projection only when the compliance case
+   * is approved. The provider session remains the source of truth and is never
+   * persisted or returned to the client.
+   */
+  async identityDetails(userId: string) {
+    const item = await this.db.complianceCase.findUnique({
+      where: {
+        userId_provider_type: {
+          userId,
+          provider: this.provider(),
+          type: 'KYC',
+        },
+      },
+      select: {
+        status: true,
+        identityVerifiedAt: true,
+        providerReferenceCiphertext: true,
+      },
+    });
+    if (item?.status !== 'APPROVED' || !item.providerReferenceCiphertext || !this.identity.getIdentityVerification) {
+      return { available: false as const, verifiedAt: item?.identityVerifiedAt?.toISOString() ?? null, details: null };
+    }
+    const reference = this.crypto.decrypt(item.providerReferenceCiphertext, `compliance:${userId}`);
+    const current = await this.identity.getIdentityVerification(reference);
+    if (current.status !== 'APPROVED') {
+      return { available: false as const, verifiedAt: item.identityVerifiedAt?.toISOString() ?? null, details: null };
+    }
+    return {
+      available: Boolean(current.verifiedDetails),
+      verifiedAt: item.identityVerifiedAt?.toISOString() ?? null,
+      details: current.verifiedDetails ?? null,
+    } satisfies {
+      available: boolean;
+      verifiedAt: string | null;
+      details: VerifiedIdentityDetails | null;
     };
   }
   /**

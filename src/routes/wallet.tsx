@@ -20,6 +20,7 @@ import {
   LockKeyhole,
   RefreshCw,
   ShieldCheck,
+  Unplug,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
@@ -498,6 +499,7 @@ function ConnectedBankPanel({
   query: UseQueryResult<BankConnection[]>;
   refreshWallet: () => void;
 }) {
+  const connectedBanks = query.data?.filter((bank) => bank.status === "CONNECTED") ?? [];
   return (
     <WalletPanel title="Connected bank" icon={<Landmark />} className="wallet-panel--bank">
       <div className="wallet-panel__body wallet-bank-panel-body">
@@ -508,9 +510,9 @@ function ConnectedBankPanel({
             retry={() => void query.refetch()}
           />
         ) : null}
-        {!query.isLoading && !query.isError && query.data?.length ? (
+        {!query.isLoading && !query.isError && connectedBanks.length ? (
           <ul className="wallet-banks">
-            {query.data.map((connection) => (
+            {connectedBanks.map((connection) => (
               <BankConnectionRow
                 key={connection.id}
                 connection={connection}
@@ -519,9 +521,9 @@ function ConnectedBankPanel({
             ))}
           </ul>
         ) : null}
-        {!query.isLoading && !query.isError && !query.data?.length ? <BankEmpty /> : null}
+        {!query.isLoading && !query.isError && !connectedBanks.length ? <BankEmpty /> : null}
         <BankConnectionControl
-          hasConnected={Boolean(query.data?.some((bank) => bank.status === "CONNECTED"))}
+          hasConnected={connectedBanks.length > 0}
         />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
@@ -686,10 +688,13 @@ function BankConnectionRow({
             {connection.status === "CONNECTED" ? (
               <button
                 type="button"
+                className="wallet-bank-disconnect"
                 onClick={beginDisconnect}
                 disabled={disconnectMutation.isPending}
+                aria-label={`Disconnect ${label}`}
               >
-                Disconnect
+                <Unplug aria-hidden="true" />
+                <span>Disconnect</span>
               </button>
             ) : null}
           </div>

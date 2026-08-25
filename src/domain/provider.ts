@@ -22,6 +22,28 @@ export interface ComplianceSession {
   capability?: "NOT_REQUIRED_IN_CURRENT_BETA" | "NOT_CONFIGURED";
 }
 
+/** Customer-visible identity fields loaded only after an explicit reveal. */
+export interface VerifiedIdentityDetails {
+  fullName: string | null;
+  email: string | null;
+  phone: string | null;
+  dateOfBirth: string | null;
+  address: {
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    countryCode: string | null;
+  } | null;
+}
+
+export interface IdentityDetailsProjection {
+  available: boolean;
+  verifiedAt: ISODateTime | null;
+  details: VerifiedIdentityDetails | null;
+}
+
 /** Safe persisted bank connection projection. No provider secret is a UI value. */
 export interface BankConnection {
   id: string;

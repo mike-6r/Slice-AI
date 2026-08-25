@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   HOMEPAGE_FEATURED_ASSET,
   HOMEPAGE_OWNERSHIP_EXAMPLE,
+  HOMEPAGE_SLICE_SHARE_EXAMPLES,
   HOMEPAGE_TRENDING_ASSETS,
   showcaseDestination,
 } from "./homepage-showcase";
@@ -53,5 +54,13 @@ describe("homepage showcase routing", () => {
 
   it("keeps the PriceCharting PSA 10 guide in its source currency", () => {
     expect(HOMEPAGE_FEATURED_ASSET.displayPrice).toBe("$343,098.00 USD");
+  });
+
+  it("keeps the owner-provided 1% Slice Share examples mathematically accurate", () => {
+    expect(HOMEPAGE_SLICE_SHARE_EXAMPLES.definition).toBe("1 Slice Share = 1% ownership");
+    for (const example of HOMEPAGE_SLICE_SHARE_EXAMPLES.examples) {
+      expect(example.oneSliceSharePriceMinor * 100).toBe(example.collectibleValueMinor);
+      expect(example.ownership).toBe("1%");
+    }
   });
 });

@@ -19,6 +19,7 @@ import type {
   AdminMembershipRow,
   AdminRiskOperations,
   AdminComplianceDetail,
+  AdminControlCenter,
   AdminCatalogueResponse,
   AdminRepository,
   AdminSearchResult,
@@ -74,6 +75,7 @@ import type {
   CollectibleReferenceImport,
   PublicationReadiness,
   AccountCapability,
+  IdentityDetailsProjection,
   MarketSummary,
   MarketSnapshot,
   SimilarAsset,
@@ -341,13 +343,19 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     ? { status: value.insurance.status, expiresAt: value.insurance.expiresAt as ISODateTime }
     : null,
   status: "listed",
-  media: (value.media ?? []).map((item, index) => ({
-    id: item.id,
-    url: item.url,
-    alt: item.alt,
-    kind: "image" as const,
-    order: index,
-  })),
+  media: [...(value.media ?? [])]
+    .sort((a, b) => {
+      const aIsFront = a.slot.toLowerCase() === "front";
+      const bIsFront = b.slot.toLowerCase() === "front";
+      return Number(bIsFront) - Number(aIsFront);
+    })
+    .map((item, index) => ({
+      id: item.id,
+      url: item.url,
+      alt: item.alt,
+      kind: "image" as const,
+      order: index,
+    })),
   sliceGrade: value.sliceGrade ?? undefined,
   grade: value.grading
     ? {
@@ -951,6 +959,44 @@ const mapCompliance = (raw: unknown): ComplianceSummary => {
       value.capability === "NOT_REQUIRED_IN_CURRENT_BETA" || value.capability === "NOT_CONFIGURED"
         ? value.capability
         : undefined,
+  };
+};
+const mapIdentityDetails = (raw: unknown): IdentityDetailsProjection => {
+  const value = objectField(raw, "identity details");
+  const available = booleanField(value.available, "identityDetails.available");
+  const details =
+    value.details === null
+      ? null
+      : (() => {
+          const source = objectField(value.details, "identityDetails.details");
+          const address =
+            source.address === null
+              ? null
+              : (() => {
+                  const item = objectField(source.address, "identityDetails.address");
+                  return {
+                    line1: nullableString(item.line1, "identityDetails.address.line1"),
+                    line2: nullableString(item.line2, "identityDetails.address.line2"),
+                    city: nullableString(item.city, "identityDetails.address.city"),
+                    region: nullableString(item.region, "identityDetails.address.region"),
+                    postalCode: nullableString(item.postalCode, "identityDetails.address.postalCode"),
+                    countryCode: nullableString(item.countryCode, "identityDetails.address.countryCode"),
+                  };
+                })();
+          return {
+            fullName: nullableString(source.fullName, "identityDetails.fullName"),
+            email: nullableString(source.email, "identityDetails.email"),
+            phone: nullableString(source.phone, "identityDetails.phone"),
+            dateOfBirth: nullableString(source.dateOfBirth, "identityDetails.dateOfBirth"),
+            address,
+          };
+        })();
+  if (available !== Boolean(details))
+    throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid identity details availability from service.");
+  return {
+    available,
+    verifiedAt: nullableString(value.verifiedAt, "identityDetails.verifiedAt") as ISODateTime | null,
+    details,
   };
 };
 const mapMovement = (raw: unknown): WalletMovementView => {
@@ -3013,6 +3059,125 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       const accountMix = objectField(value.accountMix, "admin operations account mix");
       const memberships = objectField(value.memberships, "admin operations memberships");
       const support = objectField(value.support, "admin operations support");
+      const rawControlCenter =
+        value.controlCenter && typeof value.controlCenter === "object"
+          ? objectField(value.controlCenter, "admin control center")
+          : null;
+      const controlCenter = rawControlCenter
+        ? (() => {
+            const summary = objectField(rawControlCenter.summary, "admin control center summary");
+            const mapSummary = (key: string) => {
+              const item = objectField(summary[key], `admin control center summary.${key}`);
+              return {
+                count: typeof item.count === "number" ? item.count : null,
+                subtitle: stringField(item.subtitle, `admin control center summary.${key}.subtitle`),
+                severity: stringField(item.severity, `admin control center summary.${key}.severity`),
+                target: stringField(item.target, `admin control center summary.${key}.target`),
+                ...(key === "financialRisk"
+                  ? { access: stringField(item.access, "admin control center summary.financialRisk.access") as "FULL" | "LIMITED" }
+                  : {}),
+              };
+            };
+            const financial = objectField(rawControlCenter.financialOperations, "admin control center financial operations");
+            const nullableMinor = (value: unknown, field: string) => nullableString(value, field);
+            return {
+              summary: {
+                needsAction: mapSummary("needsAction") as AdminControlCenter["summary"]["needsAction"],
+                financialRisk: mapSummary("financialRisk") as AdminControlCenter["summary"]["financialRisk"],
+                staffDecisions: mapSummary("staffDecisions") as AdminControlCenter["summary"]["staffDecisions"],
+                platformIncidents: mapSummary("platformIncidents") as AdminControlCenter["summary"]["platformIncidents"],
+              },
+              priorityWork: Array.isArray(rawControlCenter.priorityWork)
+                ? rawControlCenter.priorityWork.map((raw) => {
+                    const item = objectField(raw, "admin control center priority work");
+                    return {
+                      id: stringField(item.id, "admin control center priority work.id"),
+                      severity: stringField(item.severity, "admin control center priority work.severity"),
+                      type: stringField(item.type, "admin control center priority work.type"),
+                      title: stringField(item.title, "admin control center priority work.title"),
+                      context: stringField(item.context, "admin control center priority work.context"),
+                      age: stringField(item.age, "admin control center priority work.age"),
+                      owner: nullableString(item.owner, "admin control center priority work.owner"),
+                      actionLabel: stringField(item.actionLabel, "admin control center priority work.actionLabel"),
+                      target: stringField(item.target, "admin control center priority work.target"),
+                      reference: nullableString(item.reference, "admin control center priority work.reference"),
+                    };
+                  })
+                : [],
+              platformHealth: Array.isArray(rawControlCenter.platformHealth)
+                ? rawControlCenter.platformHealth.map((raw) => {
+                    const item = objectField(raw, "admin control center platform health");
+                    return {
+                      name: stringField(item.name, "admin control center platform health.name"),
+                      status: stringField(item.status, "admin control center platform health.status"),
+                      summary: stringField(item.summary, "admin control center platform health.summary"),
+                      lastCheckedAt: nullableString(item.lastCheckedAt, "admin control center platform health.lastCheckedAt"),
+                    };
+                  })
+                : [],
+              financialOperations: {
+                available: booleanField(financial.available, "admin control center financial operations.available"),
+                access: stringField(financial.access, "admin control center financial operations.access") as "FULL" | "LIMITED",
+                message: nullableString(financial.message, "admin control center financial operations.message"),
+                currency: "GBP",
+                customerCashLiabilityMinor: nullableMinor(financial.customerCashLiabilityMinor, "admin control center financial operations.customerCashLiabilityMinor"),
+                bacsRiskHeldMinor: nullableMinor(financial.bacsRiskHeldMinor, "admin control center financial operations.bacsRiskHeldMinor"),
+                withdrawalEligibleMinor: nullableMinor(financial.withdrawalEligibleMinor, "admin control center financial operations.withdrawalEligibleMinor"),
+                providerAvailableMinor: nullableMinor(financial.providerAvailableMinor, "admin control center financial operations.providerAvailableMinor"),
+                providerPendingMinor: nullableMinor(financial.providerPendingMinor, "admin control center financial operations.providerPendingMinor"),
+                payoutLiquidityCoverageBps: typeof financial.payoutLiquidityCoverageBps === "number" ? financial.payoutLiquidityCoverageBps : null,
+                openDeficitsCount: typeof financial.openDeficitsCount === "number" ? financial.openDeficitsCount : null,
+                openDeficitsMinor: nullableMinor(financial.openDeficitsMinor, "admin control center financial operations.openDeficitsMinor"),
+                returnsManualReviewCount: typeof financial.returnsManualReviewCount === "number" ? financial.returnsManualReviewCount : null,
+                dualControlApprovals: typeof financial.dualControlApprovals === "number" ? financial.dualControlApprovals : null,
+                providerLiquidityStatus: nullableString(financial.providerLiquidityStatus, "admin control center financial operations.providerLiquidityStatus"),
+                warning: typeof financial.warning === "boolean" ? financial.warning : null,
+              },
+              pipeline: Array.isArray(rawControlCenter.pipeline)
+                ? rawControlCenter.pipeline.map((raw) => {
+                    const item = objectField(raw, "admin control center pipeline");
+                    return {
+                      id: stringField(item.id, "admin control center pipeline.id"),
+                      label: stringField(item.label, "admin control center pipeline.label"),
+                      count: Number(item.count ?? 0),
+                      oldestAt: nullableString(item.oldestAt, "admin control center pipeline.oldestAt"),
+                      oldestAge: nullableString(item.oldestAge, "admin control center pipeline.oldestAge"),
+                      overdueCount: typeof item.overdueCount === "number" ? item.overdueCount : null,
+                      target: stringField(item.target, "admin control center pipeline.target"),
+                    };
+                  })
+                : [],
+              importantActivity: Array.isArray(rawControlCenter.importantActivity)
+                ? rawControlCenter.importantActivity.map((raw) => {
+                    const item = objectField(raw, "admin control center activity");
+                    return {
+                      id: stringField(item.id, "admin control center activity.id"),
+                      title: stringField(item.title, "admin control center activity.title"),
+                      summary: stringField(item.summary, "admin control center activity.summary"),
+                      actor: nullableString(item.actor, "admin control center activity.actor"),
+                      occurredAt: stringField(item.occurredAt, "admin control center activity.occurredAt"),
+                      target: stringField(item.target, "admin control center activity.target"),
+                    };
+                  })
+                : [],
+              openCases: Array.isArray(rawControlCenter.openCases)
+                ? rawControlCenter.openCases.map((raw) => {
+                    const item = objectField(raw, "admin control center case");
+                    return {
+                      id: stringField(item.id, "admin control center case.id"),
+                      type: stringField(item.type, "admin control center case.type"),
+                      severity: stringField(item.severity, "admin control center case.severity"),
+                      subject: stringField(item.subject, "admin control center case.subject"),
+                      age: stringField(item.age, "admin control center case.age"),
+                      owner: nullableString(item.owner, "admin control center case.owner"),
+                      nextAction: stringField(item.nextAction, "admin control center case.nextAction"),
+                    };
+                  })
+                : [],
+              lastRefreshedAt: stringField(rawControlCenter.lastRefreshedAt, "admin control center.lastRefreshedAt"),
+            } satisfies AdminControlCenter;
+          })()
+        : undefined;
       return {
         kpis: {
           totalUsers: Number(kpis.totalUsers ?? 0),
@@ -3126,6 +3291,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
               };
             })
           : [],
+        ...(controlCenter ? { controlCenter } : {}),
         generatedAt: stringField(value.generatedAt, "admin operations generatedAt"),
       } satisfies AdminOperationsOverview;
     },
@@ -4411,6 +4577,9 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
     providers: {
       async getCompliance() {
         return mapCompliance(await client.get<unknown>("/me/compliance"));
+      },
+      async getIdentityDetails() {
+        return mapIdentityDetails(await client.get<unknown>("/me/compliance/identity-details"));
       },
       async startCompliance() {
         const value = objectField(
