@@ -1,8 +1,10 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
@@ -12,6 +14,7 @@ import { createIdentityTransaction } from '../../identity/persistence/prisma-ide
 import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { parseOwnershipUnits } from '../domain/ownership-units';
 import { throwIfOwnershipTestFailure } from './ownership-test-failure';
+import { hasStagingDemoPhysicalReadiness } from '../../lifecycle/domain/staging-demo-physical.policy';
 
 type Db = Prisma.TransactionClient;
 
@@ -25,6 +28,7 @@ export class OwnershipService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async issue(
@@ -72,6 +76,7 @@ export class OwnershipService {
           publication: true,
           custodyRecord: true,
           controlledBetaBypass: true,
+          stagingDemoPhysicalIntake: true,
           insuranceCoverage: {
             where: {
               status: 'ACTIVE',
@@ -92,7 +97,9 @@ export class OwnershipService {
       if (
         asset.status !== 'PUBLISHED' ||
         asset.publication?.status !== 'PUBLISHED' ||
-        (asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass) ||
+        (asset.custodyRecord?.status !== 'SECURED' &&
+          !asset.controlledBetaBypass &&
+          !hasStagingDemoPhysicalReadiness(this.config.isBeta, asset.stagingDemoPhysicalIntake)) ||
         asset.insuranceCoverage.length !== 1
       )
         throw new ConflictException({

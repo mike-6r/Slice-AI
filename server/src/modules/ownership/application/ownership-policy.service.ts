@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
@@ -12,6 +13,7 @@ import {
   STANDARD_OWNERSHIP_POLICY,
   validatePolicyUnits,
 } from '../domain/issuance-policy';
+import { hasStagingDemoPhysicalReadiness } from '../../lifecycle/domain/staging-demo-physical.policy';
 
 type Db = Prisma.TransactionClient;
 
@@ -20,6 +22,7 @@ export class OwnershipPolicyService {
   constructor(
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async adminProjection(assetId: string) {
@@ -30,6 +33,7 @@ export class OwnershipPolicyService {
         status: true,
         custodyRecord: { select: { status: true } },
         controlledBetaBypass: { select: { id: true } },
+        stagingDemoPhysicalIntake: { select: { status: true } },
         insuranceCoverage: {
           where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } },
           select: { expiresAt: true },
@@ -71,7 +75,9 @@ export class OwnershipPolicyService {
     const blockers = [
       asset.status !== 'PUBLISHED' ? 'CATALOGUE_NOT_PUBLISHED' : null,
       !decision ? 'VALUATION_REQUIRED' : null,
-      asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass
+      asset.custodyRecord?.status !== 'SECURED' &&
+      !asset.controlledBetaBypass &&
+      !hasStagingDemoPhysicalReadiness(this.config.isBeta, asset.stagingDemoPhysicalIntake)
         ? 'CUSTODY_NOT_SECURED'
         : null,
       status !== 'APPROVED' && status !== 'ISSUED' ? 'SUPPLY_POLICY_NOT_APPROVED' : null,

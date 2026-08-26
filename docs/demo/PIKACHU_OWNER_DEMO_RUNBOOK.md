@@ -1,0 +1,14 @@
+# Pikachu owner demo runbook
+
+Use staging only: `https://staging.slicecollectable.com`. The demo asset is **Pikachu With Grey Felt Hat #85**, PSA 10, cert `107760843`. It is a staged demonstration, not a statement that the card was physically shipped or placed in a production vault.
+
+1. Sign in as `demo-collector@slicecollectable.com` and open **List a collectible**. Show the existing submitted record; do not create another one. Explain: “The collector has supplied identity, images, grading evidence, terms, and valuation context.”
+2. Sign in as `povnu@icloud.com`, then open **Admin Console → Review Queue**. Open submission `07dbf13f-f712-4d4a-adcf-96c45c7e641b`, verify the PSA certification, record staff condition/valuation where required, approve, and run the canonicalisation action. Expected result: **Approved** and **Collectible record linked**.
+3. Open **Admin Console → Physical Intake**, search for `Pikachu With Grey Felt Hat`, and select **Complete demo intake**. Read the confirmation copy aloud: “In production, the Collector ships the real asset to an approved Slice receiving destination and Slice separately records delivery, receipt, verification, and custody. Because this is staging, I'm using the demo physical workflow, which exercises the platform lifecycle without claiming a real shipment or real vault custody occurred.”
+4. Confirm **Complete demo intake**. Expected result: **Demo Intake Complete**, **Demo Verified**, and **Demo Custody**. Explain that no carrier, production receipt, or production vault record is created; the intake detail explicitly identifies the simulation.
+5. Open the asset operations/detail workspace. Record the authorised staff valuation of **£2,500.00** using the staff valuation authority. Add active staging-demo coverage if the readiness view requires it. Explain that external PriceCharting data remains reference-only.
+6. Configure the ownership supply: **1,000 total Slices**. Approve it, publish the canonical asset when readiness is green, and issue the 1,000 Slices. Expected economic configuration: **400 Slices / 40%** retained by `demo-collector@slicecollectable.com`; **600 / 60%** in the Initial Offering; no Treasury allocation.
+7. Create the Initial Offering with **600** offered units at **£2.50** each. Verify **£1,500** gross, **5% / £75** fee, and **£1,425** collector proceeds. Approve and open the offering. Explain these are explicitly authorised demo economics, not real-world card valuation.
+8. Publish/open the staging market as required by the canonical workflow. Verify the public Marketplace and the public asset detail show the Pikachu, published market state, and an unmistakable **STAGING / DEMO** indicator.
+
+If a normal production flow is demonstrated instead, stop after approval and explain that real destination selection, shipment, carrier delivery, Slice receipt, verification, custody, insurance, and market authority are all independently recorded.

@@ -862,6 +862,7 @@ export type AdminControlCenter = {
 export type AdminIntakeRow = {
   id: string;
   submissionId: string;
+  assetId: string | null;
   intakeReference: string | null;
   title: string;
   thumbnailUrl: string | null;
@@ -919,6 +920,14 @@ export type AdminIntakeRow = {
   }>;
   valuationStatus: string | null;
   custodyStatus: string | null;
+  demoIntake: {
+    id: string;
+    status: string;
+    destinationLabel: string;
+    simulatedReceiptAt: string;
+    verifiedAt: string;
+    custodyAt: string;
+  } | null;
   exception: { code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" } | null;
 };
 
@@ -1690,6 +1699,10 @@ export interface AdminRepository {
       notes?: string;
     },
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
+  completeStagingDemoPhysicalIntake(
+    submissionId: string,
+    input: { assetId: string; reason: string },
+  ): Promise<{ demoIntakeId: string; status: string; replayed: boolean }>;
   startIntakeVerification(
     id: string,
   ): Promise<{ intakeId: string; status: string; startedAt: string }>;

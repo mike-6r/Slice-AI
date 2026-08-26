@@ -1245,6 +1245,7 @@ function PhysicalIntakeBoard({
   });
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
+  const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
   const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
   const [showDestinations, setShowDestinations] = useState(false);
   const [fixtureMode, setFixtureMode] = useState<"NORMAL" | "TEST" | "ALL">(
@@ -1277,6 +1278,17 @@ function PhysicalIntakeBoard({
       }),
     onSuccess: () => {
       setReceiptRow(null);
+      updateSearch({ page: "1" });
+    },
+  });
+  const demoIntake = useMutation({
+    mutationFn: (row: AdminIntakeRow) =>
+      services.repositories.admin.completeStagingDemoPhysicalIntake(row.submissionId, {
+        assetId: row.assetId ?? "",
+        reason: "Owner-demo staging simulation: canonical identity, PSA certification and grade match verified without a real shipment or production vault receipt.",
+      }),
+    onSuccess: () => {
+      setDemoRow(null);
       updateSearch({ page: "1" });
     },
   });
@@ -1515,6 +1527,7 @@ function PhysicalIntakeBoard({
                     onOpen={() => setSelectedRow(row)}
                     onReceipt={() => setReceiptRow(row)}
                     onStartVerification={() => verificationStart.mutate(row.id)}
+                    onCompleteDemoIntake={() => setDemoRow(row)}
                   />
                 ))}
               </tbody>
@@ -1691,6 +1704,28 @@ function PhysicalIntakeBoard({
           </div>
         </div>
       ) : null}
+      {demoRow ? (
+        <div className="physical-intake-modal" role="dialog" aria-modal="true" aria-labelledby="demo-intake-title">
+          <div className="admin-panel">
+            <p className="admin-console-eyebrow">Staging demo authority</p>
+            <h2 id="demo-intake-title">Complete Demo Intake</h2>
+            <p>
+              Staging simulation only. This records a simulated receipt, verification, and custody state for demonstration purposes. It does not represent a real shipment or production vault receipt.
+            </p>
+            <dl>
+              <div><dt>Collectible</dt><dd>{demoRow.title}</dd></div>
+              <div><dt>Result</dt><dd>Demo Intake Complete · Demo Verified · Demo Custody</dd></div>
+            </dl>
+            <div className="physical-intake-modal-actions">
+              <button type="button" className="admin-inline-action" onClick={() => setDemoRow(null)}>Cancel</button>
+              <button type="button" className="button-primary" disabled={demoIntake.isPending} onClick={() => demoIntake.mutate(demoRow)}>
+                {demoIntake.isPending ? "Completing…" : "Complete demo intake"}
+              </button>
+            </div>
+            {demoIntake.isError ? <p className="text-negative">The demo authority could not be completed. No production receipt or custody was recorded.</p> : null}
+          </div>
+        </div>
+      ) : null}
     </AdminPageSection>
   );
 }
@@ -1700,11 +1735,13 @@ function PhysicalIntakeRow({
   onOpen,
   onReceipt,
   onStartVerification,
+  onCompleteDemoIntake,
 }: {
   row: AdminIntakeRow;
   onOpen: () => void;
   onReceipt: () => void;
   onStartVerification: () => void;
+  onCompleteDemoIntake: () => void;
 }) {
   return (
     <tr>
@@ -1791,7 +1828,11 @@ function PhysicalIntakeRow({
       </td>
       <td>
         <div className="physical-intake-row-actions">
-          {row.allowedActions.includes("CONFIRM_RECEIPT") ? (
+          {row.allowedActions.includes("COMPLETE_DEMO_INTAKE") ? (
+            <button type="button" className="button-primary" onClick={onCompleteDemoIntake}>
+              Complete demo intake
+            </button>
+          ) : row.allowedActions.includes("CONFIRM_RECEIPT") ? (
             <button type="button" className="button-primary" onClick={onReceipt}>
               Confirm receipt
             </button>
@@ -1825,6 +1866,7 @@ function intakeStageLabel(stage: string) {
         VERIFICATION: "Awaiting verification",
         VERIFIED: "Verified",
         VAULT_READY: "Ready for vault",
+        DEMO_CUSTODY: "Demo custody",
         EXCEPTION: "Exception",
       } as Record<string, string>
     )[stage] ?? sentence(stage)
@@ -1832,6 +1874,8 @@ function intakeStageLabel(stage: string) {
 }
 
 function intakeNextActor(row: AdminIntakeRow) {
+  if (row.stage === "DEMO_CUSTODY") return "Staging demo complete · no production custody";
+  if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE")) return "Staff action · complete staging demo intake";
   if (row.stage === "ACCEPTED_AWAITING_VAULT") return "Collector action · add tracking";
   if (row.stage === "DELIVERED_AWAITING_RECEIPT") return "Staff action · confirm receipt";
   if (row.stage === "RECEIVED" || row.stage === "VERIFICATION")
@@ -1857,6 +1901,9 @@ function IntakeDetailPanel({
     ["Received by Slice", Boolean(row.receipt), row.receipt?.confirmedAt],
     ["Verified", ["VERIFIED", "VAULT_READY"].includes(row.stage), null],
     ["Ready for vault", row.stage === "VAULT_READY", null],
+    ["Demo intake", Boolean(row.demoIntake), row.demoIntake?.simulatedReceiptAt],
+    ["Demo verified", Boolean(row.demoIntake), row.demoIntake?.verifiedAt],
+    ["Demo custody", Boolean(row.demoIntake), row.demoIntake?.custodyAt],
   ] as const;
   return (
     <section className="physical-intake-detail admin-panel" aria-label="Intake detail">
@@ -1919,6 +1966,7 @@ function IntakeDetailPanel({
                   : "Not confirmed"}
               </dd>
             </div>
+            {row.demoIntake ? <div><dt>Demo authority</dt><dd>{row.demoIntake.destinationLabel} · simulated only</dd></div> : null}
             <div>
               <dt>Verification</dt>
               <dd>{row.verification?.status ?? "Not started"}</dd>

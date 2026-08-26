@@ -2211,6 +2211,7 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
   return {
     id: stringField(value.id, "admin intake.id"),
     submissionId: stringField(value.submissionId, "admin intake.submissionId"),
+    assetId: nullableString(value.assetId, "admin intake.assetId"),
     intakeReference:
       value.intakeReference === null
         ? null
@@ -2345,6 +2346,20 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
       value.custodyStatus === null
         ? null
         : nullableString(value.custodyStatus, "admin intake.custodyStatus"),
+    demoIntake:
+      value.demoIntake === null || value.demoIntake === undefined
+        ? null
+        : (() => {
+            const demo = objectField(value.demoIntake, "admin intake demo intake");
+            return {
+              id: stringField(demo.id, "admin intake demo intake.id"),
+              status: stringField(demo.status, "admin intake demo intake.status"),
+              destinationLabel: stringField(demo.destinationLabel, "admin intake demo intake.destinationLabel"),
+              simulatedReceiptAt: stringField(demo.simulatedReceiptAt, "admin intake demo intake.simulatedReceiptAt"),
+              verifiedAt: stringField(demo.verifiedAt, "admin intake demo intake.verifiedAt"),
+              custodyAt: stringField(demo.custodyAt, "admin intake demo intake.custodyAt"),
+            };
+          })(),
     exception:
       value.exception === null
         ? null
@@ -4039,6 +4054,29 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         intakeId: stringField(value.intakeId, "intake receipt.intakeId"),
         status: stringField(value.status, "intake receipt.status"),
         confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
+      };
+    },
+    async completeStagingDemoPhysicalIntake(submissionId, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/submissions/${encodeURIComponent(submissionId)}/staging-demo/physical-intake`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+            body: JSON.stringify({
+              assetId: input.assetId,
+              fixtureKey: "PIKACHU_OWNER_DEMO_2026",
+              confirmation: "COMPLETE_STAGING_DEMO_INTAKE",
+              reason: input.reason,
+            }),
+          },
+        ),
+        "staging demo physical intake",
+      );
+      return {
+        demoIntakeId: stringField(value.demoIntakeId, "staging demo intake.id"),
+        status: stringField(value.status, "staging demo intake.status"),
+        replayed: Boolean(value.replayed),
       };
     },
     async startIntakeVerification(id) {

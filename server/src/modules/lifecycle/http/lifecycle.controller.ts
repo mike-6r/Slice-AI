@@ -23,6 +23,10 @@ import {
   CONTROLLED_BETA_UMBREON_FIXTURE_KEY,
   LifecycleService,
 } from '../application/lifecycle.service';
+import {
+  STAGING_DEMO_PHYSICAL_CONFIRMATION,
+  STAGING_DEMO_PIKACHU_FIXTURE_KEY,
+} from '../domain/staging-demo-physical.policy';
 
 const money = z
   .object({
@@ -82,6 +86,14 @@ const controlledBetaPhysicalBypass = z
     fixtureKey: z.literal(CONTROLLED_BETA_UMBREON_FIXTURE_KEY),
     reason: z.string().trim().min(12).max(280),
     confirmation: z.literal(CONTROLLED_BETA_PHYSICAL_BYPASS_CONFIRMATION),
+  })
+  .strict();
+const stagingDemoPhysicalIntake = z
+  .object({
+    assetId: z.string().trim().min(1).max(128),
+    fixtureKey: z.literal(STAGING_DEMO_PIKACHU_FIXTURE_KEY),
+    reason: z.string().trim().min(12).max(280),
+    confirmation: z.literal(STAGING_DEMO_PHYSICAL_CONFIRMATION),
   })
   .strict();
 
@@ -194,6 +206,24 @@ export class LifecycleController {
       this.lifecycle.controlledBetaPhysicalBypass(
         req.actor!,
         { submissionId, ...parse(controlledBetaPhysicalBypass, body) },
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('admin/submissions/:submissionId/staging-demo/physical-intake')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('controlled_beta.lifecycle.manage')
+  completeStagingDemoPhysicalIntake(
+    @Param('submissionId') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.lifecycle.completeStagingDemoPhysicalIntake(
+        req.actor!,
+        { submissionId, ...parse(stagingDemoPhysicalIntake, body) },
         req.requestId ?? 'unknown',
         key!,
       ),

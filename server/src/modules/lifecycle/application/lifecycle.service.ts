@@ -23,6 +23,13 @@ import {
   evaluateReadiness,
 } from '../domain/publication.policy';
 import { deriveMarketLifecycle } from '../../market-lifecycle/domain/market-lifecycle';
+import {
+  hasStagingDemoPhysicalReadiness,
+  isEligiblePikachuOwnerDemo,
+  isProtectedControlledAsset,
+  STAGING_DEMO_PHYSICAL_CONFIRMATION,
+  STAGING_DEMO_PIKACHU_FIXTURE_KEY,
+} from '../domain/staging-demo-physical.policy';
 
 type Db = Prisma.TransactionClient;
 type OperationsBoardInput = {
@@ -774,6 +781,133 @@ export class LifecycleService {
     );
   }
 
+  /**
+   * A demo authority, not a physical shortcut. It records only simulated
+   * staging receipt, verification and custody for one immutable owner-demo
+   * fixture and deliberately leaves real shipment/receipt/custody tables empty.
+   */
+  completeStagingDemoPhysicalIntake(
+    actor: Actor,
+    input: { submissionId: string; assetId: string; fixtureKey: string; reason: string; confirmation: string },
+    requestId: string,
+    key: string,
+  ) {
+    this.recentAuth.require(actor);
+    if (!this.config.isBeta)
+      throw new ForbiddenException({
+        code: 'STAGING_DEMO_FEATURE_DISABLED',
+        message: 'Demo physical intake is available only in staging.',
+      });
+    if (!actor.roles.includes('ADMIN'))
+      throw new ForbiddenException({ code: 'ADMIN_REQUIRED', message: 'Only an administrator can complete demo intake.' });
+    if (
+      input.fixtureKey !== STAGING_DEMO_PIKACHU_FIXTURE_KEY ||
+      input.confirmation !== STAGING_DEMO_PHYSICAL_CONFIRMATION
+    )
+      throw new ConflictException({
+        code: 'STAGING_DEMO_CONFIRMATION_REQUIRED',
+        message: 'The explicit owner-demo fixture and confirmation are required.',
+      });
+
+    return this.mutate(
+      actor,
+      `lifecycle.staging-demo-physical-intake:${input.submissionId}`,
+      'POST',
+      `/v1/admin/submissions/${input.submissionId}/staging-demo/physical-intake`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${input.assetId} FOR UPDATE`;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id: input.submissionId },
+          include: {
+            owner: { select: { email: true } },
+            stagingDemoPhysicalIntake: true,
+            intake: true,
+            asset: {
+              include: {
+                category: { select: { name: true } },
+                collectibleSet: { select: { name: true } },
+                gradeScaleEntry: { include: { company: { select: { code: true } } } },
+                custodyRecord: true,
+                stagingDemoPhysicalIntake: true,
+              },
+            },
+          },
+        });
+        const asset = submission?.asset;
+        if (!submission || !asset || submission.assetId !== input.assetId || submission.status !== 'APPROVED')
+          throw new ConflictException({
+            code: 'STAGING_DEMO_APPROVED_CANONICAL_ASSET_REQUIRED',
+            message: 'Demo intake requires the existing approved canonical asset.',
+          });
+        if (isProtectedControlledAsset(asset))
+          throw new ForbiddenException({
+            code: 'STAGING_DEMO_CONTROLLED_ASSET_FORBIDDEN',
+            message: 'Controlled Umbreon and Charizard fixtures cannot use demo intake.',
+          });
+        if (!isEligiblePikachuOwnerDemo({ owner: submission.owner, asset }))
+          throw new ForbiddenException({
+            code: 'STAGING_DEMO_ASSET_MARKER_REQUIRED',
+            message: 'This asset is not the explicitly marked staging owner-demo fixture.',
+          });
+        const existing = submission.stagingDemoPhysicalIntake ?? asset.stagingDemoPhysicalIntake;
+        if (existing)
+          return {
+            status: existing.status,
+            submissionId: submission.id,
+            assetId: asset.id,
+            demoIntakeId: existing.id,
+            replayed: true,
+            simulated: true,
+          };
+        if (submission.intake || asset.custodyRecord)
+          throw new ConflictException({
+            code: 'PHYSICAL_STATE_ALREADY_STARTED',
+            message: 'Demo intake cannot be mixed with production physical records.',
+          });
+        const now = new Date();
+        const created = await db.stagingDemoPhysicalIntake.create({
+          data: {
+            id: randomUUID(),
+            submissionId: submission.id,
+            assetId: asset.id,
+            fixtureKey: input.fixtureKey,
+            status: 'DEMO_CUSTODY',
+            destinationLabel: 'Slice Staging Demo Intake — Simulated only',
+            simulationNote: input.reason.trim(),
+            identityMatch: true,
+            certificationMatch: true,
+            gradeMatch: true,
+            variantMatch: true,
+            simulatedReceiptAt: now,
+            verifiedAt: now,
+            custodyAt: now,
+            completedByUserId: actor.userId,
+          },
+        });
+        await audit('STAGING_DEMO_PHYSICAL_INTAKE_COMPLETED', 'asset', asset.id, {
+          submissionId: submission.id,
+          assetId: asset.id,
+          demoIntakeId: created.id,
+          fixtureKey: input.fixtureKey,
+          status: created.status,
+          reason: input.reason.trim(),
+        });
+        return {
+          status: created.status,
+          submissionId: submission.id,
+          assetId: asset.id,
+          demoIntakeId: created.id,
+          simulated: true,
+          destinationLabel: created.destinationLabel,
+          physicalStateUnchanged: true,
+        };
+      },
+    );
+  }
+
   publish(actor: Actor, assetId: string, requestId: string, key: string) {
     this.recentAuth.require(actor);
     return this.mutate(
@@ -864,6 +998,7 @@ export class LifecycleService {
           take: 1,
         },
         controlledBetaBypass: true,
+        stagingDemoPhysicalIntake: true,
       },
     });
     if (!asset)
@@ -876,7 +1011,9 @@ export class LifecycleService {
       verificationApproved: asset.submissions.length > 0,
       activeDecision: asset.valuationDecisions.length > 0,
       custodySecured: asset.custodyRecord?.status === 'SECURED',
-      controlledBetaPhysicalBypass: Boolean(asset.controlledBetaBypass),
+      controlledBetaPhysicalBypass:
+        Boolean(asset.controlledBetaBypass) ||
+        hasStagingDemoPhysicalReadiness(this.config.isBeta, asset.stagingDemoPhysicalIntake),
       activeCoverage: asset.insuranceCoverage.length > 0,
       hasException: asset.custodyRecord?.status === 'EXCEPTION',
     });

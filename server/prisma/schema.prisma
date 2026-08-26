@@ -925,6 +925,7 @@ model User {
   receiptConfirmations                IntakeReceiptConfirmation[]        @relation("ReceiptConfirmer")
   portfolioSnapshots                  PortfolioSnapshot[]
   controlledBetaBypasses              ControlledBetaPhysicalBypass[]     @relation("ControlledBetaBypassActor")
+  stagingDemoPhysicalIntakes          StagingDemoPhysicalIntake[]        @relation("StagingDemoPhysicalIntakeActor")
   initialOfferingsOriginated          InitialOffering[]                  @relation("InitialOfferingOriginator")
   initialOfferingsBeneficiary         InitialOffering[]                  @relation("InitialOfferingBeneficiary")
   initialOfferingInventories          InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
@@ -1401,6 +1402,7 @@ model Asset {
   discussionPosts               DiscussionPost[]
   saleProposals                 SaleProposal[]
   controlledBetaBypass          ControlledBetaPhysicalBypass?
+  stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
   initialOffering               InitialOffering?
   initialOfferingInventory      InitialOfferingInventory[]
   certificationClaims           GradingCertificationClaim[]
@@ -1502,6 +1504,7 @@ model AssetSubmission {
   intake                        SubmissionIntake?
   preGrades                     RawCardPreGrade[]
   controlledBetaBypass          ControlledBetaPhysicalBypass?
+  stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
   certificationVerifications    GradingCertificationVerification[]
   certificationClaims           GradingCertificationClaim[]
 
@@ -1823,6 +1826,33 @@ model ControlledBetaPhysicalBypass {
 
   @@index([assetId, createdAt, id])
   @@index([createdByUserId, createdAt, id])
+}
+
+/// Explicit staging-only simulated physical authority. This is never a
+/// production shipment, Slice receipt, verification, or vault-custody record.
+model StagingDemoPhysicalIntake {
+  id                   String          @id @default(cuid())
+  submissionId         String          @unique
+  assetId              String          @unique
+  fixtureKey           String
+  status               String          @default("DEMO_INTAKE")
+  destinationLabel     String
+  simulationNote       String
+  identityMatch        Boolean
+  certificationMatch   Boolean
+  gradeMatch           Boolean
+  variantMatch         Boolean
+  simulatedReceiptAt   DateTime
+  verifiedAt           DateTime
+  custodyAt            DateTime
+  completedByUserId    String
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  submission           AssetSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  asset                Asset           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  completedBy          User            @relation("StagingDemoPhysicalIntakeActor", fields: [completedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([completedByUserId, createdAt, id])
 }
 
 model VerificationReview {

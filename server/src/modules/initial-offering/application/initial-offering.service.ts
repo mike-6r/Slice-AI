@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
@@ -9,6 +10,7 @@ import type { IdempotencyIdentity } from '../../identity/ports/repositories';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
 import { eventType, initialOfferingLifecycleEvent, orderLifecycleEvent } from '../../outbox/domain/domain-event';
 import { assertInitialOfferingTransition, calculateInitialOfferingPreview, initialOfferingFeePolicy, isInitialOfferingSupplyPolicyReady, unitsForPercentage, validateOfferingTerms } from '../domain/initial-offering';
+import { hasStagingDemoPhysicalReadiness } from '../../lifecycle/domain/staging-demo-physical.policy';
 
 type Db = Prisma.TransactionClient;
 type TransitionTarget = 'PAUSED' | 'CANCELLED' | 'EXPIRED';
@@ -19,6 +21,7 @@ export class InitialOfferingService {
     private readonly db: PrismaService,
     private readonly recentAuth: RecentAuthService,
     private readonly outbox: OutboxWriter,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async propose(actor: Actor, assetId: string, offeredUnitsWire: string, requestId: string, key: string) {
@@ -98,7 +101,7 @@ export class InitialOfferingService {
     this.recentAuth.require(actor);
     const offeredUnits = parseUnits(offeredUnitsWire);
     return this.mutate(actor, `update:${offeringId}`, { offeringId, offeredUnits: offeredUnits.toString() }, requestId, key, async (db, audit) => {
-      const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 } } } } });
+      const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, stagingDemoPhysicalIntake: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 } } } } });
       if (!offering || offering.originatingCollectorUserId !== actor.userId) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
       if (offering.status !== 'AWAITING_APPROVAL' && offering.status !== 'CHANGES_REQUESTED') fail('OFFERING_IMMUTABLE', 'Offering terms cannot change after approval.');
       const policy = offering.asset.ownershipSupplyPolicy;
@@ -135,16 +138,16 @@ export class InitialOfferingService {
   }
 
   async adminProjection(offeringId: string) {
-    const offering = await this.db.initialOffering.findUnique({ where: { id: offeringId }, include: { inventory: true, originatingCollector: { select: { id: true, profile: { select: { displayName: true, publicUsername: true } } } }, asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 }, tradingMarket: true } } } });
+    const offering = await this.db.initialOffering.findUnique({ where: { id: offeringId }, include: { inventory: true, originatingCollector: { select: { id: true, profile: { select: { displayName: true, publicUsername: true } } } }, asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, stagingDemoPhysicalIntake: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 }, tradingMarket: true } } } });
     if (!offering) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
     const base = await this.projection(offering);
-    return { ...base, collector: { id: offering.originatingCollector.id, displayName: offering.originatingCollector.profile?.displayName ?? 'Collector', username: offering.originatingCollector.profile?.publicUsername ?? null }, readiness: { custody: offering.asset.custodyRecord?.status === 'SECURED' || Boolean(offering.asset.controlledBetaBypass), insurance: offering.asset.insuranceCoverage.length === 1, publication: offering.asset.publication?.status === 'PUBLISHED', market: offering.asset.tradingMarket?.status === 'OPEN' && offering.asset.tradingMarket.tradingEnabled }, valuation: offering.asset.valuationDecisions[0] ? { minor: offering.asset.valuationDecisions[0].valueMinor.toString(), currency: offering.asset.valuationDecisions[0].currency, asOf: offering.asset.valuationDecisions[0].decidedAt.toISOString() } : null, supplyPolicy: offering.asset.ownershipSupplyPolicy ? { status: offering.asset.ownershipSupplyPolicy.status, units: offering.asset.ownershipSupplyPolicy.proposedUnits.toString(), pricePerUnitMinor: offering.asset.ownershipSupplyPolicy.pricePerUnitMinor.toString() } : null };
+    return { ...base, collector: { id: offering.originatingCollector.id, displayName: offering.originatingCollector.profile?.displayName ?? 'Collector', username: offering.originatingCollector.profile?.publicUsername ?? null }, readiness: { custody: offering.asset.custodyRecord?.status === 'SECURED' || Boolean(offering.asset.controlledBetaBypass) || hasStagingDemoPhysicalReadiness(this.config.isBeta, offering.asset.stagingDemoPhysicalIntake), insurance: offering.asset.insuranceCoverage.length === 1, publication: offering.asset.publication?.status === 'PUBLISHED', market: offering.asset.tradingMarket?.status === 'OPEN' && offering.asset.tradingMarket.tradingEnabled }, valuation: offering.asset.valuationDecisions[0] ? { minor: offering.asset.valuationDecisions[0].valueMinor.toString(), currency: offering.asset.valuationDecisions[0].currency, asOf: offering.asset.valuationDecisions[0].decidedAt.toISOString() } : null, supplyPolicy: offering.asset.ownershipSupplyPolicy ? { status: offering.asset.ownershipSupplyPolicy.status, units: offering.asset.ownershipSupplyPolicy.proposedUnits.toString(), pricePerUnitMinor: offering.asset.ownershipSupplyPolicy.pricePerUnitMinor.toString() } : null };
   }
 
   async approve(actor: Actor, offeringId: string, reason: string, requestId: string, key: string) {
     this.recentAuth.require(actor);
     return this.mutate(actor, `approve:${offeringId}`, { offeringId, reason }, requestId, key, async (db, audit) => {
-      const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 } } } } });
+      const offering = await db.initialOffering.findUnique({ where: { id: offeringId }, include: { asset: { include: { ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, publication: true, custodyRecord: true, controlledBetaBypass: true, stagingDemoPhysicalIntake: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 } } } } });
       if (!offering) throw new NotFoundException({ code: 'INITIAL_OFFERING_NOT_FOUND', message: 'Offering not found.' });
       if (offering.originatingCollectorUserId === actor.userId) fail('OFFERING_SELF_APPROVAL', 'The originating collector cannot approve their own offering.');
       assertInitialOfferingTransition(offering.status, 'APPROVED');
@@ -153,7 +156,7 @@ export class InitialOfferingService {
       if (!policy || !isInitialOfferingSupplyPolicyReady(policy.status) || policy.id !== offering.ownershipSupplyPolicyId) fail('SUPPLY_POLICY_NOT_APPROVED', 'The linked supply policy is not approved.');
       if (!decision || decision.id !== offering.valuationDecisionId || decision.valueMinor !== policy.valuationMinor || decision.currency !== offering.currency) fail('VALUATION_CHANGED', 'The linked valuation is no longer authoritative.');
       if (offering.asset.status !== 'PUBLISHED' || offering.asset.publication?.status !== 'PUBLISHED') fail('ASSET_NOT_PUBLISHED', 'The asset must be published before approval.');
-      if (offering.asset.custodyRecord?.status !== 'SECURED' && !offering.asset.controlledBetaBypass) fail('CUSTODY_NOT_SECURED', 'The asset must be secured before approval.');
+      if (offering.asset.custodyRecord?.status !== 'SECURED' && !offering.asset.controlledBetaBypass && !hasStagingDemoPhysicalReadiness(this.config.isBeta, offering.asset.stagingDemoPhysicalIntake)) fail('CUSTODY_NOT_SECURED', 'The asset must be secured before approval.');
       if (offering.asset.insuranceCoverage.length !== 1) fail('INSURANCE_REQUIRED', 'Active insurance is required before an offering can be approved.');
       const updated = await db.initialOffering.update({ where: { id: offeringId }, data: { status: 'APPROVED', approvedAt: new Date() } });
       await this.appendLifecycle(db, updated, eventType.initialOfferingApproved, requestId, actor.userId);
@@ -264,10 +267,10 @@ export class InitialOfferingService {
   }
 
   private async authoritativeAsset(db: Db, assetId: string, ownerUserId: string) {
-    const asset = await db.asset.findUnique({ where: { id: assetId }, include: { publication: true, custodyRecord: true, controlledBetaBypass: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 }, ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, submissions: { where: { ownerUserId, status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1 }, initialOffering: true } });
+    const asset = await db.asset.findUnique({ where: { id: assetId }, include: { publication: true, custodyRecord: true, controlledBetaBypass: true, stagingDemoPhysicalIntake: true, insuranceCoverage: { where: { status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } }, take: 1 }, ownershipSupplyPolicy: true, valuationDecisions: { where: { status: 'ACTIVE' }, orderBy: { decidedAt: 'desc' }, take: 1 }, submissions: { where: { ownerUserId, status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1 }, initialOffering: true } });
     if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Asset not found.' });
     if (asset.status !== 'PUBLISHED' || asset.publication?.status !== 'PUBLISHED') fail('ASSET_NOT_PUBLISHED', 'The asset must be published before an offering can be proposed.');
-    if (asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass) fail('CUSTODY_NOT_SECURED', 'The asset must be secured before an offering can be proposed.');
+    if (asset.custodyRecord?.status !== 'SECURED' && !asset.controlledBetaBypass && !hasStagingDemoPhysicalReadiness(this.config.isBeta, asset.stagingDemoPhysicalIntake)) fail('CUSTODY_NOT_SECURED', 'The asset must be secured before an offering can be proposed.');
     if (asset.insuranceCoverage.length !== 1) fail('INSURANCE_REQUIRED', 'Active insurance is required before an offering can be proposed.');
     return asset;
   }

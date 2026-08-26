@@ -230,6 +230,9 @@ export const mockRepositories: AppRepositories = {
     async confirmIntakeReceipt() {
       throw new Error("Physical intake requires the API service.");
     },
+    async completeStagingDemoPhysicalIntake() {
+      throw new Error("Staging demo intake requires the API service.");
+    },
     async startIntakeVerification() {
       throw new Error("Physical intake requires the API service.");
     },

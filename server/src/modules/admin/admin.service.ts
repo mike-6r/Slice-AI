@@ -37,6 +37,7 @@ import {
   nextIntakeAction,
   stageLabel,
 } from './admin-intake-projections';
+import { isEligiblePikachuOwnerDemo } from '../lifecycle/domain/staging-demo-physical.policy';
 
 @Injectable()
 export class AdminService {
@@ -2370,6 +2371,7 @@ export class AdminService {
         category: { select: { name: true } },
         asset: {
           select: {
+            id: true,
             slug: true,
             title: true,
             edition: true,
@@ -2387,6 +2389,7 @@ export class AdminService {
         },
         reviews: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, completedAt: true } },
         certificationVerifications: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+        stagingDemoPhysicalIntake: true,
         intake: {
           include: {
             vault: true,
@@ -2428,9 +2431,13 @@ export class AdminService {
     }
     const projected = await Promise.all(visibleRows.map(async (item) => {
       const intake = item.intake;
+      const demoIntake = item.stagingDemoPhysicalIntake;
+      const demoEligible = this.config.isBeta && isEligiblePikachuOwnerDemo({ owner: item.owner, asset: item.asset });
       const baseStage = intakeStage(item);
       const stage =
-        baseStage !== 'EXCEPTION' && item.asset?.custodyRecord?.status === 'INSPECTED'
+        demoIntake?.status === 'DEMO_CUSTODY'
+          ? 'DEMO_CUSTODY'
+          : baseStage !== 'EXCEPTION' && item.asset?.custodyRecord?.status === 'INSPECTED'
           ? 'VERIFIED'
           : baseStage;
       const metadata =
@@ -2444,7 +2451,11 @@ export class AdminService {
           ? String(metadata[key])
           : null;
       const issues = intakeIssues({ stage, intake });
-      const allowedActions = intakeAllowedActions({ status: item.status, stage, intake });
+      const allowedActions = demoIntake
+        ? []
+        : demoEligible
+          ? ['COMPLETE_DEMO_INTAKE']
+          : intakeAllowedActions({ status: item.status, stage, intake });
       const exception = issues[0]
         ? { code: issues[0].code, label: issues[0].label, severity: issues[0].severity }
         : null;
@@ -2457,6 +2468,7 @@ export class AdminService {
       return {
         id: intake?.id ?? item.id,
         submissionId: item.id,
+        assetId: item.asset?.id ?? null,
         intakeReference: intake?.intakeReference ?? null,
         title:
           item.asset?.title ??
@@ -2481,8 +2493,10 @@ export class AdminService {
           item.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
         submissionStatus: item.status,
         stage,
-        stageReason: intakeStageReason({ status: item.status, intake }),
-        currentStageSince: (intake?.updatedAt ?? item.updatedAt).toISOString(),
+        stageReason: demoIntake
+          ? 'Staging simulation only · no production shipment, receipt, or vault custody was recorded'
+          : intakeStageReason({ status: item.status, intake }),
+        currentStageSince: (demoIntake?.updatedAt ?? intake?.updatedAt ?? item.updatedAt).toISOString(),
         vault: intake?.vault
           ? {
               id: intake.vault.id,
@@ -2508,10 +2522,14 @@ export class AdminService {
             }
           : null,
         updatedAt: item.updatedAt.toISOString(),
-        nextAction: intake ? nextIntakeAction(intake) : 'Await vault selection',
+        nextAction: demoIntake
+          ? 'Demo intake complete'
+          : demoEligible
+            ? 'Complete staging demo intake'
+            : intake ? nextIntakeAction(intake) : 'Await vault selection',
         allowedActions,
         issues,
-        testFixture: isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata),
+        testFixture: Boolean(demoIntake) || demoEligible || isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata),
         carrierState: intake?.shipment
           ? { status: intake.shipment.status, lastUpdatedAt: intake.shipment.lastCheckedAt?.toISOString() ?? null, source: 'MANUAL' as const }
           : null,
@@ -2538,7 +2556,17 @@ export class AdminService {
             ? 'ACTIVE'
             : 'PENDING'
           : null,
-        custodyStatus: item.asset?.custodyRecord?.status ?? null,
+        custodyStatus: demoIntake ? 'DEMO_CUSTODY' : item.asset?.custodyRecord?.status ?? null,
+        demoIntake: demoIntake
+          ? {
+              id: demoIntake.id,
+              status: demoIntake.status,
+              destinationLabel: demoIntake.destinationLabel,
+              simulatedReceiptAt: demoIntake.simulatedReceiptAt.toISOString(),
+              verifiedAt: demoIntake.verifiedAt.toISOString(),
+              custodyAt: demoIntake.custodyAt.toISOString(),
+            }
+          : null,
         exception,
       };
     }));
