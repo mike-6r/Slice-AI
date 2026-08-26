@@ -314,6 +314,24 @@ export class SubmissionController {
     });
   }
 
+  @Post('admin/submissions/:id/canonicalize')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('catalogue.manage')
+  createAndLinkCanonicalAsset(
+    @Param('id') submissionId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.createAndLinkCanonicalAsset(
+        req.actor!,
+        submissionId,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
   @Get('submissions')
   @UseGuards(AccessTokenGuard)
   list(@Query() query: unknown, @Req() req: AuthenticatedRequest) {

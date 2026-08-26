@@ -26,6 +26,8 @@ import { collectorUsageFor } from '../../collector-workspace/collector-entitleme
 import { preGradeProjection } from './raw-card-pregrade.service';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { OutboxWriter } from '../../outbox/application/outbox-writer.service';
+import { AuthorizationService } from '../../identity/access/authorization.service';
+import { slugify } from '../../catalogue/domain/catalogue.types';
 import {
   customerResourceEvent,
   eventType,
@@ -115,6 +117,7 @@ export class SubmissionService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() private readonly capabilities?: AccountCapabilityService,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
+    @Optional() private readonly authorization?: AuthorizationService,
   ) {}
 
   async create(
@@ -461,6 +464,128 @@ export class SubmissionService {
           },
         );
         return { submissionId: updated.id, assetId: updated.assetId! };
+      },
+    );
+  }
+
+  /**
+   * Model C canonicalization: an explicitly authorised staff action creates a
+   * draft Asset and binds it to exactly one approved submission atomically.
+   * It deliberately does not create custody, valuation, ownership, offering,
+   * publication, or market records.
+   */
+  async createAndLinkCanonicalAsset(
+    actor: Actor,
+    submissionId: string,
+    requestId: string,
+    key: string,
+  ) {
+    await this.authorization?.authorize(actor, 'catalogue.manage');
+    return this.mutate(
+      actor,
+      `submission.canonicalize:${submissionId}`,
+      'POST',
+      `/v1/admin/submissions/${submissionId}/canonicalize`,
+      {},
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw`SELECT id FROM "AssetSubmission" WHERE id = ${submissionId} FOR UPDATE`;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id: submissionId },
+          select: {
+            id: true,
+            status: true,
+            assetId: true,
+            ownerUserId: true,
+            categoryId: true,
+            setId: true,
+            gradeScaleEntryId: true,
+            declaredMetadata: true,
+            normalizedCertificationNumber: true,
+          },
+        });
+        if (!submission) this.notFound();
+        if (submission!.status !== 'APPROVED') {
+          throw new ConflictException({
+            code: 'SUBMISSION_STATE_CONFLICT',
+            message: 'Approve the submission before creating its collectible record.',
+          });
+        }
+        if (submission!.assetId) {
+          const asset = await db.asset.findUnique({
+            where: { id: submission!.assetId },
+            select: { id: true, publicId: true, slug: true, title: true },
+          });
+          if (!asset) {
+            throw new ConflictException({
+              code: 'CANONICAL_LINK_INTEGRITY_CONFLICT',
+              message: 'This submission has an unresolved collectible link. Resolve it before creating another record.',
+            });
+          }
+          return { submissionId: submission!.id, assetId: asset.id, publicId: asset.publicId, slug: asset.slug, title: asset.title, replayed: true };
+        }
+        const metadata = isRecord(submission!.declaredMetadata)
+          ? submission!.declaredMetadata
+          : {};
+        const title = stringMetadata(metadata.name) ?? stringMetadata(metadata.playerOrCharacter);
+        if (!title) {
+          throw new UnprocessableEntityException({
+            code: 'CANONICAL_IDENTITY_INCOMPLETE',
+            message: 'Add the collectible title in review before creating its record.',
+          });
+        }
+        const certificationNumber = stringMetadata(metadata.certificationNumber);
+        if (submission!.gradeScaleEntryId && certificationNumber) {
+          const duplicate = await db.asset.findFirst({
+            where: { gradeScaleEntryId: submission!.gradeScaleEntryId, certificationNumber },
+            select: { id: true },
+          });
+          if (duplicate) {
+            throw new ConflictException({
+              code: 'DUPLICATE_CERTIFICATION',
+              message: 'A collectible with this grading certificate already exists.',
+            });
+          }
+        }
+        const id = randomUUID();
+        const publicId = `ast_${randomUUID().replace(/-/g, '')}`;
+        const asset = await db.asset.create({
+          data: {
+            id,
+            publicId,
+            slug: slugify(`${title}-${id.slice(0, 8)}`) as string,
+            categoryId: submission!.categoryId,
+            setId: submission!.setId,
+            gradeScaleEntryId: submission!.gradeScaleEntryId,
+            title,
+            year: numberMetadata(metadata.year),
+            manufacturer: stringMetadata(metadata.manufacturer),
+            edition: stringMetadata(metadata.variant) ?? stringMetadata(metadata.edition),
+            cardNumber: stringMetadata(metadata.cardNumber),
+            certificationNumber,
+            normalizedCertificationNumber: certificationNumber
+              ? normalizeCertificationNumber(certificationNumber)
+              : null,
+            status: 'DRAFT',
+          },
+          select: { id: true, publicId: true, slug: true, title: true },
+        });
+        if (certificationNumber && submission!.gradeScaleEntryId) {
+          const grade = await db.gradeScaleEntry.findUnique({
+            where: { id: submission!.gradeScaleEntryId },
+            select: { company: { select: { code: true } } },
+          });
+          if (grade) await this.claimCertification(db, grade.company.code, normalizeCertificationNumber(certificationNumber), submission!.id, asset.id);
+        }
+        await db.assetSubmission.update({ where: { id: submission!.id }, data: { assetId: asset.id } });
+        await audit('CANONICAL_ASSET_CREATED_AND_LINKED', 'submission', submission!.id, {
+          assetId: asset.id,
+          publicId: asset.publicId,
+          ownerUserId: submission!.ownerUserId,
+          source: 'EXPLICIT_STAFF_CANONICALIZATION',
+        });
+        return { submissionId: submission!.id, assetId: asset.id, publicId: asset.publicId, slug: asset.slug, title: asset.title, replayed: false };
       },
     );
   }
@@ -3029,6 +3154,7 @@ function isBetaFixtureSubmission(
 }
 function reviewProjection(submission: {
   id: string;
+  assetId: string | null;
   status: string;
   submittedAt: Date | null;
   createdAt: Date;
@@ -3038,6 +3164,7 @@ function reviewProjection(submission: {
 }) {
   return {
     id: submission.id,
+    assetId: submission.assetId,
     status: submission.status,
     submittedAt: (submission.submittedAt ?? submission.createdAt).toISOString(),
     categoryId: submission.categoryId,
@@ -3200,6 +3327,13 @@ function formatReviewEvidenceSlot(slot: string) {
 
 function stringMetadata(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function numberMetadata(value: unknown) {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 9999
+    ? parsed
+    : null;
 }
 
 export function collectorConditionValue(metadata: unknown) {
@@ -3369,6 +3503,7 @@ function assertReviewDecisionReady(submission: {
 
 type ReviewDetailRow = {
   id: string;
+  assetId: string | null;
   status: string;
   submittedAt: Date | null;
   createdAt: Date;

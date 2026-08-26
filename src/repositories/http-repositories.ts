@@ -1479,6 +1479,7 @@ const mapReviewSummary = (raw: unknown): SubmissionReviewSummary => {
   const value = objectField(raw, "submission review");
   return {
     id: stringField(value.id, "review.id"),
+    assetId: nullableString(value.assetId, "review.assetId"),
     status: stringField(value.status, "review.status"),
     submittedAt: stringField(value.submittedAt, "review.submittedAt") as ISODateTime,
     categoryId: stringField(value.categoryId, "review.categoryId"),
@@ -4777,6 +4778,23 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return {
           submissionId: stringField(response.submissionId, "review note.submissionId"),
           updatedAt: stringField(response.updatedAt, "review note.updatedAt"),
+        };
+      },
+      async canonicalize(id) {
+        const response = objectField(
+          await client.request<unknown>(`/admin/submissions/${id}/canonicalize`, {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "canonical collectible",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "canonical collectible.submissionId"),
+          assetId: stringField(response.assetId, "canonical collectible.assetId"),
+          publicId: stringField(response.publicId, "canonical collectible.publicId"),
+          slug: stringField(response.slug, "canonical collectible.slug"),
+          title: stringField(response.title, "canonical collectible.title"),
+          replayed: Boolean(response.replayed),
         };
       },
     },

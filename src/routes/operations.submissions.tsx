@@ -40,6 +40,12 @@ type ValuationMutation = UseMutationResult<
   unknown
 >;
 type DecisionMutation = UseMutationResult<AssetSubmission, Error, Decision, unknown>;
+type CanonicalizeMutation = UseMutationResult<
+  { submissionId: string; assetId: string; publicId: string; slug: string; title: string; replayed: boolean },
+  Error,
+  void,
+  unknown
+>;
 
 export function SubmissionOperationsPage() {
   const services = useAppServices();
@@ -117,6 +123,10 @@ export function SubmissionOperationsPage() {
   });
   const saveNote = useMutation({
     mutationFn: () => services.repositories.reviews.saveNote(selected!, note),
+    onSuccess: refresh,
+  });
+  const canonicalize = useMutation({
+    mutationFn: () => services.repositories.reviews.canonicalize(selected!),
     onSuccess: refresh,
   });
   const nextSubmission = useMemo(() => {
@@ -248,6 +258,7 @@ export function SubmissionOperationsPage() {
               setConfirmAction={setConfirmAction}
               decide={decide}
               saveNote={saveNote}
+              canonicalize={canonicalize}
               nextSubmission={nextSubmission}
               onNext={() => nextSubmission && choose(nextSubmission)}
             />
@@ -343,6 +354,7 @@ function ReviewDetail({
   setConfirmAction,
   decide,
   saveNote,
+  canonicalize,
   nextSubmission,
   onNext,
 }: {
@@ -379,6 +391,7 @@ function ReviewDetail({
   saveNote: ReturnType<
     typeof useMutation<{ submissionId: string; updatedAt: string }, Error, void>
   >;
+  canonicalize: CanonicalizeMutation;
   nextSubmission?: string;
   onNext: () => void;
 }) {
@@ -413,6 +426,7 @@ function ReviewDetail({
       setConfirmAction={setConfirmAction}
       decide={decide}
       saveNote={saveNote}
+      canonicalize={canonicalize}
       nextSubmission={nextSubmission}
       onNext={onNext}
     />
@@ -618,6 +632,7 @@ function SubmissionReviewWorkspace({
   setConfirmAction,
   decide,
   saveNote,
+  canonicalize,
   nextSubmission,
   onNext,
 }: {
@@ -650,6 +665,7 @@ function SubmissionReviewWorkspace({
   setConfirmAction: (value: Decision | null) => void;
   decide: DecisionMutation;
   saveNote: ReviewNoteMutation;
+  canonicalize: CanonicalizeMutation;
   nextSubmission?: string;
   onNext: () => void;
 }) {
@@ -749,6 +765,21 @@ function SubmissionReviewWorkspace({
           </span>
         </div>
       </header>
+      {detail.status === "APPROVED" ? (
+        <section className="admin-panel-card mt-4 border border-accent/40 bg-accent/5 p-5" aria-label="Canonical collectible">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="page-kicker">Canonical collectible</p>
+              <h3 className="mt-1 text-lg font-semibold">{detail.assetId ? "Collectible record linked" : "Create the official collectible record"}</h3>
+              <p className="mt-2 max-w-3xl text-sm text-subtle">{detail.assetId ? "This approved submission is linked to a canonical draft. Receipt, verification, custody, valuation, ownership and market setup remain separate." : "Creates and links a draft collectible from reviewed identity. It does not confirm receipt, verification, custody, valuation, ownership, offering, or publication."}</p>
+              {!detail.assetId ? <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"><div><dt className="text-subtle">Title</dt><dd>{collectible?.title ?? "Needs review"}</dd></div><div><dt className="text-subtle">Submission</dt><dd>{shortId(detail.id)}</dd></div><div><dt className="text-subtle">Set / card</dt><dd>{[collectible?.set, collectible?.cardNumber].filter(Boolean).join(" · ") || "Not supplied"}</dd></div><div><dt className="text-subtle">Grade / certificate</dt><dd>{[collectible?.grader, collectible?.grade, collectible?.certificationNumber].filter(Boolean).join(" · ") || "Ungraded"}</dd></div></dl> : null}
+            </div>
+            {detail.assetId ? <Link className="button-secondary" to="/admin" search={{ section: "collectibles" }}>Open Collectibles</Link> : <button type="button" className="button-primary" onClick={() => canonicalize.mutate()} disabled={canonicalize.isPending}>{canonicalize.isPending ? "Creating collectible…" : "Create & link collectible"}</button>}
+          </div>
+          {canonicalize.isError ? <p role="alert" className="mt-3 text-sm text-negative">Creation could not be completed. Review identity or certificate details, then refresh before trying again.</p> : null}
+          {canonicalize.data ? <p className="mt-3 text-sm text-positive">{canonicalize.data.title} is now linked as {canonicalize.data.publicId}.</p> : null}
+        </section>
+      ) : null}
       <div className="admin-review-workspace-grid">
         <main className="admin-review-workspace-main">
           <WorkspaceSection

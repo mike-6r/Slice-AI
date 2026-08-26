@@ -148,6 +148,7 @@ export interface MarketResearchObservation {
 
 export interface SubmissionReviewSummary {
   id: string;
+  assetId: string | null;
   status: string;
   submittedAt: ISODateTime;
   categoryId: string;

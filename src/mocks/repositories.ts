@@ -580,6 +580,9 @@ export const mockRepositories: AppRepositories = {
     async saveNote() {
       throw new Error("Review requires the API service.");
     },
+    async canonicalize() {
+      throw new Error("Canonicalization requires the API service.");
+    },
   },
   lifecycle: {
     async listOperations() {
