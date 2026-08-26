@@ -1,8 +1,8 @@
 # Slice staging VPS deployment
 
 This is a staging runbook, not a production-launch approval. It is designed
-for the current TanStack Start SSR frontend, NestJS API, PostgreSQL, Redis and
-the in-process Document 017 outbox/delivery worker.
+for the current TanStack Start SSR frontend, NestJS API, PostgreSQL, Redis,
+in-process API workers, and the separately supervised Discord bot/worker.
 
 ## Current topology
 
@@ -18,6 +18,11 @@ the in-process Document 017 outbox/delivery worker.
 Both Slice application services run as the unprivileged `slice` system user.
 Their secrets live in `/etc/slice/slice.env` (root:slice, mode `0640`) and are
 never copied into a release directory or source control.
+
+The currently documented systemd units are `slice-api.service`,
+`slice-web.service`, `slice-discord.service`, and `slice-discord-worker.service`.
+Deployments are manual immutable releases; GitHub Actions verifies code only
+and does not deploy or contact this host.
 
 ## Staging configuration
 
@@ -76,6 +81,11 @@ causes client hydration to fail.
 runs `prisma generate`, `validate`, and `migrate deploy`, changes the `current`
 symlink only after a successful build, restarts both services, and verifies
 local liveness/readiness.
+
+`/health` is a liveness check. `/ready` is the API's dependency/application
+readiness signal. Neither endpoint proves that a particular Git commit is the
+active release; verify the immutable release directory and `current` symlink
+when confirming deployment provenance.
 
 ## Rollback
 

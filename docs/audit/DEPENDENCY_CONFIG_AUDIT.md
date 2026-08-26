@@ -28,3 +28,11 @@ No dependency was removed or upgraded. A later dependency wave should use lockfi
 ## Security notes
 
 Webhook services verify raw-body signatures and persist verified inbox events. Admin and mutation routes have explicit permission decorators. CSP `unsafe-inline` is documented as an SSR hydration exception and should remain a tracked launch-hardening item. Do not relax fail-closed provider or staging controls during cleanup.
+
+## Wave 1 reconciliation
+
+`server/.env.example` now declares every `app-config.ts` key with
+placeholder/default values and points to the grouped environment contract in
+`docs/engineering/ENVIRONMENT_CONFIGURATION.md`. No credential was added. The
+backend/Discord Prisma version seam remains intentionally unchanged and is
+documented as **ALIGN LATER** because generated-client/schema validation passes.

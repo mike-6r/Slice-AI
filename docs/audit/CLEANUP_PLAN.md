@@ -13,10 +13,12 @@ The cleanup must be wave-based. Each wave needs a small diff, characterization t
 
 ## Wave 1 — documentation/config reconciliation (P1/P2)
 
-1. Regenerate current migration and feature status documents.
-2. Reconcile `.env.example` with `app-config.ts`, especially market refresh and PriceCharting aliases.
-3. Add a CI/check script that runs frontend/backend/Discord typecheck, build, lint, Prisma validation, unit tests, and explicitly gated database integration tests.
-4. Document the three package roots, lockfile policy, and staging worker activation.
+1. Completed: added `docs/CURRENT_SYSTEM_STATE.md`, marked misleading build-guide snapshots historical, and added the audit index.
+2. Completed: reconciled `server/.env.example` against all `app-config.ts` keys, including market refresh, PriceCharting precedence, aliases, financial policy placeholders, and provider controls.
+3. Completed: added repository `verify` / `lint:changed` scripts and verify-only GitHub Actions jobs for frontend, backend, Discord, and isolated PostgreSQL/Redis integration.
+4. Completed: documented the three package roots, lockfiles, Prisma seam, verification outcomes, worker/runtime and staging deployment boundaries.
+
+The frontend full lint remains visible as known formatting debt; Wave 1 intentionally does not mass-format it. No deployment automation, schema, dependency, lifecycle, financial, custody, ownership, or canonicalization policy change was made.
 
 ## Wave 2 — safe artifact and route cleanup (P2)
 

@@ -2,7 +2,7 @@
   "name": "slice-api",
   "version": "0.1.0",
   "private": true,
-  "description": "Slice API foundation. Phase 1 contains no financial or identity workflows.",
+  "description": "Slice API for identity, collectibles, lifecycle, ownership, finance, and market workflows.",
   "scripts": {
     "build": "nest build",
     "start": "node --env-file=.env dist/main",

@@ -1,4 +1,8 @@
-# Current state
+# Historical current-state snapshot
+
+> Historical implementation document. Current authority is code/runtime and
+> `docs/CURRENT_SYSTEM_STATE.md`; counts and claims below are preserved as
+> dated evidence from 2026-08, not present-tense system status.
 
 ## Final full Slice system QA re-run — Documents 001–018 (2026-08-09)
 

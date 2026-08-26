@@ -1,4 +1,8 @@
-# Current state — Slice Discord bot build guide
+# Historical current-state snapshot — Slice Discord bot build guide
+
+> Historical implementation document. Current authority is code/runtime and
+> `docs/CURRENT_SYSTEM_STATE.md`; the claims below describe this build guide at
+> its creation and do not describe the current Discord application.
 
 This file describes the state of **this Discord bot project**, not Slice's own backend (see
 Slice's `docs/backend-build-guide/CURRENT_STATE.md` for that — summarized in

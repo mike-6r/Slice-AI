@@ -22,3 +22,12 @@
 - Overlapping staff/admin routes need authorization and navigation coverage before consolidation.
 - Integration tests should skip cleanly or fail with a clear prerequisite message when PostgreSQL is absent; current Discord integration setup attempts database lifecycle calls and reports connection failures.
 - Build warnings for large frontend chunks should be tracked as a performance budget, not treated as a functional build failure.
+
+## Wave 1 verification policy
+
+The repository now has `npm run verify`, changed-file lint, and verify-only
+GitHub Actions jobs. Discord's default `npm test` now runs only non-DB unit
+tests; `npm run test:integration` remains explicit and CI supplies its isolated
+`slice_test` PostgreSQL database. Full frontend lint remains reported rather
+than hidden; the latest local baseline is 3,959 Prettier errors, zero
+non-Prettier errors, and 10 warnings.
