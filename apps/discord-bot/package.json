@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "description": "Slice AI Discord companion service",
   "scripts": {
     "dev": "tsx watch src/main.ts",
@@ -22,7 +25,7 @@
     "prisma:status": "prisma migrate status --schema ../../server/prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "6.19.0",
+    "@prisma/client": "^6.19.3",
     "discord.js": "^14.25.1",
     "luxon": "^3.7.2",
     "sharp": "^0.34.5",
@@ -30,15 +33,15 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@eslint/js": "9.32.0",
+    "@eslint/js": "^9.39.5",
     "@types/luxon": "^3.7.4",
     "@types/node": "22.16.5",
-    "eslint": "9.32.0",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "10.1.8",
-    "prettier": "3.6.2",
-    "prisma": "6.19.0",
+    "prettier": "^3.9.6",
+    "prisma": "^6.19.3",
     "tsx": "4.20.6",
-    "typescript": "5.8.3",
+    "typescript": "^5.9.3",
     "typescript-eslint": "8.39.0",
     "vitest": "4.1.10"
   }

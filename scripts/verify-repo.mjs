@@ -50,11 +50,10 @@ run("frontend typecheck", root, ["run", "typecheck"]);
 run("frontend tests", root, ["test"]);
 run("frontend build", root, ["run", "build"]);
 run("changed-file lint", root, ["run", "lint:changed"]);
-console.log(
-  "KNOWN BASELINE DEBT frontend full lint is intentionally not part of the passing gate; run `npm run lint` to inspect the existing formatting backlog.",
-);
+run("frontend lint", root, ["run", "lint"]);
 
 const server = resolve(root, "server");
+run("backend Prisma generate", server, ["run", "prisma:generate"]);
 run("backend Prisma validate", server, ["run", "prisma:validate"]);
 run("backend typecheck", server, ["run", "typecheck"]);
 run("backend lint", server, ["run", "lint"]);
