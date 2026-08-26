@@ -533,6 +533,12 @@ export function SubmissionPage() {
       setForm((current) => ({ ...current, marketCheckStatus: "", marketCheckAcknowledged: false }));
     }
   };
+  const changeTermsAcknowledged = (checked: boolean) => {
+    const nextForm = { ...form, termsAcknowledged: checked };
+    setForm(nextForm);
+    saveStopped.current = false;
+    if (draft) update.mutate({ metadataOverride: metadataFromForm(nextForm) });
+  };
   const applyImportedDetails = (result: CollectibleReferenceImport | null = referenceResult) => {
     if (!result?.customerReference) return;
     const identity = result.identity;
@@ -886,7 +892,7 @@ export function SubmissionPage() {
               preGrade={preGrade.data?.current ?? null}
               evidenceReady={evidenceReady}
               onEdit={setStep}
-              onTermsChange={(checked) => change("termsAcknowledged", checked)}
+              onTermsChange={changeTermsAcknowledged}
             />
           ) : null}
           <footer className="list-guided-actions">
