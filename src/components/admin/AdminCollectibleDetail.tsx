@@ -41,7 +41,17 @@ export function AdminCollectibleDetail({
     staleTime: 20_000,
   });
   const receipt = useMutation({
-    mutationFn: () => services.repositories.admin.confirmIntakeReceipt(detail.data!.intake!.id),
+    mutationFn: () => services.repositories.admin.confirmIntakeReceipt(detail.data!.intake!.id, {
+      packageCondition: "UNKNOWN",
+      checklist: {
+        packageReceived: true,
+        correctIntakeReference: true,
+        correctCollectible: true,
+        visibleConditionAcceptable: true,
+        tamperDamageChecked: true,
+        trackingMatches: true,
+      },
+    }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", assetId] }),
   });
   if (detail.isLoading)

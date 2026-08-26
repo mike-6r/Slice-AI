@@ -603,6 +603,33 @@ enum IntakeStatus {
   COMPLETE
 }
 
+enum IntakeExceptionCode {
+  WRONG_ITEM
+  DAMAGED_PACKAGE
+  DAMAGED_COLLECTIBLE
+  CERT_MISMATCH
+  GRADE_MISMATCH
+  IDENTITY_MISMATCH
+  MISSING_CONTENTS
+  TRACKING_MISMATCH
+  DESTINATION_ERROR
+  RETURN_TO_SENDER
+  OTHER_REVIEW
+}
+
+enum IntakeExceptionSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IntakeVerificationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  VERIFIED
+  BLOCKED
+}
+
 enum InsuranceCoverageStatus {
   PENDING
   ACTIVE
@@ -1939,6 +1966,8 @@ model SubmissionIntake {
   vault           VaultIntakeLocation        @relation(fields: [vaultId], references: [id], onDelete: Restrict)
   shipment        IntakeShipment?
   receipt         IntakeReceiptConfirmation?
+  verification    IntakeVerification?
+  exceptions      IntakeException[]
 
   @@index([vaultId, status, updatedAt, id])
 }
@@ -1969,8 +1998,56 @@ model IntakeReceiptConfirmation {
   auditReference String?
   intake         SubmissionIntake @relation(fields: [intakeId], references: [id], onDelete: Restrict)
   confirmedBy    User             @relation("ReceiptConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  packageCondition String?
+  checklist        Json?
+  notes            String?
+  photoMediaIds    Json?
 
   @@index([confirmedById, confirmedAt, id])
+}
+
+/// Slice-owned verification authority for the physical intake handoff. This
+/// is deliberately separate from shipment delivery and from financial review.
+model IntakeVerification {
+  id                    String                   @id @default(cuid())
+  intakeId              String                   @unique
+  status                IntakeVerificationStatus @default(NOT_STARTED)
+  identityMatch         Boolean?
+  certificationMatch    Boolean?
+  gradeMatch            Boolean?
+  variantMatch          Boolean?
+  note                  String?
+  startedById           String?
+  completedById         String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  completionIdempotencyKey String?              @unique
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  intake                SubmissionIntake        @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt, id])
+}
+
+/// Explicit intake exception authority. An active exception blocks receipt
+/// verification and downstream custody progress until a staff member resolves it.
+model IntakeException {
+  id             String                  @id @default(cuid())
+  intakeId       String
+  code           IntakeExceptionCode
+  severity       IntakeExceptionSeverity @default(MEDIUM)
+  notes          String
+  idempotencyKey String?
+  createdById    String
+  resolvedById   String?
+  resolutionNote String?
+  createdAt      DateTime                @default(now())
+  resolvedAt     DateTime?
+  updatedAt      DateTime                @updatedAt
+  intake         SubmissionIntake        @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+
+  @@index([intakeId, resolvedAt, createdAt, id])
+  @@index([code, resolvedAt, createdAt, id])
 }
 
 model MarketSnapshot {

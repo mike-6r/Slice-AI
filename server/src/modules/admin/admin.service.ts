@@ -87,10 +87,13 @@ function intakeStage(item: {
     status: string;
     shipment: { status: string } | null;
     receipt: unknown;
+    verification?: { status: string } | null;
+    exceptions?: Array<unknown>;
   } | null;
 }) {
   if (!item.intake)
     return item.status === 'APPROVED' ? 'ACCEPTED_AWAITING_VAULT' : item.status;
+  if (item.intake.exceptions?.length) return 'EXCEPTION';
   if (item.intake.shipment?.status === 'EXCEPTION') return 'EXCEPTION';
   if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
     return 'DELIVERED_AWAITING_RECEIPT';
@@ -101,6 +104,7 @@ function intakeStage(item: {
     )
   )
     return 'IN_TRANSIT';
+  if (item.intake.verification?.status === 'VERIFIED') return 'VERIFIED';
   if (item.intake.status === 'COMPLETE') return 'VAULT_READY';
   if (item.intake.status === 'RECEIVED') return 'RECEIVED';
   if (item.intake.status === 'VERIFICATION') return 'VERIFICATION';
@@ -117,12 +121,16 @@ function nextIntakeAction(intake: {
   status: string;
   shipment: { status: string } | null;
   receipt: unknown;
+  verification?: { status: string } | null;
+  exceptions?: Array<unknown>;
 }) {
+  if (intake.exceptions?.length) return 'Resolve intake exception';
   if (!intake.shipment) return 'Collector needs to add tracking';
   if (intake.shipment.status === 'DELIVERED' && !intake.receipt)
     return 'Staff needs to confirm receipt';
-  if (intake.status === 'VERIFICATION') return 'Begin verification';
-  if (intake.status === 'RECEIVED') return 'Begin verification';
+  if (intake.verification?.status === 'IN_PROGRESS') return 'Complete verification';
+  if (intake.status === 'VERIFICATION') return 'Complete verification';
+  if (intake.status === 'RECEIVED') return 'Start verification';
   if (intake.status === 'COMPLETE') return 'No action required';
   return 'Monitor shipment';
 }
@@ -135,6 +143,12 @@ function stageLabel(stage: string) {
 }
 
 function intakeCounts(items: Array<{ stage: string }>) {
+  const oldestAt = items.length
+    ? items
+        .map((item) => (item as { currentStageSince?: string }).currentStageSince)
+        .filter((value): value is string => Boolean(value))
+        .sort()[0] ?? null
+    : null;
   return {
     all: items.length,
     accepted: items.filter((item) =>
@@ -150,13 +164,84 @@ function intakeCounts(items: Array<{ stage: string }>) {
     delivered: items.filter(
       (item) => item.stage === 'DELIVERED_AWAITING_RECEIPT',
     ).length,
-    received: items.filter((item) =>
-      ['RECEIVED', 'VERIFICATION'].includes(item.stage),
-    ).length,
+    received: items.filter((item) => item.stage === 'RECEIVED').length,
+    verification: items.filter((item) => item.stage === 'VERIFICATION').length,
     verified: items.filter((item) => item.stage === 'VERIFIED').length,
     readyForVault: items.filter((item) => item.stage === 'VAULT_READY').length,
     exceptions: items.filter((item) => item.stage === 'EXCEPTION').length,
+    needsAction: items.filter((item) =>
+      Boolean((item as { allowedActions?: string[] }).allowedActions?.length),
+    ).length,
+    oldestAt,
+    oldestAtByStage: Object.fromEntries(
+      [...new Set(items.map((item) => item.stage))].map((stage) => [
+        stage,
+        items
+          .filter((item) => item.stage === stage)
+          .map((item) => (item as { currentStageSince?: string }).currentStageSince)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0] ?? null,
+      ]),
+    ),
   };
+}
+
+function intakeStageReason(item: {
+  status: string;
+  intake: {
+    status: string;
+    shipment: { status: string } | null;
+    receipt: unknown;
+    verification?: { status: string } | null;
+    exceptions?: Array<unknown>;
+  } | null;
+}) {
+  if (!item.intake) return item.status === 'APPROVED' ? 'Destination required before shipping' : 'Submission not accepted';
+  if (item.intake.exceptions?.length) return 'Exception blocks normal intake progress';
+  if (item.intake.shipment?.status === 'EXCEPTION') return 'Carrier exception requires review';
+  if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt) return 'Delivered by carrier · awaiting Slice receipt';
+  if (!item.intake.shipment) return 'Waiting for collector shipment · tracking not provided';
+  if (item.intake.verification?.status === 'IN_PROGRESS' || item.intake.status === 'VERIFICATION') return 'Verification in progress';
+  if (item.intake.verification?.status === 'VERIFIED' || item.intake.status === 'COMPLETE') return 'Ready for downstream processing';
+  if (item.intake.receipt) return 'Physical receipt confirmed · verification required';
+  return 'Shipment is in transit';
+}
+
+function intakeIssues(item: {
+  stage: string;
+  intake: {
+    shipment: { status: string } | null;
+    receipt: unknown;
+    verification?: { status: string } | null;
+    exceptions?: Array<{ code: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }>;
+  } | null;
+}) {
+  const issues: Array<{ code: string; label: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }> = [];
+  if (!item.intake) issues.push({ code: 'DESTINATION_REQUIRED', label: 'No destination', severity: 'HIGH' });
+  else if (!item.intake.shipment) issues.push({ code: 'TRACKING_MISSING', label: 'Tracking missing', severity: 'MEDIUM' });
+  if (item.intake?.shipment?.status === 'EXCEPTION') issues.push({ code: 'CARRIER_EXCEPTION', label: 'Carrier exception', severity: 'HIGH' });
+  if (item.stage === 'DELIVERED_AWAITING_RECEIPT') issues.push({ code: 'RECEIPT_PENDING', label: 'Delivered · receipt pending', severity: 'HIGH' });
+  for (const exception of item.intake?.exceptions ?? []) issues.push({ code: exception.code, label: exception.code.replaceAll('_', ' '), severity: exception.severity });
+  if (item.intake?.verification?.status === 'BLOCKED') issues.push({ code: 'VERIFICATION_BLOCKED', label: 'Verification blocked', severity: 'HIGH' });
+  return issues;
+}
+
+function intakeAllowedActions(item: {
+  status: string;
+  stage: string;
+  intake: {
+    shipment: { status: string } | null;
+    receipt: unknown;
+    verification?: { status: string } | null;
+    exceptions?: Array<unknown>;
+  } | null;
+}) {
+  if (!item.intake) return item.status === 'APPROVED' ? ['SELECT_DESTINATION'] : [];
+  if (item.intake.exceptions?.length) return ['RESOLVE_EXCEPTION'];
+  if (item.stage === 'DELIVERED_AWAITING_RECEIPT') return ['CONFIRM_RECEIPT'];
+  if (item.intake.receipt && item.intake.verification?.status === 'IN_PROGRESS') return ['COMPLETE_VERIFICATION'];
+  if (item.intake.receipt && item.intake.verification?.status !== 'VERIFIED') return ['START_VERIFICATION'];
+  return [];
 }
 
 @Injectable()
@@ -2242,6 +2327,7 @@ export class AdminService {
       pageSize?: number;
       sort?: string;
       sortDirection?: 'asc' | 'desc';
+      fixture?: 'NORMAL' | 'TEST' | 'ALL';
       limit: number;
     },
   ) {
@@ -2249,13 +2335,16 @@ export class AdminService {
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
-        ...(this.config.isBeta
+        ...(this.config.isBeta && input.fixture !== 'ALL'
           ? [
               {
-                OR: [
-                  { asset: { is: null } },
-                  { asset: { is: { slug: { not: { startsWith: 'slice-demo-' } } } } },
-                ],
+                OR:
+                  input.fixture === 'TEST'
+                    ? [{ asset: { is: { slug: { startsWith: 'slice-demo-' } } } }]
+                    : [
+                        { asset: { is: null } },
+                        { asset: { is: { slug: { not: { startsWith: 'slice-demo-' } } } } },
+                      ],
               },
             ]
           : []),
@@ -2358,7 +2447,17 @@ export class AdminService {
             },
           },
         },
-        intake: { include: { vault: true, shipment: true, receipt: true } },
+        reviews: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, completedAt: true } },
+        certificationVerifications: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+        intake: {
+          include: {
+            vault: true,
+            shipment: true,
+            receipt: true,
+            verification: true,
+            exceptions: { where: { resolvedAt: null }, orderBy: { createdAt: 'desc' } },
+          },
+        },
         media: {
           where: { deletedAt: null, status: 'SAFE' },
           orderBy: { createdAt: 'asc' },
@@ -2366,19 +2465,36 @@ export class AdminService {
         },
       },
     });
-    const visibleRows = this.config.isBeta
-      ? rows.filter(
-          (item) =>
-            !isBetaFixtureSlug(item.asset?.slug ?? '') &&
-            !isBetaFixtureSubmission(item.declaredMetadata),
-        )
+    const visibleRows = this.config.isBeta && input.fixture !== 'ALL'
+      ? rows.filter((item) => {
+          const fixture = isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata);
+          return input.fixture === 'TEST' ? fixture : !fixture;
+        })
       : rows;
+    const intakeIds = visibleRows.map((item) => item.intake?.id).filter((id): id is string => Boolean(id));
+    const custodyEvents = await this.db.auditEvent.findMany({
+      where: {
+        resourceId: { in: intakeIds },
+        resourceType: { in: ['submission-intake', 'intake'] },
+        result: 'SUCCESS',
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { resourceId: true, action: true, actorUserId: true, metadata: true, createdAt: true },
+    });
+    const historyByIntake = new Map<string, typeof custodyEvents>();
+    for (const event of custodyEvents) {
+      if (!event.resourceId) continue;
+      const history = historyByIntake.get(event.resourceId) ?? [];
+      history.push(event);
+      historyByIntake.set(event.resourceId, history);
+    }
     const projected = await Promise.all(visibleRows.map(async (item) => {
       const intake = item.intake;
+      const baseStage = intakeStage(item);
       const stage =
-        item.asset?.custodyRecord?.status === 'INSPECTED'
+        baseStage !== 'EXCEPTION' && item.asset?.custodyRecord?.status === 'INSPECTED'
           ? 'VERIFIED'
-          : intakeStage(item);
+          : baseStage;
       const metadata =
         item.declaredMetadata &&
         typeof item.declaredMetadata === 'object' &&
@@ -2389,14 +2505,11 @@ export class AdminService {
         typeof metadata[key] === 'string' && String(metadata[key]).trim()
           ? String(metadata[key])
           : null;
-      const exception =
-        stage === 'EXCEPTION'
-          ? {
-              code: 'SHIPMENT_EXCEPTION',
-              label: 'Shipping exception',
-              severity: 'HIGH' as const,
-            }
-          : null;
+      const issues = intakeIssues({ stage, intake });
+      const allowedActions = intakeAllowedActions({ status: item.status, stage, intake });
+      const exception = issues[0]
+        ? { code: issues[0].code, label: issues[0].label, severity: issues[0].severity }
+        : null;
       const frontMedia = item.media.find((media) => media.slot === 'front') ?? item.media[0];
       const thumbnailUrl = frontMedia
         ? await this.storage
@@ -2430,6 +2543,7 @@ export class AdminService {
           item.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
         submissionStatus: item.status,
         stage,
+        stageReason: intakeStageReason({ status: item.status, intake }),
         currentStageSince: (intake?.updatedAt ?? item.updatedAt).toISOString(),
         vault: intake?.vault
           ? {
@@ -2457,6 +2571,30 @@ export class AdminService {
           : null,
         updatedAt: item.updatedAt.toISOString(),
         nextAction: intake ? nextIntakeAction(intake) : 'Await vault selection',
+        allowedActions,
+        issues,
+        testFixture: isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata),
+        carrierState: intake?.shipment
+          ? { status: intake.shipment.status, lastUpdatedAt: intake.shipment.lastCheckedAt?.toISOString() ?? null, source: 'MANUAL' as const }
+          : null,
+        verification: intake?.verification
+          ? {
+              status: intake.verification.status,
+              identityMatch: intake.verification.identityMatch,
+              certificationMatch: intake.verification.certificationMatch,
+              gradeMatch: intake.verification.gradeMatch,
+              variantMatch: intake.verification.variantMatch,
+              startedAt: intake.verification.startedAt?.toISOString() ?? null,
+              completedAt: intake.verification.completedAt?.toISOString() ?? null,
+              note: intake.verification.note,
+            }
+          : null,
+        custodyHistory: (historyByIntake.get(intake?.id ?? '') ?? []).map((event) => ({
+          action: event.action,
+          occurredAt: event.createdAt.toISOString(),
+          actorUserId: event.actorUserId,
+          metadata: event.metadata,
+        })),
         valuationStatus: item.asset
           ? item.asset.valuationDecisions.length
             ? 'ACTIVE'
@@ -2466,8 +2604,7 @@ export class AdminService {
         exception,
       };
     }));
-    const filtered = projected
-      .filter((item) => !input.status || item.stage === input.status)
+    const baseFiltered = projected
       .filter(
         (item) => !input.carrier || item.shipment?.carrier === input.carrier,
       )
@@ -2481,7 +2618,16 @@ export class AdminService {
           !input.dateTo ||
           item.currentStageSince < `${input.dateTo}T23:59:59.999Z`,
       );
-    const counts = intakeCounts(filtered);
+    const filtered = baseFiltered.filter((item) =>
+      !input.status
+        ? true
+        : input.status === 'NEEDS_ACTION'
+          ? item.allowedActions.length > 0
+          : input.status === 'READY'
+            ? item.stage === 'VAULT_READY'
+            : item.stage === input.status,
+    );
+    const counts = intakeCounts(baseFiltered);
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? input.limit;
     const start = Math.max(0, (page - 1) * pageSize);
@@ -2675,8 +2821,13 @@ export class AdminService {
     actor: Actor,
     intakeId: string,
     idempotencyKey: string,
+    input: {
+      packageCondition?: 'ACCEPTABLE' | 'DAMAGED' | 'UNKNOWN';
+      checklist: Record<string, boolean>;
+      notes?: string;
+    },
   ) {
-    await this.authorization.authorize(actor, 'admin.console.read');
+    await this.authorization.authorize(actor, 'custody.manage');
     return this.db.$transaction(async (db) => {
       const intake = await db.submissionIntake.findUnique({
         where: { id: intakeId },
@@ -2717,6 +2868,9 @@ export class AdminService {
           confirmedById: actor.userId,
           shipmentRef: intake.shipment.trackingNumber,
           auditReference: idempotencyKey,
+          packageCondition: input.packageCondition ?? 'UNKNOWN',
+          checklist: input.checklist,
+          notes: input.notes?.trim() || null,
         },
       });
       await db.submissionIntake.update({
@@ -2752,6 +2906,122 @@ export class AdminService {
         confirmedById: actor.userId,
         receiptId: receipt.id,
       };
+    });
+  }
+
+  async startIntakeVerification(actor: Actor, intakeId: string, idempotencyKey: string, requestId: string) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.findUnique({
+        where: { id: intakeId },
+        include: { receipt: true, verification: true, exceptions: { where: { resolvedAt: null } } },
+      });
+      if (!intake) throw new NotFoundException({ code: 'INTAKE_NOT_FOUND', message: 'Intake record not found.' });
+      if (!intake.receipt) throw new ConflictException({ code: 'RECEIPT_REQUIRED', message: 'Confirm physical receipt before starting verification.' });
+      if (intake.exceptions.length) throw new ConflictException({ code: 'INTAKE_EXCEPTION_OPEN', message: 'Resolve intake exceptions before starting verification.' });
+      if (intake.verification?.status === 'VERIFIED') return { intakeId, status: 'VERIFIED', startedAt: intake.verification.startedAt?.toISOString() ?? intake.updatedAt.toISOString(), replayed: true };
+      const now = new Date();
+      const verification = await db.intakeVerification.upsert({
+        where: { intakeId },
+        create: { intakeId, status: 'IN_PROGRESS', startedById: actor.userId, startedAt: now },
+        update: { status: 'IN_PROGRESS', startedById: actor.userId, startedAt: intake.verification?.startedAt ?? now, updatedAt: now },
+      });
+      await db.submissionIntake.update({ where: { id: intakeId }, data: { status: 'VERIFICATION' } });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'INTAKE_VERIFICATION_STARTED',
+          resourceType: 'submission-intake', resourceId: intakeId, requestId, result: 'SUCCESS',
+          metadata: { idempotencyKey, verificationId: verification.id },
+        },
+      });
+      return { intakeId, status: verification.status, startedAt: verification.startedAt!.toISOString() };
+    });
+  }
+
+  async completeIntakeVerification(
+    actor: Actor,
+    intakeId: string,
+    idempotencyKey: string,
+    input: { identityMatch: boolean; certificationMatch?: boolean | null; gradeMatch?: boolean | null; variantMatch?: boolean | null; note?: string },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.findUnique({
+        where: { id: intakeId },
+        include: {
+          receipt: true,
+          verification: true,
+          exceptions: { where: { resolvedAt: null } },
+          submission: { select: { ownerUserId: true, normalizedCertificationNumber: true } },
+        },
+      });
+      if (!intake) throw new NotFoundException({ code: 'INTAKE_NOT_FOUND', message: 'Intake record not found.' });
+      if (intake.verification?.completionIdempotencyKey === idempotencyKey && intake.verification.status === 'VERIFIED') {
+        return { intakeId, status: 'VERIFIED', completedAt: intake.verification.completedAt!.toISOString(), replayed: true };
+      }
+      if (!intake.receipt) throw new ConflictException({ code: 'RECEIPT_REQUIRED', message: 'Physical receipt is required before verification.' });
+      if (intake.exceptions.length) throw new ConflictException({ code: 'INTAKE_EXCEPTION_OPEN', message: 'Resolve intake exceptions before completing verification.' });
+      if (!intake.verification || intake.verification.status !== 'IN_PROGRESS') throw new ConflictException({ code: 'VERIFICATION_NOT_STARTED', message: 'Start intake verification before completing it.' });
+      if (!input.identityMatch) throw new ConflictException({ code: 'IDENTITY_MISMATCH', message: 'Identity must match the accepted submission before verification can complete.' });
+      if (intake.submission.normalizedCertificationNumber && input.certificationMatch !== true) throw new ConflictException({ code: 'CERT_MISMATCH', message: 'Certification match is required for a graded collectible.' });
+      const now = new Date();
+      const verification = await db.intakeVerification.update({
+        where: { intakeId },
+        data: {
+          status: 'VERIFIED', identityMatch: input.identityMatch, certificationMatch: input.certificationMatch ?? null,
+          gradeMatch: input.gradeMatch ?? null, variantMatch: input.variantMatch ?? null, note: input.note?.trim() || null,
+          completedById: actor.userId, completedAt: now, completionIdempotencyKey: idempotencyKey,
+        },
+      });
+      await db.submissionIntake.update({ where: { id: intakeId }, data: { status: 'COMPLETE' } });
+      await db.auditEvent.create({
+        data: {
+          id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'INTAKE_VERIFICATION_COMPLETED',
+          resourceType: 'submission-intake', resourceId: intakeId, requestId, result: 'SUCCESS',
+          metadata: { idempotencyKey, verificationId: verification.id, identityMatch: input.identityMatch, certificationMatch: input.certificationMatch ?? null },
+        },
+      });
+      await db.notification.create({
+        data: {
+          id: randomUUID(), userId: intake.submission.ownerUserId, type: 'INTAKE_VERIFIED', title: 'Slice verified your collectible',
+          body: 'Your collectible passed physical intake verification and is moving to the next operational stage.', resourceType: 'submission', resourceId: intake.submissionId,
+        },
+      });
+      return { intakeId, status: verification.status, completedAt: now.toISOString() };
+    });
+  }
+
+  async createIntakeException(
+    actor: Actor,
+    intakeId: string,
+    idempotencyKey: string,
+    input: { code: 'WRONG_ITEM' | 'DAMAGED_PACKAGE' | 'DAMAGED_COLLECTIBLE' | 'CERT_MISMATCH' | 'GRADE_MISMATCH' | 'IDENTITY_MISMATCH' | 'MISSING_CONTENTS' | 'TRACKING_MISMATCH' | 'DESTINATION_ERROR' | 'RETURN_TO_SENDER' | 'OTHER_REVIEW'; severity: 'LOW' | 'MEDIUM' | 'HIGH'; notes: string },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    return this.db.$transaction(async (db) => {
+      const intake = await db.submissionIntake.findUnique({ where: { id: intakeId }, include: { submission: { select: { ownerUserId: true } } } });
+      if (!intake) throw new NotFoundException({ code: 'INTAKE_NOT_FOUND', message: 'Intake record not found.' });
+      const existing = await db.intakeException.findFirst({ where: { intakeId, idempotencyKey }, orderBy: { createdAt: 'desc' } });
+      if (existing) return { id: existing.id, code: existing.code, severity: existing.severity, replayed: true };
+      const exception = await db.intakeException.create({ data: { intakeId, code: input.code, severity: input.severity, notes: input.notes, createdById: actor.userId, idempotencyKey } });
+      await db.auditEvent.create({ data: { id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'INTAKE_EXCEPTION_CREATED', resourceType: 'submission-intake', resourceId: intakeId, requestId, result: 'SUCCESS', metadata: { idempotencyKey, exceptionId: exception.id, code: exception.code, severity: exception.severity, notes: exception.notes } } });
+      await db.notification.create({ data: { id: randomUUID(), userId: intake.submission.ownerUserId, type: 'INTAKE_EXCEPTION', title: 'Slice needs more information about your collectible', body: 'Your physical intake is paused while Slice reviews an intake exception.', resourceType: 'submission', resourceId: intake.submissionId } });
+      return { id: exception.id, code: exception.code, severity: exception.severity };
+    });
+  }
+
+  async resolveIntakeException(actor: Actor, intakeId: string, exceptionId: string, idempotencyKey: string, input: { note: string }, requestId: string) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    return this.db.$transaction(async (db) => {
+      const exception = await db.intakeException.findFirst({ where: { id: exceptionId, intakeId } });
+      if (!exception) throw new NotFoundException({ code: 'INTAKE_EXCEPTION_NOT_FOUND', message: 'Intake exception not found.' });
+      if (exception.resolvedAt) return { id: exception.id, resolvedAt: exception.resolvedAt.toISOString(), replayed: true };
+      const now = new Date();
+      const updated = await db.intakeException.update({ where: { id: exception.id }, data: { resolvedAt: now, resolvedById: actor.userId, resolutionNote: input.note } });
+      await db.auditEvent.create({ data: { id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'INTAKE_EXCEPTION_RESOLVED', resourceType: 'submission-intake', resourceId: intakeId, requestId, result: 'SUCCESS', metadata: { idempotencyKey, exceptionId, note: input.note } } });
+      return { id: updated.id, resolvedAt: now.toISOString() };
     });
   }
 

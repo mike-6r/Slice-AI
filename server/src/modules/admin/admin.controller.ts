@@ -66,6 +66,7 @@ const operationsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     sort: z.string().trim().max(40).optional(),
     sortDirection: z.enum(['asc', 'desc']).optional(),
+    fixture: z.enum(['NORMAL', 'TEST', 'ALL']).default('NORMAL'),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
@@ -78,6 +79,39 @@ const catalogueQuery = z
   })
   .strict();
 const collectorFeature = z.object({ featured: z.boolean() }).strict();
+const intakeReceiptConfirmation = z
+  .object({
+    packageCondition: z.enum(['ACCEPTABLE', 'DAMAGED', 'UNKNOWN']).default('UNKNOWN'),
+    checklist: z
+      .object({
+        packageReceived: z.boolean(),
+        correctIntakeReference: z.boolean(),
+        correctCollectible: z.boolean(),
+        visibleConditionAcceptable: z.boolean(),
+        tamperDamageChecked: z.boolean(),
+        trackingMatches: z.boolean(),
+      })
+      .strict(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+const intakeVerificationComplete = z
+  .object({
+    identityMatch: z.boolean(),
+    certificationMatch: z.boolean().nullable().optional(),
+    gradeMatch: z.boolean().nullable().optional(),
+    variantMatch: z.boolean().nullable().optional(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+const intakeExceptionCreate = z
+  .object({
+    code: z.enum(['WRONG_ITEM', 'DAMAGED_PACKAGE', 'DAMAGED_COLLECTIBLE', 'CERT_MISMATCH', 'GRADE_MISMATCH', 'IDENTITY_MISMATCH', 'MISSING_CONTENTS', 'TRACKING_MISMATCH', 'DESTINATION_ERROR', 'RETURN_TO_SENDER', 'OTHER_REVIEW']),
+    severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+    notes: z.string().trim().min(3).max(2000),
+  })
+  .strict();
+const intakeExceptionResolve = z.object({ note: z.string().trim().min(3).max(2000) }).strict();
 const membershipsQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
@@ -254,10 +288,11 @@ export class AdminController {
     );
   }
   @Post('intake/:id/receipt')
-  @RequirePermission('admin.console.read')
+  @RequirePermission('custody.manage')
   confirmReceipt(
     @Param('id') intakeId: string,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
   ) {
     if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
@@ -269,7 +304,60 @@ export class AdminController {
       request.actor!,
       intakeId,
       idempotencyKey,
+      this.parse(intakeReceiptConfirmation, body ?? {}),
     );
+  }
+
+  @Post('intake/:id/verification/start')
+  @RequirePermission('custody.manage')
+  startVerification(
+    @Param('id') intakeId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
+    return this.admin.startIntakeVerification(request.actor!, intakeId, idempotencyKey, request.requestId ?? 'unknown');
+  }
+
+  @Post('intake/:id/verification/complete')
+  @RequirePermission('custody.manage')
+  completeVerification(
+    @Param('id') intakeId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
+    return this.admin.completeIntakeVerification(request.actor!, intakeId, idempotencyKey, this.parse(intakeVerificationComplete, body), request.requestId ?? 'unknown');
+  }
+
+  @Post('intake/:id/exceptions')
+  @RequirePermission('custody.manage')
+  createException(
+    @Param('id') intakeId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
+    return this.admin.createIntakeException(request.actor!, intakeId, idempotencyKey, this.parse(intakeExceptionCreate, body), request.requestId ?? 'unknown');
+  }
+
+  @Post('intake/:id/exceptions/:exceptionId/resolve')
+  @RequirePermission('custody.manage')
+  resolveException(
+    @Param('id') intakeId: string,
+    @Param('exceptionId') exceptionId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
+    return this.admin.resolveIntakeException(request.actor!, intakeId, exceptionId, idempotencyKey, this.parse(intakeExceptionResolve, body), request.requestId ?? 'unknown');
   }
 
   @Get('memberships')

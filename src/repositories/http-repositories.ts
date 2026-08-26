@@ -2187,6 +2187,7 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
         : nullableString(value.membership, "admin intake.membership"),
     submissionStatus: stringField(value.submissionStatus, "admin intake.submissionStatus"),
     stage: stringField(value.stage, "admin intake.stage"),
+    stageReason: stringField(value.stageReason, "admin intake.stageReason"),
     currentStageSince: stringField(value.currentStageSince, "admin intake.currentStageSince"),
     vault: vault
       ? {
@@ -2217,6 +2218,63 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
       : null,
     updatedAt: stringField(value.updatedAt, "admin intake.updatedAt"),
     nextAction: stringField(value.nextAction, "admin intake.nextAction"),
+    allowedActions: Array.isArray(value.allowedActions)
+      ? value.allowedActions.map((item) => String(item))
+      : [],
+    issues: Array.isArray(value.issues)
+      ? value.issues.map((item) => {
+          const issue = objectField(item, "admin intake issue");
+          return {
+            code: stringField(issue.code, "admin intake issue.code"),
+            label: stringField(issue.label, "admin intake issue.label"),
+            severity: stringField(issue.severity, "admin intake issue.severity") as
+              | "LOW"
+              | "MEDIUM"
+              | "HIGH",
+          };
+        })
+      : [],
+    testFixture: Boolean(value.testFixture),
+    carrierState:
+      value.carrierState === null || value.carrierState === undefined
+        ? null
+        : (() => {
+            const carrierState = objectField(value.carrierState, "admin intake carrierState");
+            return {
+              status: stringField(carrierState.status, "admin intake carrierState.status"),
+              lastUpdatedAt: nullableString(carrierState.lastUpdatedAt, "admin intake carrierState.lastUpdatedAt"),
+              source: stringField(carrierState.source, "admin intake carrierState.source") as
+                | "MANUAL"
+                | "PROVIDER",
+            };
+          })(),
+    verification:
+      value.verification === null || value.verification === undefined
+        ? null
+        : (() => {
+            const verification = objectField(value.verification, "admin intake verification");
+            return {
+              status: stringField(verification.status, "admin intake verification.status"),
+              identityMatch: verification.identityMatch === null ? null : Boolean(verification.identityMatch),
+              certificationMatch: verification.certificationMatch === null ? null : Boolean(verification.certificationMatch),
+              gradeMatch: verification.gradeMatch === null ? null : Boolean(verification.gradeMatch),
+              variantMatch: verification.variantMatch === null ? null : Boolean(verification.variantMatch),
+              startedAt: nullableString(verification.startedAt, "admin intake verification.startedAt"),
+              completedAt: nullableString(verification.completedAt, "admin intake verification.completedAt"),
+              note: nullableString(verification.note, "admin intake verification.note"),
+            };
+          })(),
+    custodyHistory: Array.isArray(value.custodyHistory)
+      ? value.custodyHistory.map((item) => {
+          const event = objectField(item, "admin intake custody history");
+          return {
+            action: stringField(event.action, "admin intake custody history.action"),
+            occurredAt: stringField(event.occurredAt, "admin intake custody history.occurredAt"),
+            actorUserId: nullableString(event.actorUserId, "admin intake custody history.actorUserId"),
+            metadata: event.metadata,
+          };
+        })
+      : [],
     valuationStatus:
       value.valuationStatus === null
         ? null
@@ -3421,9 +3479,17 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           shipped: mapInt("shipped"),
           delivered: mapInt("delivered"),
           received: mapInt("received"),
+          verification: mapInt("verification"),
           verified: mapInt("verified"),
           readyForVault: mapInt("readyForVault"),
           exceptions: mapInt("exceptions"),
+          needsAction: mapInt("needsAction"),
+          oldestAt: objectField(value.counts, "admin intake.counts").oldestAt === null
+            ? null
+            : nullableString(objectField(value.counts, "admin intake.counts").oldestAt, "admin intake.counts.oldestAt"),
+          oldestAtByStage: objectField(value.counts, "admin intake.counts").oldestAtByStage && typeof objectField(value.counts, "admin intake.counts").oldestAtByStage === "object"
+            ? Object.fromEntries(Object.entries(objectField(value.counts, "admin intake.counts").oldestAtByStage as Record<string, unknown>).map(([key, item]) => [key, item === null ? null : nullableString(item, `admin intake.counts.oldestAtByStage.${key}`)]))
+            : {},
         },
         overview: {
           all: mapInt("all"),
@@ -3431,9 +3497,17 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           shipped: mapInt("shipped"),
           delivered: mapInt("delivered"),
           received: mapInt("received"),
+          verification: mapInt("verification"),
           verified: mapInt("verified"),
           readyForVault: mapInt("readyForVault"),
           exceptions: mapInt("exceptions"),
+          needsAction: mapInt("needsAction"),
+          oldestAt: objectField(value.overview ?? value.counts, "admin intake.overview").oldestAt === null
+            ? null
+            : nullableString(objectField(value.overview ?? value.counts, "admin intake.overview").oldestAt, "admin intake.overview.oldestAt"),
+          oldestAtByStage: objectField(value.overview ?? value.counts, "admin intake.overview").oldestAtByStage && typeof objectField(value.overview ?? value.counts, "admin intake.overview").oldestAtByStage === "object"
+            ? Object.fromEntries(Object.entries(objectField(value.overview ?? value.counts, "admin intake.overview").oldestAtByStage as Record<string, unknown>).map(([key, item]) => [key, item === null ? null : nullableString(item, `admin intake.overview.oldestAtByStage.${key}`)]))
+            : {},
         },
         recentActivity: Array.isArray(value.recentActivity)
           ? (value.recentActivity as Array<{
@@ -3458,6 +3532,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
               }>)
             : [],
           carriers: Array.isArray(filters.carriers) ? (filters.carriers as string[]) : [],
+          fixtureModes: ["NORMAL", "TEST", "ALL"],
         },
       };
     },
@@ -3481,11 +3556,12 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         audited: Boolean(value.audited),
       };
     },
-    async confirmIntakeReceipt(id) {
+    async confirmIntakeReceipt(id, input) {
       const value = objectField(
         await client.request<unknown>(`/admin/intake/${id}/receipt`, {
           method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
+          headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+          body: JSON.stringify(input ?? {}),
         }),
         "intake receipt",
       );
@@ -3494,6 +3570,22 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         status: stringField(value.status, "intake receipt.status"),
         confirmedAt: stringField(value.confirmedAt, "intake receipt.confirmedAt"),
       };
+    },
+    async startIntakeVerification(id) {
+      const value = objectField(await client.request<unknown>(`/admin/intake/${id}/verification/start`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }), "intake verification start");
+      return { intakeId: stringField(value.intakeId, "intake verification.intakeId"), status: stringField(value.status, "intake verification.status"), startedAt: stringField(value.startedAt, "intake verification.startedAt") };
+    },
+    async completeIntakeVerification(id, input) {
+      const value = objectField(await client.request<unknown>(`/admin/intake/${id}/verification/complete`, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(input) }), "intake verification complete");
+      return { intakeId: stringField(value.intakeId, "intake verification.intakeId"), status: stringField(value.status, "intake verification.status"), completedAt: stringField(value.completedAt, "intake verification.completedAt") };
+    },
+    async createIntakeException(id, input) {
+      const value = objectField(await client.request<unknown>(`/admin/intake/${id}/exceptions`, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(input) }), "intake exception");
+      return { id: stringField(value.id, "intake exception.id"), code: stringField(value.code, "intake exception.code"), severity: stringField(value.severity, "intake exception.severity") };
+    },
+    async resolveIntakeException(id, exceptionId, input) {
+      const value = objectField(await client.request<unknown>(`/admin/intake/${id}/exceptions/${exceptionId}/resolve`, { method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(input) }), "intake exception resolution");
+      return { id: stringField(value.id, "intake exception.id"), resolvedAt: stringField(value.resolvedAt, "intake exception.resolvedAt") };
     },
     async listMemberships(input) {
       const value = objectField(

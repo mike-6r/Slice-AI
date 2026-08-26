@@ -856,6 +856,7 @@ export type AdminIntakeRow = {
   membership: string | null;
   submissionStatus: string;
   stage: string;
+  stageReason: string;
   currentStageSince: string;
   vault: {
     id: string;
@@ -874,6 +875,21 @@ export type AdminIntakeRow = {
   receipt: { confirmedAt: string; confirmedById: string } | null;
   updatedAt: string;
   nextAction: string;
+  allowedActions: string[];
+  issues: Array<{ code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" }>;
+  testFixture: boolean;
+  carrierState: { status: string; lastUpdatedAt: string | null; source: "MANUAL" | "PROVIDER" } | null;
+  verification: {
+    status: string;
+    identityMatch: boolean | null;
+    certificationMatch: boolean | null;
+    gradeMatch: boolean | null;
+    variantMatch: boolean | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    note: string | null;
+  } | null;
+  custodyHistory: Array<{ action: string; occurredAt: string; actorUserId: string | null; metadata: unknown }>;
   valuationStatus: string | null;
   custodyStatus: string | null;
   exception: { code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" } | null;
@@ -885,9 +901,13 @@ export type AdminIntakeOverview = {
   shipped: number;
   delivered: number;
   received: number;
+  verification: number;
   verified: number;
   readyForVault: number;
   exceptions: number;
+  needsAction: number;
+  oldestAt: string | null;
+  oldestAtByStage: Record<string, string | null>;
 };
 export type AdminIntakeResponse = {
   items: AdminIntakeRow[];
@@ -913,6 +933,7 @@ export type AdminIntakeResponse = {
       countryCode?: string;
     }>;
     carriers: string[];
+    fixtureModes?: Array<"NORMAL" | "TEST" | "ALL">;
   };
 };
 
@@ -1453,6 +1474,7 @@ export interface AdminRepository {
     pageSize?: number;
     sort?: string;
     sortDirection?: "asc" | "desc";
+    fixture?: "NORMAL" | "TEST" | "ALL";
     limit?: number;
   }): Promise<AdminIntakeResponse>;
   setIntakeDestinationApproval(
@@ -1467,7 +1489,32 @@ export interface AdminRepository {
   }>;
   confirmIntakeReceipt(
     id: string,
+    input?: {
+      packageCondition?: string;
+      checklist?: Record<string, boolean>;
+      notes?: string;
+    },
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
+  startIntakeVerification(id: string): Promise<{ intakeId: string; status: string; startedAt: string }>;
+  completeIntakeVerification(
+    id: string,
+    input: {
+      identityMatch: boolean;
+      certificationMatch?: boolean | null;
+      gradeMatch?: boolean | null;
+      variantMatch?: boolean | null;
+      note?: string;
+    },
+  ): Promise<{ intakeId: string; status: string; completedAt: string }>;
+  createIntakeException(
+    id: string,
+    input: { code: string; severity: "LOW" | "MEDIUM" | "HIGH"; notes: string },
+  ): Promise<{ id: string; code: string; severity: string }>;
+  resolveIntakeException(
+    id: string,
+    exceptionId: string,
+    input: { note: string },
+  ): Promise<{ id: string; resolvedAt: string }>;
   listMemberships(input?: {
     status?: string;
     plan?: string;

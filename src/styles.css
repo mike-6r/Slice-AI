@@ -12741,6 +12741,82 @@ body:has(.collectors-page) .site-shell {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Physical intake authority fields: keep the queue scannable while making
+   custody blockers and staff actions visually distinct. */
+.physical-intake-summary > button {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  border: 1px solid #203d49;
+  border-radius: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  background: linear-gradient(135deg, #0b1b23, #08141b);
+  color: inherit;
+  text-align: left;
+}
+.physical-intake-summary > button:hover,
+.physical-intake-summary > button:focus-visible {
+  border-color: #27d7b0;
+  background: linear-gradient(135deg, #102b31, #0a1b21);
+}
+.physical-intake-summary > button small {
+  overflow: hidden;
+  color: #6d8a91;
+  font-size: 0.52rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.physical-intake-fixture-badge {
+  display: inline-flex;
+  margin-left: 0.2rem;
+  border: 1px solid #6f4f18;
+  border-radius: 999px;
+  padding: 0.08rem 0.28rem;
+  color: #ffc45b;
+  font-size: 0.48rem;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.physical-intake-issue,
+.physical-intake-no-issue {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 0.22rem 0.36rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.physical-intake-issue-high { border: 1px solid #713442; background: #29151d; color: #ff8b8b; }
+.physical-intake-issue-medium { border: 1px solid #73551f; background: #281e0d; color: #ffc65d; }
+.physical-intake-issue-low { border: 1px solid #295660; background: #0d252b; color: #8adbd0; }
+.physical-intake-no-issue { color: #6dcab1; }
+.physical-intake-history {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.physical-intake-history li {
+  display: grid;
+  gap: 0.08rem;
+  border-left: 1px solid #2d5960;
+  padding-left: 0.5rem;
+}
+.physical-intake-history strong { color: #b8ddd5; font-size: 0.58rem; }
+.physical-intake-history small { color: #708b92; font-size: 0.52rem; }
+.physical-intake-table { min-width: 1220px; }
+.physical-intake-table th:nth-child(7) { width: 10%; }
+.physical-intake-table th:nth-child(8) { width: 11%; }
+
+@media (max-width: 900px) {
+  .physical-intake-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 640px) {
   .asset-detail-page .asset-redesign-media .asset-showcase {
     min-height: 25rem;

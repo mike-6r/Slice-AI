@@ -201,9 +201,13 @@ export const mockRepositories: AppRepositories = {
         shipped: 0,
         delivered: 0,
         received: 0,
+        verification: 0,
         verified: 0,
         readyForVault: 0,
         exceptions: 0,
+        needsAction: 0,
+        oldestAt: null,
+        oldestAtByStage: {},
       };
       return {
         items: [],
@@ -211,10 +215,22 @@ export const mockRepositories: AppRepositories = {
         counts: empty,
         overview: empty,
         recentActivity: [],
-        filters: { vaults: [], carriers: [] },
+        filters: { vaults: [], carriers: [], fixtureModes: ["NORMAL", "TEST", "ALL"] },
       };
     },
     async confirmIntakeReceipt() {
+      throw new Error("Physical intake requires the API service.");
+    },
+    async startIntakeVerification() {
+      throw new Error("Physical intake requires the API service.");
+    },
+    async completeIntakeVerification() {
+      throw new Error("Physical intake requires the API service.");
+    },
+    async createIntakeException() {
+      throw new Error("Physical intake requires the API service.");
+    },
+    async resolveIntakeException() {
       throw new Error("Physical intake requires the API service.");
     },
     async setIntakeDestinationApproval() {
