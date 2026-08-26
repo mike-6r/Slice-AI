@@ -24,9 +24,15 @@ No live data repair was authorised. Existing read-only staging evidence found
 one approved submission without a canonical asset link; this is a documented
 canonicalization-policy gap, not an orphan safe to repair in a schema wave.
 
-The local PostgreSQL endpoint and Docker daemon are unavailable, preventing
-disposable aggregate/orphan checks. Required future read-only checks include
-foreign-key orphan counts, duplicate logical identities, invalid state
+Wave 6 established a local, Docker-backed disposable PostgreSQL database and
+replayed all migrations. Its fixtures exercised representative foreign-key,
+unique, idempotency, provider, finance, ownership, outbox, and Discord
+relationships. This confirms testability of the constraints, not production
+retention eligibility or real-data cardinality.
+
+The current host has no configured `slice_staging` SSH alias, so new privileged
+staging aggregates could not be refreshed. Required future read-only checks
+remain foreign-key orphan counts, duplicate logical identities, invalid state
 combinations, canonical lineage aggregates, provider-parent relationships, and
 membership-plan consistency. No conclusion should be drawn from a zero-row
-table or staging-only feature gate.
+test table or staging-only feature gate.

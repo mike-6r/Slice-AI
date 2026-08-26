@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import type { AppConfig } from '../src/config/app-config';
 import { FinancialLedgerService } from '../src/modules/finance/application/financial-ledger.service';
+import {
+  feeForBps,
+  WITHDRAWAL_FEE_BPS,
+} from '../src/modules/finance/domain/fee-policy';
 import { RecentAuthService } from '../src/modules/identity/access/recent-auth.service';
 import type { Actor } from '../src/modules/identity/auth/auth.service';
 import { ComplianceService } from '../src/modules/providers/application/compliance.service';
@@ -133,8 +137,12 @@ describe('Document 016 withdrawal rollback and recovery', () => {
     expect(await db.moneyMovementHistory.count({ where: { movementId: id, toStatus: 'SETTLED' } })).toBe(1);
     expect((await db.cashReservation.findUniqueOrThrow({ where: { id: movement.reservationId! } })).status).toBe('CONSUMED');
     const journal = await db.journalTransaction.findUniqueOrThrow({ where: { id: movement.ledgerTransactionId! }, include: { entries: true } });
-    expect(journal.entries).toHaveLength(2);
+    expect(journal.entries).toHaveLength(3);
     expect(journal.entries.filter((entry) => entry.side === 'DEBIT').reduce((sum, entry) => sum + entry.amountMinor, 0n)).toBe(journal.entries.filter((entry) => entry.side === 'CREDIT').reduce((sum, entry) => sum + entry.amountMinor, 0n));
+    const grossAmount = BigInt(amount);
+    const fee = feeForBps(grossAmount, WITHDRAWAL_FEE_BPS);
+    expect(journal.entries.filter((entry) => entry.side === 'DEBIT').map((entry) => entry.amountMinor)).toEqual([grossAmount]);
+    expect(journal.entries.filter((entry) => entry.side === 'CREDIT').map((entry) => entry.amountMinor).sort()).toEqual([grossAmount - fee, fee].sort());
     await assertWallet(total, '0', total);
     expect(amount).toMatch(/^\d+$/);
   }

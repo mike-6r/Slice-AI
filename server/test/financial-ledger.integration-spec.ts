@@ -192,6 +192,20 @@ describe('Document 013 PostgreSQL finance authority', () => {
       pendingMinor: '0',
       pendingWithdrawalCount: 0,
       pendingWithdrawalMinor: '0',
+      availableMinor: '10000',
+      reservedMinor: '0',
+      riskHeldDepositCount: 0,
+      riskHeldDeposits: [],
+      riskHeldMinor: '0',
+      totalMinor: '10000',
+      tradeAvailableMinor: '10000',
+      withdrawableMinor: '10000',
+      withdrawableSources: [
+        {
+          code: 'CASH_AVAILABLE',
+          availableMinor: '10000',
+        },
+      ],
       withdrawalReservedMinor: '0',
     });
   });

@@ -223,7 +223,7 @@ describe('two-factor PostgreSQL authority', () => {
     await expect(
       service.confirmSmsEnrollment(
         actor,
-        delivery.codeForTest(user.id, phone)!,
+        delivery.codeForTest(user.id, phone, 'MFA_ENROLLMENT')!,
         '198.51.100.11',
         `${runId}-sms-confirm`,
       ),
@@ -242,7 +242,7 @@ describe('two-factor PostgreSQL authority', () => {
       method: 'SMS',
       phone: expect.stringContaining('0103'),
     });
-    const smsCode = delivery.codeForTest(user.id, phone)!;
+    const smsCode = delivery.codeForTest(user.id, phone, 'MFA_LOGIN')!;
     await expect(
       service.verifyLoginChallenge(
         { challenge: challenge!.challenge, code: '000000' },

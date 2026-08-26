@@ -19,6 +19,7 @@ const config = {
   environment: 'test',
   emailDeliveryMode: 'local_test',
   emailVerificationTtlSeconds: 3_600,
+  emailVerificationResendSeconds: 60,
 } as AppConfig;
 const delivery = new LocalTestEmailDelivery();
 const service = new EmailVerificationService(
