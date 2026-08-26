@@ -822,7 +822,12 @@ export class SubmissionService {
                 where: { submissionId: id, slot: input.slot, deletedAt: null },
                 orderBy: { createdAt: 'desc' },
               });
-        if (existing && existing.status !== 'DELETED') {
+        // A signed upload intent can expire, or completion can reject an invalid
+        // file (for example duplicate evidence). In either case the media row is
+        // left non-safe and must be reusable so the collector can correct the
+        // evidence without staff intervention. Only accepted evidence locks a
+        // required slot.
+        if (existing?.status === 'SAFE') {
           throw new ConflictException({
             code: 'SUBMISSION_STATE_CONFLICT',
             message: 'Evidence already exists for that slot.',
