@@ -2015,7 +2015,15 @@ export class SubmissionService {
       async (db, audit) => {
         const submission = await db.assetSubmission.findUnique({
           where: { id },
-          include: { media: true },
+          include: {
+            media: true,
+            certificationVerifications: {
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+            },
+            asset: { select: { title: true } },
+            owner: { select: { accountStatus: true } },
+          },
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
@@ -2024,7 +2032,10 @@ export class SubmissionService {
           submission!.reviewerId !== actor.userId
         )
           this.stateConflict();
-        if (decision === 'APPROVED') assertRequiredSafeMedia(submission!.media);
+        if (decision === 'APPROVED') {
+          assertRequiredSafeMedia(submission!.media);
+          assertReviewDecisionReady(submission!);
+        }
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -3317,6 +3328,45 @@ function parseDateBoundary(value: string | undefined, end: boolean) {
   if (end) parsed.setUTCDate(parsed.getUTCDate() + 1);
   return parsed;
 }
+
+function assertReviewDecisionReady(submission: {
+  declaredMetadata: Prisma.JsonValue | null;
+  asset: { title: string } | null;
+  gradeScaleEntryId: string | null;
+  normalizedCertificationNumber: string | null;
+  certificationVerifications: Array<{ status: string }>;
+  owner: { accountStatus: string };
+}) {
+  const metadata = isRecord(submission.declaredMetadata)
+    ? submission.declaredMetadata
+    : {};
+  const hasIdentity = Boolean(
+    stringMetadata(metadata.name) ?? submission.asset?.title,
+  );
+  if (!hasIdentity)
+    throw new ConflictException({
+      code: 'REVIEW_IDENTITY_REQUIRED',
+      message: 'Collectible identity must be confirmed before acceptance.',
+    });
+  if (submission.owner.accountStatus !== 'ACTIVE')
+    throw new ConflictException({
+      code: 'REVIEW_ACCOUNT_BLOCKED',
+      message: 'The collector account is not eligible for acceptance.',
+    });
+  const certificationRequired = Boolean(
+    submission.gradeScaleEntryId || submission.normalizedCertificationNumber,
+  );
+  const certificationStatus = submission.certificationVerifications[0]?.status;
+  if (
+    certificationRequired &&
+    !['VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '')
+  )
+    throw new ConflictException({
+      code: 'REVIEW_CERTIFICATION_BLOCKED',
+      message: 'Certification verification must be resolved before acceptance.',
+    });
+}
+
 type ReviewDetailRow = {
   id: string;
   status: string;
