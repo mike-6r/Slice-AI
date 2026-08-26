@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
-  CircleAlert,
-  Download,
-  ExternalLink,
-  Filter,
   Flag,
   LifeBuoy,
   LockKeyhole,
   RefreshCw,
   Search,
-  Settings2,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
@@ -154,6 +148,32 @@ export function AdminTrustSupport({
     tickets: "No support tickets match these filters.",
     escalations: "No escalated Trust & Support items currently require attention.",
   };
+  if (failed)
+    return (
+      <section className="admin-trust-page">
+        <TrustState
+          title="Trust & Support is unavailable"
+          detail="The current operational authority could not be loaded safely. Counts will be available when it responds."
+          retry={retry}
+        />
+      </section>
+    );
+  if (dashboardLoading && !dashboard)
+    return (
+      <section className="admin-trust-page">
+        <TableLoading />
+      </section>
+    );
+  if (!dashboard)
+    return (
+      <section className="admin-trust-page">
+        <TrustState
+          title="Trust & Support is unavailable"
+          detail="The current operational authority did not return a usable response."
+          retry={retry}
+        />
+      </section>
+    );
   return (
     <section className="admin-trust-page">
       <header className="admin-trust-header">
@@ -163,22 +183,6 @@ export function AdminTrustSupport({
           </p>
           <h2>Trust &amp; Support</h2>
           <p>Monitor compliance cases, restrictions, and support activity across the platform.</p>
-        </div>
-        <div className="admin-trust-header-actions">
-          <button
-            className="admin-trust-button"
-            disabled
-            title="Trust report export is not configured"
-          >
-            <Download size={15} /> Export
-          </button>
-          <button
-            className="admin-trust-button primary"
-            disabled
-            title="Protected settings are not exposed here"
-          >
-            <Settings2 size={15} /> Trust &amp; Support Settings
-          </button>
         </div>
       </header>
       <div className="admin-trust-kpis">
@@ -281,17 +285,8 @@ export function AdminTrustSupport({
                 </option>
               ))}
             </select>
-            <button className="admin-trust-filter" disabled>
-              <Filter size={14} /> More Filters
-            </button>
           </div>
-          {failed ? (
-            <TrustState
-              title="We couldn't load Trust & Support operations."
-              detail="The normalized operational projection could not be loaded safely."
-              retry={retry}
-            />
-          ) : loading && !records ? (
+          {loading && !records ? (
             <TableLoading />
           ) : recordsLoading ? (
             <TableLoading />
@@ -300,9 +295,7 @@ export function AdminTrustSupport({
           ) : (
             <TrustEmpty detail={emptyCopy[activeTab]} />
           )}
-          {!failed && activeTab && records ? (
-            <TrustPagination info={pageInfo} update={update} />
-          ) : null}
+          {activeTab && records ? <TrustPagination info={pageInfo} update={update} /> : null}
         </div>
         <aside className="admin-trust-rail">
           <section className="admin-trust-side-card">
@@ -340,15 +333,6 @@ export function AdminTrustSupport({
             <p className="admin-trust-muted">
               Categories can overlap; counts are not treated as exclusive percentages.
             </p>
-          </section>
-          <section className="admin-trust-side-card">
-            <h3>Quick Actions</h3>
-            <QuickAction label="Create Compliance Case" icon={<ShieldCheck />} />
-            <QuickAction label="Restrict Account" icon={<LockKeyhole />} />
-            <QuickAction label="Create Support Ticket" icon={<LifeBuoy />} />
-            <QuickAction label="Assign Ticket" icon={<UserRound />} />
-            <QuickAction label="Escalate Issue" icon={<Flag />} />
-            <QuickAction label="Export Trust Report" icon={<Download />} />
           </section>
           <section className="admin-trust-side-card">
             <div className="admin-trust-side-heading">
@@ -403,19 +387,6 @@ function CountRow({ label: title, value, tone }: { label: string; value: number;
       </span>
       <b>{value.toLocaleString("en-GB")}</b>
     </div>
-  );
-}
-function QuickAction({ label: title, icon }: { label: string; icon: React.ReactNode }) {
-  return (
-    <button
-      className="admin-trust-quick-action"
-      disabled
-      title="This workflow is not exposed through the Admin API"
-    >
-      <span>{icon}</span>
-      {title}
-      <ArrowRight size={14} />
-    </button>
   );
 }
 function TrustState({
@@ -550,7 +521,6 @@ function TrustHeader({ tab }: { tab: TrustTab }) {
       "Status",
       "Assignee",
       "Updated",
-      "Actions",
     ],
     escalations: [
       "Reference",
@@ -561,7 +531,6 @@ function TrustHeader({ tab }: { tab: TrustTab }) {
       "Owner",
       "Created",
       "Status",
-      "Actions",
     ],
   };
   return (
@@ -669,15 +638,6 @@ function TrustRow({
         </td>
         <td>{text(value("assignedTo"))}</td>
         <td>{date(value("updatedAt"))}</td>
-        <td>
-          <button
-            className="admin-trust-row-action"
-            disabled
-            title="Ticket actions remain in the Discord ticket authority"
-          >
-            View
-          </button>
-        </td>
       </tr>
     );
   return (
@@ -696,15 +656,6 @@ function TrustRow({
       <td>{date(value("createdAt"))}</td>
       <td>
         <Status value={value("status")} />
-      </td>
-      <td>
-        <button
-          className="admin-trust-row-action"
-          disabled
-          title="Escalation actions are not exposed through the Admin API"
-        >
-          Inspect
-        </button>
       </td>
     </tr>
   );

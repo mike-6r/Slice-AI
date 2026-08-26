@@ -144,7 +144,14 @@ function AdminConsole() {
     usage: membershipUsage,
     needsAction: membershipNeedsAction,
     category: operationsCategory,
+    catalogueCategory,
     grader: operationsGrader,
+    physicalState: cataloguePhysicalState,
+    verification: catalogueVerification,
+    valuation: catalogueValuation,
+    market: catalogueMarket,
+    grading: catalogueGrading,
+    collector: catalogueCollector,
     priority: operationsPriority,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
@@ -409,18 +416,6 @@ function AdminConsole() {
       ),
     enabled: section === "intake",
     staleTime: 30_000,
-  });
-  const catalogue = useQuery({
-    queryKey: ["admin", "catalogue", reviewQuery, reviewStatus, reviewPageParam],
-    queryFn: () =>
-      services.repositories.admin.listCatalogueAssets({
-        q: reviewQuery,
-        status: reviewStatus,
-        page: Math.max(1, Number(reviewPageParam ?? 1)),
-        pageSize: 25,
-      }),
-    enabled: section === "collectibles" && !selectedAsset,
-    staleTime: 20_000,
   });
   const memberships = useQuery({
     queryKey: [
@@ -889,8 +884,26 @@ function AdminConsole() {
             query={reviewQuery ?? ""}
             status={reviewStatus ?? ""}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
+            filters={{
+              category: catalogueCategory ?? "",
+              physicalState: cataloguePhysicalState ?? "",
+              verification: catalogueVerification ?? "",
+              valuation: catalogueValuation ?? "",
+              market: catalogueMarket ?? "",
+              grading: catalogueGrading ?? "",
+              collector: catalogueCollector ?? "",
+              fixture: (intakeFixture as "NORMAL" | "TEST" | "ALL" | undefined) ?? "NORMAL",
+              sort: reviewSort ?? "updated",
+            }}
             update={(patch) =>
-              void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
+              void navigate({
+                search: (current) => {
+                  if (!("category" in patch)) return { ...current, ...patch };
+                  const { category, ...remainingPatch } = patch;
+                  return { ...current, ...remainingPatch, catalogueCategory: category };
+                },
+                replace: true,
+              })
             }
             onOpen={(assetId) =>
               void navigate({
@@ -1285,7 +1298,8 @@ function PhysicalIntakeBoard({
     mutationFn: (row: AdminIntakeRow) =>
       services.repositories.admin.completeStagingDemoPhysicalIntake(row.submissionId, {
         assetId: row.assetId ?? "",
-        reason: "Owner-demo staging simulation: canonical identity, PSA certification and grade match verified without a real shipment or production vault receipt.",
+        reason:
+          "Owner-demo staging simulation: canonical identity, PSA certification and grade match verified without a real shipment or production vault receipt.",
       }),
     onSuccess: () => {
       setDemoRow(null);
@@ -1705,24 +1719,53 @@ function PhysicalIntakeBoard({
         </div>
       ) : null}
       {demoRow ? (
-        <div className="physical-intake-modal" role="dialog" aria-modal="true" aria-labelledby="demo-intake-title">
+        <div
+          className="physical-intake-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-intake-title"
+        >
           <div className="admin-panel">
             <p className="admin-console-eyebrow">Staging demo authority</p>
             <h2 id="demo-intake-title">Complete Demo Intake</h2>
             <p>
-              Staging simulation only. This records a simulated receipt, verification, and custody state for demonstration purposes. It does not represent a real shipment or production vault receipt.
+              Staging simulation only. This records a simulated receipt, verification, and custody
+              state for demonstration purposes. It does not represent a real shipment or production
+              vault receipt.
             </p>
             <dl>
-              <div><dt>Collectible</dt><dd>{demoRow.title}</dd></div>
-              <div><dt>Result</dt><dd>Demo Intake Complete · Demo Verified · Demo Custody</dd></div>
+              <div>
+                <dt>Collectible</dt>
+                <dd>{demoRow.title}</dd>
+              </div>
+              <div>
+                <dt>Result</dt>
+                <dd>Demo Intake Complete · Demo Verified · Demo Custody</dd>
+              </div>
             </dl>
             <div className="physical-intake-modal-actions">
-              <button type="button" className="admin-inline-action" onClick={() => setDemoRow(null)}>Cancel</button>
-              <button type="button" className="button-primary" disabled={demoIntake.isPending} onClick={() => demoIntake.mutate(demoRow)}>
+              <button
+                type="button"
+                className="admin-inline-action"
+                onClick={() => setDemoRow(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                disabled={demoIntake.isPending}
+                onClick={() => demoIntake.mutate(demoRow)}
+              >
                 {demoIntake.isPending ? "Completing…" : "Complete demo intake"}
               </button>
             </div>
-            {demoIntake.isError ? <p className="text-negative">The demo authority could not be completed. No production receipt or custody was recorded.</p> : null}
+            {demoIntake.isError ? (
+              <p className="text-negative">
+                The demo authority could not be completed. No production receipt or custody was
+                recorded.
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1747,13 +1790,7 @@ function PhysicalIntakeRow({
     <tr>
       <td>
         <div className="physical-intake-identity">
-          {row.thumbnailUrl ? (
-            <img src={row.thumbnailUrl} alt="" />
-          ) : (
-            <span className="physical-intake-thumbnail-placeholder" aria-hidden="true">
-              <PackageCheck />
-            </span>
-          )}
+          <PhysicalIntakeThumbnail src={row.thumbnailUrl} />
           <div>
             <strong>
               {row.title}{" "}
@@ -1855,6 +1892,35 @@ function PhysicalIntakeRow({
   );
 }
 
+function PhysicalIntakeThumbnail({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed)
+    return (
+      <span className="physical-intake-thumbnail-placeholder" aria-label="Preview unavailable">
+        <PackageCheck />
+      </span>
+    );
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
+}
+
+function PhysicalIntakeEvidence({ src, title }: { src: string | null; title: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed)
+    return (
+      <p className="admin-safe-note">
+        Front evidence is not available in the authorized intake projection.
+      </p>
+    );
+  return (
+    <img
+      className="physical-intake-evidence"
+      src={src}
+      alt={`${title} front evidence`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function intakeStageLabel(stage: string) {
   return (
     (
@@ -1875,7 +1941,8 @@ function intakeStageLabel(stage: string) {
 
 function intakeNextActor(row: AdminIntakeRow) {
   if (row.stage === "DEMO_CUSTODY") return "Staging demo complete · no production custody";
-  if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE")) return "Staff action · complete staging demo intake";
+  if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE"))
+    return "Staff action · complete staging demo intake";
   if (row.stage === "ACCEPTED_AWAITING_VAULT") return "Collector action · add tracking";
   if (row.stage === "DELIVERED_AWAITING_RECEIPT") return "Staff action · confirm receipt";
   if (row.stage === "RECEIVED" || row.stage === "VERIFICATION")
@@ -1966,7 +2033,12 @@ function IntakeDetailPanel({
                   : "Not confirmed"}
               </dd>
             </div>
-            {row.demoIntake ? <div><dt>Demo authority</dt><dd>{row.demoIntake.destinationLabel} · simulated only</dd></div> : null}
+            {row.demoIntake ? (
+              <div>
+                <dt>Demo authority</dt>
+                <dd>{row.demoIntake.destinationLabel} · simulated only</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Verification</dt>
               <dd>{row.verification?.status ?? "Not started"}</dd>
@@ -2005,17 +2077,7 @@ function IntakeDetailPanel({
         </div>
         <div>
           <h4>Evidence & custody history</h4>
-          {row.thumbnailUrl ? (
-            <img
-              className="physical-intake-evidence"
-              src={row.thumbnailUrl}
-              alt={`${row.title} front evidence`}
-            />
-          ) : (
-            <p className="admin-safe-note">
-              Front evidence is not available in the authorized intake projection.
-            </p>
-          )}
+          <PhysicalIntakeEvidence src={row.thumbnailUrl} title={row.title} />
           <ol className="physical-intake-history">
             {row.custodyHistory
               .slice(-5)
@@ -2802,7 +2864,6 @@ function ReviewQueue({
   filters: ReviewQueueFilters;
   updateSearch: (patch: Partial<AdminSearch>) => void;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
   const items = data?.items ?? [];
   const counts = data?.counts ?? {
     all: 0,
@@ -2830,14 +2891,7 @@ function ReviewQueue({
       status: next === "ready" ? "SUBMITTED" : undefined,
       page: "1",
     });
-    setSelected([]);
   };
-  const toggleSelected = (id: string) =>
-    setSelected((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
-  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
-  const toggleAll = () => setSelected(allSelected ? [] : items.map((item) => item.id));
   const clearFilters = () => {
     setSearchInput("");
     updateSearch({
@@ -3003,14 +3057,6 @@ function ReviewQueue({
             <table className="admin-review-table">
               <thead>
                 <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="Select all visible submissions"
-                    />
-                  </th>
                   <th>Submission</th>
                   <th>Collector</th>
                   <th>Evidence</th>
@@ -3024,14 +3070,6 @@ function ReviewQueue({
                 {items.length ? (
                   items.map((item) => (
                     <tr key={item.id}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(item.id)}
-                          onChange={() => toggleSelected(item.id)}
-                          aria-label={`Select ${item.submissionReference}`}
-                        />
-                      </td>
                       <td>
                         <div className="admin-review-submission-cell">
                           <span className="admin-review-thumb">

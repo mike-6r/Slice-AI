@@ -45,7 +45,14 @@ export type AdminSearch = {
   usage?: string;
   needsAction?: string;
   category?: string;
+  catalogueCategory?: string;
   grader?: string;
+  physicalState?: string;
+  verification?: string;
+  valuation?: string;
+  market?: string;
+  grading?: string;
+  collector?: string;
 };
 
 const navigableSections: AdminSection[] = [
@@ -122,7 +129,14 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
   return {
     section: normalizeAdminSection(search.section),
     category: stringValue("category"),
+    catalogueCategory: stringValue("catalogueCategory"),
     grader: stringValue("grader"),
+    physicalState: stringValue("physicalState"),
+    verification: stringValue("verification"),
+    valuation: stringValue("valuation"),
+    market: stringValue("market"),
+    grading: stringValue("grading"),
+    collector: stringValue("collector"),
     user: nonEmptyValue("user"),
     asset: nonEmptyValue("asset"),
     membership: nonEmptyValue("membership"),

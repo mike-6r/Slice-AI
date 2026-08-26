@@ -157,7 +157,8 @@ export function SubmissionOperationsPage() {
         },
         verifiedGrade: collectible.grade,
         verifiedLabel: `${collectible.grader} ${collectible.grade}`,
-        providerReference: detail.data?.certificationVerification?.officialVerificationUrl ?? undefined,
+        providerReference:
+          detail.data?.certificationVerification?.officialVerificationUrl ?? undefined,
       });
     },
     onSuccess: refresh,

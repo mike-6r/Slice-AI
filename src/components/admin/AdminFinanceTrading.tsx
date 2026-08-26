@@ -7,16 +7,12 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleAlert,
-  Download,
   ExternalLink,
-  Filter,
   Landmark,
   ListFilter,
   LoaderCircle,
   RefreshCw,
   Search,
-  Settings2,
   WalletCards,
 } from "lucide-react";
 
@@ -220,6 +216,38 @@ export function AdminFinanceTrading({
     );
   }, [activeTab, records?.items, recordsLoading, openUser]);
 
+  if (failed)
+    return (
+      <section className="admin-finance-page">
+        <EmptyState
+          title="Finance & Trading is unavailable"
+          detail="The current finance authority could not be loaded safely. Balances and activity will be available when it responds."
+          retry={retry}
+        />
+      </section>
+    );
+  if (dashboardLoading && !dashboard)
+    return (
+      <section className="admin-finance-page">
+        <div className="admin-finance-table-loading">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      </section>
+    );
+  if (!dashboard)
+    return (
+      <section className="admin-finance-page">
+        <EmptyState
+          title="Finance & Trading is unavailable"
+          detail="The current finance authority did not return a usable response."
+          retry={retry}
+        />
+      </section>
+    );
+
   return (
     <section className="admin-finance-page">
       <header className="admin-finance-header">
@@ -229,18 +257,6 @@ export function AdminFinanceTrading({
           </p>
           <h2>Finance &amp; Trading</h2>
           <p>Monitor wallets, orders, executions, and financial activity across the platform.</p>
-        </div>
-        <div className="admin-finance-header-actions">
-          <button className="admin-finance-button" disabled title="Export is not configured">
-            <Download size={15} /> Export
-          </button>
-          <button
-            className="admin-finance-button primary"
-            disabled
-            title="Settings are managed through protected configuration"
-          >
-            <Settings2 size={15} /> Finance Settings
-          </button>
         </div>
       </header>
 
@@ -327,17 +343,8 @@ export function AdminFinanceTrading({
                 </option>
               ))}
             </select>
-            <button className="admin-finance-filter" disabled>
-              <Filter size={14} /> More Filters
-            </button>
           </div>
-          {failed ? (
-            <EmptyState
-              title="Finance data unavailable"
-              detail="The authoritative finance projection could not be loaded safely."
-              retry={retry}
-            />
-          ) : loading && !records ? (
+          {loading && !records ? (
             <div className="admin-finance-table-loading">
               <span />
               <span />
@@ -347,7 +354,7 @@ export function AdminFinanceTrading({
           ) : (
             table
           )}
-          {!failed && records ? <FinancePagination info={pageInfo} update={update} /> : null}
+          {records ? <FinancePagination info={pageInfo} update={update} /> : null}
         </div>
 
         <aside className="admin-finance-rail">
@@ -515,9 +522,6 @@ export function AdminFinanceTrading({
               icon={<ExternalLink />}
               onClick={() => selectTab("executions")}
             />
-            <QuickAction label="Run Reconciliation" icon={<RefreshCw />} disabled />
-            <QuickAction label="Create Adjustment" icon={<CircleAlert />} disabled />
-            <QuickAction label="Export Ledger Report" icon={<Download />} disabled />
           </section>
         </aside>
       </div>
@@ -598,20 +602,13 @@ function QuickAction({
   label,
   icon,
   onClick,
-  disabled,
 }: {
   label: string;
   icon: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
-    <button
-      className="admin-finance-quick-action"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
+    <button className="admin-finance-quick-action" onClick={onClick} type="button">
       <span>{icon}</span>
       {label}
       <ArrowRight size={14} />
@@ -674,15 +671,7 @@ function FinancePagination({
 }
 function FinanceHeader({ tab }: { tab: FinanceTab }) {
   const columns = {
-    wallets: [
-      "Collector",
-      "Wallet Balance",
-      "Reserved",
-      "Available",
-      "Currency",
-      "Status",
-      "Actions",
-    ],
+    wallets: ["Collector", "Wallet Balance", "Reserved", "Available", "Currency", "Status"],
     movements: [
       "Reference",
       "User",
@@ -724,7 +713,6 @@ function FinanceHeader({ tab }: { tab: FinanceTab }) {
       "Observed",
       "Difference",
       "Created",
-      "Actions",
     ],
     adjustments: [
       "Request",
@@ -770,7 +758,6 @@ function FinanceRow({
           <td>
             <Status value={value("status")} />
           </td>
-          <td>···</td>
         </>
       ) : null}
       {tab === "movements" ? (
@@ -841,15 +828,6 @@ function FinanceRow({
           <td>{money(value("observedMinor"))}</td>
           <td>{money(value("differenceMinor"))}</td>
           <td>{date(value("createdAt"))}</td>
-          <td>
-            <button
-              className="admin-finance-row-action"
-              disabled
-              title="Protected reconciliation workflow"
-            >
-              Inspect
-            </button>
-          </td>
         </>
       ) : null}
       {tab === "adjustments" ? (

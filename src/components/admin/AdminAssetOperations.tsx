@@ -267,13 +267,7 @@ function OperationRow({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen
   return (
     <article className="admin-operation-row">
       <button type="button" className="admin-operation-identity" onClick={onOpen}>
-        {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt="" />
-        ) : (
-          <span className="admin-operation-thumb-fallback">
-            <ImageIcon aria-hidden="true" />
-          </span>
-        )}
+        <OperationThumbnail src={item.thumbnailUrl} />
         <span>
           <strong>{item.title}</strong>
           <small>
@@ -339,6 +333,17 @@ function OperationRow({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen
       </button>
     </article>
   );
+}
+
+function OperationThumbnail({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed)
+    return (
+      <span className="admin-operation-thumb-fallback" aria-label="Preview unavailable">
+        <ImageIcon aria-hidden="true" />
+      </span>
+    );
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
 function EmptyQueue() {

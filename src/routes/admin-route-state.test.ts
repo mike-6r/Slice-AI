@@ -20,4 +20,28 @@ describe("admin route state", () => {
     expect(operationsTab("valued")).toBe("valuation");
     expect(operationsTab("unknown")).toBe("verification");
   });
+
+  it("preserves catalogue filters in URL state", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "collectibles",
+        catalogueCategory: "Pokémon",
+        physicalState: "CUSTODY_READY",
+        verification: "VERIFIED",
+        valuation: "VALUED",
+        market: "LIVE",
+        grading: "GRADED",
+        collector: "demo-collector",
+      }),
+    ).toMatchObject({
+      section: "collectibles",
+      catalogueCategory: "Pokémon",
+      physicalState: "CUSTODY_READY",
+      verification: "VERIFIED",
+      valuation: "VALUED",
+      market: "LIVE",
+      grading: "GRADED",
+      collector: "demo-collector",
+    });
+  });
 });

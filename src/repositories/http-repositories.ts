@@ -2354,8 +2354,14 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
             return {
               id: stringField(demo.id, "admin intake demo intake.id"),
               status: stringField(demo.status, "admin intake demo intake.status"),
-              destinationLabel: stringField(demo.destinationLabel, "admin intake demo intake.destinationLabel"),
-              simulatedReceiptAt: stringField(demo.simulatedReceiptAt, "admin intake demo intake.simulatedReceiptAt"),
+              destinationLabel: stringField(
+                demo.destinationLabel,
+                "admin intake demo intake.destinationLabel",
+              ),
+              simulatedReceiptAt: stringField(
+                demo.simulatedReceiptAt,
+                "admin intake demo intake.simulatedReceiptAt",
+              ),
               verifiedAt: stringField(demo.verifiedAt, "admin intake demo intake.verifiedAt"),
               custodyAt: stringField(demo.custodyAt, "admin intake demo intake.custodyAt"),
             };
@@ -4819,14 +4825,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         };
       },
       async manualVerifyCertification(id, input) {
-        return client.request<unknown>(
-          `/reviews/submissions/${id}/certification/manual-verify`,
-          {
-            method: "POST",
-            body: input,
-            headers: { "Idempotency-Key": idempotencyKey() },
-          },
-        );
+        return client.request<unknown>(`/reviews/submissions/${id}/certification/manual-verify`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        });
       },
       async canonicalize(id) {
         const response = objectField(

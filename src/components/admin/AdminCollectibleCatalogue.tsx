@@ -6,7 +6,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useQuery } from "@tanstack/react-query";
 import "@/styles/admin-catalogue.css";
 
-type Filters = {
+export type CatalogueFilters = {
   category: string;
   physicalState: string;
   verification: string;
@@ -17,7 +17,7 @@ type Filters = {
   fixture: "NORMAL" | "TEST" | "ALL";
   sort: string;
 };
-const initialFilters: Filters = {
+const initialFilters: CatalogueFilters = {
   category: "",
   physicalState: "",
   verification: "",
@@ -33,18 +33,19 @@ export function AdminCollectibleCatalogue({
   query,
   status,
   page,
+  filters,
   update,
   onOpen,
 }: {
   query: string;
   status: string;
   page: number;
+  filters: CatalogueFilters;
   update: (patch: Record<string, string | undefined>) => void;
   onOpen: (assetId: string) => void;
 }) {
   const services = useAppServices();
   const [search, setSearch] = useState(query);
-  const [filters, setFilters] = useState<Filters>(initialFilters);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const catalogue = useQuery({
     queryKey: ["admin", "catalogue", query, status, page, filters],
@@ -88,8 +89,19 @@ export function AdminCollectibleCatalogue({
       selected={selected}
       setSearch={setSearch}
       setFilters={(patch) => {
-        setFilters((current) => ({ ...current, ...patch }));
-        update({ page: "1" });
+        const nextFilters = { ...filters, ...patch };
+        return update({
+          category: nextFilters.category || undefined,
+          physicalState: nextFilters.physicalState || undefined,
+          verification: nextFilters.verification || undefined,
+          valuation: nextFilters.valuation || undefined,
+          market: nextFilters.market || undefined,
+          grading: nextFilters.grading || undefined,
+          collector: nextFilters.collector || undefined,
+          fixture: nextFilters.fixture,
+          sort: nextFilters.sort === initialFilters.sort ? undefined : nextFilters.sort,
+          page: "1",
+        });
       }}
       update={update}
       onPreview={setPreviewId}
@@ -113,17 +125,20 @@ function CatalogueContent({
   data: AdminCatalogueResponse;
   search: string;
   status: string;
-  filters: Filters;
+  filters: CatalogueFilters;
   selected: AdminCatalogueAsset | null;
   setSearch: (value: string) => void;
-  setFilters: (patch: Partial<Filters>) => void;
+  setFilters: (patch: Partial<CatalogueFilters>) => void;
   update: (patch: Record<string, string | undefined>) => void;
   onPreview: (id: string | null) => void;
   onOpen: (id: string) => void;
 }) {
   const activeFilterCount =
-    Object.entries(filters).filter(([key, value]) => key !== "sort" && value).length +
-    (status ? 1 : 0);
+    Object.entries(filters).filter(([key, value]) => {
+      if (key === "sort") return false;
+      if (key === "fixture") return value !== "NORMAL";
+      return Boolean(value);
+    }).length + (status ? 1 : 0);
   const hasFilters = Boolean(search.trim()) || activeFilterCount > 0;
   const categories = useMemo(
     () => [...new Set(data.items.map((item) => item.identity.category))].sort(),
@@ -251,8 +266,20 @@ function CatalogueContent({
                 type="button"
                 className="admin-catalogue-clear"
                 onClick={() => {
-                  setFilters(initialFilters);
-                  update({ status: undefined, q: undefined, page: "1" });
+                  update({
+                    status: undefined,
+                    q: undefined,
+                    category: undefined,
+                    physicalState: undefined,
+                    verification: undefined,
+                    valuation: undefined,
+                    market: undefined,
+                    grading: undefined,
+                    collector: undefined,
+                    fixture: "NORMAL",
+                    sort: undefined,
+                    page: "1",
+                  });
                   setSearch("");
                 }}
               >
@@ -365,11 +392,7 @@ function CatalogueTable({
             >
               <td>
                 <div className="catalogue-identity">
-                  {item.thumbnailUrl ? (
-                    <img src={item.thumbnailUrl} alt="" loading="lazy" />
-                  ) : (
-                    <span className="catalogue-image-fallback">—</span>
-                  )}
+                  <CollectibleThumbnail src={item.thumbnailUrl} />
                   <div>
                     <strong>{item.title}</strong>
                     <small>
@@ -455,11 +478,7 @@ function CatalogueTable({
             onClick={() => onPreview(item.id)}
           >
             <div className="catalogue-identity">
-              {item.thumbnailUrl ? (
-                <img src={item.thumbnailUrl} alt="" />
-              ) : (
-                <span className="catalogue-image-fallback">—</span>
-              )}
+              <CollectibleThumbnail src={item.thumbnailUrl} />
               <div>
                 <strong>{item.title}</strong>
                 <small>
@@ -508,11 +527,7 @@ function Preview({
         </button>
       </div>
       <div className="admin-catalogue-preview__hero">
-        {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt="" />
-        ) : (
-          <span className="catalogue-image-fallback">—</span>
-        )}
+        <CollectibleThumbnail src={item.thumbnailUrl} />
         <div>
           <h3>{item.title}</h3>
           <p>{item.publicId}</p>
@@ -635,6 +650,12 @@ function StatePill({ value }: { value: string }) {
       {sentence(value)}
     </span>
   );
+}
+
+function CollectibleThumbnail({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <span className="catalogue-image-fallback">Preview unavailable</span>;
+  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 function formatMinor(minor: string, currency: string) {
   try {
