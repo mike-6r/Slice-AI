@@ -765,6 +765,9 @@ export class SubmissionService {
           },
           include: {
             media: { orderBy: { slot: 'asc' } },
+            certificationVerifications: {
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            },
             marketResearch: {
               orderBy: { collectedAt: 'desc' },
               include: { observations: { orderBy: { observedAt: 'desc' } } },
