@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
@@ -20,6 +21,10 @@ import { OwnershipPolicyService } from '../ownership/application/ownership-polic
 import { deriveMarketLifecycle } from '../market-lifecycle/domain/market-lifecycle';
 import { PlatformRevenueSettlementService } from '../finance/application/platform-revenue-settlement.service';
 import { WithdrawalPreflightService } from '../providers/application/withdrawal-preflight.service';
+import {
+  loadOptionalAdminEnrichment,
+  type AdminEnrichmentState,
+} from './admin-optional-enrichment';
 
 type AdminAttention = {
   id: string;
@@ -246,6 +251,8 @@ function intakeAllowedActions(item: {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private readonly db: PrismaService,
     private readonly authorization: AuthorizationService,
@@ -5754,16 +5761,34 @@ export class AdminService {
           objectKey: item.objectKey,
         })),
     );
-    const signedMedia = await Promise.all(
+    const signedMediaResults = await Promise.all(
       safeMedia.map(async (item) => ({
         slot: item.slot,
         filename: item.filename,
         status: item.status,
-        url: await this.storage
-          .createPrivateDownloadUrl(item.objectKey, new Date(Date.now() + 5 * 60_000))
-          .catch(() => null),
+        signed: await loadOptionalAdminEnrichment(
+          'collectible-media',
+          () =>
+            this.storage.createPrivateDownloadUrl(
+              item.objectKey,
+              new Date(Date.now() + 5 * 60_000),
+            ),
+          null,
+          this.logger,
+        ),
       })),
     );
+    const signedMedia = signedMediaResults.map((item) => ({
+      slot: item.slot,
+      filename: item.filename,
+      status: item.status,
+      url: item.signed.value,
+    }));
+    const mediaState: AdminEnrichmentState = safeMedia.length === 0
+      ? 'NOT_APPLICABLE'
+      : signedMediaResults.some((item) => item.signed.state === 'UNAVAILABLE')
+        ? 'UNAVAILABLE'
+        : 'AVAILABLE';
     const stages = detailStages(
       asset,
       approved,
@@ -5775,14 +5800,56 @@ export class AdminService {
       stages.find((stage) => stage.state === 'current')?.key ??
       stages.filter((stage) => stage.state === 'complete').at(-1)?.key ??
       asset.status;
-    const activityRows = await this.db.auditEvent.findMany({
-      where: { resourceType: 'asset', resourceId: asset.id },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      include: {
-        actor: { select: { profile: { select: { displayName: true } } } },
-      },
-    });
+    const [activityResult, issuanceResult, acceptedResult, proceedsResult] = await Promise.all([
+      loadOptionalAdminEnrichment(
+        'collectible-audit-history',
+        () => this.db.auditEvent.findMany({
+          where: { resourceType: 'asset', resourceId: asset.id },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          include: {
+            actor: { select: { profile: { select: { displayName: true } } } },
+          },
+        }),
+        [],
+        this.logger,
+      ),
+      loadOptionalAdminEnrichment(
+        'collectible-ownership-issuance',
+        () => this.ownershipPolicy.adminProjection(asset.id),
+        null,
+        this.logger,
+      ),
+      owner
+        ? loadOptionalAdminEnrichment(
+            'collector-accepted-count',
+            () => this.db.assetSubmission.count({
+              where: { ownerUserId: owner.id, status: 'APPROVED' },
+            }),
+            null,
+            this.logger,
+          )
+        : Promise.resolve({ value: null, state: 'NOT_APPLICABLE' as const }),
+      asset.initialOffering
+        ? loadOptionalAdminEnrichment(
+            'initial-offering-proceeds',
+            () => this.db.financialAccount.findFirst({
+              where: {
+                ownerType: 'USER',
+                ownerUserId: asset.initialOffering!.beneficiaryUserId,
+                code: 'COLLECTOR_PROCEEDS_AVAILABLE',
+                currency: asset.initialOffering!.currency,
+              },
+              include: { balance: true },
+            }),
+            null,
+            this.logger,
+          )
+        : Promise.resolve({ value: null, state: 'NOT_APPLICABLE' as const }),
+    ]);
+    const activityRows = activityResult.value;
+    const issuance = issuanceResult.value;
+    const initialProceedsAccount = proceedsResult.value;
     const issued = asset.ownershipSupply?.issuedUnits ?? 0n;
     const available = asset.ownershipSupply
       ? asset.ownershipSupply.totalUnits - issued
@@ -5793,13 +5860,6 @@ export class AdminService {
     const publicationBlockingCodes = readinessCodes(
       asset.publication?.readiness,
     );
-    const issuance = await this.ownershipPolicy.adminProjection(asset.id);
-    const initialProceedsAccount = asset.initialOffering
-      ? await this.db.financialAccount.findFirst({
-          where: { ownerType: 'USER', ownerUserId: asset.initialOffering.beneficiaryUserId, code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: asset.initialOffering.currency },
-          include: { balance: true },
-        })
-      : null;
     const initialOffering = asset.initialOffering
       ? {
           offeringId: asset.initialOffering.id,
@@ -5957,6 +6017,13 @@ export class AdminService {
             }
           : null,
       issuance,
+      enrichment: {
+        media: mediaState,
+        auditHistory: activityResult.state,
+        ownershipIssuance: issuanceResult.state,
+        collectorAcceptedCount: acceptedResult.state,
+        initialOfferingProceeds: proceedsResult.state,
+      },
       initialOffering,
       lifecycle: { current, legacy: Boolean(asset.publishedAt && !intake), stages },
       marketLifecycle: deriveMarketLifecycle({
@@ -5978,9 +6045,7 @@ export class AdminService {
             username: owner.profile?.publicUsername ?? null,
             memberSince: owner.createdAt.toISOString(),
             submissions: owner._count.submissions,
-            accepted: await this.db.assetSubmission.count({
-              where: { ownerUserId: owner.id, status: 'APPROVED' },
-            }),
+            accepted: acceptedResult.value,
           }
         : null,
       intake: intake

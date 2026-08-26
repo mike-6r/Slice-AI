@@ -1344,6 +1344,13 @@ export type AdminCollectibleDetail = {
     }>;
     readiness: { ready: boolean; blockers: string[] };
     supply: { status: string; totalUnits: string; issuedUnits: string } | null;
+  } | null;
+  enrichment?: {
+    media: 'AVAILABLE' | 'UNAVAILABLE' | 'STALE' | 'NOT_APPLICABLE';
+    auditHistory: 'AVAILABLE' | 'UNAVAILABLE' | 'STALE' | 'NOT_APPLICABLE';
+    ownershipIssuance: 'AVAILABLE' | 'UNAVAILABLE' | 'STALE' | 'NOT_APPLICABLE';
+    collectorAcceptedCount: 'AVAILABLE' | 'UNAVAILABLE' | 'STALE' | 'NOT_APPLICABLE';
+    initialOfferingProceeds: 'AVAILABLE' | 'UNAVAILABLE' | 'STALE' | 'NOT_APPLICABLE';
   };
   lifecycle: {
     current: string;
@@ -1362,7 +1369,7 @@ export type AdminCollectibleDetail = {
     username: string | null;
     memberSince: string;
     submissions: number;
-    accepted: number;
+    accepted: number | null;
   } | null;
   intake: {
     id: string;

@@ -352,7 +352,17 @@ function TabContent({ item, tab }: { item: Detail; tab: DetailTab }) {
   if (tab === "physical") return <PhysicalTab item={item} />;
   if (tab === "valuation") return <ValuationTab item={item} />;
   if (tab === "ownership") return <OwnershipTab item={item} />;
-  if (tab === "issuance") return <IssuanceTab item={item} />;
+  if (tab === "issuance") {
+    const issuance = item.issuance;
+    return issuance ? (
+      <IssuanceTab item={{ ...item, issuance }} />
+    ) : (
+      <UnavailableEnrichment
+        title="Issuance unavailable"
+        detail="Ownership issuance data could not be loaded. No issuance values were assumed."
+      />
+    );
+  }
   if (tab === "offering") return <InitialOfferingTab item={item} />;
   if (tab === "market") return <MarketTab item={item} />;
   return (
@@ -470,7 +480,7 @@ function InitialOfferingTab({ item }: { item: Detail }) {
     </section>
   );
 }
-function IssuanceTab({ item }: { item: Detail }) {
+function IssuanceTab({ item }: { item: Detail & { issuance: NonNullable<Detail["issuance"]> } }) {
   const services = useAppServices();
   const client = useQueryClient();
   const policy = item.issuance;
@@ -671,6 +681,17 @@ function IssuanceTab({ item }: { item: Detail }) {
             : "Supply is approved or not yet ready. Issuance remains a separate guarded operation."}
         </p>
       )}
+    </section>
+  );
+}
+function UnavailableEnrichment({ title, detail }: { title: string; detail: string }) {
+  return (
+    <section className="admin-detail-card admin-detail-tab-panel">
+      <div className="admin-card-heading">
+        <h3>{title}</h3>
+        <span className="admin-detail-status pending">Unavailable</span>
+      </div>
+      <p className="admin-empty-detail">{detail}</p>
     </section>
   );
 }
@@ -928,7 +949,7 @@ function MarketTab({ item }: { item: Detail }) {
             <button
               className="admin-button primary"
               type="button"
-              disabled={activate.isPending || item.issuance.status !== "ISSUED"}
+              disabled={activate.isPending || item.issuance?.status !== "ISSUED"}
               onClick={() => activate.mutate()}
             >
               {activate.isPending ? "Activating…" : "Activate trading market"}
