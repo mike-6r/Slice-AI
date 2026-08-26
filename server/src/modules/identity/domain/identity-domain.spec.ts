@@ -114,6 +114,21 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows graded-card certification review audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('CERT_VERIFICATION_REQUESTED', {
+        verificationId: 'verification-1',
+        companyCode: 'PSA',
+        verificationMode: 'MANUAL',
+        status: 'MANUAL_REVIEW_REQUIRED',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('CERT_MANUAL_REVIEW_REQUIRED', {
+        verificationId: 'verification-1',
+      }),
+    ).not.toThrow();
+  });
   it('identifies idempotency conflicts', () => {
     const f = fingerprintRequest('POST', '/signup', {
       email: 'a@example.test',

@@ -398,7 +398,7 @@ export function SubmissionPage() {
       version.current = updated.version;
       client.setQueryData(["submissions", draft?.id], updated);
       setNotice(
-        "Certificate recorded. Staff must confirm it against the official grading-company lookup before submission.",
+        "Certificate recorded. Staff must confirm it against the official grading-company lookup before final acceptance.",
       );
       await detail.refetch();
     },
@@ -740,7 +740,9 @@ export function SubmissionPage() {
   const evidenceReady = requiredSlotsForGrading(gradedCard).every(
     (slot) => activeMedia(submission, slot)?.status === "SAFE",
   );
-  const certificationVerified = detail.data?.certificationVerification?.status === "VERIFIED";
+  const certificationReadyForStaffReview = ["VERIFIED", "MANUAL_REVIEW_REQUIRED"].includes(
+    detail.data?.certificationVerification?.status ?? "",
+  );
   const reviewReady = Boolean(
     form.categoryId &&
     form.name.trim() &&
@@ -752,7 +754,7 @@ export function SubmissionPage() {
     isValidPercent(form.offerIntentPercent) &&
     evidenceReady &&
     (gradedCard
-      ? certificationVerified
+      ? certificationReadyForStaffReview
       : form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
     form.termsAcknowledged,
   );
@@ -1401,7 +1403,7 @@ export function DetailsStep({
               <small id="certification-number-help" className="list-field-help">
                 {verification?.status === "VERIFIED"
                   ? "Verified against the official grading-company record."
-                  : "A staff reviewer completes the official lookup before a graded card can be submitted."}
+                  : "A staff reviewer completes the official lookup before a graded card can be finally accepted."}
               </small>
             </label>
             {verification ? (
@@ -3597,6 +3599,9 @@ export function ReviewStep({
   const marketComplete = Boolean(
     form.marketCheckAcknowledged && (form.marketCheckStatus || research),
   );
+  const certificationReadyForStaffReview = ["VERIFIED", "MANUAL_REVIEW_REQUIRED"].includes(
+    submission?.certificationVerification?.status ?? "",
+  );
   const rawReviewComplete = graded || form.aiReviewSkipped || preGrade?.status === "SUCCEEDED";
   const cardDetailsComplete = Boolean(
     form.categoryId &&
@@ -3623,6 +3628,17 @@ export function ReviewStep({
     },
     { label: "Offer percentage selected", complete: validOffer },
     { label: "Required photos uploaded", complete: evidenceReady },
+    ...(graded
+      ? [
+          {
+            label:
+              submission?.certificationVerification?.status === "VERIFIED"
+                ? "Certificate verified"
+                : "Certificate review requested",
+            complete: certificationReadyForStaffReview,
+          },
+        ]
+      : []),
     {
       label: graded
         ? "Graded-card review captured"
@@ -3722,6 +3738,11 @@ export function ReviewStep({
             ) : research?.state === "UNAVAILABLE" ? (
               <div className="list-review-fallback">
                 <strong>Market source unavailable</strong>
+                <p>Slice will review this collectible manually.</p>
+              </div>
+            ) : marketComplete ? (
+              <div className="list-review-fallback">
+                <strong>Manual market review requested</strong>
                 <p>Slice will review this collectible manually.</p>
               </div>
             ) : (
