@@ -59,6 +59,13 @@ import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperati
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
+import {
+  normalizeAdminSearch,
+  operationsTab,
+  pipelineSection,
+  type AdminSearch,
+  type AdminSection,
+} from "./-admin-route-state";
 import type { AssetOperationSummary, SubmissionReviewQueueResponse } from "@/domain/submission";
 import type {
   AdminAccountsSummary,
@@ -72,95 +79,10 @@ import type {
 } from "@/data/repositories";
 
 export const Route = createFileRoute("/admin")({
-  validateSearch: (search: Record<string, unknown>): AdminSearch => ({
-    section: normalizeAdminSection(search.section),
-    category: typeof search.category === "string" ? search.category : undefined,
-    grader: typeof search.grader === "string" ? search.grader : undefined,
-    user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
-    asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
-    membership:
-      typeof search.membership === "string" && search.membership.length > 0
-        ? search.membership
-        : undefined,
-    tab:
-      typeof search.tab === "string" && search.tab.length > 0
-        ? search.tab
-        : (legacyTrustTab(search.section) ?? legacyPlatformTab(search.section)),
-    q: typeof search.q === "string" && search.q.length > 0 ? search.q : undefined,
-    plan: typeof search.plan === "string" ? search.plan : undefined,
-    type: typeof search.type === "string" ? search.type : undefined,
-    priority: typeof search.priority === "string" ? search.priority : undefined,
-    status: typeof search.status === "string" ? search.status : undefined,
-    evidence: typeof search.evidence === "string" ? search.evidence : undefined,
-    research: typeof search.research === "string" ? search.research : undefined,
-    submittedFrom: typeof search.submittedFrom === "string" ? search.submittedFrom : undefined,
-    submittedTo: typeof search.submittedTo === "string" ? search.submittedTo : undefined,
-    sort: typeof search.sort === "string" ? search.sort : undefined,
-    sortDirection: typeof search.sortDirection === "string" ? search.sortDirection : undefined,
-    page: typeof search.page === "string" ? search.page : undefined,
-    pageSize: typeof search.pageSize === "string" ? search.pageSize : undefined,
-    vault: typeof search.vault === "string" ? search.vault : undefined,
-    carrier: typeof search.carrier === "string" ? search.carrier : undefined,
-    dateFrom: typeof search.dateFrom === "string" ? search.dateFrom : undefined,
-    dateTo: typeof search.dateTo === "string" ? search.dateTo : undefined,
-    fixture: typeof search.fixture === "string" ? search.fixture : undefined,
-    billing: typeof search.billing === "string" ? search.billing : undefined,
-    usage: typeof search.usage === "string" ? search.usage : undefined,
-    needsAction: typeof search.needsAction === "string" ? search.needsAction : undefined,
-  }),
+  validateSearch: normalizeAdminSearch,
   head: () => ({ meta: [{ title: "Admin Console | Slice" }] }),
   component: AdminPage,
 });
-
-type AdminSection =
-  | "control"
-  | "users"
-  | "moderation"
-  | "intake"
-  | "collectibles"
-  | "valuations"
-  | "custody"
-  | "assetOperations"
-  | "memberships"
-  | "compliance"
-  | "payments"
-  | "support"
-  | "health"
-  | "audit"
-  | "flags"
-  | "integrations"
-  | "settings";
-
-type AdminSearch = {
-  section: AdminSection;
-  user?: string;
-  asset?: string;
-  membership?: string;
-  tab?: string;
-  q?: string;
-  plan?: string;
-  type?: string;
-  priority?: string;
-  status?: string;
-  evidence?: string;
-  research?: string;
-  submittedFrom?: string;
-  submittedTo?: string;
-  sort?: string;
-  sortDirection?: string;
-  page?: string;
-  pageSize?: string;
-  vault?: string;
-  carrier?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  fixture?: string;
-  billing?: string;
-  usage?: string;
-  needsAction?: string;
-  category?: string;
-  grader?: string;
-};
 
 type AdminNavItem = { id: AdminSection; label: string; icon: typeof LayoutDashboard };
 
@@ -183,79 +105,6 @@ const adminNavGroups: Array<{ label: string; items: AdminNavItem[] }> = [
   { label: "Business", items: navItems.slice(6, 9) },
   { label: "Platform", items: navItems.slice(9) },
 ];
-
-function isAdminSection(value: unknown): value is AdminSection {
-  return typeof value === "string" && navItems.some((item) => item.id === value);
-}
-function normalizeAdminSection(value: unknown): AdminSection {
-  if (["valuations", "custody", "marketplace"].includes(String(value))) return "collectibles";
-  if (["compliance", "restrictions", "support", "cases", "escalations"].includes(String(value)))
-    return "support";
-  if (
-    [
-      "audit",
-      "flags",
-      "integrations",
-      "settings",
-      "system-health",
-      "jobs",
-      "webhooks",
-      "feature-flags",
-      "maintenance",
-      "deployments",
-    ].includes(String(value))
-  )
-    return "health";
-  return isAdminSection(value) ? value : "control";
-}
-
-function legacyTrustTab(value: unknown) {
-  const mapping: Record<string, string> = {
-    compliance: "compliance",
-    restrictions: "restrictions",
-    cases: "tickets",
-    escalations: "escalations",
-  };
-  return typeof value === "string" ? mapping[value] : undefined;
-}
-
-function legacyPlatformTab(value: unknown) {
-  const mapping: Record<string, string> = {
-    "system-health": "health",
-    jobs: "jobs",
-    webhooks: "webhooks",
-    integrations: "integrations",
-    audit: "audit",
-    "audit-logs": "audit",
-    flags: "feature-flags",
-    "feature-flags": "feature-flags",
-    settings: "settings",
-    maintenance: "settings",
-    deployments: "jobs",
-  };
-  return typeof value === "string" ? mapping[value] : undefined;
-}
-
-function pipelineSection(stage: string): AdminSection {
-  if (["draft", "submitted", "inReview"].includes(stage)) return "moderation";
-  if (["accepted", "shipping", "received"].includes(stage)) return "intake";
-  if (stage === "verified" || stage === "valued") return "assetOperations";
-  if (stage === "vaultReady") return "assetOperations";
-  return "assetOperations";
-}
-function operationsTab(stage: string) {
-  return (
-    (
-      {
-        verified: "verification",
-        valued: "valuation",
-        vaultReady: "vault-ready",
-        marketReady: "market-ready",
-        marketLive: "market-live",
-      } as Record<string, string>
-    )[stage] ?? "verification"
-  );
-}
 
 function AdminPage() {
   return (
