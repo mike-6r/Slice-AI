@@ -31,34 +31,36 @@ async function main() {
             },
           })
         : null,
-      Object.values(demoAccounts).map(async (demo) => {
-        const user = await db.user.findUnique({
-          where: { normalizedEmail: demo.email },
-          select: { id: true, accountStatus: true },
-        });
-        if (!user)
-          return { email: demo.email, exists: false, capabilities: [] };
-        const roleRows = await db.roleAssignment.findMany({
-          where: { userId: user.id, revokedAt: null },
-          select: { role: true },
-        });
-        const actor: Actor = {
-          userId: user.id as Actor['userId'],
-          sessionId: 'staging-demo-preflight',
-          status: user.accountStatus,
-          roles: roleRows.map((row) => row.role),
-          sessionRevokedAt: null,
-          sessionRevocationReason: null,
-          authenticatedAt: new Date(),
-        };
-        return {
-          email: demo.email,
-          exists: true,
-          status: user.accountStatus,
-          roles: actor.roles,
-          capabilities: (await capabilities.summary(actor)).capabilities,
-        };
-      }),
+      Promise.all(
+        Object.values(demoAccounts).map(async (demo) => {
+          const user = await db.user.findUnique({
+            where: { normalizedEmail: demo.email },
+            select: { id: true, accountStatus: true },
+          });
+          if (!user)
+            return { email: demo.email, exists: false, capabilities: [] };
+          const roleRows = await db.roleAssignment.findMany({
+            where: { userId: user.id, revokedAt: null },
+            select: { role: true },
+          });
+          const actor: Actor = {
+            userId: user.id as Actor['userId'],
+            sessionId: 'staging-demo-preflight',
+            status: user.accountStatus,
+            roles: roleRows.map((row) => row.role),
+            sessionRevokedAt: null,
+            sessionRevocationReason: null,
+            authenticatedAt: new Date(),
+          };
+          return {
+            email: demo.email,
+            exists: true,
+            status: user.accountStatus,
+            roles: actor.roles,
+            capabilities: (await capabilities.summary(actor)).capabilities,
+          };
+        }),
+      ),
     ]);
     const configuredAdminRoles =
       configuredAdmin?.roleAssignments.map((assignment) => assignment.role) ??

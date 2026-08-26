@@ -201,6 +201,102 @@ describe('canonicalization authority', () => {
     );
   });
 
+  it('creates and links one draft Asset atomically, then replays that link without downstream records', async () => {
+    let linkedAssetId: string | null = null;
+    const audit = jest.fn().mockResolvedValue(undefined);
+    const createdAsset = {
+      id: 'asset-1',
+      publicId: 'ast_modelc',
+      slug: 'model-c-card-asset-1',
+      title: 'Model C card',
+    };
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      assetSubmission: {
+        findUnique: jest.fn().mockImplementation(async () => ({
+          id: 'submission-1',
+          status: 'APPROVED',
+          assetId: linkedAssetId,
+          ownerUserId: 'collector-1',
+          categoryId: 'category-1',
+          setId: null,
+          gradeScaleEntryId: null,
+          declaredMetadata: { name: 'Model C card', year: '2025' },
+          normalizedCertificationNumber: null,
+        })),
+        update: jest.fn().mockImplementation(async ({ data }) => {
+          linkedAssetId = data.assetId;
+          return { id: 'submission-1', assetId: linkedAssetId };
+        }),
+      },
+      asset: {
+        findFirst: jest.fn(),
+        create: jest.fn().mockResolvedValue(createdAsset),
+        findUnique: jest.fn().mockResolvedValue(createdAsset),
+      },
+      ownershipAssetSupply: { create: jest.fn() },
+      assetPublication: { create: jest.fn() },
+      vaultCustodyRecord: { create: jest.fn() },
+      valuationDecision: { create: jest.fn() },
+    };
+    const service = submissionService(db);
+    (service as unknown as { mutate: (...args: Array<unknown>) => unknown }).mutate =
+      async (...args) => {
+        const work = args[7] as (
+          transaction: typeof db,
+          writeAudit: typeof audit,
+        ) => Promise<unknown>;
+        return work(db, audit);
+      };
+
+    await expect(
+      service.createAndLinkCanonicalAsset(
+        reviewer,
+        'submission-1',
+        'request-1',
+        'key-1',
+      ),
+    ).resolves.toEqual({
+      submissionId: 'submission-1',
+      assetId: 'asset-1',
+      publicId: 'ast_modelc',
+      slug: 'model-c-card-asset-1',
+      title: 'Model C card',
+      replayed: false,
+    });
+    await expect(
+      service.createAndLinkCanonicalAsset(
+        reviewer,
+        'submission-1',
+        'request-2',
+        'key-2',
+      ),
+    ).resolves.toMatchObject({ assetId: 'asset-1', replayed: true });
+
+    expect(db.asset.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          categoryId: 'category-1',
+          title: 'Model C card',
+          year: 2025,
+          status: 'DRAFT',
+        }),
+      }),
+    );
+    expect(db.asset.create).toHaveBeenCalledTimes(1);
+    expect(db.assetSubmission.update).toHaveBeenCalledTimes(1);
+    expect(audit).toHaveBeenCalledWith(
+      'CANONICAL_ASSET_CREATED_AND_LINKED',
+      'submission',
+      'submission-1',
+      expect.objectContaining({ assetId: 'asset-1' }),
+    );
+    expect(db.ownershipAssetSupply.create).not.toHaveBeenCalled();
+    expect(db.assetPublication.create).not.toHaveBeenCalled();
+    expect(db.vaultCustodyRecord.create).not.toHaveBeenCalled();
+    expect(db.valuationDecision.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a conflicting second submission for the same Asset', async () => {
     const db = {
       $queryRaw: jest.fn().mockResolvedValue([]),
