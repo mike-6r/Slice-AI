@@ -1,5 +1,5 @@
 import type { AppRepositories } from "@/data/repositories";
-import { basisPoints, minorUnits, percentage } from "@/domain";
+import { basisPoints, minorUnits } from "@/domain";
 
 /** Frontend preview helpers only. Authoritative market and settlement logic belongs on a backend. */
 export class AssetService {
@@ -105,9 +105,6 @@ export class OwnershipService {
   publicIssuance = (assetSlug: string) => this.repositories.ownership.getPublicIssuance(assetSlug);
   ownMarketPosition = (assetSlug: string) =>
     this.repositories.ownership.getOwnMarketPosition(assetSlug);
-  percentageForUnits(units: number, totalUnits: number) {
-    return percentage((units / totalUnits) * 100);
-  }
   availableBasisPoints(value: number) {
     return basisPoints(value);
   }
