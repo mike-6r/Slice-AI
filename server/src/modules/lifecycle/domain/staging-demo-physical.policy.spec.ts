@@ -13,7 +13,7 @@ const pikachu = {
     certificationNumber: '107760843',
     category: { name: 'Pokémon TCG' },
     collectibleSet: { name: 'Pokémon x Van Gogh' },
-    gradeScaleEntry: { company: { code: 'PSA' }, grade: { toString: () => '10' } },
+    gradeScaleEntry: { company: { code: 'PSA' }, grade: { toString: () => '10.00' } },
   },
 };
 

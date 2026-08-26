@@ -29,7 +29,7 @@ export function isProtectedControlledAsset(asset: DemoCandidate['asset']) {
 /** A deliberately narrow allow-list for the existing owner-demo record. */
 export function isEligiblePikachuOwnerDemo(candidate: DemoCandidate) {
   const asset = candidate.asset;
-  const grade = asset?.gradeScaleEntry?.grade?.toString() ?? null;
+  const grade = Number(asset?.gradeScaleEntry?.grade?.toString());
   return (
     candidate.owner?.email?.toLowerCase() === 'demo-collector@slicecollectable.com' &&
     asset?.title?.trim().toLowerCase() === 'pikachu with grey felt hat' &&
@@ -39,7 +39,7 @@ export function isEligiblePikachuOwnerDemo(candidate: DemoCandidate) {
     asset.category?.name?.toLowerCase() === 'pokémon tcg' &&
     asset.collectibleSet?.name?.toLowerCase() === 'pokémon x van gogh' &&
     asset.gradeScaleEntry?.company?.code?.toUpperCase() === 'PSA' &&
-    grade === '10'
+    grade === 10
   );
 }
 
