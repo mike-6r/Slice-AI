@@ -300,8 +300,8 @@ export type AdminUserDetail = AdminUserSummary & {
   };
   portfolioSummary: {
     totalValueMinor: string | null;
-    totalInvestedMinor: string;
-    totalWithdrawnMinor: string;
+    totalInvestedMinor: string | null;
+    totalWithdrawnMinor: string | null;
     totalAssets: number;
     activeListings: number;
     openOrders: number;
@@ -330,7 +330,51 @@ export type AdminUserDetail = AdminUserSummary & {
     activeIntakes: number;
     submissions: number;
   } | null;
-  activitySnapshot: Array<{ id: string; action: string; resourceType: string; occurredAt: string }>;
+  activitySnapshot: Array<{
+    id: string;
+    action: string;
+    resourceType: string;
+    resourceId: string | null;
+    actor: string | null;
+    actorType: string;
+    result: string;
+    occurredAt: string;
+  }>;
+  permissions: {
+    finance: boolean;
+    compliance: boolean;
+    manageRoles: boolean;
+    manageStatus: boolean;
+  };
+  financialDetails: {
+    state: string;
+    availableMinor: string | null;
+    reservedMinor: string | null;
+    pendingMinor: string | null;
+    totalMinor: string | null;
+    bacsHeldMinor: string | null;
+    deficitMinor: string | null;
+    deficitStatus: string | null;
+    withdrawalHoldUntil: string | null;
+    returnedDepositCount: number;
+    manualReviewDepositCount: number;
+  } | null;
+  payoutDetails: {
+    state: string;
+    status: string | null;
+    detailsSubmitted: boolean;
+    payoutsEnabled: boolean;
+    transfersCapability: string | null;
+    lastSyncedAt: string | null;
+  } | null;
+  activeHolds: Array<{
+    scope: string;
+    reasonCode: string;
+    source: string;
+    status: string;
+    createdAt: string;
+    releasedAt: string | null;
+  }>;
 };
 
 export type AdminComplianceCase = {

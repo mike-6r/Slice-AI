@@ -3445,6 +3445,14 @@ export class AdminService {
 
   async userDetail(actor: Actor, userId: string) {
     await this.authorization.authorize(actor, 'users.read', userId as never);
+    const policyActor = {
+      actorType: 'USER' as const,
+      userId: actor.userId,
+      accountStatus: actor.status,
+      roles: actor.roles as never,
+    };
+    const financeAccess = evaluatePolicy({ actor: policyActor, action: 'finance.read' }).allowed;
+    const complianceAccess = evaluatePolicy({ actor: policyActor, action: 'compliance.read' }).allowed;
     const user = await this.db.user.findUnique({
       where: { id: userId },
       select: {
@@ -3454,6 +3462,7 @@ export class AdminService {
         accountStatus: true,
         createdAt: true,
         lastLoginAt: true,
+        bankWithdrawalHoldUntil: true,
         profile: {
           select: {
             displayName: true,
@@ -3518,6 +3527,39 @@ export class AdminService {
             publishedAt: true,
           },
         },
+        complianceHolds: {
+          where: { status: 'ACTIVE' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 20,
+          select: {
+            scope: true,
+            reasonCode: true,
+            source: true,
+            status: true,
+            createdAt: true,
+            releasedAt: true,
+          },
+        },
+        financialDeficits: {
+          where: { status: { in: ['OPEN', 'PARTIALLY_RECOVERED'] } },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 5,
+          select: { amountMinor: true, recoveredMinor: true, status: true },
+        },
+        externalFinancialAccounts: {
+          select: { riskState: true, status: true },
+        },
+        externalConnectAccounts: {
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: {
+            status: true,
+            detailsSubmitted: true,
+            payoutsEnabled: true,
+            transfersCapability: true,
+            lastSyncedAt: true,
+          },
+        },
       },
     });
     if (!user)
@@ -3538,6 +3580,9 @@ export class AdminService {
       withdrawn,
       complianceCases,
       activityRows,
+      bacsHeld,
+      returnedDeposits,
+      manualReviewDeposits,
     ] = await Promise.all([
       this.db.submissionIntake.count({
         where: {
@@ -3586,42 +3631,71 @@ export class AdminService {
           asset: { select: { title: true } },
         },
       }),
-      this.db.financialAccount.findMany({
+      financeAccess
+        ? this.db.financialAccount.findMany({
         where: { ownerType: 'USER', ownerUserId: userId, status: 'ACTIVE' },
         select: {
           currency: true,
           normalSide: true,
           balance: true,
         },
-      }),
-      this.db.moneyMovement.aggregate({
+      })
+        : Promise.resolve([]),
+      financeAccess
+        ? this.db.moneyMovement.aggregate({
         where: {
           userId,
           status: { in: ['CREATED', 'PENDING_PROVIDER', 'PROCESSING', 'MANUAL_REVIEW', 'HELD'] },
         },
         _sum: { amountMinor: true },
-      }),
-      this.db.moneyMovement.aggregate({
+      })
+        : Promise.resolve({ _sum: { amountMinor: null } }),
+      financeAccess
+        ? this.db.moneyMovement.aggregate({
         where: { userId, type: 'WITHDRAWAL', status: 'SETTLED' },
         _sum: { amountMinor: true },
-      }),
-      this.db.complianceCase.findMany({
+      })
+        : Promise.resolve({ _sum: { amountMinor: null } }),
+      complianceAccess
+        ? this.db.complianceCase.findMany({
         where: { userId },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: 12,
         select: { type: true, status: true, provider: true, updatedAt: true },
-      }),
+      })
+        : Promise.resolve([]),
       this.db.auditEvent.findMany({
-        where: { actorUserId: userId },
+        where: {
+          OR: [
+            { actorUserId: userId },
+            { resourceType: { in: ['user', 'account'] }, resourceId: userId },
+          ],
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 6,
+        take: 50,
         select: {
           id: true,
           action: true,
           resourceType: true,
+          resourceId: true,
+          actorType: true,
+          result: true,
           createdAt: true,
+          actor: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
         },
       }),
+      financeAccess
+        ? this.db.moneyMovement.aggregate({
+            where: { userId, type: 'DEPOSIT', status: 'HELD', cashAccount: { code: 'BACS_RISK_HOLD' } },
+            _sum: { amountMinor: true },
+          })
+        : Promise.resolve({ _sum: { amountMinor: null } }),
+      financeAccess
+        ? this.db.moneyMovement.count({ where: { userId, type: 'DEPOSIT', status: 'RETURNED' } })
+        : Promise.resolve(0),
+      financeAccess
+        ? this.db.moneyMovement.count({ where: { userId, type: 'DEPOSIT', status: 'MANUAL_REVIEW' } })
+        : Promise.resolve(0),
     ]);
     const wallet = financialAccounts.length
       ? financialAccounts.reduce(
@@ -3663,6 +3737,72 @@ export class AdminService {
       user.collectorSubscriptions.length ||
       user.roleAssignments.some((role) => role.role === 'COLLECTOR'),
     );
+    const hasDeficit = user.financialDeficits.length > 0;
+    const hasReturnedDeposit = returnedDeposits > 0;
+    const hasManualReview = manualReviewDeposits > 0;
+    const hasSharedInstrumentReview = user.externalFinancialAccounts.some((account) =>
+      ['SHARED_INSTRUMENT_REVIEW', 'MANUAL_REVIEW_REQUIRED'].includes(account.riskState),
+    );
+    const hasWithdrawalHold = Boolean(
+      user.bankWithdrawalHoldUntil && user.bankWithdrawalHoldUntil > new Date(),
+    );
+    const outstandingDeficitMinor = user.financialDeficits.reduce(
+      (total, item) => total + item.amountMinor - item.recoveredMinor,
+      0n,
+    );
+    const bacsHeldMinor = bacsHeld._sum.amountMinor ?? 0n;
+    const financialState = hasDeficit
+      ? 'FINANCIAL_DEFICIT'
+      : hasReturnedDeposit
+        ? 'RETURNED_DEPOSIT'
+        : hasManualReview || hasSharedInstrumentReview
+          ? 'MANUAL_REVIEW'
+          : hasWithdrawalHold
+            ? 'WITHDRAWAL_HOLD'
+            : bacsHeldMinor > 0n
+              ? 'BANK_CLEARING'
+              : 'CLEAR';
+    const financialExceptionCount = [
+      hasDeficit,
+      hasReturnedDeposit,
+      hasManualReview,
+      hasSharedInstrumentReview,
+      hasWithdrawalHold,
+    ].filter(Boolean).length;
+    const hasComplianceReview = complianceCases.some((item) =>
+      ['PENDING', 'REVIEW', 'MANUAL_REVIEW', 'SUSPENDED'].includes(item.status),
+    );
+    const complianceState = latestCompliance
+      ? latestCompliance.status === 'SUSPENDED'
+        ? 'RESTRICTED'
+        : latestCompliance.status === 'APPROVED'
+          ? 'VERIFIED'
+          : hasComplianceReview
+            ? 'REVIEW_REQUIRED'
+            : ['NOT_STARTED', 'EXPIRED'].includes(latestCompliance.status)
+              ? 'INCOMPLETE'
+              : 'REVIEW_REQUIRED'
+      : 'INCOMPLETE';
+    const payout = user.externalConnectAccounts[0] ?? null;
+    const payoutState = payout
+      ? payout.status === 'READY' && payout.payoutsEnabled && payout.transfersCapability === 'active'
+        ? 'READY'
+        : ['UNDER_REVIEW', 'RESTRICTED', 'DISABLED'].includes(payout.status)
+          ? 'RESTRICTED'
+          : 'SETUP_REQUIRED'
+      : 'SETUP_REQUIRED';
+    const permissions = {
+      finance: financeAccess,
+      compliance: complianceAccess,
+      manageRoles: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.roles.manage',
+      }).allowed,
+      manageStatus: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.status.manage',
+      }).allowed,
+    };
     return {
       id: user.id,
       displayName: user.profile?.displayName ?? 'Unnamed user',
@@ -3725,22 +3865,22 @@ export class AdminService {
         twoFactorEnabled: Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt),
       },
       complianceSummary: {
-        kycStatus: kycCase?.status ?? 'UNKNOWN',
-        kytStatus: kytCase?.status ?? 'UNKNOWN',
-        provider: latestCompliance?.provider ?? null,
-        lastReviewAt: latestCompliance?.updatedAt.toISOString() ?? null,
-        caseCount: user._count.complianceCases,
+        kycStatus: complianceAccess ? kycCase?.status ?? 'UNKNOWN' : 'UNAVAILABLE',
+        kytStatus: complianceAccess ? kytCase?.status ?? 'UNKNOWN' : 'UNAVAILABLE',
+        provider: complianceAccess ? latestCompliance?.provider ?? null : null,
+        lastReviewAt: complianceAccess ? latestCompliance?.updatedAt.toISOString() ?? null : null,
+        caseCount: complianceAccess ? user._count.complianceCases : 0,
       },
       portfolioSummary: {
         totalValueMinor: null,
-        totalInvestedMinor: (invested._sum.totalCostMinor ?? 0n).toString(),
-        totalWithdrawnMinor: (withdrawn._sum.amountMinor ?? 0n).toString(),
+        totalInvestedMinor: financeAccess ? (invested._sum.totalCostMinor ?? 0n).toString() : null,
+        totalWithdrawnMinor: financeAccess ? (withdrawn._sum.amountMinor ?? 0n).toString() : null,
         totalAssets,
         activeListings,
         openOrders,
         currency: wallet?.currency ?? user.profile?.preferredCurrency ?? 'GBP',
       },
-      walletSummary: wallet
+      walletSummary: financeAccess && wallet
         ? {
             availableMinor: wallet.available.toString(),
             reservedMinor: wallet.reserved.toString(),
@@ -3776,8 +3916,89 @@ export class AdminService {
         id: activity.id,
         action: activity.action,
         resourceType: activity.resourceType,
+        resourceId: activity.resourceId,
+        actor:
+          activity.actor?.profile?.displayName ??
+          activity.actor?.profile?.publicUsername ??
+          (activity.actorType === 'SYSTEM' ? 'System' : null),
+        actorType: activity.actorType,
+        result: activity.result,
         occurredAt: activity.createdAt.toISOString(),
       })),
+      permissions,
+      financialDetails: financeAccess
+        ? {
+            state: financialState,
+            availableMinor: wallet ? (wallet.available).toString() : null,
+            reservedMinor: wallet ? wallet.reserved.toString() : null,
+            pendingMinor: (pendingMovements._sum.amountMinor ?? 0n).toString(),
+            totalMinor: wallet ? (wallet.available + wallet.reserved).toString() : null,
+            bacsHeldMinor: bacsHeldMinor.toString(),
+            deficitMinor: outstandingDeficitMinor.toString(),
+            deficitStatus: user.financialDeficits[0]?.status ?? null,
+            withdrawalHoldUntil: user.bankWithdrawalHoldUntil?.toISOString() ?? null,
+            returnedDepositCount: returnedDeposits,
+            manualReviewDepositCount: manualReviewDeposits,
+          }
+        : null,
+      payoutDetails: financeAccess
+        ? {
+            state: payoutState,
+            status: payout?.status ?? null,
+            detailsSubmitted: Boolean(payout?.detailsSubmitted),
+            payoutsEnabled: Boolean(payout?.payoutsEnabled),
+            transfersCapability: payout?.transfersCapability ?? null,
+            lastSyncedAt: payout?.lastSyncedAt?.toISOString() ?? null,
+          }
+        : null,
+      activeHolds: complianceAccess
+        ? user.complianceHolds.map((hold) => ({
+            scope: hold.scope,
+            reasonCode: hold.reasonCode,
+            source: hold.source,
+            status: hold.status,
+            createdAt: hold.createdAt.toISOString(),
+            releasedAt: hold.releasedAt?.toISOString() ?? null,
+          }))
+        : [],
+      accountStateReason:
+        user.accountStatus === 'PENDING_REVIEW'
+          ? complianceState === 'REVIEW_REQUIRED' || complianceState === 'INCOMPLETE'
+            ? 'Compliance review'
+            : financialExceptionCount > 0
+              ? 'Financial review'
+              : 'Staff review'
+          : user.accountStatus === 'RESTRICTED'
+            ? financialState === 'FINANCIAL_DEFICIT'
+              ? 'Financial deficit'
+              : 'Manual review'
+            : user.accountStatus === 'SUSPENDED'
+              ? 'Suspended account'
+              : null,
+      financialState: financeAccess
+        ? financialState
+        : financialExceptionCount > 0
+          ? 'FINANCIAL_REVIEW'
+          : 'UNAVAILABLE',
+      financialExceptionCount: financeAccess ? financialExceptionCount : null,
+      financialAmountMinor: financeAccess ? outstandingDeficitMinor.toString() : null,
+      bacsHeldMinor: financeAccess ? bacsHeldMinor.toString() : null,
+      complianceState: complianceAccess
+        ? complianceState
+        : complianceCases.length > 0
+          ? 'REVIEW'
+          : 'UNAVAILABLE',
+      complianceReason: complianceAccess && latestCompliance && hasComplianceReview
+        ? latestCompliance.type
+        : null,
+      payoutState: financeAccess ? payoutState : 'UNAVAILABLE',
+      payoutReason: !financeAccess
+        ? 'Finance access required'
+        : payoutState === 'READY'
+        ? null
+        : payout
+          ? 'Payout setup requires attention'
+          : 'Payout setup not started',
     };
   }
 

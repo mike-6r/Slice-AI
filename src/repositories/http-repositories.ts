@@ -1875,6 +1875,18 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     value.collectorOverview && typeof value.collectorOverview === "object"
       ? objectField(value.collectorOverview, "admin user collector")
       : null;
+  const permissions =
+    value.permissions && typeof value.permissions === "object"
+      ? objectField(value.permissions, "admin user permissions")
+      : {};
+  const financialDetails =
+    value.financialDetails && typeof value.financialDetails === "object"
+      ? objectField(value.financialDetails, "admin user financial details")
+      : null;
+  const payoutDetails =
+    value.payoutDetails && typeof value.payoutDetails === "object"
+      ? objectField(value.payoutDetails, "admin user payout details")
+      : null;
   const mapMoney = (source: Record<string, unknown>, field: string) =>
     stringField(source[field] ?? "0", `admin user ${field}`);
   const mapNullableMoney = (source: Record<string, unknown>, field: string) =>
@@ -1978,8 +1990,8 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     },
     portfolioSummary: {
       totalValueMinor: mapNullableMoney(portfolioSummary, "totalValueMinor"),
-      totalInvestedMinor: mapMoney(portfolioSummary, "totalInvestedMinor"),
-      totalWithdrawnMinor: mapMoney(portfolioSummary, "totalWithdrawnMinor"),
+      totalInvestedMinor: mapNullableMoney(portfolioSummary, "totalInvestedMinor"),
+      totalWithdrawnMinor: mapNullableMoney(portfolioSummary, "totalWithdrawnMinor"),
       totalAssets: Number(portfolioSummary.totalAssets ?? 0),
       activeListings: Number(portfolioSummary.activeListings ?? 0),
       openOrders: Number(portfolioSummary.openOrders ?? 0),
@@ -2027,6 +2039,50 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
           submissions: Number(collectorOverview.submissions ?? 0),
         }
       : null,
+    permissions: {
+      finance: Boolean(permissions.finance),
+      compliance: Boolean(permissions.compliance),
+      manageRoles: Boolean(permissions.manageRoles),
+      manageStatus: Boolean(permissions.manageStatus),
+    },
+    financialDetails: financialDetails
+      ? {
+          state: stringField(financialDetails.state ?? "UNAVAILABLE", "financialDetails.state"),
+          availableMinor: nullableString(financialDetails.availableMinor, "financialDetails.availableMinor"),
+          reservedMinor: nullableString(financialDetails.reservedMinor, "financialDetails.reservedMinor"),
+          pendingMinor: nullableString(financialDetails.pendingMinor, "financialDetails.pendingMinor"),
+          totalMinor: nullableString(financialDetails.totalMinor, "financialDetails.totalMinor"),
+          bacsHeldMinor: nullableString(financialDetails.bacsHeldMinor, "financialDetails.bacsHeldMinor"),
+          deficitMinor: nullableString(financialDetails.deficitMinor, "financialDetails.deficitMinor"),
+          deficitStatus: nullableString(financialDetails.deficitStatus, "financialDetails.deficitStatus"),
+          withdrawalHoldUntil: nullableString(financialDetails.withdrawalHoldUntil, "financialDetails.withdrawalHoldUntil"),
+          returnedDepositCount: Number(financialDetails.returnedDepositCount ?? 0),
+          manualReviewDepositCount: Number(financialDetails.manualReviewDepositCount ?? 0),
+        }
+      : null,
+    payoutDetails: payoutDetails
+      ? {
+          state: stringField(payoutDetails.state ?? "SETUP_REQUIRED", "payoutDetails.state"),
+          status: nullableString(payoutDetails.status, "payoutDetails.status"),
+          detailsSubmitted: Boolean(payoutDetails.detailsSubmitted),
+          payoutsEnabled: Boolean(payoutDetails.payoutsEnabled),
+          transfersCapability: nullableString(payoutDetails.transfersCapability, "payoutDetails.transfersCapability"),
+          lastSyncedAt: nullableString(payoutDetails.lastSyncedAt, "payoutDetails.lastSyncedAt"),
+        }
+      : null,
+    activeHolds: Array.isArray(value.activeHolds)
+      ? value.activeHolds.map((rawHold) => {
+          const hold = objectField(rawHold, "admin user hold");
+          return {
+            scope: stringField(hold.scope, "admin user hold.scope"),
+            reasonCode: stringField(hold.reasonCode, "admin user hold.reasonCode"),
+            source: stringField(hold.source, "admin user hold.source"),
+            status: stringField(hold.status, "admin user hold.status"),
+            createdAt: stringField(hold.createdAt, "admin user hold.createdAt"),
+            releasedAt: nullableString(hold.releasedAt, "admin user hold.releasedAt"),
+          };
+        })
+      : [],
     activitySnapshot: Array.isArray(value.activitySnapshot)
       ? value.activitySnapshot.map((rawActivity) => {
           const activity = objectField(rawActivity, "admin user activity");
@@ -2034,6 +2090,10 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
             id: stringField(activity.id, "admin user activity.id"),
             action: stringField(activity.action, "admin user activity.action"),
             resourceType: stringField(activity.resourceType, "admin user activity.resourceType"),
+            resourceId: nullableString(activity.resourceId, "admin user activity.resourceId"),
+            actor: nullableString(activity.actor, "admin user activity.actor"),
+            actorType: stringField(activity.actorType ?? "USER", "admin user activity.actorType"),
+            result: stringField(activity.result ?? "SUCCESS", "admin user activity.result"),
             occurredAt: stringField(activity.occurredAt, "admin user activity.occurredAt"),
           };
         })
