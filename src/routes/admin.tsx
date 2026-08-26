@@ -52,6 +52,7 @@ import { AdminCollectibleCatalogue } from "@/components/admin/AdminCollectibleCa
 import { AdminAssetOperations } from "@/components/admin/AdminAssetOperations";
 import { AdminAssetOperationsDetail } from "@/components/admin/AdminAssetOperationsDetail";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
+import { AdminMembershipDetail } from "@/components/admin/AdminMembershipDetail";
 import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
@@ -77,7 +78,10 @@ export const Route = createFileRoute("/admin")({
     grader: typeof search.grader === "string" ? search.grader : undefined,
     user: typeof search.user === "string" && search.user.length > 0 ? search.user : undefined,
     asset: typeof search.asset === "string" && search.asset.length > 0 ? search.asset : undefined,
-    membership: typeof search.membership === "string" && search.membership.length > 0 ? search.membership : undefined,
+    membership:
+      typeof search.membership === "string" && search.membership.length > 0
+        ? search.membership
+        : undefined,
     tab:
       typeof search.tab === "string" && search.tab.length > 0
         ? search.tab
@@ -595,10 +599,18 @@ function AdminConsole() {
         sortDirection: reviewSortDirection === "asc" ? "asc" : "desc",
         billing: membershipBilling,
         usage: membershipUsage,
-        fixture: ["NORMAL", "TEST", "ALL"].includes(intakeFixture ?? "") ? (intakeFixture as "NORMAL" | "TEST" | "ALL") : "ALL",
+        fixture: ["NORMAL", "TEST", "ALL"].includes(intakeFixture ?? "")
+          ? (intakeFixture as "NORMAL" | "TEST" | "ALL")
+          : "ALL",
         needsAction: membershipNeedsAction === "true",
       }),
-    enabled: section === "memberships",
+    enabled: section === "memberships" && !selectedMembership,
+    staleTime: 30_000,
+  });
+  const membershipDetail = useQuery({
+    queryKey: ["admin", "membership-detail", selectedMembership],
+    queryFn: () => services.repositories.admin.getMembershipDetail(selectedMembership!),
+    enabled: section === "memberships" && Boolean(selectedMembership),
     staleTime: 30_000,
   });
   const financeDashboard = useQuery({
@@ -1050,6 +1062,43 @@ function AdminConsole() {
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })
             }
           />
+        ) : section === "memberships" && selectedMembership ? (
+          <AdminMembershipDetail
+            data={membershipDetail.data}
+            loading={membershipDetail.isLoading}
+            failed={membershipDetail.isError}
+            retry={() => void membershipDetail.refetch()}
+            back={() =>
+              void navigate({
+                search: (current) => ({ ...current, membership: undefined }),
+                replace: true,
+              })
+            }
+            openAccount={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "users",
+                  user: membershipDetail.data?.collector.id,
+                  membership: undefined,
+                  tab: "membership",
+                }),
+                replace: true,
+              })
+            }
+            openAudit={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "health",
+                  tab: "audit",
+                  q: selectedMembership,
+                  membership: undefined,
+                }),
+                replace: true,
+              })
+            }
+          />
         ) : section === "memberships" ? (
           <AdminMemberships
             data={memberships.data}
@@ -1349,7 +1398,9 @@ function PhysicalIntakeBoard({
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
   const [showDestinations, setShowDestinations] = useState(false);
-  const [fixtureMode, setFixtureMode] = useState<"NORMAL" | "TEST" | "ALL">((fixture as "NORMAL" | "TEST" | "ALL") ?? "NORMAL");
+  const [fixtureMode, setFixtureMode] = useState<"NORMAL" | "TEST" | "ALL">(
+    (fixture as "NORMAL" | "TEST" | "ALL") ?? "NORMAL",
+  );
   const receiptChecklist = {
     packageReceived: true,
     correctIntakeReference: true,
@@ -1364,12 +1415,17 @@ function PhysicalIntakeBoard({
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (draftSearch.trim() !== search) updateSearch({ q: draftSearch.trim() || undefined, fixture: fixtureMode });
+      if (draftSearch.trim() !== search)
+        updateSearch({ q: draftSearch.trim() || undefined, fixture: fixtureMode });
     }, 300);
     return () => window.clearTimeout(timer);
   }, [draftSearch, search, updateSearch, fixtureMode]);
   const receipt = useMutation({
-    mutationFn: (id: string) => services.repositories.admin.confirmIntakeReceipt(id, { packageCondition, checklist: receiptChecklist }),
+    mutationFn: (id: string) =>
+      services.repositories.admin.confirmIntakeReceipt(id, {
+        packageCondition,
+        checklist: receiptChecklist,
+      }),
     onSuccess: () => {
       setReceiptRow(null);
       updateSearch({ page: "1" });
@@ -1401,13 +1457,29 @@ function PhysicalIntakeBoard({
     oldestAt: null,
     oldestAtByStage: {},
   };
-  const countFor = (key: (typeof intakeTabs)[number][2]) => Number(overview[key as keyof typeof overview] ?? 0);
+  const countFor = (key: (typeof intakeTabs)[number][2]) =>
+    Number(overview[key as keyof typeof overview] ?? 0);
   const rows = [...(data?.items ?? [])].sort((a, b) => {
-    if (sortMode === "newest") return new Date(b.currentStageSince).getTime() - new Date(a.currentStageSince).getTime();
-    if (sortMode === "delivered") return Number(Boolean(b.shipment?.deliveredAt)) - Number(Boolean(a.shipment?.deliveredAt));
-    if (sortMode === "oldest") return new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
-    const actionRank = (row: AdminIntakeRow) => row.stage === "EXCEPTION" ? 0 : row.stage === "DELIVERED_AWAITING_RECEIPT" ? 1 : row.stage === "RECEIVED" || row.stage === "VERIFICATION" ? 2 : row.stage === "ACCEPTED_AWAITING_VAULT" ? 3 : 4;
-    return actionRank(a) - actionRank(b) || new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
+    if (sortMode === "newest")
+      return new Date(b.currentStageSince).getTime() - new Date(a.currentStageSince).getTime();
+    if (sortMode === "delivered")
+      return Number(Boolean(b.shipment?.deliveredAt)) - Number(Boolean(a.shipment?.deliveredAt));
+    if (sortMode === "oldest")
+      return new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
+    const actionRank = (row: AdminIntakeRow) =>
+      row.stage === "EXCEPTION"
+        ? 0
+        : row.stage === "DELIVERED_AWAITING_RECEIPT"
+          ? 1
+          : row.stage === "RECEIVED" || row.stage === "VERIFICATION"
+            ? 2
+            : row.stage === "ACCEPTED_AWAITING_VAULT"
+              ? 3
+              : 4;
+    return (
+      actionRank(a) - actionRank(b) ||
+      new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime()
+    );
   });
   return (
     <AdminPageSection
@@ -1439,48 +1511,277 @@ function PhysicalIntakeBoard({
           ["Verifying", overview.verification, "VERIFICATION"],
           ["Exceptions", overview.exceptions, "EXCEPTION"],
         ].map(([label, value, stage]) => (
-          <button type="button" key={label as string} onClick={() => updateSearch({ status: stage as string, page: "1" })}>
+          <button
+            type="button"
+            key={label as string}
+            onClick={() => updateSearch({ status: stage as string, page: "1" })}
+          >
             <span>{label}</span>
             <strong>{value}</strong>
-            <small>{label === "Exceptions" ? "Needs resolution" : data?.overview.oldestAtByStage[stage as string] ? `Oldest ${age(data.overview.oldestAtByStage[stage as string]!)}` : "No active work"}</small>
+            <small>
+              {label === "Exceptions"
+                ? "Needs resolution"
+                : data?.overview.oldestAtByStage[stage as string]
+                  ? `Oldest ${age(data.overview.oldestAtByStage[stage as string]!)}`
+                  : "No active work"}
+            </small>
           </button>
         ))}
       </div>
       <section className="physical-intake-workbench">
         <nav className="physical-intake-tabs" aria-label="Intake stages">
           {intakeTabs.map(([value, labelText, key]) => (
-            <button type="button" className={(!status && !value) || status === value ? "is-active" : ""} key={key} onClick={() => updateSearch({ status: value || undefined, page: "1" })}>
-              <span>{labelText}</span><strong>{countFor(key)}</strong>
+            <button
+              type="button"
+              className={(!status && !value) || status === value ? "is-active" : ""}
+              key={key}
+              onClick={() => updateSearch({ status: value || undefined, page: "1" })}
+            >
+              <span>{labelText}</span>
+              <strong>{countFor(key)}</strong>
             </button>
           ))}
         </nav>
         <div className="physical-intake-toolbar">
-          <label className="physical-intake-search"><Search aria-hidden="true" /><input aria-label="Search intake" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="Search collectible, collector, reference or tracking…" /></label>
-          <select aria-label="Destination" value={vault} onChange={(event) => updateSearch({ vault: event.target.value || undefined, page: "1" })}>
+          <label className="physical-intake-search">
+            <Search aria-hidden="true" />
+            <input
+              aria-label="Search intake"
+              value={draftSearch}
+              onChange={(event) => setDraftSearch(event.target.value)}
+              placeholder="Search collectible, collector, reference or tracking…"
+            />
+          </label>
+          <select
+            aria-label="Destination"
+            value={vault}
+            onChange={(event) =>
+              updateSearch({ vault: event.target.value || undefined, page: "1" })
+            }
+          >
             <option value="">Destination: All</option>
-            {data?.filters.vaults.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}
+            {data?.filters.vaults.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.displayName}
+              </option>
+            ))}
           </select>
-          <select aria-label="Carrier" value={carrier} onChange={(event) => updateSearch({ carrier: event.target.value || undefined, page: "1" })}>
+          <select
+            aria-label="Carrier"
+            value={carrier}
+            onChange={(event) =>
+              updateSearch({ carrier: event.target.value || undefined, page: "1" })
+            }
+          >
             <option value="">Carrier: All</option>
-            {data?.filters.carriers.map((item) => <option value={item} key={item}>{item}</option>)}
+            {data?.filters.carriers.map((item) => (
+              <option value={item} key={item}>
+                {item}
+              </option>
+            ))}
           </select>
-          <select aria-label="Fixture visibility" value={fixtureMode} onChange={(event) => { const mode = event.target.value as "NORMAL" | "TEST" | "ALL"; setFixtureMode(mode); updateSearch({ fixture: mode, page: "1" }); }}>
-            <option value="NORMAL">Production work</option><option value="TEST">QA fixtures</option><option value="ALL">All records</option>
+          <select
+            aria-label="Fixture visibility"
+            value={fixtureMode}
+            onChange={(event) => {
+              const mode = event.target.value as "NORMAL" | "TEST" | "ALL";
+              setFixtureMode(mode);
+              updateSearch({ fixture: mode, page: "1" });
+            }}
+          >
+            <option value="NORMAL">Production work</option>
+            <option value="TEST">QA fixtures</option>
+            <option value="ALL">All records</option>
           </select>
-          <select aria-label="Sort intake" value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
-            <option value="needs-action">Needs action first</option><option value="oldest">Oldest first</option><option value="newest">Newest first</option><option value="delivered">Recently delivered</option>
+          <select
+            aria-label="Sort intake"
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value)}
+          >
+            <option value="needs-action">Needs action first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest first</option>
+            <option value="delivered">Recently delivered</option>
           </select>
-          <button type="button" className="admin-secondary-button" onClick={() => updateSearch({ status: undefined, vault: undefined, carrier: undefined, dateFrom: undefined, dateTo: undefined, q: undefined, page: "1" })}>Clear filters</button>
+          <button
+            type="button"
+            className="admin-secondary-button"
+            onClick={() =>
+              updateSearch({
+                status: undefined,
+                vault: undefined,
+                carrier: undefined,
+                dateFrom: undefined,
+                dateTo: undefined,
+                q: undefined,
+                page: "1",
+              })
+            }
+          >
+            Clear filters
+          </button>
         </div>
         <div className="physical-intake-date-filter">
-          <label>Stage from <input type="date" value={dateFrom} onChange={(event) => updateSearch({ dateFrom: event.target.value || undefined, page: "1" })} /></label>
-          <label>To <input type="date" value={dateTo} onChange={(event) => updateSearch({ dateTo: event.target.value || undefined, page: "1" })} /></label>
+          <label>
+            Stage from{" "}
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) =>
+                updateSearch({ dateFrom: event.target.value || undefined, page: "1" })
+              }
+            />
+          </label>
+          <label>
+            To{" "}
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) =>
+                updateSearch({ dateTo: event.target.value || undefined, page: "1" })
+              }
+            />
+          </label>
         </div>
-        {rows.length ? <div className="admin-table-wrap physical-intake-table-wrap"><table className="admin-table physical-intake-table"><thead><tr><th>Collectible</th><th>Collector</th><th>Stage</th><th>Destination</th><th>Shipment</th><th>Age</th><th>Issues</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <PhysicalIntakeRow row={row} key={row.id} onOpen={() => setSelectedRow(row)} onReceipt={() => setReceiptRow(row)} onStartVerification={() => verificationStart.mutate(row.id)} />)}</tbody></table></div> : <AdminEmpty detail={search || status || vault || carrier || dateFrom || dateTo ? "No packages match these filters." : "No packages in this stage yet. Shipments will appear here when collectors provide tracking."} />}
-        <div className="physical-intake-pagination"><span>Showing {rows.length ? (data?.pagination.page ?? 1) * (data?.pagination.pageSize ?? 0) - (data?.pagination.pageSize ?? 0) + 1 : 0}–{Math.min((data?.pagination.page ?? 0) * (data?.pagination.pageSize ?? 0), data?.pagination.total ?? 0)} of {data?.pagination.total ?? 0}</span><div><button type="button" disabled={page <= 1} onClick={() => updateSearch({ page: String(page - 1) })}>‹</button><strong>{page}</strong><button type="button" disabled={!data || page >= data.pagination.totalPages} onClick={() => updateSearch({ page: String(page + 1) })}>›</button></div></div>
+        {rows.length ? (
+          <div className="admin-table-wrap physical-intake-table-wrap">
+            <table className="admin-table physical-intake-table">
+              <thead>
+                <tr>
+                  <th>Collectible</th>
+                  <th>Collector</th>
+                  <th>Stage</th>
+                  <th>Destination</th>
+                  <th>Shipment</th>
+                  <th>Age</th>
+                  <th>Issues</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <PhysicalIntakeRow
+                    row={row}
+                    key={row.id}
+                    onOpen={() => setSelectedRow(row)}
+                    onReceipt={() => setReceiptRow(row)}
+                    onStartVerification={() => verificationStart.mutate(row.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <AdminEmpty
+            detail={
+              search || status || vault || carrier || dateFrom || dateTo
+                ? "No packages match these filters."
+                : "No packages in this stage yet. Shipments will appear here when collectors provide tracking."
+            }
+          />
+        )}
+        <div className="physical-intake-pagination">
+          <span>
+            Showing{" "}
+            {rows.length
+              ? (data?.pagination.page ?? 1) * (data?.pagination.pageSize ?? 0) -
+                (data?.pagination.pageSize ?? 0) +
+                1
+              : 0}
+            –
+            {Math.min(
+              (data?.pagination.page ?? 0) * (data?.pagination.pageSize ?? 0),
+              data?.pagination.total ?? 0,
+            )}{" "}
+            of {data?.pagination.total ?? 0}
+          </span>
+          <div>
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => updateSearch({ page: String(page - 1) })}
+            >
+              ‹
+            </button>
+            <strong>{page}</strong>
+            <button
+              type="button"
+              disabled={!data || page >= data.pagination.totalPages}
+              onClick={() => updateSearch({ page: String(page + 1) })}
+            >
+              ›
+            </button>
+          </div>
+        </div>
       </section>
-      {selectedRow ? <IntakeDetailPanel row={selectedRow} onClose={() => setSelectedRow(null)} onReceipt={() => setReceiptRow(selectedRow)} /> : null}
-      {showDestinations ? <section className="physical-intake-destinations admin-panel"><div className="physical-intake-section-heading"><div><p className="admin-console-eyebrow">Operations configuration</p><h3>Receiving destinations</h3><p>Only approved, operator-controlled destinations can accept shipments.</p></div><button type="button" className="admin-secondary-button" onClick={() => setShowDestinations(false)}>Close</button></div><input className="admin-text-input" value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} placeholder="Reason required for approval or pause" aria-label="Destination approval reason" />{data?.filters.vaults.map((item) => <div className="physical-intake-destination" key={item.id}><div><strong>{item.displayName}</strong><small>{item.region}, {item.countryCode}</small></div><span className={item.operationallyApproved && item.acceptingShipments ? "admin-status-pill is-green" : "admin-status-pill is-amber"}>{item.operationallyApproved && item.acceptingShipments ? "Approved · accepting shipments" : "Paused"}</span><button type="button" className="admin-secondary-button" disabled={approvalReason.trim().length < 3 || destinationApproval.isPending} onClick={() => destinationApproval.mutate({ id: item.id, approved: !(item.operationallyApproved && item.acceptingShipments) })}>{item.operationallyApproved && item.acceptingShipments ? "Pause shipments" : "Approve & resume"}</button></div>)}</section> : null}
+      {selectedRow ? (
+        <IntakeDetailPanel
+          row={selectedRow}
+          onClose={() => setSelectedRow(null)}
+          onReceipt={() => setReceiptRow(selectedRow)}
+        />
+      ) : null}
+      {showDestinations ? (
+        <section className="physical-intake-destinations admin-panel">
+          <div className="physical-intake-section-heading">
+            <div>
+              <p className="admin-console-eyebrow">Operations configuration</p>
+              <h3>Receiving destinations</h3>
+              <p>Only approved, operator-controlled destinations can accept shipments.</p>
+            </div>
+            <button
+              type="button"
+              className="admin-secondary-button"
+              onClick={() => setShowDestinations(false)}
+            >
+              Close
+            </button>
+          </div>
+          <input
+            className="admin-text-input"
+            value={approvalReason}
+            onChange={(event) => setApprovalReason(event.target.value)}
+            placeholder="Reason required for approval or pause"
+            aria-label="Destination approval reason"
+          />
+          {data?.filters.vaults.map((item) => (
+            <div className="physical-intake-destination" key={item.id}>
+              <div>
+                <strong>{item.displayName}</strong>
+                <small>
+                  {item.region}, {item.countryCode}
+                </small>
+              </div>
+              <span
+                className={
+                  item.operationallyApproved && item.acceptingShipments
+                    ? "admin-status-pill is-green"
+                    : "admin-status-pill is-amber"
+                }
+              >
+                {item.operationallyApproved && item.acceptingShipments
+                  ? "Approved · accepting shipments"
+                  : "Paused"}
+              </span>
+              <button
+                type="button"
+                className="admin-secondary-button"
+                disabled={approvalReason.trim().length < 3 || destinationApproval.isPending}
+                onClick={() =>
+                  destinationApproval.mutate({
+                    id: item.id,
+                    approved: !(item.operationallyApproved && item.acceptingShipments),
+                  })
+                }
+              >
+                {item.operationallyApproved && item.acceptingShipments
+                  ? "Pause shipments"
+                  : "Approve & resume"}
+              </button>
+            </div>
+          ))}
+        </section>
+      ) : null}
       {receiptRow ? (
         <div
           className="physical-intake-modal"
@@ -1545,51 +1846,160 @@ function PhysicalIntakeBoard({
   );
 }
 
-function PhysicalIntakeRow({ row, onOpen, onReceipt, onStartVerification }: { row: AdminIntakeRow; onOpen: () => void; onReceipt: () => void; onStartVerification: () => void }) {
+function PhysicalIntakeRow({
+  row,
+  onOpen,
+  onReceipt,
+  onStartVerification,
+}: {
+  row: AdminIntakeRow;
+  onOpen: () => void;
+  onReceipt: () => void;
+  onStartVerification: () => void;
+}) {
   return (
     <tr>
       <td>
         <div className="physical-intake-identity">
-          {row.thumbnailUrl ? <img src={row.thumbnailUrl} alt="" /> : <span className="physical-intake-thumbnail-placeholder" aria-hidden="true"><PackageCheck /></span>}
-          <div><strong>{row.title} {row.testFixture ? <em className="physical-intake-fixture-badge">QA</em> : null}</strong><small>{[row.variant, row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader].filter(Boolean).join(" · ") || row.category || "Collectible"}</small><small className="physical-intake-reference">{row.intakeReference ?? `SLICE-${shortId(row.id)}`}</small></div>
+          {row.thumbnailUrl ? (
+            <img src={row.thumbnailUrl} alt="" />
+          ) : (
+            <span className="physical-intake-thumbnail-placeholder" aria-hidden="true">
+              <PackageCheck />
+            </span>
+          )}
+          <div>
+            <strong>
+              {row.title}{" "}
+              {row.testFixture ? <em className="physical-intake-fixture-badge">QA</em> : null}
+            </strong>
+            <small>
+              {[row.variant, row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader]
+                .filter(Boolean)
+                .join(" · ") ||
+                row.category ||
+                "Collectible"}
+            </small>
+            <small className="physical-intake-reference">
+              {row.intakeReference ?? `SLICE-${shortId(row.id)}`}
+            </small>
+          </div>
         </div>
       </td>
       <td>
-        <strong>{row.collector.displayName}</strong><small>{row.collector.username ? `@${row.collector.username}` : "Collector account"}</small>
+        <strong>{row.collector.displayName}</strong>
+        <small>{row.collector.username ? `@${row.collector.username}` : "Collector account"}</small>
       </td>
       <td>
-        <span className={`admin-status-pill physical-intake-status-${row.stage.toLowerCase()}`}>{intakeStageLabel(row.stage)}</span><small>{row.stageReason}</small>
+        <span className={`admin-status-pill physical-intake-status-${row.stage.toLowerCase()}`}>
+          {intakeStageLabel(row.stage)}
+        </span>
+        <small>{row.stageReason}</small>
       </td>
       <td>
-        <strong>{row.vault?.displayName ?? "Destination not selected"}</strong><small>{row.vault ? `${row.vault.region}, ${row.vault.countryCode}` : "Review submission"}</small><small>{row.vault ? "Approved destination" : ""}</small>
+        <strong>{row.vault?.displayName ?? "Destination not selected"}</strong>
+        <small>
+          {row.vault ? `${row.vault.region}, ${row.vault.countryCode}` : "Review submission"}
+        </small>
+        <small>{row.vault ? "Approved destination" : ""}</small>
       </td>
       <td>
-        {row.shipment ? <><strong>{row.shipment.carrier}</strong><small>{row.shipment.trackingNumber}</small>{safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ? <a href={safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ?? undefined} target="_blank" rel="noreferrer">Open tracking ↗</a> : null}</> : <><strong>No shipment</strong><small>Collector adds tracking</small></>}
+        {row.shipment ? (
+          <>
+            <strong>{row.shipment.carrier}</strong>
+            <small>{row.shipment.trackingNumber}</small>
+            {safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ? (
+              <a
+                href={
+                  safeTrackingUrl(row.shipment.carrier, row.shipment.trackingNumber) ?? undefined
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open tracking ↗
+              </a>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <strong>No shipment</strong>
+            <small>Collector adds tracking</small>
+          </>
+        )}
       </td>
       <td>{age(row.currentStageSince)}</td>
       <td>
-        {row.issues.length ? <span className={`physical-intake-issue physical-intake-issue-${row.issues[0].severity.toLowerCase()}`}>{row.issues[0].label}{row.issues.length > 1 ? ` +${row.issues.length - 1}` : ""}</span> : <span className="physical-intake-no-issue">No blockers</span>}
+        {row.issues.length ? (
+          <span
+            className={`physical-intake-issue physical-intake-issue-${row.issues[0].severity.toLowerCase()}`}
+          >
+            {row.issues[0].label}
+            {row.issues.length > 1 ? ` +${row.issues.length - 1}` : ""}
+          </span>
+        ) : (
+          <span className="physical-intake-no-issue">No blockers</span>
+        )}
       </td>
       <td>
-        <div className="physical-intake-row-actions">{row.allowedActions.includes("CONFIRM_RECEIPT") ? <button type="button" className="button-primary" onClick={onReceipt}>Confirm receipt</button> : row.allowedActions.includes("START_VERIFICATION") ? <button type="button" className="button-primary" onClick={onStartVerification}>Start verification</button> : <button type="button" className="admin-secondary-button" onClick={onOpen}>{row.allowedActions.includes("RESOLVE_EXCEPTION") ? "Resolve issue" : row.allowedActions.includes("COMPLETE_VERIFICATION") ? "Complete verification" : "Open intake"}</button>}</div>
+        <div className="physical-intake-row-actions">
+          {row.allowedActions.includes("CONFIRM_RECEIPT") ? (
+            <button type="button" className="button-primary" onClick={onReceipt}>
+              Confirm receipt
+            </button>
+          ) : row.allowedActions.includes("START_VERIFICATION") ? (
+            <button type="button" className="button-primary" onClick={onStartVerification}>
+              Start verification
+            </button>
+          ) : (
+            <button type="button" className="admin-secondary-button" onClick={onOpen}>
+              {row.allowedActions.includes("RESOLVE_EXCEPTION")
+                ? "Resolve issue"
+                : row.allowedActions.includes("COMPLETE_VERIFICATION")
+                  ? "Complete verification"
+                  : "Open intake"}
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );
 }
 
 function intakeStageLabel(stage: string) {
-  return ({ ACCEPTED_AWAITING_VAULT: "Awaiting shipment", IN_TRANSIT: "In transit", DELIVERED_AWAITING_RECEIPT: "Carrier delivered", RECEIVED: "Received by Slice", VERIFICATION: "Awaiting verification", VERIFIED: "Verified", VAULT_READY: "Ready for vault", EXCEPTION: "Exception" } as Record<string, string>)[stage] ?? sentence(stage);
+  return (
+    (
+      {
+        ACCEPTED_AWAITING_VAULT: "Awaiting shipment",
+        IN_TRANSIT: "In transit",
+        DELIVERED_AWAITING_RECEIPT: "Carrier delivered",
+        RECEIVED: "Received by Slice",
+        VERIFICATION: "Awaiting verification",
+        VERIFIED: "Verified",
+        VAULT_READY: "Ready for vault",
+        EXCEPTION: "Exception",
+      } as Record<string, string>
+    )[stage] ?? sentence(stage)
+  );
 }
 
 function intakeNextActor(row: AdminIntakeRow) {
   if (row.stage === "ACCEPTED_AWAITING_VAULT") return "Collector action · add tracking";
   if (row.stage === "DELIVERED_AWAITING_RECEIPT") return "Staff action · confirm receipt";
-  if (row.stage === "RECEIVED" || row.stage === "VERIFICATION") return "Staff action · begin verification";
+  if (row.stage === "RECEIVED" || row.stage === "VERIFICATION")
+    return "Staff action · begin verification";
   if (row.stage === "EXCEPTION") return "Staff action · resolve issue";
   return row.nextAction === "No action" ? "No action required" : `Monitor · ${row.nextAction}`;
 }
 
-function IntakeDetailPanel({ row, onClose, onReceipt }: { row: AdminIntakeRow; onClose: () => void; onReceipt: () => void }) {
+function IntakeDetailPanel({
+  row,
+  onClose,
+  onReceipt,
+}: {
+  row: AdminIntakeRow;
+  onClose: () => void;
+  onReceipt: () => void;
+}) {
   const timeline = [
     ["Approved", row.submissionStatus === "APPROVED", row.currentStageSince],
     ["Destination selected", Boolean(row.vault), row.currentStageSince],
@@ -1599,7 +2009,134 @@ function IntakeDetailPanel({ row, onClose, onReceipt }: { row: AdminIntakeRow; o
     ["Verified", ["VERIFIED", "VAULT_READY"].includes(row.stage), null],
     ["Ready for vault", row.stage === "VAULT_READY", null],
   ] as const;
-  return <section className="physical-intake-detail admin-panel" aria-label="Intake detail"><header className="physical-intake-section-heading"><div><p className="admin-console-eyebrow">Intake workspace</p><h3>{row.title}</h3><p>{row.variant ?? row.category ?? "Collectible"} · {row.intakeReference ?? `SLICE-${shortId(row.id)}`}</p></div><button type="button" className="admin-secondary-button" onClick={onClose}>Close detail</button></header><div className="physical-intake-detail-grid"><div><div className="physical-intake-next-action"><small>Next action</small><strong>{intakeNextActor(row)}</strong><span>{row.stageReason}</span>{row.stage === "DELIVERED_AWAITING_RECEIPT" ? <button type="button" className="button-primary" onClick={onReceipt}>Confirm physical receipt</button> : null}</div><dl className="physical-intake-detail-facts"><div><dt>Collector</dt><dd>{row.collector.displayName}{row.collector.username ? ` · @${row.collector.username}` : ""}</dd></div><div><dt>Destination</dt><dd>{row.vault?.displayName ?? "Not selected"}</dd></div><div><dt>Status</dt><dd><span className="admin-status-pill">{intakeStageLabel(row.stage)}</span></dd></div><div><dt>Shipment</dt><dd>{row.shipment ? `${row.shipment.carrier} · ${row.shipment.trackingNumber}` : "No shipment recorded"}</dd></div><div><dt>Physical receipt</dt><dd>{row.receipt ? `${date(row.receipt.confirmedAt)} · staff ${shortId(row.receipt.confirmedById)}` : "Not confirmed"}</dd></div><div><dt>Verification</dt><dd>{row.verification?.status ?? "Not started"}</dd></div></dl><div className="physical-intake-detail-links"><Link to="/operations/submissions" search={{ submission: row.submissionId, tab: "Overview" }} className="admin-secondary-button">Open submission review</Link><Link to="/admin" search={{ section: "users", user: row.collector.id }} className="admin-secondary-button">Open collector account</Link></div></div><div><h4>Lifecycle</h4><ol className="physical-intake-timeline">{timeline.map(([label, done, at]) => <li className={done ? "is-done" : "is-pending"} key={label}><span aria-hidden="true" /> <div><strong>{label}</strong><small>{done ? at ? date(at) : "Complete" : "Pending"}</small></div></li>)}</ol></div><div><h4>Evidence & custody history</h4>{row.thumbnailUrl ? <img className="physical-intake-evidence" src={row.thumbnailUrl} alt={`${row.title} front evidence`} /> : <p className="admin-safe-note">Front evidence is not available in the authorized intake projection.</p>}<ol className="physical-intake-history">{row.custodyHistory.slice(-5).reverse().map((event) => <li key={`${event.action}-${event.occurredAt}`}><strong>{sentence(event.action)}</strong><small>{date(event.occurredAt)}</small></li>)}</ol><p className="admin-safe-note">Evidence is private and shown only to authorized operators.</p></div></div></section>;
+  return (
+    <section className="physical-intake-detail admin-panel" aria-label="Intake detail">
+      <header className="physical-intake-section-heading">
+        <div>
+          <p className="admin-console-eyebrow">Intake workspace</p>
+          <h3>{row.title}</h3>
+          <p>
+            {row.variant ?? row.category ?? "Collectible"} ·{" "}
+            {row.intakeReference ?? `SLICE-${shortId(row.id)}`}
+          </p>
+        </div>
+        <button type="button" className="admin-secondary-button" onClick={onClose}>
+          Close detail
+        </button>
+      </header>
+      <div className="physical-intake-detail-grid">
+        <div>
+          <div className="physical-intake-next-action">
+            <small>Next action</small>
+            <strong>{intakeNextActor(row)}</strong>
+            <span>{row.stageReason}</span>
+            {row.stage === "DELIVERED_AWAITING_RECEIPT" ? (
+              <button type="button" className="button-primary" onClick={onReceipt}>
+                Confirm physical receipt
+              </button>
+            ) : null}
+          </div>
+          <dl className="physical-intake-detail-facts">
+            <div>
+              <dt>Collector</dt>
+              <dd>
+                {row.collector.displayName}
+                {row.collector.username ? ` · @${row.collector.username}` : ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Destination</dt>
+              <dd>{row.vault?.displayName ?? "Not selected"}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className="admin-status-pill">{intakeStageLabel(row.stage)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Shipment</dt>
+              <dd>
+                {row.shipment
+                  ? `${row.shipment.carrier} · ${row.shipment.trackingNumber}`
+                  : "No shipment recorded"}
+              </dd>
+            </div>
+            <div>
+              <dt>Physical receipt</dt>
+              <dd>
+                {row.receipt
+                  ? `${date(row.receipt.confirmedAt)} · staff ${shortId(row.receipt.confirmedById)}`
+                  : "Not confirmed"}
+              </dd>
+            </div>
+            <div>
+              <dt>Verification</dt>
+              <dd>{row.verification?.status ?? "Not started"}</dd>
+            </div>
+          </dl>
+          <div className="physical-intake-detail-links">
+            <Link
+              to="/operations/submissions"
+              search={{ submission: row.submissionId, tab: "Overview" }}
+              className="admin-secondary-button"
+            >
+              Open submission review
+            </Link>
+            <Link
+              to="/admin"
+              search={{ section: "users", user: row.collector.id }}
+              className="admin-secondary-button"
+            >
+              Open collector account
+            </Link>
+          </div>
+        </div>
+        <div>
+          <h4>Lifecycle</h4>
+          <ol className="physical-intake-timeline">
+            {timeline.map(([label, done, at]) => (
+              <li className={done ? "is-done" : "is-pending"} key={label}>
+                <span aria-hidden="true" />{" "}
+                <div>
+                  <strong>{label}</strong>
+                  <small>{done ? (at ? date(at) : "Complete") : "Pending"}</small>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <h4>Evidence & custody history</h4>
+          {row.thumbnailUrl ? (
+            <img
+              className="physical-intake-evidence"
+              src={row.thumbnailUrl}
+              alt={`${row.title} front evidence`}
+            />
+          ) : (
+            <p className="admin-safe-note">
+              Front evidence is not available in the authorized intake projection.
+            </p>
+          )}
+          <ol className="physical-intake-history">
+            {row.custodyHistory
+              .slice(-5)
+              .reverse()
+              .map((event) => (
+                <li key={`${event.action}-${event.occurredAt}`}>
+                  <strong>{sentence(event.action)}</strong>
+                  <small>{date(event.occurredAt)}</small>
+                </li>
+              ))}
+          </ol>
+          <p className="admin-safe-note">
+            Evidence is private and shown only to authorized operators.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function age(value: string) {
@@ -1850,21 +2387,21 @@ function ControlCenter({
                   ),
                 )
                 .map((item) => (
-                <StatusRow
-                  key={item.name}
-                  label={item.name}
-                  status={item.status}
-                  summary={item.summary}
-                  icon={
-                    item.name === "Database"
-                      ? Database
-                      : item.name === "Notifications"
-                        ? Activity
-                        : item.name === "Market data"
-                          ? Globe2
-                          : Gauge
-                  }
-                />
+                  <StatusRow
+                    key={item.name}
+                    label={item.name}
+                    status={item.status}
+                    summary={item.summary}
+                    icon={
+                      item.name === "Database"
+                        ? Database
+                        : item.name === "Notifications"
+                          ? Activity
+                          : item.name === "Market data"
+                            ? Globe2
+                            : Gauge
+                    }
+                  />
                 ))
             ) : (
               <AdminEmpty detail="No system health telemetry is available." />
@@ -2001,46 +2538,339 @@ function ControlCenterRevamp({
   select,
   operational,
 }: Parameters<typeof ControlCenter>[0]) {
-  if (loading) return <AdminState title="Loading Control Center" detail="Reading safe operational projections." />;
-  if (failed) return <AdminState title="Control Center unavailable" detail="Operational reads could not be loaded safely." retry={retry} />;
+  if (loading)
+    return (
+      <AdminState title="Loading Control Center" detail="Reading safe operational projections." />
+    );
+  if (failed)
+    return (
+      <AdminState
+        title="Control Center unavailable"
+        detail="Operational reads could not be loaded safely."
+        retry={retry}
+      />
+    );
   const center = operational?.controlCenter;
-  if (!center) return <AdminState title="Control Center projection needs refresh" detail="This release does not include the operational control-center projection yet." retry={retry} />;
+  if (!center)
+    return (
+      <AdminState
+        title="Control Center projection needs refresh"
+        detail="This release does not include the operational control-center projection yet."
+        retry={retry}
+      />
+    );
   const open = (target: string) => select(controlCenterSection(target));
   const summaryCards = [
-    { key: "needsAction", label: "Needs Action", icon: AlertTriangle, item: center.summary.needsAction },
-    { key: "financialRisk", label: "Financial Risk", icon: WalletCards, item: center.summary.financialRisk },
-    { key: "staffDecisions", label: "Staff Decisions", icon: ClipboardCheck, item: center.summary.staffDecisions },
-    { key: "platformIncidents", label: "Platform Incidents", icon: HeartPulse, item: center.summary.platformIncidents },
+    {
+      key: "needsAction",
+      label: "Needs Action",
+      icon: AlertTriangle,
+      item: center.summary.needsAction,
+    },
+    {
+      key: "financialRisk",
+      label: "Financial Risk",
+      icon: WalletCards,
+      item: center.summary.financialRisk,
+    },
+    {
+      key: "staffDecisions",
+      label: "Staff Decisions",
+      icon: ClipboardCheck,
+      item: center.summary.staffDecisions,
+    },
+    {
+      key: "platformIncidents",
+      label: "Platform Incidents",
+      icon: HeartPulse,
+      item: center.summary.platformIncidents,
+    },
   ] as const;
   return (
     <div className="admin-console-content admin-control-center">
       <section className="admin-console-heading admin-console-heading--overview">
-        <div><p className="admin-console-eyebrow">Control Center</p><h2>Operate Slice with clarity.</h2><span>A compact view of human decisions, customer-money risk, platform health, and pipeline pressure.</span></div>
-        <div className="admin-overview-heading-meta"><span className="admin-live-badge"><CheckCircle2 aria-hidden="true" /> Read-only projection</span><small>Last refreshed {age(center.lastRefreshedAt)}</small></div>
+        <div>
+          <p className="admin-console-eyebrow">Control Center</p>
+          <h2>Operate Slice with clarity.</h2>
+          <span>
+            A compact view of human decisions, customer-money risk, platform health, and pipeline
+            pressure.
+          </span>
+        </div>
+        <div className="admin-overview-heading-meta">
+          <span className="admin-live-badge">
+            <CheckCircle2 aria-hidden="true" /> Read-only projection
+          </span>
+          <small>Last refreshed {age(center.lastRefreshedAt)}</small>
+        </div>
       </section>
       <div className="admin-quick-actions-bar" aria-label="Quick actions">
         <span>Quick actions</span>
-        <button type="button" onClick={() => select("moderation")}><ClipboardCheck aria-hidden="true" /> Review queue <ArrowRight aria-hidden="true" /></button>
-        <button type="button" onClick={() => select("intake")}><Inbox aria-hidden="true" /> Intake board <ArrowRight aria-hidden="true" /></button>
-        <button type="button" onClick={() => select("users")}><Users aria-hidden="true" /> Accounts <ArrowRight aria-hidden="true" /></button>
-        <button type="button" onClick={() => select("health", "audit")}><FileClock aria-hidden="true" /> Audit log <ArrowRight aria-hidden="true" /></button>
+        <button type="button" onClick={() => select("moderation")}>
+          <ClipboardCheck aria-hidden="true" /> Review queue <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("intake")}>
+          <Inbox aria-hidden="true" /> Intake board <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("users")}>
+          <Users aria-hidden="true" /> Accounts <ArrowRight aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => select("health", "audit")}>
+          <FileClock aria-hidden="true" /> Audit log <ArrowRight aria-hidden="true" />
+        </button>
       </div>
       <div className="admin-control-summary-grid">
-        {summaryCards.map(({ key, label, icon: Icon, item }) => <button type="button" className={`admin-control-summary admin-control-summary--${item.severity.toLowerCase()}`} key={key} onClick={() => open(item.target)}><span className="admin-control-summary-icon"><Icon aria-hidden="true" /></span><span className="admin-control-summary-copy"><small>{label}</small><strong>{item.count ?? "—"}</strong><em>{item.subtitle}</em></span><ArrowRight aria-hidden="true" /></button>)}
+        {summaryCards.map(({ key, label, icon: Icon, item }) => (
+          <button
+            type="button"
+            className={`admin-control-summary admin-control-summary--${item.severity.toLowerCase()}`}
+            key={key}
+            onClick={() => open(item.target)}
+          >
+            <span className="admin-control-summary-icon">
+              <Icon aria-hidden="true" />
+            </span>
+            <span className="admin-control-summary-copy">
+              <small>{label}</small>
+              <strong>{item.count ?? "—"}</strong>
+              <em>{item.subtitle}</em>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </button>
+        ))}
       </div>
       <div className="admin-control-workspace-grid">
-        <section className="admin-panel admin-control-queue"><AdminPanelHeading title="Priority work queue" action="View full queue" onClick={() => open("moderation")} />{center.priorityWork.length ? <div className="admin-priority-list">{center.priorityWork.slice(0, 8).map((item) => <article className="admin-priority-row" key={item.id}><span className={`admin-priority-severity is-${item.severity.toLowerCase()}`} aria-label={`${item.severity} severity`} /><div className="admin-priority-type">{item.type}</div><div className="admin-priority-main"><strong title={item.title}>{item.title}</strong><small>{item.context}</small></div><div className="admin-priority-age">{item.age}</div><div className="admin-priority-owner">{item.owner ?? "Unassigned"}</div><button type="button" onClick={() => open(item.target)}>{item.actionLabel}</button></article>)}</div> : <AdminEmpty detail="No priority work is waiting." />}</section>
-        <section className="admin-panel admin-control-health"><AdminPanelHeading title="Platform health" action="Platform operations" onClick={() => open("health")} /><div className="admin-status-list">{center.platformHealth.length ? center.platformHealth.map((item) => <StatusRow key={item.name} label={item.name === "Payment Provider" ? "Stripe provider" : item.name} status={item.status} summary={item.summary} icon={item.name === "Database" ? Database : item.name === "Market data" ? Globe2 : item.name === "Webhooks" ? Activity : Gauge} />) : <AdminEmpty detail="Telemetry unavailable." />}</div><div className="admin-control-health-footer"><span>Open incidents</span><strong>{center.summary.platformIncidents.count}</strong><small>Projection health, not a guarantee of availability.</small></div></section>
+        <section className="admin-panel admin-control-queue">
+          <AdminPanelHeading
+            title="Priority work queue"
+            action="View full queue"
+            onClick={() => open("moderation")}
+          />
+          {center.priorityWork.length ? (
+            <div className="admin-priority-list">
+              {center.priorityWork.slice(0, 8).map((item) => (
+                <article className="admin-priority-row" key={item.id}>
+                  <span
+                    className={`admin-priority-severity is-${item.severity.toLowerCase()}`}
+                    aria-label={`${item.severity} severity`}
+                  />
+                  <div className="admin-priority-type">{item.type}</div>
+                  <div className="admin-priority-main">
+                    <strong title={item.title}>{item.title}</strong>
+                    <small>{item.context}</small>
+                  </div>
+                  <div className="admin-priority-age">{item.age}</div>
+                  <div className="admin-priority-owner">{item.owner ?? "Unassigned"}</div>
+                  <button type="button" onClick={() => open(item.target)}>
+                    {item.actionLabel}
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No priority work is waiting." />
+          )}
+        </section>
+        <section className="admin-panel admin-control-health">
+          <AdminPanelHeading
+            title="Platform health"
+            action="Platform operations"
+            onClick={() => open("health")}
+          />
+          <div className="admin-status-list">
+            {center.platformHealth.length ? (
+              center.platformHealth.map((item) => (
+                <StatusRow
+                  key={item.name}
+                  label={item.name === "Payment Provider" ? "Stripe provider" : item.name}
+                  status={item.status}
+                  summary={item.summary}
+                  icon={
+                    item.name === "Database"
+                      ? Database
+                      : item.name === "Market data"
+                        ? Globe2
+                        : item.name === "Webhooks"
+                          ? Activity
+                          : Gauge
+                  }
+                />
+              ))
+            ) : (
+              <AdminEmpty detail="Telemetry unavailable." />
+            )}
+          </div>
+          <div className="admin-control-health-footer">
+            <span>Open incidents</span>
+            <strong>{center.summary.platformIncidents.count}</strong>
+            <small>Projection health, not a guarantee of availability.</small>
+          </div>
+        </section>
       </div>
-      <section className="admin-panel admin-finance-band"><AdminPanelHeading title="Financial operations · GBP" action="Open Finance" onClick={() => open("payments")} />{center.financialOperations.access === "LIMITED" ? <p className="admin-finance-limited">{center.financialOperations.message}</p> : null}<div className="admin-finance-grid"><ControlFinanceMetric label="Customer cash liabilities" value={center.financialOperations.customerCashLiabilityMinor} /><ControlFinanceMetric label="Bacs risk-held" value={center.financialOperations.bacsRiskHeldMinor} /><ControlFinanceMetric label="Withdrawal-eligible" value={center.financialOperations.withdrawalEligibleMinor} /><ControlFinanceMetric label="Stripe available" value={center.financialOperations.providerAvailableMinor} /><ControlFinanceMetric label="Stripe pending" value={center.financialOperations.providerPendingMinor} /><ControlFinanceMetric label="Open deficits" value={center.financialOperations.openDeficitsMinor} detail={center.financialOperations.openDeficitsCount === null ? undefined : `${center.financialOperations.openDeficitsCount} open`} /><ControlFinanceMetric label="Returns / manual review" value={center.financialOperations.returnsManualReviewCount === null ? null : String(center.financialOperations.returnsManualReviewCount)} count /><ControlFinanceMetric label="Dual-control approvals" value={center.financialOperations.dualControlApprovals === null ? null : String(center.financialOperations.dualControlApprovals)} count /></div>{center.financialOperations.warning ? <div className="admin-finance-warning"><AlertTriangle aria-hidden="true" /> Payout liquidity is below eligible withdrawals. <button type="button" onClick={() => open("payments")}>Open Finance <ArrowRight aria-hidden="true" /></button></div> : null}</section>
-      <section className="admin-panel admin-pipeline-panel"><AdminPanelHeading title="Asset lifecycle pipeline" /><div className="admin-pipeline-detailed">{center.pipeline.map((stage) => <button type="button" className={stage.overdueCount ? "is-bottleneck" : ""} key={stage.id} onClick={() => open(stage.target)}><span>{stage.label}</span><strong>{stage.count}</strong><small>{stage.oldestAge ? `Oldest ${stage.oldestAge}` : "No active items"}</small>{stage.overdueCount !== null ? <em>{stage.overdueCount} overdue</em> : null}</button>)}</div></section>
-      <div className="admin-control-lower-grid"><section className="admin-panel"><AdminPanelHeading title="Important activity" action="View audit log" onClick={() => open("health")} />{center.importantActivity.length ? <div className="admin-control-activity-list">{center.importantActivity.slice(0, 6).map((item) => <button type="button" key={item.id} onClick={() => open(item.target)}><Activity aria-hidden="true" /><span><strong>{item.title}</strong><small>{item.summary}{item.actor ? ` · by ${item.actor}` : ""}</small></span><time>{age(item.occurredAt)}</time></button>)}</div> : <AdminEmpty detail="No important recent activity." />}</section><section className="admin-panel"><AdminPanelHeading title="Open cases" action="Open compliance" onClick={() => open("compliance")} />{center.openCases.length ? <div className="admin-control-cases">{center.openCases.slice(0, 5).map((item) => <button type="button" key={item.id} onClick={() => open("compliance")}><span><small>{sentence(item.type)} · {item.severity}</small><strong>{item.subject}</strong><em>{item.age} · {item.nextAction}</em></span><ArrowRight aria-hidden="true" /></button>)}</div> : <AdminEmpty detail="No open compliance cases." />}</section></div>
+      <section className="admin-panel admin-finance-band">
+        <AdminPanelHeading
+          title="Financial operations · GBP"
+          action="Open Finance"
+          onClick={() => open("payments")}
+        />
+        {center.financialOperations.access === "LIMITED" ? (
+          <p className="admin-finance-limited">{center.financialOperations.message}</p>
+        ) : null}
+        <div className="admin-finance-grid">
+          <ControlFinanceMetric
+            label="Customer cash liabilities"
+            value={center.financialOperations.customerCashLiabilityMinor}
+          />
+          <ControlFinanceMetric
+            label="Bacs risk-held"
+            value={center.financialOperations.bacsRiskHeldMinor}
+          />
+          <ControlFinanceMetric
+            label="Withdrawal-eligible"
+            value={center.financialOperations.withdrawalEligibleMinor}
+          />
+          <ControlFinanceMetric
+            label="Stripe available"
+            value={center.financialOperations.providerAvailableMinor}
+          />
+          <ControlFinanceMetric
+            label="Stripe pending"
+            value={center.financialOperations.providerPendingMinor}
+          />
+          <ControlFinanceMetric
+            label="Open deficits"
+            value={center.financialOperations.openDeficitsMinor}
+            detail={
+              center.financialOperations.openDeficitsCount === null
+                ? undefined
+                : `${center.financialOperations.openDeficitsCount} open`
+            }
+          />
+          <ControlFinanceMetric
+            label="Returns / manual review"
+            value={
+              center.financialOperations.returnsManualReviewCount === null
+                ? null
+                : String(center.financialOperations.returnsManualReviewCount)
+            }
+            count
+          />
+          <ControlFinanceMetric
+            label="Dual-control approvals"
+            value={
+              center.financialOperations.dualControlApprovals === null
+                ? null
+                : String(center.financialOperations.dualControlApprovals)
+            }
+            count
+          />
+        </div>
+        {center.financialOperations.warning ? (
+          <div className="admin-finance-warning">
+            <AlertTriangle aria-hidden="true" /> Payout liquidity is below eligible withdrawals.{" "}
+            <button type="button" onClick={() => open("payments")}>
+              Open Finance <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+      </section>
+      <section className="admin-panel admin-pipeline-panel">
+        <AdminPanelHeading title="Asset lifecycle pipeline" />
+        <div className="admin-pipeline-detailed">
+          {center.pipeline.map((stage) => (
+            <button
+              type="button"
+              className={stage.overdueCount ? "is-bottleneck" : ""}
+              key={stage.id}
+              onClick={() => open(stage.target)}
+            >
+              <span>{stage.label}</span>
+              <strong>{stage.count}</strong>
+              <small>{stage.oldestAge ? `Oldest ${stage.oldestAge}` : "No active items"}</small>
+              {stage.overdueCount !== null ? <em>{stage.overdueCount} overdue</em> : null}
+            </button>
+          ))}
+        </div>
+      </section>
+      <div className="admin-control-lower-grid">
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Important activity"
+            action="View audit log"
+            onClick={() => open("health")}
+          />
+          {center.importantActivity.length ? (
+            <div className="admin-control-activity-list">
+              {center.importantActivity.slice(0, 6).map((item) => (
+                <button type="button" key={item.id} onClick={() => open(item.target)}>
+                  <Activity aria-hidden="true" />
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>
+                      {item.summary}
+                      {item.actor ? ` · by ${item.actor}` : ""}
+                    </small>
+                  </span>
+                  <time>{age(item.occurredAt)}</time>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No important recent activity." />
+          )}
+        </section>
+        <section className="admin-panel">
+          <AdminPanelHeading
+            title="Open cases"
+            action="Open compliance"
+            onClick={() => open("compliance")}
+          />
+          {center.openCases.length ? (
+            <div className="admin-control-cases">
+              {center.openCases.slice(0, 5).map((item) => (
+                <button type="button" key={item.id} onClick={() => open("compliance")}>
+                  <span>
+                    <small>
+                      {sentence(item.type)} · {item.severity}
+                    </small>
+                    <strong>{item.subject}</strong>
+                    <em>
+                      {item.age} · {item.nextAction}
+                    </em>
+                  </span>
+                  <ArrowRight aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty detail="No open compliance cases." />
+          )}
+        </section>
+      </div>
     </div>
   );
 }
 
-function ControlFinanceMetric({ label, value, detail, count = false }: { label: string; value: string | null; detail?: string; count?: boolean }) {
-  return <div className="admin-finance-metric"><span>{label}</span><strong>{value === null ? "Unavailable" : count ? value : `£${formatMinor(value)}`}</strong><small>{detail ?? (value === null ? "Not exposed to this role" : "Authoritative projection")}</small></div>;
+function ControlFinanceMetric({
+  label,
+  value,
+  detail,
+  count = false,
+}: {
+  label: string;
+  value: string | null;
+  detail?: string;
+  count?: boolean;
+}) {
+  return (
+    <div className="admin-finance-metric">
+      <span>{label}</span>
+      <strong>{value === null ? "Unavailable" : count ? value : `£${formatMinor(value)}`}</strong>
+      <small>
+        {detail ?? (value === null ? "Not exposed to this role" : "Authoritative projection")}
+      </small>
+    </div>
+  );
 }
 
 type ReviewQueueFilters = {
@@ -2160,14 +2990,22 @@ function ReviewQueue({
         <div>
           <strong>{counts.all} awaiting review</strong>
           <span>
-            {counts.readyToReview} ready · {counts.awaitingEvidence} needs evidence · {counts.researchPending} research pending
+            {counts.readyToReview} ready · {counts.awaitingEvidence} needs evidence ·{" "}
+            {counts.researchPending} research pending
           </span>
         </div>
         <div className="admin-review-summary-actions">
-          <button type="button" className="is-active" onClick={() => updateSearch({ sort: "priority", sortDirection: "desc", page: "1" })}>
+          <button
+            type="button"
+            className="is-active"
+            onClick={() => updateSearch({ sort: "priority", sortDirection: "desc", page: "1" })}
+          >
             Ready first
           </button>
-          <button type="button" onClick={() => updateSearch({ sort: "submitted", sortDirection: "asc", page: "1" })}>
+          <button
+            type="button"
+            onClick={() => updateSearch({ sort: "submitted", sortDirection: "asc", page: "1" })}
+          >
             Oldest first
           </button>
         </div>
@@ -2312,7 +3150,9 @@ function ReviewQueue({
                               {item.category} · {item.collectible.set ?? "Set pending"}
                             </small>
                             <small>
-                              {item.collectible.cardNumber ? `Card ${item.collectible.cardNumber} · ` : ""}
+                              {item.collectible.cardNumber
+                                ? `Card ${item.collectible.cardNumber} · `
+                                : ""}
                               Submission {shortId(item.submissionReference)}
                             </small>
                           </span>
@@ -2500,7 +3340,15 @@ function ReviewSelect({
   options: Array<[string, string]>;
   onChange: (value: string) => void;
 }) {
-  return <AdminSelect label={label} value={value} options={options} onChange={onChange} className="admin-review-select" />;
+  return (
+    <AdminSelect
+      label={label}
+      value={value}
+      options={options}
+      onChange={onChange}
+      className="admin-review-select"
+    />
+  );
 }
 
 function ReviewSummaryBar({
@@ -2736,7 +3584,8 @@ function AccountsWorkspace({
       />
     );
   }
-  const updateDraft = (key: string, value: string) => setDraftFilters({ ...draftFilters, [key]: value });
+  const updateDraft = (key: string, value: string) =>
+    setDraftFilters({ ...draftFilters, [key]: value });
   const tabActive = (value: string) =>
     value === "NEEDS_REVIEW"
       ? filters.status === "PENDING_REVIEW"
@@ -2751,7 +3600,9 @@ function AccountsWorkspace({
       type: ["COLLECTOR", "INVESTOR", "STAFF", "ADMIN"].includes(value) ? value : "",
       status:
         value === "SUSPENDED" || value === "NEEDS_REVIEW" || value === "RESTRICTED"
-          ? ({ SUSPENDED: "SUSPENDED", NEEDS_REVIEW: "PENDING_REVIEW", RESTRICTED: "RESTRICTED" }[value] ?? "")
+          ? ({ SUSPENDED: "SUSPENDED", NEEDS_REVIEW: "PENDING_REVIEW", RESTRICTED: "RESTRICTED" }[
+              value
+            ] ?? "")
           : "",
     };
     setFilters(next);
@@ -2759,11 +3610,49 @@ function AccountsWorkspace({
     setPage(1);
   };
   const cards = [
-    { key: "total", label: "Total accounts", value: summary?.totalUsers ?? "—", detail: "All registered accounts", icon: Users, tone: "mint" },
-    { key: "review", label: "Pending review", value: summary?.pendingReview ?? "—", detail: "Requires staff action", icon: Clock3, tone: "amber" },
-    { key: "restricted", label: "Restricted", value: summary?.restricted ?? "—", detail: "Restricted access", icon: ShieldCheck, tone: "red" },
-    { key: "finance", label: "Financial exceptions", value: summary?.financialExceptions ?? "—", detail: summary?.financialExceptions === null ? "Finance visibility limited" : "Requires financial attention", icon: AlertTriangle, tone: "amber" },
-    { key: "suspended", label: "Suspended", value: summary?.suspended ?? "—", detail: "Suspended accounts", icon: UserRound, tone: "slate" },
+    {
+      key: "total",
+      label: "Total accounts",
+      value: summary?.totalUsers ?? "—",
+      detail: "All registered accounts",
+      icon: Users,
+      tone: "mint",
+    },
+    {
+      key: "review",
+      label: "Pending review",
+      value: summary?.pendingReview ?? "—",
+      detail: "Requires staff action",
+      icon: Clock3,
+      tone: "amber",
+    },
+    {
+      key: "restricted",
+      label: "Restricted",
+      value: summary?.restricted ?? "—",
+      detail: "Restricted access",
+      icon: ShieldCheck,
+      tone: "red",
+    },
+    {
+      key: "finance",
+      label: "Financial exceptions",
+      value: summary?.financialExceptions ?? "—",
+      detail:
+        summary?.financialExceptions === null
+          ? "Finance visibility limited"
+          : "Requires financial attention",
+      icon: AlertTriangle,
+      tone: "amber",
+    },
+    {
+      key: "suspended",
+      label: "Suspended",
+      value: summary?.suspended ?? "—",
+      detail: "Suspended accounts",
+      icon: UserRound,
+      tone: "slate",
+    },
   ] as const;
   return (
     <div className="admin-console-content admin-accounts-content admin-accounts-revamp">
@@ -2776,54 +3665,373 @@ function AccountsWorkspace({
       </section>
       <section className="admin-accounts-summary-grid" aria-label="Operational account summary">
         {cards.map(({ key, label, value, detail, icon: Icon, tone }) => (
-          <article className={`admin-accounts-summary-card admin-accounts-summary-card--${tone}`} key={key}>
-            <span className="admin-accounts-summary-icon"><Icon aria-hidden="true" /></span>
-            <div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
+          <article
+            className={`admin-accounts-summary-card admin-accounts-summary-card--${tone}`}
+            key={key}
+          >
+            <span className="admin-accounts-summary-icon">
+              <Icon aria-hidden="true" />
+            </span>
+            <div>
+              <span>{label}</span>
+              <strong>{value}</strong>
+              <small>{detail}</small>
+            </div>
           </article>
         ))}
       </section>
-      {loading ? <AdminState title="Loading platform accounts" detail="Reading the admin-safe account directory." /> : failed ? <AdminState title="We couldn't load platform accounts" detail="The account directory could not be loaded safely." retry={retry} /> : (
+      {loading ? (
+        <AdminState
+          title="Loading platform accounts"
+          detail="Reading the admin-safe account directory."
+        />
+      ) : failed ? (
+        <AdminState
+          title="We couldn't load platform accounts"
+          detail="The account directory could not be loaded safely."
+          retry={retry}
+        />
+      ) : (
         <section className="admin-panel admin-accounts-table-panel admin-accounts-revamp-panel">
-          <div className="admin-account-tabs admin-accounts-revamp-tabs" role="tablist" aria-label="Account categories">
-            {[["", "All Accounts"], ["COLLECTOR", "Collectors"], ["INVESTOR", "Investors"], ["STAFF", "Staff"], ["ADMIN", "Admins"], ["NEEDS_REVIEW", "Needs Review"], ["RESTRICTED", "Restricted"]].map(([value, label]) => (
-              <button type="button" role="tab" aria-selected={tabActive(value)} className={tabActive(value) ? "is-active" : ""} key={label} onClick={() => selectTab(value)}>{label}{value === "NEEDS_REVIEW" && summary?.pendingReview ? <b>{summary.pendingReview}</b> : null}{value === "RESTRICTED" && summary?.restricted ? <b>{summary.restricted}</b> : null}</button>
+          <div
+            className="admin-account-tabs admin-accounts-revamp-tabs"
+            role="tablist"
+            aria-label="Account categories"
+          >
+            {[
+              ["", "All Accounts"],
+              ["COLLECTOR", "Collectors"],
+              ["INVESTOR", "Investors"],
+              ["STAFF", "Staff"],
+              ["ADMIN", "Admins"],
+              ["NEEDS_REVIEW", "Needs Review"],
+              ["RESTRICTED", "Restricted"],
+            ].map(([value, label]) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tabActive(value)}
+                className={tabActive(value) ? "is-active" : ""}
+                key={label}
+                onClick={() => selectTab(value)}
+              >
+                {label}
+                {value === "NEEDS_REVIEW" && summary?.pendingReview ? (
+                  <b>{summary.pendingReview}</b>
+                ) : null}
+                {value === "RESTRICTED" && summary?.restricted ? <b>{summary.restricted}</b> : null}
+              </button>
             ))}
           </div>
           <div className="admin-accounts-filter-bar">
-            <label className="admin-account-search"><Search aria-hidden="true" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users, email, username or ID..." /></label>
-            <AdminSelect label="Account state" value={draftFilters.status} onChange={(value) => updateDraft("status", value)} options={[["", "Account state: All"], ["ACTIVE", "Active"], ["PENDING_REVIEW", "Pending review"], ["RESTRICTED", "Restricted"], ["SUSPENDED", "Suspended"]]} />
-            <AdminSelect label="Financial state" value={draftFilters.financialState} onChange={(value) => updateDraft("financialState", value)} options={[["", "Financial state: All"], ["CLEAR", "Clear"], ["BANK_CLEARING", "Bank clearing"], ["MANUAL_REVIEW", "Manual review"], ["FINANCIAL_DEFICIT", "Financial deficit"], ["RETURNED_DEPOSIT", "Returned deposit"], ["WITHDRAWAL_HOLD", "Withdrawal hold"]]} />
-            <AdminSelect label="Compliance" value={draftFilters.complianceState} onChange={(value) => updateDraft("complianceState", value)} options={[["", "Compliance: All"], ["VERIFIED", "Verified"], ["REVIEW_REQUIRED", "Review required"], ["INCOMPLETE", "Not complete"], ["RESTRICTED", "Restricted"]]} />
-            <AdminSelect label="Payouts" value={draftFilters.payoutState} onChange={(value) => updateDraft("payoutState", value)} options={[["", "Payouts: All"], ["READY", "Ready"], ["SETUP_REQUIRED", "Setup required"], ["RESTRICTED", "Restricted"]]} />
-            <AdminSelect label="Role" value={draftFilters.role} onChange={(value) => updateDraft("role", value)} options={[["", "Role: All"], ["COLLECTOR", "Collector"], ["ADMIN", "Admin"], ["SUPPORT", "Support"], ["ASSET_REVIEWER", "Asset reviewer"]]} />
-            <AdminSelect label="Membership" value={draftFilters.membershipPlan} onChange={(value) => updateDraft("membershipPlan", value)} options={[["", "Membership: All"], ["STARTER", "Starter"], ["PRO", "Pro"], ["ELITE", "Elite"]]} />
-            <button type="button" className="admin-filter-more" onClick={() => setFiltersOpen(!filtersOpen)}><ListChecks aria-hidden="true" /> More filters</button>
+            <label className="admin-account-search">
+              <Search aria-hidden="true" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search users, email, username or ID..."
+              />
+            </label>
+            <AdminSelect
+              label="Account state"
+              value={draftFilters.status}
+              onChange={(value) => updateDraft("status", value)}
+              options={[
+                ["", "Account state: All"],
+                ["ACTIVE", "Active"],
+                ["PENDING_REVIEW", "Pending review"],
+                ["RESTRICTED", "Restricted"],
+                ["SUSPENDED", "Suspended"],
+              ]}
+            />
+            <AdminSelect
+              label="Financial state"
+              value={draftFilters.financialState}
+              onChange={(value) => updateDraft("financialState", value)}
+              options={[
+                ["", "Financial state: All"],
+                ["CLEAR", "Clear"],
+                ["BANK_CLEARING", "Bank clearing"],
+                ["MANUAL_REVIEW", "Manual review"],
+                ["FINANCIAL_DEFICIT", "Financial deficit"],
+                ["RETURNED_DEPOSIT", "Returned deposit"],
+                ["WITHDRAWAL_HOLD", "Withdrawal hold"],
+              ]}
+            />
+            <AdminSelect
+              label="Compliance"
+              value={draftFilters.complianceState}
+              onChange={(value) => updateDraft("complianceState", value)}
+              options={[
+                ["", "Compliance: All"],
+                ["VERIFIED", "Verified"],
+                ["REVIEW_REQUIRED", "Review required"],
+                ["INCOMPLETE", "Not complete"],
+                ["RESTRICTED", "Restricted"],
+              ]}
+            />
+            <AdminSelect
+              label="Payouts"
+              value={draftFilters.payoutState}
+              onChange={(value) => updateDraft("payoutState", value)}
+              options={[
+                ["", "Payouts: All"],
+                ["READY", "Ready"],
+                ["SETUP_REQUIRED", "Setup required"],
+                ["RESTRICTED", "Restricted"],
+              ]}
+            />
+            <AdminSelect
+              label="Role"
+              value={draftFilters.role}
+              onChange={(value) => updateDraft("role", value)}
+              options={[
+                ["", "Role: All"],
+                ["COLLECTOR", "Collector"],
+                ["ADMIN", "Admin"],
+                ["SUPPORT", "Support"],
+                ["ASSET_REVIEWER", "Asset reviewer"],
+              ]}
+            />
+            <AdminSelect
+              label="Membership"
+              value={draftFilters.membershipPlan}
+              onChange={(value) => updateDraft("membershipPlan", value)}
+              options={[
+                ["", "Membership: All"],
+                ["STARTER", "Starter"],
+                ["PRO", "Pro"],
+                ["ELITE", "Elite"],
+              ]}
+            />
+            <button
+              type="button"
+              className="admin-filter-more"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            >
+              <ListChecks aria-hidden="true" /> More filters
+            </button>
           </div>
-          {filtersOpen ? <section className="admin-account-advanced-filters admin-accounts-revamp-advanced" aria-label="More account filters">
-            <div><strong>More filters</strong><span>Use only dimensions backed by account telemetry.</span></div>
-            <AdminSelect label="Billing status" value={draftFilters.membershipStatus} onChange={(value) => updateDraft("membershipStatus", value)} options={[["", "Billing: All"], ["ACTIVE", "Active"], ["TRIALING", "Trialing"], ["PAST_DUE", "Past due"], ["SUSPENDED", "Suspended"], ["EXPIRED", "Expired"]]} />
-            <AdminSelect label="Last active" value={draftFilters.lastActiveWindow} onChange={(value) => updateDraft("lastActiveWindow", value)} options={[["", "Last active: Any time"], ["1", "Last 24 hours"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["inactive", "Inactive 30+ days"]]} />
-            <div className="admin-date-range"><input aria-label="Joined from" type="date" value={draftFilters.joinedFrom} onChange={(event) => updateDraft("joinedFrom", event.target.value)} /><input aria-label="Joined to" type="date" value={draftFilters.joinedTo} onChange={(event) => updateDraft("joinedTo", event.target.value)} /></div>
-            <button type="button" className="admin-apply-filters" onClick={applyFilters}>Apply filters</button><button type="button" className="admin-clear-filters" onClick={clearFilters}>Clear all</button>
-          </section> : null}
-          <div className="admin-accounts-table-heading"><div><strong>Account directory</strong><span>{total} account{total === 1 ? "" : "s"} match the current view</span></div><label>Sort <AdminSelect label="Sort accounts" value={sort} onChange={setSort} options={[["joined", "Needs attention / joined"], ["lastActive", "Last activity"], ["username", "Name"]]} /></label></div>
-          {users.length ? <div className="admin-table-wrap admin-accounts-revamp-table-wrap"><table className="admin-table admin-accounts-table admin-accounts-revamp-table"><thead><tr><th>User</th><th>Access</th><th>Account state</th><th>Financial state</th><th>Compliance</th><th>Payouts</th><th>Last activity</th><th>Joined</th><th aria-label="Action" /></tr></thead><tbody>
-            {users.map((user) => {
-              const activeRoles = uniqueRoleAssignments(user.roles).filter((role) => role.role !== "USER");
-              return <tr key={user.id} className={`admin-account-row admin-account-row--${accountTone(user)}`} onDoubleClick={() => openUser(user.id)}>
-                <td data-label="User"><button type="button" className="admin-account-user-button" onClick={() => openUser(user.id)}><span className="admin-user-avatar">{initials(user.displayName)}</span><span><strong>{user.displayName}</strong><small>{user.username ? `@${user.username}` : user.email}</small>{isBetaAccount(user) ? <em className="admin-beta-badge">TEST</em> : null}</span></button></td>
-                <td data-label="Access"><div className="admin-account-access"><span className="admin-type-badge">{sentence(user.primaryType)}</span>{activeRoles.length > 0 && activeRoles[0].role !== user.primaryType ? <small title={activeRoles.map((role) => sentence(role.role)).join(", ")}>{activeRoles.length} role{activeRoles.length === 1 ? "" : "s"}</small> : null}</div></td>
-                <td data-label="Account state"><AccountStateCell label={accountStatusLabel(user.accountStatus)} reason={user.accountStateReason} tone={accountStatusTone(user.accountStatus)} /></td>
-                <td data-label="Financial state"><AccountStateCell label={financialStateLabel(user.financialState)} reason={financialStateDetail(user)} tone={financialStateTone(user.financialState)} /></td>
-                <td data-label="Compliance"><AccountStateCell label={complianceStateLabel(user.complianceState)} reason={user.complianceReason ? sentence(user.complianceReason) : null} tone={complianceStateTone(user.complianceState)} /></td>
-                <td data-label="Payouts"><AccountStateCell label={payoutStateLabel(user.payoutState)} reason={user.payoutReason} tone={payoutStateTone(user.payoutState)} /></td>
-                <td data-label="Last activity" title={user.lastActivityAt ? new Date(user.lastActivityAt).toISOString() : "Activity telemetry is not available."}>{user.lastActivityAt ? date(user.lastActivityAt) : <span className="admin-muted">Not tracked</span>}</td>
-                <td data-label="Joined">{date(user.createdAt)}</td>
-                <td data-label="Action"><button type="button" className="admin-open-account admin-open-account--compact" aria-label={`Open account for ${user.displayName}`} onClick={() => openUser(user.id)}>Open <ArrowRight aria-hidden="true" /></button></td>
-              </tr>;
-            })}
-          </tbody></table></div> : <AdminEmpty detail="No accounts match these filters." icon={Users} />}
-          <div className="admin-pagination"><span>{total ? `Showing ${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} of ${total} accounts` : "No accounts match these filters."}</span><span className="admin-pagination-controls"><button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft aria-hidden="true" /></button><strong>{page}</strong><button type="button" aria-label="Next page" disabled={page * 10 >= total} onClick={() => setPage(page + 1)}><ChevronRight aria-hidden="true" /></button></span></div>
+          {filtersOpen ? (
+            <section
+              className="admin-account-advanced-filters admin-accounts-revamp-advanced"
+              aria-label="More account filters"
+            >
+              <div>
+                <strong>More filters</strong>
+                <span>Use only dimensions backed by account telemetry.</span>
+              </div>
+              <AdminSelect
+                label="Billing status"
+                value={draftFilters.membershipStatus}
+                onChange={(value) => updateDraft("membershipStatus", value)}
+                options={[
+                  ["", "Billing: All"],
+                  ["ACTIVE", "Active"],
+                  ["TRIALING", "Trialing"],
+                  ["PAST_DUE", "Past due"],
+                  ["SUSPENDED", "Suspended"],
+                  ["EXPIRED", "Expired"],
+                ]}
+              />
+              <AdminSelect
+                label="Last active"
+                value={draftFilters.lastActiveWindow}
+                onChange={(value) => updateDraft("lastActiveWindow", value)}
+                options={[
+                  ["", "Last active: Any time"],
+                  ["1", "Last 24 hours"],
+                  ["7", "Last 7 days"],
+                  ["30", "Last 30 days"],
+                  ["inactive", "Inactive 30+ days"],
+                ]}
+              />
+              <div className="admin-date-range">
+                <input
+                  aria-label="Joined from"
+                  type="date"
+                  value={draftFilters.joinedFrom}
+                  onChange={(event) => updateDraft("joinedFrom", event.target.value)}
+                />
+                <input
+                  aria-label="Joined to"
+                  type="date"
+                  value={draftFilters.joinedTo}
+                  onChange={(event) => updateDraft("joinedTo", event.target.value)}
+                />
+              </div>
+              <button type="button" className="admin-apply-filters" onClick={applyFilters}>
+                Apply filters
+              </button>
+              <button type="button" className="admin-clear-filters" onClick={clearFilters}>
+                Clear all
+              </button>
+            </section>
+          ) : null}
+          <div className="admin-accounts-table-heading">
+            <div>
+              <strong>Account directory</strong>
+              <span>
+                {total} account{total === 1 ? "" : "s"} match the current view
+              </span>
+            </div>
+            <label>
+              Sort{" "}
+              <AdminSelect
+                label="Sort accounts"
+                value={sort}
+                onChange={setSort}
+                options={[
+                  ["joined", "Needs attention / joined"],
+                  ["lastActive", "Last activity"],
+                  ["username", "Name"],
+                ]}
+              />
+            </label>
+          </div>
+          {users.length ? (
+            <div className="admin-table-wrap admin-accounts-revamp-table-wrap">
+              <table className="admin-table admin-accounts-table admin-accounts-revamp-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Access</th>
+                    <th>Account state</th>
+                    <th>Financial state</th>
+                    <th>Compliance</th>
+                    <th>Payouts</th>
+                    <th>Last activity</th>
+                    <th>Joined</th>
+                    <th aria-label="Action" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => {
+                    const activeRoles = uniqueRoleAssignments(user.roles).filter(
+                      (role) => role.role !== "USER",
+                    );
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`admin-account-row admin-account-row--${accountTone(user)}`}
+                        onDoubleClick={() => openUser(user.id)}
+                      >
+                        <td data-label="User">
+                          <button
+                            type="button"
+                            className="admin-account-user-button"
+                            onClick={() => openUser(user.id)}
+                          >
+                            <span className="admin-user-avatar">{initials(user.displayName)}</span>
+                            <span>
+                              <strong>{user.displayName}</strong>
+                              <small>{user.username ? `@${user.username}` : user.email}</small>
+                              {isBetaAccount(user) ? (
+                                <em className="admin-beta-badge">TEST</em>
+                              ) : null}
+                            </span>
+                          </button>
+                        </td>
+                        <td data-label="Access">
+                          <div className="admin-account-access">
+                            <span className="admin-type-badge">{sentence(user.primaryType)}</span>
+                            {activeRoles.length > 0 && activeRoles[0].role !== user.primaryType ? (
+                              <small
+                                title={activeRoles.map((role) => sentence(role.role)).join(", ")}
+                              >
+                                {activeRoles.length} role{activeRoles.length === 1 ? "" : "s"}
+                              </small>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td data-label="Account state">
+                          <AccountStateCell
+                            label={accountStatusLabel(user.accountStatus)}
+                            reason={user.accountStateReason}
+                            tone={accountStatusTone(user.accountStatus)}
+                          />
+                        </td>
+                        <td data-label="Financial state">
+                          <AccountStateCell
+                            label={financialStateLabel(user.financialState)}
+                            reason={financialStateDetail(user)}
+                            tone={financialStateTone(user.financialState)}
+                          />
+                        </td>
+                        <td data-label="Compliance">
+                          <AccountStateCell
+                            label={complianceStateLabel(user.complianceState)}
+                            reason={user.complianceReason ? sentence(user.complianceReason) : null}
+                            tone={complianceStateTone(user.complianceState)}
+                          />
+                        </td>
+                        <td data-label="Payouts">
+                          <AccountStateCell
+                            label={payoutStateLabel(user.payoutState)}
+                            reason={user.payoutReason}
+                            tone={payoutStateTone(user.payoutState)}
+                          />
+                        </td>
+                        <td
+                          data-label="Last activity"
+                          title={
+                            user.lastActivityAt
+                              ? new Date(user.lastActivityAt).toISOString()
+                              : "Activity telemetry is not available."
+                          }
+                        >
+                          {user.lastActivityAt ? (
+                            date(user.lastActivityAt)
+                          ) : (
+                            <span className="admin-muted">Not tracked</span>
+                          )}
+                        </td>
+                        <td data-label="Joined">{date(user.createdAt)}</td>
+                        <td data-label="Action">
+                          <button
+                            type="button"
+                            className="admin-open-account admin-open-account--compact"
+                            aria-label={`Open account for ${user.displayName}`}
+                            onClick={() => openUser(user.id)}
+                          >
+                            Open <ArrowRight aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <AdminEmpty detail="No accounts match these filters." icon={Users} />
+          )}
+          <div className="admin-pagination">
+            <span>
+              {total
+                ? `Showing ${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} of ${total} accounts`
+                : "No accounts match these filters."}
+            </span>
+            <span className="admin-pagination-controls">
+              <button
+                type="button"
+                aria-label="Previous page"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft aria-hidden="true" />
+              </button>
+              <strong>{page}</strong>
+              <button
+                type="button"
+                aria-label="Next page"
+                disabled={page * 10 >= total}
+                onClick={() => setPage(page + 1)}
+              >
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </span>
+          </div>
         </section>
       )}
     </div>
@@ -3027,7 +4235,9 @@ function UserDetailExperience({
   const tabs = [
     "Overview",
     "Access",
-    ...(user.primaryType === "INVESTOR" || user.portfolioSummary.totalAssets || user.portfolioSummary.openOrders
+    ...(user.primaryType === "INVESTOR" ||
+    user.portfolioSummary.totalAssets ||
+    user.portfolioSummary.openOrders
       ? ["Investor"]
       : []),
     "Collector",
@@ -3036,7 +4246,8 @@ function UserDetailExperience({
     "Activity",
     "Audit",
   ];
-  const normalizedTab = tab === "Roles & Access" ? "Access" : tab === "Wallet" || tab === "Orders" ? "Finance" : tab;
+  const normalizedTab =
+    tab === "Roles & Access" ? "Access" : tab === "Wallet" || tab === "Orders" ? "Finance" : tab;
   const activeTab = tabs.includes(normalizedTab ?? "") ? normalizedTab! : "Overview";
   const money = (value: string | null, currency = "GBP") =>
     value === null
@@ -3296,13 +4507,25 @@ function UserDetailExperience({
                 <div className="admin-record-list">
                   {user.recentOrders.map((order) => (
                     <article className="admin-record" key={order.id}>
-                      <span className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}>{sentence(order.side)}</span>
-                      <div className="min-w-0"><strong>{order.assetTitle}</strong><small>{order.units} ownership units · {money(order.limitPriceMinor, order.currency)} · {date(order.updatedAt)}</small></div>
+                      <span
+                        className={`admin-order-side admin-order-side--${order.side.toLowerCase()}`}
+                      >
+                        {sentence(order.side)}
+                      </span>
+                      <div className="min-w-0">
+                        <strong>{order.assetTitle}</strong>
+                        <small>
+                          {order.units} ownership units ·{" "}
+                          {money(order.limitPriceMinor, order.currency)} · {date(order.updatedAt)}
+                        </small>
+                      </div>
                       <span className="admin-record-status">{sentence(order.status)}</span>
                     </article>
                   ))}
                 </div>
-              ) : <AdminEmpty detail="No orders recorded for this account." icon={WalletCards} />}
+              ) : (
+                <AdminEmpty detail="No orders recorded for this account." icon={WalletCards} />
+              )}
             </>
           ) : (
             <AdminEmpty
@@ -3321,8 +4544,18 @@ function UserDetailExperience({
             value={sentence(user.complianceSummary.kycStatus)}
             tone="positive"
           />
-          <DetailRow label="Transaction monitoring" value={user.complianceSummary.kytStatus === "UNKNOWN" ? "Not configured" : sentence(user.complianceSummary.kytStatus)} />
-          <DetailRow label="Verification source" value={user.complianceSummary.provider ? "Internal verification" : "Not configured"} />
+          <DetailRow
+            label="Transaction monitoring"
+            value={
+              user.complianceSummary.kytStatus === "UNKNOWN"
+                ? "Not configured"
+                : sentence(user.complianceSummary.kytStatus)
+            }
+          />
+          <DetailRow
+            label="Verification source"
+            value={user.complianceSummary.provider ? "Internal verification" : "Not configured"}
+          />
           <DetailRow label="Cases" value={String(user.complianceSummary.caseCount)} />
           <p className="admin-safe-note">
             Provider truth is preserved; sensitive evidence and secrets are not exposed.
@@ -3368,7 +4601,9 @@ function UserDetailExperience({
           <div>
             <p className="admin-console-eyebrow">Users &amp; Accounts · Account Control Center</p>
             <h2>{user.displayName}</h2>
-            <span>{user.username ? `@${user.username}` : "Username unavailable"} · {user.email}</span>
+            <span>
+              {user.username ? `@${user.username}` : "Username unavailable"} · {user.email}
+            </span>
             <div className="admin-detail-chips">
               <span>{sentence(user.primaryType)}</span>
               {isBetaAccount(user) ? <span>Beta test</span> : null}
@@ -3378,23 +4613,50 @@ function UserDetailExperience({
           </div>
         </div>
         <div className="admin-user-detail-actions">
-          <span className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}>
+          <span
+            className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+          >
             {sentence(user.accountStatus)}
           </span>
-          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("Access")}>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--compact"
+            onClick={() => setTab("Access")}
+          >
             <Settings aria-hidden="true" /> Manage account
           </button>
-          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("Audit")}>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--compact"
+            onClick={() => setTab("Audit")}
+          >
             <FileClock aria-hidden="true" /> Audit log
           </button>
         </div>
       </section>
       <section className="admin-detail-summary" aria-label="Account summary">
-        <div><span>Verification</span><strong>{sentence(user.complianceSummary.kycStatus)}</strong></div>
-        <div><span>Collector</span><strong>{user.collectorOverview ? "Enabled" : "Not enabled"}</strong></div>
-        <div><span>Membership</span><strong>{user.collector?.subscription ? user.collector.subscription.plan : "Not applicable"}</strong></div>
-        <div><span>Last active</span><strong>{user.lastActivityAt ? date(user.lastActivityAt) : "Not tracked"}</strong></div>
-        <div><span>User ID</span><strong title={user.id}>{shortId(user.id)}…</strong></div>
+        <div>
+          <span>Verification</span>
+          <strong>{sentence(user.complianceSummary.kycStatus)}</strong>
+        </div>
+        <div>
+          <span>Collector</span>
+          <strong>{user.collectorOverview ? "Enabled" : "Not enabled"}</strong>
+        </div>
+        <div>
+          <span>Membership</span>
+          <strong>
+            {user.collector?.subscription ? user.collector.subscription.plan : "Not applicable"}
+          </strong>
+        </div>
+        <div>
+          <span>Last active</span>
+          <strong>{user.lastActivityAt ? date(user.lastActivityAt) : "Not tracked"}</strong>
+        </div>
+        <div>
+          <span>User ID</span>
+          <strong title={user.id}>{shortId(user.id)}…</strong>
+        </div>
       </section>
       <nav className="admin-tabs admin-user-detail-tabs" aria-label="User detail sections">
         {tabs.map((item) => (
@@ -3408,7 +4670,9 @@ function UserDetailExperience({
           </button>
         ))}
       </nav>
-      <div className="admin-user-detail-main"><main>{renderTab()}</main></div>
+      <div className="admin-user-detail-main">
+        <main>{renderTab()}</main>
+      </div>
     </div>
   );
 }
@@ -3443,7 +4707,7 @@ function ConsolidatedUserDetailExperience({
     Activity: "History",
     Audit: "History",
   };
-  const requestedTab = tab ? legacyTabMap[tab] ?? tab : "Overview";
+  const requestedTab = tab ? (legacyTabMap[tab] ?? tab) : "Overview";
   const activeTab = ["Overview", "Operations", "History"].includes(requestedTab)
     ? requestedTab
     : "Overview";
@@ -3452,7 +4716,9 @@ function ConsolidatedUserDetailExperience({
   }, [activeTab, setTab, tab]);
 
   if (loading)
-    return <AdminState title="Loading account" detail="Reading identity and operational projections." />;
+    return (
+      <AdminState title="Loading account" detail="Reading identity and operational projections." />
+    );
   if (failed || !user)
     return (
       <AdminState
@@ -3476,13 +4742,20 @@ function ConsolidatedUserDetailExperience({
   const stateTone = (value: string) => {
     if (["CLEAR", "VERIFIED", "READY", "ACTIVE"].includes(value)) return "positive";
     if (["UNAVAILABLE", "UNKNOWN"].includes(value)) return "muted";
-    if (["RESTRICTED", "SUSPENDED", "FINANCIAL_DEFICIT", "RETURNED_DEPOSIT"].includes(value)) return "critical";
+    if (["RESTRICTED", "SUSPENDED", "FINANCIAL_DEFICIT", "RETURNED_DEPOSIT"].includes(value))
+      return "critical";
     return "warning";
   };
   const stateText = (value: string) =>
-    value === "UNAVAILABLE" ? "Unavailable" : value === "SETUP_REQUIRED" ? "Setup required" : sentence(value);
+    value === "UNAVAILABLE"
+      ? "Unavailable"
+      : value === "SETUP_REQUIRED"
+        ? "Setup required"
+        : sentence(value);
   const stateCell = (label: string, value: string, detail: string) => (
-    <div className={`admin-account-detail-state-cell admin-account-detail-state-cell--${stateTone(value)}`}>
+    <div
+      className={`admin-account-detail-state-cell admin-account-detail-state-cell--${stateTone(value)}`}
+    >
       <span className="admin-account-detail-state-label">{label}</span>
       <strong>{stateText(value)}</strong>
       <small>{detail}</small>
@@ -3497,12 +4770,46 @@ function ConsolidatedUserDetailExperience({
       .replace(/\b\w/g, (character) => character.toUpperCase());
   const historyCategory = (action: string, resourceType: string) => {
     const value = `${action} ${resourceType}`.toLowerCase();
-    if (value.includes("security") || value.includes("login") || value.includes("2fa") || value.includes("password") || value.includes("session")) return "Security";
-    if (value.includes("finance") || value.includes("money") || value.includes("payout") || value.includes("deposit") || value.includes("withdraw") || value.includes("wallet")) return "Financial";
-    if (value.includes("order") || value.includes("trade") || value.includes("listing") || value.includes("market")) return "Trading";
-    if (value.includes("compliance") || value.includes("identity") || value.includes("kyc") || value.includes("kyb")) return "Compliance";
-    if (value.includes("collector") || value.includes("submission") || value.includes("intake")) return "Collector";
-    if (value.includes("admin") || value.includes("role") || value.includes("permission") || value.includes("audit")) return "Admin";
+    if (
+      value.includes("security") ||
+      value.includes("login") ||
+      value.includes("2fa") ||
+      value.includes("password") ||
+      value.includes("session")
+    )
+      return "Security";
+    if (
+      value.includes("finance") ||
+      value.includes("money") ||
+      value.includes("payout") ||
+      value.includes("deposit") ||
+      value.includes("withdraw") ||
+      value.includes("wallet")
+    )
+      return "Financial";
+    if (
+      value.includes("order") ||
+      value.includes("trade") ||
+      value.includes("listing") ||
+      value.includes("market")
+    )
+      return "Trading";
+    if (
+      value.includes("compliance") ||
+      value.includes("identity") ||
+      value.includes("kyc") ||
+      value.includes("kyb")
+    )
+      return "Compliance";
+    if (value.includes("collector") || value.includes("submission") || value.includes("intake"))
+      return "Collector";
+    if (
+      value.includes("admin") ||
+      value.includes("role") ||
+      value.includes("permission") ||
+      value.includes("audit")
+    )
+      return "Admin";
     return "Account";
   };
   const statusEvents = user.statusHistory.map((entry) => ({
@@ -3518,31 +4825,72 @@ function ConsolidatedUserDetailExperience({
   }));
   const auditEvents = user.activitySnapshot.map((activity) => ({
     ...activity,
-    detail: activity.resourceId ? `${activity.resourceType} · ${shortId(activity.resourceId)}` : activity.resourceType,
+    detail: activity.resourceId
+      ? `${activity.resourceType} · ${shortId(activity.resourceId)}`
+      : activity.resourceType,
   }));
   const historyEvents = [...auditEvents, ...statusEvents].sort(
     (left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime(),
   );
-  const historyFilters = ["All", "Security", "Financial", "Trading", "Compliance", "Account", "Collector", "Admin", "Provider"];
+  const historyFilters = [
+    "All",
+    "Security",
+    "Financial",
+    "Trading",
+    "Compliance",
+    "Account",
+    "Collector",
+    "Admin",
+    "Provider",
+  ];
   const visibleHistory = historyEvents.filter((event) =>
-    historyFilter === "All" ? true : historyCategory(event.action, event.resourceType) === historyFilter,
+    historyFilter === "All"
+      ? true
+      : historyCategory(event.action, event.resourceType) === historyFilter,
   );
   const attention = [
-    user.accountStatus === "PENDING_REVIEW" ? ["Account review", user.accountStateReason ?? "Staff review required."] : null,
-    ["RESTRICTED", "SUSPENDED"].includes(user.accountStatus) ? ["Account restricted", user.accountStateReason ?? "Account access is restricted."] : null,
-    user.permissions.finance && user.financialState !== "CLEAR" ? ["Financial exception", financialStateDetail(user)] : null,
-    user.permissions.compliance && ["REVIEW_REQUIRED", "INCOMPLETE", "RESTRICTED"].includes(user.complianceState) ? ["Compliance", complianceStateLabel(user.complianceState)] : null,
-    user.payoutState !== "READY" ? ["Payouts", user.payoutReason ?? payoutStateLabel(user.payoutState)] : null,
-    user.activeHolds.length ? ["Active hold", `${user.activeHolds.length} account hold${user.activeHolds.length === 1 ? "" : "s"} recorded.`] : null,
+    user.accountStatus === "PENDING_REVIEW"
+      ? ["Account review", user.accountStateReason ?? "Staff review required."]
+      : null,
+    ["RESTRICTED", "SUSPENDED"].includes(user.accountStatus)
+      ? ["Account restricted", user.accountStateReason ?? "Account access is restricted."]
+      : null,
+    user.permissions.finance && user.financialState !== "CLEAR"
+      ? ["Financial exception", financialStateDetail(user)]
+      : null,
+    user.permissions.compliance &&
+    ["REVIEW_REQUIRED", "INCOMPLETE", "RESTRICTED"].includes(user.complianceState)
+      ? ["Compliance", complianceStateLabel(user.complianceState)]
+      : null,
+    user.payoutState !== "READY"
+      ? ["Payouts", user.payoutReason ?? payoutStateLabel(user.payoutState)]
+      : null,
+    user.activeHolds.length
+      ? [
+          "Active hold",
+          `${user.activeHolds.length} account hold${user.activeHolds.length === 1 ? "" : "s"} recorded.`,
+        ]
+      : null,
   ].filter((item): item is [string, string] => Boolean(item));
   const finance = user.financialDetails;
-  const investorVisible = user.primaryType === "INVESTOR" || user.portfolioSummary.totalAssets > 0 || user.portfolioSummary.openOrders > 0;
+  const investorVisible =
+    user.primaryType === "INVESTOR" ||
+    user.portfolioSummary.totalAssets > 0 ||
+    user.portfolioSummary.openOrders > 0;
 
   const renderOverview = () => (
     <div className="admin-account-detail-stack">
       <section className="admin-account-detail-state-grid" aria-label="Account operating state">
-        {stateCell("Account state", user.accountStatus, user.accountStateReason ?? "No restrictions")}
-        {stateCell("Access", user.primaryType, `${roles.length} active role${roles.length === 1 ? "" : "s"}`)}
+        {stateCell(
+          "Account state",
+          user.accountStatus,
+          user.accountStateReason ?? "No restrictions",
+        )}
+        {stateCell(
+          "Access",
+          user.primaryType,
+          `${roles.length} active role${roles.length === 1 ? "" : "s"}`,
+        )}
         {stateCell(
           "Financial state",
           user.financialState,
@@ -3555,38 +4903,60 @@ function ConsolidatedUserDetailExperience({
         {stateCell(
           "Compliance",
           user.complianceState,
-          user.permissions.compliance ? user.complianceReason ?? "No current case context" : "Compliance access required",
+          user.permissions.compliance
+            ? (user.complianceReason ?? "No current case context")
+            : "Compliance access required",
         )}
         {stateCell("Payouts", user.payoutState, user.payoutReason ?? "Payout capability ready")}
       </section>
 
       <div className="admin-account-detail-grid admin-account-detail-grid--overview">
         <section className="admin-account-detail-panel">
-          <AdminPanelHeading title="Needs attention" action={attention.length ? "Open operations" : undefined} onClick={attention.length ? () => setTab("Operations") : undefined} />
+          <AdminPanelHeading
+            title="Needs attention"
+            action={attention.length ? "Open operations" : undefined}
+            onClick={attention.length ? () => setTab("Operations") : undefined}
+          />
           {attention.length ? (
             <div className="admin-account-detail-issues">
               {attention.map(([label, detail]) => (
                 <div className="admin-account-detail-issue" key={`${label}-${detail}`}>
                   <AlertTriangle aria-hidden="true" />
-                  <span><strong>{label}</strong><small>{detail}</small></span>
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{detail}</small>
+                  </span>
                 </div>
               ))}
             </div>
-          ) : <AdminEmpty detail="No active issues require attention." icon={BadgeCheck} />}
+          ) : (
+            <AdminEmpty detail="No active issues require attention." icon={BadgeCheck} />
+          )}
         </section>
 
         <section className="admin-account-detail-panel">
-          <AdminPanelHeading title="Recent activity" action={historyEvents.length ? "View history" : undefined} onClick={historyEvents.length ? () => setTab("History") : undefined} />
+          <AdminPanelHeading
+            title="Recent activity"
+            action={historyEvents.length ? "View history" : undefined}
+            onClick={historyEvents.length ? () => setTab("History") : undefined}
+          />
           {historyEvents.length ? (
             <div className="admin-account-detail-activity-list">
               {historyEvents.slice(0, 5).map((event) => (
                 <div className="admin-account-detail-activity" key={event.id}>
                   <Activity aria-hidden="true" />
-                  <span><strong>{activityTitle(event.action)}</strong><small>{event.actor ?? "System"} · {relative(event.occurredAt)}</small></span>
+                  <span>
+                    <strong>{activityTitle(event.action)}</strong>
+                    <small>
+                      {event.actor ?? "System"} · {relative(event.occurredAt)}
+                    </small>
+                  </span>
                 </div>
               ))}
             </div>
-          ) : <AdminEmpty detail="No meaningful activity is available." icon={FileClock} />}
+          ) : (
+            <AdminEmpty detail="No meaningful activity is available." icon={FileClock} />
+          )}
         </section>
       </div>
 
@@ -3595,12 +4965,30 @@ function ConsolidatedUserDetailExperience({
           <section className="admin-account-detail-panel">
             <AdminPanelHeading title="Investor summary" />
             <div className="admin-account-detail-metrics">
-              <DetailRow label="Portfolio assets" value={String(user.portfolioSummary.totalAssets)} />
+              <DetailRow
+                label="Portfolio assets"
+                value={String(user.portfolioSummary.totalAssets)}
+              />
               <DetailRow label="Open orders" value={String(user.portfolioSummary.openOrders)} />
-              <DetailRow label="Active listings" value={String(user.portfolioSummary.activeListings)} />
-              <DetailRow label="Invested" value={money(user.permissions.finance ? user.portfolioSummary.totalInvestedMinor : null, user.portfolioSummary.currency)} />
+              <DetailRow
+                label="Active listings"
+                value={String(user.portfolioSummary.activeListings)}
+              />
+              <DetailRow
+                label="Invested"
+                value={money(
+                  user.permissions.finance ? user.portfolioSummary.totalInvestedMinor : null,
+                  user.portfolioSummary.currency,
+                )}
+              />
             </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("Operations")}>Open operational details <ArrowRight aria-hidden="true" /></button>
+            <button
+              type="button"
+              className="admin-detail-link"
+              onClick={() => setTab("Operations")}
+            >
+              Open operational details <ArrowRight aria-hidden="true" />
+            </button>
           </section>
         ) : null}
         {user.collectorOverview ? (
@@ -3608,15 +4996,37 @@ function ConsolidatedUserDetailExperience({
             <AdminPanelHeading title="Collector summary" />
             <div className="admin-account-detail-metrics">
               <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
-              <DetailRow label="Active intake" value={String(user.collectorOverview.activeIntakes)} />
-              <DetailRow label="Live collectibles" value={String(user.collectorOverview.assets.length + user.collectorOverview.additionalAssets)} />
-              <DetailRow label="Directory" value={user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"} />
+              <DetailRow
+                label="Active intake"
+                value={String(user.collectorOverview.activeIntakes)}
+              />
+              <DetailRow
+                label="Live collectibles"
+                value={String(
+                  user.collectorOverview.assets.length + user.collectorOverview.additionalAssets,
+                )}
+              />
+              <DetailRow
+                label="Directory"
+                value={user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"}
+              />
             </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("Operations")}>Open Collector operations <ArrowRight aria-hidden="true" /></button>
+            <button
+              type="button"
+              className="admin-detail-link"
+              onClick={() => setTab("Operations")}
+            >
+              Open Collector operations <ArrowRight aria-hidden="true" />
+            </button>
           </section>
         ) : null}
         {!investorVisible && !user.collectorOverview ? (
-          <section className="admin-account-detail-panel admin-account-detail-panel--empty"><AdminEmpty detail="No investor or Collector workspace summary applies to this account." icon={Users} /></section>
+          <section className="admin-account-detail-panel admin-account-detail-panel--empty">
+            <AdminEmpty
+              detail="No investor or Collector workspace summary applies to this account."
+              icon={Users}
+            />
+          </section>
         ) : null}
       </div>
     </div>
@@ -3629,16 +5039,28 @@ function ConsolidatedUserDetailExperience({
         <section className="admin-account-detail-panel">
           <AdminPanelHeading title="Identity & account access" />
           <DetailRow label="Phone" value={user.identity.phone ?? "Not verified"} />
-          <DetailRow label="Two-factor authentication" value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"} />
+          <DetailRow
+            label="Two-factor authentication"
+            value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}
+          />
           <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
           <DetailRow label="Timezone" value={user.profile?.timezone ?? "Unavailable"} />
-          <DetailRow label="Discord" value={user.identity.discord.connected ? "Connected" : "Not connected"} />
-          <p className="admin-safe-note">Sensitive identity evidence is kept in the authoritative verification workspace.</p>
+          <DetailRow
+            label="Discord"
+            value={user.identity.discord.connected ? "Connected" : "Not connected"}
+          />
+          <p className="admin-safe-note">
+            Sensitive identity evidence is kept in the authoritative verification workspace.
+          </p>
         </section>
       </div>
 
       <section className="admin-account-detail-panel">
-        <AdminPanelHeading title="Financial operations" action={user.permissions.finance ? "Finance workspace" : undefined} onClick={user.permissions.finance ? () => setTab("Operations") : undefined} />
+        <AdminPanelHeading
+          title="Financial operations"
+          action={user.permissions.finance ? "Finance workspace" : undefined}
+          onClick={user.permissions.finance ? () => setTab("Operations") : undefined}
+        />
         {user.permissions.finance && finance ? (
           <div className="admin-account-detail-finance-grid">
             <DetailRow label="Available cash" value={money(finance.availableMinor)} />
@@ -3646,12 +5068,26 @@ function ConsolidatedUserDetailExperience({
             <DetailRow label="Provider pending" value={money(finance.pendingMinor)} />
             <DetailRow label="Bacs risk-held" value={money(finance.bacsHeldMinor)} />
             <DetailRow label="Financial deficit" value={money(finance.deficitMinor)} />
-            <DetailRow label="Returns / manual review" value={`${finance.returnedDepositCount} / ${finance.manualReviewDepositCount}`} />
-            <DetailRow label="Withdrawal hold" value={finance.withdrawalHoldUntil ? date(finance.withdrawalHoldUntil) : "None"} />
+            <DetailRow
+              label="Returns / manual review"
+              value={`${finance.returnedDepositCount} / ${finance.manualReviewDepositCount}`}
+            />
+            <DetailRow
+              label="Withdrawal hold"
+              value={finance.withdrawalHoldUntil ? date(finance.withdrawalHoldUntil) : "None"}
+            />
             <DetailRow label="Payout state" value={payoutStateLabel(user.payoutState)} />
           </div>
-        ) : <AdminEmpty detail="Finance details are restricted to authorized Finance operators." icon={WalletCards} />}
-        <p className="admin-safe-note">Read-only projection. Ledger corrections and payout actions remain in their protected workspaces.</p>
+        ) : (
+          <AdminEmpty
+            detail="Finance details are restricted to authorized Finance operators."
+            icon={WalletCards}
+          />
+        )}
+        <p className="admin-safe-note">
+          Read-only projection. Ledger corrections and payout actions remain in their protected
+          workspaces.
+        </p>
       </section>
 
       <div className="admin-account-detail-grid admin-account-detail-grid--operations">
@@ -3661,25 +5097,53 @@ function ConsolidatedUserDetailExperience({
             <>
               <DetailRow label="State" value={complianceStateLabel(user.complianceState)} />
               <DetailRow label="KYC" value={sentence(user.complianceSummary.kycStatus)} />
-              <DetailRow label="Transaction monitoring" value={sentence(user.complianceSummary.kytStatus)} />
+              <DetailRow
+                label="Transaction monitoring"
+                value={sentence(user.complianceSummary.kytStatus)}
+              />
               <DetailRow label="Open cases" value={String(user.complianceSummary.caseCount)} />
               <DetailRow label="Active holds" value={String(user.activeHolds.length)} />
             </>
-          ) : <AdminEmpty detail="Compliance details are restricted to authorized Compliance staff." icon={ShieldCheck} />}
-          <p className="admin-safe-note">Evidence and provider secrets are not displayed on the account surface.</p>
+          ) : (
+            <AdminEmpty
+              detail="Compliance details are restricted to authorized Compliance staff."
+              icon={ShieldCheck}
+            />
+          )}
+          <p className="admin-safe-note">
+            Evidence and provider secrets are not displayed on the account surface.
+          </p>
         </section>
         <section className="admin-account-detail-panel">
           <AdminPanelHeading title="Payout & bank operations" />
           {user.permissions.finance ? (
             <>
               <DetailRow label="Payout readiness" value={payoutStateLabel(user.payoutState)} />
-              <DetailRow label="Connect status" value={user.payoutDetails?.status ? sentence(user.payoutDetails.status) : "Not connected"} />
-              <DetailRow label="Payouts enabled" value={user.payoutDetails?.payoutsEnabled ? "Yes" : "No"} />
-              <DetailRow label="Transfers capability" value={user.payoutDetails?.transfersCapability ?? "Unavailable"} />
+              <DetailRow
+                label="Connect status"
+                value={
+                  user.payoutDetails?.status ? sentence(user.payoutDetails.status) : "Not connected"
+                }
+              />
+              <DetailRow
+                label="Payouts enabled"
+                value={user.payoutDetails?.payoutsEnabled ? "Yes" : "No"}
+              />
+              <DetailRow
+                label="Transfers capability"
+                value={user.payoutDetails?.transfersCapability ?? "Unavailable"}
+              />
               <DetailRow label="Funding bank" value="Protected bank connection" />
             </>
-          ) : <AdminEmpty detail="Payout details are restricted to authorized Finance operators." icon={Landmark} />}
-          <p className="admin-safe-note">Bank account numbers and provider identifiers are intentionally hidden.</p>
+          ) : (
+            <AdminEmpty
+              detail="Payout details are restricted to authorized Finance operators."
+              icon={Landmark}
+            />
+          )}
+          <p className="admin-safe-note">
+            Bank account numbers and provider identifiers are intentionally hidden.
+          </p>
         </section>
       </div>
 
@@ -3687,17 +5151,32 @@ function ConsolidatedUserDetailExperience({
         <div className="admin-account-detail-grid admin-account-detail-grid--operations">
           <section className="admin-account-detail-panel">
             <AdminPanelHeading title="Collector operations" />
-            <DetailRow label="Membership" value={user.collector?.subscription ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}` : "No membership"} />
+            <DetailRow
+              label="Membership"
+              value={
+                user.collector?.subscription
+                  ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}`
+                  : "No membership"
+              }
+            />
             <DetailRow label="Active intake" value={String(user.collectorOverview.activeIntakes)} />
             <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
-            <DetailRow label="Directory profile" value={user.collector?.publicDirectory?.slug ?? "Not created"} />
+            <DetailRow
+              label="Directory profile"
+              value={user.collector?.publicDirectory?.slug ?? "Not created"}
+            />
           </section>
           <CollectorDirectoryManagement user={user} retry={retry} />
         </div>
       ) : null}
 
       <div className="admin-account-detail-danger">
-        <div><strong>Restricted account actions</strong><span>These actions are audited and server-authorized. No action runs during read-only review.</span></div>
+        <div>
+          <strong>Restricted account actions</strong>
+          <span>
+            These actions are audited and server-authorized. No action runs during read-only review.
+          </span>
+        </div>
         <AccountStatusManagement user={user} retry={retry} />
       </div>
     </div>
@@ -3706,9 +5185,29 @@ function ConsolidatedUserDetailExperience({
   const renderHistory = () => (
     <section className="admin-account-detail-panel admin-account-detail-history">
       <div className="admin-account-detail-history-heading">
-        <div><p className="admin-console-eyebrow">Immutable account timeline</p><h3>History</h3><span>Meaningful account, security, financial, trading, compliance, Collector, provider, and admin events.</span></div>
-        <div className="admin-account-detail-history-filters" role="group" aria-label="History filters">
-          {historyFilters.map((filter) => <button type="button" className={historyFilter === filter ? "is-active" : ""} key={filter} onClick={() => setHistoryFilter(filter)}>{filter}</button>)}
+        <div>
+          <p className="admin-console-eyebrow">Immutable account timeline</p>
+          <h3>History</h3>
+          <span>
+            Meaningful account, security, financial, trading, compliance, Collector, provider, and
+            admin events.
+          </span>
+        </div>
+        <div
+          className="admin-account-detail-history-filters"
+          role="group"
+          aria-label="History filters"
+        >
+          {historyFilters.map((filter) => (
+            <button
+              type="button"
+              className={historyFilter === filter ? "is-active" : ""}
+              key={filter}
+              onClick={() => setHistoryFilter(filter)}
+            >
+              {filter}
+            </button>
+          ))}
         </div>
       </div>
       {visibleHistory.length ? (
@@ -3717,53 +5216,131 @@ function ConsolidatedUserDetailExperience({
             const category = historyCategory(event.action, event.resourceType);
             return (
               <article className="admin-account-detail-timeline-row" key={event.id}>
-                <span className={`admin-account-detail-timeline-marker admin-account-detail-timeline-marker--${stateTone(event.result)}`} aria-hidden="true"><Activity /></span>
+                <span
+                  className={`admin-account-detail-timeline-marker admin-account-detail-timeline-marker--${stateTone(event.result)}`}
+                  aria-hidden="true"
+                >
+                  <Activity />
+                </span>
                 <div className="admin-account-detail-timeline-content">
-                  <div><span className="admin-account-detail-category">{category}</span><time dateTime={event.occurredAt}>{date(event.occurredAt)} · {relative(event.occurredAt)}</time></div>
+                  <div>
+                    <span className="admin-account-detail-category">{category}</span>
+                    <time dateTime={event.occurredAt}>
+                      {date(event.occurredAt)} · {relative(event.occurredAt)}
+                    </time>
+                  </div>
                   <strong>{activityTitle(event.action)}</strong>
-                  <small>{event.detail} · Actor: {event.actor ?? "System"} · {sentence(event.result)}</small>
-                  <button type="button" className="admin-account-detail-event-id" title="Copy event ID" onClick={() => void navigator.clipboard?.writeText(event.id)}>Event {shortId(event.id)}…</button>
+                  <small>
+                    {event.detail} · Actor: {event.actor ?? "System"} · {sentence(event.result)}
+                  </small>
+                  <button
+                    type="button"
+                    className="admin-account-detail-event-id"
+                    title="Copy event ID"
+                    onClick={() => void navigator.clipboard?.writeText(event.id)}
+                  >
+                    Event {shortId(event.id)}…
+                  </button>
                 </div>
               </article>
             );
           })}
         </div>
-      ) : <AdminEmpty detail={`No ${historyFilter.toLowerCase()} history is available for this account.`} icon={FileClock} />}
+      ) : (
+        <AdminEmpty
+          detail={`No ${historyFilter.toLowerCase()} history is available for this account.`}
+          icon={FileClock}
+        />
+      )}
     </section>
   );
 
   return (
     <div className="admin-console-content admin-user-detail-content admin-account-detail-content">
-      <button type="button" className="admin-back-link" onClick={back}><ChevronLeft aria-hidden="true" /> Accounts</button>
+      <button type="button" className="admin-back-link" onClick={back}>
+        <ChevronLeft aria-hidden="true" /> Accounts
+      </button>
       <section className="admin-account-detail-header">
         <div className="admin-detail-identity">
           <div className="admin-user-identity-avatar">{initials(user.displayName)}</div>
           <div className="admin-account-detail-identity-copy">
             <p className="admin-console-eyebrow">Accounts · Operational account detail</p>
             <h2>{user.displayName}</h2>
-            <span>{user.username ? `@${user.username}` : "Username unavailable"} · {user.email}</span>
+            <span>
+              {user.username ? `@${user.username}` : "Username unavailable"} · {user.email}
+            </span>
             <div className="admin-detail-chips">
               <span>{sentence(user.primaryType)}</span>
-              {roles.slice(0, 3).map((role) => <span key={role.id}>{sentence(role.role)}</span>)}
+              {roles.slice(0, 3).map((role) => (
+                <span key={role.id}>{sentence(role.role)}</span>
+              ))}
               {isBetaAccount(user) ? <span>Test account</span> : null}
             </div>
           </div>
         </div>
         <div className="admin-account-detail-header-actions">
-          <span className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}>{accountStatusLabel(user.accountStatus)}</span>
-          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("Operations")}><Settings aria-hidden="true" /> Manage account</button>
-          <button type="button" className="admin-detail-action admin-detail-action--compact" onClick={() => setTab("History")}><FileClock aria-hidden="true" /> History</button>
+          <span
+            className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
+          >
+            {accountStatusLabel(user.accountStatus)}
+          </span>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--compact"
+            onClick={() => setTab("Operations")}
+          >
+            <Settings aria-hidden="true" /> Manage account
+          </button>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--compact"
+            onClick={() => setTab("History")}
+          >
+            <FileClock aria-hidden="true" /> History
+          </button>
         </div>
         <div className="admin-account-detail-header-meta">
-          <span>Joined <strong>{date(user.createdAt)}</strong></span>
-          <span>Last meaningful activity <strong>{historyEvents[0] ? relative(historyEvents[0].occurredAt) : "Not tracked"}</strong></span>
-          <span>User ID <strong>{shortId(user.id)}…</strong> <button type="button" onClick={() => void navigator.clipboard?.writeText(user.id)}>Copy</button></span>
+          <span>
+            Joined <strong>{date(user.createdAt)}</strong>
+          </span>
+          <span>
+            Last meaningful activity{" "}
+            <strong>
+              {historyEvents[0] ? relative(historyEvents[0].occurredAt) : "Not tracked"}
+            </strong>
+          </span>
+          <span>
+            User ID <strong>{shortId(user.id)}…</strong>{" "}
+            <button type="button" onClick={() => void navigator.clipboard?.writeText(user.id)}>
+              Copy
+            </button>
+          </span>
         </div>
       </section>
-      <nav className="admin-tabs admin-user-detail-tabs admin-account-detail-tabs" aria-label="Account detail sections">
-        {["Overview", "Operations", "History"].map((item) => <button type="button" className={activeTab === item ? "is-active" : ""} key={item} onClick={() => setTab(item)}>{item}</button>)}
+      <nav
+        className="admin-tabs admin-user-detail-tabs admin-account-detail-tabs"
+        aria-label="Account detail sections"
+      >
+        {["Overview", "Operations", "History"].map((item) => (
+          <button
+            type="button"
+            className={activeTab === item ? "is-active" : ""}
+            key={item}
+            onClick={() => setTab(item)}
+          >
+            {item}
+          </button>
+        ))}
       </nav>
-      <div className="admin-user-detail-main admin-account-detail-main"><main>{activeTab === "Overview" ? renderOverview() : activeTab === "Operations" ? renderOperations() : renderHistory()}</main></div>
+      <div className="admin-user-detail-main admin-account-detail-main">
+        <main>
+          {activeTab === "Overview"
+            ? renderOverview()
+            : activeTab === "Operations"
+              ? renderOperations()
+              : renderHistory()}
+        </main>
+      </div>
     </div>
   );
 }
@@ -3808,8 +5385,14 @@ function CollectorDirectoryManagement({
       {directory ? (
         <>
           <DetailRow label="Directory profile" value={directory.slug} />
-          <DetailRow label="Published profile" value={directory.isPublic ? "Available" : "Not marked public"} />
-          <DetailRow label="Featured status" value={directory.isFeatured ? "Featured" : "Not featured"} />
+          <DetailRow
+            label="Published profile"
+            value={directory.isPublic ? "Available" : "Not marked public"}
+          />
+          <DetailRow
+            label="Featured status"
+            value={directory.isFeatured ? "Featured" : "Not featured"}
+          />
           {canManage ? (
             <button
               type="button"
@@ -3817,40 +5400,53 @@ function CollectorDirectoryManagement({
               disabled={feature.isPending}
               onClick={() => {
                 const next = !directory.isFeatured;
-                if (window.confirm(`${next ? "Feature" : "Remove"} ${user.displayName} in the public Collector directory? This change is audited.`)) {
+                if (
+                  window.confirm(
+                    `${next ? "Feature" : "Remove"} ${user.displayName} in the public Collector directory? This change is audited.`,
+                  )
+                ) {
                   feature.mutate(next);
                 }
               }}
             >
-              {feature.isPending ? "Saving…" : directory.isFeatured ? "Remove from featured" : "Feature Collector"}
+              {feature.isPending
+                ? "Saving…"
+                : directory.isFeatured
+                  ? "Remove from featured"
+                  : "Feature Collector"}
             </button>
           ) : (
             <p className="admin-safe-note">Only Administrators can change featured placement.</p>
           )}
-          {feature.isError ? <p className="admin-safe-note" role="alert">Featured placement was not saved. No directory state was changed.</p> : null}
+          {feature.isError ? (
+            <p className="admin-safe-note" role="alert">
+              Featured placement was not saved. No directory state was changed.
+            </p>
+          ) : null}
         </>
       ) : (
-        <AdminEmpty detail="This Collector has no public directory profile yet. Create the profile from the Collector workspace before featuring it." icon={Users} />
+        <AdminEmpty
+          detail="This Collector has no public directory profile yet. Create the profile from the Collector workspace before featuring it."
+          icon={Users}
+        />
       )}
-      <p className="admin-safe-note">Featured placement changes presentation only. It does not change Collector roles, submissions, ownership, pricing, or trading.</p>
+      <p className="admin-safe-note">
+        Featured placement changes presentation only. It does not change Collector roles,
+        submissions, ownership, pricing, or trading.
+      </p>
     </section>
   );
 }
 
-function UserRoleManagement({
-  user,
-  retry,
-}: {
-  user: AdminUserDetail;
-  retry: () => void;
-}) {
+function UserRoleManagement({ user, retry }: { user: AdminUserDetail; retry: () => void }) {
   const services = useAppServices();
   const currentUser = useQuery({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
     staleTime: 60_000,
   });
-  const canManageRoles = user.permissions.manageRoles && (currentUser.data?.roles.includes("ADMIN") ?? false);
+  const canManageRoles =
+    user.permissions.manageRoles && (currentUser.data?.roles.includes("ADMIN") ?? false);
   const [role, setRole] = useState("COLLECTOR");
   const grant = useMutation({
     mutationFn: () =>
@@ -3867,7 +5463,12 @@ function UserRoleManagement({
     onSuccess: retry,
   });
   const uniqueRoles = Array.from(
-    new Map(user.roles.map((assignment) => [`${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`, assignment])).values(),
+    new Map(
+      user.roles.map((assignment) => [
+        `${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`,
+        assignment,
+      ]),
+    ).values(),
   );
   const roleDescriptions: Record<string, string> = {
     COLLECTOR: "Can submit and manage eligible collectibles.",
@@ -3887,8 +5488,12 @@ function UserRoleManagement({
             <div className="admin-role-row" key={assignment.id}>
               <div>
                 <strong>{sentence(assignment.role)}</strong>
-                <small>{roleDescriptions[assignment.role] ?? "Account capability assigned by policy."}</small>
-                <span>Granted {date(assignment.createdAt)} · {assignment.scopeType}</span>
+                <small>
+                  {roleDescriptions[assignment.role] ?? "Account capability assigned by policy."}
+                </small>
+                <span>
+                  Granted {date(assignment.createdAt)} · {assignment.scopeType}
+                </span>
               </div>
               {canManageRoles ? (
                 <button
@@ -3915,7 +5520,12 @@ function UserRoleManagement({
       )}
       {canManageRoles ? (
         <div className="admin-detail-action-form admin-role-add-form">
-          <AdminSelect label="Role to add" value={role} onChange={setRole} options={adminAssignableRoles as unknown as Array<[string, string]>} />
+          <AdminSelect
+            label="Role to add"
+            value={role}
+            onChange={setRole}
+            options={adminAssignableRoles as unknown as Array<[string, string]>}
+          />
           <button
             type="button"
             className="admin-detail-action"
@@ -3934,35 +5544,33 @@ function UserRoleManagement({
         </div>
       ) : (
         <p className="admin-safe-note admin-role-readonly-note">
-          Roles are read-only for your workspace. Only an Administrator can add or remove access, so no role-change request will be sent.
+          Roles are read-only for your workspace. Only an Administrator can add or remove access, so
+          no role-change request will be sent.
         </p>
       )}
       {canManageRoles && (grant.isError || revoke.isError) ? (
         <p className="admin-safe-note" role="alert">
-          The role change was not saved. Refresh the account and confirm your permission before retrying.
+          The role change was not saved. Refresh the account and confirm your permission before
+          retrying.
         </p>
       ) : null}
       <p className="admin-safe-note">
-        Role changes are authorized and audited by the server. Duplicate semantic assignments are shown once.
+        Role changes are authorized and audited by the server. Duplicate semantic assignments are
+        shown once.
       </p>
     </section>
   );
 }
 
-function AccountStatusManagement({
-  user,
-  retry,
-}: {
-  user: AdminUserDetail;
-  retry: () => void;
-}) {
+function AccountStatusManagement({ user, retry }: { user: AdminUserDetail; retry: () => void }) {
   const services = useAppServices();
   const currentUser = useQuery({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
     staleTime: 60_000,
   });
-  const canManageStatus = user.permissions.manageStatus && (currentUser.data?.roles.includes("ADMIN") ?? false);
+  const canManageStatus =
+    user.permissions.manageStatus && (currentUser.data?.roles.includes("ADMIN") ?? false);
   const [nextStatus, setNextStatus] = useState("");
   const [reason, setReason] = useState("");
   const transition = useMutation({
@@ -4001,12 +5609,22 @@ function AccountStatusManagement({
   return (
     <section className="admin-panel admin-status-panel">
       <AdminPanelHeading title="Account status" />
-      <div className="admin-current-status"><span>Current status</span><strong>{sentence(user.accountStatus)}</strong></div>
+      <div className="admin-current-status">
+        <span>Current status</span>
+        <strong>{sentence(user.accountStatus)}</strong>
+      </div>
       {options.length && canManageStatus ? (
         <div className="admin-status-form">
-          <AdminSelect label="Change status" value={nextStatus} onChange={setNextStatus} options={[["", "Choose a new status"], ...options]} />
+          <AdminSelect
+            label="Change status"
+            value={nextStatus}
+            onChange={setNextStatus}
+            options={[["", "Choose a new status"], ...options]}
+          />
           <label>
-            <span>Reason <em>(required)</em></span>
+            <span>
+              Reason <em>(required)</em>
+            </span>
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
@@ -4031,7 +5649,9 @@ function AccountStatusManagement({
           </button>
         </div>
       ) : (
-        <p className="admin-safe-note">No further status transitions are permitted for this account.</p>
+        <p className="admin-safe-note">
+          No further status transitions are permitted for this account.
+        </p>
       )}
       {transition.isError ? (
         <p className="admin-safe-note" role="alert">
@@ -4039,7 +5659,8 @@ function AccountStatusManagement({
         </p>
       ) : null}
       <p className="admin-safe-note">
-        Suspension, restriction and closure can revoke sessions according to policy. Self-lockout and last-admin protections remain server-enforced.
+        Suspension, restriction and closure can revoke sessions according to policy. Self-lockout
+        and last-admin protections remain server-enforced.
       </p>
     </section>
   );
@@ -4351,9 +5972,25 @@ function ComplianceWorkspace({
               label="Provider status"
               value={sentence(detail.providerStatus)}
             />
-            <AdminKpi icon={ShieldCheck} label="Identity" value={sentence(detail.identity?.state ?? detail.status)} />
-            <AdminKpi icon={AlertTriangle} label="Risk review" value={sentence(detail.riskReview?.status ?? "Not reported")} />
-            <AdminKpi icon={Users} label="Payout readiness" value={detail.connectPayoutReadiness?.[0] ? sentence(detail.connectPayoutReadiness[0].status) : "Not started"} />
+            <AdminKpi
+              icon={ShieldCheck}
+              label="Identity"
+              value={sentence(detail.identity?.state ?? detail.status)}
+            />
+            <AdminKpi
+              icon={AlertTriangle}
+              label="Risk review"
+              value={sentence(detail.riskReview?.status ?? "Not reported")}
+            />
+            <AdminKpi
+              icon={Users}
+              label="Payout readiness"
+              value={
+                detail.connectPayoutReadiness?.[0]
+                  ? sentence(detail.connectPayoutReadiness[0].status)
+                  : "Not started"
+              }
+            />
             <AdminKpi icon={AlertTriangle} label="Decisions" value={detail.decisions.length} />
             <AdminKpi icon={Users} label="Restrictions" value={detail.restrictions.length} />
             <AdminKpi icon={FileClock} label="Audit events" value={detail.audit.length} />
@@ -5122,9 +6759,7 @@ function initials(value?: string) {
     .toUpperCase();
 }
 
-function uniqueRoleAssignments(
-  roles: AdminUserSummary["roles"],
-): AdminUserSummary["roles"] {
+function uniqueRoleAssignments(roles: AdminUserSummary["roles"]): AdminUserSummary["roles"] {
   return Array.from(
     new Map(
       roles.map((assignment) => [
@@ -5144,22 +6779,47 @@ function accountStatusLabel(value: string) {
   return value === "PENDING_REVIEW" ? "Pending review" : sentence(value);
 }
 function accountStatusTone(value: string) {
-  return value === "RESTRICTED" || value === "SUSPENDED" ? "critical" : value === "PENDING_REVIEW" ? "warning" : "positive";
+  return value === "RESTRICTED" || value === "SUSPENDED"
+    ? "critical"
+    : value === "PENDING_REVIEW"
+      ? "warning"
+      : "positive";
 }
 function financialStateLabel(value: string) {
-  return value === "FINANCIAL_REVIEW" ? "Financial review" : value === "UNAVAILABLE" ? "Unavailable" : sentence(value);
+  return value === "FINANCIAL_REVIEW"
+    ? "Financial review"
+    : value === "UNAVAILABLE"
+      ? "Unavailable"
+      : sentence(value);
 }
 function financialStateTone(value: string) {
-  return value === "CLEAR" ? "positive" : value === "BANK_CLEARING" ? "warning" : value === "UNAVAILABLE" ? "muted" : "critical";
+  return value === "CLEAR"
+    ? "positive"
+    : value === "BANK_CLEARING"
+      ? "warning"
+      : value === "UNAVAILABLE"
+        ? "muted"
+        : "critical";
 }
 function financialStateDetail(user: AdminUserSummary) {
-  if (user.financialState === "FINANCIAL_DEFICIT" && user.financialAmountMinor) return `${formatAccountMinor(user.financialAmountMinor)} outstanding`;
-  if (user.financialState === "BANK_CLEARING" && user.bacsHeldMinor) return `${formatAccountMinor(user.bacsHeldMinor)} held`;
-  if (user.financialExceptionCount && user.financialExceptionCount > 1) return `+${user.financialExceptionCount - 1} more issue${user.financialExceptionCount > 2 ? "s" : ""}`;
-  return user.financialState === "CLEAR" ? null : user.financialState === "UNAVAILABLE" ? "Finance access required" : "Requires attention";
+  if (user.financialState === "FINANCIAL_DEFICIT" && user.financialAmountMinor)
+    return `${formatAccountMinor(user.financialAmountMinor)} outstanding`;
+  if (user.financialState === "BANK_CLEARING" && user.bacsHeldMinor)
+    return `${formatAccountMinor(user.bacsHeldMinor)} held`;
+  if (user.financialExceptionCount && user.financialExceptionCount > 1)
+    return `+${user.financialExceptionCount - 1} more issue${user.financialExceptionCount > 2 ? "s" : ""}`;
+  return user.financialState === "CLEAR"
+    ? null
+    : user.financialState === "UNAVAILABLE"
+      ? "Finance access required"
+      : "Requires attention";
 }
 function complianceStateLabel(value: string) {
-  return value === "REVIEW_REQUIRED" ? "Review" : value === "UNAVAILABLE" ? "Unavailable" : sentence(value);
+  return value === "REVIEW_REQUIRED"
+    ? "Review"
+    : value === "UNAVAILABLE"
+      ? "Unavailable"
+      : sentence(value);
 }
 function complianceStateTone(value: string) {
   return value === "VERIFIED" ? "positive" : value === "UNAVAILABLE" ? "muted" : "warning";
@@ -5171,7 +6831,11 @@ function payoutStateTone(value: string) {
   return value === "READY" ? "positive" : value === "RESTRICTED" ? "critical" : "warning";
 }
 function accountTone(user: AdminUserSummary) {
-  if (["RESTRICTED", "SUSPENDED"].includes(user.accountStatus) || user.financialState === "FINANCIAL_DEFICIT") return "critical";
+  if (
+    ["RESTRICTED", "SUSPENDED"].includes(user.accountStatus) ||
+    user.financialState === "FINANCIAL_DEFICIT"
+  )
+    return "critical";
   if (user.accountStatus === "PENDING_REVIEW" || user.financialState !== "CLEAR") return "warning";
   return "normal";
 }
@@ -5190,9 +6854,15 @@ function AccountStateCell({
   tone: string;
 }) {
   return (
-    <span className={`admin-account-state-cell admin-account-state-cell--${tone}`} title={reason ?? label}>
+    <span
+      className={`admin-account-state-cell admin-account-state-cell--${tone}`}
+      title={reason ?? label}
+    >
       <span className="admin-account-state-dot" aria-hidden="true" />
-      <span><strong>{label}</strong>{reason ? <small>{reason}</small> : null}</span>
+      <span>
+        <strong>{label}</strong>
+        {reason ? <small>{reason}</small> : null}
+      </span>
     </span>
   );
 }

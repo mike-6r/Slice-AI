@@ -261,6 +261,9 @@ export const mockRepositories: AppRepositories = {
         recentActivity: [],
       };
     },
+    async getMembershipDetail() {
+      throw new Error("Membership detail requires the API service.");
+    },
     async listUsers() {
       return {
         items: [],
@@ -545,7 +548,14 @@ export const mockRepositories: AppRepositories = {
           blocked: 0,
           overdue: null,
         },
-        summary: { highPriority: 0, awaitingEvidence: 0, researchPending: 0, readyToReview: 0, blocked: 0, overdue: null },
+        summary: {
+          highPriority: 0,
+          awaitingEvidence: 0,
+          researchPending: 0,
+          readyToReview: 0,
+          blocked: 0,
+          overdue: null,
+        },
         nextCursor: null,
       };
     },

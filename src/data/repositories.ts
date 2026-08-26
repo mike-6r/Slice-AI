@@ -878,7 +878,11 @@ export type AdminIntakeRow = {
   allowedActions: string[];
   issues: Array<{ code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" }>;
   testFixture: boolean;
-  carrierState: { status: string; lastUpdatedAt: string | null; source: "MANUAL" | "PROVIDER" } | null;
+  carrierState: {
+    status: string;
+    lastUpdatedAt: string | null;
+    source: "MANUAL" | "PROVIDER";
+  } | null;
   verification: {
     status: string;
     identityMatch: boolean | null;
@@ -889,7 +893,12 @@ export type AdminIntakeRow = {
     completedAt: string | null;
     note: string | null;
   } | null;
-  custodyHistory: Array<{ action: string; occurredAt: string; actorUserId: string | null; metadata: unknown }>;
+  custodyHistory: Array<{
+    action: string;
+    occurredAt: string;
+    actorUserId: string | null;
+    metadata: unknown;
+  }>;
   valuationStatus: string | null;
   custodyStatus: string | null;
   exception: { code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" } | null;
@@ -982,7 +991,13 @@ export type AdminMembershipRow = {
   needsAction: boolean;
   nextChange: { kind: string; at: string | null; label: string };
   testFixture: boolean;
-  events: Array<{ id: string; fromStatus: string | null; toStatus: string; source: string; occurredAt: string }>;
+  events: Array<{
+    id: string;
+    fromStatus: string | null;
+    toStatus: string;
+    source: string;
+    occurredAt: string;
+  }>;
   updatedAt: string;
 };
 
@@ -1012,6 +1027,104 @@ export type AdminMembershipDirectoryResponse = {
     reference: string | null;
     occurredAt: string;
   }>;
+};
+
+export type AdminMembershipDetailResponse = {
+  id: string;
+  collector: {
+    id: string;
+    displayName: string;
+    username: string | null;
+    email: string;
+    accountStatus: string;
+    joinedAt: string;
+    lastLoginAt: string | null;
+  };
+  membership: {
+    status: string;
+    source: { kind: string; label: string; detail: string | null };
+    createdAt: string;
+    memberSince: string;
+    testFixture: boolean;
+    cancelAtPeriodEnd: boolean;
+  };
+  plan: {
+    id: string;
+    code: string;
+    displayName: string;
+    description: string;
+    monthlyPriceMinor: string;
+    currency: string;
+    billingInterval: string;
+    versionUpdatedAt: string;
+    active: boolean;
+  };
+  period: {
+    start: string | null;
+    end: string | null;
+    daysRemaining: number | null;
+    source: string;
+    label: string;
+  };
+  nextChange: { kind: string; label: string; at: string | null };
+  billing: {
+    provider: string | null;
+    providerLabel: string;
+    configured: boolean;
+    state: string;
+    paymentSetup: string;
+    paymentSetupLabel: string;
+    lastSyncAt: string | null;
+    syncState: string;
+    providerReferenceAvailable: boolean;
+  };
+  entitlements: {
+    source: string;
+    sourceLabel: string;
+    features: Array<{ key: string; label: string; enabled: boolean }>;
+    limits: Array<{
+      key: string;
+      label: string;
+      limit: number;
+      used: number | null;
+      remaining: number | null;
+      tracking: string;
+    }>;
+    overrides: { supported: boolean; items: unknown[]; message: string };
+  };
+  usage: {
+    health: "NORMAL" | "AT_LIMIT" | "OVER_LIMIT";
+    billingPeriodStart: string;
+    billingPeriodEnd: string;
+    tracked: AdminMembershipDetailResponse["entitlements"]["limits"];
+    unavailable: string[];
+  };
+  account: {
+    status: string;
+    testFixture: boolean;
+    financeState: string;
+    complianceState: string;
+  };
+  issues: Array<{
+    code: string;
+    severity: "INFO" | "WARNING" | "ERROR";
+    label: string;
+    detail: string;
+  }>;
+  allowedActions: string[];
+  history: Array<{
+    id: string;
+    category: string;
+    event: string;
+    detail: string;
+    performedBy: string;
+    occurredAt: string;
+  }>;
+  capabilities: {
+    billingConfigured: boolean;
+    auditAvailable: boolean;
+    overridesSupported: boolean;
+  };
 };
 
 export type AdminSearchResult = {
@@ -1387,7 +1500,13 @@ export type AdminCatalogueAsset = {
     set: string | null;
     cardNumber: string | null;
     edition: string | null;
-    grading: { company: string; code: string; grade: string; label: string; certStatus: string } | null;
+    grading: {
+      company: string;
+      code: string;
+      grade: string;
+      label: string;
+      certStatus: string;
+    } | null;
   };
   provenance: {
     submissionId: string;
@@ -1546,7 +1665,9 @@ export interface AdminRepository {
       notes?: string;
     },
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
-  startIntakeVerification(id: string): Promise<{ intakeId: string; status: string; startedAt: string }>;
+  startIntakeVerification(
+    id: string,
+  ): Promise<{ intakeId: string; status: string; startedAt: string }>;
   completeIntakeVerification(
     id: string,
     input: {
@@ -1579,6 +1700,7 @@ export interface AdminRepository {
     fixture?: "NORMAL" | "TEST" | "ALL";
     needsAction?: boolean;
   }): Promise<AdminMembershipDirectoryResponse>;
+  getMembershipDetail(id: string): Promise<AdminMembershipDetailResponse>;
   listUsers(input?: {
     q?: string;
     role?: string;

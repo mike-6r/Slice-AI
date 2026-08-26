@@ -3475,6 +3475,269 @@ export class AdminService {
     };
   }
 
+  async membershipDetail(actor: Actor, membershipId: string) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const policyActor = {
+      actorType: 'USER' as const,
+      userId: actor.userId,
+      accountStatus: actor.status,
+      roles: actor.roles as never,
+    };
+    const auditAccess = evaluatePolicy({ actor: policyActor, action: 'audit.read' }).allowed;
+    const membership = await this.db.collectorSubscription.findUnique({
+      where: { id: membershipId },
+      include: {
+        plan: {
+          select: {
+            id: true,
+            code: true,
+            displayName: true,
+            description: true,
+            monthlyPriceMinor: true,
+            currency: true,
+            billingInterval: true,
+            entitlements: true,
+            active: true,
+            updatedAt: true,
+          },
+        },
+        statusHistory: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 50,
+          select: {
+            id: true,
+            fromStatus: true,
+            toStatus: true,
+            source: true,
+            reason: true,
+            createdAt: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            accountStatus: true,
+            createdAt: true,
+            lastLoginAt: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+          },
+        },
+      },
+    });
+    if (!membership) {
+      throw new NotFoundException({ code: 'MEMBERSHIP_NOT_FOUND', message: 'Membership not found.' });
+    }
+
+    const entitlements = membership.plan.entitlements && typeof membership.plan.entitlements === 'object' && !Array.isArray(membership.plan.entitlements)
+      ? membership.plan.entitlements as Record<string, unknown>
+      : {};
+    const usage = (await collectorUsageForMany(
+      this.db,
+      [membership.user.id],
+      new Map([[membership.user.id, membership.plan.entitlements]]),
+    )).get(membership.user.id)!;
+    const billingConfigured = this.config.providerMode !== 'local' && Boolean(
+      this.config.stripeSecretKey && this.config.stripePublishableKey && this.config.stripeWebhookSecret,
+    );
+    const testFixture = membership.provider === 'STAGING_DEMO';
+    const remoteProvider = Boolean(membership.provider && !testFixture);
+    const providerAvailable = billingConfigured && remoteProvider;
+    const billingState = membership.status === 'PAST_DUE'
+      ? 'PAST_DUE'
+      : membership.status === 'SUSPENDED'
+        ? 'SUSPENDED'
+        : membership.status === 'INCOMPLETE'
+          ? 'PENDING'
+          : providerAvailable
+            ? 'CURRENT'
+            : 'NOT_CONFIGURED';
+    const usageDefinitions = [
+      ['activeCollectibles', 'Active collectibles', usage.activeCollectibles, usage.maxActiveCollectibles],
+      ['monthlySubmissionLimit', 'Monthly submissions', usage.monthlySubmissionsUsed, usage.maxMonthlySubmissions],
+      ['maxConcurrentIntake', 'Concurrent intake', usage.concurrentIntake, usage.maxConcurrentIntake],
+      ['maxOpenSubmissions', 'Open submissions', usage.openSubmissions, usage.maxOpenSubmissions],
+      ['maxOpenDrafts', 'Open drafts', usage.openDrafts, usage.maxOpenDrafts],
+    ] as const;
+    const configuredLimits = Object.entries(entitlements)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .map(([key, value]) => {
+        const definition = usageDefinitions.find(([definitionKey]) => definitionKey === key);
+        const limit = Number(value);
+        const used = definition?.[2] ?? null;
+        const tracked = used !== null && definition?.[3] !== null;
+        return {
+          key,
+          label: ({
+            maxActiveCollectibles: 'Active collectibles',
+            monthlySubmissionLimit: 'Monthly submissions',
+            maxConcurrentIntake: 'Concurrent intake',
+            maxOpenSubmissions: 'Open submissions',
+            maxOpenDrafts: 'Open drafts',
+            maxConcurrentSubmissions: 'Concurrent submissions',
+            maxFeaturedAssets: 'Featured profile assets',
+          } as Record<string, string>)[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()),
+          limit,
+          used,
+          remaining: used === null ? null : Math.max(limit - used, 0),
+          tracking: tracked ? 'AVAILABLE' : 'NOT_AVAILABLE',
+        };
+      });
+    const features = Object.entries(entitlements)
+      .filter(([, value]) => typeof value === 'boolean')
+      .map(([key, value]) => ({
+        key,
+        label: ({
+          exportEnabled: 'Exports',
+          bulkImportEnabled: 'Bulk import',
+          advancedAnalyticsEnabled: 'Advanced analytics',
+        } as Record<string, string>)[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()),
+        enabled: value,
+      }));
+    const activeLimit = usage.maxActiveCollectibles;
+    const monthlyLimit = usage.maxMonthlySubmissions;
+    const atLimit = Boolean(
+      (activeLimit !== null && usage.activeCollectibles >= activeLimit) ||
+      (monthlyLimit !== null && usage.monthlySubmissionsUsed >= monthlyLimit) ||
+      (usage.maxConcurrentIntake !== null && usage.concurrentIntake >= usage.maxConcurrentIntake),
+    );
+    const overLimit = Boolean(
+      (activeLimit !== null && usage.activeCollectibles > activeLimit) ||
+      (monthlyLimit !== null && usage.monthlySubmissionsUsed > monthlyLimit) ||
+      (usage.maxConcurrentIntake !== null && usage.concurrentIntake > usage.maxConcurrentIntake),
+    );
+    const usageHealth = overLimit ? 'OVER_LIMIT' : atLimit ? 'AT_LIMIT' : 'NORMAL';
+    const activationEvent = [...membership.statusHistory]
+      .reverse()
+      .find((event) => event.toStatus === 'ACTIVE' || event.toStatus === 'TRIALING');
+    const memberSince = activationEvent?.createdAt ?? membership.createdAt;
+    const source = testFixture
+      ? { kind: 'INTERNAL_BETA', label: 'Internal Beta entitlement', detail: 'Staging demo fixture' }
+      : remoteProvider
+        ? { kind: 'PROVIDER_SUBSCRIPTION', label: 'Provider subscription', detail: membership.provider }
+        : { kind: 'UNSPECIFIED', label: 'Source not recorded', detail: 'No membership source discriminator is persisted.' };
+    const nextChange = membership.status === 'CANCEL_AT_PERIOD_END'
+      ? { kind: 'CANCEL', label: 'Cancels at period end', at: membership.currentPeriodEnd?.toISOString() ?? null }
+      : membership.status === 'INCOMPLETE'
+        ? { kind: 'PAYMENT_SETUP', label: 'Payment setup required', at: null }
+        : membership.status === 'TRIALING' && membership.currentPeriodEnd
+          ? { kind: 'TRIAL_END', label: 'Trial ends', at: membership.currentPeriodEnd.toISOString() }
+          : membership.currentPeriodEnd
+            ? { kind: providerAvailable ? 'RENEWAL' : 'INTERNAL_PERIOD_END', label: providerAvailable ? 'Renews' : 'Internal period ends', at: membership.currentPeriodEnd.toISOString() }
+            : { kind: 'NONE', label: 'No scheduled change', at: null };
+    const daysRemaining = membership.currentPeriodEnd
+      ? Math.max(0, Math.ceil((membership.currentPeriodEnd.getTime() - Date.now()) / 86_400_000))
+      : null;
+    const issues: Array<{ code: string; severity: 'INFO' | 'WARNING' | 'ERROR'; label: string; detail: string }> = [];
+    if (testFixture) issues.push({ code: 'INTERNAL_BETA', severity: 'INFO', label: 'Internal Beta membership', detail: 'This record is explicitly marked as a staging demo fixture.' });
+    if (!billingConfigured) issues.push({ code: 'BILLING_NOT_CONFIGURED', severity: 'INFO', label: 'Billing provider not configured', detail: 'Provider-backed billing actions are unavailable in this environment.' });
+    if (membership.status === 'INCOMPLETE') issues.push({ code: 'PAYMENT_SETUP', severity: 'WARNING', label: 'Payment setup incomplete', detail: 'The membership has not completed provider payment setup.' });
+    if (membership.status === 'PAST_DUE') issues.push({ code: 'PAST_DUE', severity: 'ERROR', label: 'Past due', detail: 'The persisted membership state requires billing attention.' });
+    if (membership.status === 'SUSPENDED') issues.push({ code: 'SUSPENDED', severity: 'ERROR', label: 'Membership suspended', detail: 'Access is suspended according to the persisted membership state.' });
+    if (overLimit) issues.push({ code: 'USAGE_OVER_LIMIT', severity: 'ERROR', label: 'Usage limit exceeded', detail: 'One or more enforced plan limits are exceeded.' });
+    if (membership.status === 'CANCEL_AT_PERIOD_END') issues.push({ code: 'SCHEDULED_CANCELLATION', severity: 'WARNING', label: 'Scheduled cancellation', detail: 'The membership is scheduled to end at the current period boundary.' });
+    const auditRows = auditAccess
+      ? await this.db.auditEvent.findMany({
+          where: { OR: [{ resourceId: membership.id, resourceType: { in: ['collector-membership', 'membership', 'subscription'] } }, { actorUserId: membership.user.id, action: { contains: 'MEMBERSHIP', mode: 'insensitive' } }] },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 100,
+          select: { id: true, action: true, resourceType: true, result: true, createdAt: true, actorType: true, actor: { select: { profile: { select: { displayName: true } } } } },
+        })
+      : [];
+    const history = [
+      ...membership.statusHistory.map((event) => ({
+        id: `status:${event.id}`,
+        category: 'MEMBERSHIP',
+        event: event.toStatus,
+        detail: event.reason ?? `Membership state changed from ${event.fromStatus ?? 'none'} to ${event.toStatus}.`,
+        performedBy: event.source.startsWith('WEBHOOK:') ? 'Provider webhook' : event.source,
+        occurredAt: event.createdAt.toISOString(),
+      })),
+      ...auditRows.map((event) => ({
+        id: `audit:${event.id}`,
+        category: event.action.includes('PAYMENT') || event.action.includes('INVOICE') ? 'BILLING' : 'ADMIN',
+        event: event.action,
+        detail: `${event.resourceType} · ${event.result}`,
+        performedBy: event.actor?.profile?.displayName ?? (event.actorType === 'SYSTEM' ? 'System' : event.actorType),
+        occurredAt: event.createdAt.toISOString(),
+      })),
+    ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+    return {
+      id: membership.id,
+      collector: {
+        id: membership.user.id,
+        displayName: membership.user.profile?.displayName ?? 'Unnamed collector',
+        username: membership.user.profile?.publicUsername ?? null,
+        email: membership.user.email,
+        accountStatus: membership.user.accountStatus,
+        joinedAt: membership.user.createdAt.toISOString(),
+        lastLoginAt: membership.user.lastLoginAt?.toISOString() ?? null,
+      },
+      membership: {
+        status: membership.status,
+        source,
+        createdAt: membership.createdAt.toISOString(),
+        memberSince: memberSince.toISOString(),
+        testFixture,
+        cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
+      },
+      plan: {
+        id: membership.plan.id,
+        code: membership.plan.code,
+        displayName: membership.plan.displayName,
+        description: membership.plan.description,
+        monthlyPriceMinor: membership.plan.monthlyPriceMinor.toString(),
+        currency: membership.plan.currency,
+        billingInterval: membership.plan.billingInterval,
+        versionUpdatedAt: membership.plan.updatedAt.toISOString(),
+        active: membership.plan.active,
+      },
+      period: {
+        start: membership.currentPeriodStart?.toISOString() ?? null,
+        end: membership.currentPeriodEnd?.toISOString() ?? null,
+        daysRemaining,
+        source: providerAvailable ? 'PROVIDER' : 'INTERNAL_MEMBERSHIP',
+        label: providerAvailable ? 'Provider billing period' : 'Internal membership period',
+      },
+      nextChange,
+      billing: {
+        provider: testFixture ? 'INTERNAL_BETA' : membership.provider ?? null,
+        providerLabel: testFixture ? 'Internal Beta' : membership.provider ? (providerAvailable ? 'Stripe Billing' : 'Provider unavailable') : 'None configured',
+        configured: billingConfigured,
+        state: billingState,
+        paymentSetup: testFixture ? 'NOT_APPLICABLE' : membership.status === 'INCOMPLETE' ? 'REQUIRED' : membership.paymentMethodLast4 ? 'RECORDED' : 'NOT_REPORTED',
+        paymentSetupLabel: testFixture ? 'Not applicable — internal Beta entitlement' : membership.status === 'INCOMPLETE' ? 'Setup required' : membership.paymentMethodLast4 ? 'Provider payment method recorded' : 'Provider payment state not reported',
+        lastSyncAt: membership.lastProviderEventCreatedAt?.toISOString() ?? null,
+        syncState: remoteProvider ? (membership.lastProviderEventCreatedAt ? 'SYNCED' : 'NOT_REPORTED') : 'NOT_APPLICABLE',
+        providerReferenceAvailable: Boolean(providerAvailable && membership.providerSubscriptionId),
+      },
+      entitlements: {
+        source: testFixture ? 'INTERNAL_BETA' : 'PLAN_DEFAULT',
+        sourceLabel: testFixture ? 'Internal Beta entitlement' : `${membership.plan.displayName} plan`,
+        features,
+        limits: configuredLimits,
+        overrides: { supported: false, items: [], message: 'Membership-specific entitlement overrides are not supported by the current model.' },
+      },
+      usage: {
+        health: usageHealth,
+        billingPeriodStart: usage.billingPeriodStart,
+        billingPeriodEnd: usage.billingPeriodEnd,
+        tracked: configuredLimits,
+        unavailable: ['Concurrent submissions', 'Featured profile assets'],
+      },
+      account: {
+        status: membership.user.accountStatus,
+        testFixture,
+        financeState: 'RESTRICTED_TO_ACCOUNT_WORKSPACE',
+        complianceState: 'RESTRICTED_TO_TRUST_WORKSPACE',
+      },
+      issues,
+      allowedActions: auditAccess ? ['OPEN_ACCOUNT', 'VIEW_AUDIT_HISTORY'] : ['OPEN_ACCOUNT'],
+      history,
+      capabilities: { billingConfigured, auditAvailable: auditAccess, overridesSupported: false },
+    };
+  }
+
   async listUsers(
     actor: Actor,
     input: {

@@ -385,6 +385,12 @@ export class AdminController {
     });
   }
 
+  @Get('memberships/:id')
+  @RequirePermission('admin.console.read')
+  membership(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.admin.membershipDetail(request.actor!, id);
+  }
+
   @Get('users')
   @RequirePermission('users.read')
   users(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
