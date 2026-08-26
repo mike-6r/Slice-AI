@@ -37,7 +37,7 @@ import {
   nextIntakeAction,
   stageLabel,
 } from './admin-intake-projections';
-import { isEligiblePikachuOwnerDemo } from '../lifecycle/domain/staging-demo-physical.policy';
+import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
 
 @Injectable()
 export class AdminService {
@@ -2432,7 +2432,7 @@ export class AdminService {
     const projected = await Promise.all(visibleRows.map(async (item) => {
       const intake = item.intake;
       const demoIntake = item.stagingDemoPhysicalIntake;
-      const demoEligible = this.config.isBeta && isEligiblePikachuOwnerDemo({ owner: item.owner, asset: item.asset });
+      const demoEligible = this.config.isBeta && isExplicitPikachuOwnerDemoSubmission(item.id);
       const baseStage = intakeStage(item);
       const stage =
         demoIntake?.status === 'DEMO_CUSTODY'

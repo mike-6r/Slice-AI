@@ -4,6 +4,11 @@
  */
 export const STAGING_DEMO_PIKACHU_FIXTURE_KEY = 'PIKACHU_OWNER_DEMO_2026';
 export const STAGING_DEMO_PHYSICAL_CONFIRMATION = 'COMPLETE_STAGING_DEMO_INTAKE';
+export const STAGING_DEMO_PIKACHU_SUBMISSION_ID = '07dbf13f-f712-4d4a-adcf-96c45c7e641b';
+
+export function isExplicitPikachuOwnerDemoSubmission(submissionId: string) {
+  return submissionId === STAGING_DEMO_PIKACHU_SUBMISSION_ID;
+}
 
 type DemoCandidate = {
   owner?: { email?: string | null } | null;

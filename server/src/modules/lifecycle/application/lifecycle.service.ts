@@ -25,7 +25,7 @@ import {
 import { deriveMarketLifecycle } from '../../market-lifecycle/domain/market-lifecycle';
 import {
   hasStagingDemoPhysicalReadiness,
-  isEligiblePikachuOwnerDemo,
+  isExplicitPikachuOwnerDemoSubmission,
   isProtectedControlledAsset,
   STAGING_DEMO_PHYSICAL_CONFIRMATION,
   STAGING_DEMO_PIKACHU_FIXTURE_KEY,
@@ -847,7 +847,7 @@ export class LifecycleService {
             code: 'STAGING_DEMO_CONTROLLED_ASSET_FORBIDDEN',
             message: 'Controlled Umbreon and Charizard fixtures cannot use demo intake.',
           });
-        if (!isEligiblePikachuOwnerDemo({ owner: submission.owner, asset }))
+        if (!isExplicitPikachuOwnerDemoSubmission(submission.id))
           throw new ForbiddenException({
             code: 'STAGING_DEMO_ASSET_MARKER_REQUIRED',
             message: 'This asset is not the explicitly marked staging owner-demo fixture.',
