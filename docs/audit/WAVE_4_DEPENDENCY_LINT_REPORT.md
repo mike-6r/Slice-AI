@@ -28,8 +28,8 @@ The dedicated mechanical formatting commit is `d173e4f`.
 - Formatted source files: 31 files changed by Prettier; generated output and
   lockfiles were not formatted.
 - `npm run format:check`: pass.
-- Full frontend lint before: approximately 3,950 formatting errors and 9
-  existing warnings.
+- Full frontend lint before: Wave 1 recorded approximately 3,959 Prettier
+  errors, 0 non-Prettier errors, and 10 warnings.
 - Full frontend lint after: 0 errors and 9 warnings.
 
 The remaining warnings are not suppressed or globally disabled:
