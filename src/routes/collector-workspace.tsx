@@ -1832,6 +1832,7 @@ function PlanCard({
   actionPending: boolean;
 }) {
   const isCurrent = current?.code === plan.code;
+  const needsSetup = isCurrent && current?.status === "INCOMPLETE";
   const unavailable = plan.availability !== "AVAILABLE";
   const changePlan = Boolean(current && !isCurrent);
   return (
@@ -1850,14 +1851,17 @@ function PlanCard({
       </ul>
       <button
         className={`collector-button ${isCurrent ? "collector-button--primary" : ""}`}
-        disabled={isCurrent || unavailable || actionPending}
+        disabled={(isCurrent && !needsSetup) || unavailable || actionPending}
         onClick={() =>
-          action({ action: changePlan ? "CHANGE_PLAN" : "CHECKOUT", planCode: plan.code })
+          action({
+            action: changePlan ? "CHANGE_PLAN" : "CHECKOUT",
+            planCode: plan.code,
+          })
         }
       >
         {isCurrent
           ? current?.status === "INCOMPLETE"
-            ? "Processing"
+            ? "Complete setup"
             : "Current plan"
           : unavailable
             ? "Unavailable"
