@@ -746,9 +746,7 @@ export function SubmissionPage() {
   const evidenceReady = requiredSlotsForGrading(gradedCard).every(
     (slot) => activeMedia(submission, slot)?.status === "SAFE",
   );
-  const certificationReadyForStaffReview = ["VERIFIED", "MANUAL_REVIEW_REQUIRED"].includes(
-    detail.data?.certificationVerification?.status ?? "",
-  );
+  const certificationVerified = detail.data?.certificationVerification?.status === "VERIFIED";
   const reviewReady = Boolean(
     form.categoryId &&
     form.name.trim() &&
@@ -760,7 +758,7 @@ export function SubmissionPage() {
     isValidPercent(form.offerIntentPercent) &&
     evidenceReady &&
     (gradedCard
-      ? certificationReadyForStaffReview
+      ? certificationVerified
       : form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
     form.termsAcknowledged,
   );
@@ -3605,9 +3603,7 @@ export function ReviewStep({
   const marketComplete = Boolean(
     form.marketCheckAcknowledged && (form.marketCheckStatus || research),
   );
-  const certificationReadyForStaffReview = ["VERIFIED", "MANUAL_REVIEW_REQUIRED"].includes(
-    submission?.certificationVerification?.status ?? "",
-  );
+  const certificationVerified = submission?.certificationVerification?.status === "VERIFIED";
   const rawReviewComplete = graded || form.aiReviewSkipped || preGrade?.status === "SUCCEEDED";
   const cardDetailsComplete = Boolean(
     form.categoryId &&
@@ -3637,11 +3633,10 @@ export function ReviewStep({
     ...(graded
       ? [
           {
-            label:
-              submission?.certificationVerification?.status === "VERIFIED"
-                ? "Certificate verified"
-                : "Certificate review requested",
-            complete: certificationReadyForStaffReview,
+            label: certificationVerified
+              ? "Certificate verified"
+              : "Certificate verification pending",
+            complete: certificationVerified,
           },
         ]
       : []),
