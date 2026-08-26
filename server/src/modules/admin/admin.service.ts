@@ -2132,55 +2132,109 @@ export class AdminService {
    */
   async catalogueAssets(
     actor: Actor,
-    input: { q?: string; status?: string; page?: number; pageSize?: number },
+    input: {
+      q?: string;
+      status?: string;
+      category?: string;
+      physicalState?: string;
+      verification?: string;
+      valuation?: string;
+      market?: string;
+      grading?: string;
+      collector?: string;
+      fixture?: 'NORMAL' | 'TEST' | 'ALL';
+      sort?: string;
+      sortDirection?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+    },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
     const q = input.q?.trim();
-    const where: Prisma.AssetWhereInput = {
-      ...(this.config.isBeta
-        ? {
-            slug: { not: { startsWith: 'slice-demo-' } },
-            // Static/reference records are not operator collectibles until a
-            // real account has submitted them.
-            submissions: {
-              some: {
+    const fixture = input.fixture ?? 'NORMAL';
+    const fixtureWhere: Prisma.AssetWhereInput = this.config.isBeta
+      ? fixture === 'ALL'
+        ? {}
+        : fixture === 'TEST'
+          ? {
+              OR: [
+                { slug: { startsWith: 'slice-demo-' } },
+                { submissions: { some: { OR: [
+                  { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+                  { declaredMetadata: { path: ['certificationNumber'], string_starts_with: 'STG-' } },
+                ] } } },
+              ],
+            }
+          : {
+              slug: { not: { startsWith: 'slice-demo-' } },
+              submissions: { some: {
                 status: { notIn: ['DRAFT', 'CANCELLED'] },
                 NOT: [
                   { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
-                  {
-                    declaredMetadata: {
-                      path: ['certificationNumber'],
-                      string_starts_with: 'STG-',
-                    },
-                  },
+                  { declaredMetadata: { path: ['certificationNumber'], string_starts_with: 'STG-' } },
                 ],
-              },
-            },
-          }
-        : {}),
-      ...(input.status
-        ? { status: input.status as never }
-        : { status: { not: 'ARCHIVED' } }),
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: 'insensitive' } },
-              { publicId: { contains: q, mode: 'insensitive' } },
-              { slug: { contains: q, mode: 'insensitive' } },
-              { cardNumber: { contains: q, mode: 'insensitive' } },
-              { category: { name: { contains: q, mode: 'insensitive' } } },
-              { collectibleSet: { name: { contains: q, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
-    };
+              } },
+            }
+      : {};
+    const whereParts: Prisma.AssetWhereInput[] = [
+      fixtureWhere,
+      input.status ? { status: input.status as never } : { status: { not: 'ARCHIVED' } },
+    ];
+    if (q) whereParts.push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { publicId: { contains: q, mode: 'insensitive' } },
+        { slug: { contains: q, mode: 'insensitive' } },
+        { cardNumber: { contains: q, mode: 'insensitive' } },
+        { certificationNumber: { contains: q, mode: 'insensitive' } },
+        { normalizedCertificationNumber: { contains: q, mode: 'insensitive' } },
+        { category: { name: { contains: q, mode: 'insensitive' } } },
+        { collectibleSet: { name: { contains: q, mode: 'insensitive' } } },
+        { submissions: { some: { owner: { profile: { displayName: { contains: q, mode: 'insensitive' } } } } } },
+        { submissions: { some: { owner: { profile: { publicUsername: { contains: q, mode: 'insensitive' } } } } } },
+      ],
+    });
+    if (input.category) whereParts.push({ category: { name: input.category } });
+    if (input.collector) whereParts.push({ submissions: { some: { owner: { profile: { OR: [
+      { displayName: { contains: input.collector, mode: 'insensitive' } },
+      { publicUsername: { contains: input.collector, mode: 'insensitive' } },
+    ] } } } } });
+    if (input.grading === 'RAW') whereParts.push({ gradeScaleEntry: { is: null } });
+    if (input.grading === 'GRADED') whereParts.push({ gradeScaleEntry: { isNot: null } });
+    if (input.grading && !['RAW', 'GRADED'].includes(input.grading)) whereParts.push({ gradeScaleEntry: { is: { company: { code: input.grading } } } });
+    if (input.valuation === 'PENDING') whereParts.push({ valuationDecisions: { none: { status: 'ACTIVE' } } });
+    if (input.valuation === 'VALUED') whereParts.push({ valuationDecisions: { some: { status: 'ACTIVE' } } });
+    if (input.verification === 'VERIFIED') whereParts.push({ submissions: { some: { intake: { is: { verification: { is: { status: 'VERIFIED' } } } } } } });
+    if (input.verification === 'PENDING') whereParts.push({ OR: [
+      { submissions: { none: { intake: { is: { verification: { is: { status: 'VERIFIED' } } } } } } },
+      { submissions: { some: { intake: { is: { verification: { is: { status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED'] } } } } } } } },
+    ] });
+    if (input.physicalState === 'AWAITING_RECEIPT') whereParts.push({ custodyRecord: { is: { status: 'EXPECTED' } } });
+    if (input.physicalState === 'RECEIVED') whereParts.push({ custodyRecord: { is: { status: 'RECEIVED' } } });
+    if (input.physicalState === 'IN_VERIFICATION') whereParts.push({ submissions: { some: { intake: { is: { verification: { is: { status: 'IN_PROGRESS' } } } } } } });
+    if (input.physicalState === 'CUSTODY_READY') whereParts.push({ custodyRecord: { is: { status: 'SECURED' } } });
+    if (input.physicalState === 'EXCEPTION') whereParts.push({ OR: [
+      { custodyRecord: { is: { status: 'EXCEPTION' } } },
+      { submissions: { some: { intake: { is: { exceptions: { some: { resolvedAt: null } } } } } } },
+    ] });
+    if (input.market === 'LIVE') whereParts.push({ publication: { is: { status: 'PUBLISHED' } } });
+    if (input.market === 'INITIAL_OFFERING') whereParts.push({ initialOffering: { isNot: null } });
+    if (input.market === 'PAUSED') whereParts.push({ tradingMarket: { is: { status: 'HALTED' } } });
+    if (input.market === 'NOT_PUBLISHED') whereParts.push({ OR: [{ publication: { is: null } }, { publication: { is: { status: { in: ['BLOCKED', 'READY', 'UNPUBLISHED'] } } } }] });
+    const where: Prisma.AssetWhereInput = { AND: whereParts };
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 25;
+    const sortDirection = input.sortDirection ?? 'desc';
+    const orderBy: Prisma.AssetOrderByWithRelationInput[] = input.sort === 'title'
+      ? [{ title: input.sortDirection === 'desc' ? 'desc' : 'asc' }, { id: 'desc' }]
+      : input.sort === 'newest'
+        ? [{ createdAt: sortDirection }, { id: 'desc' }]
+        : [{ updatedAt: sortDirection }, { id: 'desc' }];
     const [total, assets] = await Promise.all([
       this.db.asset.count({ where }),
       this.db.asset.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
@@ -2191,7 +2245,7 @@ export class AdminService {
             where: { status: 'ACTIVE' },
             orderBy: { decidedAt: 'desc' },
             take: 1,
-            select: { status: true, decidedAt: true },
+            select: { status: true, decidedAt: true, valueMinor: true, currency: true },
           },
           custodyRecord: { select: { status: true, updatedAt: true } },
           publication: { select: { status: true, publishedAt: true, updatedAt: true } },
@@ -2203,6 +2257,20 @@ export class AdminService {
               status: true,
               submittedAt: true,
               updatedAt: true,
+              declaredMetadata: true,
+              reviews: {
+                orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+                take: 1,
+                select: { status: true, decision: true },
+              },
+              intake: {
+                select: {
+                  id: true,
+                  status: true,
+                  verification: { select: { status: true } },
+                  exceptions: { where: { resolvedAt: null }, select: { id: true } },
+                },
+              },
               owner: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
               media: {
                 where: { deletedAt: null },
@@ -2226,6 +2294,24 @@ export class AdminService {
         },
       }),
     ]);
+    const summaryWhere: Prisma.AssetWhereInput = {
+      AND: [fixtureWhere, { status: { not: 'ARCHIVED' } }],
+    };
+    const [summaryTotal, inCustody, verificationPending, valuationPending, marketLive, exceptions, ownerPositions] = await Promise.all([
+      this.db.asset.count({ where: summaryWhere }),
+      this.db.asset.count({ where: { AND: [summaryWhere, { custodyRecord: { is: { status: { in: ['RECEIVED', 'INSPECTED', 'SECURED'] } } } }] } }),
+      this.db.asset.count({ where: { AND: [summaryWhere, { OR: [
+        { submissions: { none: { intake: { is: { verification: { is: { status: 'VERIFIED' } } } } } } },
+        { submissions: { some: { intake: { is: { verification: { is: { status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED'] } } } } } } } },
+      ] }] } }),
+      this.db.asset.count({ where: { AND: [summaryWhere, { valuationDecisions: { none: { status: 'ACTIVE' } } }] } }),
+      this.db.asset.count({ where: { AND: [summaryWhere, { publication: { is: { status: 'PUBLISHED' } } }] } }),
+      this.db.asset.count({ where: { AND: [summaryWhere, { OR: [
+        { custodyRecord: { is: { status: 'EXCEPTION' } } },
+        { submissions: { some: { intake: { is: { exceptions: { some: { resolvedAt: null } } } } } } },
+      ] }] } }),
+      this.db.ownershipPosition.count({ where: { settledUnits: { gt: 0n }, supply: { is: { asset: { is: summaryWhere } } } } }),
+    ]);
     return {
       items: await Promise.all(assets.map(async (asset) => {
         const submission = asset.submissions[0] ?? null;
@@ -2243,11 +2329,41 @@ export class AdminService {
             : mediaStatuses.some((status) => status === 'REJECTED')
               ? 'REJECTED'
               : 'IN_REVIEW';
-        const verificationState = asset.custodyRecord
-          ? asset.custodyRecord.status === 'EXPECTED'
-            ? 'AWAITING_RECEIPT'
-            : asset.custodyRecord.status
-          : 'NOT_STARTED';
+        const verificationState = submission?.intake?.verification?.status === 'VERIFIED'
+          ? 'VERIFIED'
+          : submission?.intake?.verification?.status === 'IN_PROGRESS'
+            ? 'IN_PROGRESS'
+            : submission?.intake?.verification?.status === 'BLOCKED'
+              ? 'MISMATCH'
+              : submission?.reviews[0]?.status === 'COMPLETED'
+                ? 'VERIFIED'
+                : 'PENDING';
+        const physicalState = asset.custodyRecord?.status === 'EXPECTED'
+          ? 'AWAITING_RECEIPT'
+          : asset.custodyRecord?.status === 'RECEIVED'
+            ? 'RECEIVED'
+            : asset.custodyRecord?.status === 'INSPECTED'
+              ? 'IN_VERIFICATION'
+              : asset.custodyRecord?.status === 'SECURED'
+                ? 'CUSTODY_READY'
+                : asset.custodyRecord?.status === 'EXCEPTION' || submission?.intake?.exceptions.length
+                  ? 'EXCEPTION'
+                  : 'NOT_RECORDED';
+        const blockers = [
+          ...(physicalState === 'EXCEPTION' ? ['Resolve custody/intake exception'] : []),
+          ...(verificationState !== 'VERIFIED' ? ['Verification pending'] : []),
+          ...(asset.valuationDecisions.length === 0 ? ['Staff valuation pending'] : []),
+        ];
+        const nextAction = physicalState === 'EXCEPTION'
+          ? 'Resolve exception'
+          : verificationState !== 'VERIFIED'
+            ? 'Continue verification'
+            : asset.valuationDecisions.length === 0
+              ? 'Open valuation'
+              : asset.publication?.status !== 'PUBLISHED'
+                ? 'Open market setup'
+                : 'Open collectible';
+        const testFixture = isBetaFixtureSlug(asset.slug) || isBetaFixtureSubmission(submission?.declaredMetadata ?? null);
         return {
           id: asset.id,
           publicId: asset.publicId,
@@ -2255,6 +2371,7 @@ export class AdminService {
           title: asset.title,
           thumbnailUrl,
           status: asset.status,
+          testFixture,
           identity: {
             category: asset.category.name,
             year: asset.year,
@@ -2280,10 +2397,24 @@ export class AdminService {
                 username: submission.owner.profile?.publicUsername ?? null,
               }
             : null,
+          lineage: {
+            submissionId: submission?.id ?? null,
+            intakeId: submission?.intake?.id ?? null,
+            reviewState: submission?.reviews[0]?.status ?? null,
+          },
           mediaState,
           verificationState,
           valuationState: asset.valuationDecisions.length ? 'ACTIVE' : 'NOT_STARTED',
-          custodyState: asset.custodyRecord?.status ?? 'NOT_STARTED',
+          custodyState: physicalState,
+          valuation: asset.valuationDecisions[0]
+            ? {
+                minor: asset.valuationDecisions[0].valueMinor.toString(),
+                currency: asset.valuationDecisions[0].currency,
+                decidedAt: asset.valuationDecisions[0].decidedAt.toISOString(),
+              }
+            : null,
+          nextAction,
+          blockers,
           marketReadiness: asset.publication?.status === 'PUBLISHED' ? 'PUBLISHED' : 'NOT_READY',
           publicationState: asset.publication?.status ?? 'NOT_PUBLISHED',
           ownership: {
@@ -2310,6 +2441,15 @@ export class AdminService {
         pageSize,
         total,
         totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      summary: {
+        total: summaryTotal,
+        inCustody,
+        verificationPending,
+        valuationPending,
+        marketLive,
+        exceptions,
+        ownerPositions,
       },
     };
   }

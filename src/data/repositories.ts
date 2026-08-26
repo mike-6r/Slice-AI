@@ -1379,10 +1379,19 @@ export type AdminCatalogueAsset = {
     collector: string;
     username: string | null;
   } | null;
+  testFixture: boolean;
   mediaState: string;
   verificationState: string;
   valuationState: string;
   custodyState: string;
+  lineage: {
+    submissionId: string | null;
+    intakeId: string | null;
+    reviewState: string | null;
+  };
+  valuation: { minor: string; currency: string; decidedAt: string } | null;
+  nextAction: string;
+  blockers: string[];
   marketReadiness: string;
   publicationState: string;
   ownership: { ownerCount: number; totalUnits: string | null; issuedUnits: string | null };
@@ -1393,6 +1402,20 @@ export type AdminCatalogueAsset = {
 export type AdminCatalogueResponse = {
   items: AdminCatalogueAsset[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  summary: {
+    total: number;
+    inCustody: number;
+    verificationPending: number;
+    valuationPending: number;
+    marketLive: number;
+    exceptions: number;
+    ownerPositions: number;
+  };
+  filterOptions?: {
+    categories: string[];
+    collectors: string[];
+    gradingCompanies: string[];
+  };
 };
 
 export type InitialOfferingProjection = {
@@ -1460,6 +1483,16 @@ export interface AdminRepository {
   listCatalogueAssets(input?: {
     q?: string;
     status?: string;
+    category?: string;
+    physicalState?: string;
+    verification?: string;
+    valuation?: string;
+    market?: string;
+    grading?: string;
+    collector?: string;
+    fixture?: "NORMAL" | "TEST" | "ALL";
+    sort?: string;
+    sortDirection?: "asc" | "desc";
     page?: number;
     pageSize?: number;
   }): Promise<AdminCatalogueResponse>;

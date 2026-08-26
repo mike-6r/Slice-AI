@@ -1279,6 +1279,7 @@ function PhysicalIntakeWorkspace({
       carrier={carrier}
       dateFrom={dateFrom}
       dateTo={dateTo}
+      fixture={fixture}
       page={page}
       updateSearch={updateSearch}
     />
@@ -1303,6 +1304,7 @@ function PhysicalIntakeBoard({
   carrier,
   dateFrom,
   dateTo,
+  fixture,
   page,
   updateSearch,
 }: {
@@ -1313,10 +1315,15 @@ function PhysicalIntakeBoard({
   carrier: string;
   dateFrom: string;
   dateTo: string;
+  fixture: string;
   page: number;
   updateSearch: (next: Record<string, string | undefined>) => void;
 }) {
   const services = useAppServices();
+  const verificationStart = useMutation({
+    mutationFn: (id: string) => services.repositories.admin.startIntakeVerification(id),
+    onSuccess: () => updateSearch({ page: "1" }),
+  });
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
@@ -1373,7 +1380,7 @@ function PhysicalIntakeBoard({
     oldestAt: null,
     oldestAtByStage: {},
   };
-  const countFor = (key: (typeof intakeTabs)[number][2]) => overview[key as keyof typeof overview] ?? 0;
+  const countFor = (key: (typeof intakeTabs)[number][2]) => Number(overview[key as keyof typeof overview] ?? 0);
   const rows = [...(data?.items ?? [])].sort((a, b) => {
     if (sortMode === "newest") return new Date(b.currentStageSince).getTime() - new Date(a.currentStageSince).getTime();
     if (sortMode === "delivered") return Number(Boolean(b.shipment?.deliveredAt)) - Number(Boolean(a.shipment?.deliveredAt));
@@ -3765,7 +3772,7 @@ function CollectorDirectoryManagement({
   });
   const verificationStart = useMutation({
     mutationFn: (id: string) => services.repositories.admin.startIntakeVerification(id),
-    onSuccess: () => updateSearch({ page: "1" }),
+    onSuccess: retry,
   });
   const directory = user.collector?.publicDirectory ?? null;
   const canManage = currentUser.data?.roles.includes("ADMIN") ?? false;

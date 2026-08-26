@@ -3125,6 +3125,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                 slug: stringField(item.slug, "admin catalogue.slug"),
                 title: stringField(item.title, "admin catalogue.title"),
                 status: stringField(item.status, "admin catalogue.status"),
+                testFixture: Boolean(item.testFixture),
                 thumbnailUrl: nullableString(item.thumbnailUrl, "admin catalogue.thumbnailUrl"),
                 identity: {
                   category: stringField(identity.category, "admin catalogue.identity.category"),
@@ -3170,8 +3171,15 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                         provenance.username,
                         "admin catalogue.provenance.username",
                       ),
-                    }
+                  }
                   : null,
+                lineage: item.lineage
+                  ? {
+                      submissionId: nullableString(objectField(item.lineage, "admin catalogue.lineage").submissionId, "admin catalogue.lineage.submissionId"),
+                      intakeId: nullableString(objectField(item.lineage, "admin catalogue.lineage").intakeId, "admin catalogue.lineage.intakeId"),
+                      reviewState: nullableString(objectField(item.lineage, "admin catalogue.lineage").reviewState, "admin catalogue.lineage.reviewState"),
+                    }
+                  : { submissionId: null, intakeId: null, reviewState: null },
                 mediaState: stringField(item.mediaState, "admin catalogue.mediaState"),
                 verificationState: stringField(
                   item.verificationState,
@@ -3179,6 +3187,15 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                 ),
                 valuationState: stringField(item.valuationState, "admin catalogue.valuationState"),
                 custodyState: stringField(item.custodyState, "admin catalogue.custodyState"),
+                valuation: item.valuation
+                  ? {
+                      minor: stringField(objectField(item.valuation, "admin catalogue.valuation").minor, "admin catalogue.valuation.minor"),
+                      currency: stringField(objectField(item.valuation, "admin catalogue.valuation").currency, "admin catalogue.valuation.currency"),
+                      decidedAt: stringField(objectField(item.valuation, "admin catalogue.valuation").decidedAt, "admin catalogue.valuation.decidedAt"),
+                    }
+                  : null,
+                nextAction: stringField(item.nextAction, "admin catalogue.nextAction"),
+                blockers: Array.isArray(item.blockers) ? item.blockers.map((value) => String(value)) : [],
                 marketReadiness: stringField(
                   item.marketReadiness,
                   "admin catalogue.marketReadiness",
@@ -3208,6 +3225,18 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           total: Number(pagination.total ?? 0),
           totalPages: Number(pagination.totalPages ?? 1),
         },
+        summary: (() => {
+          const summary = objectField(value.summary ?? {}, "admin collectibles summary");
+          return {
+            total: Number(summary.total ?? 0),
+            inCustody: Number(summary.inCustody ?? 0),
+            verificationPending: Number(summary.verificationPending ?? 0),
+            valuationPending: Number(summary.valuationPending ?? 0),
+            marketLive: Number(summary.marketLive ?? 0),
+            exceptions: Number(summary.exceptions ?? 0),
+            ownerPositions: Number(summary.ownerPositions ?? 0),
+          };
+        })(),
       };
     },
     async getComplianceCase(id) {

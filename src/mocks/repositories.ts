@@ -140,6 +140,15 @@ export const mockRepositories: AppRepositories = {
           total: 0,
           totalPages: 1,
         },
+        summary: {
+          total: 0,
+          inCustody: 0,
+          verificationPending: 0,
+          valuationPending: 0,
+          marketLive: 0,
+          exceptions: 0,
+          ownerPositions: 0,
+        },
       };
     },
     async getComplianceCase() {

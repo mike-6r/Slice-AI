@@ -74,6 +74,16 @@ const catalogueQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
     status: z.string().trim().max(32).optional(),
+    category: z.string().trim().max(80).optional(),
+    physicalState: z.string().trim().max(40).optional(),
+    verification: z.string().trim().max(40).optional(),
+    valuation: z.string().trim().max(40).optional(),
+    market: z.string().trim().max(40).optional(),
+    grading: z.string().trim().max(40).optional(),
+    collector: z.string().trim().max(120).optional(),
+    fixture: z.enum(['NORMAL', 'TEST', 'ALL']).default('NORMAL'),
+    sort: z.string().trim().max(40).optional(),
+    sortDirection: z.enum(['asc', 'desc']).optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
