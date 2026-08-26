@@ -4780,6 +4780,16 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           updatedAt: stringField(response.updatedAt, "review note.updatedAt"),
         };
       },
+      async manualVerifyCertification(id, input) {
+        return client.request<unknown>(
+          `/reviews/submissions/${id}/certification/manual-verify`,
+          {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        );
+      },
       async canonicalize(id) {
         const response = objectField(
           await client.request<unknown>(`/admin/submissions/${id}/canonicalize`, {

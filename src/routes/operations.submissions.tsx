@@ -53,6 +53,7 @@ type CanonicalizeMutation = UseMutationResult<
   void,
   unknown
 >;
+type ManualCertificationMutation = UseMutationResult<unknown, Error, void, unknown>;
 
 export function SubmissionOperationsPage() {
   const services = useAppServices();
@@ -134,6 +135,31 @@ export function SubmissionOperationsPage() {
   });
   const canonicalize = useMutation({
     mutationFn: () => services.repositories.reviews.canonicalize(selected!),
+    onSuccess: refresh,
+  });
+  const manualVerifyCertification = useMutation({
+    mutationFn: () => {
+      const collectible = detail.data?.collectible;
+      if (!collectible?.grader || !collectible.grade || !collectible.certificationNumber)
+        throw new Error("A graded submission with certification details is required.");
+      return services.repositories.reviews.manualVerifyCertification(selected!, {
+        verifiedIdentity: {
+          year: collectible.year ?? "",
+          set: collectible.set ?? "",
+          cardNumber: collectible.cardNumber ?? "",
+          name: collectible.title ?? "",
+          variant: collectible.variant ?? "",
+          language:
+            typeof detail.data?.declaredMetadata?.language === "string"
+              ? detail.data.declaredMetadata.language
+              : "",
+          companyCode: collectible.grader,
+        },
+        verifiedGrade: collectible.grade,
+        verifiedLabel: `${collectible.grader} ${collectible.grade}`,
+        providerReference: detail.data?.certificationVerification?.officialVerificationUrl ?? undefined,
+      });
+    },
     onSuccess: refresh,
   });
   const nextSubmission = useMemo(() => {
@@ -265,6 +291,7 @@ export function SubmissionOperationsPage() {
               setConfirmAction={setConfirmAction}
               decide={decide}
               saveNote={saveNote}
+              manualVerifyCertification={manualVerifyCertification}
               canonicalize={canonicalize}
               nextSubmission={nextSubmission}
               onNext={() => nextSubmission && choose(nextSubmission)}
@@ -361,6 +388,7 @@ function ReviewDetail({
   setConfirmAction,
   decide,
   saveNote,
+  manualVerifyCertification,
   canonicalize,
   nextSubmission,
   onNext,
@@ -398,6 +426,7 @@ function ReviewDetail({
   saveNote: ReturnType<
     typeof useMutation<{ submissionId: string; updatedAt: string }, Error, void>
   >;
+  manualVerifyCertification: ManualCertificationMutation;
   canonicalize: CanonicalizeMutation;
   nextSubmission?: string;
   onNext: () => void;
@@ -433,6 +462,7 @@ function ReviewDetail({
       setConfirmAction={setConfirmAction}
       decide={decide}
       saveNote={saveNote}
+      manualVerifyCertification={manualVerifyCertification}
       canonicalize={canonicalize}
       nextSubmission={nextSubmission}
       onNext={onNext}
@@ -639,6 +669,7 @@ function SubmissionReviewWorkspace({
   setConfirmAction,
   decide,
   saveNote,
+  manualVerifyCertification,
   canonicalize,
   nextSubmission,
   onNext,
@@ -672,6 +703,7 @@ function SubmissionReviewWorkspace({
   setConfirmAction: (value: Decision | null) => void;
   decide: DecisionMutation;
   saveNote: ReviewNoteMutation;
+  manualVerifyCertification: ManualCertificationMutation;
   canonicalize: CanonicalizeMutation;
   nextSubmission?: string;
   onNext: () => void;
@@ -982,6 +1014,30 @@ function SubmissionReviewWorkspace({
               >
                 Open official verification reference ↗
               </a>
+            ) : null}
+            {activeCert && activeCert.status !== "VERIFIED" && collectible?.grader ? (
+              <div className="mt-4 rounded-md border border-warning/40 bg-warning/10 p-4">
+                <p className="text-sm text-subtle">
+                  Records a staff manual verification against the official reference using the
+                  identity and grade shown above. This creates an auditable decision and unlocks
+                  collector submission only when the recorded values match.
+                </p>
+                <button
+                  type="button"
+                  className="button-primary mt-3"
+                  onClick={() => manualVerifyCertification.mutate()}
+                  disabled={manualVerifyCertification.isPending}
+                >
+                  {manualVerifyCertification.isPending
+                    ? "Recording verification…"
+                    : "Record staff certification verification"}
+                </button>
+                {manualVerifyCertification.error ? (
+                  <p className="mt-2 text-sm text-danger" role="alert">
+                    {manualVerifyCertification.error.message}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </WorkspaceSection>
           <WorkspaceSection

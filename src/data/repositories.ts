@@ -167,6 +167,16 @@ export interface SubmissionReviewRepository {
     },
   ): Promise<AssetSubmission>;
   saveNote(id: string, note: string): Promise<{ submissionId: string; updatedAt: string }>;
+  manualVerifyCertification(
+    id: string,
+    input: {
+      verifiedIdentity: Record<string, unknown>;
+      verifiedGrade: string;
+      verifiedLabel?: string;
+      designation?: string;
+      providerReference?: string;
+    },
+  ): Promise<unknown>;
   canonicalize(id: string): Promise<{
     submissionId: string;
     assetId: string;
