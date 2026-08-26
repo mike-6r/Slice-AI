@@ -2385,6 +2385,7 @@ export class AdminService {
                   code: asset.gradeScaleEntry.company.code,
                   grade: asset.gradeScaleEntry.grade.toFixed(2),
                   label: asset.gradeScaleEntry.label,
+                  certStatus: asset.certificationNumber ? 'ON_FILE' : 'NOT_APPLICABLE',
                 }
               : null,
           },

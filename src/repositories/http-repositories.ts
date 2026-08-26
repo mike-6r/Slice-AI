@@ -3146,6 +3146,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                         code: stringField(grading.code, "admin catalogue.grading.code"),
                         grade: stringField(grading.grade, "admin catalogue.grading.grade"),
                         label: stringField(grading.label, "admin catalogue.grading.label"),
+                        certStatus: stringField(grading.certStatus, "admin catalogue.grading.certStatus"),
                       }
                     : null,
                 },

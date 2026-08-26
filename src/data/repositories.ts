@@ -1370,7 +1370,7 @@ export type AdminCatalogueAsset = {
     set: string | null;
     cardNumber: string | null;
     edition: string | null;
-    grading: { company: string; code: string; grade: string; label: string } | null;
+    grading: { company: string; code: string; grade: string; label: string; certStatus: string } | null;
   };
   provenance: {
     submissionId: string;
