@@ -1846,7 +1846,9 @@ export class SubmissionService {
       : submission!.status === 'IN_REVIEW'
         ? 'READY'
         : 'UNCLAIMED';
+    const selfReviewForbidden = submission!.ownerUserId === actor.userId;
     const canReview =
+      !selfReviewForbidden &&
       submission!.status === 'IN_REVIEW' &&
       (submission!.reviewerId === actor.userId || actor.roles.includes('ADMIN'));
     return {
@@ -1898,12 +1900,16 @@ export class SubmissionService {
         currentValuation: latestReview?.valuationMinor?.toString() ?? null,
       },
       allowedActions: {
-        canClaim: submission!.status === 'SUBMITTED' && !submission!.reviewerId,
+        canClaim:
+          !selfReviewForbidden &&
+          submission!.status === 'SUBMITTED' &&
+          !submission!.reviewerId,
         canRelease: canReview,
         canEdit: canReview,
         canAccept: canReview && blockers.length === 0,
         canRequestChanges: canReview,
         canReject: canReview,
+        selfReviewForbidden,
       },
     };
   }

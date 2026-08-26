@@ -167,7 +167,14 @@ export interface SubmissionReviewRepository {
     },
   ): Promise<AssetSubmission>;
   saveNote(id: string, note: string): Promise<{ submissionId: string; updatedAt: string }>;
-  canonicalize(id: string): Promise<{ submissionId: string; assetId: string; publicId: string; slug: string; title: string; replayed: boolean }>;
+  canonicalize(id: string): Promise<{
+    submissionId: string;
+    assetId: string;
+    publicId: string;
+    slug: string;
+    title: string;
+    replayed: boolean;
+  }>;
 }
 export interface AssetLifecycleRepository {
   listOperations(): Promise<AssetOperationSummary[]>;

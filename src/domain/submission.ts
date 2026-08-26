@@ -363,6 +363,7 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     canAccept: boolean;
     canRequestChanges: boolean;
     canReject: boolean;
+    selfReviewForbidden: boolean;
   };
 }
 
