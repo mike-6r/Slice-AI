@@ -27,7 +27,8 @@ const copy: Record<NonNullable<AccountCapability["reason"]>, { title: string; de
   },
   BANK_CHANGE_WITHDRAWAL_HOLD: {
     title: "Withdrawals are temporarily held",
-    detail: "For security, withdrawals remain paused after a connected bank change until the configured hold ends.",
+    detail:
+      "For security, withdrawals remain paused after a connected bank change until the configured hold ends.",
   },
   PAYOUT_ACCOUNT_REQUIRED: {
     title: "Complete payout setup to withdraw",

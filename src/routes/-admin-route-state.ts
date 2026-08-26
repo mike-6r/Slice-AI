@@ -160,12 +160,14 @@ export function pipelineSection(stage: string): AdminSection {
 
 export function operationsTab(stage: string) {
   return (
-    ({
-      verified: "verification",
-      valued: "valuation",
-      vaultReady: "vault-ready",
-      marketReady: "market-ready",
-      marketLive: "market-live",
-    } as Record<string, string>)[stage] ?? "verification"
+    (
+      {
+        verified: "verification",
+        valued: "valuation",
+        vaultReady: "vault-ready",
+        marketReady: "market-ready",
+        marketLive: "market-live",
+      } as Record<string, string>
+    )[stage] ?? "verification"
   );
 }

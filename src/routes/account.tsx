@@ -471,11 +471,17 @@ function nextAccountSetupAction(capabilities: AccountCapability[]) {
     OPEN_WALLET: { href: "/wallet", label: "Open wallet" },
     VIEW_ACCOUNT_STATUS: { href: "/account#overview", label: "View account status" },
   };
-  return action ? actions[action] : { href: "/account#access" as const, label: "Review account setup" };
+  return action
+    ? actions[action]
+    : { href: "/account#access" as const, label: "Review account setup" };
 }
 
-function fallbackNextAction(reason: AccountCapability["reason"]): AccountCapabilityNextAction | null {
-  const actions: Partial<Record<NonNullable<AccountCapability["reason"]>, AccountCapabilityNextAction>> = {
+function fallbackNextAction(
+  reason: AccountCapability["reason"],
+): AccountCapabilityNextAction | null {
+  const actions: Partial<
+    Record<NonNullable<AccountCapability["reason"]>, AccountCapabilityNextAction>
+  > = {
     EMAIL_VERIFICATION_REQUIRED: "VERIFY_EMAIL",
     PHONE_VERIFICATION_REQUIRED: "VERIFY_PHONE",
     TWO_FACTOR_REQUIRED: "ENABLE_TWO_FACTOR",
@@ -492,7 +498,7 @@ function fallbackNextAction(reason: AccountCapability["reason"]): AccountCapabil
     ACCOUNT_DELETION_PENDING: "VIEW_ACCOUNT_STATUS",
     ACCOUNT_REVIEW_REQUIRED: "VIEW_ACCOUNT_STATUS",
   };
-  return reason ? actions[reason] ?? null : null;
+  return reason ? (actions[reason] ?? null) : null;
 }
 
 function capabilityStatusLabel(status: AccountCapability["status"] | undefined) {
@@ -713,21 +719,38 @@ function ProfilePanel({
                     <Definition label="Country" value={user.profile.countryCode} />
                     <Definition label="Timezone" value={user.profile.timezone} />
                   </dl>
-                  <section className="account-verified-details" aria-labelledby="account-verified-details-title">
+                  <section
+                    className="account-verified-details"
+                    aria-labelledby="account-verified-details-title"
+                  >
                     <div className="account-verified-details-heading">
                       <div>
                         <h3 id="account-verified-details-title">Verified identity</h3>
-                        <p>Only your verified profile details are shown here. ID images and document numbers are never displayed.</p>
+                        <p>
+                          Only your verified profile details are shown here. ID images and document
+                          numbers are never displayed.
+                        </p>
                       </div>
                       <span className="account-verified-details-badge">Private</span>
                     </div>
-                    {identityDetails.isLoading ? <p className="account-profile-detail-note">Loading verified details…</p> : null}
-                    {identityDetails.error ? <p className="account-form-error">{errorCopy(identityDetails.error, "Verified details are temporarily unavailable.")}</p> : null}
+                    {identityDetails.isLoading ? (
+                      <p className="account-profile-detail-note">Loading verified details…</p>
+                    ) : null}
+                    {identityDetails.error ? (
+                      <p className="account-form-error">
+                        {errorCopy(
+                          identityDetails.error,
+                          "Verified details are temporarily unavailable.",
+                        )}
+                      </p>
+                    ) : null}
                     {identityDetails.data?.available && identityDetails.data.details ? (
                       <VerifiedIdentityFields details={identityDetails.data.details} />
                     ) : null}
                     {identityDetails.data && !identityDetails.data.available ? (
-                      <p className="account-profile-detail-note">Complete identity verification to make verified details available.</p>
+                      <p className="account-profile-detail-note">
+                        Complete identity verification to make verified details available.
+                      </p>
                     ) : null}
                   </section>
                 </div>
@@ -748,19 +771,47 @@ function VerifiedIdentityFields({
   return (
     <div className="account-verified-details-fields">
       <dl>
-        <Definition label="Legal name" value={details.fullName ?? "Not provided"} muted={!details.fullName} />
-        <Definition label="Verified email" value={details.email ?? "Not provided"} muted={!details.email} />
-        <Definition label="Verified phone" value={details.phone ?? "Not provided"} muted={!details.phone} />
-        <Definition label="Date of birth" value={details.dateOfBirth ?? "Not provided"} muted={!details.dateOfBirth} />
-        <Definition label="Verified country" value={details.address?.countryCode ?? "Not provided"} muted={!details.address?.countryCode} />
+        <Definition
+          label="Legal name"
+          value={details.fullName ?? "Not provided"}
+          muted={!details.fullName}
+        />
+        <Definition
+          label="Verified email"
+          value={details.email ?? "Not provided"}
+          muted={!details.email}
+        />
+        <Definition
+          label="Verified phone"
+          value={details.phone ?? "Not provided"}
+          muted={!details.phone}
+        />
+        <Definition
+          label="Date of birth"
+          value={details.dateOfBirth ?? "Not provided"}
+          muted={!details.dateOfBirth}
+        />
+        <Definition
+          label="Verified country"
+          value={details.address?.countryCode ?? "Not provided"}
+          muted={!details.address?.countryCode}
+        />
       </dl>
       <div className="account-verified-address">
         <span className="account-verified-address-label">Verified address</span>
         {details.address ? (
           <address>
-            {[details.address.line1, details.address.line2, details.address.city, details.address.region, details.address.postalCode]
+            {[
+              details.address.line1,
+              details.address.line2,
+              details.address.city,
+              details.address.region,
+              details.address.postalCode,
+            ]
               .filter(Boolean)
-              .map((line) => <span key={line}>{line}</span>)}
+              .map((line) => (
+                <span key={line}>{line}</span>
+              ))}
           </address>
         ) : (
           <span className="account-profile-detail-note">Not provided</span>

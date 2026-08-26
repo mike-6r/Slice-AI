@@ -3322,10 +3322,7 @@ function activityAsset(
   if (!asset && !holding && !summary) return undefined;
   const slug = asset?.slug ?? summary?.slug ?? holding?.slug ?? null;
   const media =
-    frontAssetMedia(asset)?.url ??
-    summary?.thumbnailUrl ??
-    holding?.thumbnailUrl ??
-    null;
+    frontAssetMedia(asset)?.url ?? summary?.thumbnailUrl ?? holding?.thumbnailUrl ?? null;
   return {
     slug,
     title: asset?.details.title ?? summary?.title ?? holding?.title ?? "Collectible",

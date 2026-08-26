@@ -28,7 +28,10 @@ function ResetPasswordPage() {
       <section className="auth-card auth-card--compact">
         {success ? (
           <>
-            <CheckCircle2 className="auth-status-icon auth-status-icon--success" aria-hidden="true" />
+            <CheckCircle2
+              className="auth-status-icon auth-status-icon--success"
+              aria-hidden="true"
+            />
             <h1>Password changed</h1>
             <p>Your password was updated and other signed-in sessions were revoked.</p>
             <Link className="auth-submit" to="/login">
@@ -48,7 +51,9 @@ function ResetPasswordPage() {
           <>
             <KeyRound className="auth-status-icon" aria-hidden="true" />
             <h1>Choose a new password</h1>
-            <p>Use a strong password you do not use anywhere else. This link can only be used once.</p>
+            <p>
+              Use a strong password you do not use anywhere else. This link can only be used once.
+            </p>
             <form
               className="mt-6 space-y-4 text-left"
               onSubmit={async (event) => {
@@ -64,9 +69,7 @@ function ResetPasswordPage() {
                   setSuccess(true);
                 } catch (reason) {
                   setError(
-                    reason instanceof ApiError
-                      ? reason.message
-                      : "Unable to reset your password.",
+                    reason instanceof ApiError ? reason.message : "Unable to reset your password.",
                   );
                 } finally {
                   setSubmitting(false);
@@ -103,7 +106,11 @@ function ResetPasswordPage() {
               {confirmation && password !== confirmation ? (
                 <p className="form-error">Passwords do not match.</p>
               ) : null}
-              {error ? <p className="form-error" role="alert">{error}</p> : null}
+              {error ? (
+                <p className="form-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
               <button
                 className="auth-submit w-full disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!valid || submitting}

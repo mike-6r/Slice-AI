@@ -41,17 +41,18 @@ export function AdminCollectibleDetail({
     staleTime: 20_000,
   });
   const receipt = useMutation({
-    mutationFn: () => services.repositories.admin.confirmIntakeReceipt(detail.data!.intake!.id, {
-      packageCondition: "UNKNOWN",
-      checklist: {
-        packageReceived: true,
-        correctIntakeReference: true,
-        correctCollectible: true,
-        visibleConditionAcceptable: true,
-        tamperDamageChecked: true,
-        trackingMatches: true,
-      },
-    }),
+    mutationFn: () =>
+      services.repositories.admin.confirmIntakeReceipt(detail.data!.intake!.id, {
+        packageCondition: "UNKNOWN",
+        checklist: {
+          packageReceived: true,
+          correctIntakeReference: true,
+          correctCollectible: true,
+          visibleConditionAcceptable: true,
+          tamperDamageChecked: true,
+          trackingMatches: true,
+        },
+      }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["admin", "collectible", assetId] }),
   });
   if (detail.isLoading)
@@ -380,14 +381,26 @@ function InitialOfferingTab({ item }: { item: Detail }) {
   const client = useQueryClient();
   const offering = item.initialOffering;
   const [reason, setReason] = useState("");
-  const invalidate = () => void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] });
+  const invalidate = () =>
+    void client.invalidateQueries({ queryKey: ["admin", "collectible", item.id] });
   const approve = useMutation({
-    mutationFn: () => services.repositories.admin.approveInitialOffering(offering!.offeringId, reason.trim()),
-    onSuccess: () => { setReason(""); invalidate(); },
+    mutationFn: () =>
+      services.repositories.admin.approveInitialOffering(offering!.offeringId, reason.trim()),
+    onSuccess: () => {
+      setReason("");
+      invalidate();
+    },
   });
   const requestChanges = useMutation({
-    mutationFn: () => services.repositories.admin.requestInitialOfferingChanges(offering!.offeringId, reason.trim()),
-    onSuccess: () => { setReason(""); invalidate(); },
+    mutationFn: () =>
+      services.repositories.admin.requestInitialOfferingChanges(
+        offering!.offeringId,
+        reason.trim(),
+      ),
+    onSuccess: () => {
+      setReason("");
+      invalidate();
+    },
   });
   const open = useMutation({
     mutationFn: () => services.repositories.admin.openInitialOffering(offering!.offeringId),
@@ -404,77 +417,168 @@ function InitialOfferingTab({ item }: { item: Detail }) {
   if (!offering) {
     return (
       <section className="admin-detail-card admin-detail-tab-panel">
-        <div className="admin-card-heading"><h3>Initial offering</h3><span>Not configured</span></div>
+        <div className="admin-card-heading">
+          <h3>Initial offering</h3>
+          <span>Not configured</span>
+        </div>
         <p className="admin-detail-muted">
-          No collector offering has been submitted. This is separate from Slice Treasury liquidity and does not create ownership units.
+          No collector offering has been submitted. This is separate from Slice Treasury liquidity
+          and does not create ownership units.
         </p>
       </section>
     );
   }
-  const busy = approve.isPending || requestChanges.isPending || open.isPending || pause.isPending || cancel.isPending;
+  const busy =
+    approve.isPending ||
+    requestChanges.isPending ||
+    open.isPending ||
+    pause.isPending ||
+    cancel.isPending;
   const status = offering.status;
   return (
     <section className="admin-detail-card admin-detail-tab-panel admin-offering-panel">
       <div className="admin-card-heading">
         <div>
           <h3>Collector initial offering</h3>
-          <p className="admin-detail-muted">A collector-originated sale of part of the approved ownership supply.</p>
+          <p className="admin-detail-muted">
+            A collector-originated sale of part of the approved ownership supply.
+          </p>
         </div>
         <span className={`admin-detail-status ${status.toLowerCase()}`}>{sentence(status)}</span>
       </div>
       <div className="admin-detail-card-grid admin-detail-card-grid--three">
         <InfoCard title="Collector terms">
           <Field label="Collector" value={offering.collector.displayName} />
-          <Field label="Offered" value={`${offering.offeredUnits} units · ${formatOfferingBps(offering.offeredPercentageBps)}`} accent />
-          <Field label="Collector retains" value={`${offering.retainedUnits} units · ${formatOfferingBps(offering.retainedPercentageBps)}`} />
-          <Field label="Price per unit" value={money(offering.pricePerUnitMinor, offering.currency)} />
-          <Field label="Gross proceeds" value={money(offering.grossOfferingMinor, offering.currency)} />
+          <Field
+            label="Offered"
+            value={`${offering.offeredUnits} units · ${formatOfferingBps(offering.offeredPercentageBps)}`}
+            accent
+          />
+          <Field
+            label="Collector retains"
+            value={`${offering.retainedUnits} units · ${formatOfferingBps(offering.retainedPercentageBps)}`}
+          />
+          <Field
+            label="Price per unit"
+            value={money(offering.pricePerUnitMinor, offering.currency)}
+          />
+          <Field
+            label="Gross proceeds"
+            value={money(offering.grossOfferingMinor, offering.currency)}
+          />
         </InfoCard>
         <InfoCard title="Settlement">
-          <Field label="Fee policy" value={`${offering.feeScheduleVersion} · ${offering.feeBps / 100}%`} />
+          <Field
+            label="Fee policy"
+            value={`${offering.feeScheduleVersion} · ${offering.feeBps / 100}%`}
+          />
           <Field label="Fee" value={money(offering.feeMinor, offering.currency)} />
-          <Field label="Collector net" value={money(offering.netOfferingMinor, offering.currency)} accent />
-          <Field label="Valuation" value={offering.valuation ? money(offering.valuation.minor, offering.valuation.currency) : "Not recorded"} />
-          <Field label="Supply policy" value={offering.supplyPolicy ? sentence(offering.supplyPolicy.status) : "Not approved"} />
+          <Field
+            label="Collector net"
+            value={money(offering.netOfferingMinor, offering.currency)}
+            accent
+          />
+          <Field
+            label="Valuation"
+            value={
+              offering.valuation
+                ? money(offering.valuation.minor, offering.valuation.currency)
+                : "Not recorded"
+            }
+          />
+          <Field
+            label="Supply policy"
+            value={offering.supplyPolicy ? sentence(offering.supplyPolicy.status) : "Not approved"}
+          />
         </InfoCard>
         <InfoCard title="Readiness">
-          <Field label="Publication" value={offering.readiness.publication ? "Published" : "Required"} />
+          <Field
+            label="Publication"
+            value={offering.readiness.publication ? "Published" : "Required"}
+          />
           <Field label="Custody" value={offering.readiness.custody ? "Secured" : "Required"} />
           <Field label="Insurance" value={offering.readiness.insurance ? "Active" : "Required"} />
           <Field label="Trading market" value={offering.readiness.market ? "Open" : "Not open"} />
-          <Field label="Inventory" value={offering.inventory ? `${offering.inventory.availableUnits} available · ${offering.inventory.settledUnits} settled` : "Not issued"} />
+          <Field
+            label="Inventory"
+            value={
+              offering.inventory
+                ? `${offering.inventory.availableUnits} available · ${offering.inventory.settledUnits} settled`
+                : "Not issued"
+            }
+          />
         </InfoCard>
       </div>
       <div className="admin-offering-ledger-note">
         <strong>Initial offering inventory</strong>
-        <span>Collector-originated inventory and proceeds are tracked separately from Slice Treasury liquidity.</span>
+        <span>
+          Collector-originated inventory and proceeds are tracked separately from Slice Treasury
+          liquidity.
+        </span>
       </div>
       {offering.changeRequestReason ? (
-        <div className="admin-detail-callout"><strong>Collector action needed:</strong> {offering.changeRequestReason}</div>
+        <div className="admin-detail-callout">
+          <strong>Collector action needed:</strong> {offering.changeRequestReason}
+        </div>
       ) : null}
-      {(status === "AWAITING_APPROVAL" || status === "CHANGES_REQUESTED") ? (
+      {status === "AWAITING_APPROVAL" || status === "CHANGES_REQUESTED" ? (
         <div className="admin-issuance-form">
           <label>
             Review note
-            <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain the approval or requested change." />
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Explain the approval or requested change."
+            />
           </label>
           <div className="admin-button-row">
-            <button className="admin-button secondary" type="button" disabled={busy || reason.trim().length < 12} onClick={() => requestChanges.mutate()}>
+            <button
+              className="admin-button secondary"
+              type="button"
+              disabled={busy || reason.trim().length < 12}
+              onClick={() => requestChanges.mutate()}
+            >
               {requestChanges.isPending ? "Sending…" : "Request changes"}
             </button>
-            <button className="admin-button primary" type="button" disabled={busy || reason.trim().length < 12} onClick={() => approve.mutate()}>
+            <button
+              className="admin-button primary"
+              type="button"
+              disabled={busy || reason.trim().length < 12}
+              onClick={() => approve.mutate()}
+            >
               {approve.isPending ? "Approving…" : "Approve offering"}
             </button>
           </div>
         </div>
       ) : null}
       {status === "APPROVED" ? (
-        <button className="admin-button primary" type="button" disabled={busy} onClick={() => open.mutate()}>{open.isPending ? "Opening…" : "Open initial offering"}</button>
+        <button
+          className="admin-button primary"
+          type="button"
+          disabled={busy}
+          onClick={() => open.mutate()}
+        >
+          {open.isPending ? "Opening…" : "Open initial offering"}
+        </button>
       ) : null}
       {status === "OPEN" || status === "PARTIALLY_FILLED" ? (
         <div className="admin-button-row">
-          <button className="admin-button secondary" type="button" disabled={busy} onClick={() => pause.mutate()}>{pause.isPending ? "Pausing…" : "Pause offering"}</button>
-          <button className="admin-button danger" type="button" disabled={busy} onClick={() => cancel.mutate()}>{cancel.isPending ? "Cancelling…" : "Cancel offering"}</button>
+          <button
+            className="admin-button secondary"
+            type="button"
+            disabled={busy}
+            onClick={() => pause.mutate()}
+          >
+            {pause.isPending ? "Pausing…" : "Pause offering"}
+          </button>
+          <button
+            className="admin-button danger"
+            type="button"
+            disabled={busy}
+            onClick={() => cancel.mutate()}
+          >
+            {cancel.isPending ? "Cancelling…" : "Cancel offering"}
+          </button>
         </div>
       ) : null}
     </section>
@@ -990,13 +1094,17 @@ function MarketTab({ item }: { item: Detail }) {
             value={
               item.market.reference?.nextRefreshAt
                 ? date(item.market.reference.nextRefreshAt)
-              : null
+                : null
             }
           />
           <Field label="Mapping status" value={item.market.reference?.status} />
           <Field
             label="Last successful refresh"
-            value={item.market.reference?.lastSuccessAt ? date(item.market.reference.lastSuccessAt) : "Not recorded"}
+            value={
+              item.market.reference?.lastSuccessAt
+                ? date(item.market.reference.lastSuccessAt)
+                : "Not recorded"
+            }
           />
           <Field
             label="History points"
@@ -1005,7 +1113,8 @@ function MarketTab({ item }: { item: Detail }) {
           <Field
             label="30D movement"
             value={
-              item.market.reference?.movement30dBps === null || item.market.reference?.movement30dBps === undefined
+              item.market.reference?.movement30dBps === null ||
+              item.market.reference?.movement30dBps === undefined
                 ? "Unavailable"
                 : `${(item.market.reference.movement30dBps / 100).toFixed(2)}%`
             }
@@ -1157,10 +1266,10 @@ function label(value: string) {
     : value === "market"
       ? "Market"
       : value === "issuance"
-      ? "Issuance"
-      : value === "offering"
-        ? "Offering"
-        : value[0].toUpperCase() + value.slice(1);
+        ? "Issuance"
+        : value === "offering"
+          ? "Offering"
+          : value[0].toUpperCase() + value.slice(1);
 }
 function formatOfferingBps(value: number) {
   return `${(value / 100).toLocaleString("en-GB", { maximumFractionDigits: 2 })}%`;

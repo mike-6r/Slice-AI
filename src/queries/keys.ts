@@ -56,7 +56,8 @@ export const queryKeys = {
     bankConnections: ["providers", "bank-connections"] as const,
     connectPayoutSetup: ["providers", "connect-payout-setup"] as const,
     feePolicy: ["providers", "fee-policy"] as const,
-    withdrawalPreflight: (amountMinor = "0") => ["providers", "withdrawal-preflight", amountMinor] as const,
+    withdrawalPreflight: (amountMinor = "0") =>
+      ["providers", "withdrawal-preflight", amountMinor] as const,
     movements: (cursor?: string) => ["providers", "movements", cursor ?? null] as const,
   },
   notifications: Object.assign((userId: string) => ["notifications", userId] as const, {

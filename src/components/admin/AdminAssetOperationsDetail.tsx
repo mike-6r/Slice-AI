@@ -324,16 +324,43 @@ function Overview({
         ) : null}
         {!item.intake ? (
           <div className="admin-custody-fields">
-            <label>Provider code<input value={providerCode} onChange={(event) => setProviderCode(event.target.value)} placeholder="Approved operator code" /></label>
-            <label>Facility code<input value={facilityCode} onChange={(event) => setFacilityCode(event.target.value)} placeholder="Approved facility" /></label>
-            <label>Handoff reference<input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Receipt or operator reference" /></label>
+            <label>
+              Provider code
+              <input
+                value={providerCode}
+                onChange={(event) => setProviderCode(event.target.value)}
+                placeholder="Approved operator code"
+              />
+            </label>
+            <label>
+              Facility code
+              <input
+                value={facilityCode}
+                onChange={(event) => setFacilityCode(event.target.value)}
+                placeholder="Approved facility"
+              />
+            </label>
+            <label>
+              Handoff reference
+              <input
+                value={providerRef}
+                onChange={(event) => setProviderRef(event.target.value)}
+                placeholder="Receipt or operator reference"
+              />
+            </label>
           </div>
         ) : null}
         <button
           type="button"
           className="admin-ops-button primary"
           onClick={onHandoff}
-          disabled={handoffPending || Boolean(item.intake) || !providerCode.trim() || !facilityCode.trim() || !providerRef.trim()}
+          disabled={
+            handoffPending ||
+            Boolean(item.intake) ||
+            !providerCode.trim() ||
+            !facilityCode.trim() ||
+            !providerRef.trim()
+          }
         >
           {" "}
           {item.intake ? "Receipt already recorded" : "Start custody handoff"}{" "}
@@ -516,7 +543,11 @@ function Custody({
         </p>
         <label className="admin-form-field">
           Evidence or operator reference
-          <input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Reference for this custody step" />
+          <input
+            value={providerRef}
+            onChange={(event) => setProviderRef(event.target.value)}
+            placeholder="Reference for this custody step"
+          />
         </label>
         <div className="admin-action-list">
           {["RECEIVED", "INSPECTED", "SECURED", "EXCEPTION"].map((status) => (

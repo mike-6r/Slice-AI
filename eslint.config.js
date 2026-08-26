@@ -10,15 +10,7 @@ export default tseslint.config(
   // `server/npm run lint` gate. Keeping it out of this frontend invocation
   // prevents the root `eslint .` command from re-parsing backend tests.
   {
-    ignores: [
-      "dist",
-      ".output",
-      ".vinxi",
-      "server/**",
-      "apps/**",
-      "docs/**",
-      "**/dist/**",
-    ],
+    ignores: ["dist", ".output", ".vinxi", "server/**", "apps/**", "docs/**", "**/dist/**"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

@@ -33,7 +33,11 @@ export function AssetOperationsPage() {
   };
   const handoff = useMutation({
     mutationFn: () =>
-      services.repositories.lifecycle.handoff(selected!, { providerCode, facilityCode, providerRef }),
+      services.repositories.lifecycle.handoff(selected!, {
+        providerCode,
+        facilityCode,
+        providerRef,
+      }),
     onSuccess: refresh,
   });
   const custody = useMutation({
@@ -136,15 +140,41 @@ export function AssetOperationsPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <ActionCard title="Custody" detail={`Current: ${item.custodyStatus}`}>
                 <div className="grid gap-2 text-xs">
-                  <label>Provider code<input value={providerCode} onChange={(event) => setProviderCode(event.target.value)} placeholder="Approved operator code" /></label>
-                  <label>Facility code<input value={facilityCode} onChange={(event) => setFacilityCode(event.target.value)} placeholder="Approved facility" /></label>
-                  <label>Evidence / operator reference<input value={providerRef} onChange={(event) => setProviderRef(event.target.value)} placeholder="Reference for this step" /></label>
+                  <label>
+                    Provider code
+                    <input
+                      value={providerCode}
+                      onChange={(event) => setProviderCode(event.target.value)}
+                      placeholder="Approved operator code"
+                    />
+                  </label>
+                  <label>
+                    Facility code
+                    <input
+                      value={facilityCode}
+                      onChange={(event) => setFacilityCode(event.target.value)}
+                      placeholder="Approved facility"
+                    />
+                  </label>
+                  <label>
+                    Evidence / operator reference
+                    <input
+                      value={providerRef}
+                      onChange={(event) => setProviderRef(event.target.value)}
+                      placeholder="Reference for this step"
+                    />
+                  </label>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     className="button-secondary"
                     onClick={() => handoff.mutate()}
-                    disabled={handoff.isPending || !providerCode.trim() || !facilityCode.trim() || !providerRef.trim()}
+                    disabled={
+                      handoff.isPending ||
+                      !providerCode.trim() ||
+                      !facilityCode.trim() ||
+                      !providerRef.trim()
+                    }
                   >
                     Start intake
                   </button>

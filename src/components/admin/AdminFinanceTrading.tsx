@@ -347,9 +347,7 @@ export function AdminFinanceTrading({
           ) : (
             table
           )}
-          {!failed && records ? (
-            <FinancePagination info={pageInfo} update={update} />
-          ) : null}
+          {!failed && records ? <FinancePagination info={pageInfo} update={update} /> : null}
         </div>
 
         <aside className="admin-finance-rail">

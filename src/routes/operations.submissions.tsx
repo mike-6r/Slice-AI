@@ -18,18 +18,27 @@ export const Route = createFileRoute("/operations/submissions")({
   component: SubmissionOperationsPage,
 });
 
-const tabs = [
-  "Review",
-  "Evidence",
-  "AI Review",
-  "Market",
-  "History",
-] as const;
+const tabs = ["Review", "Evidence", "AI Review", "Market", "History"] as const;
 type Tab = (typeof tabs)[number];
 type Decision = "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
-type ReviewNoteMutation = UseMutationResult<{ submissionId: string; updatedAt: string }, Error, void, unknown>;
-type ConditionMutation = UseMutationResult<{ submissionId: string; staffCondition: string; updatedAt: string }, Error, void, unknown>;
-type ValuationMutation = UseMutationResult<{ submissionId: string; valueMinor: string | null; updatedAt: string }, Error, void, unknown>;
+type ReviewNoteMutation = UseMutationResult<
+  { submissionId: string; updatedAt: string },
+  Error,
+  void,
+  unknown
+>;
+type ConditionMutation = UseMutationResult<
+  { submissionId: string; staffCondition: string; updatedAt: string },
+  Error,
+  void,
+  unknown
+>;
+type ValuationMutation = UseMutationResult<
+  { submissionId: string; valueMinor: string | null; updatedAt: string },
+  Error,
+  void,
+  unknown
+>;
 type DecisionMutation = UseMutationResult<AssetSubmission, Error, Decision, unknown>;
 
 export function SubmissionOperationsPage() {
@@ -39,9 +48,7 @@ export function SubmissionOperationsPage() {
   const navigate = Route.useNavigate();
   const { submission: deepLinkedSubmission, tab: deepLinkedTab } = Route.useSearch();
   const [selected, setSelected] = useState<string | null>(deepLinkedSubmission ?? null);
-  const [activeTab, setActiveTab] = useState<Tab>(
-    isTab(deepLinkedTab) ? deepLinkedTab : "Review",
-  );
+  const [activeTab, setActiveTab] = useState<Tab>(isTab(deepLinkedTab) ? deepLinkedTab : "Review");
   const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
   const [note, setNote] = useState("");
   const [requestedItems, setRequestedItems] = useState<string[]>(["Front image"]);
@@ -151,101 +158,101 @@ export function SubmissionOperationsPage() {
   return (
     <ReviewAdminShell>
       <main className="page-shell admin-review-detail py-8">
-      <div className="admin-review-layout">
-        <aside className="admin-review-queue admin-panel-card">
-          <p className="page-kicker">Submissions</p>
-          <h1 className="mt-1 text-xl font-semibold">Review queue</h1>
-          <p className="mt-2 text-sm text-subtle">
-            {queue.data?.pagination.total ?? 0} items awaiting staff review
-          </p>
-          <div className="admin-review-queue-list mt-5">
-            {(queue.data?.items ?? []).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`admin-review-queue-item ${selected === item.id ? "is-selected" : ""}`}
-                onClick={() => choose(item.id)}
-              >
-                <span className="admin-review-queue-thumb">
-                  <AdminReviewMedia
-                    src={item.thumbnailUrl}
-                    alt=""
-                    fallback={<span>{item.collectible.title.slice(0, 1)}</span>}
-                  />
-                </span>
-                <span className="min-w-0 text-left">
-                  <strong className="block truncate">{item.collectible.title}</strong>
-                  <small className="mt-1 block truncate text-subtle">
-                    {item.submissionReference} · {item.collector.displayName}
-                  </small>
-                </span>
-                <span className={`admin-review-status status-${item.reviewState.toLowerCase()}`}>
-                  {label(item.reviewState)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </aside>
-        {!selected ? (
-          <section className="admin-panel-card p-8">
-            <State
-              title="Select a submission"
-              detail="Choose an item from the review queue to inspect its evidence and review history."
+        <div className="admin-review-layout">
+          <aside className="admin-review-queue admin-panel-card">
+            <p className="page-kicker">Submissions</p>
+            <h1 className="mt-1 text-xl font-semibold">Review queue</h1>
+            <p className="mt-2 text-sm text-subtle">
+              {queue.data?.pagination.total ?? 0} items awaiting staff review
+            </p>
+            <div className="admin-review-queue-list mt-5">
+              {(queue.data?.items ?? []).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`admin-review-queue-item ${selected === item.id ? "is-selected" : ""}`}
+                  onClick={() => choose(item.id)}
+                >
+                  <span className="admin-review-queue-thumb">
+                    <AdminReviewMedia
+                      src={item.thumbnailUrl}
+                      alt=""
+                      fallback={<span>{item.collectible.title.slice(0, 1)}</span>}
+                    />
+                  </span>
+                  <span className="min-w-0 text-left">
+                    <strong className="block truncate">{item.collectible.title}</strong>
+                    <small className="mt-1 block truncate text-subtle">
+                      {item.submissionReference} · {item.collector.displayName}
+                    </small>
+                  </span>
+                  <span className={`admin-review-status status-${item.reviewState.toLowerCase()}`}>
+                    {label(item.reviewState)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+          {!selected ? (
+            <section className="admin-panel-card p-8">
+              <State
+                title="Select a submission"
+                detail="Choose an item from the review queue to inspect its evidence and review history."
+              />
+            </section>
+          ) : detail.isLoading ? (
+            <section className="admin-panel-card p-8">
+              <State
+                title="Loading review detail"
+                detail="Retrieving the authorized submission record."
+              />
+            </section>
+          ) : detail.isError || !detailData ? (
+            <section className="admin-panel-card p-8">
+              <State
+                title="Review detail unavailable"
+                detail="This submission could not be loaded safely."
+                retry={() => void detail.refetch()}
+              />
+            </section>
+          ) : (
+            <ReviewDetail
+              detail={detailData}
+              activeTab={activeTab}
+              onTab={changeTab}
+              onClaim={() => claim.mutate(selected)}
+              claiming={claim.isPending}
+              onRelease={() => release.mutate(selected)}
+              releasing={release.isPending}
+              staffCondition={staffCondition}
+              setStaffCondition={setStaffCondition}
+              staffConditionNote={staffConditionNote}
+              setStaffConditionNote={setStaffConditionNote}
+              valuation={valuation}
+              setValuation={setValuation}
+              valuationBasis={valuationBasis}
+              setValuationBasis={setValuationBasis}
+              valuationConfidence={valuationConfidence}
+              setValuationConfidence={setValuationConfidence}
+              saveCondition={saveCondition}
+              saveValuation={saveValuation}
+              reason={reason}
+              setReason={setReason}
+              note={note}
+              setNote={setNote}
+              requestedItems={requestedItems}
+              setRequestedItems={setRequestedItems}
+              customerMessage={customerMessage}
+              setCustomerMessage={setCustomerMessage}
+              confirmAction={confirmAction}
+              setConfirmAction={setConfirmAction}
+              decide={decide}
+              saveNote={saveNote}
+              nextSubmission={nextSubmission}
+              onNext={() => nextSubmission && choose(nextSubmission)}
             />
-          </section>
-        ) : detail.isLoading ? (
-          <section className="admin-panel-card p-8">
-            <State
-              title="Loading review detail"
-              detail="Retrieving the authorized submission record."
-            />
-          </section>
-        ) : detail.isError || !detailData ? (
-          <section className="admin-panel-card p-8">
-            <State
-              title="Review detail unavailable"
-              detail="This submission could not be loaded safely."
-              retry={() => void detail.refetch()}
-            />
-          </section>
-        ) : (
-          <ReviewDetail
-            detail={detailData}
-            activeTab={activeTab}
-            onTab={changeTab}
-            onClaim={() => claim.mutate(selected)}
-            claiming={claim.isPending}
-            onRelease={() => release.mutate(selected)}
-            releasing={release.isPending}
-            staffCondition={staffCondition}
-            setStaffCondition={setStaffCondition}
-            staffConditionNote={staffConditionNote}
-            setStaffConditionNote={setStaffConditionNote}
-            valuation={valuation}
-            setValuation={setValuation}
-            valuationBasis={valuationBasis}
-            setValuationBasis={setValuationBasis}
-            valuationConfidence={valuationConfidence}
-            setValuationConfidence={setValuationConfidence}
-            saveCondition={saveCondition}
-            saveValuation={saveValuation}
-            reason={reason}
-            setReason={setReason}
-            note={note}
-            setNote={setNote}
-            requestedItems={requestedItems}
-            setRequestedItems={setRequestedItems}
-            customerMessage={customerMessage}
-            setCustomerMessage={setCustomerMessage}
-            confirmAction={confirmAction}
-            setConfirmAction={setConfirmAction}
-            decide={decide}
-            saveNote={saveNote}
-            nextSubmission={nextSubmission}
-            onNext={() => nextSubmission && choose(nextSubmission)}
-          />
-        )}
-      </div>
+          )}
+        </div>
       </main>
     </ReviewAdminShell>
   );
@@ -265,18 +272,27 @@ function ReviewAdminShell({ children }: { children: ReactNode }) {
   return (
     <div className="admin-console-shell admin-review-console-shell">
       <aside className="admin-console-sidebar">
-        <div className="admin-console-brand"><Wordmark /></div>
+        <div className="admin-console-brand">
+          <Wordmark />
+        </div>
         <p className="admin-console-eyebrow">Admin Console</p>
         <nav className="admin-console-nav" aria-label="Admin Console">
           {items.map(([labelText, section]) => (
-            <Link key={section} to="/admin" search={{ section }} className={section === "moderation" ? "is-active" : ""}>
+            <Link
+              key={section}
+              to="/admin"
+              search={{ section }}
+              className={section === "moderation" ? "is-active" : ""}
+            >
               <span>{labelText}</span>
             </Link>
           ))}
         </nav>
         <div className="admin-console-account">
           <span>Review workspace</span>
-          <Link to="/admin" search={{ section: "moderation" }}>Back to queue</Link>
+          <Link to="/admin" search={{ section: "moderation" }}>
+            Back to queue
+          </Link>
         </div>
       </aside>
       <div className="admin-console-main">
@@ -492,7 +508,7 @@ function ReviewDetail({
             </div>
           </div>
           <dl className="admin-review-mini-facts mt-4">
-              {fact("Membership", detail.collectorSummary?.membership)}
+            {fact("Membership", detail.collectorSummary?.membership)}
             {fact(
               "Member since",
               detail.collectorSummary ? formatDate(detail.collectorSummary?.memberSince) : null,
@@ -662,10 +678,26 @@ function SubmissionReviewWorkspace({
   return (
     <section className="admin-review-workspace">
       <div className="admin-review-workspace-nav">
-        <Link to="/admin" search={{ section: "moderation" }}>← Back to queue</Link>
+        <Link to="/admin" search={{ section: "moderation" }}>
+          ← Back to queue
+        </Link>
         <div className="admin-review-nav-actions">
-          <button type="button" className="button-secondary" onClick={onNext} disabled={!nextSubmission}>Previous</button>
-          <button type="button" className="button-secondary" onClick={onNext} disabled={!nextSubmission}>Next →</button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={onNext}
+            disabled={!nextSubmission}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={onNext}
+            disabled={!nextSubmission}
+          >
+            Next →
+          </button>
           <span>{nextSubmission ? "Queue context preserved" : "Single result"}</span>
         </div>
       </div>
@@ -679,91 +711,598 @@ function SubmissionReviewWorkspace({
             />
           </div>
           <div className="min-w-0">
-            <div className="admin-review-eyebrow-row"><span>Submission Review</span><StatusPill value={statusText} /></div>
+            <div className="admin-review-eyebrow-row">
+              <span>Submission Review</span>
+              <StatusPill value={statusText} />
+            </div>
             <h2>{collectible?.title ?? "Untitled submission"}</h2>
-            <p>{[collectible?.year, collectible?.set, collectible?.cardNumber, collectible?.variant].filter(Boolean).join(" · ") || "Identity details supplied by collector"}</p>
+            <p>
+              {[collectible?.year, collectible?.set, collectible?.cardNumber, collectible?.variant]
+                .filter(Boolean)
+                .join(" · ") || "Identity details supplied by collector"}
+            </p>
             <div className="admin-review-chip-row">
-              {collectible?.grader ? <span>{collectible.grader} {collectible.grade ?? ""}</span> : <span>Raw / ungraded</span>}
-              {collectible?.certificationNumber ? <span>Cert {collectible.certificationNumber}</span> : null}
+              {collectible?.grader ? (
+                <span>
+                  {collectible.grader} {collectible.grade ?? ""}
+                </span>
+              ) : (
+                <span>Raw / ungraded</span>
+              )}
+              {collectible?.certificationNumber ? (
+                <span>Cert {collectible.certificationNumber}</span>
+              ) : null}
               <span>{shortId(detail.id)}</span>
             </div>
           </div>
         </div>
         <div className="admin-review-workspace-header-meta">
-          <span>Submitted<strong>{formatDate(detail.submittedAt)}</strong></span>
-          <span>Collector<strong>{detail.collectorSummary?.displayName ?? "Collector"}</strong></span>
-          <span>Assigned to<strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong></span>
+          <span>
+            Submitted<strong>{formatDate(detail.submittedAt)}</strong>
+          </span>
+          <span>
+            Collector<strong>{detail.collectorSummary?.displayName ?? "Collector"}</strong>
+          </span>
+          <span>
+            Assigned to
+            <strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong>
+          </span>
         </div>
       </header>
       <div className="admin-review-workspace-grid">
         <main className="admin-review-workspace-main">
-          <WorkspaceSection number="1" title="Submission identity" status={readiness?.checklist.find((item) => item.key === "identity")?.satisfied ? "Confirmed" : "Needs review"} tone={readiness?.checklist.find((item) => item.key === "identity")?.satisfied ? "ready" : "warning"}>
+          <WorkspaceSection
+            number="1"
+            title="Submission identity"
+            status={
+              readiness?.checklist.find((item) => item.key === "identity")?.satisfied
+                ? "Confirmed"
+                : "Needs review"
+            }
+            tone={
+              readiness?.checklist.find((item) => item.key === "identity")?.satisfied
+                ? "ready"
+                : "warning"
+            }
+          >
             <div className="admin-review-identity-grid">
               {identityField("Category", collectible?.category, "System normalized")}
               {identityField("Year", collectible?.year, "Customer supplied")}
-              {identityField("Brand / set", collectible?.set, collectible?.set ? "Provider matched" : "Customer supplied")}
+              {identityField(
+                "Brand / set",
+                collectible?.set,
+                collectible?.set ? "Provider matched" : "Customer supplied",
+              )}
               {identityField("Card number", collectible?.cardNumber, "Customer supplied")}
               {identityField("Variant", collectible?.variant, "Customer supplied")}
               {identityField("Language", metadataValue(detail, "language"), "Customer supplied")}
-              {identityField("Grading company", collectible?.grader, collectible?.grader ? "System normalized" : "Not applicable")}
-              {identityField("Grade", collectible?.grade, collectible?.grade ? "System normalized" : "Raw card")}
-              {identityField("Certification", collectible?.certificationNumber, collectible?.certificationNumber ? "Customer supplied" : "Not required")}
+              {identityField(
+                "Grading company",
+                collectible?.grader,
+                collectible?.grader ? "System normalized" : "Not applicable",
+              )}
+              {identityField(
+                "Grade",
+                collectible?.grade,
+                collectible?.grade ? "System normalized" : "Raw card",
+              )}
+              {identityField(
+                "Certification",
+                collectible?.certificationNumber,
+                collectible?.certificationNumber ? "Customer supplied" : "Not required",
+              )}
               {identityField("Reference URL", referenceUrl(detail), "Customer supplied")}
             </div>
-            <div className="admin-review-source-callout"><strong>Identity matching</strong><span>{detail.marketResearch ? "Provider research is attached to this submission." : "No provider match is attached; staff review can continue."}</span></div>
+            <div className="admin-review-source-callout">
+              <strong>Identity matching</strong>
+              <span>
+                {detail.marketResearch
+                  ? "Provider research is attached to this submission."
+                  : "No provider match is attached; staff review can continue."}
+              </span>
+            </div>
           </WorkspaceSection>
-          <WorkspaceSection number="2" title="Evidence" status={`${evidence?.presentRequired ?? 0}/${evidence?.required ?? 0} required`} tone={evidence?.missingRequired ? "warning" : "ready"}>
-            <div className="admin-review-evidence-summary"><strong>{evidence?.percent ?? 0}%</strong><span>Backend evidence projection · {evidence?.missingRequired ?? 0} blocking missing</span></div>
+          <WorkspaceSection
+            number="2"
+            title="Evidence"
+            status={`${evidence?.presentRequired ?? 0}/${evidence?.required ?? 0} required`}
+            tone={evidence?.missingRequired ? "warning" : "ready"}
+          >
+            <div className="admin-review-evidence-summary">
+              <strong>{evidence?.percent ?? 0}%</strong>
+              <span>
+                Backend evidence projection · {evidence?.missingRequired ?? 0} blocking missing
+              </span>
+            </div>
             <div className="admin-review-workspace-gallery">
-              {media.map((item) => <button type="button" key={item.id} className={`admin-review-workspace-media ${item.required ? "is-required" : ""}`} onClick={() => { setFocusedMedia(item.id); setZoom(1); }}><AdminReviewMedia src={item.thumbnailUrl} alt={`${label(item.slot)} evidence`} fallback={<span>{label(item.slot)}</span>} /><strong>{label(item.slot)}</strong><small>{item.required ? "Required" : "Optional"} · {label(item.status)}</small></button>)}
+              {media.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`admin-review-workspace-media ${item.required ? "is-required" : ""}`}
+                  onClick={() => {
+                    setFocusedMedia(item.id);
+                    setZoom(1);
+                  }}
+                >
+                  <AdminReviewMedia
+                    src={item.thumbnailUrl}
+                    alt={`${label(item.slot)} evidence`}
+                    fallback={<span>{label(item.slot)}</span>}
+                  />
+                  <strong>{label(item.slot)}</strong>
+                  <small>
+                    {item.required ? "Required" : "Optional"} · {label(item.status)}
+                  </small>
+                </button>
+              ))}
             </div>
-            {!media.length ? <EmptyInline text="No safe evidence is available in the authorized projection." /> : null}
+            {!media.length ? (
+              <EmptyInline text="No safe evidence is available in the authorized projection." />
+            ) : null}
           </WorkspaceSection>
-          <WorkspaceSection number="3" title="Grade & certification" status={activeCert?.status ?? (collectible?.grader ? "Pending" : "Not required")} tone={activeCert?.status === "VERIFIED" || !collectible?.grader ? "ready" : "warning"}>
+          <WorkspaceSection
+            number="3"
+            title="Grade & certification"
+            status={activeCert?.status ?? (collectible?.grader ? "Pending" : "Not required")}
+            tone={activeCert?.status === "VERIFIED" || !collectible?.grader ? "ready" : "warning"}
+          >
             <div className="admin-review-two-panel">
-              <InfoPanel title="Grading path"><strong>{collectible?.grader ?? "Raw / ungraded"}</strong><span>{collectible?.grade ?? "Condition review path · no cert required"}</span></InfoPanel>
-              <InfoPanel title="Certification verification"><strong>{activeCert?.status ? label(activeCert.status) : collectible?.grader ? "Not checked" : "Not required"}</strong><span>{activeCert?.verifiedLabel ?? activeCert?.verifiedGrade ?? "A successful provider lookup is not an authenticity determination."}</span></InfoPanel>
+              <InfoPanel title="Grading path">
+                <strong>{collectible?.grader ?? "Raw / ungraded"}</strong>
+                <span>{collectible?.grade ?? "Condition review path · no cert required"}</span>
+              </InfoPanel>
+              <InfoPanel title="Certification verification">
+                <strong>
+                  {activeCert?.status
+                    ? label(activeCert.status)
+                    : collectible?.grader
+                      ? "Not checked"
+                      : "Not required"}
+                </strong>
+                <span>
+                  {activeCert?.verifiedLabel ??
+                    activeCert?.verifiedGrade ??
+                    "A successful provider lookup is not an authenticity determination."}
+                </span>
+              </InfoPanel>
             </div>
-            {activeCert?.officialVerificationUrl ? <a className="admin-review-provider-link" href={activeCert.officialVerificationUrl} target="_blank" rel="noreferrer">Open official verification reference ↗</a> : null}
+            {activeCert?.officialVerificationUrl ? (
+              <a
+                className="admin-review-provider-link"
+                href={activeCert.officialVerificationUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open official verification reference ↗
+              </a>
+            ) : null}
           </WorkspaceSection>
-          <WorkspaceSection number="4" title="Research / market" status={detail.marketResearch ? label(detail.marketResearch.state) : "No match"} tone={detail.marketResearch && !["PENDING", "IN_PROGRESS"].includes(detail.marketResearch.state) ? "ready" : "info"}>
-            {detail.marketResearch ? <ResearchInline detail={detail} /> : <EmptyInline text="No external reference match is attached. PriceCharting remains informational and does not set Slice valuation or pricing." />}
+          <WorkspaceSection
+            number="4"
+            title="Research / market"
+            status={detail.marketResearch ? label(detail.marketResearch.state) : "No match"}
+            tone={
+              detail.marketResearch &&
+              !["PENDING", "IN_PROGRESS"].includes(detail.marketResearch.state)
+                ? "ready"
+                : "info"
+            }
+          >
+            {detail.marketResearch ? (
+              <ResearchInline detail={detail} />
+            ) : (
+              <EmptyInline text="No external reference match is attached. PriceCharting remains informational and does not set Slice valuation or pricing." />
+            )}
           </WorkspaceSection>
-          <WorkspaceSection number="5" title="Condition / AI review" status={staffReview?.condition ? "Staff recorded" : "Needs staff review"} tone={staffReview?.condition ? "ready" : "warning"}>
+          <WorkspaceSection
+            number="5"
+            title="Condition / AI review"
+            status={staffReview?.condition ? "Staff recorded" : "Needs staff review"}
+            tone={staffReview?.condition ? "ready" : "warning"}
+          >
             <div className="admin-review-two-panel">
-              <div className="admin-review-edit-card"><label>Staff condition<select value={staffCondition || staffReview?.condition || ""} onChange={(event) => setStaffCondition(event.target.value)} disabled={!canEdit}><option value="">Select internal condition</option><option>Mint</option><option>Near Mint</option><option>Excellent</option><option>Very Good</option><option>Good</option></select></label><label>Staff notes<textarea rows={3} value={staffConditionNote || staffReview?.conditionNote || ""} onChange={(event) => setStaffConditionNote(event.target.value)} disabled={!canEdit} placeholder="Assessment notes for staff only" /></label><button type="button" className="button-secondary" onClick={() => saveCondition.mutate()} disabled={!canEdit || !staffCondition.trim() || saveCondition.isPending}>{saveCondition.isPending ? "Saving…" : "Save condition"}</button></div>
-              <InfoPanel title={`AI / Ximilar · ${detail.preGrade?.provider ?? "No provider result"}`}><strong>{detail.preGrade?.overallEstimate != null ? detail.preGrade.overallEstimate.toFixed(1) : "Not returned"}</strong><span>{detail.preGrade?.conditionLabel ?? "Advisory only · never official grade, authenticity, condition, or valuation authority."}</span>{detail.preGrade?.analyzedAt ? <small>Analyzed {formatDate(detail.preGrade.analyzedAt)}</small> : null}</InfoPanel>
+              <div className="admin-review-edit-card">
+                <label>
+                  Staff condition
+                  <select
+                    value={staffCondition || staffReview?.condition || ""}
+                    onChange={(event) => setStaffCondition(event.target.value)}
+                    disabled={!canEdit}
+                  >
+                    <option value="">Select internal condition</option>
+                    <option>Mint</option>
+                    <option>Near Mint</option>
+                    <option>Excellent</option>
+                    <option>Very Good</option>
+                    <option>Good</option>
+                  </select>
+                </label>
+                <label>
+                  Staff notes
+                  <textarea
+                    rows={3}
+                    value={staffConditionNote || staffReview?.conditionNote || ""}
+                    onChange={(event) => setStaffConditionNote(event.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Assessment notes for staff only"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => saveCondition.mutate()}
+                  disabled={!canEdit || !staffCondition.trim() || saveCondition.isPending}
+                >
+                  {saveCondition.isPending ? "Saving…" : "Save condition"}
+                </button>
+              </div>
+              <InfoPanel
+                title={`AI / Ximilar · ${detail.preGrade?.provider ?? "No provider result"}`}
+              >
+                <strong>
+                  {detail.preGrade?.overallEstimate != null
+                    ? detail.preGrade.overallEstimate.toFixed(1)
+                    : "Not returned"}
+                </strong>
+                <span>
+                  {detail.preGrade?.conditionLabel ??
+                    "Advisory only · never official grade, authenticity, condition, or valuation authority."}
+                </span>
+                {detail.preGrade?.analyzedAt ? (
+                  <small>Analyzed {formatDate(detail.preGrade.analyzedAt)}</small>
+                ) : null}
+              </InfoPanel>
             </div>
           </WorkspaceSection>
-          <WorkspaceSection number="6" title="Staff valuation & decision" status={staffReview?.valuation ? "Recorded" : "Not recorded"} tone={staffReview?.valuation ? "ready" : "warning"}>
-            <div className="admin-review-two-panel"><div className="admin-review-edit-card"><label>Estimated total value (GBP)<input inputMode="decimal" value={valuation || (staffReview?.valuation ? (Number(staffReview.valuation.valueMinor) / 100).toFixed(2) : "")} onChange={(event) => setValuation(event.target.value)} disabled={!canEdit} placeholder="0.00" /></label><label>Valuation basis<input value={valuationBasis} onChange={(event) => setValuationBasis(event.target.value)} disabled={!canEdit} /></label><label>Confidence<input type="number" min="0" max="100" value={valuationConfidence} onChange={(event) => setValuationConfidence(event.target.value)} disabled={!canEdit} /></label><button type="button" className="button-secondary" onClick={() => saveValuation.mutate()} disabled={!canEdit || !/^\d+(\.\d{1,2})?$/.test(valuation) || saveValuation.isPending}>{saveValuation.isPending ? "Saving…" : "Save valuation"}</button></div><InfoPanel title="Reference inputs"><strong>{detail.marketResearch ? "External research attached" : "No external match"}</strong><span>Customer expected value: {metadataValue(detail, "collectorExpectedValueMinor") ?? "Not supplied"}</span><span>AI advisory: {detail.preGrade?.overallEstimate?.toFixed(1) ?? "Not returned"}</span><span>Staff valuation remains separate from all external references.</span></InfoPanel></div>
+          <WorkspaceSection
+            number="6"
+            title="Staff valuation & decision"
+            status={staffReview?.valuation ? "Recorded" : "Not recorded"}
+            tone={staffReview?.valuation ? "ready" : "warning"}
+          >
+            <div className="admin-review-two-panel">
+              <div className="admin-review-edit-card">
+                <label>
+                  Estimated total value (GBP)
+                  <input
+                    inputMode="decimal"
+                    value={
+                      valuation ||
+                      (staffReview?.valuation
+                        ? (Number(staffReview.valuation.valueMinor) / 100).toFixed(2)
+                        : "")
+                    }
+                    onChange={(event) => setValuation(event.target.value)}
+                    disabled={!canEdit}
+                    placeholder="0.00"
+                  />
+                </label>
+                <label>
+                  Valuation basis
+                  <input
+                    value={valuationBasis}
+                    onChange={(event) => setValuationBasis(event.target.value)}
+                    disabled={!canEdit}
+                  />
+                </label>
+                <label>
+                  Confidence
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={valuationConfidence}
+                    onChange={(event) => setValuationConfidence(event.target.value)}
+                    disabled={!canEdit}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => saveValuation.mutate()}
+                  disabled={
+                    !canEdit || !/^\d+(\.\d{1,2})?$/.test(valuation) || saveValuation.isPending
+                  }
+                >
+                  {saveValuation.isPending ? "Saving…" : "Save valuation"}
+                </button>
+              </div>
+              <InfoPanel title="Reference inputs">
+                <strong>
+                  {detail.marketResearch ? "External research attached" : "No external match"}
+                </strong>
+                <span>
+                  Customer expected value:{" "}
+                  {metadataValue(detail, "collectorExpectedValueMinor") ?? "Not supplied"}
+                </span>
+                <span>
+                  AI advisory: {detail.preGrade?.overallEstimate?.toFixed(1) ?? "Not returned"}
+                </span>
+                <span>Staff valuation remains separate from all external references.</span>
+              </InfoPanel>
+            </div>
           </WorkspaceSection>
-          <section className="admin-review-workspace-notes"><div className="admin-review-note-columns"><Notes detail={detail} note={note} setNote={setNote} saveNote={saveNote} /><div className="admin-panel-card"><SectionTitle title="Customer-facing request" /><p className="text-sm text-subtle">Only sent when requesting changes. Private staff notes remain separate.</p><textarea rows={5} value={customerMessage} onChange={(event) => setCustomerMessage(event.target.value)} placeholder="Message to collector…" /></div></div></section>
-          <section className="admin-panel-card"><SectionTitle title="Review history" /><ul className="admin-review-history mt-4">{detail.reviews.length ? detail.reviews.map((item) => <li key={item.id ?? item.createdAt}><strong>{humanReviewEvent(item.decision ?? item.status)}</strong><span>{formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}</span>{item.note ? <p>{item.note}</p> : null}</li>) : <li className="text-sm text-subtle">No review history yet.</li>}</ul><Link className="admin-review-provider-link" to="/admin" search={{ section: "audit" }}>View full audit log →</Link></section>
+          <section className="admin-review-workspace-notes">
+            <div className="admin-review-note-columns">
+              <Notes detail={detail} note={note} setNote={setNote} saveNote={saveNote} />
+              <div className="admin-panel-card">
+                <SectionTitle title="Customer-facing request" />
+                <p className="text-sm text-subtle">
+                  Only sent when requesting changes. Private staff notes remain separate.
+                </p>
+                <textarea
+                  rows={5}
+                  value={customerMessage}
+                  onChange={(event) => setCustomerMessage(event.target.value)}
+                  placeholder="Message to collector…"
+                />
+              </div>
+            </div>
+          </section>
+          <section className="admin-panel-card">
+            <SectionTitle title="Review history" />
+            <ul className="admin-review-history mt-4">
+              {detail.reviews.length ? (
+                detail.reviews.map((item) => (
+                  <li key={item.id ?? item.createdAt}>
+                    <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
+                    <span>
+                      {formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}
+                    </span>
+                    {item.note ? <p>{item.note}</p> : null}
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-subtle">No review history yet.</li>
+              )}
+            </ul>
+            <Link className="admin-review-provider-link" to="/admin" search={{ section: "audit" }}>
+              View full audit log →
+            </Link>
+          </section>
         </main>
         <aside className="admin-review-decision-rail">
-          <section className="admin-panel-card admin-review-sticky-rail"><div className="admin-review-rail-heading"><span>Review & decision</span><StatusPill value={statusText} /></div><div className="admin-review-rail-assignee"><span className="admin-review-avatar">{(detail.reviewAssignment?.reviewer?.displayName ?? "U").slice(0, 1)}</span><div><strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong><small>{detail.reviewAssignment?.claimedAt ? `Claimed ${formatDate(detail.reviewAssignment.claimedAt)}` : "Available to claim"}</small></div></div>{actions?.canClaim ? <button type="button" className="button-primary w-full" onClick={onClaim} disabled={claiming}>{claiming ? "Claiming…" : "Claim review"}</button> : null}{actions?.canRelease ? <button type="button" className="button-secondary w-full mt-2" onClick={onRelease} disabled={releasing}>{releasing ? "Releasing…" : "Release claim"}</button> : null}<div className="admin-review-rail-readiness"><h4>Readiness</h4><strong className={readiness?.state === "READY" ? "is-ready" : "is-blocked"}>{readiness?.state === "READY" ? "Ready to accept" : "Blocking review"}</strong>{readiness?.checklist.map((item) => <div key={item.key}><span className={item.satisfied ? "is-complete" : ""}>{item.satisfied ? "✓" : "○"}</span><span>{item.label}</span><small>{item.required ? "Required" : "Advisory"}</small></div>)}{readiness?.blockers.length ? <ul className="admin-review-blockers">{readiness.blockers.map((item) => <li key={item}>{item}</li>)}</ul> : null}</div><div className="admin-review-decision-actions"><h4>Decision actions</h4><button type="button" className="admin-review-action is-accept" onClick={() => setConfirmAction("APPROVED")} disabled={!actions?.canAccept}>Accept submission<small>Next step: Physical Intake</small></button><button type="button" className="admin-review-action is-changes" onClick={() => setConfirmAction("CHANGES_REQUESTED")} disabled={!actions?.canRequestChanges}>Request changes<small>Collector action required</small></button><button type="button" className="admin-review-action is-reject" onClick={() => setConfirmAction("REJECTED")} disabled={!actions?.canReject}>Reject submission<small>Permanent review decision</small></button></div>{confirmAction ? <div className="admin-review-confirmation"><strong>Confirm {label(confirmAction)}</strong><select value={reason} onChange={(event) => setReason(event.target.value)}><option value="INCOMPLETE_EVIDENCE">Incomplete evidence</option><option value="IDENTITY_UNCLEAR">Identity needs attention</option><option value="UNSUPPORTED_COLLECTIBLE">Unsupported collectible</option><option value="DUPLICATE_SUBMISSION">Possible duplicate</option><option value="OTHER">Other</option></select>{confirmAction === "CHANGES_REQUESTED" ? <div className="admin-review-change-options">{["Front image", "Back image", "Identity details", "Grade / certification", "Other"].map((item) => <label key={item}><input type="checkbox" checked={requestedItems.includes(item)} onChange={(event) => setRequestedItems(event.target.checked ? [...requestedItems, item] : requestedItems.filter((value) => value !== item))} />{item}</label>)}</div> : null}<button type="button" className="button-primary" onClick={submitDecision} disabled={decide.isPending}>{decide.isPending ? "Saving…" : "Confirm decision"}</button><button type="button" className="button-secondary" onClick={() => setConfirmAction(null)}>Cancel</button></div> : null}</section>
+          <section className="admin-panel-card admin-review-sticky-rail">
+            <div className="admin-review-rail-heading">
+              <span>Review & decision</span>
+              <StatusPill value={statusText} />
+            </div>
+            <div className="admin-review-rail-assignee">
+              <span className="admin-review-avatar">
+                {(detail.reviewAssignment?.reviewer?.displayName ?? "U").slice(0, 1)}
+              </span>
+              <div>
+                <strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong>
+                <small>
+                  {detail.reviewAssignment?.claimedAt
+                    ? `Claimed ${formatDate(detail.reviewAssignment.claimedAt)}`
+                    : "Available to claim"}
+                </small>
+              </div>
+            </div>
+            {actions?.canClaim ? (
+              <button
+                type="button"
+                className="button-primary w-full"
+                onClick={onClaim}
+                disabled={claiming}
+              >
+                {claiming ? "Claiming…" : "Claim review"}
+              </button>
+            ) : null}
+            {actions?.canRelease ? (
+              <button
+                type="button"
+                className="button-secondary w-full mt-2"
+                onClick={onRelease}
+                disabled={releasing}
+              >
+                {releasing ? "Releasing…" : "Release claim"}
+              </button>
+            ) : null}
+            <div className="admin-review-rail-readiness">
+              <h4>Readiness</h4>
+              <strong className={readiness?.state === "READY" ? "is-ready" : "is-blocked"}>
+                {readiness?.state === "READY" ? "Ready to accept" : "Blocking review"}
+              </strong>
+              {readiness?.checklist.map((item) => (
+                <div key={item.key}>
+                  <span className={item.satisfied ? "is-complete" : ""}>
+                    {item.satisfied ? "✓" : "○"}
+                  </span>
+                  <span>{item.label}</span>
+                  <small>{item.required ? "Required" : "Advisory"}</small>
+                </div>
+              ))}
+              {readiness?.blockers.length ? (
+                <ul className="admin-review-blockers">
+                  {readiness.blockers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <div className="admin-review-decision-actions">
+              <h4>Decision actions</h4>
+              <button
+                type="button"
+                className="admin-review-action is-accept"
+                onClick={() => setConfirmAction("APPROVED")}
+                disabled={!actions?.canAccept}
+              >
+                Accept submission<small>Next step: Physical Intake</small>
+              </button>
+              <button
+                type="button"
+                className="admin-review-action is-changes"
+                onClick={() => setConfirmAction("CHANGES_REQUESTED")}
+                disabled={!actions?.canRequestChanges}
+              >
+                Request changes<small>Collector action required</small>
+              </button>
+              <button
+                type="button"
+                className="admin-review-action is-reject"
+                onClick={() => setConfirmAction("REJECTED")}
+                disabled={!actions?.canReject}
+              >
+                Reject submission<small>Permanent review decision</small>
+              </button>
+            </div>
+            {confirmAction ? (
+              <div className="admin-review-confirmation">
+                <strong>Confirm {label(confirmAction)}</strong>
+                <select value={reason} onChange={(event) => setReason(event.target.value)}>
+                  <option value="INCOMPLETE_EVIDENCE">Incomplete evidence</option>
+                  <option value="IDENTITY_UNCLEAR">Identity needs attention</option>
+                  <option value="UNSUPPORTED_COLLECTIBLE">Unsupported collectible</option>
+                  <option value="DUPLICATE_SUBMISSION">Possible duplicate</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                {confirmAction === "CHANGES_REQUESTED" ? (
+                  <div className="admin-review-change-options">
+                    {[
+                      "Front image",
+                      "Back image",
+                      "Identity details",
+                      "Grade / certification",
+                      "Other",
+                    ].map((item) => (
+                      <label key={item}>
+                        <input
+                          type="checkbox"
+                          checked={requestedItems.includes(item)}
+                          onChange={(event) =>
+                            setRequestedItems(
+                              event.target.checked
+                                ? [...requestedItems, item]
+                                : requestedItems.filter((value) => value !== item),
+                            )
+                          }
+                        />
+                        {item}
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={submitDecision}
+                  disabled={decide.isPending}
+                >
+                  {decide.isPending ? "Saving…" : "Confirm decision"}
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setConfirmAction(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+          </section>
         </aside>
       </div>
-      {activeMedia ? <div className="admin-review-lightbox" role="dialog" aria-modal="true" aria-label={`${label(activeMedia.slot)} evidence`}><div className="admin-panel-card admin-review-lightbox-card"><div className="flex items-center justify-between gap-3"><strong>{label(activeMedia.slot)}</strong><button className="button-secondary" type="button" onClick={() => setFocusedMedia(null)}>Close</button></div><div className="admin-review-lightbox-toolbar"><button type="button" onClick={() => setZoom(Math.max(1, zoom - 0.25))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.25))}>+</button></div><div className="admin-review-lightbox-media"><AdminReviewMedia src={activeMedia.thumbnailUrl} alt={`${label(activeMedia.slot)} evidence enlarged`} fallback={<span>Secure preview unavailable</span>} style={{ transform: `scale(${zoom})` }} /></div></div></div> : null}
+      {activeMedia ? (
+        <div
+          className="admin-review-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${label(activeMedia.slot)} evidence`}
+        >
+          <div className="admin-panel-card admin-review-lightbox-card">
+            <div className="flex items-center justify-between gap-3">
+              <strong>{label(activeMedia.slot)}</strong>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setFocusedMedia(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="admin-review-lightbox-toolbar">
+              <button type="button" onClick={() => setZoom(Math.max(1, zoom - 0.25))}>
+                −
+              </button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.25))}>
+                +
+              </button>
+            </div>
+            <div className="admin-review-lightbox-media">
+              <AdminReviewMedia
+                src={activeMedia.thumbnailUrl}
+                alt={`${label(activeMedia.slot)} evidence enlarged`}
+                fallback={<span>Secure preview unavailable</span>}
+                style={{ transform: `scale(${zoom})` }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function WorkspaceSection({ number, title, status, tone, children }: { number: string; title: string; status: string; tone: "ready" | "warning" | "info"; children: ReactNode }) {
-  return <section className="admin-panel-card admin-review-workspace-section"><header><div className="admin-review-section-number">{number}</div><div><h3>{title}</h3><p>Authoritative review workspace section</p></div><StatusPill value={status} tone={tone} /></header><div className="admin-review-workspace-section-body">{children}</div></section>;
+function WorkspaceSection({
+  number,
+  title,
+  status,
+  tone,
+  children,
+}: {
+  number: string;
+  title: string;
+  status: string;
+  tone: "ready" | "warning" | "info";
+  children: ReactNode;
+}) {
+  return (
+    <section className="admin-panel-card admin-review-workspace-section">
+      <header>
+        <div className="admin-review-section-number">{number}</div>
+        <div>
+          <h3>{title}</h3>
+          <p>Authoritative review workspace section</p>
+        </div>
+        <StatusPill value={status} tone={tone} />
+      </header>
+      <div className="admin-review-workspace-section-body">{children}</div>
+    </section>
+  );
 }
 function StatusPill({ value, tone }: { value: string; tone?: "ready" | "warning" | "info" }) {
-  return <span className={`admin-review-status-pill is-${tone ?? (value.toLowerCase().includes("ready") || value.toLowerCase().includes("confirmed") || value.toLowerCase().includes("complete") ? "ready" : "info")}`}>{value}</span>;
+  return (
+    <span
+      className={`admin-review-status-pill is-${tone ?? (value.toLowerCase().includes("ready") || value.toLowerCase().includes("confirmed") || value.toLowerCase().includes("complete") ? "ready" : "info")}`}
+    >
+      {value}
+    </span>
+  );
 }
 function InfoPanel({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="admin-review-info-panel"><span>{title}</span>{children}</div>;
+  return (
+    <div className="admin-review-info-panel">
+      <span>{title}</span>
+      {children}
+    </div>
+  );
 }
 function EmptyInline({ text }: { text: string }) {
   return <p className="admin-review-empty-inline">{text}</p>;
 }
 function identityField(title: string, value: string | null | undefined, source: string) {
-  return <div className="admin-review-identity-field"><span>{title}</span><strong>{value || "Not supplied"}</strong><small>{source}</small></div>;
+  return (
+    <div className="admin-review-identity-field">
+      <span>{title}</span>
+      <strong>{value || "Not supplied"}</strong>
+      <small>{source}</small>
+    </div>
+  );
 }
 function metadataValue(detail: SubmissionReviewDetail, key: string) {
   const value = detail.declaredMetadata?.[key];
@@ -777,7 +1316,40 @@ function referenceUrl(detail: SubmissionReviewDetail) {
 function ResearchInline({ detail }: { detail: SubmissionReviewDetail }) {
   const research = detail.marketResearch;
   if (!research) return null;
-  return <div><div className="admin-review-research-inline"><InfoPanel title="Provider"><strong>PriceCharting</strong><span>{label(research.state)} · captured {formatDate(research.collectedAt)}</span></InfoPanel><InfoPanel title="Reference values"><strong>{research.snapshot.sales ? marketRange(research.snapshot.sales) : "Not available"}</strong><span>Source currency retained; no invented FX conversion.</span></InfoPanel></div><ul className="admin-review-observations mt-4">{research.observations.slice(0, 6).map((item) => <li key={`${item.providerCode}-${item.externalReferenceId}`}><strong>{item.observationType === "SALE" ? "Completed sale" : "Listing"}</strong><span>{marketAmount(item.amountMinor, item.currency)} · {item.providerCode.replaceAll("_", " ")}</span>{item.externalUrl ? <a href={item.externalUrl} target="_blank" rel="noreferrer">View source ↗</a> : null}</li>)}</ul></div>;
+  return (
+    <div>
+      <div className="admin-review-research-inline">
+        <InfoPanel title="Provider">
+          <strong>PriceCharting</strong>
+          <span>
+            {label(research.state)} · captured {formatDate(research.collectedAt)}
+          </span>
+        </InfoPanel>
+        <InfoPanel title="Reference values">
+          <strong>
+            {research.snapshot.sales ? marketRange(research.snapshot.sales) : "Not available"}
+          </strong>
+          <span>Source currency retained; no invented FX conversion.</span>
+        </InfoPanel>
+      </div>
+      <ul className="admin-review-observations mt-4">
+        {research.observations.slice(0, 6).map((item) => (
+          <li key={`${item.providerCode}-${item.externalReferenceId}`}>
+            <strong>{item.observationType === "SALE" ? "Completed sale" : "Listing"}</strong>
+            <span>
+              {marketAmount(item.amountMinor, item.currency)} ·{" "}
+              {item.providerCode.replaceAll("_", " ")}
+            </span>
+            {item.externalUrl ? (
+              <a href={item.externalUrl} target="_blank" rel="noreferrer">
+                View source ↗
+              </a>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function ReviewActions({
@@ -852,15 +1424,41 @@ function ReviewActions({
           {confirmAction === "CHANGES_REQUESTED" ? (
             <div className="admin-review-change-request">
               <strong>What should the collector update?</strong>
-              <p className="text-sm text-subtle">Select the evidence that needs attention before resubmission.</p>
+              <p className="text-sm text-subtle">
+                Select the evidence that needs attention before resubmission.
+              </p>
               <div className="admin-review-change-options">
-                {["Front image", "Back image", "Identity details", "Grade / certification", "Condition", "Other"].map((item) => (
-                  <label key={item}><input type="checkbox" checked={requestedItems.includes(item)} onChange={() => setRequestedItems(requestedItems.includes(item) ? requestedItems.filter((value) => value !== item) : [...requestedItems, item])} /> {item}</label>
+                {[
+                  "Front image",
+                  "Back image",
+                  "Identity details",
+                  "Grade / certification",
+                  "Condition",
+                  "Other",
+                ].map((item) => (
+                  <label key={item}>
+                    <input
+                      type="checkbox"
+                      checked={requestedItems.includes(item)}
+                      onChange={() =>
+                        setRequestedItems(
+                          requestedItems.includes(item)
+                            ? requestedItems.filter((value) => value !== item)
+                            : [...requestedItems, item],
+                        )
+                      }
+                    />{" "}
+                    {item}
+                  </label>
                 ))}
               </div>
               <label className="grid gap-1 text-sm">
                 Message to collector
-                <textarea value={customerMessage} onChange={(event) => setCustomerMessage(event.target.value)} rows={3} />
+                <textarea
+                  value={customerMessage}
+                  onChange={(event) => setCustomerMessage(event.target.value)}
+                  rows={3}
+                />
               </label>
             </div>
           ) : null}
@@ -1008,7 +1606,9 @@ function Evidence({
       id: item.id,
       slot: item.slot,
       status: item.status,
-      required: ["front", "back", "top-edge", "bottom-edge", "left-edge", "right-edge"].includes(item.slot),
+      required: ["front", "back", "top-edge", "bottom-edge", "left-edge", "right-edge"].includes(
+        item.slot,
+      ),
       thumbnailUrl: null,
     }));
   const active = items.find((item) => item.id === focused);
@@ -1094,8 +1694,12 @@ function AiReview({ detail }: { detail: SubmissionReviewDetail }) {
     return (
       <section className="admin-panel-card admin-review-empty-state">
         <SectionTitle title="AI card review" />
-        <p className="mt-3 text-sm text-subtle">AI review has not been completed for this submission.</p>
-        <span className="admin-review-advisory">Optional advisory evidence · no provider call was made while opening this review.</span>
+        <p className="mt-3 text-sm text-subtle">
+          AI review has not been completed for this submission.
+        </p>
+        <span className="admin-review-advisory">
+          Optional advisory evidence · no provider call was made while opening this review.
+        </span>
       </section>
     );
   }
@@ -1106,31 +1710,50 @@ function AiReview({ detail }: { detail: SubmissionReviewDetail }) {
         <div>
           <p className="page-kicker">AI Card Review · {result.provider}</p>
           <h3>{result.status === "SUCCEEDED" ? score : label(result.status)}</h3>
-          <p className="text-sm text-subtle">Advisory estimate only — never an official grade or valuation.</p>
+          <p className="text-sm text-subtle">
+            Advisory estimate only — never an official grade or valuation.
+          </p>
         </div>
-        <span className={`admin-review-ai-state admin-review-ai-state--${result.status.toLowerCase()}`}>
+        <span
+          className={`admin-review-ai-state admin-review-ai-state--${result.status.toLowerCase()}`}
+        >
           {result.conditionLabel ?? "No condition estimate"}
         </span>
       </section>
       <section className="admin-panel-card">
         <SectionTitle title="Component signals" />
         <div className="admin-review-score-grid mt-4">
-          {[["Centering", result.centeringScore], ["Corners", result.cornerScore], ["Edges", result.edgeScore], ["Surface", result.surfaceScore]].map(([name, value]) => (
-            <Metric key={String(name)} title={String(name)} value={value == null ? "Not returned" : String(value)} />
+          {[
+            ["Centering", result.centeringScore],
+            ["Corners", result.cornerScore],
+            ["Edges", result.edgeScore],
+            ["Surface", result.surfaceScore],
+          ].map(([name, value]) => (
+            <Metric
+              key={String(name)}
+              title={String(name)}
+              value={value == null ? "Not returned" : String(value)}
+            />
           ))}
         </div>
-        {result.analyzedAt ? <p className="mt-4 text-xs text-subtle">Analyzed {formatDate(result.analyzedAt)}</p> : null}
+        {result.analyzedAt ? (
+          <p className="mt-4 text-xs text-subtle">Analyzed {formatDate(result.analyzedAt)}</p>
+        ) : null}
       </section>
       {result.visualizations?.length ? (
         <section className="admin-panel-card">
           <SectionTitle title="AI visual review" />
           <div className="admin-review-gallery mt-4">
-            {result.visualizations.filter((item) => item.url).map((item) => (
-              <figure key={`${item.side}-${item.type}`} className="admin-review-ai-visual">
-                <img src={item.url!} alt={`${label(item.side)} ${item.type} analysis`} />
-                <figcaption>{label(item.side)} · {label(item.type)}</figcaption>
-              </figure>
-            ))}
+            {result.visualizations
+              .filter((item) => item.url)
+              .map((item) => (
+                <figure key={`${item.side}-${item.type}`} className="admin-review-ai-visual">
+                  <img src={item.url!} alt={`${label(item.side)} ${item.type} analysis`} />
+                  <figcaption>
+                    {label(item.side)} · {label(item.type)}
+                  </figcaption>
+                </figure>
+              ))}
           </div>
         </section>
       ) : null}
@@ -1198,20 +1821,34 @@ function History({ detail }: { detail: SubmissionReviewDetail }) {
       <section className="admin-panel-card">
         <SectionTitle title="Review history" />
         <ul className="admin-review-history mt-4">
-          {detail.reviews.length ? detail.reviews.map((item) => (
-            <li key={item.id ?? item.createdAt}>
-              <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
-              <span>{formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}</span>
-              {item.note ? <p>{item.note}</p> : null}
-            </li>
-          )) : <li className="text-sm text-subtle">No review history yet.</li>}
+          {detail.reviews.length ? (
+            detail.reviews.map((item) => (
+              <li key={item.id ?? item.createdAt}>
+                <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
+                <span>
+                  {formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}
+                </span>
+                {item.note ? <p>{item.note}</p> : null}
+              </li>
+            ))
+          ) : (
+            <li className="text-sm text-subtle">No review history yet.</li>
+          )}
         </ul>
       </section>
       {detail.activity?.length ? (
         <section className="admin-panel-card">
           <SectionTitle title="Submission activity" />
           <ul className="admin-review-activity mt-4">
-            {detail.activity.map((item) => <li key={item.id}><strong>{humanReviewEvent(item.action)}</strong><span>{item.actor} · {formatDate(item.occurredAt)}</span>{item.detail ? <small>{item.detail}</small> : null}</li>)}
+            {detail.activity.map((item) => (
+              <li key={item.id}>
+                <strong>{humanReviewEvent(item.action)}</strong>
+                <span>
+                  {item.actor} · {formatDate(item.occurredAt)}
+                </span>
+                {item.detail ? <small>{item.detail}</small> : null}
+              </li>
+            ))}
           </ul>
         </section>
       ) : null}
@@ -1294,7 +1931,9 @@ function ReviewRail({ detail }: { detail: SubmissionReviewDetail }) {
     <aside className="admin-review-rail">
       <section className="admin-panel-card">
         <SectionTitle title="Review readiness" />
-        <p className="mt-2 text-xs text-subtle">Required checks gate approval. AI and market research are advisory.</p>
+        <p className="mt-2 text-xs text-subtle">
+          Required checks gate approval. AI and market research are advisory.
+        </p>
         <ul className="admin-review-check-list mt-4">
           {(detail.reviewChecklist ?? []).map((item) => (
             <li key={item.key}>

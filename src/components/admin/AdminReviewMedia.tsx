@@ -26,5 +26,7 @@ export function AdminReviewMedia({ src, alt, fallback, className, style }: Admin
     );
   }
 
-  return <img className={className} style={style} src={src} alt={alt} onError={() => setFailed(true)} />;
+  return (
+    <img className={className} style={style} src={src} alt={alt} onError={() => setFailed(true)} />
+  );
 }

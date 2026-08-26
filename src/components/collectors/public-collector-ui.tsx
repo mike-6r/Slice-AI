@@ -25,8 +25,15 @@ export function CollectorAvatar({
   );
 }
 
-function AssetMedia({ listing, compact = false }: { listing: CollectorPublishedListing; compact?: boolean }) {
-  const media = listing.media?.find((item) => item.slot.toLowerCase() === "front") ?? listing.media?.[0];
+function AssetMedia({
+  listing,
+  compact = false,
+}: {
+  listing: CollectorPublishedListing;
+  compact?: boolean;
+}) {
+  const media =
+    listing.media?.find((item) => item.slot.toLowerCase() === "front") ?? listing.media?.[0];
   return media ? (
     <img src={media.url} alt={media.alt} loading="lazy" />
   ) : (
@@ -222,12 +229,19 @@ export function CollectorCard({
         </div>
       </dl>
       {listings.length > 0 ? (
-        <div className="collector-mini-strip" aria-label={`${collector.displayName} published collectibles`}>
+        <div
+          className="collector-mini-strip"
+          aria-label={`${collector.displayName} published collectibles`}
+        >
           {listings.slice(0, 3).map((listing) => (
             <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
           ))}
           {count > 3 && (
-            <Link to="/collector/$id/assets" params={{ id: collector.handle }} className="collector-more-assets">
+            <Link
+              to="/collector/$id/assets"
+              params={{ id: collector.handle }}
+              className="collector-more-assets"
+            >
               +{count - 3}
             </Link>
           )}
@@ -235,7 +249,11 @@ export function CollectorCard({
       ) : (
         <p className="collector-card-empty">No published assets yet.</p>
       )}
-      <Link to="/collector/$id" params={{ id: collector.handle }} className="collector-card-profile-link">
+      <Link
+        to="/collector/$id"
+        params={{ id: collector.handle }}
+        className="collector-card-profile-link"
+      >
         View profile <ArrowRight aria-hidden="true" />
       </Link>
     </article>
@@ -254,7 +272,10 @@ export function PublicCollectorAssetCard({ listing }: { listing: CollectorPublis
         <h3>{listing.title}</h3>
         <strong>
           {listing.estimatedMarketValue
-            ? formatMoney(listing.estimatedMarketValue.amount, listing.estimatedMarketValue.currency)
+            ? formatMoney(
+                listing.estimatedMarketValue.amount,
+                listing.estimatedMarketValue.currency,
+              )
             : "Value unavailable"}
         </strong>
       </div>

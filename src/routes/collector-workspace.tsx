@@ -1645,7 +1645,10 @@ function SubscriptionPage({
             {!current ? (
               <button
                 className="collector-button collector-button--primary"
-                onClick={() => firstAvailablePlan && action({ action: "CHECKOUT", planCode: firstAvailablePlan.code })}
+                onClick={() =>
+                  firstAvailablePlan &&
+                  action({ action: "CHECKOUT", planCode: firstAvailablePlan.code })
+                }
                 disabled={actionPending || !firstAvailablePlan || !data.billing.configured}
               >
                 Choose a plan <ArrowRight aria-hidden="true" />
@@ -1747,8 +1750,8 @@ function BillingDetails({
   const current = data.current;
   const canManage = Boolean(
     data.billing.configured &&
-      current &&
-      ["TRIALING", "ACTIVE", "CANCEL_AT_PERIOD_END"].includes(current.status),
+    current &&
+    ["TRIALING", "ACTIVE", "CANCEL_AT_PERIOD_END"].includes(current.status),
   );
   return (
     <article className="collector-panel collector-membership-billing">
@@ -1848,15 +1851,19 @@ function PlanCard({
       <button
         className={`collector-button ${isCurrent ? "collector-button--primary" : ""}`}
         disabled={isCurrent || unavailable || actionPending}
-        onClick={() => action({ action: changePlan ? "CHANGE_PLAN" : "CHECKOUT", planCode: plan.code })}
+        onClick={() =>
+          action({ action: changePlan ? "CHANGE_PLAN" : "CHECKOUT", planCode: plan.code })
+        }
       >
         {isCurrent
-          ? current?.status === "INCOMPLETE" ? "Processing" : "Current plan"
+          ? current?.status === "INCOMPLETE"
+            ? "Processing"
+            : "Current plan"
           : unavailable
             ? "Unavailable"
             : changePlan
-            ? "Change plan"
-            : `Choose ${plan.displayName.replace("Collector ", "")}`}{" "}
+              ? "Change plan"
+              : `Choose ${plan.displayName.replace("Collector ", "")}`}{" "}
         <ArrowRight aria-hidden="true" />
       </button>
     </article>

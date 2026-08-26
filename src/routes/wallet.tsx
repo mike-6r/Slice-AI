@@ -405,7 +405,11 @@ function WalletKpis({
         value={formatWalletMoney(cash.riskHeldMinor ?? "0")}
         detail={
           cash.riskHeldDeposits?.find((deposit) => deposit.expectedReleaseAt)?.expectedReleaseAt
-            ? "Expected after " + formatShortDate(cash.riskHeldDeposits.find((deposit) => deposit.expectedReleaseAt)!.expectedReleaseAt!)
+            ? "Expected after " +
+              formatShortDate(
+                cash.riskHeldDeposits.find((deposit) => deposit.expectedReleaseAt)!
+                  .expectedReleaseAt!,
+              )
             : "Recent Bacs cash held while the bank debit clears"
         }
       />
@@ -522,9 +526,7 @@ function ConnectedBankPanel({
           </ul>
         ) : null}
         {!query.isLoading && !query.isError && !connectedBanks.length ? <BankEmpty /> : null}
-        <BankConnectionControl
-          hasConnected={connectedBanks.length > 0}
-        />
+        <BankConnectionControl hasConnected={connectedBanks.length > 0} />
         <div className="wallet-bank-reassurance" aria-label="Bank connection safeguards">
           <span>
             <ShieldCheck />

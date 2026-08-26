@@ -157,8 +157,12 @@ export const mapCash = (raw: unknown): PortfolioCashSummary => {
                 return {
                   id: requiredString(deposit.id, "wallet.riskHeldDeposits.id"),
                   amountMinor: minor(deposit.amountMinor, "wallet.riskHeldDeposits.amountMinor"),
-                  providerAvailableOn: nullableString(deposit.providerAvailableOn) as BacsRiskHeldDeposit["providerAvailableOn"],
-                  expectedReleaseAt: nullableString(deposit.expectedReleaseAt) as BacsRiskHeldDeposit["expectedReleaseAt"],
+                  providerAvailableOn: nullableString(
+                    deposit.providerAvailableOn,
+                  ) as BacsRiskHeldDeposit["providerAvailableOn"],
+                  expectedReleaseAt: nullableString(
+                    deposit.expectedReleaseAt,
+                  ) as BacsRiskHeldDeposit["expectedReleaseAt"],
                 };
               })
             : (() => {

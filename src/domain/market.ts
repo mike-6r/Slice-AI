@@ -3,13 +3,7 @@ import type { BasisPoints, CurrencyCode, ISODateTime, Money, Percentage } from "
 
 export type TimeRange = "24H" | "7D" | "30D" | "90D" | "1Y" | "ALL";
 export type ReferenceSeries =
-  | "UNGRADED"
-  | "GRADE_7"
-  | "GRADE_8"
-  | "GRADE_9"
-  | "GRADE_9_5"
-  | "PSA_10"
-  | "BGS_10";
+  "UNGRADED" | "GRADE_7" | "GRADE_8" | "GRADE_9" | "GRADE_9_5" | "PSA_10" | "BGS_10";
 export type ValuationSource = "demo-market" | "auction-comparable" | "manual-appraisal";
 export interface PricePoint {
   timestamp: ISODateTime;

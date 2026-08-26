@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, ChevronDown, Search, SlidersHorizontal, UsersRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  Search,
+  SlidersHorizontal,
+  UsersRound,
+} from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { CollectorCard, FeaturedCollector } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -38,7 +45,9 @@ export function CollectorSearch({
 
 export const Route = createFileRoute("/collectors")({
   validateSearch: (search: Record<string, unknown>): CollectorSearch => ({
-    ...(typeof search.q === "string" && search.q.trim() ? { q: search.q.trim().slice(0, 120) } : {}),
+    ...(typeof search.q === "string" && search.q.trim()
+      ? { q: search.q.trim().slice(0, 120) }
+      : {}),
     ...(typeof search.specialty === "string" && search.specialty.trim()
       ? { specialty: search.specialty.trim().slice(0, 80) }
       : {}),
@@ -50,7 +59,10 @@ export const Route = createFileRoute("/collectors")({
   head: () => ({
     meta: [
       { title: "Collectors | Slice" },
-      { name: "description", content: "Explore active Collectors and the published collectibles they showcase on Slice." },
+      {
+        name: "description",
+        content: "Explore active Collectors and the published collectibles they showcase on Slice.",
+      },
     ],
   }),
   component: CollectorsPage,
@@ -109,7 +121,8 @@ function CollectorsPage() {
           <p className="collectors-kicker">The Slice community</p>
           <h1>Collectors worth knowing.</h1>
           <p>
-            Discover active Collectors and the published collectibles they choose to showcase on Slice.
+            Discover active Collectors and the published collectibles they choose to showcase on
+            Slice.
           </p>
           <div className="collectors-hero-note">
             <UsersRound aria-hidden="true" />
@@ -119,12 +132,17 @@ function CollectorsPage() {
         <div className="collectors-hero-aside" aria-label="Collector directory summary">
           <span className="collectors-hero-aside__eyebrow">A better way to explore</span>
           <strong>Find the next point of view for your collection.</strong>
-          <span>Search by name or specialty, then open a profile to see the published assets behind it.</span>
+          <span>
+            Search by name or specialty, then open a profile to see the published assets behind it.
+          </span>
         </div>
       </section>
 
       {featured.length > 0 && !hasFilters && (
-        <section className="collectors-shell collectors-featured-section" aria-labelledby="featured-heading">
+        <section
+          className="collectors-shell collectors-featured-section"
+          aria-labelledby="featured-heading"
+        >
           <div className="collectors-section-heading">
             <div>
               <p className="collectors-kicker">Community highlights</p>
@@ -140,11 +158,16 @@ function CollectorsPage() {
         </section>
       )}
 
-      <section className="collectors-shell collectors-directory" aria-labelledby="directory-heading">
+      <section
+        className="collectors-shell collectors-directory"
+        aria-labelledby="directory-heading"
+      >
         <div className="collectors-directory-toolbar">
           <form className="collectors-directory-search" onSubmit={submitSearch}>
             <Search aria-hidden="true" />
-            <label className="sr-only" htmlFor="collector-search">Search public collectors</label>
+            <label className="sr-only" htmlFor="collector-search">
+              Search public collectors
+            </label>
             <input
               id="collector-search"
               type="search"
@@ -159,7 +182,9 @@ function CollectorsPage() {
             <select
               aria-label="Sort public collectors"
               value={sort}
-              onChange={(event) => setSearch({ sort: event.target.value as CollectorDirectorySort })}
+              onChange={(event) =>
+                setSearch({ sort: event.target.value as CollectorDirectorySort })
+              }
             >
               <option value="featured">Featured first</option>
               <option value="recent">Recently published</option>
@@ -187,7 +212,9 @@ function CollectorsPage() {
                 key={specialty}
                 type="button"
                 className={search.specialty === specialty ? "is-active" : undefined}
-                onClick={() => setSearch({ specialty: specialty === search.specialty ? undefined : specialty })}
+                onClick={() =>
+                  setSearch({ specialty: specialty === search.specialty ? undefined : specialty })
+                }
               >
                 {specialty}
               </button>
@@ -200,7 +227,11 @@ function CollectorsPage() {
             <p className="collectors-kicker">Public directory</p>
             <h2 id="directory-heading">Meet the collectors.</h2>
           </div>
-          <span>{page ? `${page.total} active Collector${page.total === 1 ? "" : "s"}` : "Loading collectors"}</span>
+          <span>
+            {page
+              ? `${page.total} active Collector${page.total === 1 ? "" : "s"}`
+              : "Loading collectors"}
+          </span>
         </div>
 
         {result.isPending ? (
@@ -214,7 +245,9 @@ function CollectorsPage() {
             <BoxIcon />
             <h3>Collectors are unavailable.</h3>
             <p>We could not load the public directory right now.</p>
-            <button type="button" onClick={() => void result.refetch()}>Try again</button>
+            <button type="button" onClick={() => void result.refetch()}>
+              Try again
+            </button>
           </div>
         ) : data?.items.length ? (
           <div className="collectors-directory-grid">
@@ -225,19 +258,42 @@ function CollectorsPage() {
         ) : (
           <div className="collectors-empty-state">
             <Search aria-hidden="true" />
-            <h3>{hasFilters ? "No collectors match those filters." : "No active Collectors yet."}</h3>
-            <p>{hasFilters ? "Try a different name or specialty." : "Active Collector accounts will appear here with their published collectibles."}</p>
-            {hasFilters && <button type="button" onClick={() => setSearch({ q: undefined, specialty: undefined })}>Clear filters</button>}
+            <h3>
+              {hasFilters ? "No collectors match those filters." : "No active Collectors yet."}
+            </h3>
+            <p>
+              {hasFilters
+                ? "Try a different name or specialty."
+                : "Active Collector accounts will appear here with their published collectibles."}
+            </p>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => setSearch({ q: undefined, specialty: undefined })}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
 
         {page && page.totalPages > 1 && (
           <nav className="collectors-pagination" aria-label="Collectors pagination">
-            <button type="button" disabled={!page.hasPreviousPage} onClick={() => setSearch({ page: currentPage - 1 })}>
+            <button
+              type="button"
+              disabled={!page.hasPreviousPage}
+              onClick={() => setSearch({ page: currentPage - 1 })}
+            >
               <ArrowLeft aria-hidden="true" /> Previous
             </button>
-            <span>Page {page.page} of {page.totalPages}</span>
-            <button type="button" disabled={!page.hasNextPage} onClick={() => setSearch({ page: currentPage + 1 })}>
+            <span>
+              Page {page.page} of {page.totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={!page.hasNextPage}
+              onClick={() => setSearch({ page: currentPage + 1 })}
+            >
               Next <ArrowRight aria-hidden="true" />
             </button>
           </nav>

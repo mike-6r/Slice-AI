@@ -230,10 +230,9 @@
 .admin-operations-queue-head,
 .admin-operation-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1.7fr) minmax(155px, 1fr) minmax(155px, 1fr) minmax(
-      170px,
-      1fr
-    ) 65px 36px;
+  grid-template-columns:
+    minmax(260px, 1.7fr) minmax(155px, 1fr) minmax(155px, 1fr) minmax(170px, 1fr)
+    65px 36px;
   gap: 14px;
   align-items: center;
   padding: 11px 15px;
@@ -807,10 +806,9 @@
 @media (max-width: 1050px) {
   .admin-operation-row,
   .admin-operations-queue-head {
-    grid-template-columns: minmax(230px, 1.6fr) minmax(145px, 1fr) minmax(145px, 1fr) minmax(
-        150px,
-        1fr
-      ) 55px 32px;
+    grid-template-columns:
+      minmax(230px, 1.6fr) minmax(145px, 1fr) minmax(145px, 1fr) minmax(150px, 1fr)
+      55px 32px;
     gap: 9px;
   }
   .admin-operation-detail__grid {
