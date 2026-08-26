@@ -33,11 +33,7 @@ export function isEligiblePikachuOwnerDemo(candidate: DemoCandidate) {
   return (
     candidate.owner?.email?.toLowerCase() === 'demo-collector@slicecollectable.com' &&
     asset?.title?.trim().toLowerCase() === 'pikachu with grey felt hat' &&
-    asset.year === 2023 &&
-    asset.cardNumber === '85' &&
     asset.certificationNumber === '107760843' &&
-    asset.category?.name?.toLowerCase() === 'pokémon tcg' &&
-    asset.collectibleSet?.name?.toLowerCase() === 'pokémon x van gogh' &&
     asset.gradeScaleEntry?.company?.code?.toUpperCase() === 'PSA' &&
     grade === 10
   );
