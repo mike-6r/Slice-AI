@@ -967,11 +967,22 @@ export type AdminMembershipRow = {
     billingPeriodStart: string;
     billingPeriodEnd: string;
   };
-  billing: { nextBillingDate: string | null; health: string };
+  usageHealth: "NORMAL" | "AT_LIMIT" | "OVER_LIMIT";
+  billing: {
+    nextBillingDate: string | null;
+    health: string;
+    configured: boolean;
+    provider: string | null;
+    lastSyncAt: string | null;
+  };
   entitlements: Record<string, unknown>;
   overLimit: boolean;
   warnings: string[];
   eligibleActions: string[];
+  needsAction: boolean;
+  nextChange: { kind: string; at: string | null; label: string };
+  testFixture: boolean;
+  events: Array<{ id: string; fromStatus: string | null; toStatus: string; source: string; occurredAt: string }>;
   updatedAt: string;
 };
 
@@ -989,6 +1000,12 @@ export type AdminMembershipDirectoryResponse = {
   };
   statusOverview: Record<string, number>;
   planDistribution: Record<string, number>;
+  capabilities: {
+    providerConfigured: boolean;
+    provider: string | null;
+    canExport: boolean;
+    usageThresholds: "EXACT_ONLY" | "AT_LIMIT_ONLY";
+  };
   recentActivity: Array<{
     id: string;
     title: string;
@@ -1491,6 +1508,7 @@ export interface AdminRepository {
     grading?: string;
     collector?: string;
     fixture?: "NORMAL" | "TEST" | "ALL";
+    needsAction?: boolean;
     sort?: string;
     sortDirection?: "asc" | "desc";
     page?: number;
@@ -1556,6 +1574,10 @@ export interface AdminRepository {
     pageSize?: number;
     sort?: string;
     sortDirection?: "asc" | "desc";
+    billing?: string;
+    usage?: string;
+    fixture?: "NORMAL" | "TEST" | "ALL";
+    needsAction?: boolean;
   }): Promise<AdminMembershipDirectoryResponse>;
   listUsers(input?: {
     q?: string;

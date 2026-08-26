@@ -252,6 +252,12 @@ export const mockRepositories: AppRepositories = {
         kpis: { active: 0, starter: 0, pro: 0, elite: 0, pastDue: 0, trialing: 0, total: 0 },
         statusOverview: {},
         planDistribution: {},
+        capabilities: {
+          providerConfigured: false,
+          provider: null,
+          canExport: false,
+          usageThresholds: "AT_LIMIT_ONLY",
+        },
         recentActivity: [],
       };
     },

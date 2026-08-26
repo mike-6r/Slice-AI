@@ -2383,6 +2383,9 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
           "admin membership.billing.nextBillingDate",
         ),
         health: stringField(billing.health, "admin membership.billing.health"),
+        configured: Boolean(billing.configured),
+        provider: nullableString(billing.provider, "admin membership.billing.provider"),
+        lastSyncAt: nullableString(billing.lastSyncAt, "admin membership.billing.lastSyncAt"),
       };
     })(),
     entitlements: (() => {
@@ -2395,6 +2398,31 @@ const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
     warnings: Array.isArray(value.warnings) ? value.warnings.map((entry) => String(entry)) : [],
     eligibleActions: Array.isArray(value.eligibleActions)
       ? value.eligibleActions.map((entry) => String(entry))
+      : [],
+    usageHealth: ["NORMAL", "AT_LIMIT", "OVER_LIMIT"].includes(String(value.usageHealth))
+      ? (String(value.usageHealth) as "NORMAL" | "AT_LIMIT" | "OVER_LIMIT")
+      : "NORMAL",
+    needsAction: Boolean(value.needsAction),
+    nextChange: (() => {
+      const next = objectField(value.nextChange ?? {}, "admin membership.nextChange");
+      return {
+        kind: stringField(next.kind, "admin membership.nextChange.kind"),
+        at: nullableString(next.at, "admin membership.nextChange.at"),
+        label: stringField(next.label, "admin membership.nextChange.label"),
+      };
+    })(),
+    testFixture: Boolean(value.testFixture),
+    events: Array.isArray(value.events)
+      ? value.events.map((entry) => {
+          const event = objectField(entry, "admin membership event");
+          return {
+            id: stringField(event.id, "admin membership event.id"),
+            fromStatus: nullableString(event.fromStatus, "admin membership event.fromStatus"),
+            toStatus: stringField(event.toStatus, "admin membership event.toStatus"),
+            source: stringField(event.source, "admin membership event.source"),
+            occurredAt: stringField(event.occurredAt, "admin membership event.occurredAt"),
+          };
+        })
       : [],
     updatedAt: stringField(value.updatedAt, "admin membership.updatedAt"),
   };
@@ -2429,6 +2457,15 @@ const mapAdminMembershipDirectory = (raw: unknown): AdminMembershipDirectoryResp
     },
     statusOverview: numericRecord(value.statusOverview),
     planDistribution: numericRecord(value.planDistribution),
+    capabilities: (() => {
+      const capabilities = objectField(value.capabilities ?? {}, "admin membership capabilities");
+      return {
+        providerConfigured: Boolean(capabilities.providerConfigured),
+        provider: nullableString(capabilities.provider, "admin membership capabilities.provider"),
+        canExport: Boolean(capabilities.canExport),
+        usageThresholds: capabilities.usageThresholds === "AT_LIMIT_ONLY" ? "AT_LIMIT_ONLY" as const : "EXACT_ONLY" as const,
+      };
+    })(),
     recentActivity: Array.isArray(value.recentActivity)
       ? value.recentActivity.map((entry) => {
           const activity = objectField(entry, "admin membership activity");

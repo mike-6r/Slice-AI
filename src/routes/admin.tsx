@@ -100,6 +100,9 @@ export const Route = createFileRoute("/admin")({
     dateFrom: typeof search.dateFrom === "string" ? search.dateFrom : undefined,
     dateTo: typeof search.dateTo === "string" ? search.dateTo : undefined,
     fixture: typeof search.fixture === "string" ? search.fixture : undefined,
+    billing: typeof search.billing === "string" ? search.billing : undefined,
+    usage: typeof search.usage === "string" ? search.usage : undefined,
+    needsAction: typeof search.needsAction === "string" ? search.needsAction : undefined,
   }),
   head: () => ({ meta: [{ title: "Admin Console | Slice" }] }),
   component: AdminPage,
@@ -148,6 +151,9 @@ type AdminSearch = {
   dateFrom?: string;
   dateTo?: string;
   fixture?: string;
+  billing?: string;
+  usage?: string;
+  needsAction?: string;
   category?: string;
   grader?: string;
 };
@@ -281,6 +287,9 @@ function AdminConsole() {
     dateFrom: intakeDateFrom,
     dateTo: intakeDateTo,
     fixture: intakeFixture,
+    billing: membershipBilling,
+    usage: membershipUsage,
+    needsAction: membershipNeedsAction,
     category: operationsCategory,
     grader: operationsGrader,
     priority: operationsPriority,
@@ -567,6 +576,10 @@ function AdminConsole() {
       reviewQuery,
       membershipPlanFilter,
       membershipStatus,
+      membershipBilling,
+      membershipUsage,
+      intakeFixture,
+      membershipNeedsAction,
       reviewPageParam,
       reviewSort,
       reviewSortDirection,
@@ -580,6 +593,10 @@ function AdminConsole() {
         pageSize: Math.min(100, Math.max(1, Number(reviewPageSizeParam ?? 10))),
         sort: reviewSort,
         sortDirection: reviewSortDirection === "asc" ? "asc" : "desc",
+        billing: membershipBilling,
+        usage: membershipUsage,
+        fixture: ["NORMAL", "TEST", "ALL"].includes(intakeFixture ?? "") ? (intakeFixture as "NORMAL" | "TEST" | "ALL") : "ALL",
+        needsAction: membershipNeedsAction === "true",
       }),
     enabled: section === "memberships",
     staleTime: 30_000,
@@ -1045,6 +1062,10 @@ function AdminConsole() {
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             sort={reviewSort ?? "updated"}
             sortDirection={reviewSortDirection === "asc" ? "asc" : "desc"}
+            billing={membershipBilling ?? ""}
+            usage={membershipUsage ?? ""}
+            fixture={intakeFixture ?? "ALL"}
+            needsAction={membershipNeedsAction === "true"}
             selectedId={selectedMembership}
             update={(patch) =>
               void navigate({

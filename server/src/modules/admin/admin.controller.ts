@@ -129,6 +129,10 @@ const membershipsQuery = z
     status: z
       .enum(['INCOMPLETE', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'CANCEL_AT_PERIOD_END', 'TRIALING', 'SUSPENDED', 'EXPIRED'])
       .optional(),
+    billing: z.enum(['CURRENT', 'PENDING', 'PAST_DUE', 'SUSPENDED', 'DISABLED']).optional(),
+    usage: z.enum(['NORMAL', 'AT_LIMIT', 'OVER_LIMIT']).optional(),
+    fixture: z.enum(['NORMAL', 'TEST', 'ALL']).default('ALL'),
+    needsAction: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
     sort: z.enum(['collector', 'plan', 'status', 'billing', 'updated']).default('updated'),
@@ -492,7 +496,7 @@ export class AdminController {
     return this.admin.collectibleDetail(request.actor!, id, tab);
   }
 
-  private parse<T>(schema: z.ZodType<T>, value: unknown): T {
+  private parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.output<T> {
     const parsed = schema.safeParse(value);
     if (!parsed.success)
       throw new BadRequestException({

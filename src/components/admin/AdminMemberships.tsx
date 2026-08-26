@@ -1,20 +1,20 @@
+import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Search, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import type { AdminMembershipDirectoryResponse, AdminMembershipRow } from "@/data/repositories";
 import "@/styles/admin-memberships.css";
 
-const tabs = [
+const statusTabs = [
   ["", "All"],
-  ["INCOMPLETE", "Payment setup"],
+  ["NEEDS_ACTION", "Needs action"],
   ["ACTIVE", "Active"],
+  ["INCOMPLETE", "Payment setup"],
   ["PAST_DUE", "Past due"],
   ["TRIALING", "Trialing"],
-  ["CANCEL_AT_PERIOD_END", "Cancelling"],
-  ["CANCELLED", "Cancelled"],
   ["SUSPENDED", "Suspended"],
-  ["EXPIRED", "Expired"],
+  ["CANCELLED", "Cancelled"],
 ] as const;
-const statusLabel = (status: string) =>
+const statusLabel = (value: string) =>
   ({
     INCOMPLETE: "Payment setup",
     ACTIVE: "Active",
@@ -24,10 +24,20 @@ const statusLabel = (status: string) =>
     TRIALING: "Trialing",
     SUSPENDED: "Suspended",
     EXPIRED: "Expired",
-  })[status] ?? status.replaceAll("_", " ");
-const planLabel = (code: string) =>
-  `${{ STARTER: "Starter", PRO: "Pro", ELITE: "Elite" }[code] ?? code} plan`;
-function formatDate(value: string | null) {
+  })[value] ?? value.replaceAll("_", " ");
+const sentence = (value: string) =>
+  value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+function date(value: string | null) {
   if (!value) return "Not configured";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
@@ -39,19 +49,14 @@ function formatDate(value: string | null) {
         timeZone: "UTC",
       }).format(parsed);
 }
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-function usageState(value: number, limit: number | null, percent: number | null) {
-  if (limit === null) return "Uncapped";
-  if (value > limit) return "Over limit";
-  if ((percent ?? 0) >= 100) return "At limit";
-  if ((percent ?? 0) >= 80) return "Near limit";
-  return "Within plan";
+function money(minor: string, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(
+      Number(minor) / 100,
+    );
+  } catch {
+    return `${minor} ${currency}`;
+  }
 }
 
 export function AdminMemberships({
@@ -63,6 +68,12 @@ export function AdminMemberships({
   plan,
   status,
   page,
+  sort,
+  sortDirection,
+  billing,
+  usage,
+  fixture,
+  needsAction,
   update,
   selectedId,
 }: {
@@ -76,12 +87,14 @@ export function AdminMemberships({
   page: number;
   sort: string;
   sortDirection: "asc" | "desc";
+  billing: string;
+  usage: string;
+  fixture: string;
+  needsAction: boolean;
   update: (patch: Record<string, string | undefined>) => void;
   selectedId?: string;
 }) {
   const [search, setSearch] = useState(query);
-  const [billingFilter, setBillingFilter] = useState("");
-  const [usageFilter, setUsageFilter] = useState("");
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -95,277 +108,385 @@ export function AdminMemberships({
     return (
       <section className="admin-memberships-state">
         <h2>Memberships unavailable</h2>
-        <p>We couldn't load Collector memberships right now.</p>
+        <p>Membership and entitlement authority could not be loaded. Counts are unavailable.</p>
         <button type="button" onClick={retry}>
           Try again
         </button>
       </section>
     );
-  const filteredItems = data.items.filter((row) => {
-    const billingMatch = !billingFilter || row.membership.billingState === billingFilter;
-    const activePercent = row.usage.activeCollectiblesPercent ?? 0;
-    const monthlyPercent = row.usage.monthlySubmissionsPercent ?? 0;
-    const state = row.overLimit
-      ? "OVER_LIMIT"
-      : Math.max(activePercent, monthlyPercent) >= 100
-        ? "AT_LIMIT"
-        : Math.max(activePercent, monthlyPercent) >= 80
-          ? "NEAR_LIMIT"
-          : "OK";
-    return billingMatch && (!usageFilter || state === usageFilter);
-  });
   const selected = selectedId ? data.items.find((row) => row.id === selectedId) : undefined;
-  if (selectedId && selected)
-    return <MembershipDetail row={selected} back={() => update({ membership: undefined })} />;
-  const statusCount = (key: string) => data.statusOverview[key] ?? 0;
-  const total = data.pagination.total;
-  const totalVisible = Object.values(data.statusOverview).reduce((sum, value) => sum + value, 0);
+  const activeTab = needsAction ? "NEEDS_ACTION" : status;
+  const filtered = Boolean(
+    query || plan || status || billing || usage || fixture !== "ALL" || needsAction,
+  );
   return (
     <main className="admin-memberships-page">
       <header className="admin-memberships-header">
         <div>
           <p className="admin-memberships-eyebrow">ADMIN CONSOLE / MEMBERSHIPS</p>
           <h2>Memberships</h2>
-          <p>Manage Collector plans, usage, entitlements and subscription status.</p>
+          <p>Operational view of Collector plans, entitlements, usage and provider capability.</p>
         </div>
-        <div className="admin-memberships-header-actions">
-          <button type="button" className="admin-memberships-button" disabled>
-            <Download aria-hidden="true" /> Export
-          </button>
-          <span className="admin-memberships-beta-note">
-            Billing provider is not configured in Beta
-          </span>
+        <div className="admin-memberships-provider">
+          <span>Billing integration</span>
+          <strong>
+            {data.capabilities.providerConfigured
+              ? `${data.capabilities.provider ?? "Provider"} configured`
+              : "Not configured in Beta"}
+          </strong>
         </div>
       </header>
-      <section className="admin-membership-summary" aria-label="Membership summary">
-        <strong>
-          {data.kpis.active.toLocaleString("en-GB")} active membership
-          {data.kpis.active === 1 ? "" : "s"}
-        </strong>
-        <span>Starter {data.kpis.starter}</span>
-        <span>Pro {data.kpis.pro}</span>
-        <span>Elite {data.kpis.elite}</span>
-        <span>Past due {data.kpis.pastDue}</span>
-        <span>Trialing {data.kpis.trialing}</span>
+      <section className="admin-membership-summary">
+        <Summary label="Active" value={data.kpis.active} tone="green" />
+        <Summary label="Payment setup" value={data.statusOverview.INCOMPLETE ?? 0} tone="blue" />
+        <Summary label="Past due" value={data.kpis.pastDue} tone="amber" />
+        <Summary label="Trialing" value={data.kpis.trialing} tone="purple" />
+        <Summary label="Suspended" value={data.statusOverview.SUSPENDED ?? 0} tone="red" />
+        <Summary label="Total" value={data.kpis.total} />
       </section>
-      <section className="admin-membership-table-card">
-        <nav className="admin-membership-tabs" aria-label="Membership status">
-          {tabs.map(([key, label]) => (
-            <button
-              type="button"
-              className={(status || "") === key ? "active" : ""}
-              key={key || "all"}
-              onClick={() => update({ status: key || undefined, page: "1" })}
-            >
-              {label} <b>{key ? statusCount(key) : totalVisible}</b>
-            </button>
-          ))}
-        </nav>
-        <div className="admin-membership-toolbar">
-          <label className="admin-membership-search">
-            <Search aria-hidden="true" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search name, username, email or membership ID"
-              aria-label="Search memberships"
-            />
-          </label>
-          <select
-            value={plan}
-            onChange={(event) => update({ plan: event.target.value || undefined, page: "1" })}
-            aria-label="Plan"
-          >
-            <option value="">Plan: All</option>
-            <option value="STARTER">Starter</option>
-            <option value="PRO">Pro</option>
-            <option value="ELITE">Elite</option>
-          </select>
-          <select
-            value={status}
-            onChange={(event) => update({ status: event.target.value || undefined, page: "1" })}
-            aria-label="Status"
-          >
-            <option value="">Status: All</option>
-            {tabs.slice(1).map(([key, label]) => (
-              <option key={key} value={key}>
+      <section className="admin-membership-workspace">
+        <div className="admin-membership-main">
+          <nav className="admin-membership-tabs" aria-label="Membership views">
+            {statusTabs.map(([key, label]) => (
+              <button
+                type="button"
+                key={key || "all"}
+                className={activeTab === key ? "active" : ""}
+                onClick={() =>
+                  key === "NEEDS_ACTION"
+                    ? update({ needsAction: "true", status: undefined, page: "1" })
+                    : update({ needsAction: undefined, status: key || undefined, page: "1" })
+                }
+              >
                 {label}
-              </option>
+                {key && key !== "NEEDS_ACTION" ? <b>{data.statusOverview[key] ?? 0}</b> : null}
+              </button>
             ))}
-          </select>
-          <select
-            value={billingFilter}
-            onChange={(event) => setBillingFilter(event.target.value)}
-            aria-label="Billing state"
-          >
-            <option value="">Billing: All</option>
-            <option value="CURRENT">Current</option>
-            <option value="PENDING">Payment setup</option>
-            <option value="PAST_DUE">Past due</option>
-            <option value="SUSPENDED">Suspended</option>
-            <option value="DISABLED">Not configured</option>
-          </select>
-          <select
-            value={usageFilter}
-            onChange={(event) => setUsageFilter(event.target.value)}
-            aria-label="Usage state"
-          >
-            <option value="">Usage: All</option>
-            <option value="OK">Within plan</option>
-            <option value="NEAR_LIMIT">Near limit</option>
-            <option value="AT_LIMIT">At limit</option>
-            <option value="OVER_LIMIT">Over limit</option>
-          </select>
-        </div>
-        <div className="admin-membership-table-wrap">
-          <table className="admin-membership-table">
-            <thead>
-              <tr>
-                <th>Collector</th>
-                <th>Plan</th>
-                <th>Status</th>
-                <th>Usage</th>
-                <th>Capacity</th>
-                <th>Renewal</th>
-                <th>Manage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((row) => (
-                <MembershipRow key={row.id} row={row} open={() => update({ membership: row.id })} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!filteredItems.length ? (
-          <div className="admin-membership-empty">
-            {query || plan || status || billingFilter || usageFilter
-              ? "No memberships match these filters."
-              : "No Collector memberships found."}
+          </nav>
+          <div className="admin-membership-toolbar">
+            <label className="admin-membership-search">
+              <Search aria-hidden="true" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search collector, email, username or membership ID"
+                aria-label="Search memberships"
+              />
+            </label>
+            <Select
+              label="Plan"
+              value={plan}
+              onChange={(value) => update({ plan: value || undefined, page: "1" })}
+              options={[
+                ["", "All plans"],
+                ["STARTER", "Starter"],
+                ["PRO", "Pro"],
+                ["ELITE", "Elite"],
+              ]}
+            />
+            <Select
+              label="Status"
+              value={status}
+              onChange={(value) =>
+                update({ needsAction: undefined, status: value || undefined, page: "1" })
+              }
+              options={[
+                ["", "All states"],
+                ...statusTabs.slice(2).map(([value, label]) => [value, label] as [string, string]),
+              ]}
+            />
+            <Select
+              label="Billing"
+              value={billing}
+              onChange={(value) => update({ billing: value || undefined, page: "1" })}
+              options={[
+                ["", "All billing"],
+                ["CURRENT", "Current"],
+                ["PENDING", "Payment setup"],
+                ["PAST_DUE", "Past due"],
+                ["SUSPENDED", "Suspended"],
+                ["DISABLED", "Not configured"],
+              ]}
+            />
+            <Select
+              label="Usage"
+              value={usage}
+              onChange={(value) => update({ usage: value || undefined, page: "1" })}
+              options={[
+                ["", "All usage"],
+                ["NORMAL", "Normal"],
+                ["AT_LIMIT", "At limit"],
+                ["OVER_LIMIT", "Over limit"],
+              ]}
+            />
+            <Select
+              label="Fixtures"
+              value={fixture}
+              onChange={(value) => update({ fixture: value, page: "1" })}
+              options={[
+                ["ALL", "All records"],
+                ["NORMAL", "Production work"],
+                ["TEST", "Test/demo"],
+              ]}
+            />
+            {filtered ? (
+              <button
+                type="button"
+                className="admin-membership-clear"
+                onClick={() => {
+                  setSearch("");
+                  update({
+                    q: undefined,
+                    plan: undefined,
+                    status: undefined,
+                    billing: undefined,
+                    usage: undefined,
+                    needsAction: undefined,
+                    fixture: "ALL",
+                    page: "1",
+                  });
+                }}
+              >
+                Clear filters
+              </button>
+            ) : null}
           </div>
-        ) : null}
-        <footer className="admin-membership-pagination">
-          <span>
-            Showing {total ? (data.pagination.page - 1) * data.pagination.pageSize + 1 : 0} to{" "}
-            {Math.min(data.pagination.page * data.pagination.pageSize, total)} of {total}{" "}
-            memberships
-          </span>
-          <div>
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => update({ page: String(page - 1) })}
-            >
-              ‹
-            </button>
-            <strong>{data.pagination.page}</strong>
-            <button
-              type="button"
-              disabled={page >= data.pagination.totalPages}
-              onClick={() => update({ page: String(page + 1) })}
-            >
-              ›
-            </button>
+          <div className="admin-membership-meta">
+            <span>
+              <strong>{data.pagination.total}</strong>{" "}
+              {filtered ? "matching memberships" : "memberships"}
+            </span>
+            <span>
+              {data.capabilities.usageThresholds === "AT_LIMIT_ONLY"
+                ? "Usage health reports configured limits only"
+                : "Usage thresholds unavailable"}
+            </span>
           </div>
-        </footer>
+          {data.items.length ? (
+            <MembershipTable
+              rows={data.items}
+              selectedId={selectedId}
+              open={(id) => update({ membership: id })}
+            />
+          ) : (
+            <div className="admin-membership-empty">
+              <strong>
+                {filtered
+                  ? "No memberships match these filters."
+                  : "No Collector memberships exist."}
+              </strong>
+              <p>
+                {filtered
+                  ? "Try clearing a filter or searching another collector field."
+                  : "Membership records will appear here when Slice creates them."}
+              </p>
+            </div>
+          )}
+          <footer className="admin-membership-pagination">
+            <span>
+              {data.pagination.total
+                ? `Showing ${(page - 1) * data.pagination.pageSize + 1}–${Math.min(page * data.pagination.pageSize, data.pagination.total)} of ${data.pagination.total}`
+                : filtered
+                  ? "No matching records"
+                  : "No memberships"}
+            </span>
+            <div>
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => update({ page: String(page - 1) })}
+              >
+                ‹
+              </button>
+              <strong>{page}</strong>
+              <button
+                type="button"
+                disabled={page >= data.pagination.totalPages}
+                onClick={() => update({ page: String(page + 1) })}
+              >
+                ›
+              </button>
+            </div>
+          </footer>
+        </div>
+        {selected ? (
+          <MembershipDrawer row={selected} close={() => update({ membership: undefined })} />
+        ) : (
+          <aside className="admin-membership-drawer admin-membership-drawer--empty">
+            <strong>Select a membership</strong>
+            <p>
+              Review plan, billing capability, entitlements, usage, cycle state and allowed actions.
+            </p>
+          </aside>
+        )}
       </section>
     </main>
   );
 }
 
-function MembershipRow({ row, open }: { row: AdminMembershipRow; open: () => void }) {
-  const active = usageState(
-    row.usage.activeCollectibles,
-    row.usage.activeCollectiblesLimit,
-    row.usage.activeCollectiblesPercent,
-  );
-  const monthly = usageState(
-    row.usage.monthlySubmissions,
-    row.usage.monthlySubmissionsLimit,
-    row.usage.monthlySubmissionsPercent,
-  );
-  const intakePercent = row.usage.concurrentIntakeLimit
-    ? Math.round((row.usage.concurrentIntake / row.usage.concurrentIntakeLimit) * 100)
-    : null;
+function MembershipTable({
+  rows,
+  selectedId,
+  open,
+}: {
+  rows: AdminMembershipRow[];
+  selectedId?: string;
+  open: (id: string) => void;
+}) {
   return (
-    <tr>
-      <td>
-        <div className="admin-membership-collector">
-          <span className="admin-membership-avatar">{initials(row.collector.displayName)}</span>
-          <div>
-            <strong>{row.collector.displayName}</strong>
-            <small>
-              {row.collector.username ? `@${row.collector.username}` : row.collector.email}
-            </small>
-            <small>{row.collector.email}</small>
-          </div>
-        </div>
-      </td>
-      <td>
-        <strong>{planLabel(row.plan.code)}</strong>
-        <small className="admin-membership-price">
-          {row.plan.monthlyPriceMinor === "0"
-            ? "No charge"
-            : `${row.plan.currency} ${(Number(row.plan.monthlyPriceMinor) / 100).toFixed(2)} / month`}
-        </small>
-      </td>
-      <td>
-        <span className={`admin-membership-status status-${row.membership.status.toLowerCase()}`}>
-          {statusLabel(row.membership.status)}
-        </span>
-        <small>
-          {row.membership.betaEntitlement
-            ? "Internal Beta entitlement"
-            : row.membership.billingState === "DISABLED"
-              ? "Billing not configured"
-              : "Provider billing"}
-        </small>
-      </td>
-      <td>
-        <Usage
-          value={row.usage.activeCollectibles}
-          limit={row.usage.activeCollectiblesLimit}
-          percent={row.usage.activeCollectiblesPercent}
-          label="Collectibles"
-          state={active}
-        />
-        <Usage
-          value={row.usage.monthlySubmissions}
-          limit={row.usage.monthlySubmissionsLimit}
-          percent={row.usage.monthlySubmissionsPercent}
-          label="Submissions this period"
-          state={monthly}
-        />
-      </td>
-      <td>
-        <Usage
-          value={row.usage.concurrentIntake}
-          limit={row.usage.concurrentIntakeLimit}
-          percent={intakePercent}
-          label="Concurrent intake"
-          state={usageState(
-            row.usage.concurrentIntake,
-            row.usage.concurrentIntakeLimit,
-            intakePercent,
-          )}
-        />
-      </td>
-      <td>
-        <strong>{formatDate(row.billing.nextBillingDate)}</strong>
-        <small>
-          {row.membership.cancelAtPeriodEnd
-            ? "Cancels at period end"
-            : row.membership.billingState === "DISABLED"
-              ? "Billing not configured"
-              : "Renews"}
-        </small>
-      </td>
-      <td>
-        <button type="button" className="admin-membership-manage" onClick={open}>
-          Manage <span aria-hidden="true">→</span>
-        </button>
-      </td>
-    </tr>
+    <div className="admin-membership-table-wrap">
+      <table className="admin-membership-table">
+        <thead>
+          <tr>
+            <th>Collector</th>
+            <th>Plan</th>
+            <th>State</th>
+            <th>Billing</th>
+            <th>Usage</th>
+            <th>Limits</th>
+            <th>Current period</th>
+            <th>Next change</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.id}
+              className={row.id === selectedId ? "is-selected" : ""}
+              onClick={() => open(row.id)}
+            >
+              <td>
+                <div className="admin-membership-collector">
+                  <span className="admin-membership-avatar">
+                    {initials(row.collector.displayName)}
+                  </span>
+                  <div>
+                    <strong>{row.collector.displayName}</strong>
+                    <small>
+                      {row.collector.username ? `@${row.collector.username}` : row.collector.email}
+                    </small>
+                    {row.testFixture ? <em>TEST / DEMO</em> : null}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <strong>{row.plan.displayName}</strong>
+                <small>
+                  {row.billing.configured
+                    ? money(row.plan.monthlyPriceMinor, row.plan.currency) + " / month"
+                    : "Internal beta plan"}
+                </small>
+              </td>
+              <td>
+                <span
+                  className={`admin-membership-status status-${row.membership.status.toLowerCase()}`}
+                >
+                  {statusLabel(row.membership.status)}
+                </span>
+                <small>
+                  {row.needsAction
+                    ? "Staff/user action required"
+                    : row.membership.betaEntitlement
+                      ? "Internal Beta entitlement"
+                      : "No action required"}
+                </small>
+              </td>
+              <td>
+                <span
+                  className={`admin-membership-billing billing-${row.billing.health.toLowerCase()}`}
+                >
+                  {sentence(row.billing.health)}
+                </span>
+                <small>
+                  {row.billing.configured
+                    ? (row.billing.provider ?? "Provider")
+                    : "Provider not configured"}
+                </small>
+              </td>
+              <td>
+                <Usage
+                  value={row.usage.activeCollectibles}
+                  limit={row.usage.activeCollectiblesLimit}
+                  percent={row.usage.activeCollectiblesPercent}
+                  label="Collectibles"
+                />
+                <Usage
+                  value={row.usage.monthlySubmissions}
+                  limit={row.usage.monthlySubmissionsLimit}
+                  percent={row.usage.monthlySubmissionsPercent}
+                  label="Submissions"
+                />
+              </td>
+              <td>
+                <Usage
+                  value={row.usage.concurrentIntake}
+                  limit={row.usage.concurrentIntakeLimit}
+                  percent={null}
+                  label="Concurrent intake"
+                />
+              </td>
+              <td>
+                <strong>{date(row.membership.currentPeriodStart)}</strong>
+                <small>{date(row.membership.currentPeriodEnd)} end</small>
+              </td>
+              <td>
+                <strong>{row.nextChange.label}</strong>
+                <small>{date(row.nextChange.at)}</small>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="admin-membership-manage"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    open(row.id);
+                  }}
+                >
+                  Manage <ArrowRight size={14} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="admin-membership-mobile-list">
+        {rows.map((row) => (
+          <article
+            key={row.id}
+            className="admin-membership-mobile-card"
+            onClick={() => open(row.id)}
+          >
+            <div className="admin-membership-collector">
+              <span className="admin-membership-avatar">{initials(row.collector.displayName)}</span>
+              <div>
+                <strong>{row.collector.displayName}</strong>
+                <small>
+                  {row.plan.displayName} · {statusLabel(row.membership.status)}
+                </small>
+              </div>
+            </div>
+            <div className="admin-membership-mobile-states">
+              <span>{sentence(row.billing.health)}</span>
+              <span>
+                {row.usageHealth === "NORMAL" ? "Within limits" : sentence(row.usageHealth)}
+              </span>
+              <span>{row.nextChange.label}</span>
+            </div>
+            <button
+              type="button"
+              className="admin-membership-manage"
+              onClick={(event) => {
+                event.stopPropagation();
+                open(row.id);
+              }}
+            >
+              Open membership <ArrowRight size={14} />
+            </button>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 function Usage({
@@ -373,13 +494,11 @@ function Usage({
   limit,
   percent,
   label,
-  state,
 }: {
   value: number;
   limit: number | null;
   percent: number | null;
   label: string;
-  state: string;
 }) {
   return (
     <div className="admin-membership-usage">
@@ -390,151 +509,176 @@ function Usage({
         </strong>
         <small>{label}</small>
       </div>
-      <span
-        className="admin-membership-progress"
-        title={`${label}: ${percent === null ? "uncapped" : `${percent}% used`}`}
-      >
-        <i style={{ width: `${Math.min(percent ?? 0, 100)}%` }} />
-      </span>
-      <em className={`usage-${state.toLowerCase().replaceAll(" ", "-")}`}>{state}</em>
+      {percent !== null ? (
+        <span className="admin-membership-progress">
+          <i style={{ width: `${Math.min(percent, 100)}%` }} />
+        </span>
+      ) : null}
     </div>
   );
 }
-
-function MembershipDetail({ row, back }: { row: AdminMembershipRow; back: () => void }) {
+function MembershipDrawer({ row, close }: { row: AdminMembershipRow; close: () => void }) {
   return (
-    <main className="admin-memberships-page admin-membership-detail">
-      <button type="button" className="admin-membership-back" onClick={back}>
-        <ArrowLeft aria-hidden="true" /> Back to memberships
-      </button>
-      <header className="admin-memberships-header">
+    <aside className="admin-membership-drawer">
+      <div className="admin-membership-drawer-head">
+        <span>Membership detail</span>
+        <button type="button" onClick={close} aria-label="Close membership detail">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="admin-membership-drawer-hero">
+        <span className="admin-membership-avatar">{initials(row.collector.displayName)}</span>
         <div>
-          <p className="admin-memberships-eyebrow">MEMBERSHIP DETAIL</p>
-          <h2>{row.collector.displayName}</h2>
-          <p>
-            {row.collector.email} · {planLabel(row.plan.code)}
-          </p>
+          <h3>{row.collector.displayName}</h3>
+          <p>{row.collector.email}</p>
+          {row.testFixture ? <em>TEST / DEMO ACCOUNT</em> : null}
         </div>
+      </div>
+      <DrawerSection title="Membership">
+        <p>
+          <b>Plan:</b> {row.plan.displayName}
+        </p>
+        <p>
+          <b>State:</b> {statusLabel(row.membership.status)}
+        </p>
+        <p>
+          <b>Membership ID:</b> {row.id}
+        </p>
+        <p>
+          <b>Source:</b> {sentence(row.membership.source)}
+        </p>
+      </DrawerSection>
+      <DrawerSection title="Billing">
+        <p>
+          <b>Capability:</b>{" "}
+          {row.billing.configured ? "Provider configured" : "Not configured in Beta"}
+        </p>
+        <p>
+          <b>State:</b> {sentence(row.billing.health)}
+        </p>
+        <p>
+          <b>Next event:</b> {row.nextChange.label}
+        </p>
+        <p>
+          <b>Last sync:</b> {date(row.billing.lastSyncAt)}
+        </p>
+      </DrawerSection>
+      <DrawerSection title="Plan entitlements">
+        <div className="admin-membership-entitlements">
+          {Object.entries(row.entitlements).length ? (
+            Object.entries(row.entitlements).map(([key, value]) => (
+              <p key={key}>
+                <b>{sentence(key)}:</b>{" "}
+                {typeof value === "boolean" ? (value ? "Enabled" : "Disabled") : String(value)}
+              </p>
+            ))
+          ) : (
+            <p>No plan entitlements configured.</p>
+          )}
+        </div>
+      </DrawerSection>
+      <DrawerSection title="Usage">
+        <Usage
+          value={row.usage.activeCollectibles}
+          limit={row.usage.activeCollectiblesLimit}
+          percent={row.usage.activeCollectiblesPercent}
+          label="Active collectibles"
+        />
+        <Usage
+          value={row.usage.monthlySubmissions}
+          limit={row.usage.monthlySubmissionsLimit}
+          percent={row.usage.monthlySubmissionsPercent}
+          label="Submissions this period"
+        />
+        <Usage
+          value={row.usage.concurrentIntake}
+          limit={row.usage.concurrentIntakeLimit}
+          percent={null}
+          label="Concurrent intake"
+        />
+        {row.warnings.length ? (
+          <ul className="admin-membership-warnings">
+            {row.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="admin-membership-good">
+            <ShieldCheck size={15} /> Within configured limits
+          </p>
+        )}
+      </DrawerSection>
+      <DrawerSection title="Recent membership events">
+        {row.events.length ? (
+          <ul className="admin-membership-events">
+            {row.events.map((event) => (
+              <li key={event.id}>
+                <strong>{sentence(event.toStatus)}</strong>
+                <small>
+                  {event.source} · {date(event.occurredAt)}
+                </small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No membership events recorded.</p>
+        )}
+      </DrawerSection>
+      <div className="admin-membership-drawer-actions">
         <button
           type="button"
-          className="admin-memberships-button"
           onClick={() =>
             window.location.assign(`/admin?section=users&user=${row.collector.id}&tab=membership`)
           }
         >
           Open account
         </button>
-      </header>
-      <section className="admin-membership-detail-grid">
-        <article>
-          <h3>Overview</h3>
-          <div className="admin-membership-detail-status">
-            <span
-              className={`admin-membership-status status-${row.membership.status.toLowerCase()}`}
-            >
-              {statusLabel(row.membership.status)}
-            </span>
-            <span>
-              {row.membership.betaEntitlement
-                ? "Internal Beta entitlement"
-                : row.membership.billingState === "DISABLED"
-                  ? "Billing provider not configured"
-                  : "Provider billing connected"}
-            </span>
-          </div>
-          <dl>
-            <div>
-              <dt>Plan</dt>
-              <dd>{planLabel(row.plan.code)}</dd>
-            </div>
-            <div>
-              <dt>Renewal</dt>
-              <dd>{formatDate(row.billing.nextBillingDate)}</dd>
-            </div>
-            <div>
-              <dt>Membership ID</dt>
-              <dd>{row.id}</dd>
-            </div>
-            <div>
-              <dt>Updated</dt>
-              <dd>{formatDate(row.updatedAt)}</dd>
-            </div>
-          </dl>
-        </article>
-        <article>
-          <h3>Usage & capacity</h3>
-          <Usage
-            value={row.usage.activeCollectibles}
-            limit={row.usage.activeCollectiblesLimit}
-            percent={row.usage.activeCollectiblesPercent}
-            label="Active collectibles"
-            state={usageState(
-              row.usage.activeCollectibles,
-              row.usage.activeCollectiblesLimit,
-              row.usage.activeCollectiblesPercent,
-            )}
-          />
-          <Usage
-            value={row.usage.monthlySubmissions}
-            limit={row.usage.monthlySubmissionsLimit}
-            percent={row.usage.monthlySubmissionsPercent}
-            label="Monthly submissions"
-            state={usageState(
-              row.usage.monthlySubmissions,
-              row.usage.monthlySubmissionsLimit,
-              row.usage.monthlySubmissionsPercent,
-            )}
-          />
-          {row.warnings.length ? (
-            <ul className="admin-membership-warnings">
-              {row.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="admin-membership-good">
-              <ShieldCheck aria-hidden="true" /> Within configured limits
-            </p>
-          )}
-        </article>
-        <article>
-          <h3>Entitlements</h3>
-          <p className="admin-membership-muted">Effective limits from the assigned plan.</p>
-          <div className="admin-membership-entitlements">
-            {Object.entries(row.entitlements)
-              .filter(
-                ([key]) =>
-                  key.startsWith("max") || key.includes("Limit") || key.endsWith("Enabled"),
-              )
-              .map(([key, value]) => (
-                <span key={key}>
-                  <strong>{String(value)}</strong>
-                  <small>
-                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}
-                  </small>
-                </span>
-              ))}
-          </div>
-        </article>
-        <article>
-          <h3>Manage membership</h3>
-          <p className="admin-membership-muted">
-            Changes are provider-owned. This Beta environment has no billing provider configured.
-          </p>
-          <div className="admin-membership-actions">
-            <button type="button" disabled>
-              Change plan
-            </button>
-            <button type="button" disabled>
-              {row.membership.cancelAtPeriodEnd ? "Resume membership" : "Cancel at period end"}
-            </button>
-            <button type="button" disabled>
-              Grant Beta entitlement
-            </button>
-          </div>
-        </article>
-      </section>
-    </main>
+        <button type="button" disabled={!row.eligibleActions.includes("VIEW_AUDIT_HISTORY")}>
+          View audit history
+        </button>
+      </div>
+    </aside>
+  );
+}
+function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="admin-membership-drawer-section">
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+function Summary({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className={`admin-membership-summary-card ${tone ? `tone-${tone}` : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <label className="admin-membership-select">
+      <span className="sr-only">{label}</span>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map(([key, text]) => (
+          <option value={key} key={key}>
+            {text}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={14} />
+    </label>
   );
 }
 function MembershipLoading() {

@@ -2143,6 +2143,7 @@ export class AdminService {
       grading?: string;
       collector?: string;
       fixture?: 'NORMAL' | 'TEST' | 'ALL';
+      needsAction?: boolean;
       sort?: string;
       sortDirection?: 'asc' | 'desc';
       page?: number;
@@ -3176,25 +3177,42 @@ export class AdminService {
       pageSize: number;
       sort?: string;
       sortDirection?: 'asc' | 'desc';
+      billing?: string;
+      usage?: 'NORMAL' | 'AT_LIMIT' | 'OVER_LIMIT';
+      fixture?: 'NORMAL' | 'TEST' | 'ALL';
+      needsAction?: boolean;
     },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
+    const fixture = input.fixture ?? 'ALL';
+    const fixtureWhere: Prisma.CollectorSubscriptionWhereInput = fixture === 'TEST'
+      ? { provider: 'STAGING_DEMO' }
+      : fixture === 'NORMAL'
+        ? { OR: [{ provider: null }, { provider: { not: 'STAGING_DEMO' } }] }
+        : {};
+    const billingWhere: Prisma.CollectorSubscriptionWhereInput = input.billing === 'CURRENT'
+      ? { AND: [{ provider: { not: null } }, { provider: { not: 'STAGING_DEMO' } }, { status: { in: ['ACTIVE', 'TRIALING', 'CANCEL_AT_PERIOD_END'] } }] }
+      : input.billing === 'PENDING'
+        ? { status: 'INCOMPLETE' }
+        : input.billing === 'PAST_DUE'
+          ? { status: 'PAST_DUE' }
+          : input.billing === 'SUSPENDED'
+            ? { status: 'SUSPENDED' }
+            : input.billing === 'DISABLED'
+              ? { OR: [{ provider: null }, { provider: 'STAGING_DEMO' }] }
+              : {};
     const baseWhere: Prisma.CollectorSubscriptionWhereInput = {
-      ...(input.plan
-        ? { plan: { code: input.plan as 'STARTER' | 'PRO' | 'ELITE' } }
-        : {}),
-      ...(input.q
-        ? {
-            user: {
-              OR: [
-                { email: { contains: input.q, mode: 'insensitive' } },
-                { profile: { displayName: { contains: input.q, mode: 'insensitive' } } },
-                { profile: { publicUsername: { contains: input.q, mode: 'insensitive' } } },
-                { id: { contains: input.q, mode: 'insensitive' } },
-              ],
-            },
-          }
-        : {}),
+      AND: [
+        fixtureWhere,
+        billingWhere,
+        ...(input.plan ? [{ plan: { code: input.plan as 'STARTER' | 'PRO' | 'ELITE' } }] : []),
+        ...(input.q ? [{ user: { OR: [
+          { email: { contains: input.q, mode: 'insensitive' as Prisma.QueryMode } },
+          { profile: { displayName: { contains: input.q, mode: 'insensitive' as Prisma.QueryMode } } },
+          { profile: { publicUsername: { contains: input.q, mode: 'insensitive' as Prisma.QueryMode } } },
+          { id: { contains: input.q, mode: 'insensitive' as Prisma.QueryMode } },
+        ] } }] : []),
+      ],
     };
     const where: Prisma.CollectorSubscriptionWhereInput = {
       ...baseWhere,
@@ -3216,8 +3234,8 @@ export class AdminService {
       this.db.collectorSubscription.findMany({
         where,
         orderBy: [orderBy, { id: 'desc' }],
-        skip: (input.page - 1) * input.pageSize,
-        take: input.pageSize,
+        skip: input.usage || input.needsAction ? undefined : (input.page - 1) * input.pageSize,
+        take: input.usage || input.needsAction ? undefined : input.pageSize,
         include: {
           plan: {
             select: {
@@ -3227,6 +3245,11 @@ export class AdminService {
               currency: true,
               entitlements: true,
             },
+          },
+          statusHistory: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 8,
+            select: { id: true, fromStatus: true, toStatus: true, source: true, createdAt: true },
           },
           user: {
             select: {
@@ -3286,6 +3309,9 @@ export class AdminService {
     for (const row of statusRows) statusOverview[row.status] = row._count._all;
     const planDistribution = { STARTER: 0, PRO: 0, ELITE: 0 };
     for (const row of activePlanRows) planDistribution[row.plan.code] += 1;
+    const billingConfigured = this.config.providerMode !== 'local' && Boolean(
+      this.config.stripeSecretKey && this.config.stripePublishableKey && this.config.stripeWebhookSecret,
+    );
     const activityTitle = (action: string) => {
       if (action.includes('PAYMENT') || action.includes('INVOICE')) return 'Payment activity';
       if (action.includes('CANCEL')) return 'Membership canceled';
@@ -3313,10 +3339,8 @@ export class AdminService {
       );
       const warnings: string[] = [];
       if (overLimit) warnings.push('One or more plan limits are exceeded; new capacity-consuming actions may be blocked.');
-      else if ((activePercent ?? 0) >= 80) warnings.push('Active collectible capacity is at least 80% used.');
-      if (monthlyPercent !== null && monthlyPercent >= 80) warnings.push('Monthly submission allowance is at least 80% used.');
       if (concurrentAtLimit) warnings.push('Concurrent intake capacity is currently full.');
-      const providerConfigured = Boolean(item.provider && item.provider !== 'STAGING_DEMO');
+      const providerConfigured = billingConfigured && Boolean(item.provider && item.provider !== 'STAGING_DEMO');
       const billingState = item.status === 'PAST_DUE'
         ? 'PAST_DUE'
         : item.status === 'SUSPENDED'
@@ -3326,6 +3350,20 @@ export class AdminService {
             : providerConfigured
               ? 'CURRENT'
               : 'DISABLED';
+      const atLimit = Boolean(
+        (activeLimit !== null && usage.activeCollectibles >= activeLimit) ||
+        (monthlyLimit !== null && usage.monthlySubmissionsUsed >= monthlyLimit) ||
+        concurrentAtLimit,
+      );
+      const usageHealth = overLimit ? 'OVER_LIMIT' : atLimit ? 'AT_LIMIT' : 'NORMAL';
+      const needsAction = overLimit || ['INCOMPLETE', 'PAST_DUE', 'SUSPENDED'].includes(item.status);
+      const nextChange = item.status === 'CANCEL_AT_PERIOD_END'
+        ? { kind: 'CANCEL', at: item.currentPeriodEnd?.toISOString() ?? null, label: 'Cancels at period end' }
+        : item.status === 'INCOMPLETE'
+          ? { kind: 'PAYMENT_SETUP', at: null, label: 'Payment setup required' }
+          : item.currentPeriodEnd
+            ? { kind: billingConfigured ? 'RENEWAL' : 'PERIOD_END', at: item.currentPeriodEnd.toISOString(), label: billingConfigured ? 'Renews' : 'Current period ends' }
+            : { kind: 'NONE', at: null, label: 'No scheduled change' };
       return {
         id: item.id,
         collector: {
@@ -3369,6 +3407,9 @@ export class AdminService {
         billing: {
           nextBillingDate: item.currentPeriodEnd?.toISOString() ?? null,
           health: billingState,
+          configured: billingConfigured,
+          provider: item.provider,
+          lastSyncAt: item.lastProviderEventCreatedAt?.toISOString() ?? null,
         },
         entitlements:
           item.plan.entitlements && typeof item.plan.entitlements === 'object' && !Array.isArray(item.plan.entitlements)
@@ -3376,24 +3417,37 @@ export class AdminService {
             : {},
         overLimit,
         warnings,
-        eligibleActions: providerConfigured
-          ? item.status === 'CANCEL_AT_PERIOD_END'
-            ? ['RESUME', 'CHANGE_PLAN']
-            : item.status === 'CANCELLED' || item.status === 'EXPIRED'
-              ? ['CHANGE_PLAN']
-              : ['CHANGE_PLAN', 'CANCEL']
-          : [],
+        usageHealth,
+        needsAction,
+        nextChange,
+        testFixture: item.provider === 'STAGING_DEMO',
+        events: item.statusHistory.map((event) => ({
+          id: event.id,
+          fromStatus: event.fromStatus,
+          toStatus: event.toStatus,
+          source: event.source,
+          occurredAt: event.createdAt.toISOString(),
+        })),
+        eligibleActions: ['OPEN_ACCOUNT', 'VIEW_AUDIT_HISTORY'],
         updatedAt: item.updatedAt.toISOString(),
       };
     });
+    const derivedFilter = Boolean(input.usage || input.needsAction);
+    const filteredItems = derivedFilter
+      ? items.filter((item) => (!input.usage || item.usageHealth === input.usage) && (!input.needsAction || item.needsAction))
+      : items;
+    const directoryTotal = derivedFilter ? filteredItems.length : total;
+    const pageItems = derivedFilter
+      ? filteredItems.slice((input.page - 1) * input.pageSize, input.page * input.pageSize)
+      : filteredItems;
     const count = (status: string) => statusOverview[status] ?? 0;
     return {
-      items,
+      items: pageItems,
       pagination: {
         page: input.page,
         pageSize: input.pageSize,
-        total,
-        totalPages: Math.ceil(total / input.pageSize),
+        total: directoryTotal,
+        totalPages: Math.ceil(directoryTotal / input.pageSize),
       },
       kpis: {
         active: count('ACTIVE'),
@@ -3402,10 +3456,16 @@ export class AdminService {
         elite: planDistribution.ELITE,
         pastDue: count('PAST_DUE'),
         trialing: count('TRIALING'),
-        total,
+        total: directoryTotal,
       },
       statusOverview,
       planDistribution,
+      capabilities: {
+        providerConfigured: billingConfigured,
+        provider: billingConfigured ? 'STRIPE' : null,
+        canExport: false,
+        usageThresholds: 'AT_LIMIT_ONLY',
+      },
       recentActivity: recentEvents.map((event) => ({
         id: event.id,
         title: activityTitle(event.action),
