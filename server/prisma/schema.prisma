@@ -1806,7 +1806,15 @@ model VerificationReview {
   decision     String?
   reasonCode   String?
   note         String?
+  staffCondition      String?
+  staffConditionNote  String?
+  valuationMinor      BigInt?
+  valuationCurrency   String?
+  valuationBasis      String?
+  valuationConfidence Int?
+  valuationNote       String?
   createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
   completedAt  DateTime?
   submission   AssetSubmission          @relation(fields: [submissionId], references: [id], onDelete: Restrict)
   reviewer     User                     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)

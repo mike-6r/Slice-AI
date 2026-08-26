@@ -1178,6 +1178,7 @@ export class SubmissionService {
         owner: {
           select: {
             email: true,
+            accountStatus: true,
             profile: { select: { displayName: true, publicUsername: true } },
             collectorSubscriptions: {
               where: { status: 'ACTIVE' },
@@ -1191,6 +1192,7 @@ export class SubmissionService {
         asset: {
           select: {
             title: true,
+            year: true,
             edition: true,
             cardNumber: true,
             collectibleSet: { select: { name: true } },
@@ -1210,6 +1212,11 @@ export class SubmissionService {
             deletedAt: true,
             objectKey: true,
           },
+        },
+        certificationVerifications: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { status: true },
         },
         marketResearch: {
           orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
@@ -1269,6 +1276,240 @@ export class SubmissionService {
       summary: counts,
       nextCursor: final
         ? encodeCursor('review-queue', new Date(final.submittedAt), final.id)
+        : null,
+    };
+  }
+
+  async operationalQueue(
+    actor: Actor,
+    input: {
+      q?: string;
+      priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+      status?: 'SUBMITTED' | 'IN_REVIEW';
+      evidence?: 'complete' | 'missing' | 'partial';
+      research?:
+        | 'completed'
+        | 'in_progress'
+        | 'pending'
+        | 'unavailable'
+        | 'not_requested';
+      readiness?:
+        | 'READY'
+        | 'NEEDS_EVIDENCE'
+        | 'RESEARCH_PENDING'
+        | 'COLLECTOR_ACTION'
+        | 'MANUAL_REVIEW'
+        | 'BLOCKED';
+      testFixture?: 'include' | 'only' | 'exclude';
+      grader?: string;
+      submittedFrom?: string;
+      submittedTo?: string;
+      sort?: 'submitted' | 'priority' | 'collector' | 'research' | 'evidence';
+      sortDirection?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+    },
+  ) {
+    const isAdmin = actor.roles.includes('ADMIN');
+    const submittedFrom = parseDateBoundary(input.submittedFrom, false);
+    const submittedTo = parseDateBoundary(input.submittedTo, true);
+    const search = input.q?.trim();
+    const fixtureWhere: Prisma.AssetSubmissionWhereInput = {
+      OR: [
+        { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+        {
+          declaredMetadata: {
+            path: ['certificationNumber'],
+            string_starts_with: 'STG-',
+          },
+        },
+      ],
+    };
+    const completeEvidence: Prisma.AssetSubmissionWhereInput = {
+      AND: REQUIRED_MEDIA_SLOTS.map((slot) => ({
+        media: { some: { slot, status: 'SAFE', deletedAt: null } },
+      })),
+    };
+    const researchPending: Prisma.AssetSubmissionWhereInput = {
+      marketResearch: { some: { state: { in: ['PENDING', 'IN_PROGRESS', 'PROCESSING'] } } },
+    };
+    const researchUnavailable: Prisma.AssetSubmissionWhereInput = {
+      marketResearch: { some: { state: 'UNAVAILABLE' } },
+    };
+    const requestedBase: Prisma.AssetSubmissionWhereInput[] = [
+      isAdmin
+        ? { status: { in: ['SUBMITTED', 'IN_REVIEW'] } }
+        : {
+            OR: [
+              { status: 'SUBMITTED', reviewerId: null },
+              { status: 'IN_REVIEW', reviewerId: actor.userId },
+            ],
+          },
+      ...(input.status ? [{ status: input.status }] : []),
+      ...(submittedFrom || submittedTo
+        ? [{ submittedAt: { ...(submittedFrom ? { gte: submittedFrom } : {}), ...(submittedTo ? { lt: submittedTo } : {}) } }]
+        : []),
+      ...(input.testFixture === 'only' ? [fixtureWhere] : []),
+      ...(input.testFixture === 'exclude' ? [{ NOT: fixtureWhere }] : []),
+      ...(search
+        ? [
+            {
+              OR: [
+                { id: { contains: search, mode: 'insensitive' as const } },
+                { normalizedCertificationNumber: { contains: search, mode: 'insensitive' as const } },
+                { owner: { email: { contains: search, mode: 'insensitive' as const } } },
+                {
+                  owner: {
+                    profile: {
+                      OR: [
+                        { displayName: { contains: search, mode: 'insensitive' as const } },
+                        { publicUsername: { contains: search, mode: 'insensitive' as const } },
+                      ],
+                    },
+                  },
+                },
+                { asset: { title: { contains: search, mode: 'insensitive' as const } } },
+                { asset: { cardNumber: { contains: search, mode: 'insensitive' as const } } },
+                { category: { name: { contains: search, mode: 'insensitive' as const } } },
+                { collectibleSet: { name: { contains: search, mode: 'insensitive' as const } } },
+              ],
+            },
+          ]
+        : []),
+      ...(input.grader
+        ? [
+            {
+              OR: [
+                { gradeScaleEntry: { company: { code: { contains: input.grader, mode: 'insensitive' as const } } } },
+                { asset: { gradeScaleEntry: { company: { code: { contains: input.grader, mode: 'insensitive' as const } } } } },
+              ],
+            },
+          ]
+        : []),
+      ...(input.priority === 'HIGH'
+        ? [{ submittedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }]
+        : input.priority === 'MEDIUM'
+          ? [{ submittedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } }]
+          : input.priority === 'LOW'
+            ? [{ submittedAt: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } }]
+            : []),
+    ];
+    const baseWhere: Prisma.AssetSubmissionWhereInput = { AND: requestedBase };
+    const withRules = (...rules: Prisma.AssetSubmissionWhereInput[]) => ({
+      AND: [...requestedBase, ...rules],
+    });
+    const readinessRules: Record<string, Prisma.AssetSubmissionWhereInput> = {
+      READY: { AND: [completeEvidence, { NOT: researchPending }, { status: 'SUBMITTED' }] },
+      NEEDS_EVIDENCE: { NOT: completeEvidence },
+      RESEARCH_PENDING: researchPending,
+      MANUAL_REVIEW: { status: 'IN_REVIEW' },
+      BLOCKED: { OR: [{ NOT: completeEvidence }, researchPending, researchUnavailable] },
+    };
+    const rowRules: Prisma.AssetSubmissionWhereInput[] = [];
+    if (input.readiness && readinessRules[input.readiness]) rowRules.push(readinessRules[input.readiness]);
+    const rowWhere = withRules(...rowRules);
+    const [
+      total,
+      highPriority,
+      awaitingEvidence,
+      researchPendingCount,
+      readyToReview,
+      blocked,
+      rows,
+    ] = await Promise.all([
+      this.prisma.assetSubmission.count({ where: baseWhere }),
+      this.prisma.assetSubmission.count({ where: withRules({ submittedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }) }),
+      this.prisma.assetSubmission.count({ where: withRules({ NOT: completeEvidence }) }),
+      this.prisma.assetSubmission.count({ where: withRules(researchPending) }),
+      this.prisma.assetSubmission.count({ where: withRules({ AND: [completeEvidence, { NOT: researchPending }, { status: 'SUBMITTED' }] }) }),
+      this.prisma.assetSubmission.count({ where: withRules(readinessRules.BLOCKED) }),
+      this.prisma.assetSubmission.findMany({
+        where: rowWhere,
+        orderBy: [{ submittedAt: input.sortDirection === 'desc' ? 'desc' : 'asc' }, { id: 'asc' }],
+        skip: Math.max(0, ((input.page ?? 1) - 1) * (input.pageSize ?? 10)),
+        take: input.pageSize ?? 10,
+        include: {
+          owner: {
+            select: {
+              email: true,
+              accountStatus: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+              collectorSubscriptions: {
+                where: { status: 'ACTIVE' },
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+                select: { plan: { select: { displayName: true } } },
+              },
+            },
+          },
+          category: { select: { name: true } },
+          asset: {
+            select: {
+              title: true,
+              year: true,
+              edition: true,
+              cardNumber: true,
+              collectibleSet: { select: { name: true } },
+              gradeScaleEntry: { select: { label: true, company: { select: { code: true } } } },
+            },
+          },
+          collectibleSet: { select: { name: true } },
+          gradeScaleEntry: { select: { label: true, company: { select: { code: true } } } },
+          certificationVerifications: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { status: true },
+          },
+          media: { select: { slot: true, status: true, deletedAt: true, objectKey: true } },
+          marketResearch: {
+            orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { state: true, collectedAt: true },
+          },
+        },
+      }),
+    ]);
+    const projected = await Promise.all(
+      rows.map(async (row) => {
+        const item = reviewQueueProjection(row);
+        const front = row.media.find((media) => media.slot === 'front' && media.status === 'SAFE' && media.deletedAt === null);
+        return {
+          ...item,
+          thumbnailUrl: front
+            ? await this.storage.createPrivateDownloadUrl(front.objectKey, new Date(Date.now() + 5 * 60_000)).catch(() => null)
+            : null,
+        };
+      }),
+    );
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 10;
+    return {
+      items: projected,
+      pagination: {
+        page,
+        pageSize,
+        total: await this.prisma.assetSubmission.count({ where: rowWhere }),
+        totalPages: Math.max(1, Math.ceil((await this.prisma.assetSubmission.count({ where: rowWhere })) / pageSize)),
+      },
+      counts: {
+        all: total,
+        highPriority,
+        awaitingEvidence,
+        researchPending: researchPendingCount,
+        readyToReview,
+        blocked,
+        overdue: null,
+      },
+      summary: {
+        highPriority,
+        awaitingEvidence,
+        researchPending: researchPendingCount,
+        readyToReview,
+        blocked,
+        overdue: null,
+      },
+      nextCursor: projected.length
+        ? encodeCursor('review-queue', new Date(projected[projected.length - 1].submittedAt), projected[projected.length - 1].id)
         : null,
     };
   }
@@ -1448,7 +1689,98 @@ export class SubmissionService {
           })),
       );
     }
-    return response;
+    const latestReview = submission!.reviews.at(-1) ?? null;
+    const safeMediaCount = submission!.media.filter(
+      (media) =>
+        REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
+        media.status === 'SAFE' &&
+        media.deletedAt === null,
+    ).length;
+    const certification = submission!.certificationVerifications[0] ?? null;
+    const identityConfirmed = Boolean(
+      response.collectible?.title &&
+        response.collectible.title !== 'Untitled submission',
+    );
+    const evidenceComplete = safeMediaCount === REQUIRED_MEDIA_SLOTS.length;
+    const certificationResolved =
+      !response.collectible?.grader ||
+      !response.collectible.certificationNumber ||
+      certification?.status === 'VERIFIED' ||
+      certification?.status === 'MANUAL_REVIEW';
+    const researchResolved =
+      !response.marketResearch ||
+      !['PENDING', 'IN_PROGRESS'].includes(response.marketResearch.state);
+    const blockers = [
+      ...(identityConfirmed ? [] : ['Collectible identity is incomplete.']),
+      ...(evidenceComplete ? [] : [`${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required evidence item(s) missing.`]),
+      ...(certificationResolved ? [] : ['Certification verification requires review.']),
+      ...(researchResolved ? [] : ['Market research is still pending.']),
+    ];
+    const readinessState = blockers.length
+      ? 'BLOCKED'
+      : submission!.status === 'IN_REVIEW'
+        ? 'READY'
+        : 'UNCLAIMED';
+    const canReview =
+      submission!.status === 'IN_REVIEW' &&
+      (submission!.reviewerId === actor.userId || actor.roles.includes('ADMIN'));
+    return {
+      ...response,
+      reviewAssignment: {
+        state:
+          submission!.status === 'IN_REVIEW'
+            ? submission!.reviewerId === actor.userId
+              ? 'CLAIMED_BY_ME'
+              : 'CLAIMED_BY_OTHER'
+            : submission!.reviewerId
+              ? 'COMPLETED'
+              : 'UNCLAIMED',
+        reviewer: reviewer
+          ? {
+              id: reviewer.id,
+              displayName: reviewer.profile?.displayName ?? 'Reviewer',
+              username: reviewer.profile?.publicUsername ?? null,
+            }
+          : null,
+        claimedAt: latestReview?.createdAt.toISOString() ?? null,
+        lastActivity: submission!.updatedAt.toISOString(),
+      },
+      staffReview: {
+        condition: latestReview?.staffCondition ?? null,
+        conditionNote: latestReview?.staffConditionNote ?? null,
+        valuation: latestReview?.valuationMinor
+          ? {
+              valueMinor: latestReview.valuationMinor.toString(),
+              currency: latestReview.valuationCurrency ?? 'GBP',
+              basis: latestReview.valuationBasis ?? null,
+              confidence: latestReview.valuationConfidence,
+              note: latestReview.valuationNote ?? null,
+              updatedAt: latestReview.updatedAt.toISOString(),
+            }
+          : null,
+      },
+      readiness: {
+        state: readinessState,
+        blockers,
+        checklist: [
+          { key: 'identity', label: 'Identity confirmed', required: true, satisfied: identityConfirmed },
+          { key: 'evidence', label: 'Required evidence accepted', required: true, satisfied: evidenceComplete },
+          { key: 'certification', label: 'Grade & certification resolved', required: true, satisfied: certificationResolved },
+          { key: 'research', label: 'Research resolved or not required', required: false, satisfied: researchResolved },
+          { key: 'condition', label: 'Staff condition recorded', required: false, satisfied: Boolean(latestReview?.staffCondition) },
+          { key: 'valuation', label: 'Staff valuation recorded', required: false, satisfied: Boolean(latestReview?.valuationMinor) },
+        ],
+        currentValuation: latestReview?.valuationMinor?.toString() ?? null,
+      },
+      allowedActions: {
+        canClaim: submission!.status === 'SUBMITTED' && !submission!.reviewerId,
+        canRelease: canReview,
+        canEdit: canReview,
+        canAccept: canReview && blockers.length === 0,
+        canRequestChanges: canReview,
+        canReject: canReview,
+      },
+    };
   }
 
   claim(actor: Actor, id: string, requestId: string, key: string) {
@@ -1493,6 +1825,164 @@ export class SubmissionService {
         return { submissionId: id, reviewId: review.id, status: 'IN_REVIEW' };
       },
     );
+  }
+
+  releaseClaim(actor: Actor, id: string, requestId: string, key: string) {
+    return this.mutate(
+      actor,
+      `review.release:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/release`,
+      {},
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+        `;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id },
+        });
+        if (!submission) this.notFound();
+        if (
+          submission!.status !== 'IN_REVIEW' ||
+          (submission!.reviewerId !== actor.userId && !actor.roles.includes('ADMIN'))
+        )
+          this.stateConflict();
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            status: 'SUBMITTED',
+            reviewerId: null,
+            version: { increment: 1 },
+          },
+        });
+        await audit('SUBMISSION_REVIEW_RELEASED', 'submission', id, {
+          previousReviewerId: submission!.reviewerId,
+          version: updated.version,
+        });
+        return { submissionId: id, status: updated.status, version: updated.version };
+      },
+    );
+  }
+
+  saveStaffCondition(
+    actor: Actor,
+    id: string,
+    input: { condition: string; note?: string },
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.condition:${id}`,
+      'PATCH',
+      `/v1/reviews/submissions/${id}/condition`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockClaimedReview(db, actor, id);
+        const updated = await db.verificationReview.update({
+          where: { id: review.id },
+          data: {
+            staffCondition: redactNote(input.condition).slice(0, 80),
+            staffConditionNote: input.note ? redactNote(input.note) : null,
+          },
+        });
+        await audit('SUBMISSION_STAFF_CONDITION_UPDATED', 'submission', id, {
+          reviewId: review.id,
+          condition: updated.staffCondition,
+          note: updated.staffConditionNote,
+        });
+        return {
+          submissionId: id,
+          staffCondition: updated.staffCondition,
+          staffConditionNote: updated.staffConditionNote,
+          updatedAt: updated.updatedAt.toISOString(),
+        };
+      },
+    );
+  }
+
+  saveStaffValuation(
+    actor: Actor,
+    id: string,
+    input: {
+      valueMinor: string;
+      currency: 'GBP';
+      basis: string;
+      confidence?: number;
+      note?: string;
+    },
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.valuation:${id}`,
+      'PATCH',
+      `/v1/reviews/submissions/${id}/valuation`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockClaimedReview(db, actor, id);
+        const updated = await db.verificationReview.update({
+          where: { id: review.id },
+          data: {
+            valuationMinor: BigInt(input.valueMinor),
+            valuationCurrency: input.currency,
+            valuationBasis: redactNote(input.basis).slice(0, 120),
+            valuationConfidence: input.confidence ?? null,
+            valuationNote: input.note ? redactNote(input.note) : null,
+          },
+        });
+        await audit('SUBMISSION_STAFF_VALUATION_UPDATED', 'submission', id, {
+          reviewId: review.id,
+          previousValueMinor: review.valuationMinor?.toString() ?? null,
+          valueMinor: updated.valuationMinor?.toString() ?? null,
+          currency: updated.valuationCurrency,
+          basis: updated.valuationBasis,
+          confidence: updated.valuationConfidence,
+          note: updated.valuationNote,
+        });
+        return {
+          submissionId: id,
+          valueMinor: updated.valuationMinor?.toString() ?? null,
+          currency: updated.valuationCurrency,
+          basis: updated.valuationBasis,
+          confidence: updated.valuationConfidence,
+          note: updated.valuationNote,
+          updatedAt: updated.updatedAt.toISOString(),
+        };
+      },
+    );
+  }
+
+  private async lockClaimedReview(db: Db, actor: Actor, id: string) {
+    await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+    `;
+    const submission = await db.assetSubmission.findUnique({
+      where: { id },
+    });
+    if (!submission) this.notFound();
+    if (
+      submission!.status !== 'IN_REVIEW' ||
+      (submission!.reviewerId !== actor.userId && !actor.roles.includes('ADMIN'))
+    )
+      this.stateConflict();
+    const review = await db.verificationReview.findFirst({
+      where: { submissionId: id, status: 'CLAIMED' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    if (!review)
+      throw new ConflictException({
+        code: 'REVIEW_NOT_CLAIMED',
+        message: 'Claim the submission before editing the review.',
+      });
+    return review;
   }
 
   decide(
@@ -2553,11 +3043,13 @@ type ReviewQueueRow = {
   category: { name: string };
   owner: {
     email: string;
+    accountStatus: string;
     profile: { displayName: string; publicUsername: string | null } | null;
     collectorSubscriptions: Array<{ plan: { displayName: string } }>;
   };
   asset: {
     title: string;
+    year: number | null;
     edition: string | null;
     cardNumber: string | null;
     collectibleSet: { name: string } | null;
@@ -2576,9 +3068,8 @@ type ReviewQueueRow = {
     objectKey: string;
   }>;
   marketResearch: Array<{ state: string; collectedAt: Date }>;
+  certificationVerifications: Array<{ status: string }>;
 };
-
-const REQUIRED_QUEUE_EVIDENCE = [...REQUIRED_MEDIA_SLOTS];
 
 function reviewQueueProjection(submission: ReviewQueueRow) {
   const metadata =
@@ -2589,10 +3080,15 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
   const safeMedia = submission.media.filter(
     (media) => media.status === 'SAFE' && media.deletedAt === null,
   );
-  const presentRequired = REQUIRED_QUEUE_EVIDENCE.filter((slot) =>
+  const assetGrade =
+    submission.asset?.gradeScaleEntry ?? submission.gradeScaleEntry;
+  const requiredSlots = assetGrade
+    ? [...REQUIRED_MEDIA_SLOTS, 'grading-label']
+    : [...REQUIRED_MEDIA_SLOTS];
+  const presentRequired = requiredSlots.filter((slot) =>
     safeMedia.some((media) => media.slot === slot),
   ).length;
-  const missingRequired = REQUIRED_QUEUE_EVIDENCE.length - presentRequired;
+  const missingRequired = requiredSlots.length - presentRequired;
   const evidenceStatus =
     missingRequired === 0
       ? 'COMPLETE'
@@ -2601,8 +3097,7 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
         : 'MISSING_REQUIRED';
   const research = submission.marketResearch[0];
   const researchStatus = researchStatusFor(research?.state);
-  const assetGrade =
-    submission.asset?.gradeScaleEntry ?? submission.gradeScaleEntry;
+  const certificationStatus = submission.certificationVerifications[0]?.status ?? null;
   const title =
     submission.asset?.title ??
     stringMetadata(metadata.name) ??
@@ -2622,6 +3117,7 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
     },
     collectible: {
       title,
+      year: submission.asset?.year ? String(submission.asset.year) : stringMetadata(metadata.year),
       variant:
         stringMetadata(metadata.variant) ?? submission.asset?.edition ?? null,
       set:
@@ -2640,13 +3136,14 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
     thumbnailUrl: null as string | null,
     evidence: {
       percent: Math.round(
-        (presentRequired / REQUIRED_QUEUE_EVIDENCE.length) * 100,
+        (presentRequired / requiredSlots.length) * 100,
       ),
       status: evidenceStatus,
       missingRequired,
       presentRequired,
-      required: REQUIRED_QUEUE_EVIDENCE.length,
+      required: requiredSlots.length,
       itemCount: safeMedia.length,
+      certificationStatus,
     },
     research: {
       status: researchStatus,
@@ -2654,7 +3151,40 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
     },
     priority: reviewPriority(submittedAt),
     submittedAt: submittedAt.toISOString(),
+    readinessState:
+      missingRequired > 0
+        ? 'NEEDS_EVIDENCE'
+        : certificationStatus && certificationStatus !== 'VERIFIED'
+          ? 'BLOCKED'
+          : researchStatus === 'PENDING' || researchStatus === 'IN_PROGRESS'
+            ? 'RESEARCH_PENDING'
+            : researchStatus === 'UNAVAILABLE'
+              ? 'BLOCKED'
+              : submission.status === 'IN_REVIEW'
+                ? 'MANUAL_REVIEW'
+                : 'READY',
+    readinessReason:
+      missingRequired > 0
+        ? `Missing ${requiredSlots.filter((slot) => !safeMedia.some((media) => media.slot === slot)).map(formatReviewEvidenceSlot).join(' and ')}.`
+        : certificationStatus && certificationStatus !== 'VERIFIED'
+          ? certificationStatus === 'MISMATCH'
+            ? 'Certificate identity mismatch requires review.'
+            : 'Certificate verification pending.'
+          : researchStatus === 'PENDING' || researchStatus === 'IN_PROGRESS'
+            ? 'Price reference research is pending.'
+            : researchStatus === 'UNAVAILABLE'
+              ? 'Research is unavailable; manual review is required.'
+              : submission.status === 'IN_REVIEW'
+                ? 'Submission is claimed for staff review.'
+                : 'Ready for staff decision.',
+    ageHours: Math.max(0, Math.floor((Date.now() - submittedAt.getTime()) / 3_600_000)),
+    overdue: null,
+    testFixture: isBetaFixtureSubmission(submission.declaredMetadata, true),
   };
+}
+
+function formatReviewEvidenceSlot(slot: string) {
+  return slot === 'grading-label' ? 'the grading-label photo' : `the ${slot} photo`;
 }
 
 function stringMetadata(value: unknown) {
@@ -2815,6 +3345,13 @@ type ReviewDetailRow = {
     decision: string | null;
     reasonCode: string | null;
     note: string | null;
+    staffCondition: string | null;
+    staffConditionNote: string | null;
+    valuationMinor: bigint | null;
+    valuationCurrency: string | null;
+    valuationBasis: string | null;
+    valuationConfidence: number | null;
+    valuationNote: string | null;
     createdAt: Date;
     completedAt: Date | null;
   }>;
@@ -2891,6 +3428,13 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       decision: review.decision,
       reasonCode: review.reasonCode,
       note: review.note,
+      staffCondition: review.staffCondition,
+      staffConditionNote: review.staffConditionNote,
+      valuationMinor: review.valuationMinor?.toString() ?? null,
+      valuationCurrency: review.valuationCurrency,
+      valuationBasis: review.valuationBasis,
+      valuationConfidence: review.valuationConfidence,
+      valuationNote: review.valuationNote,
       createdAt: review.createdAt.toISOString(),
       completedAt: review.completedAt?.toISOString() ?? null,
     })),

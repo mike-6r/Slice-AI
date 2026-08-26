@@ -159,6 +159,13 @@ export type ReviewQueuePriority = "HIGH" | "MEDIUM" | "LOW";
 export type ReviewQueueEvidenceStatus = "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";
 export type ReviewQueueResearchStatus =
   "COMPLETED" | "IN_PROGRESS" | "PENDING" | "UNAVAILABLE" | "NOT_REQUESTED";
+export type ReviewQueueReadinessState =
+  | "READY"
+  | "NEEDS_EVIDENCE"
+  | "RESEARCH_PENDING"
+  | "COLLECTOR_ACTION"
+  | "MANUAL_REVIEW"
+  | "BLOCKED";
 
 export interface SubmissionReviewQueueItem {
   id: string;
@@ -172,6 +179,7 @@ export interface SubmissionReviewQueueItem {
   };
   collectible: {
     title: string;
+    year: string | null;
     variant: string | null;
     set: string | null;
     grader: string | null;
@@ -186,6 +194,7 @@ export interface SubmissionReviewQueueItem {
     presentRequired: number;
     required: number;
     itemCount: number;
+    certificationStatus: string | null;
   };
   research: {
     status: ReviewQueueResearchStatus;
@@ -193,6 +202,11 @@ export interface SubmissionReviewQueueItem {
   };
   priority: ReviewQueuePriority;
   submittedAt: ISODateTime;
+  readinessState: ReviewQueueReadinessState;
+  readinessReason: string;
+  ageHours: number;
+  overdue: boolean | null;
+  testFixture: boolean;
 }
 
 export interface SubmissionReviewQueueResponse {
@@ -209,12 +223,16 @@ export interface SubmissionReviewQueueResponse {
     awaitingEvidence: number;
     researchPending: number;
     readyToReview: number;
+    blocked: number;
+    overdue: number | null;
   };
   summary: {
     highPriority: number;
     awaitingEvidence: number;
     researchPending: number;
     readyToReview: number;
+    blocked: number;
+    overdue: number | null;
   };
   nextCursor: string | null;
 }
@@ -302,6 +320,49 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     title: string;
     submittedAt: ISODateTime | null;
   }>;
+  certificationVerification?: {
+    status: string;
+    companyCode: string;
+    certificationNumber: string;
+    verificationMode: string;
+    officialVerificationUrl: string | null;
+    verifiedGrade: string | null;
+    verifiedLabel: string | null;
+    designation: string | null;
+    verifiedAt: ISODateTime | null;
+  } | null;
+  reviewAssignment?: {
+    state: "UNCLAIMED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "RELEASED" | "COMPLETED";
+    reviewer: { id: string; displayName: string; username: string | null } | null;
+    claimedAt: ISODateTime | null;
+    lastActivity: ISODateTime;
+  };
+  staffReview?: {
+    condition: string | null;
+    conditionNote: string | null;
+    valuation: {
+      valueMinor: string;
+      currency: string;
+      basis: string | null;
+      confidence: number | null;
+      note: string | null;
+      updatedAt: ISODateTime;
+    } | null;
+  };
+  readiness?: {
+    state: "READY" | "BLOCKED" | "UNCLAIMED";
+    blockers: string[];
+    checklist: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
+    currentValuation: string | null;
+  };
+  allowedActions?: {
+    canClaim: boolean;
+    canRelease: boolean;
+    canEdit: boolean;
+    canAccept: boolean;
+    canRequestChanges: boolean;
+    canReject: boolean;
+  };
 }
 
 export interface AssetOperationSummary {

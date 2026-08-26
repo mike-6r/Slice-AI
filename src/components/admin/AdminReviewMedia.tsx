@@ -1,15 +1,16 @@
 import { ImageOff } from "lucide-react";
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type AdminReviewMediaProps = {
   src?: string | null;
   alt: string;
   fallback?: ReactNode;
   className?: string;
+  style?: CSSProperties;
 };
 
-export function AdminReviewMedia({ src, alt, fallback, className }: AdminReviewMediaProps) {
+export function AdminReviewMedia({ src, alt, fallback, className, style }: AdminReviewMediaProps) {
   const [failed, setFailed] = useState(false);
 
   if (!src || failed) {
@@ -25,5 +26,5 @@ export function AdminReviewMedia({ src, alt, fallback, className }: AdminReviewM
     );
   }
 
-  return <img className={className} src={src} alt={alt} onError={() => setFailed(true)} />;
+  return <img className={className} style={style} src={src} alt={alt} onError={() => setFailed(true)} />;
 }

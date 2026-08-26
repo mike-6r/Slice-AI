@@ -1518,6 +1518,7 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
         },
         collectible: {
           title: stringField(collectible.title, "review queue collectible.title"),
+          year: nullableString(collectible.year, "review queue collectible.year"),
           variant: nullableString(collectible.variant, "review queue collectible.variant"),
           set: nullableString(collectible.set, "review queue collectible.set"),
           grader: nullableString(collectible.grader, "review queue collectible.grader"),
@@ -1533,6 +1534,10 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
           presentRequired: Number(evidence.presentRequired),
           required: Number(evidence.required),
           itemCount: Number(evidence.itemCount),
+          certificationStatus: nullableString(
+            evidence.certificationStatus,
+            "review queue evidence.certificationStatus",
+          ),
         },
         research: {
           status:
@@ -1541,6 +1546,11 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
         },
         priority: priority as SubmissionReviewQueueResponse["items"][number]["priority"],
         submittedAt: stringField(item.submittedAt, "review queue item.submittedAt") as ISODateTime,
+        readinessState: stringField(item.readinessState, "review queue item.readinessState") as SubmissionReviewQueueResponse["items"][number]["readinessState"],
+        readinessReason: stringField(item.readinessReason, "review queue item.readinessReason"),
+        ageHours: Number(item.ageHours ?? 0),
+        overdue: item.overdue === null ? null : Boolean(item.overdue),
+        testFixture: Boolean(item.testFixture),
       };
     }),
     pagination: {
@@ -1555,12 +1565,16 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
       awaitingEvidence: mapCount(counts, "awaitingEvidence"),
       researchPending: mapCount(counts, "researchPending"),
       readyToReview: mapCount(counts, "readyToReview"),
+      blocked: mapCount(counts, "blocked"),
+      overdue: counts.overdue === null ? null : mapCount(counts, "overdue"),
     },
     summary: {
       highPriority: mapCount(summary, "highPriority"),
       awaitingEvidence: mapCount(summary, "awaitingEvidence"),
       researchPending: mapCount(summary, "researchPending"),
       readyToReview: mapCount(summary, "readyToReview"),
+      blocked: mapCount(summary, "blocked"),
+      overdue: summary.overdue === null ? null : mapCount(summary, "overdue"),
     },
     nextCursor: nullableString(value.nextCursor, "review queue.nextCursor"),
   };
@@ -1607,6 +1621,10 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
     }),
     marketResearch: value.marketResearch ? mapMarketResearch(value.marketResearch) : null,
     preGrade: value.preGrade ? mapRawCardPreGrade(value.preGrade) : null,
+    certificationVerification:
+      value.certificationVerification && typeof value.certificationVerification === "object"
+        ? (objectField(value.certificationVerification, "certification verification") as never)
+        : null,
     collectorSummary:
       value.collectorSummary && typeof value.collectorSummary === "object"
         ? (objectField(value.collectorSummary, "collector summary") as never)
@@ -1643,6 +1661,22 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
         ? (objectField(value.notes, "review notes") as never)
         : undefined,
     relatedItems: Array.isArray(value.relatedItems) ? (value.relatedItems as never) : undefined,
+    reviewAssignment:
+      value.reviewAssignment && typeof value.reviewAssignment === "object"
+        ? (objectField(value.reviewAssignment, "review assignment") as never)
+        : undefined,
+    staffReview:
+      value.staffReview && typeof value.staffReview === "object"
+        ? (objectField(value.staffReview, "staff review") as never)
+        : undefined,
+    readiness:
+      value.readiness && typeof value.readiness === "object"
+        ? (objectField(value.readiness, "review readiness") as never)
+        : undefined,
+    allowedActions:
+      value.allowedActions && typeof value.allowedActions === "object"
+        ? (objectField(value.allowedActions, "review allowed actions") as never)
+        : undefined,
   };
 };
 const mapOperation = (raw: unknown): AssetOperationSummary => {
@@ -4059,6 +4093,53 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return {
           submissionId: stringField(response.submissionId, "claim.submissionId"),
           status: stringField(response.status, "claim.status"),
+        };
+      },
+      async release(id) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/release`, {
+            method: "POST",
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review release",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "release.submissionId"),
+          status: stringField(response.status, "release.status"),
+          version: Number(response.version),
+        };
+      },
+      async saveCondition(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/condition`, {
+            method: "PATCH",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "staff condition",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "condition.submissionId"),
+          staffCondition: stringField(response.staffCondition, "condition.staffCondition"),
+          updatedAt: stringField(response.updatedAt, "condition.updatedAt"),
+        };
+      },
+      async saveValuation(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/valuation`, {
+            method: "PATCH",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "staff valuation",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "valuation.submissionId"),
+          valueMinor:
+            response.valueMinor == null
+              ? null
+              : stringField(response.valueMinor, "valuation.valueMinor"),
+          updatedAt: stringField(response.updatedAt, "valuation.updatedAt"),
         };
       },
       async decide(id, decision, input) {

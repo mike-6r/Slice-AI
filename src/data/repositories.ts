@@ -50,6 +50,7 @@ import type {
   SubmissionReviewDetail,
   SubmissionReviewQueueResponse,
   SubmissionReviewSummary,
+  ReviewQueueReadinessState,
   PublicationReadiness,
   UpdateSubmissionDraft,
   TimeRange,
@@ -128,6 +129,9 @@ export interface SubmissionReviewRepository {
     status?: string;
     evidence?: "complete" | "missing" | "partial";
     research?: "completed" | "in_progress" | "pending" | "unavailable" | "not_requested";
+    readiness?: ReviewQueueReadinessState;
+    testFixture?: "include" | "only" | "exclude";
+    grader?: string;
     submittedFrom?: string;
     submittedTo?: string;
     sort?: "submitted" | "priority" | "collector" | "research" | "evidence";
@@ -137,6 +141,21 @@ export interface SubmissionReviewRepository {
   }): Promise<SubmissionReviewQueueResponse>;
   getDetail(id: string): Promise<SubmissionReviewDetail>;
   claim(id: string): Promise<{ submissionId: string; status: string }>;
+  release(id: string): Promise<{ submissionId: string; status: string; version: number }>;
+  saveCondition(
+    id: string,
+    input: { condition: string; note?: string },
+  ): Promise<{ submissionId: string; staffCondition: string; updatedAt: string }>;
+  saveValuation(
+    id: string,
+    input: {
+      valueMinor: string;
+      currency: "GBP";
+      basis: string;
+      confidence?: number;
+      note?: string;
+    },
+  ): Promise<{ submissionId: string; valueMinor: string | null; updatedAt: string }>;
   decide(
     id: string,
     decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED",

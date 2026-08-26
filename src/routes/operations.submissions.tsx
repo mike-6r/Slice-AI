@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { UseMutationResult } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -26,6 +27,10 @@ const tabs = [
 ] as const;
 type Tab = (typeof tabs)[number];
 type Decision = "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
+type ReviewNoteMutation = UseMutationResult<{ submissionId: string; updatedAt: string }, Error, void, unknown>;
+type ConditionMutation = UseMutationResult<{ submissionId: string; staffCondition: string; updatedAt: string }, Error, void, unknown>;
+type ValuationMutation = UseMutationResult<{ submissionId: string; valueMinor: string | null; updatedAt: string }, Error, void, unknown>;
+type DecisionMutation = UseMutationResult<AssetSubmission, Error, Decision, unknown>;
 
 export function SubmissionOperationsPage() {
   const services = useAppServices();
@@ -43,6 +48,11 @@ export function SubmissionOperationsPage() {
   const [customerMessage, setCustomerMessage] = useState(
     "Please provide the requested information so our team can continue the review.",
   );
+  const [staffCondition, setStaffCondition] = useState("");
+  const [staffConditionNote, setStaffConditionNote] = useState("");
+  const [valuation, setValuation] = useState("");
+  const [valuationBasis, setValuationBasis] = useState("External reference and staff assessment");
+  const [valuationConfidence, setValuationConfidence] = useState("80");
   const [confirmAction, setConfirmAction] = useState<Decision | null>(null);
   useEffect(() => setSelected(deepLinkedSubmission ?? null), [deepLinkedSubmission]);
   useEffect(() => setActiveTab(isTab(deepLinkedTab) ? deepLinkedTab : "Review"), [deepLinkedTab]);
@@ -59,6 +69,28 @@ export function SubmissionOperationsPage() {
   const refresh = () => void client.invalidateQueries({ queryKey: ["review"] });
   const claim = useMutation({
     mutationFn: (id: string) => services.repositories.reviews.claim(id),
+    onSuccess: refresh,
+  });
+  const release = useMutation({
+    mutationFn: (id: string) => services.repositories.reviews.release(id),
+    onSuccess: refresh,
+  });
+  const saveCondition = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.saveCondition(selected!, {
+        condition: staffCondition.trim(),
+        ...(staffConditionNote.trim() ? { note: staffConditionNote.trim() } : {}),
+      }),
+    onSuccess: refresh,
+  });
+  const saveValuation = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.saveValuation(selected!, {
+        valueMinor: String(Math.round(Number(valuation) * 100)),
+        currency: "GBP",
+        basis: valuationBasis.trim(),
+        confidence: Number(valuationConfidence),
+      }),
     onSuccess: refresh,
   });
   const decide = useMutation<AssetSubmission, Error, Decision>({
@@ -183,6 +215,20 @@ export function SubmissionOperationsPage() {
             onTab={changeTab}
             onClaim={() => claim.mutate(selected)}
             claiming={claim.isPending}
+            onRelease={() => release.mutate(selected)}
+            releasing={release.isPending}
+            staffCondition={staffCondition}
+            setStaffCondition={setStaffCondition}
+            staffConditionNote={staffConditionNote}
+            setStaffConditionNote={setStaffConditionNote}
+            valuation={valuation}
+            setValuation={setValuation}
+            valuationBasis={valuationBasis}
+            setValuationBasis={setValuationBasis}
+            valuationConfidence={valuationConfidence}
+            setValuationConfidence={setValuationConfidence}
+            saveCondition={saveCondition}
+            saveValuation={saveValuation}
             reason={reason}
             setReason={setReason}
             note={note}
@@ -255,6 +301,20 @@ function ReviewDetail({
   onTab,
   onClaim,
   claiming,
+  onRelease,
+  releasing,
+  staffCondition,
+  setStaffCondition,
+  staffConditionNote,
+  setStaffConditionNote,
+  valuation,
+  setValuation,
+  valuationBasis,
+  setValuationBasis,
+  valuationConfidence,
+  setValuationConfidence,
+  saveCondition,
+  saveValuation,
   reason,
   setReason,
   note,
@@ -275,6 +335,20 @@ function ReviewDetail({
   onTab: (tab: Tab) => void;
   onClaim: () => void;
   claiming: boolean;
+  onRelease: () => void;
+  releasing: boolean;
+  staffCondition: string;
+  setStaffCondition: (value: string) => void;
+  staffConditionNote: string;
+  setStaffConditionNote: (value: string) => void;
+  valuation: string;
+  setValuation: (value: string) => void;
+  valuationBasis: string;
+  setValuationBasis: (value: string) => void;
+  valuationConfidence: string;
+  setValuationConfidence: (value: string) => void;
+  saveCondition: ConditionMutation;
+  saveValuation: ValuationMutation;
   reason: string;
   setReason: (value: string) => void;
   note: string;
@@ -285,13 +359,48 @@ function ReviewDetail({
   setCustomerMessage: (value: string) => void;
   confirmAction: Decision | null;
   setConfirmAction: (value: Decision | null) => void;
-  decide: ReturnType<typeof useMutation<AssetSubmission, Error, Decision>>;
+  decide: DecisionMutation;
   saveNote: ReturnType<
     typeof useMutation<{ submissionId: string; updatedAt: string }, Error, void>
   >;
   nextSubmission?: string;
   onNext: () => void;
 }) {
+  return (
+    <SubmissionReviewWorkspace
+      detail={detail}
+      onClaim={onClaim}
+      claiming={claiming}
+      onRelease={onRelease}
+      releasing={releasing}
+      staffCondition={staffCondition}
+      setStaffCondition={setStaffCondition}
+      staffConditionNote={staffConditionNote}
+      setStaffConditionNote={setStaffConditionNote}
+      valuation={valuation}
+      setValuation={setValuation}
+      valuationBasis={valuationBasis}
+      setValuationBasis={setValuationBasis}
+      valuationConfidence={valuationConfidence}
+      setValuationConfidence={setValuationConfidence}
+      saveCondition={saveCondition}
+      saveValuation={saveValuation}
+      reason={reason}
+      setReason={setReason}
+      note={note}
+      setNote={setNote}
+      requestedItems={requestedItems}
+      setRequestedItems={setRequestedItems}
+      customerMessage={customerMessage}
+      setCustomerMessage={setCustomerMessage}
+      confirmAction={confirmAction}
+      setConfirmAction={setConfirmAction}
+      decide={decide}
+      saveNote={saveNote}
+      nextSubmission={nextSubmission}
+      onNext={onNext}
+    />
+  );
   const meta = detail.declaredMetadata ?? {};
   const collectible = detail.collectible ?? {
     title: String(meta.name ?? "Untitled submission"),
@@ -377,27 +486,27 @@ function ReviewDetail({
               </strong>
               <span className="block truncate text-sm text-subtle">
                 {detail.collectorSummary?.username
-                  ? `@${detail.collectorSummary.username}`
+                  ? `@${detail.collectorSummary?.username}`
                   : "Private profile"}
               </span>
             </div>
           </div>
           <dl className="admin-review-mini-facts mt-4">
-            {fact("Membership", detail.collectorSummary?.membership)}
+              {fact("Membership", detail.collectorSummary?.membership)}
             {fact(
               "Member since",
-              detail.collectorSummary ? formatDate(detail.collectorSummary.memberSince) : null,
+              detail.collectorSummary ? formatDate(detail.collectorSummary?.memberSince) : null,
             )}
             {fact(
               "Submissions",
-              detail.collectorSummary ? String(detail.collectorSummary.submissionCount) : null,
+              detail.collectorSummary ? String(detail.collectorSummary?.submissionCount) : null,
             )}
           </dl>
           {detail.collectorSummary ? (
             <Link
               className="mt-4 inline-block text-sm font-semibold text-accent"
               to="/admin"
-              search={{ section: "users", user: detail.collectorSummary.userId, tab: "Collector" }}
+              search={{ section: "users", user: detail.collectorSummary?.userId, tab: "Collector" }}
             >
               View collector profile →
             </Link>
@@ -461,6 +570,214 @@ function ReviewDetail({
       ) : null}
     </section>
   );
+}
+
+function SubmissionReviewWorkspace({
+  detail,
+  onClaim,
+  claiming,
+  onRelease,
+  releasing,
+  staffCondition,
+  setStaffCondition,
+  staffConditionNote,
+  setStaffConditionNote,
+  valuation,
+  setValuation,
+  valuationBasis,
+  setValuationBasis,
+  valuationConfidence,
+  setValuationConfidence,
+  saveCondition,
+  saveValuation,
+  reason,
+  setReason,
+  note,
+  setNote,
+  requestedItems,
+  setRequestedItems,
+  customerMessage,
+  setCustomerMessage,
+  confirmAction,
+  setConfirmAction,
+  decide,
+  saveNote,
+  nextSubmission,
+  onNext,
+}: {
+  detail: SubmissionReviewDetail;
+  onClaim: () => void;
+  claiming: boolean;
+  onRelease: () => void;
+  releasing: boolean;
+  staffCondition: string;
+  setStaffCondition: (value: string) => void;
+  staffConditionNote: string;
+  setStaffConditionNote: (value: string) => void;
+  valuation: string;
+  setValuation: (value: string) => void;
+  valuationBasis: string;
+  setValuationBasis: (value: string) => void;
+  valuationConfidence: string;
+  setValuationConfidence: (value: string) => void;
+  saveCondition: ConditionMutation;
+  saveValuation: ValuationMutation;
+  reason: string;
+  setReason: (value: string) => void;
+  note: string;
+  setNote: (value: string) => void;
+  requestedItems: string[];
+  setRequestedItems: (value: string[]) => void;
+  customerMessage: string;
+  setCustomerMessage: (value: string) => void;
+  confirmAction: Decision | null;
+  setConfirmAction: (value: Decision | null) => void;
+  decide: DecisionMutation;
+  saveNote: ReviewNoteMutation;
+  nextSubmission?: string;
+  onNext: () => void;
+}) {
+  const [focusedMedia, setFocusedMedia] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const collectible = detail.collectible;
+  const evidence = detail.evidenceSummary;
+  const readiness = detail.readiness;
+  const actions = detail.allowedActions;
+  const claimedByMe = detail.reviewAssignment?.state === "CLAIMED_BY_ME";
+  const canEdit = Boolean(actions?.canEdit && claimedByMe);
+  const media = evidence?.items ?? [];
+  const activeMedia = media.find((item) => item.id === focusedMedia);
+  const activeCert = detail.certificationVerification;
+  const staffReview = detail.staffReview;
+  useEffect(() => {
+    if (!valuation && staffReview?.valuation?.valueMinor) {
+      setValuation((Number(staffReview.valuation.valueMinor) / 100).toFixed(2));
+    }
+    if (!staffCondition && staffReview?.condition) setStaffCondition(staffReview.condition);
+  }, [staffCondition, staffReview?.condition, staffReview?.valuation?.valueMinor, valuation]);
+  const submitDecision = () => {
+    if (confirmAction) decide.mutate(confirmAction);
+  };
+  const statusText = detail.status === "IN_REVIEW" ? "In review" : label(detail.status);
+  return (
+    <section className="admin-review-workspace">
+      <div className="admin-review-workspace-nav">
+        <Link to="/admin" search={{ section: "moderation" }}>← Back to queue</Link>
+        <div className="admin-review-nav-actions">
+          <button type="button" className="button-secondary" onClick={onNext} disabled={!nextSubmission}>Previous</button>
+          <button type="button" className="button-secondary" onClick={onNext} disabled={!nextSubmission}>Next →</button>
+          <span>{nextSubmission ? "Queue context preserved" : "Single result"}</span>
+        </div>
+      </div>
+      <header className="admin-review-workspace-header">
+        <div className="admin-review-workspace-hero">
+          <div className="admin-review-hero-image">
+            <AdminReviewMedia
+              src={collectible?.thumbnailUrl ?? null}
+              alt={`${collectible?.title ?? "Submission"} front`}
+              fallback={<span>No preview</span>}
+            />
+          </div>
+          <div className="min-w-0">
+            <div className="admin-review-eyebrow-row"><span>Submission Review</span><StatusPill value={statusText} /></div>
+            <h2>{collectible?.title ?? "Untitled submission"}</h2>
+            <p>{[collectible?.year, collectible?.set, collectible?.cardNumber, collectible?.variant].filter(Boolean).join(" · ") || "Identity details supplied by collector"}</p>
+            <div className="admin-review-chip-row">
+              {collectible?.grader ? <span>{collectible.grader} {collectible.grade ?? ""}</span> : <span>Raw / ungraded</span>}
+              {collectible?.certificationNumber ? <span>Cert {collectible.certificationNumber}</span> : null}
+              <span>{shortId(detail.id)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="admin-review-workspace-header-meta">
+          <span>Submitted<strong>{formatDate(detail.submittedAt)}</strong></span>
+          <span>Collector<strong>{detail.collectorSummary?.displayName ?? "Collector"}</strong></span>
+          <span>Assigned to<strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong></span>
+        </div>
+      </header>
+      <div className="admin-review-workspace-grid">
+        <main className="admin-review-workspace-main">
+          <WorkspaceSection number="1" title="Submission identity" status={readiness?.checklist.find((item) => item.key === "identity")?.satisfied ? "Confirmed" : "Needs review"} tone={readiness?.checklist.find((item) => item.key === "identity")?.satisfied ? "ready" : "warning"}>
+            <div className="admin-review-identity-grid">
+              {identityField("Category", collectible?.category, "System normalized")}
+              {identityField("Year", collectible?.year, "Customer supplied")}
+              {identityField("Brand / set", collectible?.set, collectible?.set ? "Provider matched" : "Customer supplied")}
+              {identityField("Card number", collectible?.cardNumber, "Customer supplied")}
+              {identityField("Variant", collectible?.variant, "Customer supplied")}
+              {identityField("Language", metadataValue(detail, "language"), "Customer supplied")}
+              {identityField("Grading company", collectible?.grader, collectible?.grader ? "System normalized" : "Not applicable")}
+              {identityField("Grade", collectible?.grade, collectible?.grade ? "System normalized" : "Raw card")}
+              {identityField("Certification", collectible?.certificationNumber, collectible?.certificationNumber ? "Customer supplied" : "Not required")}
+              {identityField("Reference URL", referenceUrl(detail), "Customer supplied")}
+            </div>
+            <div className="admin-review-source-callout"><strong>Identity matching</strong><span>{detail.marketResearch ? "Provider research is attached to this submission." : "No provider match is attached; staff review can continue."}</span></div>
+          </WorkspaceSection>
+          <WorkspaceSection number="2" title="Evidence" status={`${evidence?.presentRequired ?? 0}/${evidence?.required ?? 0} required`} tone={evidence?.missingRequired ? "warning" : "ready"}>
+            <div className="admin-review-evidence-summary"><strong>{evidence?.percent ?? 0}%</strong><span>Backend evidence projection · {evidence?.missingRequired ?? 0} blocking missing</span></div>
+            <div className="admin-review-workspace-gallery">
+              {media.map((item) => <button type="button" key={item.id} className={`admin-review-workspace-media ${item.required ? "is-required" : ""}`} onClick={() => { setFocusedMedia(item.id); setZoom(1); }}><AdminReviewMedia src={item.thumbnailUrl} alt={`${label(item.slot)} evidence`} fallback={<span>{label(item.slot)}</span>} /><strong>{label(item.slot)}</strong><small>{item.required ? "Required" : "Optional"} · {label(item.status)}</small></button>)}
+            </div>
+            {!media.length ? <EmptyInline text="No safe evidence is available in the authorized projection." /> : null}
+          </WorkspaceSection>
+          <WorkspaceSection number="3" title="Grade & certification" status={activeCert?.status ?? (collectible?.grader ? "Pending" : "Not required")} tone={activeCert?.status === "VERIFIED" || !collectible?.grader ? "ready" : "warning"}>
+            <div className="admin-review-two-panel">
+              <InfoPanel title="Grading path"><strong>{collectible?.grader ?? "Raw / ungraded"}</strong><span>{collectible?.grade ?? "Condition review path · no cert required"}</span></InfoPanel>
+              <InfoPanel title="Certification verification"><strong>{activeCert?.status ? label(activeCert.status) : collectible?.grader ? "Not checked" : "Not required"}</strong><span>{activeCert?.verifiedLabel ?? activeCert?.verifiedGrade ?? "A successful provider lookup is not an authenticity determination."}</span></InfoPanel>
+            </div>
+            {activeCert?.officialVerificationUrl ? <a className="admin-review-provider-link" href={activeCert.officialVerificationUrl} target="_blank" rel="noreferrer">Open official verification reference ↗</a> : null}
+          </WorkspaceSection>
+          <WorkspaceSection number="4" title="Research / market" status={detail.marketResearch ? label(detail.marketResearch.state) : "No match"} tone={detail.marketResearch && !["PENDING", "IN_PROGRESS"].includes(detail.marketResearch.state) ? "ready" : "info"}>
+            {detail.marketResearch ? <ResearchInline detail={detail} /> : <EmptyInline text="No external reference match is attached. PriceCharting remains informational and does not set Slice valuation or pricing." />}
+          </WorkspaceSection>
+          <WorkspaceSection number="5" title="Condition / AI review" status={staffReview?.condition ? "Staff recorded" : "Needs staff review"} tone={staffReview?.condition ? "ready" : "warning"}>
+            <div className="admin-review-two-panel">
+              <div className="admin-review-edit-card"><label>Staff condition<select value={staffCondition || staffReview?.condition || ""} onChange={(event) => setStaffCondition(event.target.value)} disabled={!canEdit}><option value="">Select internal condition</option><option>Mint</option><option>Near Mint</option><option>Excellent</option><option>Very Good</option><option>Good</option></select></label><label>Staff notes<textarea rows={3} value={staffConditionNote || staffReview?.conditionNote || ""} onChange={(event) => setStaffConditionNote(event.target.value)} disabled={!canEdit} placeholder="Assessment notes for staff only" /></label><button type="button" className="button-secondary" onClick={() => saveCondition.mutate()} disabled={!canEdit || !staffCondition.trim() || saveCondition.isPending}>{saveCondition.isPending ? "Saving…" : "Save condition"}</button></div>
+              <InfoPanel title={`AI / Ximilar · ${detail.preGrade?.provider ?? "No provider result"}`}><strong>{detail.preGrade?.overallEstimate != null ? detail.preGrade.overallEstimate.toFixed(1) : "Not returned"}</strong><span>{detail.preGrade?.conditionLabel ?? "Advisory only · never official grade, authenticity, condition, or valuation authority."}</span>{detail.preGrade?.analyzedAt ? <small>Analyzed {formatDate(detail.preGrade.analyzedAt)}</small> : null}</InfoPanel>
+            </div>
+          </WorkspaceSection>
+          <WorkspaceSection number="6" title="Staff valuation & decision" status={staffReview?.valuation ? "Recorded" : "Not recorded"} tone={staffReview?.valuation ? "ready" : "warning"}>
+            <div className="admin-review-two-panel"><div className="admin-review-edit-card"><label>Estimated total value (GBP)<input inputMode="decimal" value={valuation || (staffReview?.valuation ? (Number(staffReview.valuation.valueMinor) / 100).toFixed(2) : "")} onChange={(event) => setValuation(event.target.value)} disabled={!canEdit} placeholder="0.00" /></label><label>Valuation basis<input value={valuationBasis} onChange={(event) => setValuationBasis(event.target.value)} disabled={!canEdit} /></label><label>Confidence<input type="number" min="0" max="100" value={valuationConfidence} onChange={(event) => setValuationConfidence(event.target.value)} disabled={!canEdit} /></label><button type="button" className="button-secondary" onClick={() => saveValuation.mutate()} disabled={!canEdit || !/^\d+(\.\d{1,2})?$/.test(valuation) || saveValuation.isPending}>{saveValuation.isPending ? "Saving…" : "Save valuation"}</button></div><InfoPanel title="Reference inputs"><strong>{detail.marketResearch ? "External research attached" : "No external match"}</strong><span>Customer expected value: {metadataValue(detail, "collectorExpectedValueMinor") ?? "Not supplied"}</span><span>AI advisory: {detail.preGrade?.overallEstimate?.toFixed(1) ?? "Not returned"}</span><span>Staff valuation remains separate from all external references.</span></InfoPanel></div>
+          </WorkspaceSection>
+          <section className="admin-review-workspace-notes"><div className="admin-review-note-columns"><Notes detail={detail} note={note} setNote={setNote} saveNote={saveNote} /><div className="admin-panel-card"><SectionTitle title="Customer-facing request" /><p className="text-sm text-subtle">Only sent when requesting changes. Private staff notes remain separate.</p><textarea rows={5} value={customerMessage} onChange={(event) => setCustomerMessage(event.target.value)} placeholder="Message to collector…" /></div></div></section>
+          <section className="admin-panel-card"><SectionTitle title="Review history" /><ul className="admin-review-history mt-4">{detail.reviews.length ? detail.reviews.map((item) => <li key={item.id ?? item.createdAt}><strong>{humanReviewEvent(item.decision ?? item.status)}</strong><span>{formatDate(item.createdAt)} · {item.actor?.displayName ?? "Staff"}</span>{item.note ? <p>{item.note}</p> : null}</li>) : <li className="text-sm text-subtle">No review history yet.</li>}</ul><Link className="admin-review-provider-link" to="/admin" search={{ section: "audit" }}>View full audit log →</Link></section>
+        </main>
+        <aside className="admin-review-decision-rail">
+          <section className="admin-panel-card admin-review-sticky-rail"><div className="admin-review-rail-heading"><span>Review & decision</span><StatusPill value={statusText} /></div><div className="admin-review-rail-assignee"><span className="admin-review-avatar">{(detail.reviewAssignment?.reviewer?.displayName ?? "U").slice(0, 1)}</span><div><strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong><small>{detail.reviewAssignment?.claimedAt ? `Claimed ${formatDate(detail.reviewAssignment.claimedAt)}` : "Available to claim"}</small></div></div>{actions?.canClaim ? <button type="button" className="button-primary w-full" onClick={onClaim} disabled={claiming}>{claiming ? "Claiming…" : "Claim review"}</button> : null}{actions?.canRelease ? <button type="button" className="button-secondary w-full mt-2" onClick={onRelease} disabled={releasing}>{releasing ? "Releasing…" : "Release claim"}</button> : null}<div className="admin-review-rail-readiness"><h4>Readiness</h4><strong className={readiness?.state === "READY" ? "is-ready" : "is-blocked"}>{readiness?.state === "READY" ? "Ready to accept" : "Blocking review"}</strong>{readiness?.checklist.map((item) => <div key={item.key}><span className={item.satisfied ? "is-complete" : ""}>{item.satisfied ? "✓" : "○"}</span><span>{item.label}</span><small>{item.required ? "Required" : "Advisory"}</small></div>)}{readiness?.blockers.length ? <ul className="admin-review-blockers">{readiness.blockers.map((item) => <li key={item}>{item}</li>)}</ul> : null}</div><div className="admin-review-decision-actions"><h4>Decision actions</h4><button type="button" className="admin-review-action is-accept" onClick={() => setConfirmAction("APPROVED")} disabled={!actions?.canAccept}>Accept submission<small>Next step: Physical Intake</small></button><button type="button" className="admin-review-action is-changes" onClick={() => setConfirmAction("CHANGES_REQUESTED")} disabled={!actions?.canRequestChanges}>Request changes<small>Collector action required</small></button><button type="button" className="admin-review-action is-reject" onClick={() => setConfirmAction("REJECTED")} disabled={!actions?.canReject}>Reject submission<small>Permanent review decision</small></button></div>{confirmAction ? <div className="admin-review-confirmation"><strong>Confirm {label(confirmAction)}</strong><select value={reason} onChange={(event) => setReason(event.target.value)}><option value="INCOMPLETE_EVIDENCE">Incomplete evidence</option><option value="IDENTITY_UNCLEAR">Identity needs attention</option><option value="UNSUPPORTED_COLLECTIBLE">Unsupported collectible</option><option value="DUPLICATE_SUBMISSION">Possible duplicate</option><option value="OTHER">Other</option></select>{confirmAction === "CHANGES_REQUESTED" ? <div className="admin-review-change-options">{["Front image", "Back image", "Identity details", "Grade / certification", "Other"].map((item) => <label key={item}><input type="checkbox" checked={requestedItems.includes(item)} onChange={(event) => setRequestedItems(event.target.checked ? [...requestedItems, item] : requestedItems.filter((value) => value !== item))} />{item}</label>)}</div> : null}<button type="button" className="button-primary" onClick={submitDecision} disabled={decide.isPending}>{decide.isPending ? "Saving…" : "Confirm decision"}</button><button type="button" className="button-secondary" onClick={() => setConfirmAction(null)}>Cancel</button></div> : null}</section>
+        </aside>
+      </div>
+      {activeMedia ? <div className="admin-review-lightbox" role="dialog" aria-modal="true" aria-label={`${label(activeMedia.slot)} evidence`}><div className="admin-panel-card admin-review-lightbox-card"><div className="flex items-center justify-between gap-3"><strong>{label(activeMedia.slot)}</strong><button className="button-secondary" type="button" onClick={() => setFocusedMedia(null)}>Close</button></div><div className="admin-review-lightbox-toolbar"><button type="button" onClick={() => setZoom(Math.max(1, zoom - 0.25))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(Math.min(3, zoom + 0.25))}>+</button></div><div className="admin-review-lightbox-media"><AdminReviewMedia src={activeMedia.thumbnailUrl} alt={`${label(activeMedia.slot)} evidence enlarged`} fallback={<span>Secure preview unavailable</span>} style={{ transform: `scale(${zoom})` }} /></div></div></div> : null}
+    </section>
+  );
+}
+
+function WorkspaceSection({ number, title, status, tone, children }: { number: string; title: string; status: string; tone: "ready" | "warning" | "info"; children: ReactNode }) {
+  return <section className="admin-panel-card admin-review-workspace-section"><header><div className="admin-review-section-number">{number}</div><div><h3>{title}</h3><p>Authoritative review workspace section</p></div><StatusPill value={status} tone={tone} /></header><div className="admin-review-workspace-section-body">{children}</div></section>;
+}
+function StatusPill({ value, tone }: { value: string; tone?: "ready" | "warning" | "info" }) {
+  return <span className={`admin-review-status-pill is-${tone ?? (value.toLowerCase().includes("ready") || value.toLowerCase().includes("confirmed") || value.toLowerCase().includes("complete") ? "ready" : "info")}`}>{value}</span>;
+}
+function InfoPanel({ title, children }: { title: string; children: ReactNode }) {
+  return <div className="admin-review-info-panel"><span>{title}</span>{children}</div>;
+}
+function EmptyInline({ text }: { text: string }) {
+  return <p className="admin-review-empty-inline">{text}</p>;
+}
+function identityField(title: string, value: string | null | undefined, source: string) {
+  return <div className="admin-review-identity-field"><span>{title}</span><strong>{value || "Not supplied"}</strong><small>{source}</small></div>;
+}
+function metadataValue(detail: SubmissionReviewDetail, key: string) {
+  const value = detail.declaredMetadata?.[key];
+  return typeof value === "string" || typeof value === "number" ? String(value) : null;
+}
+function referenceUrl(detail: SubmissionReviewDetail) {
+  const reference = detail.customerReference;
+  const value = reference?.normalizedUrl;
+  return typeof value === "string" ? value : null;
+}
+function ResearchInline({ detail }: { detail: SubmissionReviewDetail }) {
+  const research = detail.marketResearch;
+  if (!research) return null;
+  return <div><div className="admin-review-research-inline"><InfoPanel title="Provider"><strong>PriceCharting</strong><span>{label(research.state)} · captured {formatDate(research.collectedAt)}</span></InfoPanel><InfoPanel title="Reference values"><strong>{research.snapshot.sales ? marketRange(research.snapshot.sales) : "Not available"}</strong><span>Source currency retained; no invented FX conversion.</span></InfoPanel></div><ul className="admin-review-observations mt-4">{research.observations.slice(0, 6).map((item) => <li key={`${item.providerCode}-${item.externalReferenceId}`}><strong>{item.observationType === "SALE" ? "Completed sale" : "Listing"}</strong><span>{marketAmount(item.amountMinor, item.currency)} · {item.providerCode.replaceAll("_", " ")}</span>{item.externalUrl ? <a href={item.externalUrl} target="_blank" rel="noreferrer">View source ↗</a> : null}</li>)}</ul></div>;
 }
 
 function ReviewActions({

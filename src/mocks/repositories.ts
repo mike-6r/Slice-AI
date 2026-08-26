@@ -511,8 +511,10 @@ export const mockRepositories: AppRepositories = {
           awaitingEvidence: 0,
           researchPending: 0,
           readyToReview: 0,
+          blocked: 0,
+          overdue: null,
         },
-        summary: { highPriority: 0, awaitingEvidence: 0, researchPending: 0, readyToReview: 0 },
+        summary: { highPriority: 0, awaitingEvidence: 0, researchPending: 0, readyToReview: 0, blocked: 0, overdue: null },
         nextCursor: null,
       };
     },
@@ -520,6 +522,15 @@ export const mockRepositories: AppRepositories = {
       throw new Error("Review requires the API service.");
     },
     async claim() {
+      throw new Error("Review requires the API service.");
+    },
+    async release() {
+      throw new Error("Review requires the API service.");
+    },
+    async saveCondition() {
+      throw new Error("Review requires the API service.");
+    },
+    async saveValuation() {
       throw new Error("Review requires the API service.");
     },
     async decide() {

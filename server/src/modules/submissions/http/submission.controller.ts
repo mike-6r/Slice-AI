@@ -86,6 +86,21 @@ const identityCorrection = z
   })
   .strict();
 const reviewNote = z.object({ note: z.string().trim().max(2000) }).strict();
+const reviewCondition = z
+  .object({
+    condition: z.string().trim().min(1).max(80),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+const reviewValuation = z
+  .object({
+    valueMinor: z.string().regex(/^\d+$/).max(18),
+    currency: z.literal('GBP'),
+    basis: z.string().trim().min(1).max(120),
+    confidence: z.number().int().min(0).max(100).optional(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .strict();
 const queueQuery = z
   .object({
     cursor: z.string().min(1).max(512).optional(),
@@ -103,6 +118,18 @@ const queueQuery = z
         'not_requested',
       ])
       .optional(),
+    readiness: z
+      .enum([
+        'READY',
+        'NEEDS_EVIDENCE',
+        'RESEARCH_PENDING',
+        'COLLECTOR_ACTION',
+        'MANUAL_REVIEW',
+        'BLOCKED',
+      ])
+      .optional(),
+    testFixture: z.enum(['include', 'only', 'exclude']).optional(),
+    grader: z.string().trim().max(80).optional(),
     submittedFrom: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -469,7 +496,7 @@ export class SubmissionController {
   @RequirePermission('submission.review')
   queue(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const input = parse(queueQuery, query);
-    return this.submissions.queue(req.actor!, input);
+    return this.submissions.operationalQueue(req.actor!, input);
   }
   @Get('reviews/submissions/:id')
   @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -489,6 +516,61 @@ export class SubmissionController {
       this.submissions.claim(
         req.actor!,
         submissionId,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/release')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  release(
+    @Param('id') submissionId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.releaseClaim(
+        req.actor!,
+        submissionId,
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Patch('reviews/submissions/:id/condition')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  condition(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.saveStaffCondition(
+        req.actor!,
+        submissionId,
+        parse(reviewCondition, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Patch('reviews/submissions/:id/valuation')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  valuation(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.saveStaffValuation(
+        req.actor!,
+        submissionId,
+        parse(reviewValuation, body),
         req.requestId ?? 'unknown',
         key!,
       ),
