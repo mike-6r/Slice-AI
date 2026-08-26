@@ -12,6 +12,7 @@ type DemoCandidate = {
     year?: number | null;
     cardNumber?: string | null;
     certificationNumber?: string | null;
+    normalizedCertificationNumber?: string | null;
     category?: { name?: string | null } | null;
     collectibleSet?: { name?: string | null } | null;
     gradeScaleEntry?: { company?: { code?: string | null } | null; grade?: { toString(): string } | null } | null;
@@ -30,10 +31,11 @@ export function isProtectedControlledAsset(asset: DemoCandidate['asset']) {
 export function isEligiblePikachuOwnerDemo(candidate: DemoCandidate) {
   const asset = candidate.asset;
   const grade = Number(asset?.gradeScaleEntry?.grade?.toString());
+  const certification = (asset?.certificationNumber ?? asset?.normalizedCertificationNumber ?? '')
+    .replace(/\D/g, '');
   return (
-    candidate.owner?.email?.toLowerCase() === 'demo-collector@slicecollectable.com' &&
     asset?.title?.trim().toLowerCase() === 'pikachu with grey felt hat' &&
-    asset.certificationNumber === '107760843' &&
+    certification === '107760843' &&
     asset.gradeScaleEntry?.company?.code?.toUpperCase() === 'PSA' &&
     grade === 10
   );

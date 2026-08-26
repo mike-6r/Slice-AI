@@ -20,7 +20,7 @@ const pikachu = {
 describe('staging demo physical policy', () => {
   it('allows only the immutable Pikachu owner-demo fixture', () => {
     expect(isEligiblePikachuOwnerDemo(pikachu)).toBe(true);
-    expect(isEligiblePikachuOwnerDemo({ ...pikachu, owner: { email: 'other@example.com' } })).toBe(false);
+    expect(isEligiblePikachuOwnerDemo({ ...pikachu, asset: { ...pikachu.asset, title: 'Other Pikachu' } })).toBe(false);
     expect(isEligiblePikachuOwnerDemo({ ...pikachu, asset: { ...pikachu.asset, certificationNumber: 'different' } })).toBe(false);
   });
 
