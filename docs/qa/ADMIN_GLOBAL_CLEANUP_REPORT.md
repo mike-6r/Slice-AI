@@ -50,8 +50,15 @@ records were not changed.
 
 ## Follow-up items
 
-- Authenticated desktop, tablet, and mobile browser QA must be performed against
-  the deployed staging release using an active staff browser session.
+- Deployment and authenticated desktop, tablet, and mobile browser QA are
+  blocked by staging access rather than by code validation. On 26 Aug 2026 the
+  configured `slice` deployment identity was rejected by the VPS before any
+  server command could run. The currently live public `/health` and `/ready`
+  endpoints both returned HTTP 200, so the last known-good release remains in
+  service. The candidate has not been activated.
+- Authenticated browser QA must be performed against the deployed staging
+  release using an active staff browser session after the VPS deployment key is
+  restored.
 - Existing non-blocking fast-refresh warnings should be addressed in a separate
   component-export hygiene pass.
 - The remaining active Admin pages should continue to use authoritative APIs
