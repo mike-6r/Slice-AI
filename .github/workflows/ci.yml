@@ -37,6 +37,11 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    # `prisma validate` resolves DATABASE_URL even though it does not connect.
+    # Keep this verification job self-contained; the integration job below uses
+    # the real ephemeral PostgreSQL service.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/slice_ci
     defaults:
       run:
         working-directory: server
