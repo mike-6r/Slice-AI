@@ -4933,7 +4933,7 @@ function ConsolidatedUserDetailExperience({
         page: historyPage,
         pageSize: 20,
       }),
-    enabled: Boolean(user) && activeTab === "History",
+    enabled: Boolean(user) && (activeTab === "Overview" || activeTab === "History"),
     staleTime: 30_000,
   });
   useEffect(() => {
@@ -5081,12 +5081,6 @@ function ConsolidatedUserDetailExperience({
       ]
     : [];
   const finance = user.financialDetails;
-  const investorVisible =
-    user.primaryType === "INVESTOR" ||
-    user.portfolioSummary.totalAssets > 0 ||
-    user.portfolioSummary.openOrders > 0;
-  const investorRole = user.semanticRoles.includes("INVESTOR");
-
   const renderOverview = () => (
     <div className="admin-account-detail-stack">
       <section className="admin-account-detail-state-grid" aria-label="Account operating state">
@@ -5119,7 +5113,7 @@ function ConsolidatedUserDetailExperience({
         {stateCell("Payouts", user.payoutState, user.payoutReason ?? "Payout capability ready")}
       </section>
 
-      <div className="admin-account-detail-grid admin-account-detail-grid--overview">
+      <div className="admin-account-detail-grid admin-account-detail-grid--dashboard">
         <section className="admin-account-detail-panel">
           <AdminPanelHeading
             title="Needs attention"
@@ -5143,6 +5137,55 @@ function ConsolidatedUserDetailExperience({
               <BadgeCheck aria-hidden="true" /> No active issues
             </div>
           )}
+        </section>
+
+        <section className="admin-account-detail-panel">
+          <AdminPanelHeading
+            title="Roles & access"
+            action="Manage"
+            onClick={() => setTab("Operations")}
+          />
+          <div className="admin-account-detail-compact-roles">
+            {roles.length ? (
+              roles.slice(0, 4).map((role) => (
+                <div key={role.id}>
+                  <strong>{sentence(role.role)}</strong>
+                  <span>{role.scopeType}</span>
+                </div>
+              ))
+            ) : (
+              <span className="admin-muted">No elevated roles assigned.</span>
+            )}
+          </div>
+          <button type="button" className="admin-detail-link" onClick={() => setTab("Operations")}>
+            Manage roles <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+
+        <section className="admin-account-detail-panel">
+          <AdminPanelHeading
+            title="Identity & account access"
+            action="Review"
+            onClick={() => setTab("Operations")}
+          />
+          <div className="admin-account-detail-identity-list">
+            <DetailRow label="Phone" value={user.identity.phone ?? "Not verified"} />
+            <DetailRow
+              label="Two-factor authentication"
+              value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}
+              tone={user.identity.twoFactorEnabled ? "positive" : undefined}
+            />
+            <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
+            <DetailRow label="Timezone" value={user.profile?.timezone ?? "Unavailable"} />
+            <DetailRow
+              label="Discord"
+              value={user.identity.discord.connected ? "Connected" : "Not connected"}
+              tone={user.identity.discord.connected ? "positive" : undefined}
+            />
+          </div>
+          <button type="button" className="admin-detail-link" onClick={() => setTab("Operations")}>
+            Review identity settings <ArrowRight aria-hidden="true" />
+          </button>
         </section>
 
         <section className="admin-account-detail-panel">
@@ -5171,75 +5214,141 @@ function ConsolidatedUserDetailExperience({
         </section>
       </div>
 
-      <div className="admin-account-detail-grid admin-account-detail-grid--summary">
-        {investorVisible ? (
-          <section className="admin-account-detail-panel">
-            <AdminPanelHeading title={investorRole ? "Investor summary" : "Investment activity"} />
-            <div className="admin-account-detail-metrics">
-              <DetailRow
-                label="Portfolio assets"
-                value={String(user.portfolioSummary.totalAssets)}
-              />
-              <DetailRow label="Open orders" value={String(user.portfolioSummary.openOrders)} />
-              <DetailRow
-                label="Active listings"
-                value={String(user.portfolioSummary.activeListings)}
-              />
-              <DetailRow
-                label="Invested"
-                value={money(
-                  user.permissions.finance ? user.portfolioSummary.totalInvestedMinor : null,
-                  user.portfolioSummary.currency,
-                )}
-              />
-            </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
-              Open operational details <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-        ) : null}
-        {user.collectorOverview ? (
-          <section className="admin-account-detail-panel">
-            <AdminPanelHeading title="Collector summary" />
-            <div className="admin-account-detail-metrics">
-              <DetailRow label="Submissions" value={String(user.collectorOverview.submissions)} />
-              <DetailRow
-                label="Active intake"
-                value={String(user.collectorOverview.activeIntakes)}
-              />
-              <DetailRow
-                label="Live collectibles"
-                value={String(
-                  user.collectorOverview.assets.length + user.collectorOverview.additionalAssets,
-                )}
-              />
-              <DetailRow
-                label="Directory"
-                value={user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"}
-              />
-            </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
-              Open Collector operations <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-        ) : null}
-        {!investorVisible && !user.collectorOverview ? (
-          <section className="admin-account-detail-panel admin-account-detail-panel--empty">
-            <AdminEmpty
-              detail="No investor or Collector workspace summary applies to this account."
-              icon={Users}
+      <div className="admin-account-detail-grid admin-account-detail-grid--supporting">
+        <section className="admin-account-detail-panel">
+          <AdminPanelHeading
+            title="Finance & payouts"
+            action="Open Finance"
+            onClick={() => setTab("Operations")}
+          />
+          <div className="admin-account-detail-metrics">
+            <DetailRow
+              label="Available cash"
+              value={money(user.permissions.finance ? (finance?.availableMinor ?? null) : null)}
             />
-          </section>
-        ) : null}
+            <DetailRow label="Payout readiness" value={payoutStateLabel(user.payoutState)} />
+            <DetailRow
+              label="Reserved"
+              value={money(user.permissions.finance ? (finance?.reservedMinor ?? null) : null)}
+            />
+            <DetailRow
+              label="Payouts enabled"
+              value={
+                user.permissions.finance
+                  ? user.payoutDetails?.payoutsEnabled
+                    ? "Yes"
+                    : "No"
+                  : "Unavailable"
+              }
+            />
+            <DetailRow
+              label="Provider pending"
+              value={money(user.permissions.finance ? (finance?.pendingMinor ?? null) : null)}
+            />
+            <DetailRow
+              label="Funding bank"
+              value={user.permissions.finance ? "Protected connection" : "Unavailable"}
+            />
+            <DetailRow
+              label="Financial deficit"
+              value={money(user.permissions.finance ? (finance?.deficitMinor ?? null) : null)}
+            />
+            <DetailRow
+              label="Withdrawal hold"
+              value={
+                user.permissions.finance
+                  ? finance?.withdrawalHoldUntil
+                    ? date(finance.withdrawalHoldUntil)
+                    : "None"
+                  : "Unavailable"
+              }
+            />
+          </div>
+        </section>
+
+        <section className="admin-account-detail-panel">
+          <AdminPanelHeading
+            title="Compliance summary"
+            action="Open workspace"
+            onClick={() => setTab("Operations")}
+          />
+          <div className="admin-account-detail-metrics">
+            <DetailRow label="KYC status" value={stateText(user.complianceSummary.kycStatus)} />
+            <DetailRow
+              label="Open cases"
+              value={
+                user.permissions.compliance
+                  ? String(user.complianceSummary.caseCount)
+                  : "Unavailable"
+              }
+            />
+            <DetailRow
+              label="Transaction monitoring"
+              value={stateText(user.complianceSummary.kytStatus)}
+            />
+            <DetailRow
+              label="Active holds"
+              value={user.permissions.compliance ? String(user.activeHolds.length) : "Unavailable"}
+            />
+            <DetailRow label="Review state" value={complianceStateLabel(user.complianceState)} />
+            <DetailRow
+              label="Last review"
+              value={
+                user.permissions.compliance
+                  ? user.complianceSummary.lastReviewAt
+                    ? relative(user.complianceSummary.lastReviewAt)
+                    : "Not available"
+                  : "Unavailable"
+              }
+            />
+          </div>
+        </section>
+
+        <section className="admin-account-detail-panel">
+          <AdminPanelHeading
+            title="Account participation"
+            action="Open operations"
+            onClick={() => setTab("Operations")}
+          />
+          <div className="admin-account-detail-metrics">
+            <DetailRow
+              label="Collector submissions"
+              value={String(user.collectorOverview?.submissions ?? 0)}
+            />
+            <DetailRow label="Portfolio assets" value={String(user.portfolioSummary.totalAssets)} />
+            <DetailRow
+              label="Active intake"
+              value={String(user.collectorOverview?.activeIntakes ?? 0)}
+            />
+            <DetailRow label="Open orders" value={String(user.portfolioSummary.openOrders)} />
+            <DetailRow
+              label="Active listings"
+              value={String(user.portfolioSummary.activeListings)}
+            />
+            <DetailRow
+              label="Invested total"
+              value={money(
+                user.permissions.finance ? user.portfolioSummary.totalInvestedMinor : null,
+                user.portfolioSummary.currency,
+              )}
+            />
+            <DetailRow
+              label="Membership"
+              value={
+                user.collector?.subscription
+                  ? `${user.collector.subscription.plan} · ${sentence(user.collector.subscription.status)}`
+                  : "No membership"
+              }
+            />
+            <DetailRow
+              label="Directory"
+              value={user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"}
+            />
+          </div>
+        </section>
       </div>
+
+      {renderHistory()}
     </div>
   );
 
@@ -5388,8 +5497,7 @@ function ConsolidatedUserDetailExperience({
     <section className="admin-account-detail-panel admin-account-detail-history">
       <div className="admin-account-detail-history-heading">
         <div>
-          <p className="admin-console-eyebrow">Immutable account timeline</p>
-          <h3>History</h3>
+          <h3>Immutable account history</h3>
           <span>
             Meaningful account, security, financial, trading, compliance, Collector, provider, and
             admin events.
@@ -5427,44 +5535,41 @@ function ConsolidatedUserDetailExperience({
           retry={() => void history.refetch()}
         />
       ) : history.data?.items.length ? (
-        <div className="admin-account-detail-timeline">
-          {history.data.items.map((event) => {
-            const category = historyCategory(event.action, event.resourceType);
-            return (
-              <article className="admin-account-detail-timeline-row" key={event.id}>
-                <span
-                  className={`admin-account-detail-timeline-marker admin-account-detail-timeline-marker--${stateTone(event.result)}`}
-                  aria-hidden="true"
-                >
-                  <Activity />
-                </span>
-                <div className="admin-account-detail-timeline-content">
-                  <div>
-                    <span className="admin-account-detail-category">{category}</span>
+        <div className="admin-table-wrap admin-account-detail-history-table-wrap">
+          <table className="admin-table admin-account-detail-history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Category</th>
+                <th>Actor</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.data.items.map((event) => (
+                <tr key={event.id}>
+                  <td>
                     <time dateTime={event.occurredAt}>
-                      {new Date(event.occurredAt).toLocaleString()} · {relative(event.occurredAt)}
+                      {new Date(event.occurredAt).toLocaleString()}
                     </time>
-                  </div>
-                  <strong>{activityTitle(event.action)}</strong>
-                  <small>
-                    {event.resourceType} · Actor: {event.actor ?? "System"} ·{" "}
-                    {sentence(event.result)}
-                  </small>
-                  <details className="admin-account-detail-event-details">
-                    <summary>Technical details</summary>
-                    <button
-                      type="button"
-                      className="admin-account-detail-event-id"
-                      title="Copy event ID"
-                      onClick={() => void navigator.clipboard?.writeText(event.id)}
-                    >
-                      Copy event reference {shortId(event.id)}…
-                    </button>
-                  </details>
-                </div>
-              </article>
-            );
-          })}
+                  </td>
+                  <td>{activityTitle(event.action)}</td>
+                  <td>
+                    <span className="admin-account-detail-category">
+                      {historyCategory(event.action, event.resourceType)}
+                    </span>
+                  </td>
+                  <td>{event.actor ?? "System"}</td>
+                  <td>
+                    {event.resourceId
+                      ? `${event.resourceType} · ${shortId(event.resourceId)}…`
+                      : event.resourceType}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <AdminEmpty
@@ -5498,9 +5603,13 @@ function ConsolidatedUserDetailExperience({
 
   return (
     <div className="admin-console-content admin-user-detail-content admin-account-detail-content">
-      <button type="button" className="admin-back-link" onClick={back}>
-        <ChevronLeft aria-hidden="true" /> Accounts
-      </button>
+      <nav className="admin-account-detail-breadcrumb" aria-label="Account navigation">
+        <button type="button" className="admin-back-link" onClick={back}>
+          <ChevronLeft aria-hidden="true" /> Accounts
+        </button>
+        <span aria-hidden="true">›</span>
+        <strong>{user.displayName}</strong>
+      </nav>
       <section className="admin-account-detail-header">
         <div className="admin-detail-identity">
           <div className="admin-user-identity-avatar">{initials(user.displayName)}</div>
@@ -5524,6 +5633,20 @@ function ConsolidatedUserDetailExperience({
           >
             {accountStatusLabel(user.accountStatus)}
           </span>
+          <button
+            type="button"
+            className="admin-account-detail-header-action"
+            onClick={() => setTab("Operations")}
+          >
+            <Settings aria-hidden="true" /> Manage account
+          </button>
+          <button
+            type="button"
+            className="admin-account-detail-header-action"
+            onClick={() => setTab("History")}
+          >
+            <FileClock aria-hidden="true" /> View history
+          </button>
         </div>
         <div className="admin-account-detail-header-meta">
           <span>
@@ -5543,21 +5666,6 @@ function ConsolidatedUserDetailExperience({
           </span>
         </div>
       </section>
-      <nav
-        className="admin-tabs admin-user-detail-tabs admin-account-detail-tabs"
-        aria-label="Account detail sections"
-      >
-        {["Overview", "Operations", "History"].map((item) => (
-          <button
-            type="button"
-            className={activeTab === item ? "is-active" : ""}
-            key={item}
-            onClick={() => setTab(item)}
-          >
-            {item}
-          </button>
-        ))}
-      </nav>
       <div className="admin-user-detail-main admin-account-detail-main">
         <main>
           {activeTab === "Overview"

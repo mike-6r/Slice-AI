@@ -40,6 +40,21 @@
   width: min(100%, 1520px);
   margin-inline: auto;
 }
+.admin-account-detail-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.3rem;
+  color: #8297a0;
+  font-size: 0.64rem;
+}
+.admin-account-detail-breadcrumb .admin-back-link {
+  margin: 0;
+}
+.admin-account-detail-breadcrumb strong {
+  color: #dce9e6;
+  font-weight: 600;
+}
 .admin-account-detail-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -73,6 +88,25 @@
   justify-content: flex-end;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+.admin-account-detail-header-action {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #38515c;
+  border-radius: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  color: #d9e8e5;
+  font-size: 0.6rem;
+}
+.admin-account-detail-header-action:hover,
+.admin-account-detail-header-action:focus-visible {
+  border-color: #28d0a9;
+  color: #6ae8c8;
+}
+.admin-account-detail-header-action svg {
+  width: 0.78rem;
 }
 .admin-account-detail-header-meta {
   display: flex;
@@ -166,6 +200,12 @@
 .admin-account-detail-grid--operations {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.admin-account-detail-grid--dashboard {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.admin-account-detail-grid--supporting {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .admin-account-detail-grid--summary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -238,6 +278,32 @@
 .admin-account-detail-panel > .admin-detail-link {
   margin-top: 0.75rem;
 }
+.admin-account-detail-compact-roles {
+  display: grid;
+  gap: 0;
+}
+.admin-account-detail-compact-roles > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(39, 59, 69, 0.62);
+  padding: 0.48rem 0;
+}
+.admin-account-detail-compact-roles > div:last-child {
+  border-bottom: 0;
+}
+.admin-account-detail-compact-roles strong {
+  color: #e4eeeb;
+  font-size: 0.64rem;
+}
+.admin-account-detail-compact-roles span {
+  color: #7f98a2;
+  font-size: 0.53rem;
+}
+.admin-account-detail-identity-list .admin-detail-row {
+  padding-block: 0.43rem;
+}
 .admin-account-detail-danger {
   display: grid;
   gap: 0.65rem;
@@ -264,6 +330,28 @@
 }
 .admin-account-detail-history {
   min-height: 20rem;
+}
+.admin-account-detail-history-table-wrap {
+  margin-top: 0.8rem;
+}
+.admin-account-detail-history-table {
+  min-width: 48rem;
+}
+.admin-account-detail-history-table th,
+.admin-account-detail-history-table td {
+  padding-block: 0.55rem;
+  font-size: 0.58rem;
+}
+.admin-account-detail-history-table td {
+  color: #afc0c3;
+}
+.admin-account-detail-history-table td:nth-child(2) {
+  color: #e3edeb;
+  font-weight: 600;
+}
+.admin-account-detail-history-table time {
+  color: #8ea3aa;
+  white-space: nowrap;
 }
 .admin-account-detail-history-heading {
   display: flex;
@@ -383,6 +471,12 @@
   .admin-account-detail-state-cell:nth-child(n + 4) {
     border-top: 1px solid #20313b;
   }
+  .admin-account-detail-grid--dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-account-detail-grid--supporting {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 760px) {
   .admin-account-detail-header {
@@ -394,6 +488,8 @@
   .admin-account-detail-state-grid,
   .admin-account-detail-grid--overview,
   .admin-account-detail-grid--summary,
+  .admin-account-detail-grid--dashboard,
+  .admin-account-detail-grid--supporting,
   .admin-account-detail-grid--operations {
     grid-template-columns: 1fr;
   }
