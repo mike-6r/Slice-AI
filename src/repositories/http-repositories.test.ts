@@ -66,7 +66,9 @@ const dto = {
 
 describe("HTTP catalogue mapping", () => {
   it("keeps the account identifier in the history path, not the strict query", async () => {
-    const get = vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 });
+    const get = vi
+      .fn()
+      .mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 });
     const repositories = createHttpRepositories({ get } as unknown as ApiClient);
 
     await expect(
