@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Crown,
   Database,
+  Download,
   FileClock,
   Flag,
   Gauge,
@@ -40,7 +41,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { logout } from "@/auth/actions";
@@ -282,6 +283,7 @@ function AdminConsole() {
   const [accountSearchInput, setAccountSearchInput] = useState(accountQ ?? "");
   const [accountSearch, setAccountSearch] = useState(accountQ ?? "");
   const [accountPage, setAccountPage] = useState(Math.max(1, Number(accountPageParam ?? 1)));
+  const [accountPageSize, setAccountPageSize] = useState<10 | 25 | 50 | 100>(10);
   const [accountSort, setAccountSort] = useState(accountSortParam ?? "joined");
   const [accountSortDirection, setAccountSortDirection] = useState<"asc" | "desc">("desc");
   const [accountFilters, setAccountFilters] = useState({
@@ -635,6 +637,7 @@ function AdminConsole() {
       accountSearch,
       accountFilters,
       accountPage,
+      accountPageSize,
       accountSort,
       accountSortDirection,
     ],
@@ -645,7 +648,7 @@ function AdminConsole() {
         sort: accountSort,
         sortDirection: accountSortDirection,
         page: accountPage,
-        pageSize: 10,
+        pageSize: accountPageSize,
       }),
     enabled: section === "users",
     staleTime: 30_000,
@@ -1069,6 +1072,24 @@ function AdminConsole() {
             openUser={openUser}
             clearUser={() => select("users")}
             page={accountPage}
+            pageSize={accountPageSize}
+            setPageSize={(value) => {
+              const nextPageSize = Number(value);
+              if (
+                nextPageSize !== 10 &&
+                nextPageSize !== 25 &&
+                nextPageSize !== 50 &&
+                nextPageSize !== 100
+              ) {
+                return;
+              }
+              setAccountPageSize(nextPageSize);
+              setAccountPage(1);
+              void navigate({
+                search: (current) => ({ ...current, accountPage: "1" }),
+                replace: true,
+              });
+            }}
             total={users.data?.total ?? 0}
             summary={users.data?.summary}
             search={accountSearchInput}
@@ -3573,6 +3594,8 @@ function AccountsWorkspace({
   openUser,
   clearUser,
   page,
+  pageSize,
+  setPageSize,
   total,
   summary,
   search,
@@ -3602,6 +3625,8 @@ function AccountsWorkspace({
   openUser: (id: string) => void;
   clearUser: () => void;
   page: number;
+  pageSize: 10 | 25 | 50 | 100;
+  setPageSize: (value: string) => void;
   total: number;
   summary?: AdminAccountsSummary;
   search: string;
@@ -3634,6 +3659,56 @@ function AccountsWorkspace({
   }
   const updateDraft = (key: string, value: string) =>
     setDraftFilters({ ...draftFilters, [key]: value });
+  const activeFilterCount =
+    Object.values(filters).filter((value) => value.trim().length > 0).length +
+    (search.trim().length > 0 ? 1 : 0);
+  const exportCurrentPage = () => {
+    const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = users.map((user) => [
+      user.displayName,
+      user.email,
+      user.username ?? "",
+      uniqueRoleAssignments(user.roles)
+        .filter((role) => role.role !== "USER")
+        .map((role) => sentence(role.role))
+        .join("; "),
+      accountStatusLabel(user.accountStatus),
+      financialStateLabel(user.financialState),
+      complianceStateLabel(user.complianceState),
+      payoutStateLabel(user.payoutState),
+      user.lastActivityAt ?? "",
+      user.createdAt,
+    ]);
+    const csv = [
+      [
+        "Account",
+        "Email",
+        "Username",
+        "Access",
+        "Account state",
+        "Financial state",
+        "Compliance",
+        "Payouts",
+        "Last activity",
+        "Joined",
+      ],
+      ...rows,
+    ]
+      .map((row) => row.map(quote).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `slice-accounts-page-${page}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const paginationPages = Array.from(
+    new Set(
+      [1, 2, 3, totalPages - 1, totalPages].filter((value) => value > 0 && value <= totalPages),
+    ),
+  );
   const tabActive = (value: string) =>
     value === "NEEDS_REVIEW"
       ? filters.attention === "REQUIRED"
@@ -3723,6 +3798,9 @@ function AccountsWorkspace({
           <h2>Accounts</h2>
           <span>Manage account access, financial state, compliance and platform permissions.</span>
         </div>
+        <button type="button" className="admin-accounts-export" onClick={exportCurrentPage}>
+          <Download aria-hidden="true" /> Export
+        </button>
       </section>
       <section className="admin-accounts-summary-grid" aria-label="Operational account summary">
         {cards.map(({ key, label, value, detail, icon: Icon, tone }) => (
@@ -3757,35 +3835,57 @@ function AccountsWorkspace({
         />
       ) : (
         <section className="admin-panel admin-accounts-table-panel admin-accounts-revamp-panel">
-          <div
-            className="admin-account-tabs admin-accounts-revamp-tabs"
-            role="tablist"
-            aria-label="Account categories"
-          >
-            {[
-              ["", "All Accounts"],
-              ["COLLECTOR", "Collectors"],
-              ["INVESTOR", "Investors"],
-              ["STAFF", "Staff"],
-              ["ADMIN", "Admins"],
-              ["NEEDS_REVIEW", "Needs Review"],
-              ["RESTRICTED", "Restricted"],
-            ].map(([value, label]) => (
+          <div className="admin-accounts-directory-toolbar">
+            <div
+              className="admin-account-tabs admin-accounts-revamp-tabs"
+              role="tablist"
+              aria-label="Account categories"
+            >
+              {[
+                ["", "All Accounts"],
+                ["COLLECTOR", "Collectors"],
+                ["INVESTOR", "Investors"],
+                ["STAFF", "Staff"],
+                ["ADMIN", "Admins"],
+                ["NEEDS_REVIEW", "Needs Review"],
+                ["RESTRICTED", "Restricted"],
+              ].map(([value, label]) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tabActive(value)}
+                  className={tabActive(value) ? "is-active" : ""}
+                  key={label}
+                  onClick={() => selectTab(value)}
+                >
+                  {label}
+                  {value === "NEEDS_REVIEW" && summary?.needsReview ? (
+                    <b>{summary.needsReview}</b>
+                  ) : null}
+                  {value === "RESTRICTED" && summary?.restricted ? (
+                    <b>{summary.restricted}</b>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <div className="admin-accounts-toolbar-actions">
               <button
                 type="button"
-                role="tab"
-                aria-selected={tabActive(value)}
-                className={tabActive(value) ? "is-active" : ""}
-                key={label}
-                onClick={() => selectTab(value)}
+                className="admin-clear-filters"
+                disabled={activeFilterCount === 0}
+                onClick={clearFilters}
               >
-                {label}
-                {value === "NEEDS_REVIEW" && summary?.needsReview ? (
-                  <b>{summary.needsReview}</b>
-                ) : null}
-                {value === "RESTRICTED" && summary?.restricted ? <b>{summary.restricted}</b> : null}
+                <X aria-hidden="true" /> Clear filters
               </button>
-            ))}
+              <button
+                type="button"
+                className="admin-filter-more"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+              >
+                <SlidersHorizontal aria-hidden="true" /> More filters
+                {activeFilterCount ? <b>{activeFilterCount}</b> : null}
+              </button>
+            </div>
           </div>
           <div className="admin-accounts-filter-bar">
             <label className="admin-account-search">
@@ -3863,13 +3963,17 @@ function AccountsWorkspace({
                 ["ASSET_REVIEWER", "Asset reviewer"],
               ]}
             />
-            <button
-              type="button"
-              className="admin-filter-more"
-              onClick={() => setFiltersOpen(!filtersOpen)}
-            >
-              <ListChecks aria-hidden="true" /> More filters
-            </button>
+            <AdminSelect
+              label="Membership"
+              value={draftFilters.membershipPlan}
+              onChange={(value) => updateDraft("membershipPlan", value)}
+              options={[
+                ["", "Membership: All"],
+                ["STARTER", "Starter"],
+                ["PRO", "Pro"],
+                ["ELITE", "Elite"],
+              ]}
+            />
           </div>
           {filtersOpen ? (
             <section
@@ -3891,17 +3995,6 @@ function AccountsWorkspace({
                   ["PAST_DUE", "Past due"],
                   ["SUSPENDED", "Suspended"],
                   ["EXPIRED", "Expired"],
-                ]}
-              />
-              <AdminSelect
-                label="Membership"
-                value={draftFilters.membershipPlan}
-                onChange={(value) => updateDraft("membershipPlan", value)}
-                options={[
-                  ["", "Membership: All"],
-                  ["STARTER", "Starter"],
-                  ["PRO", "Pro"],
-                  ["ELITE", "Elite"],
                 ]}
               />
               <AdminSelect
@@ -3949,14 +4042,8 @@ function AccountsWorkspace({
             </section>
           ) : null}
           <div className="admin-accounts-table-heading">
-            <div>
-              <strong>Account directory</strong>
-              <span>
-                {total} account{total === 1 ? "" : "s"} match the current view
-              </span>
-            </div>
             <label>
-              Sort{" "}
+              <span>Sort by</span>
               <AdminSelect
                 label="Sort accounts"
                 value={sort}
@@ -3968,21 +4055,24 @@ function AccountsWorkspace({
                 ]}
               />
             </label>
+            <span className="admin-accounts-match-count">
+              {total} account{total === 1 ? "" : "s"} match the current view
+            </span>
           </div>
           {users.length ? (
             <div className="admin-table-wrap admin-accounts-revamp-table-wrap">
               <table className="admin-table admin-accounts-table admin-accounts-revamp-table">
                 <thead>
                   <tr>
-                    <th>User</th>
+                    <th>Account</th>
                     <th>Access</th>
                     <th>Account state</th>
                     <th>Financial state</th>
                     <th>Compliance</th>
                     <th>Payouts</th>
-                    <th>Last sign-in</th>
+                    <th>Last activity</th>
                     <th>Joined</th>
-                    <th aria-label="Action" />
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4004,7 +4094,10 @@ function AccountsWorkspace({
                             <span className="admin-user-avatar">{initials(user.displayName)}</span>
                             <span>
                               <strong>{user.displayName}</strong>
-                              <small>{user.username ? `@${user.username}` : user.email}</small>
+                              <small>
+                                {user.username ? `@${user.username} · ${user.email}` : user.email}
+                              </small>
+                              <small>ID: {shortId(user.id)}</small>
                               {user.fixture === "DEMO" ? (
                                 <em className="admin-beta-badge">DEMO</em>
                               ) : null}
@@ -4013,14 +4106,13 @@ function AccountsWorkspace({
                         </td>
                         <td data-label="Access">
                           <div className="admin-account-access">
-                            <span className="admin-type-badge">{sentence(user.primaryType)}</span>
-                            {activeRoles.length > 0 && activeRoles[0].role !== user.primaryType ? (
-                              <small
-                                title={activeRoles.map((role) => sentence(role.role)).join(", ")}
-                              >
-                                {activeRoles.length} role{activeRoles.length === 1 ? "" : "s"}
-                              </small>
-                            ) : null}
+                            {(activeRoles.length ? activeRoles : [{ role: user.primaryType }]).map(
+                              (role, index) => (
+                                <span className="admin-type-badge" key={`${role.role}-${index}`}>
+                                  {sentence(role.role)}
+                                </span>
+                              ),
+                            )}
                           </div>
                         </td>
                         <td data-label="Account state">
@@ -4052,7 +4144,7 @@ function AccountsWorkspace({
                           />
                         </td>
                         <td
-                          data-label="Last sign-in"
+                          data-label="Last activity"
                           title={
                             user.lastActivityAt
                               ? new Date(user.lastActivityAt).toISOString()
@@ -4060,13 +4152,16 @@ function AccountsWorkspace({
                           }
                         >
                           {user.lastActivityAt ? (
-                            date(user.lastActivityAt)
+                            <span className="admin-account-activity">
+                              <strong>{relativeDate(user.lastActivityAt)}</strong>
+                              <small>Signed in</small>
+                            </span>
                           ) : (
                             <span className="admin-muted">No sign-in recorded</span>
                           )}
                         </td>
-                        <td data-label="Joined">{date(user.createdAt)}</td>
-                        <td data-label="Action">
+                        <td data-label="Joined">{fullDate(user.createdAt)}</td>
+                        <td data-label="Actions">
                           <button
                             type="button"
                             className="admin-open-account admin-open-account--compact"
@@ -4088,7 +4183,7 @@ function AccountsWorkspace({
           <div className="admin-pagination">
             <span>
               {total
-                ? `Showing ${(page - 1) * 10 + 1}–${Math.min(page * 10, total)} of ${total} accounts`
+                ? `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} accounts`
                 : "No accounts match these filters."}
             </span>
             <span className="admin-pagination-controls">
@@ -4100,16 +4195,42 @@ function AccountsWorkspace({
               >
                 <ChevronLeft aria-hidden="true" />
               </button>
-              <strong>{page}</strong>
+              {paginationPages.map((candidate, index) => (
+                <Fragment key={candidate}>
+                  {index > 0 && candidate - paginationPages[index - 1] > 1 ? <i>…</i> : null}
+                  <button
+                    type="button"
+                    className={candidate === page ? "is-active" : ""}
+                    aria-label={`Page ${candidate}`}
+                    onClick={() => setPage(candidate)}
+                  >
+                    {candidate}
+                  </button>
+                </Fragment>
+              ))}
               <button
                 type="button"
                 aria-label="Next page"
-                disabled={page * 10 >= total}
+                disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
               >
                 <ChevronRight aria-hidden="true" />
               </button>
             </span>
+            <label className="admin-accounts-page-size">
+              Rows per page
+              <AdminSelect
+                label="Rows per page"
+                value={String(pageSize)}
+                onChange={setPageSize}
+                options={[
+                  ["10", "10"],
+                  ["25", "25"],
+                  ["50", "50"],
+                  ["100", "100"],
+                ]}
+              />
+            </label>
           </div>
         </section>
       )}
@@ -6840,6 +6961,23 @@ function date(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(
     new Date(value),
   );
+}
+function fullDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+function relativeDate(value: string) {
+  const difference = Math.max(0, Date.now() - new Date(value).getTime());
+  const minutes = Math.floor(difference / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days < 30 ? `${days}d ago` : date(value);
 }
 function formatMinor(value: string) {
   const sign = value.startsWith("-") ? "-" : "";
