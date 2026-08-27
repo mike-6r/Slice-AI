@@ -3704,7 +3704,6 @@ function AccountsWorkspace({
           : "Requires financial attention",
       icon: AlertTriangle,
       tone: "amber",
-      disabled: summary?.financialExceptions === null,
     },
     {
       key: "suspended",
@@ -3725,13 +3724,13 @@ function AccountsWorkspace({
         </div>
       </section>
       <section className="admin-accounts-summary-grid" aria-label="Operational account summary">
-        {cards.map(({ key, label, value, detail, icon: Icon, tone, disabled }) => (
+        {cards.map(({ key, label, value, detail, icon: Icon, tone }) => (
           <button
             type="button"
             className={`admin-accounts-summary-card admin-accounts-summary-card--${tone}`}
             key={key}
             onClick={() => selectSummary(key)}
-            disabled={disabled}
+            disabled={key === "finance" && summary?.financialExceptions === null}
           >
             <span className="admin-accounts-summary-icon">
               <Icon aria-hidden="true" />
