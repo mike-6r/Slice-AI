@@ -752,7 +752,9 @@ function AdminConsole() {
           onClick={() => setMobileOpen(false)}
         />
       ) : null}
-      <main className="admin-console-main">
+      <main
+        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}`}
+      >
         <header className="admin-console-topbar">
           <button
             type="button"
