@@ -152,6 +152,22 @@ function AdminConsole() {
     market: catalogueMarket,
     grading: catalogueGrading,
     collector: catalogueCollector,
+    accountQ,
+    accountType,
+    accountStatus,
+    accountMembershipPlan,
+    accountMembershipStatus,
+    accountFinancialState,
+    accountComplianceState,
+    accountPayoutState,
+    accountRole,
+    accountAttention,
+    accountFixture,
+    accountJoinedFrom,
+    accountJoinedTo,
+    accountLastActive,
+    accountSort: accountSortParam,
+    accountPage: accountPageParam,
     priority: operationsPriority,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
@@ -262,23 +278,25 @@ function AdminConsole() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [accountSearchInput, setAccountSearchInput] = useState("");
-  const [accountSearch, setAccountSearch] = useState("");
-  const [accountPage, setAccountPage] = useState(1);
-  const [accountSort, setAccountSort] = useState("joined");
+  const [accountSearchInput, setAccountSearchInput] = useState(accountQ ?? "");
+  const [accountSearch, setAccountSearch] = useState(accountQ ?? "");
+  const [accountPage, setAccountPage] = useState(Math.max(1, Number(accountPageParam ?? 1)));
+  const [accountSort, setAccountSort] = useState(accountSortParam ?? "joined");
   const [accountSortDirection, setAccountSortDirection] = useState<"asc" | "desc">("desc");
   const [accountFilters, setAccountFilters] = useState({
-    type: "",
-    status: "",
-    membershipPlan: "",
-    membershipStatus: "",
-    financialState: "",
-    complianceState: "",
-    payoutState: "",
-    role: "",
-    joinedFrom: "",
-    joinedTo: "",
-    lastActiveWindow: "",
+    type: accountType ?? "",
+    status: accountStatus ?? "",
+    membershipPlan: accountMembershipPlan ?? "",
+    membershipStatus: accountMembershipStatus ?? "",
+    financialState: accountFinancialState ?? "",
+    complianceState: accountComplianceState ?? "",
+    payoutState: accountPayoutState ?? "",
+    attention: accountAttention ?? "",
+    fixture: accountFixture ?? "",
+    role: accountRole ?? "",
+    joinedFrom: accountJoinedFrom ?? "",
+    joinedTo: accountJoinedTo ?? "",
+    lastActiveWindow: accountLastActive ?? "",
   });
   const [accountDraft, setAccountDraft] = useState(accountFilters);
   const [accountFiltersOpen, setAccountFiltersOpen] = useState(false);
@@ -286,12 +304,58 @@ function AdminConsole() {
   const [selectedComplianceCase, setSelectedComplianceCase] = useState<string | undefined>();
   const [reviewSearchInput, setReviewSearchInput] = useState(reviewQuery ?? "");
   useEffect(() => {
-    const timer = window.setTimeout(() => setAccountSearch(accountSearchInput.trim()), 350);
+    const timer = window.setTimeout(() => {
+      const next = accountSearchInput.trim();
+      setAccountSearch(next);
+      if (next === accountQ) return;
+      void navigate({
+        search: (current) => ({ ...current, accountQ: next || undefined, accountPage: "1" }),
+        replace: true,
+      });
+    }, 350);
     return () => window.clearTimeout(timer);
-  }, [accountSearchInput]);
+  }, [accountQ, accountSearchInput, navigate]);
   useEffect(() => {
-    setAccountPage(1);
-  }, [accountSearch, accountFilters, accountSort, accountSortDirection]);
+    const nextFilters = {
+      type: accountType ?? "",
+      status: accountStatus ?? "",
+      membershipPlan: accountMembershipPlan ?? "",
+      membershipStatus: accountMembershipStatus ?? "",
+      financialState: accountFinancialState ?? "",
+      complianceState: accountComplianceState ?? "",
+      payoutState: accountPayoutState ?? "",
+      attention: accountAttention ?? "",
+      fixture: accountFixture ?? "",
+      role: accountRole ?? "",
+      joinedFrom: accountJoinedFrom ?? "",
+      joinedTo: accountJoinedTo ?? "",
+      lastActiveWindow: accountLastActive ?? "",
+    };
+    setAccountSearchInput(accountQ ?? "");
+    setAccountSearch(accountQ ?? "");
+    setAccountPage(Math.max(1, Number(accountPageParam ?? 1)));
+    setAccountSort(accountSortParam ?? "joined");
+    setAccountSortDirection(accountSortParam === "username" ? "asc" : "desc");
+    setAccountFilters(nextFilters);
+    setAccountDraft(nextFilters);
+  }, [
+    accountAttention,
+    accountComplianceState,
+    accountFinancialState,
+    accountFixture,
+    accountJoinedFrom,
+    accountJoinedTo,
+    accountLastActive,
+    accountMembershipPlan,
+    accountMembershipStatus,
+    accountPageParam,
+    accountPayoutState,
+    accountQ,
+    accountRole,
+    accountSortParam,
+    accountStatus,
+    accountType,
+  ]);
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
     return () => window.clearTimeout(timer);
@@ -1011,10 +1075,29 @@ function AdminConsole() {
             filters={accountFilters}
             draftFilters={accountDraft}
             setDraftFilters={(value) => setAccountDraft(value as typeof accountDraft)}
-            setFilters={(value) => setAccountFilters(value as typeof accountFilters)}
+            setFilters={(value) => {
+              const next = value as typeof accountFilters;
+              setAccountFilters(next);
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  ...accountFilterSearch(next),
+                  accountPage: "1",
+                }),
+                replace: true,
+              });
+            }}
             applyFilters={() => {
               setAccountFilters(accountDraft);
               setAccountPage(1);
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  ...accountFilterSearch(accountDraft),
+                  accountPage: "1",
+                }),
+                replace: true,
+              });
             }}
             clearFilters={() => {
               const cleared = {
@@ -1025,6 +1108,8 @@ function AdminConsole() {
                 financialState: "",
                 complianceState: "",
                 payoutState: "",
+                attention: "",
+                fixture: "",
                 role: "",
                 joinedFrom: "",
                 joinedTo: "",
@@ -1034,6 +1119,15 @@ function AdminConsole() {
               setAccountFilters(cleared);
               setAccountSearchInput("");
               setAccountPage(1);
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  ...accountFilterSearch(cleared),
+                  accountQ: undefined,
+                  accountPage: "1",
+                }),
+                replace: true,
+              });
             }}
             setType={(value) => {
               const next =
@@ -1042,12 +1136,30 @@ function AdminConsole() {
                   : { ...accountFilters, type: value, status: "" };
               setAccountFilters(next);
               setAccountDraft(next);
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  ...accountFilterSearch(next),
+                  accountPage: "1",
+                }),
+                replace: true,
+              });
             }}
-            setPage={setAccountPage}
+            setPage={(value) => {
+              setAccountPage(value);
+              void navigate({
+                search: (current) => ({ ...current, accountPage: String(value) }),
+                replace: true,
+              });
+            }}
             sort={accountSort}
             setSort={(value) => {
               setAccountSort(value);
-              setAccountSortDirection(value === "joined" ? "desc" : "desc");
+              setAccountSortDirection(value === "username" ? "asc" : "desc");
+              void navigate({
+                search: (current) => ({ ...current, accountSort: value, accountPage: "1" }),
+                replace: true,
+              });
             }}
             filtersOpen={accountFiltersOpen}
             setFiltersOpen={setAccountFiltersOpen}
@@ -3523,7 +3635,7 @@ function AccountsWorkspace({
     setDraftFilters({ ...draftFilters, [key]: value });
   const tabActive = (value: string) =>
     value === "NEEDS_REVIEW"
-      ? filters.status === "PENDING_REVIEW"
+      ? filters.attention === "REQUIRED"
       : value === "RESTRICTED"
         ? filters.status === "RESTRICTED"
         : value === "SUSPENDED"
@@ -3534,12 +3646,25 @@ function AccountsWorkspace({
       ...filters,
       type: ["COLLECTOR", "INVESTOR", "STAFF", "ADMIN"].includes(value) ? value : "",
       status:
-        value === "SUSPENDED" || value === "NEEDS_REVIEW" || value === "RESTRICTED"
-          ? ({ SUSPENDED: "SUSPENDED", NEEDS_REVIEW: "PENDING_REVIEW", RESTRICTED: "RESTRICTED" }[
-              value
-            ] ?? "")
+        value === "SUSPENDED" || value === "RESTRICTED"
+          ? ({ SUSPENDED: "SUSPENDED", RESTRICTED: "RESTRICTED" }[value] ?? "")
           : "",
+      attention: value === "NEEDS_REVIEW" ? "REQUIRED" : "",
     };
+    setFilters(next);
+    setDraftFilters(next);
+    setPage(1);
+  };
+  const selectSummary = (key: string) => {
+    const next = {
+      ...filters,
+      type: "",
+      status: "",
+      financialState: key === "finance" ? "EXCEPTION" : "",
+      attention: key === "review" ? "REQUIRED" : "",
+    };
+    if (key === "restricted") next.status = "RESTRICTED";
+    if (key === "suspended") next.status = "SUSPENDED";
     setFilters(next);
     setDraftFilters(next);
     setPage(1);
@@ -3555,9 +3680,9 @@ function AccountsWorkspace({
     },
     {
       key: "review",
-      label: "Pending review",
-      value: summary?.pendingReview ?? "—",
-      detail: "Requires staff action",
+      label: "Needs review",
+      value: summary?.needsReview ?? "—",
+      detail: "Authoritative staff attention",
       icon: Clock3,
       tone: "amber",
     },
@@ -3579,6 +3704,7 @@ function AccountsWorkspace({
           : "Requires financial attention",
       icon: AlertTriangle,
       tone: "amber",
+      disabled: summary?.financialExceptions === null,
     },
     {
       key: "suspended",
@@ -3599,10 +3725,13 @@ function AccountsWorkspace({
         </div>
       </section>
       <section className="admin-accounts-summary-grid" aria-label="Operational account summary">
-        {cards.map(({ key, label, value, detail, icon: Icon, tone }) => (
-          <article
+        {cards.map(({ key, label, value, detail, icon: Icon, tone, disabled }) => (
+          <button
+            type="button"
             className={`admin-accounts-summary-card admin-accounts-summary-card--${tone}`}
             key={key}
+            onClick={() => selectSummary(key)}
+            disabled={disabled}
           >
             <span className="admin-accounts-summary-icon">
               <Icon aria-hidden="true" />
@@ -3612,7 +3741,7 @@ function AccountsWorkspace({
               <strong>{value}</strong>
               <small>{detail}</small>
             </div>
-          </article>
+          </button>
         ))}
       </section>
       {loading ? (
@@ -3651,8 +3780,8 @@ function AccountsWorkspace({
                 onClick={() => selectTab(value)}
               >
                 {label}
-                {value === "NEEDS_REVIEW" && summary?.pendingReview ? (
-                  <b>{summary.pendingReview}</b>
+                {value === "NEEDS_REVIEW" && summary?.needsReview ? (
+                  <b>{summary.needsReview}</b>
                 ) : null}
                 {value === "RESTRICTED" && summary?.restricted ? <b>{summary.restricted}</b> : null}
               </button>
@@ -3679,20 +3808,23 @@ function AccountsWorkspace({
                 ["SUSPENDED", "Suspended"],
               ]}
             />
-            <AdminSelect
-              label="Financial state"
-              value={draftFilters.financialState}
-              onChange={(value) => updateDraft("financialState", value)}
-              options={[
-                ["", "Financial state: All"],
-                ["CLEAR", "Clear"],
-                ["BANK_CLEARING", "Bank clearing"],
-                ["MANUAL_REVIEW", "Manual review"],
-                ["FINANCIAL_DEFICIT", "Financial deficit"],
-                ["RETURNED_DEPOSIT", "Returned deposit"],
-                ["WITHDRAWAL_HOLD", "Withdrawal hold"],
-              ]}
-            />
+            {summary?.financialExceptions !== null ? (
+              <AdminSelect
+                label="Financial state"
+                value={draftFilters.financialState}
+                onChange={(value) => updateDraft("financialState", value)}
+                options={[
+                  ["", "Financial state: All"],
+                  ["EXCEPTION", "Financial exception"],
+                  ["CLEAR", "Clear"],
+                  ["BANK_CLEARING", "Bank clearing"],
+                  ["MANUAL_REVIEW", "Manual review"],
+                  ["FINANCIAL_DEFICIT", "Financial deficit"],
+                  ["RETURNED_DEPOSIT", "Returned deposit"],
+                  ["WITHDRAWAL_HOLD", "Withdrawal hold"],
+                ]}
+              />
+            ) : null}
             <AdminSelect
               label="Compliance"
               value={draftFilters.complianceState}
@@ -3712,7 +3844,10 @@ function AccountsWorkspace({
               options={[
                 ["", "Payouts: All"],
                 ["READY", "Ready"],
-                ["SETUP_REQUIRED", "Setup required"],
+                ["NOT_CONFIGURED", "Not configured"],
+                ["SETUP_IN_PROGRESS", "Setup in progress"],
+                ["UNDER_REVIEW", "Under review"],
+                ["ACTION_REQUIRED", "Action required"],
                 ["RESTRICTED", "Restricted"],
               ]}
             />
@@ -3726,17 +3861,6 @@ function AccountsWorkspace({
                 ["ADMIN", "Admin"],
                 ["SUPPORT", "Support"],
                 ["ASSET_REVIEWER", "Asset reviewer"],
-              ]}
-            />
-            <AdminSelect
-              label="Membership"
-              value={draftFilters.membershipPlan}
-              onChange={(value) => updateDraft("membershipPlan", value)}
-              options={[
-                ["", "Membership: All"],
-                ["STARTER", "Starter"],
-                ["PRO", "Pro"],
-                ["ELITE", "Elite"],
               ]}
             />
             <button
@@ -3770,6 +3894,17 @@ function AccountsWorkspace({
                 ]}
               />
               <AdminSelect
+                label="Membership"
+                value={draftFilters.membershipPlan}
+                onChange={(value) => updateDraft("membershipPlan", value)}
+                options={[
+                  ["", "Membership: All"],
+                  ["STARTER", "Starter"],
+                  ["PRO", "Pro"],
+                  ["ELITE", "Elite"],
+                ]}
+              />
+              <AdminSelect
                 label="Last active"
                 value={draftFilters.lastActiveWindow}
                 onChange={(value) => updateDraft("lastActiveWindow", value)}
@@ -3779,6 +3914,16 @@ function AccountsWorkspace({
                   ["7", "Last 7 days"],
                   ["30", "Last 30 days"],
                   ["inactive", "Inactive 30+ days"],
+                ]}
+              />
+              <AdminSelect
+                label="Fixture"
+                value={draftFilters.fixture}
+                onChange={(value) => updateDraft("fixture", value)}
+                options={[
+                  ["", "Fixture: All"],
+                  ["NORMAL", "Normal"],
+                  ["DEMO", "Demo"],
                 ]}
               />
               <div className="admin-date-range">
@@ -3817,9 +3962,9 @@ function AccountsWorkspace({
                 value={sort}
                 onChange={setSort}
                 options={[
-                  ["joined", "Needs attention / joined"],
-                  ["lastActive", "Last activity"],
-                  ["username", "Name"],
+                  ["joined", "Newest accounts"],
+                  ["lastActive", "Recent sign-in"],
+                  ["username", "Name A–Z"],
                 ]}
               />
             </label>
@@ -3835,7 +3980,7 @@ function AccountsWorkspace({
                     <th>Financial state</th>
                     <th>Compliance</th>
                     <th>Payouts</th>
-                    <th>Last activity</th>
+                    <th>Last sign-in</th>
                     <th>Joined</th>
                     <th aria-label="Action" />
                   </tr>
@@ -3849,7 +3994,6 @@ function AccountsWorkspace({
                       <tr
                         key={user.id}
                         className={`admin-account-row admin-account-row--${accountTone(user)}`}
-                        onDoubleClick={() => openUser(user.id)}
                       >
                         <td data-label="User">
                           <button
@@ -3861,8 +4005,8 @@ function AccountsWorkspace({
                             <span>
                               <strong>{user.displayName}</strong>
                               <small>{user.username ? `@${user.username}` : user.email}</small>
-                              {isBetaAccount(user) ? (
-                                <em className="admin-beta-badge">TEST</em>
+                              {user.fixture === "DEMO" ? (
+                                <em className="admin-beta-badge">DEMO</em>
                               ) : null}
                             </span>
                           </button>
@@ -3908,17 +4052,17 @@ function AccountsWorkspace({
                           />
                         </td>
                         <td
-                          data-label="Last activity"
+                          data-label="Last sign-in"
                           title={
                             user.lastActivityAt
                               ? new Date(user.lastActivityAt).toISOString()
-                              : "Activity telemetry is not available."
+                              : "No completed sign-in has been recorded."
                           }
                         >
                           {user.lastActivityAt ? (
                             date(user.lastActivityAt)
                           ) : (
-                            <span className="admin-muted">Not tracked</span>
+                            <span className="admin-muted">No sign-in recorded</span>
                           )}
                         </td>
                         <td data-label="Joined">{date(user.createdAt)}</td>
@@ -4541,7 +4685,7 @@ function UserDetailExperience({
             </span>
             <div className="admin-detail-chips">
               <span>{sentence(user.primaryType)}</span>
-              {isBetaAccount(user) ? <span>Beta test</span> : null}
+              {user.fixture === "DEMO" ? <span>Demo account</span> : null}
               <span>{user.collectorOverview ? "Collector access" : "Investor access"}</span>
               <span>Joined {date(user.createdAt)}</span>
             </div>
@@ -5209,7 +5353,7 @@ function ConsolidatedUserDetailExperience({
               {roles.slice(0, 3).map((role) => (
                 <span key={role.id}>{sentence(role.role)}</span>
               ))}
-              {isBetaAccount(user) ? <span>Test account</span> : null}
+              {user.fixture === "DEMO" ? <span>Demo account</span> : null}
             </div>
           </div>
         </div>
@@ -6705,11 +6849,6 @@ function uniqueRoleAssignments(roles: AdminUserSummary["roles"]): AdminUserSumma
   );
 }
 
-function isBetaAccount(user: AdminUserSummary) {
-  const value = `${user.email} ${user.username ?? ""} ${user.displayName}`.toLowerCase();
-  return value.includes("demo-") || value.includes("beta") || value.includes("test");
-}
-
 function accountStatusLabel(value: string) {
   return value === "PENDING_REVIEW" ? "Pending review" : sentence(value);
 }
@@ -6760,25 +6899,56 @@ function complianceStateTone(value: string) {
   return value === "VERIFIED" ? "positive" : value === "UNAVAILABLE" ? "muted" : "warning";
 }
 function payoutStateLabel(value: string) {
-  return value === "SETUP_REQUIRED" ? "Setup required" : sentence(value);
+  return value === "NOT_CONFIGURED"
+    ? "Not configured"
+    : value === "SETUP_IN_PROGRESS"
+      ? "Setup in progress"
+      : value === "ACTION_REQUIRED"
+        ? "Action required"
+        : value === "UNDER_REVIEW"
+          ? "Under review"
+          : sentence(value);
 }
 function payoutStateTone(value: string) {
-  return value === "READY" ? "positive" : value === "RESTRICTED" ? "critical" : "warning";
+  return value === "READY"
+    ? "positive"
+    : value === "RESTRICTED" || value === "ACTION_REQUIRED"
+      ? "critical"
+      : value === "NOT_CONFIGURED" || value === "UNDER_REVIEW"
+        ? "muted"
+        : "warning";
 }
 function accountTone(user: AdminUserSummary) {
-  if (
-    ["RESTRICTED", "SUSPENDED"].includes(user.accountStatus) ||
-    user.financialState === "FINANCIAL_DEFICIT"
-  )
-    return "critical";
-  if (user.accountStatus === "PENDING_REVIEW" || user.financialState !== "CLEAR") return "warning";
-  return "normal";
+  return user.attention.level === "RESTRICTED" || user.attention.level === "BLOCKING"
+    ? "critical"
+    : user.attention.level === "ATTENTION"
+      ? "warning"
+      : "normal";
 }
 function formatAccountMinor(value: string) {
   const negative = value.startsWith("-");
   const digits = value.replace(/^-/, "").padStart(3, "0");
   return `${negative ? "-" : ""}£${digits.slice(0, -2)}.${digits.slice(-2)}`;
 }
+
+function accountFilterSearch(filters: Record<string, string>) {
+  return {
+    accountType: filters.type || undefined,
+    accountStatus: filters.status || undefined,
+    accountMembershipPlan: filters.membershipPlan || undefined,
+    accountMembershipStatus: filters.membershipStatus || undefined,
+    accountFinancialState: filters.financialState || undefined,
+    accountComplianceState: filters.complianceState || undefined,
+    accountPayoutState: filters.payoutState || undefined,
+    accountRole: filters.role || undefined,
+    accountAttention: filters.attention || undefined,
+    accountFixture: filters.fixture || undefined,
+    accountJoinedFrom: filters.joinedFrom || undefined,
+    accountJoinedTo: filters.joinedTo || undefined,
+    accountLastActive: filters.lastActiveWindow || undefined,
+  };
+}
+
 function AccountStateCell({
   label,
   reason,

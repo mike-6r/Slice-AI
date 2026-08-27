@@ -249,6 +249,14 @@ export type AdminUserSummary = {
   complianceReason: string | null;
   payoutState: string;
   payoutReason: string | null;
+  attention: {
+    required: boolean;
+    level: "NONE" | "ATTENTION" | "BLOCKING" | "RESTRICTED";
+    domain: "ACCESS" | "FINANCIAL" | "COMPLIANCE" | "PAYOUT" | null;
+    reason: string | null;
+    nextAction: string | null;
+  };
+  fixture: "NORMAL" | "DEMO";
   roles: Array<{
     id: string;
     role: string;
@@ -271,7 +279,7 @@ export type AdminAccountsSummary = {
   staff: number;
   admins: number;
   suspended: number;
-  pendingReview: number;
+  needsReview: number;
   activeUsers: number;
   restricted: number;
   financialExceptions: number | null;
@@ -1749,6 +1757,8 @@ export interface AdminRepository {
     financialState?: string;
     complianceState?: string;
     payoutState?: string;
+    attention?: string;
+    fixture?: string;
     joinedFrom?: string;
     joinedTo?: string;
     lastActiveWindow?: string;

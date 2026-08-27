@@ -279,7 +279,7 @@ export const mockRepositories: AppRepositories = {
           staff: 0,
           admins: 0,
           suspended: 0,
-          pendingReview: 0,
+          needsReview: 0,
           activeUsers: 0,
           restricted: 0,
           financialExceptions: null,

@@ -53,6 +53,22 @@ export type AdminSearch = {
   market?: string;
   grading?: string;
   collector?: string;
+  accountQ?: string;
+  accountType?: string;
+  accountStatus?: string;
+  accountMembershipPlan?: string;
+  accountMembershipStatus?: string;
+  accountFinancialState?: string;
+  accountComplianceState?: string;
+  accountPayoutState?: string;
+  accountRole?: string;
+  accountAttention?: string;
+  accountFixture?: string;
+  accountJoinedFrom?: string;
+  accountJoinedTo?: string;
+  accountLastActive?: string;
+  accountSort?: string;
+  accountPage?: string;
 };
 
 const navigableSections: AdminSection[] = [
@@ -163,6 +179,22 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     billing: stringValue("billing"),
     usage: stringValue("usage"),
     needsAction: stringValue("needsAction"),
+    accountQ: nonEmptyValue("accountQ"),
+    accountType: stringValue("accountType"),
+    accountStatus: stringValue("accountStatus"),
+    accountMembershipPlan: stringValue("accountMembershipPlan"),
+    accountMembershipStatus: stringValue("accountMembershipStatus"),
+    accountFinancialState: stringValue("accountFinancialState"),
+    accountComplianceState: stringValue("accountComplianceState"),
+    accountPayoutState: stringValue("accountPayoutState"),
+    accountRole: stringValue("accountRole"),
+    accountAttention: stringValue("accountAttention"),
+    accountFixture: stringValue("accountFixture"),
+    accountJoinedFrom: stringValue("accountJoinedFrom"),
+    accountJoinedTo: stringValue("accountJoinedTo"),
+    accountLastActive: stringValue("accountLastActive"),
+    accountSort: stringValue("accountSort"),
+    accountPage: stringValue("accountPage"),
   };
 }
 

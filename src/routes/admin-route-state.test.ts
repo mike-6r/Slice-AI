@@ -44,4 +44,28 @@ describe("admin route state", () => {
       collector: "demo-collector",
     });
   });
+
+  it("preserves the paginated Accounts directory view in URL state", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "users",
+        accountQ: "demo",
+        accountType: "COLLECTOR",
+        accountAttention: "REQUIRED",
+        accountPayoutState: "NOT_CONFIGURED",
+        accountFixture: "DEMO",
+        accountSort: "lastActive",
+        accountPage: "2",
+      }),
+    ).toMatchObject({
+      section: "users",
+      accountQ: "demo",
+      accountType: "COLLECTOR",
+      accountAttention: "REQUIRED",
+      accountPayoutState: "NOT_CONFIGURED",
+      accountFixture: "DEMO",
+      accountSort: "lastActive",
+      accountPage: "2",
+    });
+  });
 });

@@ -6349,6 +6349,21 @@
   padding: 0.8rem 0.9rem;
   background: linear-gradient(145deg, rgba(14, 30, 39, 0.96), rgba(9, 20, 28, 0.92));
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-accounts-summary-card:hover,
+.admin-accounts-summary-card:focus-visible {
+  border-color: currentColor;
+  outline: 0;
+}
+.admin-accounts-summary-card:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+.admin-accounts-summary-card:disabled:hover {
+  border-color: #20353e;
 }
 .admin-accounts-summary-icon {
   display: grid;
@@ -6423,7 +6438,7 @@
 }
 .admin-accounts-filter-bar {
   display: grid;
-  grid-template-columns: minmax(15rem, 1.7fr) repeat(6, minmax(7.5rem, 1fr)) auto;
+  grid-template-columns: minmax(15rem, 1.7fr) repeat(5, minmax(8.25rem, 1fr)) auto;
   gap: 0.45rem;
   padding: 0.78rem 0.9rem;
   background: rgba(12, 26, 34, 0.74);
@@ -6444,7 +6459,7 @@
 }
 .admin-accounts-revamp-advanced {
   align-items: end;
-  grid-template-columns: 1.6fr repeat(2, minmax(9rem, 1fr)) 1.5fr auto auto;
+  grid-template-columns: 1.3fr repeat(3, minmax(9rem, 1fr)) 1.5fr auto auto;
 }
 .admin-accounts-table-heading {
   padding: 0.9rem 0.9rem 0.45rem;

@@ -1864,6 +1864,7 @@ const mapAdminUser = (raw: unknown): AdminUserSummary => {
   const membership = value.membership
     ? objectField(value.membership, "admin user membership")
     : null;
+  const attention = value.attention ? objectField(value.attention, "admin user attention") : {};
   return {
     id: stringField(value.id, "admin user.id"),
     displayName: stringField(value.displayName, "admin user.displayName"),
@@ -1887,8 +1888,20 @@ const mapAdminUser = (raw: unknown): AdminUserSummary => {
       "admin user.complianceState",
     ),
     complianceReason: nullableString(value.complianceReason, "admin user.complianceReason"),
-    payoutState: stringField(value.payoutState ?? "SETUP_REQUIRED", "admin user.payoutState"),
+    payoutState: stringField(value.payoutState ?? "NOT_CONFIGURED", "admin user.payoutState"),
     payoutReason: nullableString(value.payoutReason, "admin user.payoutReason"),
+    attention: {
+      required: Boolean(attention.required),
+      level: ["NONE", "ATTENTION", "BLOCKING", "RESTRICTED"].includes(String(attention.level))
+        ? (String(attention.level) as AdminUserSummary["attention"]["level"])
+        : "NONE",
+      domain: ["ACCESS", "FINANCIAL", "COMPLIANCE", "PAYOUT"].includes(String(attention.domain))
+        ? (String(attention.domain) as NonNullable<AdminUserSummary["attention"]["domain"]>)
+        : null,
+      reason: nullableString(attention.reason, "admin user attention.reason"),
+      nextAction: nullableString(attention.nextAction, "admin user attention.nextAction"),
+    },
+    fixture: value.fixture === "DEMO" ? "DEMO" : "NORMAL",
     roles,
     createdAt: stringField(value.createdAt, "admin user.createdAt"),
     lastActivityAt: nullableString(value.lastActivityAt, "admin user.lastActivityAt"),
@@ -4172,7 +4185,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           staff: Number(summary.staff ?? 0),
           admins: Number(summary.admins ?? 0),
           suspended: Number(summary.suspended ?? 0),
-          pendingReview: Number(summary.pendingReview ?? 0),
+          needsReview: Number(summary.needsReview ?? 0),
           activeUsers: Number(summary.activeUsers ?? 0),
           restricted: Number(summary.restricted ?? 0),
           financialExceptions:

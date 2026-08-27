@@ -31,6 +31,8 @@ const page = z
     financialState: z.string().trim().max(40).optional(),
     complianceState: z.string().trim().max(40).optional(),
     payoutState: z.string().trim().max(40).optional(),
+    attention: z.enum(['REQUIRED']).optional(),
+    fixture: z.enum(['ALL', 'NORMAL', 'DEMO']).optional(),
     joinedFrom: z.string().trim().max(40).optional(),
     joinedTo: z.string().trim().max(40).optional(),
     lastActiveWindow: z.string().trim().max(40).optional(),
