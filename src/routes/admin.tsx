@@ -5247,7 +5247,13 @@ function ConsolidatedUserDetailExperience({
             />
             <DetailRow
               label="Funding bank"
-              value={user.permissions.finance ? "Protected connection" : "Unavailable"}
+              value={
+                user.permissions.finance
+                  ? user.payoutDetails?.status
+                    ? "Protected connection"
+                    : "Not connected"
+                  : "Unavailable"
+              }
             />
             <DetailRow
               label="Financial deficit"
@@ -5446,7 +5452,10 @@ function ConsolidatedUserDetailExperience({
                 label="Transfers capability"
                 value={user.payoutDetails?.transfersCapability ?? "Unavailable"}
               />
-              <DetailRow label="Funding bank" value="Protected bank connection" />
+              <DetailRow
+                label="Funding bank"
+                value={user.payoutDetails?.status ? "Protected bank connection" : "Not connected"}
+              />
             </>
           ) : (
             <AdminEmpty

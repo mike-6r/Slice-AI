@@ -4207,8 +4207,9 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
     },
     async getUserHistory(input): Promise<AdminAccountHistoryResponse> {
+      const { id, ...query } = input;
       const value = objectField(
-        await client.get<unknown>(`/admin/users/${encodeURIComponent(input.id)}/history`, input),
+        await client.get<unknown>(`/admin/users/${encodeURIComponent(id)}/history`, query),
         "admin user history",
       );
       return {

@@ -65,6 +65,26 @@ const dto = {
 };
 
 describe("HTTP catalogue mapping", () => {
+  it("keeps the account identifier in the history path, not the strict query", async () => {
+    const get = vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(
+      repositories.admin.getUserHistory({
+        id: "account-1",
+        category: "SECURITY",
+        page: 2,
+        pageSize: 20,
+      }),
+    ).resolves.toMatchObject({ items: [], page: 1, total: 0 });
+
+    expect(get).toHaveBeenCalledWith("/admin/users/account-1/history", {
+      category: "SECURITY",
+      page: 2,
+      pageSize: 20,
+    });
+  });
+
   it("maps the bounded account-capability contract without raw compliance state", async () => {
     const get = vi.fn().mockResolvedValue({
       capabilities: [
