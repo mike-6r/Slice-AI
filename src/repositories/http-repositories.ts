@@ -1,5 +1,6 @@
 import { ApiClient, ApiError } from "@/api/http-client";
 import type {
+  AdminAccountHistoryResponse,
   AdminComplianceCase,
   AdminFinanceDashboard,
   AdminFinanceRecord,
@@ -1963,6 +1964,11 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     nullableString(source[field], `admin user ${field}`);
   return {
     ...user,
+    semanticRoles: Array.isArray(value.semanticRoles)
+      ? value.semanticRoles
+          .filter((role): role is string => typeof role === "string" && role !== "USER")
+          .filter((role, index, roles) => roles.indexOf(role) === index)
+      : Array.from(new Set(user.roles.map((role) => role.role).filter((role) => role !== "USER"))),
     profile: profile
       ? {
           displayName: nullableString(profile.displayName, "profile.displayName"),
@@ -4199,6 +4205,36 @@ const adminRepository = (client: ApiClient): AdminRepository => {
     },
     async getUser(id) {
       return mapAdminUserDetail(await client.get<unknown>(`/admin/users/${id}`));
+    },
+    async getUserHistory(input): Promise<AdminAccountHistoryResponse> {
+      const value = objectField(
+        await client.get<unknown>(`/admin/users/${encodeURIComponent(input.id)}/history`, input),
+        "admin user history",
+      );
+      return {
+        items: Array.isArray(value.items)
+          ? value.items.map((rawActivity) => {
+              const activity = objectField(rawActivity, "admin user history item");
+              return {
+                id: stringField(activity.id, "admin user history.id"),
+                action: stringField(activity.action, "admin user history.action"),
+                resourceType: stringField(activity.resourceType, "admin user history.resourceType"),
+                resourceId: nullableString(activity.resourceId, "admin user history.resourceId"),
+                actor: nullableString(activity.actor, "admin user history.actor"),
+                actorType: stringField(
+                  activity.actorType ?? "USER",
+                  "admin user history.actorType",
+                ),
+                result: stringField(activity.result ?? "SUCCESS", "admin user history.result"),
+                occurredAt: stringField(activity.occurredAt, "admin user history.occurredAt"),
+              };
+            })
+          : [],
+        page: Number(value.page ?? 1),
+        pageSize: Number(value.pageSize ?? 20),
+        total: Number(value.total ?? 0),
+        totalPages: Number(value.totalPages ?? 1),
+      };
     },
     async transitionUserStatus(id, input) {
       const value = objectField(

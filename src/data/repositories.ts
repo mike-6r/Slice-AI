@@ -288,6 +288,7 @@ export type AdminAccountsSummary = {
 };
 
 export type AdminUserDetail = AdminUserSummary & {
+  semanticRoles: string[];
   profile: {
     displayName: string | null;
     publicUsername: string | null;
@@ -420,6 +421,14 @@ export type AdminUserDetail = AdminUserSummary & {
     createdAt: string;
     releasedAt: string | null;
   }>;
+};
+
+export type AdminAccountHistoryResponse = {
+  items: AdminUserDetail["activitySnapshot"];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type AdminComplianceCase = {
@@ -1775,6 +1784,21 @@ export interface AdminRepository {
     summary: AdminAccountsSummary;
   }>;
   getUser(id: string): Promise<AdminUserDetail>;
+  getUserHistory(input: {
+    id: string;
+    category?:
+      | "ALL"
+      | "SECURITY"
+      | "FINANCIAL"
+      | "TRADING"
+      | "COMPLIANCE"
+      | "ACCOUNT"
+      | "COLLECTOR"
+      | "ADMIN"
+      | "PROVIDER";
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminAccountHistoryResponse>;
   transitionUserStatus(
     id: string,
     input: { toStatus: string; reasonCode: string; restore?: boolean },

@@ -4773,6 +4773,8 @@ function ConsolidatedUserDetailExperience({
   setTab: (value: string) => void;
 }) {
   const [historyFilter, setHistoryFilter] = useState("All");
+  const [historyPage, setHistoryPage] = useState(1);
+  const services = useAppServices();
   const legacyTabMap: Record<string, string> = {
     Access: "Operations",
     "Roles & Access": "Operations",
@@ -4789,6 +4791,27 @@ function ConsolidatedUserDetailExperience({
   const activeTab = ["Overview", "Operations", "History"].includes(requestedTab)
     ? requestedTab
     : "Overview";
+  const history = useQuery({
+    queryKey: ["admin", "user", user?.id, "history", historyFilter, historyPage],
+    queryFn: () =>
+      services.repositories.admin.getUserHistory({
+        id: user!.id,
+        category: historyFilter.toUpperCase() as
+          | "ALL"
+          | "SECURITY"
+          | "FINANCIAL"
+          | "TRADING"
+          | "COMPLIANCE"
+          | "ACCOUNT"
+          | "COLLECTOR"
+          | "ADMIN"
+          | "PROVIDER",
+        page: historyPage,
+        pageSize: 20,
+      }),
+    enabled: Boolean(user) && activeTab === "History",
+    staleTime: 30_000,
+  });
   useEffect(() => {
     if (tab && tab !== activeTab) setTab(activeTab);
   }, [activeTab, setTab, tab]);
@@ -4827,9 +4850,13 @@ function ConsolidatedUserDetailExperience({
   const stateText = (value: string) =>
     value === "UNAVAILABLE"
       ? "Unavailable"
-      : value === "SETUP_REQUIRED"
-        ? "Setup required"
-        : sentence(value);
+      : value === "NOT_CONFIGURED"
+        ? "Not configured"
+        : value === "SETUP_IN_PROGRESS"
+          ? "Setup in progress"
+          : value === "NOT_REQUIRED"
+            ? "Not currently required"
+            : sentence(value);
   const stateCell = (label: string, value: string, detail: string) => (
     <div
       className={`admin-account-detail-state-cell admin-account-detail-state-cell--${stateTone(value)}`}
@@ -4921,40 +4948,20 @@ function ConsolidatedUserDetailExperience({
     "Admin",
     "Provider",
   ];
-  const visibleHistory = historyEvents.filter((event) =>
-    historyFilter === "All"
-      ? true
-      : historyCategory(event.action, event.resourceType) === historyFilter,
-  );
-  const attention = [
-    user.accountStatus === "PENDING_REVIEW"
-      ? ["Account review", user.accountStateReason ?? "Staff review required."]
-      : null,
-    ["RESTRICTED", "SUSPENDED"].includes(user.accountStatus)
-      ? ["Account restricted", user.accountStateReason ?? "Account access is restricted."]
-      : null,
-    user.permissions.finance && user.financialState !== "CLEAR"
-      ? ["Financial exception", financialStateDetail(user)]
-      : null,
-    user.permissions.compliance &&
-    ["REVIEW_REQUIRED", "INCOMPLETE", "RESTRICTED"].includes(user.complianceState)
-      ? ["Compliance", complianceStateLabel(user.complianceState)]
-      : null,
-    user.payoutState !== "READY"
-      ? ["Payouts", user.payoutReason ?? payoutStateLabel(user.payoutState)]
-      : null,
-    user.activeHolds.length
-      ? [
-          "Active hold",
-          `${user.activeHolds.length} account hold${user.activeHolds.length === 1 ? "" : "s"} recorded.`,
-        ]
-      : null,
-  ].filter((item): item is [string, string] => Boolean(item));
+  const attention = user.attention.required
+    ? [
+        [
+          user.attention.domain ?? "Account",
+          user.attention.reason ?? "Staff attention is required.",
+        ],
+      ]
+    : [];
   const finance = user.financialDetails;
   const investorVisible =
     user.primaryType === "INVESTOR" ||
     user.portfolioSummary.totalAssets > 0 ||
     user.portfolioSummary.openOrders > 0;
+  const investorRole = user.semanticRoles.includes("INVESTOR");
 
   const renderOverview = () => (
     <div className="admin-account-detail-stack">
@@ -5008,7 +5015,9 @@ function ConsolidatedUserDetailExperience({
               ))}
             </div>
           ) : (
-            <AdminEmpty detail="No active issues require attention." icon={BadgeCheck} />
+            <div className="admin-account-detail-healthy-strip">
+              <BadgeCheck aria-hidden="true" /> No active issues
+            </div>
           )}
         </section>
 
@@ -5041,7 +5050,7 @@ function ConsolidatedUserDetailExperience({
       <div className="admin-account-detail-grid admin-account-detail-grid--summary">
         {investorVisible ? (
           <section className="admin-account-detail-panel">
-            <AdminPanelHeading title="Investor summary" />
+            <AdminPanelHeading title={investorRole ? "Investor summary" : "Investment activity"} />
             <div className="admin-account-detail-metrics">
               <DetailRow
                 label="Portfolio assets"
@@ -5134,11 +5143,7 @@ function ConsolidatedUserDetailExperience({
       </div>
 
       <section className="admin-account-detail-panel">
-        <AdminPanelHeading
-          title="Financial operations"
-          action={user.permissions.finance ? "Finance workspace" : undefined}
-          onClick={user.permissions.finance ? () => setTab("Operations") : undefined}
-        />
+        <AdminPanelHeading title="Financial summary" />
         {user.permissions.finance && finance ? (
           <div className="admin-account-detail-finance-grid">
             <DetailRow label="Available cash" value={money(finance.availableMinor)} />
@@ -5162,10 +5167,7 @@ function ConsolidatedUserDetailExperience({
             icon={WalletCards}
           />
         )}
-        <p className="admin-safe-note">
-          Read-only projection. Ledger corrections and payout actions remain in their protected
-          workspaces.
-        </p>
+        <p className="admin-safe-note">Financial balances are managed in Finance.</p>
       </section>
 
       <div className="admin-account-detail-grid admin-account-detail-grid--operations">
@@ -5248,15 +5250,13 @@ function ConsolidatedUserDetailExperience({
         </div>
       ) : null}
 
-      <div className="admin-account-detail-danger">
+      <section className="admin-account-detail-panel admin-account-detail-controls">
         <div>
-          <strong>Restricted account actions</strong>
-          <span>
-            These actions are audited and server-authorized. No action runs during read-only review.
-          </span>
+          <strong>Account controls</strong>
+          <span>Access changes require a reason and are recorded in account history.</span>
         </div>
         <AccountStatusManagement user={user} retry={retry} />
-      </div>
+      </section>
     </div>
   );
 
@@ -5281,16 +5281,30 @@ function ConsolidatedUserDetailExperience({
               type="button"
               className={historyFilter === filter ? "is-active" : ""}
               key={filter}
-              onClick={() => setHistoryFilter(filter)}
+              onClick={() => {
+                setHistoryFilter(filter);
+                setHistoryPage(1);
+              }}
             >
               {filter}
             </button>
           ))}
         </div>
       </div>
-      {visibleHistory.length ? (
+      {history.isLoading ? (
+        <AdminState
+          title="Loading account history"
+          detail="Reading the immutable account timeline."
+        />
+      ) : history.isError ? (
+        <AdminState
+          title="Account history is unavailable"
+          detail="The account record is still available. Retry the timeline when the service recovers."
+          retry={() => void history.refetch()}
+        />
+      ) : history.data?.items.length ? (
         <div className="admin-account-detail-timeline">
-          {visibleHistory.map((event) => {
+          {history.data.items.map((event) => {
             const category = historyCategory(event.action, event.resourceType);
             return (
               <article className="admin-account-detail-timeline-row" key={event.id}>
@@ -5304,21 +5318,25 @@ function ConsolidatedUserDetailExperience({
                   <div>
                     <span className="admin-account-detail-category">{category}</span>
                     <time dateTime={event.occurredAt}>
-                      {date(event.occurredAt)} · {relative(event.occurredAt)}
+                      {new Date(event.occurredAt).toLocaleString()} · {relative(event.occurredAt)}
                     </time>
                   </div>
                   <strong>{activityTitle(event.action)}</strong>
                   <small>
-                    {event.detail} · Actor: {event.actor ?? "System"} · {sentence(event.result)}
+                    {event.resourceType} · Actor: {event.actor ?? "System"} ·{" "}
+                    {sentence(event.result)}
                   </small>
-                  <button
-                    type="button"
-                    className="admin-account-detail-event-id"
-                    title="Copy event ID"
-                    onClick={() => void navigator.clipboard?.writeText(event.id)}
-                  >
-                    Event {shortId(event.id)}…
-                  </button>
+                  <details className="admin-account-detail-event-details">
+                    <summary>Technical details</summary>
+                    <button
+                      type="button"
+                      className="admin-account-detail-event-id"
+                      title="Copy event ID"
+                      onClick={() => void navigator.clipboard?.writeText(event.id)}
+                    >
+                      Copy event reference {shortId(event.id)}…
+                    </button>
+                  </details>
                 </div>
               </article>
             );
@@ -5330,6 +5348,27 @@ function ConsolidatedUserDetailExperience({
           icon={FileClock}
         />
       )}
+      {history.data && history.data.totalPages > 1 ? (
+        <div className="admin-pagination" aria-label="History pagination">
+          <button
+            type="button"
+            disabled={history.data.page <= 1}
+            onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+          >
+            Previous
+          </button>
+          <span>
+            Page {history.data.page} of {history.data.totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={history.data.page >= history.data.totalPages}
+            onClick={() => setHistoryPage((page) => Math.min(history.data!.totalPages, page + 1))}
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 
@@ -5348,9 +5387,8 @@ function ConsolidatedUserDetailExperience({
               {user.username ? `@${user.username}` : "Username unavailable"} · {user.email}
             </span>
             <div className="admin-detail-chips">
-              <span>{sentence(user.primaryType)}</span>
-              {roles.slice(0, 3).map((role) => (
-                <span key={role.id}>{sentence(role.role)}</span>
+              {user.semanticRoles.map((role) => (
+                <span key={role}>{sentence(role)}</span>
               ))}
               {user.fixture === "DEMO" ? <span>Demo account</span> : null}
             </div>
@@ -5362,20 +5400,6 @@ function ConsolidatedUserDetailExperience({
           >
             {accountStatusLabel(user.accountStatus)}
           </span>
-          <button
-            type="button"
-            className="admin-detail-action admin-detail-action--compact"
-            onClick={() => setTab("Operations")}
-          >
-            <Settings aria-hidden="true" /> Manage account
-          </button>
-          <button
-            type="button"
-            className="admin-detail-action admin-detail-action--compact"
-            onClick={() => setTab("History")}
-          >
-            <FileClock aria-hidden="true" /> History
-          </button>
         </div>
         <div className="admin-account-detail-header-meta">
           <span>
@@ -5384,7 +5408,7 @@ function ConsolidatedUserDetailExperience({
           <span>
             Last meaningful activity{" "}
             <strong>
-              {historyEvents[0] ? relative(historyEvents[0].occurredAt) : "Not tracked"}
+              {user.lastActivityAt ? relative(user.lastActivityAt) : "No sign-in recorded"}
             </strong>
           </span>
           <span>
@@ -5445,10 +5469,6 @@ function CollectorDirectoryManagement({
     queryKey: queryKeys.user.current,
     queryFn: () => services.repositories.users.getCurrentUser(),
     staleTime: 60_000,
-  });
-  const verificationStart = useMutation({
-    mutationFn: (id: string) => services.repositories.admin.startIntakeVerification(id),
-    onSuccess: retry,
   });
   const directory = user.collector?.publicDirectory ?? null;
   const canManage = currentUser.data?.roles.includes("ADMIN") ?? false;
@@ -5542,10 +5562,12 @@ function UserRoleManagement({ user, retry }: { user: AdminUserDetail; retry: () 
   });
   const uniqueRoles = Array.from(
     new Map(
-      user.roles.map((assignment) => [
-        `${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`,
-        assignment,
-      ]),
+      user.roles
+        .filter((assignment) => assignment.role !== "USER")
+        .map((assignment) => [
+          `${assignment.role}:${assignment.scopeType}:${assignment.scopeId ?? ""}`,
+          assignment,
+        ]),
     ).values(),
   );
   const roleDescriptions: Record<string, string> = {
@@ -5566,9 +5588,7 @@ function UserRoleManagement({ user, retry }: { user: AdminUserDetail; retry: () 
             <div className="admin-role-row" key={assignment.id}>
               <div>
                 <strong>{sentence(assignment.role)}</strong>
-                <small>
-                  {roleDescriptions[assignment.role] ?? "Account capability assigned by policy."}
-                </small>
+                <small>{roleDescriptions[assignment.role] ?? "Active account capability."}</small>
                 <span>
                   Granted {date(assignment.createdAt)} · {assignment.scopeType}
                 </span>
@@ -5587,7 +5607,7 @@ function UserRoleManagement({ user, retry }: { user: AdminUserDetail; retry: () 
                       revoke.mutate(assignment.id);
                   }}
                 >
-                  Remove role
+                  Revoke role
                 </button>
               ) : null}
             </div>
@@ -5632,10 +5652,7 @@ function UserRoleManagement({ user, retry }: { user: AdminUserDetail; retry: () 
           retrying.
         </p>
       ) : null}
-      <p className="admin-safe-note">
-        Role changes are authorized and audited by the server. Duplicate semantic assignments are
-        shown once.
-      </p>
+      <p className="admin-safe-note">Role changes are recorded in account history.</p>
     </section>
   );
 }

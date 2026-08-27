@@ -68,4 +68,22 @@ describe("admin route state", () => {
       accountPage: "2",
     });
   });
+
+  it("preserves the selected Account Detail tab for direct links and refresh", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "users",
+        user: "user-demo-1",
+        tab: "History",
+        accountQ: "demo",
+        accountPage: "2",
+      }),
+    ).toMatchObject({
+      section: "users",
+      user: "user-demo-1",
+      tab: "History",
+      accountQ: "demo",
+      accountPage: "2",
+    });
+  });
 });

@@ -72,6 +72,14 @@ const operationsQuery = z
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
+const accountHistoryQuery = page
+  .pick({ page: true, pageSize: true })
+  .extend({
+    category: z
+      .enum(['ALL', 'SECURITY', 'FINANCIAL', 'TRADING', 'COMPLIANCE', 'ACCOUNT', 'COLLECTOR', 'ADMIN', 'PROVIDER'])
+      .default('ALL'),
+  })
+  .strict();
 const catalogueQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
@@ -407,6 +415,13 @@ export class AdminController {
   @RequirePermission('users.read')
   user(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.admin.userDetail(request.actor!, id);
+  }
+
+  @Get('users/:id/history')
+  @RequirePermission('users.read')
+  userHistory(@Param('id') id: string, @Query() query: unknown, @Req() request: AuthenticatedRequest) {
+    const input = this.parse(accountHistoryQuery, query);
+    return this.admin.userHistory(request.actor!, id, input);
   }
 
   @Get('compliance/cases')

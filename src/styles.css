@@ -6365,6 +6365,18 @@
 .admin-accounts-summary-card:disabled:hover {
   border-color: #20353e;
 }
+.admin-account-detail-healthy-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.3rem;
+  color: #67d7b6;
+  font-size: 0.72rem;
+}
+.admin-account-detail-healthy-strip svg {
+  width: 1rem;
+  height: 1rem;
+}
 .admin-accounts-summary-icon {
   display: grid;
   width: 2rem;

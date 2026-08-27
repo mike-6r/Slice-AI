@@ -4108,6 +4108,7 @@ export class AdminService {
           take: 1,
           select: {
             status: true,
+            provider: true,
             currentPeriodEnd: true,
             cancelAtPeriodEnd: true,
             plan: { select: { code: true, displayName: true } },
@@ -4261,6 +4262,7 @@ export class AdminService {
         : Promise.resolve([]),
       this.db.auditEvent.findMany({
         where: {
+          action: { not: 'AUTH_SESSION_ROTATED' },
           OR: [
             { actorUserId: userId },
             { resourceType: { in: ['user', 'account'] }, resourceId: userId },
@@ -4382,10 +4384,32 @@ export class AdminService {
     const payoutState = payout
       ? payout.status === 'READY' && payout.payoutsEnabled && payout.transfersCapability === 'active'
         ? 'READY'
-        : ['UNDER_REVIEW', 'RESTRICTED', 'DISABLED'].includes(payout.status)
+        : ['RESTRICTED', 'DISABLED'].includes(payout.status)
           ? 'RESTRICTED'
-          : 'SETUP_REQUIRED'
-      : 'SETUP_REQUIRED';
+          : payout.status === 'ACTION_REQUIRED'
+            ? 'ACTION_REQUIRED'
+            : payout.status === 'UNDER_REVIEW'
+              ? 'UNDER_REVIEW'
+              : 'SETUP_IN_PROGRESS'
+      : 'NOT_CONFIGURED';
+    const semanticRoles = Array.from(
+      new Map(
+        user.roleAssignments
+          .filter((assignment) => assignment.role !== 'USER')
+          .map((assignment) => [assignment.role, assignment]),
+      ).values(),
+    ).map((assignment) => assignment.role);
+    const attention = user.accountStatus === 'RESTRICTED' || user.accountStatus === 'SUSPENDED'
+      ? { required: true, level: 'RESTRICTED' as const, domain: 'ACCESS' as const, reason: user.accountStatus === 'SUSPENDED' ? 'Account is suspended.' : 'Account access is restricted.', nextAction: 'Review account access' }
+      : financeAccess && (hasDeficit || hasReturnedDeposit)
+        ? { required: true, level: 'BLOCKING' as const, domain: 'FINANCIAL' as const, reason: hasDeficit ? 'Financial deficit requires review.' : 'Returned deposit requires review.', nextAction: 'Open Finance' }
+        : user.accountStatus === 'PENDING_REVIEW'
+          ? { required: true, level: 'ATTENTION' as const, domain: 'ACCESS' as const, reason: hasComplianceReview ? 'Compliance review required.' : 'Account review required.', nextAction: hasComplianceReview ? 'Open Trust & Support' : 'Review account' }
+          : complianceAccess && hasComplianceReview
+            ? { required: true, level: 'ATTENTION' as const, domain: 'COMPLIANCE' as const, reason: 'Compliance review required.', nextAction: 'Open Trust & Support' }
+            : financeAccess && ['ACTION_REQUIRED', 'RESTRICTED'].includes(payoutState)
+              ? { required: true, level: payoutState === 'RESTRICTED' ? 'RESTRICTED' as const : 'ATTENTION' as const, domain: 'PAYOUT' as const, reason: payoutState === 'RESTRICTED' ? 'Payout capability is restricted.' : 'Payout setup requires action.', nextAction: 'Open account' }
+              : { required: false, level: 'NONE' as const, domain: null, reason: null, nextAction: null };
     const permissions = {
       finance: financeAccess,
       compliance: complianceAccess,
@@ -4404,9 +4428,12 @@ export class AdminService {
       username: user.profile?.publicUsername ?? null,
       email: user.email,
       primaryType,
+      semanticRoles,
       accountStatus: user.accountStatus,
       createdAt: user.createdAt.toISOString(),
       lastActivityAt: user.lastLoginAt?.toISOString() ?? null,
+      attention,
+      fixture: user.collectorSubscriptions[0]?.provider === 'STAGING_DEMO' ? 'DEMO' : 'NORMAL',
       profile: user.profile,
       roles: user.roleAssignments.map((assignment) => ({
         ...assignment,
@@ -4460,8 +4487,8 @@ export class AdminService {
         twoFactorEnabled: Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt),
       },
       complianceSummary: {
-        kycStatus: complianceAccess ? kycCase?.status ?? 'UNKNOWN' : 'UNAVAILABLE',
-        kytStatus: complianceAccess ? kytCase?.status ?? 'UNKNOWN' : 'UNAVAILABLE',
+        kycStatus: complianceAccess ? kycCase?.status ?? 'NOT_REQUIRED' : 'UNAVAILABLE',
+        kytStatus: complianceAccess ? kytCase?.status ?? 'NOT_REQUIRED' : 'UNAVAILABLE',
         provider: complianceAccess ? latestCompliance?.provider ?? null : null,
         lastReviewAt: complianceAccess ? latestCompliance?.updatedAt.toISOString() ?? null : null,
         caseCount: complianceAccess ? user._count.complianceCases : 0,
@@ -4558,11 +4585,11 @@ export class AdminService {
         : [],
       accountStateReason:
         user.accountStatus === 'PENDING_REVIEW'
-          ? complianceState === 'REVIEW_REQUIRED' || complianceState === 'INCOMPLETE'
-            ? 'Compliance review'
+          ? hasComplianceReview
+            ? 'Compliance review required'
             : financialExceptionCount > 0
-              ? 'Financial review'
-              : 'Staff review'
+              ? 'Financial review required'
+              : 'Account review required'
           : user.accountStatus === 'RESTRICTED'
             ? financialState === 'FINANCIAL_DEFICIT'
               ? 'Financial deficit'
@@ -4591,9 +4618,84 @@ export class AdminService {
         ? 'Finance access required'
         : payoutState === 'READY'
         ? null
-        : payout
-          ? 'Payout setup requires attention'
-          : 'Payout setup not started',
+        : payoutState === 'NOT_CONFIGURED'
+          ? 'No payout profile is required until payouts apply.'
+          : payoutState === 'SETUP_IN_PROGRESS'
+            ? 'Payout setup is in progress.'
+            : payoutState === 'UNDER_REVIEW'
+              ? 'Payout profile is under provider review.'
+              : payoutState === 'RESTRICTED'
+                ? 'Payout capability is restricted.'
+                : 'Payout setup requires action.',
+    };
+  }
+
+  async userHistory(
+    actor: Actor,
+    userId: string,
+    input: { category: 'ALL' | 'SECURITY' | 'FINANCIAL' | 'TRADING' | 'COMPLIANCE' | 'ACCOUNT' | 'COLLECTOR' | 'ADMIN' | 'PROVIDER'; page: number; pageSize: number },
+  ) {
+    await this.authorization.authorize(actor, 'users.read', userId as never);
+    const accountScope: Prisma.AuditEventWhereInput = {
+      OR: [
+        { actorUserId: userId },
+        { resourceType: { in: ['user', 'account'] }, resourceId: userId },
+      ],
+    };
+    const categoryTerms: Record<string, string[]> = {
+      SECURITY: ['auth', 'session', 'password', '2fa', 'security'],
+      FINANCIAL: ['finance', 'money', 'payout', 'deposit', 'withdraw', 'wallet'],
+      TRADING: ['order', 'trade', 'listing', 'market'],
+      COMPLIANCE: ['compliance', 'identity', 'kyc', 'kyt'],
+      COLLECTOR: ['collector', 'submission', 'intake'],
+      ADMIN: ['role', 'permission', 'admin'],
+      PROVIDER: ['provider', 'webhook'],
+      ACCOUNT: ['account', 'profile', 'user'],
+    };
+    const categoryWhere = input.category === 'ALL'
+      ? { action: { not: 'AUTH_SESSION_ROTATED' } }
+      : {
+          OR: (categoryTerms[input.category] ?? []).flatMap((term) => [
+            { action: { contains: term, mode: 'insensitive' as const } },
+            { resourceType: { contains: term, mode: 'insensitive' as const } },
+          ]),
+        };
+    const where: Prisma.AuditEventWhereInput = { AND: [accountScope, categoryWhere] };
+    const page = Math.max(1, input.page);
+    const [events, total] = await Promise.all([
+      this.db.auditEvent.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          id: true,
+          action: true,
+          resourceType: true,
+          resourceId: true,
+          actorType: true,
+          result: true,
+          createdAt: true,
+          actor: { select: { profile: { select: { displayName: true, publicUsername: true } } } },
+        },
+      }),
+      this.db.auditEvent.count({ where }),
+    ]);
+    return {
+      items: events.map((event) => ({
+        id: event.id,
+        action: event.action,
+        resourceType: event.resourceType,
+        resourceId: event.resourceId,
+        actor: event.actor?.profile?.displayName ?? event.actor?.profile?.publicUsername ?? (event.actorType === 'SYSTEM' ? 'System' : null),
+        actorType: event.actorType,
+        result: event.result,
+        occurredAt: event.createdAt.toISOString(),
+      })),
+      page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
     };
   }
 

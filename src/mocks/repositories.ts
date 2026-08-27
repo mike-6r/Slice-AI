@@ -291,6 +291,15 @@ export const mockRepositories: AppRepositories = {
     async getUser() {
       throw new Error("Admin user directory requires the API service.");
     },
+    async getUserHistory(input) {
+      return {
+        items: [],
+        page: input.page ?? 1,
+        pageSize: input.pageSize ?? 20,
+        total: 0,
+        totalPages: 1,
+      };
+    },
     async transitionUserStatus() {
       throw new Error("Account status changes require the API service.");
     },
