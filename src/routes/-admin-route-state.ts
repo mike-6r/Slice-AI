@@ -198,6 +198,10 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
   };
 }
 
+export function compactAdminAccountFilters(filters: Record<string, string>) {
+  return Object.fromEntries(Object.entries(filters).filter(([, value]) => value.trim().length > 0));
+}
+
 export function pipelineSection(stage: string): AdminSection {
   if (["draft", "submitted", "inReview"].includes(stage)) return "moderation";
   if (["accepted", "shipping", "received"].includes(stage)) return "intake";

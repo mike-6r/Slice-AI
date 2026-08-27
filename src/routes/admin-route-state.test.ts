@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAdminSearch, operationsTab, pipelineSection } from "./-admin-route-state";
+import {
+  compactAdminAccountFilters,
+  normalizeAdminSearch,
+  operationsTab,
+  pipelineSection,
+} from "./-admin-route-state";
 
 describe("admin route state", () => {
   it("preserves legacy section aliases and their workspace tabs", () => {
@@ -85,5 +90,15 @@ describe("admin route state", () => {
       accountQ: "demo",
       accountPage: "2",
     });
+  });
+
+  it("omits empty optional Accounts filters before the strict API request", () => {
+    expect(
+      compactAdminAccountFilters({
+        fixture: "",
+        attention: "",
+        status: "RESTRICTED",
+      }),
+    ).toEqual({ status: "RESTRICTED" });
   });
 });

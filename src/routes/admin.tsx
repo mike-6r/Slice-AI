@@ -60,6 +60,7 @@ import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import {
+  compactAdminAccountFilters,
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
@@ -640,7 +641,7 @@ function AdminConsole() {
     queryFn: () =>
       services.repositories.admin.listUsers({
         q: accountSearch || undefined,
-        ...accountFilters,
+        ...compactAdminAccountFilters(accountFilters),
         sort: accountSort,
         sortDirection: accountSortDirection,
         page: accountPage,
