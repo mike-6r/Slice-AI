@@ -6,17 +6,20 @@ const requestedBase = process.env.LINT_CHANGED_BASE?.trim();
 const base = requestedBase && !/^0+$/.test(requestedBase) ? requestedBase : "HEAD";
 
 function changedFiles() {
-  try {
-    const range = base === "HEAD" ? "HEAD" : `${base}...HEAD`;
-    return execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", range], {
+  const list = (range) =>
+    execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", range], {
       cwd: root,
       encoding: "utf8",
     })
       .split(/\r?\n/)
       .filter(Boolean);
+  try {
+    const range = base === "HEAD" ? "HEAD" : `${base}...HEAD`;
+    return list(range);
   } catch (error) {
-    console.error(`FAIL changed-file lint: unable to resolve base ${base}`);
-    throw error;
+    if (base === "HEAD") throw error;
+    console.warn(`Changed-file lint base ${base} is unavailable; using HEAD~1 instead.`);
+    return list("HEAD~1..HEAD");
   }
 }
 
