@@ -30,6 +30,8 @@ export type AdminSearch = {
   status?: string;
   evidence?: string;
   research?: string;
+  readiness?: string;
+  reviewer?: string;
   submittedFrom?: string;
   submittedTo?: string;
   sort?: string;
@@ -165,6 +167,8 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     status: stringValue("status"),
     evidence: stringValue("evidence"),
     research: stringValue("research"),
+    readiness: stringValue("readiness"),
+    reviewer: stringValue("reviewer"),
     submittedFrom: stringValue("submittedFrom"),
     submittedTo: stringValue("submittedTo"),
     sort: stringValue("sort"),

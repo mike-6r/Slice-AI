@@ -92,6 +92,18 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('x-forwarded-for', reviewer.clientIp);
     expect(queue.status).toBe(200);
     expect(queue.body.items.map((x: { id: string }) => x.id)).toContain(id);
+    const queueItem = queue.body.items.find(
+      (item: { id: string }) => item.id === id,
+    );
+    expect(queueItem).toMatchObject({
+      readinessState: 'READY',
+      evidence: {
+        presentRequired: REQUIRED_MEDIA_SLOTS.length,
+        required: REQUIRED_MEDIA_SLOTS.length,
+      },
+      reviewer: { state: 'UNCLAIMED', displayName: null },
+    });
+    expect(queueItem).not.toHaveProperty('priority');
     const claim = await request(h.app.getHttpServer())
       .post(`/api/v1/reviews/submissions/${id}/claim`)
       .set('authorization', reviewer.auth)
@@ -99,6 +111,17 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('idempotency-key', `${h.runId}-claim`)
       .send({});
     expect(claim.status).toBe(201);
+    const claimedQueue = await request(h.app.getHttpServer())
+      .get('/api/v1/reviews/submissions?reviewer=mine')
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(claimedQueue.status).toBe(200);
+    expect(
+      claimedQueue.body.items.find((item: { id: string }) => item.id === id),
+    ).toMatchObject({
+      reviewer: { state: 'CLAIMED_BY_ME' },
+      readinessState: 'MANUAL_REVIEW',
+    });
     const secondQueue = await request(h.app.getHttpServer())
       .get('/api/v1/reviews/submissions')
       .set('authorization', secondReviewer.auth)

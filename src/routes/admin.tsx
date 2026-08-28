@@ -131,6 +131,8 @@ function AdminConsole() {
     status: reviewStatus,
     evidence: reviewEvidence,
     research: reviewResearch,
+    readiness: reviewReadiness,
+    reviewer: reviewReviewer,
     submittedFrom: reviewSubmittedFrom,
     submittedTo: reviewSubmittedTo,
     sort: reviewSort,
@@ -391,21 +393,21 @@ function AdminConsole() {
       reviewStatus,
       reviewEvidence,
       reviewResearch,
+      reviewReadiness,
+      reviewReviewer,
       reviewSubmittedFrom,
       reviewSubmittedTo,
       reviewSort,
       reviewSortDirection,
       reviewPageParam,
       reviewPageSizeParam,
+      intakeFixture,
     ],
     queryFn: () =>
       services.repositories.reviews.listQueue(
         section === "moderation"
           ? {
               q: reviewQuery,
-              priority: ["HIGH", "MEDIUM", "LOW"].includes(reviewPriority ?? "")
-                ? (reviewPriority as "HIGH" | "MEDIUM" | "LOW")
-                : undefined,
               status: ["SUBMITTED", "IN_REVIEW"].includes(reviewStatus ?? "")
                 ? (reviewStatus as "SUBMITTED" | "IN_REVIEW")
                 : undefined,
@@ -422,12 +424,21 @@ function AdminConsole() {
                 ? (reviewResearch as
                     "completed" | "in_progress" | "pending" | "unavailable" | "not_requested")
                 : undefined,
+              readiness: ["READY", "NEEDS_EVIDENCE", "MANUAL_REVIEW", "BLOCKED"].includes(
+                reviewReadiness ?? "",
+              )
+                ? (reviewReadiness as "READY" | "NEEDS_EVIDENCE" | "MANUAL_REVIEW" | "BLOCKED")
+                : undefined,
+              reviewer: ["unclaimed", "mine", "claimed"].includes(reviewReviewer ?? "")
+                ? (reviewReviewer as "unclaimed" | "mine" | "claimed")
+                : undefined,
+              testFixture: ["include", "only"].includes(intakeFixture ?? "")
+                ? (intakeFixture as "include" | "only")
+                : "exclude",
               submittedFrom: reviewSubmittedFrom,
               submittedTo: reviewSubmittedTo,
-              sort: ["submitted", "priority", "collector", "research", "evidence"].includes(
-                reviewSort ?? "",
-              )
-                ? (reviewSort as "submitted" | "priority" | "collector" | "research" | "evidence")
+              sort: ["submitted"].includes(reviewSort ?? "")
+                ? (reviewSort as "submitted")
                 : undefined,
               sortDirection: ["asc", "desc"].includes(reviewSortDirection ?? "")
                 ? (reviewSortDirection as "asc" | "desc")
@@ -867,10 +878,12 @@ function AdminConsole() {
             searchInput={reviewSearchInput}
             setSearchInput={setReviewSearchInput}
             filters={{
-              priority: reviewPriority ?? "",
               status: reviewStatus ?? "",
               evidence: reviewEvidence ?? "",
               research: reviewResearch ?? "",
+              readiness: reviewReadiness ?? "",
+              reviewer: reviewReviewer ?? "",
+              fixture: intakeFixture ?? "",
               submittedFrom: reviewSubmittedFrom ?? "",
               submittedTo: reviewSubmittedTo ?? "",
               sort: reviewSort ?? "submitted",
@@ -2969,10 +2982,12 @@ function ControlFinanceMetric({
 }
 
 type ReviewQueueFilters = {
-  priority: string;
   status: string;
+  readiness: string;
   evidence: string;
   research: string;
+  reviewer: string;
+  fixture: string;
   submittedFrom: string;
   submittedTo: string;
   sort: string;
@@ -3003,28 +3018,27 @@ function ReviewQueue({
   const items = data?.items ?? [];
   const counts = data?.counts ?? {
     all: 0,
-    highPriority: 0,
     awaitingEvidence: 0,
     researchPending: 0,
     readyToReview: 0,
+    blocked: 0,
+    claimed: 0,
+    unclaimed: 0,
   };
   const totalPages = data?.pagination.totalPages ?? 1;
   const tab =
-    filters.priority === "HIGH"
-      ? "high"
-      : filters.evidence === "missing"
-        ? "evidence"
-        : filters.research === "pending" || filters.research === "in_progress"
-          ? "research"
-          : filters.evidence === "complete" && filters.status === "SUBMITTED"
-            ? "ready"
-            : "all";
-  const selectTab = (next: "all" | "high" | "evidence" | "research" | "ready") => {
+    filters.evidence === "missing"
+      ? "evidence"
+      : filters.research === "pending" || filters.research === "in_progress"
+        ? "research"
+        : filters.readiness === "READY"
+          ? "ready"
+          : "all";
+  const selectTab = (next: "all" | "evidence" | "research" | "ready") => {
     updateSearch({
-      priority: next === "high" ? "HIGH" : undefined,
-      evidence: next === "evidence" ? "missing" : next === "ready" ? "complete" : undefined,
+      readiness: next === "ready" ? "READY" : undefined,
+      evidence: next === "evidence" ? "missing" : undefined,
       research: next === "research" ? "pending" : undefined,
-      status: next === "ready" ? "SUBMITTED" : undefined,
       page: "1",
     });
   };
@@ -3032,10 +3046,12 @@ function ReviewQueue({
     setSearchInput("");
     updateSearch({
       q: undefined,
-      priority: undefined,
       status: undefined,
+      readiness: undefined,
       evidence: undefined,
       research: undefined,
+      reviewer: undefined,
+      fixture: undefined,
       submittedFrom: undefined,
       submittedTo: undefined,
       sort: "submitted",
@@ -3077,25 +3093,22 @@ function ReviewQueue({
         <div>
           <strong>{counts.all} awaiting review</strong>
           <span>
-            {counts.readyToReview} ready · {counts.awaitingEvidence} needs evidence ·{" "}
-            {counts.researchPending} research pending
+            {counts.readyToReview} ready · {counts.awaitingEvidence} need evidence ·{" "}
+            {counts.claimed} claimed
           </span>
         </div>
-        <div className="admin-review-summary-actions">
-          <button
-            type="button"
-            className="is-active"
-            onClick={() => updateSearch({ sort: "priority", sortDirection: "desc", page: "1" })}
-          >
-            Ready first
-          </button>
-          <button
-            type="button"
-            onClick={() => updateSearch({ sort: "submitted", sortDirection: "asc", page: "1" })}
-          >
-            Oldest first
-          </button>
-        </div>
+        <ReviewSelect
+          label="Sort review queue"
+          value={`${filters.sort}:${filters.sortDirection}`}
+          options={[
+            ["submitted:asc", "Oldest submitted"],
+            ["submitted:desc", "Newest submitted"],
+          ]}
+          onChange={(value) => {
+            const [, sortDirection] = value.split(":");
+            updateSearch({ sort: "submitted", sortDirection, page: "1" });
+          }}
+        />
       </div>
       <div className="admin-review-queue-layout">
         <section className="admin-panel admin-review-table-panel">
@@ -3105,12 +3118,6 @@ function ReviewQueue({
               label="All"
               count={counts.all}
               onClick={() => selectTab("all")}
-            />
-            <ReviewTab
-              active={tab === "high"}
-              label="High Priority"
-              count={counts.highPriority}
-              onClick={() => selectTab("high")}
             />
             <ReviewTab
               active={tab === "evidence"}
@@ -3126,7 +3133,7 @@ function ReviewQueue({
             />
             <ReviewTab
               active={tab === "ready"}
-              label="Ready to Review"
+              label="Ready"
               count={counts.readyToReview}
               onClick={() => selectTab("ready")}
             />
@@ -3142,15 +3149,16 @@ function ReviewQueue({
               />
             </label>
             <ReviewSelect
-              label="Priority"
-              value={filters.priority}
+              label="Readiness"
+              value={filters.readiness}
               options={[
-                ["", "Priority: All"],
-                ["HIGH", "High"],
-                ["MEDIUM", "Medium"],
-                ["LOW", "Low"],
+                ["", "Readiness: All"],
+                ["READY", "Ready to claim"],
+                ["NEEDS_EVIDENCE", "Needs evidence"],
+                ["MANUAL_REVIEW", "Claimed review"],
+                ["BLOCKED", "Blocked"],
               ]}
-              onChange={(value) => updateSearch({ priority: value || undefined, page: "1" })}
+              onChange={(value) => updateSearch({ readiness: value || undefined, page: "1" })}
             />
             <ReviewSelect
               label="Status"
@@ -3174,7 +3182,7 @@ function ReviewQueue({
               onChange={(value) => updateSearch({ evidence: value || undefined, page: "1" })}
             />
             <ReviewSelect
-              label="Market research"
+              label="Research"
               value={filters.research}
               options={[
                 ["", "Research: All"],
@@ -3184,6 +3192,27 @@ function ReviewQueue({
                 ["not_requested", "Not requested"],
               ]}
               onChange={(value) => updateSearch({ research: value || undefined, page: "1" })}
+            />
+            <ReviewSelect
+              label="Reviewer"
+              value={filters.reviewer}
+              options={[
+                ["", "Reviewer: All"],
+                ["unclaimed", "Unclaimed"],
+                ["mine", "Claimed by me"],
+                ["claimed", "Claimed"],
+              ]}
+              onChange={(value) => updateSearch({ reviewer: value || undefined, page: "1" })}
+            />
+            <ReviewSelect
+              label="Work type"
+              value={filters.fixture}
+              options={[
+                ["", "Operational work"],
+                ["include", "Operational + fixtures"],
+                ["only", "Fixtures only"],
+              ]}
+              onChange={(value) => updateSearch({ fixture: value || undefined, page: "1" })}
             />
             <button type="button" className="admin-review-more-filters" onClick={clearFilters}>
               Clear filters
@@ -3195,9 +3224,10 @@ function ReviewQueue({
                 <tr>
                   <th>Submission</th>
                   <th>Collector</th>
+                  <th>Readiness</th>
                   <th>Evidence</th>
                   <th>Research</th>
-                  <th>Priority</th>
+                  <th>Reviewer</th>
                   <th>Submitted</th>
                   <th>Actions</th>
                 </tr>
@@ -3218,14 +3248,25 @@ function ReviewQueue({
                           <span>
                             <strong>{item.collectible.title}</strong>
                             <small>
-                              {item.category} · {item.collectible.set ?? "Set pending"}
+                              {[
+                                item.collectible.year,
+                                item.collectible.set ?? item.category,
+                                item.collectible.cardNumber
+                                  ? `#${item.collectible.cardNumber}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </small>
                             <small>
-                              {item.collectible.cardNumber
-                                ? `Card ${item.collectible.cardNumber} · `
-                                : ""}
-                              Submission {shortId(item.submissionReference)}
+                              {[item.collectible.grader, item.collectible.grade]
+                                .filter(Boolean)
+                                .join(" ") || "Ungraded"}{" "}
+                              · Submission {shortId(item.submissionReference)}
                             </small>
+                            {item.testFixture ? (
+                              <em className="admin-review-fixture-badge">TEST / DEMO</em>
+                            ) : null}
                           </span>
                         </div>
                       </td>
@@ -3242,13 +3283,25 @@ function ReviewQueue({
                       </td>
                       <td>
                         <div
+                          className={`admin-review-readiness admin-review-readiness--${item.readinessState.toLowerCase()}`}
+                        >
+                          <strong>{reviewReadinessLabel(item.readinessState)}</strong>
+                          <small>{item.readinessReason}</small>
+                        </div>
+                      </td>
+                      <td>
+                        <div
                           className={`admin-review-evidence admin-review-evidence--${item.evidence.status.toLowerCase()}`}
                         >
-                          <strong>{item.evidence.percent}%</strong>
+                          <strong>
+                            {item.evidence.presentRequired} / {item.evidence.required} required
+                          </strong>
                           <small>
                             {item.evidence.status === "COMPLETE"
                               ? "Complete"
-                              : `Missing (${item.evidence.missingRequired})`}
+                              : item.evidence.missingRequired === 1
+                                ? "1 required item missing"
+                                : `${item.evidence.missingRequired} required items missing`}
                           </small>
                         </div>
                       </td>
@@ -3263,12 +3316,12 @@ function ReviewQueue({
                         </div>
                       </td>
                       <td>
-                        <span
-                          className={`admin-review-priority admin-review-priority--${item.priority.toLowerCase()}`}
+                        <div
+                          className={`admin-review-reviewer admin-review-reviewer--${item.reviewer.state.toLowerCase()}`}
                         >
-                          {item.priority === "HIGH" ? "↑" : item.priority === "MEDIUM" ? "↑" : "↓"}{" "}
-                          {sentence(item.priority)}
-                        </span>
+                          <strong>{reviewerLabel(item.reviewer)}</strong>
+                          <small>{reviewerDetail(item.reviewer)}</small>
+                        </div>
                       </td>
                       <td>
                         <span className="admin-review-submitted">
@@ -3281,7 +3334,7 @@ function ReviewQueue({
                           to="/operations/submissions"
                           search={{ submission: item.id, tab: undefined }}
                         >
-                          Review <ArrowRight aria-hidden="true" />
+                          {reviewActionLabel(item)} <ArrowRight aria-hidden="true" />
                         </Link>
                       </td>
                     </tr>
@@ -3291,12 +3344,22 @@ function ReviewQueue({
                     <td colSpan={8}>
                       <AdminEmpty
                         detail={
-                          searchInput || filters.priority || filters.evidence || filters.research
+                          searchInput ||
+                          filters.readiness ||
+                          filters.evidence ||
+                          filters.research ||
+                          filters.reviewer ||
+                          filters.fixture
                             ? "No submissions match these filters."
                             : "No submissions currently need review."
                         }
                       />
-                      {searchInput || filters.priority || filters.evidence || filters.research ? (
+                      {searchInput ||
+                      filters.readiness ||
+                      filters.evidence ||
+                      filters.research ||
+                      filters.reviewer ||
+                      filters.fixture ? (
                         <button
                           type="button"
                           className="admin-inline-action"
@@ -3457,6 +3520,48 @@ function reviewResearchLabel(status: string) {
       NOT_REQUESTED: "Not Requested",
     }[status] ?? "Pending"
   );
+}
+
+function reviewReadinessLabel(state: string) {
+  return (
+    {
+      READY: "Ready to claim",
+      NEEDS_EVIDENCE: "Needs evidence",
+      MANUAL_REVIEW: "Review in progress",
+      BLOCKED: "Blocked",
+    }[state] ?? "Needs review"
+  );
+}
+
+function reviewerLabel(reviewer: SubmissionReviewQueueResponse["items"][number]["reviewer"]) {
+  return (
+    {
+      UNCLAIMED: "Unclaimed",
+      CLAIMED_BY_ME: "You",
+      CLAIMED_BY_OTHER: reviewer.displayName ?? "Staff reviewer",
+      SELF_REVIEW_RESTRICTED: "Self-review restricted",
+    }[reviewer.state] ?? "Unclaimed"
+  );
+}
+
+function reviewerDetail(reviewer: SubmissionReviewQueueResponse["items"][number]["reviewer"]) {
+  return (
+    {
+      UNCLAIMED: "Available to claim",
+      CLAIMED_BY_ME: "Continue this review",
+      CLAIMED_BY_OTHER: "Claim held by staff",
+      SELF_REVIEW_RESTRICTED: "Another reviewer is required",
+    }[reviewer.state] ?? ""
+  );
+}
+
+function reviewActionLabel(item: SubmissionReviewQueueResponse["items"][number]) {
+  if (item.reviewer.state === "SELF_REVIEW_RESTRICTED") return "View";
+  if (item.reviewer.state === "CLAIMED_BY_ME") return "Continue review";
+  if (item.reviewer.state === "CLAIMED_BY_OTHER") return "Open review";
+  if (item.readinessState === "NEEDS_EVIDENCE") return "View evidence";
+  if (item.readinessState === "BLOCKED") return "Resolve blocker";
+  return "Claim & review";
 }
 
 function reviewDateTime(value: string) {

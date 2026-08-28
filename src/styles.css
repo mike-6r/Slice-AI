@@ -46066,7 +46066,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 .admin-review-toolbar {
   display: grid;
-  grid-template-columns: minmax(15rem, 1fr) repeat(4, auto) auto;
+  grid-template-columns: minmax(15rem, 1fr) repeat(6, auto) auto;
   align-items: center;
   padding: 0.7rem 0.75rem;
 }
@@ -46083,7 +46083,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 }
 
 .admin-review-table {
-  min-width: 850px;
+  min-width: 1080px;
 }
 
 .admin-review-table th {
@@ -46106,12 +46106,21 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 .admin-review-table th:nth-child(2),
 .admin-review-table td:nth-child(2) {
-  min-width: 18rem;
+  min-width: 12rem;
 }
 
 .admin-review-table th:nth-child(3),
 .admin-review-table td:nth-child(3) {
-  min-width: 12rem;
+  min-width: 13rem;
+}
+
+.admin-review-table th:nth-child(4),
+.admin-review-table td:nth-child(4),
+.admin-review-table th:nth-child(5),
+.admin-review-table td:nth-child(5),
+.admin-review-table th:nth-child(6),
+.admin-review-table td:nth-child(6) {
+  min-width: 8.5rem;
 }
 
 .admin-review-thumb {
@@ -46138,6 +46147,48 @@ body:has(.collectors-page) .main-navigation > .site-shell {
   width: 1rem;
   height: 1rem;
   color: #43c9ad;
+}
+
+.admin-review-readiness,
+.admin-review-reviewer {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.admin-review-readiness strong,
+.admin-review-reviewer strong {
+  color: #dce9e5;
+}
+
+.admin-review-readiness small,
+.admin-review-reviewer small {
+  max-width: 14rem;
+  color: #89a09d;
+  line-height: 1.35;
+}
+
+.admin-review-readiness--ready strong,
+.admin-review-reviewer--claimed_by_me strong {
+  color: #55d7b6;
+}
+
+.admin-review-readiness--needs_evidence strong,
+.admin-review-readiness--blocked strong,
+.admin-review-reviewer--self_review_restricted strong {
+  color: #f0bb67;
+}
+
+.admin-review-fixture-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.25rem;
+  border: 1px solid rgba(236, 183, 93, 0.38);
+  border-radius: 999px;
+  padding: 0.1rem 0.32rem;
+  color: #f0c879;
+  font-size: 0.53rem;
+  font-style: normal;
+  letter-spacing: 0.06em;
 }
 
 .admin-review-detail {
@@ -46290,10 +46341,10 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 @media (max-width: 1150px) {
   .admin-review-toolbar {
-    grid-template-columns: minmax(15rem, 1fr) repeat(2, auto);
+    grid-template-columns: minmax(15rem, 1fr) repeat(3, auto);
   }
 
-  .admin-review-toolbar .admin-select:nth-of-type(n + 3),
+  .admin-review-toolbar .admin-select:nth-of-type(n + 4),
   .admin-review-more-filters {
     grid-row: 2;
   }
@@ -46331,7 +46382,7 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     grid-template-columns: 1fr;
   }
 
-  .admin-review-toolbar .admin-select:nth-of-type(n + 3),
+  .admin-review-toolbar .admin-select:nth-of-type(n + 4),
   .admin-review-more-filters {
     grid-row: auto;
   }

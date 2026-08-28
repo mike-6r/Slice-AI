@@ -106,7 +106,6 @@ const queueQuery = z
     cursor: z.string().min(1).max(512).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
     q: z.string().trim().max(160).optional(),
-    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
     status: z.enum(['SUBMITTED', 'IN_REVIEW']).optional(),
     evidence: z.enum(['complete', 'missing', 'partial']).optional(),
     research: z
@@ -119,16 +118,10 @@ const queueQuery = z
       ])
       .optional(),
     readiness: z
-      .enum([
-        'READY',
-        'NEEDS_EVIDENCE',
-        'RESEARCH_PENDING',
-        'COLLECTOR_ACTION',
-        'MANUAL_REVIEW',
-        'BLOCKED',
-      ])
+      .enum(['READY', 'NEEDS_EVIDENCE', 'MANUAL_REVIEW', 'BLOCKED'])
       .optional(),
-    testFixture: z.enum(['include', 'only', 'exclude']).optional(),
+    reviewer: z.enum(['unclaimed', 'mine', 'claimed']).optional(),
+    testFixture: z.enum(['include', 'only', 'exclude']).default('exclude'),
     grader: z.string().trim().max(80).optional(),
     submittedFrom: z
       .string()
@@ -138,9 +131,7 @@ const queueQuery = z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional(),
-    sort: z
-      .enum(['submitted', 'priority', 'collector', 'research', 'evidence'])
-      .optional(),
+    sort: z.enum(['submitted']).optional(),
     sortDirection: z.enum(['asc', 'desc']).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
@@ -169,7 +160,10 @@ const certificationVerification = z
 const manualCertificationVerification = z
   .object({
     verifiedIdentity: z.record(z.unknown()),
-    verifiedGrade: z.string().trim().regex(/^\d{1,2}(?:\.\d{1,2})?$/),
+    verifiedGrade: z
+      .string()
+      .trim()
+      .regex(/^\d{1,2}(?:\.\d{1,2})?$/),
     verifiedLabel: z.string().trim().max(120).optional(),
     designation: z.string().trim().max(80).optional(),
     subgrades: z.record(z.unknown()).optional(),

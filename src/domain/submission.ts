@@ -156,17 +156,12 @@ export interface SubmissionReviewSummary {
   gradeScaleEntryId: string | null;
 }
 
-export type ReviewQueuePriority = "HIGH" | "MEDIUM" | "LOW";
 export type ReviewQueueEvidenceStatus = "COMPLETE" | "PARTIAL" | "MISSING_REQUIRED";
 export type ReviewQueueResearchStatus =
   "COMPLETED" | "IN_PROGRESS" | "PENDING" | "UNAVAILABLE" | "NOT_REQUESTED";
-export type ReviewQueueReadinessState =
-  | "READY"
-  | "NEEDS_EVIDENCE"
-  | "RESEARCH_PENDING"
-  | "COLLECTOR_ACTION"
-  | "MANUAL_REVIEW"
-  | "BLOCKED";
+export type ReviewQueueReadinessState = "READY" | "NEEDS_EVIDENCE" | "MANUAL_REVIEW" | "BLOCKED";
+export type ReviewQueueReviewerState =
+  "UNCLAIMED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "SELF_REVIEW_RESTRICTED";
 
 export interface SubmissionReviewQueueItem {
   id: string;
@@ -201,7 +196,10 @@ export interface SubmissionReviewQueueItem {
     status: ReviewQueueResearchStatus;
     observedAt: string | null;
   };
-  priority: ReviewQueuePriority;
+  reviewer: {
+    state: ReviewQueueReviewerState;
+    displayName: string | null;
+  };
   submittedAt: ISODateTime;
   readinessState: ReviewQueueReadinessState;
   readinessReason: string;
@@ -220,20 +218,20 @@ export interface SubmissionReviewQueueResponse {
   };
   counts: {
     all: number;
-    highPriority: number;
     awaitingEvidence: number;
     researchPending: number;
     readyToReview: number;
     blocked: number;
-    overdue: number | null;
+    claimed: number;
+    unclaimed: number;
   };
   summary: {
-    highPriority: number;
     awaitingEvidence: number;
     researchPending: number;
     readyToReview: number;
     blocked: number;
-    overdue: number | null;
+    claimed: number;
+    unclaimed: number;
   };
   nextCursor: string | null;
 }

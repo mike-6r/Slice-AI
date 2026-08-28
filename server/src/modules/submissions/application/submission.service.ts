@@ -509,7 +509,8 @@ export class SubmissionService {
         if (submission!.status !== 'APPROVED') {
           throw new ConflictException({
             code: 'SUBMISSION_STATE_CONFLICT',
-            message: 'Approve the submission before creating its collectible record.',
+            message:
+              'Approve the submission before creating its collectible record.',
           });
         }
         if (submission!.assetId) {
@@ -520,31 +521,48 @@ export class SubmissionService {
           if (!asset) {
             throw new ConflictException({
               code: 'CANONICAL_LINK_INTEGRITY_CONFLICT',
-              message: 'This submission has an unresolved collectible link. Resolve it before creating another record.',
+              message:
+                'This submission has an unresolved collectible link. Resolve it before creating another record.',
             });
           }
-          return { submissionId: submission!.id, assetId: asset.id, publicId: asset.publicId, slug: asset.slug, title: asset.title, replayed: true };
+          return {
+            submissionId: submission!.id,
+            assetId: asset.id,
+            publicId: asset.publicId,
+            slug: asset.slug,
+            title: asset.title,
+            replayed: true,
+          };
         }
         const metadata = isRecord(submission!.declaredMetadata)
           ? submission!.declaredMetadata
           : {};
-        const title = stringMetadata(metadata.name) ?? stringMetadata(metadata.playerOrCharacter);
+        const title =
+          stringMetadata(metadata.name) ??
+          stringMetadata(metadata.playerOrCharacter);
         if (!title) {
           throw new UnprocessableEntityException({
             code: 'CANONICAL_IDENTITY_INCOMPLETE',
-            message: 'Add the collectible title in review before creating its record.',
+            message:
+              'Add the collectible title in review before creating its record.',
           });
         }
-        const certificationNumber = stringMetadata(metadata.certificationNumber);
+        const certificationNumber = stringMetadata(
+          metadata.certificationNumber,
+        );
         if (submission!.gradeScaleEntryId && certificationNumber) {
           const duplicate = await db.asset.findFirst({
-            where: { gradeScaleEntryId: submission!.gradeScaleEntryId, certificationNumber },
+            where: {
+              gradeScaleEntryId: submission!.gradeScaleEntryId,
+              certificationNumber,
+            },
             select: { id: true },
           });
           if (duplicate) {
             throw new ConflictException({
               code: 'DUPLICATE_CERTIFICATION',
-              message: 'A collectible with this grading certificate already exists.',
+              message:
+                'A collectible with this grading certificate already exists.',
             });
           }
         }
@@ -561,7 +579,9 @@ export class SubmissionService {
             title,
             year: numberMetadata(metadata.year),
             manufacturer: stringMetadata(metadata.manufacturer),
-            edition: stringMetadata(metadata.variant) ?? stringMetadata(metadata.edition),
+            edition:
+              stringMetadata(metadata.variant) ??
+              stringMetadata(metadata.edition),
             cardNumber: stringMetadata(metadata.cardNumber),
             certificationNumber,
             normalizedCertificationNumber: certificationNumber
@@ -576,16 +596,38 @@ export class SubmissionService {
             where: { id: submission!.gradeScaleEntryId },
             select: { company: { select: { code: true } } },
           });
-          if (grade) await this.claimCertification(db, grade.company.code, normalizeCertificationNumber(certificationNumber), submission!.id, asset.id);
+          if (grade)
+            await this.claimCertification(
+              db,
+              grade.company.code,
+              normalizeCertificationNumber(certificationNumber),
+              submission!.id,
+              asset.id,
+            );
         }
-        await db.assetSubmission.update({ where: { id: submission!.id }, data: { assetId: asset.id } });
-        await audit('CANONICAL_ASSET_CREATED_AND_LINKED', 'submission', submission!.id, {
+        await db.assetSubmission.update({
+          where: { id: submission!.id },
+          data: { assetId: asset.id },
+        });
+        await audit(
+          'CANONICAL_ASSET_CREATED_AND_LINKED',
+          'submission',
+          submission!.id,
+          {
+            assetId: asset.id,
+            publicId: asset.publicId,
+            ownerUserId: submission!.ownerUserId,
+            source: 'EXPLICIT_STAFF_CANONICALIZATION',
+          },
+        );
+        return {
+          submissionId: submission!.id,
           assetId: asset.id,
           publicId: asset.publicId,
-          ownerUserId: submission!.ownerUserId,
-          source: 'EXPLICIT_STAFF_CANONICALIZATION',
-        });
-        return { submissionId: submission!.id, assetId: asset.id, publicId: asset.publicId, slug: asset.slug, title: asset.title, replayed: false };
+          slug: asset.slug,
+          title: asset.title,
+          replayed: false,
+        };
       },
     );
   }
@@ -1417,7 +1459,6 @@ export class SubmissionService {
     actor: Actor,
     input: {
       q?: string;
-      priority?: 'HIGH' | 'MEDIUM' | 'LOW';
       status?: 'SUBMITTED' | 'IN_REVIEW';
       evidence?: 'complete' | 'missing' | 'partial';
       research?:
@@ -1426,18 +1467,13 @@ export class SubmissionService {
         | 'pending'
         | 'unavailable'
         | 'not_requested';
-      readiness?:
-        | 'READY'
-        | 'NEEDS_EVIDENCE'
-        | 'RESEARCH_PENDING'
-        | 'COLLECTOR_ACTION'
-        | 'MANUAL_REVIEW'
-        | 'BLOCKED';
+      readiness?: 'READY' | 'NEEDS_EVIDENCE' | 'MANUAL_REVIEW' | 'BLOCKED';
+      reviewer?: 'unclaimed' | 'mine' | 'claimed';
       testFixture?: 'include' | 'only' | 'exclude';
       grader?: string;
       submittedFrom?: string;
       submittedTo?: string;
-      sort?: 'submitted' | 'priority' | 'collector' | 'research' | 'evidence';
+      sort?: 'submitted';
       sortDirection?: 'asc' | 'desc';
       page?: number;
       pageSize?: number;
@@ -1464,10 +1500,19 @@ export class SubmissionService {
       })),
     };
     const researchPending: Prisma.AssetSubmissionWhereInput = {
-      marketResearch: { some: { state: { in: ['PENDING', 'IN_PROGRESS', 'PROCESSING'] } } },
+      marketResearch: {
+        some: { state: { in: ['PENDING', 'IN_PROGRESS', 'PROCESSING'] } },
+      },
     };
-    const researchUnavailable: Prisma.AssetSubmissionWhereInput = {
-      marketResearch: { some: { state: 'UNAVAILABLE' } },
+    const certificationResolved: Prisma.AssetSubmissionWhereInput = {
+      OR: [
+        { gradeScaleEntryId: null, normalizedCertificationNumber: null },
+        {
+          certificationVerifications: {
+            some: { status: { in: ['VERIFIED', 'MANUAL_REVIEW'] } },
+          },
+        },
+      ],
     };
     const requestedBase: Prisma.AssetSubmissionWhereInput[] = [
       isAdmin
@@ -1480,7 +1525,14 @@ export class SubmissionService {
           },
       ...(input.status ? [{ status: input.status }] : []),
       ...(submittedFrom || submittedTo
-        ? [{ submittedAt: { ...(submittedFrom ? { gte: submittedFrom } : {}), ...(submittedTo ? { lt: submittedTo } : {}) } }]
+        ? [
+            {
+              submittedAt: {
+                ...(submittedFrom ? { gte: submittedFrom } : {}),
+                ...(submittedTo ? { lt: submittedTo } : {}),
+              },
+            },
+          ]
         : []),
       ...(input.testFixture === 'only' ? [fixtureWhere] : []),
       ...(input.testFixture === 'exclude' ? [{ NOT: fixtureWhere }] : []),
@@ -1489,22 +1541,60 @@ export class SubmissionService {
             {
               OR: [
                 { id: { contains: search, mode: 'insensitive' as const } },
-                { normalizedCertificationNumber: { contains: search, mode: 'insensitive' as const } },
-                { owner: { email: { contains: search, mode: 'insensitive' as const } } },
+                {
+                  normalizedCertificationNumber: {
+                    contains: search,
+                    mode: 'insensitive' as const,
+                  },
+                },
+                {
+                  owner: {
+                    email: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
                 {
                   owner: {
                     profile: {
                       OR: [
-                        { displayName: { contains: search, mode: 'insensitive' as const } },
-                        { publicUsername: { contains: search, mode: 'insensitive' as const } },
+                        {
+                          displayName: {
+                            contains: search,
+                            mode: 'insensitive' as const,
+                          },
+                        },
+                        {
+                          publicUsername: {
+                            contains: search,
+                            mode: 'insensitive' as const,
+                          },
+                        },
                       ],
                     },
                   },
                 },
-                { asset: { title: { contains: search, mode: 'insensitive' as const } } },
-                { asset: { cardNumber: { contains: search, mode: 'insensitive' as const } } },
-                { category: { name: { contains: search, mode: 'insensitive' as const } } },
-                { collectibleSet: { name: { contains: search, mode: 'insensitive' as const } } },
+                {
+                  asset: {
+                    title: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
+                {
+                  asset: {
+                    cardNumber: {
+                      contains: search,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                },
+                {
+                  category: {
+                    name: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
+                {
+                  collectibleSet: {
+                    name: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
               ],
             },
           ]
@@ -1513,52 +1603,109 @@ export class SubmissionService {
         ? [
             {
               OR: [
-                { gradeScaleEntry: { company: { code: { contains: input.grader, mode: 'insensitive' as const } } } },
-                { asset: { gradeScaleEntry: { company: { code: { contains: input.grader, mode: 'insensitive' as const } } } } },
+                {
+                  gradeScaleEntry: {
+                    company: {
+                      code: {
+                        contains: input.grader,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  },
+                },
+                {
+                  asset: {
+                    gradeScaleEntry: {
+                      company: {
+                        code: {
+                          contains: input.grader,
+                          mode: 'insensitive' as const,
+                        },
+                      },
+                    },
+                  },
+                },
               ],
             },
           ]
         : []),
-      ...(input.priority === 'HIGH'
-        ? [{ submittedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }]
-        : input.priority === 'MEDIUM'
-          ? [{ submittedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } }]
-          : input.priority === 'LOW'
-            ? [{ submittedAt: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } }]
-            : []),
+      ...(input.reviewer === 'unclaimed'
+        ? [{ status: 'SUBMITTED' as const, reviewerId: null }]
+        : []),
+      ...(input.reviewer === 'mine'
+        ? [{ status: 'IN_REVIEW' as const, reviewerId: actor.userId }]
+        : []),
+      ...(input.reviewer === 'claimed'
+        ? [{ status: 'IN_REVIEW' as const, reviewerId: { not: null } }]
+        : []),
     ];
     const baseWhere: Prisma.AssetSubmissionWhereInput = { AND: requestedBase };
     const withRules = (...rules: Prisma.AssetSubmissionWhereInput[]) => ({
       AND: [...requestedBase, ...rules],
     });
     const readinessRules: Record<string, Prisma.AssetSubmissionWhereInput> = {
-      READY: { AND: [completeEvidence, { NOT: researchPending }, { status: 'SUBMITTED' }] },
+      READY: {
+        AND: [
+          completeEvidence,
+          certificationResolved,
+          { status: 'SUBMITTED' },
+          { owner: { accountStatus: 'ACTIVE' } },
+        ],
+      },
       NEEDS_EVIDENCE: { NOT: completeEvidence },
-      RESEARCH_PENDING: researchPending,
       MANUAL_REVIEW: { status: 'IN_REVIEW' },
-      BLOCKED: { OR: [{ NOT: completeEvidence }, researchPending, researchUnavailable] },
+      BLOCKED: {
+        OR: [
+          { owner: { accountStatus: { not: 'ACTIVE' } } },
+          {
+            AND: [
+              {
+                OR: [
+                  { gradeScaleEntryId: { not: null } },
+                  { normalizedCertificationNumber: { not: null } },
+                ],
+              },
+              { NOT: certificationResolved },
+            ],
+          },
+        ],
+      },
     };
     const rowRules: Prisma.AssetSubmissionWhereInput[] = [];
-    if (input.readiness && readinessRules[input.readiness]) rowRules.push(readinessRules[input.readiness]);
+    if (input.readiness && readinessRules[input.readiness])
+      rowRules.push(readinessRules[input.readiness]);
     const rowWhere = withRules(...rowRules);
     const [
       total,
-      highPriority,
       awaitingEvidence,
       researchPendingCount,
       readyToReview,
       blocked,
+      claimed,
+      totalFiltered,
       rows,
     ] = await Promise.all([
       this.prisma.assetSubmission.count({ where: baseWhere }),
-      this.prisma.assetSubmission.count({ where: withRules({ submittedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }) }),
-      this.prisma.assetSubmission.count({ where: withRules({ NOT: completeEvidence }) }),
+      this.prisma.assetSubmission.count({
+        where: withRules({ NOT: completeEvidence }),
+      }),
       this.prisma.assetSubmission.count({ where: withRules(researchPending) }),
-      this.prisma.assetSubmission.count({ where: withRules({ AND: [completeEvidence, { NOT: researchPending }, { status: 'SUBMITTED' }] }) }),
-      this.prisma.assetSubmission.count({ where: withRules(readinessRules.BLOCKED) }),
+      this.prisma.assetSubmission.count({
+        where: withRules(readinessRules.READY),
+      }),
+      this.prisma.assetSubmission.count({
+        where: withRules(readinessRules.BLOCKED),
+      }),
+      this.prisma.assetSubmission.count({
+        where: withRules({ status: 'IN_REVIEW', reviewerId: { not: null } }),
+      }),
+      this.prisma.assetSubmission.count({ where: rowWhere }),
       this.prisma.assetSubmission.findMany({
         where: rowWhere,
-        orderBy: [{ submittedAt: input.sortDirection === 'desc' ? 'desc' : 'asc' }, { id: 'asc' }],
+        orderBy: [
+          { submittedAt: input.sortDirection === 'desc' ? 'desc' : 'asc' },
+          { id: 'asc' },
+        ],
         skip: Math.max(0, ((input.page ?? 1) - 1) * (input.pageSize ?? 10)),
         take: input.pageSize ?? 10,
         include: {
@@ -1583,17 +1730,28 @@ export class SubmissionService {
               edition: true,
               cardNumber: true,
               collectibleSet: { select: { name: true } },
-              gradeScaleEntry: { select: { label: true, company: { select: { code: true } } } },
+              gradeScaleEntry: {
+                select: { label: true, company: { select: { code: true } } },
+              },
             },
           },
           collectibleSet: { select: { name: true } },
-          gradeScaleEntry: { select: { label: true, company: { select: { code: true } } } },
+          gradeScaleEntry: {
+            select: { label: true, company: { select: { code: true } } },
+          },
           certificationVerifications: {
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: 1,
             select: { status: true },
           },
-          media: { select: { slot: true, status: true, deletedAt: true, objectKey: true } },
+          media: {
+            select: {
+              slot: true,
+              status: true,
+              deletedAt: true,
+              objectKey: true,
+            },
+          },
           marketResearch: {
             orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
             take: 1,
@@ -1602,14 +1760,51 @@ export class SubmissionService {
         },
       }),
     ]);
+    const reviewerIds = [
+      ...new Set(
+        rows.flatMap((row) => (row.reviewerId ? [row.reviewerId] : [])),
+      ),
+    ];
+    const reviewers = reviewerIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: reviewerIds } },
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { displayName: true } },
+          },
+        })
+      : [];
+    const reviewerById = new Map(
+      reviewers.map((reviewer) => [
+        reviewer.id,
+        reviewer.profile?.displayName ?? reviewer.email,
+      ]),
+    );
     const projected = await Promise.all(
       rows.map(async (row) => {
-        const item = reviewQueueProjection(row);
-        const front = row.media.find((media) => media.slot === 'front' && media.status === 'SAFE' && media.deletedAt === null);
+        const item = reviewQueueProjection(row, {
+          actorUserId: actor.userId,
+          reviewerDisplayName: row.reviewerId
+            ? (reviewerById.get(row.reviewerId) ?? null)
+            : null,
+        });
+        Reflect.deleteProperty(item, 'priority');
+        const front = row.media.find(
+          (media) =>
+            media.slot === 'front' &&
+            media.status === 'SAFE' &&
+            media.deletedAt === null,
+        );
         return {
           ...item,
           thumbnailUrl: front
-            ? await this.storage.createPrivateDownloadUrl(front.objectKey, new Date(Date.now() + 5 * 60_000)).catch(() => null)
+            ? await this.storage
+                .createPrivateDownloadUrl(
+                  front.objectKey,
+                  new Date(Date.now() + 5 * 60_000),
+                )
+                .catch(() => null)
             : null,
         };
       }),
@@ -1621,28 +1816,32 @@ export class SubmissionService {
       pagination: {
         page,
         pageSize,
-        total: await this.prisma.assetSubmission.count({ where: rowWhere }),
-        totalPages: Math.max(1, Math.ceil((await this.prisma.assetSubmission.count({ where: rowWhere })) / pageSize)),
+        total: totalFiltered,
+        totalPages: Math.max(1, Math.ceil(totalFiltered / pageSize)),
       },
       counts: {
         all: total,
-        highPriority,
         awaitingEvidence,
         researchPending: researchPendingCount,
         readyToReview,
         blocked,
-        overdue: null,
+        claimed,
+        unclaimed: total - claimed,
       },
       summary: {
-        highPriority,
         awaitingEvidence,
         researchPending: researchPendingCount,
         readyToReview,
         blocked,
-        overdue: null,
+        claimed,
+        unclaimed: total - claimed,
       },
       nextCursor: projected.length
-        ? encodeCursor('review-queue', new Date(projected[projected.length - 1].submittedAt), projected[projected.length - 1].id)
+        ? encodeCursor(
+            'review-queue',
+            new Date(projected[projected.length - 1].submittedAt),
+            projected[projected.length - 1].id,
+          )
         : null,
     };
   }
@@ -1832,7 +2031,7 @@ export class SubmissionService {
     const certification = submission!.certificationVerifications[0] ?? null;
     const identityConfirmed = Boolean(
       response.collectible?.title &&
-        response.collectible.title !== 'Untitled submission',
+      response.collectible.title !== 'Untitled submission',
     );
     const evidenceComplete = safeMediaCount === REQUIRED_MEDIA_SLOTS.length;
     const certificationResolved =
@@ -1840,14 +2039,16 @@ export class SubmissionService {
       !response.collectible.certificationNumber ||
       certification?.status === 'VERIFIED' ||
       certification?.status === 'MANUAL_REVIEW';
-    const researchResolved =
-      !response.marketResearch ||
-      !['PENDING', 'IN_PROGRESS'].includes(response.marketResearch.state);
     const blockers = [
       ...(identityConfirmed ? [] : ['Collectible identity is incomplete.']),
-      ...(evidenceComplete ? [] : [`${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required evidence item(s) missing.`]),
-      ...(certificationResolved ? [] : ['Certification verification requires review.']),
-      ...(researchResolved ? [] : ['Market research is still pending.']),
+      ...(evidenceComplete
+        ? []
+        : [
+            `${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required evidence item(s) missing.`,
+          ]),
+      ...(certificationResolved
+        ? []
+        : ['Certification verification requires review.']),
     ];
     const readinessState = blockers.length
       ? 'BLOCKED'
@@ -1858,7 +2059,8 @@ export class SubmissionService {
     const canReview =
       !selfReviewForbidden &&
       submission!.status === 'IN_REVIEW' &&
-      (submission!.reviewerId === actor.userId || actor.roles.includes('ADMIN'));
+      (submission!.reviewerId === actor.userId ||
+        actor.roles.includes('ADMIN'));
     return {
       ...response,
       reviewAssignment: {
@@ -1898,12 +2100,46 @@ export class SubmissionService {
         state: readinessState,
         blockers,
         checklist: [
-          { key: 'identity', label: 'Identity confirmed', required: true, satisfied: identityConfirmed },
-          { key: 'evidence', label: 'Required evidence accepted', required: true, satisfied: evidenceComplete },
-          { key: 'certification', label: 'Grade & certification resolved', required: true, satisfied: certificationResolved },
-          { key: 'research', label: 'Research resolved or not required', required: false, satisfied: researchResolved },
-          { key: 'condition', label: 'Staff condition recorded', required: false, satisfied: Boolean(latestReview?.staffCondition) },
-          { key: 'valuation', label: 'Staff valuation recorded', required: false, satisfied: Boolean(latestReview?.valuationMinor) },
+          {
+            key: 'identity',
+            label: 'Identity confirmed',
+            required: true,
+            satisfied: identityConfirmed,
+          },
+          {
+            key: 'evidence',
+            label: 'Required evidence accepted',
+            required: true,
+            satisfied: evidenceComplete,
+          },
+          {
+            key: 'certification',
+            label: 'Grade & certification resolved',
+            required: true,
+            satisfied: certificationResolved,
+          },
+          {
+            key: 'research',
+            label: 'Market research reference',
+            required: false,
+            satisfied:
+              !response.marketResearch ||
+              !['PENDING', 'IN_PROGRESS'].includes(
+                response.marketResearch.state,
+              ),
+          },
+          {
+            key: 'condition',
+            label: 'Staff condition recorded',
+            required: false,
+            satisfied: Boolean(latestReview?.staffCondition),
+          },
+          {
+            key: 'valuation',
+            label: 'Staff valuation recorded',
+            required: false,
+            satisfied: Boolean(latestReview?.valuationMinor),
+          },
         ],
         currentValuation: latestReview?.valuationMinor?.toString() ?? null,
       },
@@ -1985,7 +2221,8 @@ export class SubmissionService {
         if (!submission) this.notFound();
         if (
           submission!.status !== 'IN_REVIEW' ||
-          (submission!.reviewerId !== actor.userId && !actor.roles.includes('ADMIN'))
+          (submission!.reviewerId !== actor.userId &&
+            !actor.roles.includes('ADMIN'))
         )
           this.stateConflict();
         const updated = await db.assetSubmission.update({
@@ -2000,7 +2237,11 @@ export class SubmissionService {
           previousReviewerId: submission!.reviewerId,
           version: updated.version,
         });
-        return { submissionId: id, status: updated.status, version: updated.version };
+        return {
+          submissionId: id,
+          status: updated.status,
+          version: updated.version,
+        };
       },
     );
   }
@@ -2109,7 +2350,8 @@ export class SubmissionService {
     if (!submission) this.notFound();
     if (
       submission!.status !== 'IN_REVIEW' ||
-      (submission!.reviewerId !== actor.userId && !actor.roles.includes('ADMIN'))
+      (submission!.reviewerId !== actor.userId &&
+        !actor.roles.includes('ADMIN'))
     )
       this.stateConflict();
     const review = await db.verificationReview.findFirst({
@@ -3189,6 +3431,8 @@ function reviewProjection(submission: {
 
 type ReviewQueueRow = {
   id: string;
+  ownerUserId: string;
+  reviewerId: string | null;
   status: string;
   submittedAt: Date | null;
   createdAt: Date;
@@ -3212,6 +3456,8 @@ type ReviewQueueRow = {
   } | null;
   collectibleSet: { name: string } | null;
   gradeScaleEntry: { label: string; company: { code: string } } | null;
+  gradeScaleEntryId: string | null;
+  normalizedCertificationNumber: string | null;
   declaredMetadata: Prisma.JsonValue | null;
   media: Array<{
     slot: string;
@@ -3223,7 +3469,13 @@ type ReviewQueueRow = {
   certificationVerifications: Array<{ status: string }>;
 };
 
-function reviewQueueProjection(submission: ReviewQueueRow) {
+function reviewQueueProjection(
+  submission: ReviewQueueRow,
+  context: { actorUserId: string; reviewerDisplayName: string | null } = {
+    actorUserId: '',
+    reviewerDisplayName: null,
+  },
+) {
   const metadata =
     submission.declaredMetadata &&
     typeof submission.declaredMetadata === 'object'
@@ -3249,7 +3501,14 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
         : 'MISSING_REQUIRED';
   const research = submission.marketResearch[0];
   const researchStatus = researchStatusFor(research?.state);
-  const certificationStatus = submission.certificationVerifications[0]?.status ?? null;
+  const certificationStatus =
+    submission.certificationVerifications[0]?.status ?? null;
+  const certificationRequired = Boolean(
+    submission.gradeScaleEntryId || submission.normalizedCertificationNumber,
+  );
+  const certificationResolved =
+    !certificationRequired ||
+    ['VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '');
   const title =
     submission.asset?.title ??
     stringMetadata(metadata.name) ??
@@ -3269,7 +3528,9 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
     },
     collectible: {
       title,
-      year: submission.asset?.year ? String(submission.asset.year) : stringMetadata(metadata.year),
+      year: submission.asset?.year
+        ? String(submission.asset.year)
+        : stringMetadata(metadata.year),
       variant:
         stringMetadata(metadata.variant) ?? submission.asset?.edition ?? null,
       set:
@@ -3287,9 +3548,7 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
     },
     thumbnailUrl: null as string | null,
     evidence: {
-      percent: Math.round(
-        (presentRequired / requiredSlots.length) * 100,
-      ),
+      percent: Math.round((presentRequired / requiredSlots.length) * 100),
       status: evidenceStatus,
       missingRequired,
       presentRequired,
@@ -3301,42 +3560,61 @@ function reviewQueueProjection(submission: ReviewQueueRow) {
       status: researchStatus,
       observedAt: research?.collectedAt.toISOString() ?? null,
     },
+    reviewer: {
+      state:
+        submission.ownerUserId === context.actorUserId
+          ? 'SELF_REVIEW_RESTRICTED'
+          : submission.status === 'IN_REVIEW'
+            ? submission.reviewerId === context.actorUserId
+              ? 'CLAIMED_BY_ME'
+              : 'CLAIMED_BY_OTHER'
+            : 'UNCLAIMED',
+      displayName: context.reviewerDisplayName,
+    },
+    // Retained only for the legacy internal queue method until it is removed;
+    // the operational API and admin UI do not expose age as priority.
     priority: reviewPriority(submittedAt),
     submittedAt: submittedAt.toISOString(),
     readinessState:
       missingRequired > 0
         ? 'NEEDS_EVIDENCE'
-        : certificationStatus && certificationStatus !== 'VERIFIED'
+        : !certificationResolved
           ? 'BLOCKED'
-          : researchStatus === 'PENDING' || researchStatus === 'IN_PROGRESS'
-            ? 'RESEARCH_PENDING'
-            : researchStatus === 'UNAVAILABLE'
-              ? 'BLOCKED'
-              : submission.status === 'IN_REVIEW'
-                ? 'MANUAL_REVIEW'
-                : 'READY',
+          : submission.owner.accountStatus !== 'ACTIVE'
+            ? 'BLOCKED'
+            : submission.status === 'IN_REVIEW'
+              ? 'MANUAL_REVIEW'
+              : 'READY',
     readinessReason:
       missingRequired > 0
-        ? `Missing ${requiredSlots.filter((slot) => !safeMedia.some((media) => media.slot === slot)).map(formatReviewEvidenceSlot).join(' and ')}.`
-        : certificationStatus && certificationStatus !== 'VERIFIED'
+        ? `Missing ${requiredSlots
+            .filter((slot) => !safeMedia.some((media) => media.slot === slot))
+            .map(formatReviewEvidenceSlot)
+            .join(' and ')}.`
+        : !certificationResolved
           ? certificationStatus === 'MISMATCH'
             ? 'Certificate identity mismatch requires review.'
             : 'Certificate verification pending.'
-          : researchStatus === 'PENDING' || researchStatus === 'IN_PROGRESS'
-            ? 'Price reference research is pending.'
-            : researchStatus === 'UNAVAILABLE'
-              ? 'Research is unavailable; manual review is required.'
-              : submission.status === 'IN_REVIEW'
-                ? 'Submission is claimed for staff review.'
-                : 'Ready for staff decision.',
-    ageHours: Math.max(0, Math.floor((Date.now() - submittedAt.getTime()) / 3_600_000)),
+          : submission.owner.accountStatus !== 'ACTIVE'
+            ? 'Collector account is not eligible for acceptance.'
+            : submission.status === 'IN_REVIEW'
+              ? 'Claimed review is in progress.'
+              : submission.ownerUserId === context.actorUserId
+                ? 'Self-review is restricted; another reviewer must claim it.'
+                : 'Ready to claim for staff decision.',
+    ageHours: Math.max(
+      0,
+      Math.floor((Date.now() - submittedAt.getTime()) / 3_600_000),
+    ),
     overdue: null,
     testFixture: isBetaFixtureSubmission(submission.declaredMetadata, true),
   };
 }
 
 function formatReviewEvidenceSlot(slot: string) {
-  return slot === 'grading-label' ? 'the grading-label photo' : `the ${slot} photo`;
+  return slot === 'grading-label'
+    ? 'the grading-label photo'
+    : `the ${slot} photo`;
 }
 
 function stringMetadata(value: unknown) {

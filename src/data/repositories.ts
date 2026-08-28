@@ -125,16 +125,16 @@ export interface SubmissionReviewRepository {
     cursor?: string;
     limit?: number;
     q?: string;
-    priority?: "HIGH" | "MEDIUM" | "LOW";
     status?: string;
     evidence?: "complete" | "missing" | "partial";
     research?: "completed" | "in_progress" | "pending" | "unavailable" | "not_requested";
     readiness?: ReviewQueueReadinessState;
+    reviewer?: "unclaimed" | "mine" | "claimed";
     testFixture?: "include" | "only" | "exclude";
     grader?: string;
     submittedFrom?: string;
     submittedTo?: string;
-    sort?: "submitted" | "priority" | "collector" | "research" | "evidence";
+    sort?: "submitted";
     sortDirection?: "asc" | "desc";
     page?: number;
     pageSize?: number;

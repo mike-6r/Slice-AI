@@ -1508,11 +1508,9 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
       const collectible = objectField(item.collectible, "review queue collectible");
       const evidence = objectField(item.evidence, "review queue evidence");
       const research = objectField(item.research, "review queue research");
-      const priority = stringField(item.priority, "review queue priority");
+      const reviewer = objectField(item.reviewer, "review queue reviewer");
       const evidenceStatus = stringField(evidence.status, "review queue evidence.status");
       const researchStatus = stringField(research.status, "review queue research.status");
-      if (!["HIGH", "MEDIUM", "LOW"].includes(priority))
-        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue priority.");
       if (!["COMPLETE", "PARTIAL", "MISSING_REQUIRED"].includes(evidenceStatus))
         throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue evidence status.");
       if (
@@ -1559,7 +1557,13 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
             researchStatus as SubmissionReviewQueueResponse["items"][number]["research"]["status"],
           observedAt: nullableString(research.observedAt, "review queue research.observedAt"),
         },
-        priority: priority as SubmissionReviewQueueResponse["items"][number]["priority"],
+        reviewer: {
+          state: stringField(
+            reviewer.state,
+            "review queue reviewer.state",
+          ) as SubmissionReviewQueueResponse["items"][number]["reviewer"]["state"],
+          displayName: nullableString(reviewer.displayName, "review queue reviewer.displayName"),
+        },
         submittedAt: stringField(item.submittedAt, "review queue item.submittedAt") as ISODateTime,
         readinessState: stringField(
           item.readinessState,
@@ -1579,20 +1583,20 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
     },
     counts: {
       all: mapCount(counts, "all"),
-      highPriority: mapCount(counts, "highPriority"),
       awaitingEvidence: mapCount(counts, "awaitingEvidence"),
       researchPending: mapCount(counts, "researchPending"),
       readyToReview: mapCount(counts, "readyToReview"),
       blocked: mapCount(counts, "blocked"),
-      overdue: counts.overdue === null ? null : mapCount(counts, "overdue"),
+      claimed: mapCount(counts, "claimed"),
+      unclaimed: mapCount(counts, "unclaimed"),
     },
     summary: {
-      highPriority: mapCount(summary, "highPriority"),
       awaitingEvidence: mapCount(summary, "awaitingEvidence"),
       researchPending: mapCount(summary, "researchPending"),
       readyToReview: mapCount(summary, "readyToReview"),
       blocked: mapCount(summary, "blocked"),
-      overdue: summary.overdue === null ? null : mapCount(summary, "overdue"),
+      claimed: mapCount(summary, "claimed"),
+      unclaimed: mapCount(summary, "unclaimed"),
     },
     nextCursor: nullableString(value.nextCursor, "review queue.nextCursor"),
   };
