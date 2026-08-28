@@ -1847,12 +1847,16 @@ export class SubmissionService {
         : ['Certification verification requires review.']),
     ];
     const selfReviewForbidden = submission!.ownerUserId === actor.userId;
-    const canReview =
+    const claimedByActor =
+      !selfReviewForbidden &&
+      submission!.status === 'IN_REVIEW' &&
+      submission!.reviewerId === actor.userId;
+    const canManageClaim =
       !selfReviewForbidden &&
       submission!.status === 'IN_REVIEW' &&
       (submission!.reviewerId === actor.userId ||
         actor.roles.includes('ADMIN'));
-    const decisionEligible = canReview && blockers.length === 0;
+    const decisionEligible = claimedByActor && blockers.length === 0;
     const advisoryItems = [
       {
         key: 'research',
@@ -2058,11 +2062,11 @@ export class SubmissionService {
           !selfReviewForbidden &&
           submission!.status === 'SUBMITTED' &&
           !submission!.reviewerId,
-        canRelease: canReview,
-        canEdit: canReview,
-        canAccept: canReview && blockers.length === 0,
-        canRequestChanges: canReview,
-        canReject: canReview,
+        canRelease: canManageClaim,
+        canEdit: claimedByActor,
+        canAccept: decisionEligible,
+        canRequestChanges: claimedByActor,
+        canReject: claimedByActor,
         selfReviewForbidden,
       },
     };

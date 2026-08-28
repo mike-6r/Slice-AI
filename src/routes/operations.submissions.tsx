@@ -949,7 +949,11 @@ function PostApproval({
       <div className="mt-4 flex flex-wrap gap-2">
         {detail.assetId ? (
           <>
-            <Link className="button-secondary" to="/admin" search={{ section: "collectibles" }}>
+            <Link
+              className="button-secondary"
+              to="/admin"
+              search={{ section: "collectibles", asset: detail.assetId }}
+            >
               Open Collectible
             </Link>
             <Link className="button-primary" to="/admin" search={{ section: "intake" }}>
