@@ -228,6 +228,9 @@ export const mockRepositories: AppRepositories = {
         filters: { vaults: [], carriers: [], fixtureModes: ["NORMAL", "TEST", "ALL"] },
       };
     },
+    async getIntakeDetail() {
+      throw new Error("Physical intake detail requires the API service.");
+    },
     async confirmIntakeReceipt() {
       throw new Error("Physical intake requires the API service.");
     },

@@ -15,6 +15,7 @@ import type {
   AdminPlatformDashboard,
   AdminPlatformRecordsResponse,
   AdminPlatformRecord,
+  AdminIntakeDetail,
   AdminIntakeRow,
   AdminMembershipDetailResponse,
   AdminMembershipDirectoryResponse,
@@ -2421,6 +2422,183 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
   };
 };
 
+const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
+  const value = objectField(raw, "admin intake detail");
+  const intake =
+    value.intake === null ? null : objectField(value.intake, "admin intake detail.intake");
+  const custody =
+    value.custody === null ? null : objectField(value.custody, "admin intake detail.custody");
+  const nullableBoolean = (item: Record<string, unknown>, key: string) =>
+    item[key] === null || item[key] === undefined ? null : Boolean(item[key]);
+  return {
+    row: mapAdminIntake(value.row),
+    intake: intake
+      ? {
+          id: stringField(intake.id, "admin intake detail.intake.id"),
+          reference: stringField(intake.reference, "admin intake detail.intake.reference"),
+          status: stringField(intake.status, "admin intake detail.intake.status"),
+          selectedAt: stringField(intake.selectedAt, "admin intake detail.intake.selectedAt"),
+          shippedAt: nullableString(intake.shippedAt, "admin intake detail.intake.shippedAt"),
+          deliveredAt: nullableString(intake.deliveredAt, "admin intake detail.intake.deliveredAt"),
+          receivedAt: nullableString(intake.receivedAt, "admin intake detail.intake.receivedAt"),
+          updatedAt: stringField(intake.updatedAt, "admin intake detail.intake.updatedAt"),
+          destination: (() => {
+            const destination = objectField(intake.destination, "admin intake detail.destination");
+            return {
+              id: stringField(destination.id, "admin intake detail.destination.id"),
+              displayName: stringField(
+                destination.displayName,
+                "admin intake detail.destination.displayName",
+              ),
+              region: stringField(destination.region, "admin intake detail.destination.region"),
+              countryCode: stringField(
+                destination.countryCode,
+                "admin intake detail.destination.countryCode",
+              ),
+              active: Boolean(destination.active),
+              intakeAvailable: Boolean(destination.intakeAvailable),
+              operationallyApproved: Boolean(destination.operationallyApproved),
+              acceptingShipments: Boolean(destination.acceptingShipments),
+              environment: stringField(
+                destination.environment,
+                "admin intake detail.destination.environment",
+              ),
+            };
+          })(),
+          shipment:
+            intake.shipment === null
+              ? null
+              : (() => {
+                  const shipment = objectField(intake.shipment, "admin intake detail.shipment");
+                  return {
+                    carrier: stringField(shipment.carrier, "admin intake detail.shipment.carrier"),
+                    trackingNumber: stringField(
+                      shipment.trackingNumber,
+                      "admin intake detail.shipment.trackingNumber",
+                    ),
+                    status: stringField(shipment.status, "admin intake detail.shipment.status"),
+                    shippedAt: stringField(
+                      shipment.shippedAt,
+                      "admin intake detail.shipment.shippedAt",
+                    ),
+                    deliveredAt: nullableString(
+                      shipment.deliveredAt,
+                      "admin intake detail.shipment.deliveredAt",
+                    ),
+                    lastCheckedAt: nullableString(
+                      shipment.lastCheckedAt,
+                      "admin intake detail.shipment.lastCheckedAt",
+                    ),
+                    notes: nullableString(shipment.notes, "admin intake detail.shipment.notes"),
+                  };
+                })(),
+          receipt:
+            intake.receipt === null
+              ? null
+              : (() => {
+                  const receipt = objectField(intake.receipt, "admin intake detail.receipt");
+                  return {
+                    id: stringField(receipt.id, "admin intake detail.receipt.id"),
+                    confirmedAt: stringField(
+                      receipt.confirmedAt,
+                      "admin intake detail.receipt.confirmedAt",
+                    ),
+                    confirmedBy: stringField(
+                      receipt.confirmedBy,
+                      "admin intake detail.receipt.confirmedBy",
+                    ),
+                    packageCondition: nullableString(
+                      receipt.packageCondition,
+                      "admin intake detail.receipt.packageCondition",
+                    ),
+                    checklist: receipt.checklist,
+                    notes: nullableString(receipt.notes, "admin intake detail.receipt.notes"),
+                  };
+                })(),
+          verification:
+            intake.verification === null
+              ? null
+              : (() => {
+                  const verification = objectField(
+                    intake.verification,
+                    "admin intake detail.verification",
+                  );
+                  return {
+                    id: stringField(verification.id, "admin intake detail.verification.id"),
+                    status: stringField(
+                      verification.status,
+                      "admin intake detail.verification.status",
+                    ),
+                    identityMatch: nullableBoolean(verification, "identityMatch"),
+                    certificationMatch: nullableBoolean(verification, "certificationMatch"),
+                    gradeMatch: nullableBoolean(verification, "gradeMatch"),
+                    variantMatch: nullableBoolean(verification, "variantMatch"),
+                    note: nullableString(
+                      verification.note,
+                      "admin intake detail.verification.note",
+                    ),
+                    startedAt: nullableString(
+                      verification.startedAt,
+                      "admin intake detail.verification.startedAt",
+                    ),
+                    completedAt: nullableString(
+                      verification.completedAt,
+                      "admin intake detail.verification.completedAt",
+                    ),
+                  };
+                })(),
+          exceptions: Array.isArray(intake.exceptions)
+            ? intake.exceptions.map((rawException) => {
+                const exception = objectField(rawException, "admin intake detail.exception");
+                return {
+                  id: stringField(exception.id, "admin intake detail.exception.id"),
+                  code: stringField(exception.code, "admin intake detail.exception.code"),
+                  severity: stringField(
+                    exception.severity,
+                    "admin intake detail.exception.severity",
+                  ) as "LOW" | "MEDIUM" | "HIGH",
+                  notes: stringField(exception.notes, "admin intake detail.exception.notes"),
+                  createdAt: stringField(
+                    exception.createdAt,
+                    "admin intake detail.exception.createdAt",
+                  ),
+                  resolvedAt: nullableString(
+                    exception.resolvedAt,
+                    "admin intake detail.exception.resolvedAt",
+                  ),
+                  resolutionNote: nullableString(
+                    exception.resolutionNote,
+                    "admin intake detail.exception.resolutionNote",
+                  ),
+                };
+              })
+            : [],
+        }
+      : null,
+    custody: custody
+      ? {
+          status: stringField(custody.status, "admin intake detail.custody.status"),
+          receivedAt: nullableString(custody.receivedAt, "admin intake detail.custody.receivedAt"),
+          securedAt: nullableString(custody.securedAt, "admin intake detail.custody.securedAt"),
+          updatedAt: stringField(custody.updatedAt, "admin intake detail.custody.updatedAt"),
+        }
+      : null,
+    history: Array.isArray(value.history)
+      ? value.history.map((rawEvent) => {
+          const event = objectField(rawEvent, "admin intake detail.history");
+          return {
+            id: stringField(event.id, "admin intake detail.history.id"),
+            source: stringField(event.source, "admin intake detail.history.source") as
+              "INTAKE" | "CUSTODY",
+            action: stringField(event.action, "admin intake detail.history.action"),
+            occurredAt: stringField(event.occurredAt, "admin intake detail.history.occurredAt"),
+            actor: nullableString(event.actor, "admin intake detail.history.actor"),
+          };
+        })
+      : [],
+  };
+};
+
 const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
   const value = objectField(raw, "admin membership row");
   const collector = objectField(value.collector, "admin membership collector");
@@ -4068,6 +4246,11 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           fixtureModes: ["NORMAL", "TEST", "ALL"],
         },
       };
+    },
+    async getIntakeDetail(submissionId) {
+      return mapAdminIntakeDetail(
+        await client.get<unknown>(`/admin/intake/submissions/${encodeURIComponent(submissionId)}`),
+      );
     },
     async setIntakeDestinationApproval(id, input) {
       const value = objectField(

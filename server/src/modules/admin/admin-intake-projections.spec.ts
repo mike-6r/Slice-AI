@@ -13,16 +13,17 @@ const base = (overrides: Partial<Parameters<typeof intakeStage>[0]> = {}) => ({
 });
 
 describe('admin intake projections', () => {
-  it('keeps an accepted submission without an intake destination out of shipment work', () => {
+  it('keeps an accepted submission without an intake destination collector-owned', () => {
     const item = base();
     const stage = intakeStage(item);
 
     expect(stage).toBe('AWAITING_DESTINATION');
     expect(intakeNextAction({ ...item, stage })).toEqual({
-      label: 'Select destination',
-      actor: 'STAFF',
-      needsStaffAction: true,
+      label: 'Await collector destination',
+      actor: 'COLLECTOR',
+      needsStaffAction: false,
     });
+    expect(intakeAllowedActions({ ...item, stage })).toEqual([]);
   });
 
   it('distinguishes an authorised destination awaiting collector tracking from staff action', () => {

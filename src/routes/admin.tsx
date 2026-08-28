@@ -1559,16 +1559,22 @@ function PhysicalIntakeBoard({
   const selectedRow = selectedIntake
     ? rows.find((row) => row.submissionId === selectedIntake)
     : undefined;
-  if (selectedIntake && selectedRow) {
+  const intakeDetail = useQuery({
+    queryKey: ["admin", "intake-detail", selectedIntake],
+    queryFn: () => services.repositories.admin.getIntakeDetail(selectedIntake!),
+    enabled: Boolean(selectedIntake),
+  });
+  const detailRow = intakeDetail.data?.row ?? selectedRow;
+  if (selectedIntake && detailRow) {
     return (
       <PhysicalIntakeDetailPage
-        row={selectedRow}
+        row={detailRow}
         tab={intakeTab}
         onClose={closeIntake}
         onSelectTab={selectIntakeTab}
-        onReceipt={() => receipt.mutate(selectedRow.id)}
-        onStartVerification={() => verificationStart.mutate(selectedRow.id)}
-        onCompleteDemoIntake={() => demoIntake.mutate(selectedRow)}
+        onReceipt={() => receipt.mutate(detailRow.id)}
+        onStartVerification={() => verificationStart.mutate(detailRow.id)}
+        onCompleteDemoIntake={() => demoIntake.mutate(detailRow)}
         receiptPending={receipt.isPending}
         receiptFailed={receipt.isError}
         demoPending={demoIntake.isPending}
@@ -1584,11 +1590,18 @@ function PhysicalIntakeBoard({
         detail="The requested intake could not be found in the authorized intake projection."
       >
         <section className="physical-intake-detail-not-found admin-panel">
-          <p className="admin-console-eyebrow">Intake unavailable</p>
-          <h2>That intake is no longer available in this view.</h2>
+          <p className="admin-console-eyebrow">
+            {intakeDetail.isLoading ? "Loading intake" : "Intake unavailable"}
+          </p>
+          <h2>
+            {intakeDetail.isLoading
+              ? "Loading the authoritative intake detail…"
+              : "That intake is no longer available in this view."}
+          </h2>
           <p>
-            It may have been removed from the current authorized projection. Return to Physical
-            Intake to choose a record from the live queue.
+            {intakeDetail.isLoading
+              ? "The detail workspace is fetching the current server-side intake projection."
+              : "It may have been removed from the current authorized projection. Return to Physical Intake to choose a record from the live queue."}
           </p>
           <button type="button" className="admin-secondary-button" onClick={closeIntake}>
             Back to Physical Intake
@@ -2239,9 +2252,9 @@ function IntakeDetailAction({
         type="button"
         className="button-primary"
         disabled
-        title="Destination selection is not available in the authorized intake projection."
+        title="The collector selects an approved destination from their workspace."
       >
-        Select destination
+        Await collector destination
       </button>
     );
   return null;
@@ -2401,7 +2414,7 @@ function PhysicalIntakeDetailPage({
             />
             {row.stage === "AWAITING_DESTINATION" ? (
               <small>
-                Destination selection is not available in the authorized intake projection.
+                The collector must select an approved receiving destination from their workspace.
               </small>
             ) : null}
           </section>
@@ -2559,7 +2572,7 @@ function IntakeOverviewTab({ row }: { row: AdminIntakeRow }) {
               <strong>{row.demoIntake?.destinationLabel ?? row.vault?.displayName}</strong>
             ) : (
               <button type="button" className="admin-secondary-button" disabled>
-                Select destination
+                Await collector destination
               </button>
             )}
           </div>
@@ -2578,7 +2591,7 @@ function IntakeOverviewTab({ row }: { row: AdminIntakeRow }) {
                 <span>Staging simulation only</span>
               </>
             ) : (
-              <span>No destination is available in the authorized intake projection.</span>
+              <span>The collector has not selected an approved destination yet.</span>
             )}
           </div>
         </div>

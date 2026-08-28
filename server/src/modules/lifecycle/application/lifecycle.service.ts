@@ -106,7 +106,11 @@ type BoardAsset = {
   custodyRecord: { status: string; updatedAt: Date } | null;
   insuranceCoverage: Array<{ status: string; expiresAt: Date }>;
   publication: { status: string; updatedAt: Date; readiness: unknown } | null;
-  ownershipSupply: { status: string; totalUnits: bigint; issuedUnits: bigint } | null;
+  ownershipSupply: {
+    status: string;
+    totalUnits: bigint;
+    issuedUnits: bigint;
+  } | null;
   ownershipSupplyPolicy: { status: string } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   controlledBetaBypass: { id: string } | null;
@@ -274,11 +278,16 @@ export class LifecycleService {
       orderBy: { updatedAt: 'asc' },
       take: 500,
     });
-    const projected = (await Promise.all(
-      assets.map((asset) => operationsItem(asset, this.storage)),
-    ))
-      .filter((item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
-        Boolean(item),
+    const projected = (
+      await Promise.all(
+        assets.map((asset) => operationsItem(asset, this.storage)),
+      )
+    )
+      .filter(
+        (
+          item,
+        ): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
+          Boolean(item),
       )
       .filter(
         (item) =>
@@ -299,7 +308,9 @@ export class LifecycleService {
     );
     const counts = stageCounts(
       allProjected.filter(
-        (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
+        (
+          item,
+        ): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
           Boolean(item),
       ),
     );
@@ -362,12 +373,38 @@ export class LifecycleService {
       async (db, audit) => {
         const asset = await db.asset.findUnique({
           where: { id: assetId },
-          include: { submissions: { where: { status: 'APPROVED' }, take: 1 } },
+          include: {
+            submissions: {
+              where: { status: 'APPROVED' },
+              take: 1,
+              select: { id: true },
+            },
+          },
         });
         if (!asset || !asset.submissions.length)
           throw new ConflictException({
             code: 'CUSTODY_PROOF_REQUIRED',
             message: 'An approved submission is required for intake.',
+          });
+        const verifiedIntake = await db.assetSubmission.findFirst({
+          where: {
+            assetId,
+            status: 'APPROVED',
+            intake: {
+              is: {
+                receipt: { isNot: null },
+                verification: { is: { status: 'VERIFIED' } },
+                exceptions: { none: { resolvedAt: null } },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (!verifiedIntake)
+          throw new ConflictException({
+            code: 'CUSTODY_VERIFICATION_REQUIRED',
+            message:
+              'Verified physical intake without an open exception is required before custody handoff.',
           });
         const custody = await db.vaultCustodyRecord.upsert({
           where: { assetId },
@@ -426,20 +463,58 @@ export class LifecycleService {
             code: 'CUSTODY_PROOF_REQUIRED',
             message: 'Asset intake is required.',
           });
+        if (['RECEIVED', 'INSPECTED'].includes(input.toStatus)) {
+          const verifiedIntake = await db.assetSubmission.findFirst({
+            where: {
+              assetId,
+              status: 'APPROVED',
+              intake: {
+                is: {
+                  receipt: { isNot: null },
+                  verification: { is: { status: 'VERIFIED' } },
+                  exceptions: { none: { resolvedAt: null } },
+                },
+              },
+            },
+            select: { id: true },
+          });
+          if (!verifiedIntake)
+            throw new ConflictException({
+              code: 'CUSTODY_VERIFICATION_REQUIRED',
+              message:
+                'Verified physical intake without an open exception is required before custody can progress.',
+            });
+        }
         assertCustodyTransition(custody.status, input.toStatus);
-        if (['RECEIVED', 'INSPECTED', 'SECURED'].includes(input.toStatus) && !input.providerRef)
+        if (
+          ['RECEIVED', 'INSPECTED', 'SECURED'].includes(input.toStatus) &&
+          !input.providerRef
+        )
           throw new ConflictException({
             code: 'CUSTODY_EVIDENCE_REQUIRED',
-            message: 'A custody evidence or operator reference is required for this transition.',
+            message:
+              'A custody evidence or operator reference is required for this transition.',
           });
         if (input.toStatus === 'SECURED') {
           if (custody.status !== 'INSPECTED')
-            throw new ConflictException({ code: 'CUSTODY_INSPECTION_REQUIRED', message: 'Custody must be inspected before it can be secured.' });
+            throw new ConflictException({
+              code: 'CUSTODY_INSPECTION_REQUIRED',
+              message: 'Custody must be inspected before it can be secured.',
+            });
           const coverage = await db.insuranceCoverage.count({
-            where: { assetId, status: 'ACTIVE', effectiveAt: { lte: new Date() }, expiresAt: { gt: new Date() } },
+            where: {
+              assetId,
+              status: 'ACTIVE',
+              effectiveAt: { lte: new Date() },
+              expiresAt: { gt: new Date() },
+            },
           });
           if (coverage !== 1)
-            throw new ConflictException({ code: 'ACTIVE_COVERAGE_REQUIRED', message: 'Active insurance coverage is required before custody can be secured.' });
+            throw new ConflictException({
+              code: 'ACTIVE_COVERAGE_REQUIRED',
+              message:
+                'Active insurance coverage is required before custody can be secured.',
+            });
         }
         const at = new Date();
         const updated = await db.vaultCustodyRecord.update({
@@ -678,7 +753,8 @@ export class LifecycleService {
     if (!this.config.isBeta)
       throw new ForbiddenException({
         code: 'CONTROLLED_BETA_FEATURE_DISABLED',
-        message: 'This controlled lifecycle exception is available only in beta.',
+        message:
+          'This controlled lifecycle exception is available only in beta.',
       });
     if (!actor.roles.includes('ADMIN'))
       throw new ForbiddenException({
@@ -788,7 +864,13 @@ export class LifecycleService {
    */
   completeStagingDemoPhysicalIntake(
     actor: Actor,
-    input: { submissionId: string; assetId: string; fixtureKey: string; reason: string; confirmation: string },
+    input: {
+      submissionId: string;
+      assetId: string;
+      fixtureKey: string;
+      reason: string;
+      confirmation: string;
+    },
     requestId: string,
     key: string,
   ) {
@@ -799,14 +881,18 @@ export class LifecycleService {
         message: 'Demo physical intake is available only in staging.',
       });
     if (!actor.roles.includes('ADMIN'))
-      throw new ForbiddenException({ code: 'ADMIN_REQUIRED', message: 'Only an administrator can complete demo intake.' });
+      throw new ForbiddenException({
+        code: 'ADMIN_REQUIRED',
+        message: 'Only an administrator can complete demo intake.',
+      });
     if (
       input.fixtureKey !== STAGING_DEMO_PIKACHU_FIXTURE_KEY ||
       input.confirmation !== STAGING_DEMO_PHYSICAL_CONFIRMATION
     )
       throw new ConflictException({
         code: 'STAGING_DEMO_CONFIRMATION_REQUIRED',
-        message: 'The explicit owner-demo fixture and confirmation are required.',
+        message:
+          'The explicit owner-demo fixture and confirmation are required.',
       });
 
     return this.mutate(
@@ -829,7 +915,9 @@ export class LifecycleService {
               include: {
                 category: { select: { name: true } },
                 collectibleSet: { select: { name: true } },
-                gradeScaleEntry: { include: { company: { select: { code: true } } } },
+                gradeScaleEntry: {
+                  include: { company: { select: { code: true } } },
+                },
                 custodyRecord: true,
                 stagingDemoPhysicalIntake: true,
               },
@@ -837,22 +925,32 @@ export class LifecycleService {
           },
         });
         const asset = submission?.asset;
-        if (!submission || !asset || submission.assetId !== input.assetId || submission.status !== 'APPROVED')
+        if (
+          !submission ||
+          !asset ||
+          submission.assetId !== input.assetId ||
+          submission.status !== 'APPROVED'
+        )
           throw new ConflictException({
             code: 'STAGING_DEMO_APPROVED_CANONICAL_ASSET_REQUIRED',
-            message: 'Demo intake requires the existing approved canonical asset.',
+            message:
+              'Demo intake requires the existing approved canonical asset.',
           });
         if (isProtectedControlledAsset(asset))
           throw new ForbiddenException({
             code: 'STAGING_DEMO_CONTROLLED_ASSET_FORBIDDEN',
-            message: 'Controlled Umbreon and Charizard fixtures cannot use demo intake.',
+            message:
+              'Controlled Umbreon and Charizard fixtures cannot use demo intake.',
           });
         if (!isExplicitPikachuOwnerDemoSubmission(submission.id))
           throw new ForbiddenException({
             code: 'STAGING_DEMO_ASSET_MARKER_REQUIRED',
-            message: 'This asset is not the explicitly marked staging owner-demo fixture.',
+            message:
+              'This asset is not the explicitly marked staging owner-demo fixture.',
           });
-        const existing = submission.stagingDemoPhysicalIntake ?? asset.stagingDemoPhysicalIntake;
+        const existing =
+          submission.stagingDemoPhysicalIntake ??
+          asset.stagingDemoPhysicalIntake;
         if (existing)
           return {
             status: existing.status,
@@ -865,7 +963,8 @@ export class LifecycleService {
         if (submission.intake || asset.custodyRecord)
           throw new ConflictException({
             code: 'PHYSICAL_STATE_ALREADY_STARTED',
-            message: 'Demo intake cannot be mixed with production physical records.',
+            message:
+              'Demo intake cannot be mixed with production physical records.',
           });
         const now = new Date();
         const created = await db.stagingDemoPhysicalIntake.create({
@@ -887,14 +986,19 @@ export class LifecycleService {
             completedByUserId: actor.userId,
           },
         });
-        await audit('STAGING_DEMO_PHYSICAL_INTAKE_COMPLETED', 'asset', asset.id, {
-          submissionId: submission.id,
-          assetId: asset.id,
-          demoIntakeId: created.id,
-          fixtureKey: input.fixtureKey,
-          status: created.status,
-          reason: input.reason.trim(),
-        });
+        await audit(
+          'STAGING_DEMO_PHYSICAL_INTAKE_COMPLETED',
+          'asset',
+          asset.id,
+          {
+            submissionId: submission.id,
+            assetId: asset.id,
+            demoIntakeId: created.id,
+            fixtureKey: input.fixtureKey,
+            status: created.status,
+            reason: input.reason.trim(),
+          },
+        );
         return {
           status: created.status,
           submissionId: submission.id,
@@ -1013,7 +1117,10 @@ export class LifecycleService {
       custodySecured: asset.custodyRecord?.status === 'SECURED',
       controlledBetaPhysicalBypass:
         Boolean(asset.controlledBetaBypass) ||
-        hasStagingDemoPhysicalReadiness(this.config.isBeta, asset.stagingDemoPhysicalIntake),
+        hasStagingDemoPhysicalReadiness(
+          this.config.isBeta,
+          asset.stagingDemoPhysicalIntake,
+        ),
       activeCoverage: asset.insuranceCoverage.length > 0,
       hasException: asset.custodyRecord?.status === 'EXCEPTION',
     });
@@ -1324,7 +1431,8 @@ function eligibleActionsFor(
     actions.push('REVIEW_VERIFICATION');
   if (stage === 'AWAITING_VALUATION') actions.push('RECORD_VALUATION');
   if (stage === 'CUSTODY_PENDING') actions.push('UPDATE_CUSTODY');
-  if (stage === 'MARKET_READY' && readiness.status === 'READY') actions.push('PUBLISH');
+  if (stage === 'MARKET_READY' && readiness.status === 'READY')
+    actions.push('PUBLISH');
   if (stage === 'EXCEPTION') actions.push('OPEN_EXCEPTION');
   return actions;
 }

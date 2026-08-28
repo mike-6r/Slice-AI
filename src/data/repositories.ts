@@ -996,6 +996,81 @@ export type AdminIntakeResponse = {
   };
 };
 
+export type AdminIntakeDetail = {
+  row: AdminIntakeRow;
+  intake: {
+    id: string;
+    reference: string;
+    status: string;
+    selectedAt: string;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    receivedAt: string | null;
+    updatedAt: string;
+    destination: {
+      id: string;
+      displayName: string;
+      region: string;
+      countryCode: string;
+      active: boolean;
+      intakeAvailable: boolean;
+      operationallyApproved: boolean;
+      acceptingShipments: boolean;
+      environment: string;
+    };
+    shipment: {
+      carrier: string;
+      trackingNumber: string;
+      status: string;
+      shippedAt: string;
+      deliveredAt: string | null;
+      lastCheckedAt: string | null;
+      notes: string | null;
+    } | null;
+    receipt: {
+      id: string;
+      confirmedAt: string;
+      confirmedBy: string;
+      packageCondition: string | null;
+      checklist: unknown;
+      notes: string | null;
+    } | null;
+    verification: {
+      id: string;
+      status: string;
+      identityMatch: boolean | null;
+      certificationMatch: boolean | null;
+      gradeMatch: boolean | null;
+      variantMatch: boolean | null;
+      note: string | null;
+      startedAt: string | null;
+      completedAt: string | null;
+    } | null;
+    exceptions: Array<{
+      id: string;
+      code: string;
+      severity: "LOW" | "MEDIUM" | "HIGH";
+      notes: string;
+      createdAt: string;
+      resolvedAt: string | null;
+      resolutionNote: string | null;
+    }>;
+  } | null;
+  custody: {
+    status: string;
+    receivedAt: string | null;
+    securedAt: string | null;
+    updatedAt: string;
+  } | null;
+  history: Array<{
+    id: string;
+    source: "INTAKE" | "CUSTODY";
+    action: string;
+    occurredAt: string;
+    actor: string | null;
+  }>;
+};
+
 export type AdminMembershipRow = {
   id: string;
   collector: { id: string; displayName: string; username: string | null; email: string };
@@ -1705,6 +1780,7 @@ export interface AdminRepository {
     workType?: "ALL" | "PRODUCTION" | "DEMO_QA";
     limit?: number;
   }): Promise<AdminIntakeResponse>;
+  getIntakeDetail(submissionId: string): Promise<AdminIntakeDetail>;
   setIntakeDestinationApproval(
     id: string,
     input: { operationallyApproved: boolean; acceptingShipments: boolean; reason: string },

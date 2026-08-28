@@ -77,7 +77,17 @@ const accountHistoryQuery = page
   .pick({ page: true, pageSize: true })
   .extend({
     category: z
-      .enum(['ALL', 'SECURITY', 'FINANCIAL', 'TRADING', 'COMPLIANCE', 'ACCOUNT', 'COLLECTOR', 'ADMIN', 'PROVIDER'])
+      .enum([
+        'ALL',
+        'SECURITY',
+        'FINANCIAL',
+        'TRADING',
+        'COMPLIANCE',
+        'ACCOUNT',
+        'COLLECTOR',
+        'ADMIN',
+        'PROVIDER',
+      ])
       .default('ALL'),
   })
   .strict();
@@ -102,7 +112,9 @@ const catalogueQuery = z
 const collectorFeature = z.object({ featured: z.boolean() }).strict();
 const intakeReceiptConfirmation = z
   .object({
-    packageCondition: z.enum(['ACCEPTABLE', 'DAMAGED', 'UNKNOWN']).default('UNKNOWN'),
+    packageCondition: z
+      .enum(['ACCEPTABLE', 'DAMAGED', 'UNKNOWN'])
+      .default('UNKNOWN'),
     checklist: z
       .object({
         packageReceived: z.boolean(),
@@ -127,32 +139,71 @@ const intakeVerificationComplete = z
   .strict();
 const intakeExceptionCreate = z
   .object({
-    code: z.enum(['WRONG_ITEM', 'DAMAGED_PACKAGE', 'DAMAGED_COLLECTIBLE', 'CERT_MISMATCH', 'GRADE_MISMATCH', 'IDENTITY_MISMATCH', 'MISSING_CONTENTS', 'TRACKING_MISMATCH', 'DESTINATION_ERROR', 'RETURN_TO_SENDER', 'OTHER_REVIEW']),
+    code: z.enum([
+      'WRONG_ITEM',
+      'DAMAGED_PACKAGE',
+      'DAMAGED_COLLECTIBLE',
+      'CERT_MISMATCH',
+      'GRADE_MISMATCH',
+      'IDENTITY_MISMATCH',
+      'MISSING_CONTENTS',
+      'TRACKING_MISMATCH',
+      'DESTINATION_ERROR',
+      'RETURN_TO_SENDER',
+      'OTHER_REVIEW',
+    ]),
     severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
     notes: z.string().trim().min(3).max(2000),
   })
   .strict();
-const intakeExceptionResolve = z.object({ note: z.string().trim().min(3).max(2000) }).strict();
+const intakeExceptionResolve = z
+  .object({ note: z.string().trim().min(3).max(2000) })
+  .strict();
 const membershipsQuery = z
   .object({
     q: z.string().trim().max(120).optional(),
     plan: z.enum(['STARTER', 'PRO', 'ELITE']).optional(),
     status: z
-      .enum(['INCOMPLETE', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'CANCEL_AT_PERIOD_END', 'TRIALING', 'SUSPENDED', 'EXPIRED'])
+      .enum([
+        'INCOMPLETE',
+        'ACTIVE',
+        'PAST_DUE',
+        'CANCELLED',
+        'CANCEL_AT_PERIOD_END',
+        'TRIALING',
+        'SUSPENDED',
+        'EXPIRED',
+      ])
       .optional(),
-    billing: z.enum(['CURRENT', 'PENDING', 'PAST_DUE', 'SUSPENDED', 'DISABLED']).optional(),
+    billing: z
+      .enum(['CURRENT', 'PENDING', 'PAST_DUE', 'SUSPENDED', 'DISABLED'])
+      .optional(),
     usage: z.enum(['NORMAL', 'AT_LIMIT', 'OVER_LIMIT']).optional(),
     fixture: z.enum(['NORMAL', 'TEST', 'ALL']).default('ALL'),
-    needsAction: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    needsAction: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
-    sort: z.enum(['collector', 'plan', 'status', 'billing', 'updated']).default('updated'),
+    sort: z
+      .enum(['collector', 'plan', 'status', 'billing', 'updated'])
+      .default('updated'),
     sortDirection: z.enum(['asc', 'desc']).default('desc'),
   })
   .strict();
 const financeRecordsQuery = z
   .object({
-    tab: z.enum(['wallets', 'movements', 'orders', 'executions', 'reconciliation', 'adjustments']).default('wallets'),
+    tab: z
+      .enum([
+        'wallets',
+        'movements',
+        'orders',
+        'executions',
+        'reconciliation',
+        'adjustments',
+      ])
+      .default('wallets'),
     q: z.string().trim().max(120).optional(),
     status: z.string().trim().max(64).optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
@@ -161,7 +212,9 @@ const financeRecordsQuery = z
   .strict();
 const trustSupportRecordsQuery = z
   .object({
-    tab: z.enum(['compliance', 'restrictions', 'tickets', 'escalations']).default('compliance'),
+    tab: z
+      .enum(['compliance', 'restrictions', 'tickets', 'escalations'])
+      .default('compliance'),
     q: z.string().trim().max(120).optional(),
     status: z.string().trim().max(64).optional(),
     type: z.string().trim().max(64).optional(),
@@ -175,7 +228,17 @@ const trustSupportRecordsQuery = z
   .strict();
 const platformRecordsQuery = z
   .object({
-    tab: z.enum(['jobs', 'webhooks', 'integrations', 'audit', 'health', 'feature-flags', 'settings']).default('jobs'),
+    tab: z
+      .enum([
+        'jobs',
+        'webhooks',
+        'integrations',
+        'audit',
+        'health',
+        'feature-flags',
+        'settings',
+      ])
+      .default('jobs'),
     q: z.string().trim().max(120).optional(),
     status: z.string().trim().max(64).optional(),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
@@ -191,7 +254,10 @@ const intakeApproval = z
   .strict();
 const intakeDestination = z
   .object({
-    id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,79}$/),
+    id: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9-]{2,79}$/),
     displayName: z.string().trim().min(3).max(160),
     receiverName: z.string().trim().min(2).max(160),
     addressLine1: z.string().trim().min(3).max(200),
@@ -199,7 +265,10 @@ const intakeDestination = z
     city: z.string().trim().min(2).max(120),
     region: z.string().trim().min(2).max(120),
     postalCode: z.string().trim().min(2).max(32),
-    countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/),
+    countryCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z]{2}$/),
     acceptedCategories: z.array(z.string().trim().min(2).max(120)).max(20),
     shippingInstructions: z.string().trim().min(10).max(2000),
     environment: z.literal('beta'),
@@ -238,7 +307,10 @@ export class AdminController {
 
   @Get('platform/records')
   @RequirePermission('admin.console.read')
-  platformRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+  platformRecords(
+    @Query() query: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = this.parse(platformRecordsQuery, query);
     return this.admin.platformRecords(request.actor!, {
       ...input,
@@ -285,6 +357,14 @@ export class AdminController {
       ...input,
       limit: input.limit ?? 50,
     });
+  }
+  @Get('intake/submissions/:submissionId')
+  @RequirePermission('admin.console.read')
+  intakeDetail(
+    @Param('submissionId') submissionId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.intakeDetail(request.actor!, submissionId);
   }
   @Post('intake/destinations/:id/approval')
   @RequirePermission('custody.manage')
@@ -341,8 +421,16 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
-      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
-    return this.admin.startIntakeVerification(request.actor!, intakeId, idempotencyKey, request.requestId ?? 'unknown');
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.startIntakeVerification(
+      request.actor!,
+      intakeId,
+      idempotencyKey,
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Post('intake/:id/verification/complete')
@@ -354,8 +442,17 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
-      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
-    return this.admin.completeIntakeVerification(request.actor!, intakeId, idempotencyKey, this.parse(intakeVerificationComplete, body), request.requestId ?? 'unknown');
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.completeIntakeVerification(
+      request.actor!,
+      intakeId,
+      idempotencyKey,
+      this.parse(intakeVerificationComplete, body),
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Post('intake/:id/exceptions')
@@ -367,8 +464,17 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
-      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
-    return this.admin.createIntakeException(request.actor!, intakeId, idempotencyKey, this.parse(intakeExceptionCreate, body), request.requestId ?? 'unknown');
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.createIntakeException(
+      request.actor!,
+      intakeId,
+      idempotencyKey,
+      this.parse(intakeExceptionCreate, body),
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Post('intake/:id/exceptions/:exceptionId/resolve')
@@ -381,8 +487,18 @@ export class AdminController {
     @Req() request: AuthenticatedRequest,
   ) {
     if (!idempotencyKey || !/^[\x21-\x7e]{1,128}$/.test(idempotencyKey))
-      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'A valid Idempotency-Key header is required.' });
-    return this.admin.resolveIntakeException(request.actor!, intakeId, exceptionId, idempotencyKey, this.parse(intakeExceptionResolve, body), request.requestId ?? 'unknown');
+      throw new BadRequestException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'A valid Idempotency-Key header is required.',
+      });
+    return this.admin.resolveIntakeException(
+      request.actor!,
+      intakeId,
+      exceptionId,
+      idempotencyKey,
+      this.parse(intakeExceptionResolve, body),
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Get('memberships')
@@ -420,7 +536,11 @@ export class AdminController {
 
   @Get('users/:id/history')
   @RequirePermission('users.read')
-  userHistory(@Param('id') id: string, @Query() query: unknown, @Req() request: AuthenticatedRequest) {
+  userHistory(
+    @Param('id') id: string,
+    @Query() query: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = this.parse(accountHistoryQuery, query);
     return this.admin.userHistory(request.actor!, id, input);
   }
@@ -449,7 +569,10 @@ export class AdminController {
 
   @Get('trust-support/records')
   @RequirePermission('admin.console.read')
-  trustSupportRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+  trustSupportRecords(
+    @Query() query: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = this.parse(trustSupportRecordsQuery, query);
     return this.admin.trustSupportRecords(request.actor!, {
       ...input,
@@ -479,7 +602,10 @@ export class AdminController {
 
   @Get('finance/records')
   @RequirePermission('finance.read')
-  financeRecords(@Query() query: unknown, @Req() request: AuthenticatedRequest) {
+  financeRecords(
+    @Query() query: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
     const input = this.parse(financeRecordsQuery, query);
     return this.admin.financeRecords(request.actor!, {
       ...input,
@@ -497,9 +623,7 @@ export class AdminController {
 
   @Post('market-data/refresh/:assetId')
   @RequirePermission('integrations.manage')
-  refreshMarketData(
-    @Param('assetId') assetId: string,
-  ) {
+  refreshMarketData(@Param('assetId') assetId: string) {
     return this.marketRefresh.refreshAsset(assetId);
   }
 
@@ -520,7 +644,10 @@ export class AdminController {
     return this.admin.collectibleDetail(request.actor!, id, tab);
   }
 
-  private parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.output<T> {
+  private parse<T extends z.ZodTypeAny>(
+    schema: T,
+    value: unknown,
+  ): z.output<T> {
     const parsed = schema.safeParse(value);
     if (!parsed.success)
       throw new BadRequestException({
