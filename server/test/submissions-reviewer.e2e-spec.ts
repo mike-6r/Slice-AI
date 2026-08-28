@@ -97,13 +97,24 @@ describe('Document 010 reviewer HTTP E2E', () => {
     );
     expect(queueItem).toMatchObject({
       readinessState: 'READY',
+      priority: 'LOW',
       evidence: {
         presentRequired: REQUIRED_MEDIA_SLOTS.length,
         required: REQUIRED_MEDIA_SLOTS.length,
       },
       reviewer: { state: 'UNCLAIMED', displayName: null },
     });
-    expect(queueItem).not.toHaveProperty('priority');
+    expect(queue.body.counts).toEqual(
+      expect.objectContaining({ highPriority: expect.any(Number) }),
+    );
+    const highPriorityQueue = await request(h.app.getHttpServer())
+      .get('/api/v1/reviews/submissions?priority=high')
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(highPriorityQueue.status).toBe(200);
+    expect(
+      highPriorityQueue.body.items.map((item: { id: string }) => item.id),
+    ).not.toContain(id);
     const readyDetail = await request(h.app.getHttpServer())
       .get(`/api/v1/reviews/submissions/${id}`)
       .set('authorization', reviewer.auth)

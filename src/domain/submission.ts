@@ -162,6 +162,7 @@ export type ReviewQueueResearchStatus =
 export type ReviewQueueReadinessState = "READY" | "NEEDS_EVIDENCE" | "MANUAL_REVIEW" | "BLOCKED";
 export type ReviewQueueReviewerState =
   "UNCLAIMED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "SELF_REVIEW_RESTRICTED";
+export type ReviewQueuePriority = "HIGH" | "MEDIUM" | "LOW";
 
 export interface SubmissionReviewQueueItem {
   id: string;
@@ -205,6 +206,7 @@ export interface SubmissionReviewQueueItem {
   readinessReason: string;
   ageHours: number;
   overdue: boolean | null;
+  priority: ReviewQueuePriority;
   testFixture: boolean;
 }
 
@@ -222,6 +224,7 @@ export interface SubmissionReviewQueueResponse {
     researchPending: number;
     readyToReview: number;
     blocked: number;
+    highPriority: number;
     claimed: number;
     unclaimed: number;
   };
@@ -230,6 +233,7 @@ export interface SubmissionReviewQueueResponse {
     researchPending: number;
     readyToReview: number;
     blocked: number;
+    highPriority: number;
     claimed: number;
     unclaimed: number;
   };

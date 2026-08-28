@@ -129,6 +129,7 @@ export interface SubmissionReviewRepository {
     evidence?: "complete" | "missing" | "partial";
     research?: "completed" | "in_progress" | "pending" | "unavailable" | "not_requested";
     readiness?: ReviewQueueReadinessState;
+    priority?: "high" | "medium" | "low";
     reviewer?: "unclaimed" | "mine" | "claimed";
     testFixture?: "include" | "only" | "exclude";
     grader?: string;

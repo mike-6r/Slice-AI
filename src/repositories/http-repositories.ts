@@ -1519,6 +1519,9 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
         )
       )
         throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue research status.");
+      const priority = stringField(item.priority, "review queue item.priority");
+      if (!["HIGH", "MEDIUM", "LOW"].includes(priority))
+        throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid review queue item priority.");
       return {
         id: stringField(item.id, "review queue item.id"),
         submissionReference: stringField(item.submissionReference, "review queue item.reference"),
@@ -1572,6 +1575,7 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
         readinessReason: stringField(item.readinessReason, "review queue item.readinessReason"),
         ageHours: Number(item.ageHours ?? 0),
         overdue: item.overdue === null ? null : Boolean(item.overdue),
+        priority: priority as SubmissionReviewQueueResponse["items"][number]["priority"],
         testFixture: Boolean(item.testFixture),
       };
     }),
@@ -1587,6 +1591,7 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
       researchPending: mapCount(counts, "researchPending"),
       readyToReview: mapCount(counts, "readyToReview"),
       blocked: mapCount(counts, "blocked"),
+      highPriority: mapCount(counts, "highPriority"),
       claimed: mapCount(counts, "claimed"),
       unclaimed: mapCount(counts, "unclaimed"),
     },
@@ -1595,6 +1600,7 @@ const mapReviewQueue = (raw: unknown): SubmissionReviewQueueResponse => {
       researchPending: mapCount(summary, "researchPending"),
       readyToReview: mapCount(summary, "readyToReview"),
       blocked: mapCount(summary, "blocked"),
+      highPriority: mapCount(summary, "highPriority"),
       claimed: mapCount(summary, "claimed"),
       unclaimed: mapCount(summary, "unclaimed"),
     },

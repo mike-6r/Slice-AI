@@ -2401,6 +2401,192 @@
     height: 5.8rem;
   }
 }
+
+/* Authoritative review-queue workspace. The compact table mirrors the staff
+ * workflow: metrics, filters, then the actionable records. */
+.admin-review-queue {
+  gap: 1.1rem;
+}
+.admin-review-queue-heading {
+  align-items: end;
+}
+.admin-review-queue-heading h2 {
+  margin-top: 0.35rem;
+  font-size: clamp(1.65rem, 2.4vw, 2.2rem);
+}
+.admin-review-refresh,
+.admin-review-clear-filters,
+.admin-review-more-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid #2d4650;
+  border-radius: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  color: #cfe0df;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+.admin-review-refresh svg,
+.admin-review-clear-filters svg,
+.admin-review-more-filters svg {
+  width: 0.82rem;
+}
+.admin-review-refresh:hover,
+.admin-review-clear-filters:hover,
+.admin-review-more-filters:hover {
+  border-color: #3f746b;
+  color: #57e2c0;
+}
+.admin-review-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.admin-review-kpi {
+  min-height: 5.65rem;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  border-color: rgba(44, 70, 79, 0.8);
+  padding: 0.9rem;
+}
+.admin-review-kpi--danger > span {
+  background: rgba(234, 73, 80, 0.13);
+  color: #ff6f75;
+}
+.admin-review-table-panel {
+  overflow: hidden;
+  border-color: #263d47;
+  background: linear-gradient(145deg, rgba(12, 28, 38, 0.95), rgba(8, 18, 25, 0.98));
+}
+.admin-review-tabs {
+  gap: 1.8rem;
+  padding-inline: 1.2rem;
+}
+.admin-review-tabs button {
+  padding-block: 0.95rem 0.8rem;
+  font-size: 0.63rem;
+}
+.admin-review-toolbar {
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.72rem 1.1rem;
+  border-bottom: 1px solid rgba(38, 59, 68, 0.7);
+}
+.admin-review-toolbar .admin-review-search {
+  flex: 1 1 18rem;
+  min-width: 15rem;
+  min-height: 2.45rem;
+}
+.admin-review-toolbar .admin-select {
+  min-width: 8.2rem;
+}
+.admin-review-more-filters {
+  margin-left: auto;
+}
+.admin-review-more-filters strong {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #159e83;
+  color: #061613;
+  font-size: 0.54rem;
+}
+.admin-review-advanced-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding: 0.65rem 1.1rem 0.9rem;
+  border-bottom: 1px solid rgba(38, 59, 68, 0.7);
+  background: rgba(5, 14, 20, 0.3);
+}
+.admin-review-table {
+  min-width: 1110px;
+}
+.admin-review-table th,
+.admin-review-table td {
+  padding-block: 0.72rem;
+}
+.admin-review-table th:first-child,
+.admin-review-table td:first-child {
+  width: 2.5rem;
+}
+.admin-review-table th:nth-child(2) {
+  min-width: 15.5rem;
+}
+.admin-review-table th:nth-child(3) {
+  min-width: 9.5rem;
+}
+.admin-review-readiness,
+.admin-review-reviewer {
+  display: grid;
+  gap: 0.18rem;
+}
+.admin-review-readiness strong,
+.admin-review-reviewer strong {
+  font-size: 0.64rem;
+}
+.admin-review-readiness--ready strong {
+  color: #4be0bb;
+}
+.admin-review-readiness--needs_evidence strong {
+  color: #efb044;
+}
+.admin-review-readiness--blocked strong {
+  color: #ff7778;
+}
+.admin-review-priority {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.42rem;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+}
+.admin-review-priority--high {
+  color: #ff7479;
+  background: rgba(230, 63, 72, 0.08);
+}
+.admin-review-priority--medium {
+  color: #efb248;
+  background: rgba(207, 141, 24, 0.08);
+}
+.admin-review-priority--low {
+  color: #a9bdc5;
+  background: rgba(126, 151, 163, 0.08);
+}
+@media (max-width: 1280px) {
+  .admin-review-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .admin-review-queue-heading {
+    align-items: start;
+  }
+  .admin-review-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-review-toolbar .admin-review-search {
+    flex-basis: 100%;
+  }
+  .admin-review-more-filters {
+    margin-left: 0;
+  }
+}
+@media (max-width: 480px) {
+  .admin-review-kpis {
+    grid-template-columns: 1fr;
+  }
+  .admin-review-queue-heading {
+    display: grid;
+  }
+  .admin-review-refresh {
+    width: 100%;
+  }
+}
 .admin-review-layout {
   display: grid;
   min-width: 0;

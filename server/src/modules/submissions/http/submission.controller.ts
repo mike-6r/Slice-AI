@@ -120,6 +120,7 @@ const queueQuery = z
     readiness: z
       .enum(['READY', 'NEEDS_EVIDENCE', 'MANUAL_REVIEW', 'BLOCKED'])
       .optional(),
+    priority: z.enum(['high', 'medium', 'low']).optional(),
     reviewer: z.enum(['unclaimed', 'mine', 'claimed']).optional(),
     testFixture: z.enum(['include', 'only', 'exclude']).default('exclude'),
     grader: z.string().trim().max(80).optional(),

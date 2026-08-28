@@ -1265,6 +1265,7 @@ export class SubmissionService {
         | 'unavailable'
         | 'not_requested';
       readiness?: 'READY' | 'NEEDS_EVIDENCE' | 'MANUAL_REVIEW' | 'BLOCKED';
+      priority?: 'high' | 'medium' | 'low';
       reviewer?: 'unclaimed' | 'mine' | 'claimed';
       testFixture?: 'include' | 'only' | 'exclude';
       grader?: string;
@@ -1308,6 +1309,40 @@ export class SubmissionService {
           certificationVerifications: {
             some: { status: { in: ['VERIFIED', 'MANUAL_REVIEW'] } },
           },
+        },
+      ],
+    };
+    // Priority is projected from workflow authority rather than customer input:
+    // blocked eligibility/certification or two days in queue is high priority.
+    const priorityCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const blockedForPriority: Prisma.AssetSubmissionWhereInput = {
+      OR: [
+        { owner: { accountStatus: { not: 'ACTIVE' } } },
+        {
+          AND: [
+            {
+              OR: [
+                { gradeScaleEntryId: { not: null } },
+                { normalizedCertificationNumber: { not: null } },
+              ],
+            },
+            { NOT: certificationResolved },
+          ],
+        },
+      ],
+    };
+    const highPriority: Prisma.AssetSubmissionWhereInput = {
+      OR: [blockedForPriority, { submittedAt: { lte: priorityCutoff } }],
+    };
+    const mediumPriority: Prisma.AssetSubmissionWhereInput = {
+      AND: [
+        { NOT: highPriority },
+        {
+          OR: [
+            { NOT: completeEvidence },
+            researchPending,
+            { status: 'IN_REVIEW' },
+          ],
         },
       ],
     };
@@ -1435,6 +1470,13 @@ export class SubmissionService {
       ...(input.reviewer === 'claimed'
         ? [{ status: 'IN_REVIEW' as const, reviewerId: { not: null } }]
         : []),
+      ...(input.priority === 'high'
+        ? [highPriority]
+        : input.priority === 'medium'
+          ? [mediumPriority]
+          : input.priority === 'low'
+            ? [{ NOT: { OR: [highPriority, mediumPriority] } }]
+            : []),
     ];
     const baseWhere: Prisma.AssetSubmissionWhereInput = { AND: requestedBase };
     const withRules = (...rules: Prisma.AssetSubmissionWhereInput[]) => ({
@@ -1478,6 +1520,7 @@ export class SubmissionService {
       researchPendingCount,
       readyToReview,
       blocked,
+      highPriorityCount,
       claimed,
       totalFiltered,
       rows,
@@ -1493,6 +1536,7 @@ export class SubmissionService {
       this.prisma.assetSubmission.count({
         where: withRules(readinessRules.BLOCKED),
       }),
+      this.prisma.assetSubmission.count({ where: withRules(highPriority) }),
       this.prisma.assetSubmission.count({
         where: withRules({ status: 'IN_REVIEW', reviewerId: { not: null } }),
       }),
@@ -1621,6 +1665,7 @@ export class SubmissionService {
         researchPending: researchPendingCount,
         readyToReview,
         blocked,
+        highPriority: highPriorityCount,
         claimed,
         unclaimed: total - claimed,
       },
@@ -1629,6 +1674,7 @@ export class SubmissionService {
         researchPending: researchPendingCount,
         readyToReview,
         blocked,
+        highPriority: highPriorityCount,
         claimed,
         unclaimed: total - claimed,
       },
@@ -3425,6 +3471,18 @@ function reviewQueueProjection(
     stringMetadata(metadata.name) ??
     'Untitled submission';
   const submittedAt = submission.submittedAt ?? submission.createdAt;
+  const ageHours = Math.max(
+    0,
+    Math.floor((Date.now() - submittedAt.getTime()) / 3_600_000),
+  );
+  const priority = reviewQueuePriority({
+    accountActive: submission.owner.accountStatus === 'ACTIVE',
+    certificationResolved,
+    ageHours,
+    missingRequired,
+    researchStatus,
+    reviewState: submission.status,
+  });
   return {
     id: submission.id,
     submissionReference: submission.id,
@@ -3510,11 +3568,9 @@ function reviewQueueProjection(
               : submission.ownerUserId === context.actorUserId
                 ? 'Self-review is restricted; another reviewer must claim it.'
                 : 'Ready to claim for staff decision.',
-    ageHours: Math.max(
-      0,
-      Math.floor((Date.now() - submittedAt.getTime()) / 3_600_000),
-    ),
+    ageHours,
     overdue: null,
+    priority,
     testFixture: isBetaFixtureSubmission(submission.declaredMetadata, true),
   };
 }
@@ -3523,6 +3579,29 @@ function formatReviewEvidenceSlot(slot: string) {
   return slot === 'grading-label'
     ? 'the grading-label photo'
     : `the ${slot} photo`;
+}
+
+export function reviewQueuePriority(input: {
+  accountActive: boolean;
+  certificationResolved: boolean;
+  ageHours: number;
+  missingRequired: number;
+  researchStatus: string;
+  reviewState: string;
+}) {
+  if (
+    !input.accountActive ||
+    !input.certificationResolved ||
+    input.ageHours >= 48
+  )
+    return 'HIGH' as const;
+  if (
+    input.missingRequired > 0 ||
+    ['PENDING', 'IN_PROGRESS'].includes(input.researchStatus) ||
+    input.reviewState === 'IN_REVIEW'
+  )
+    return 'MEDIUM' as const;
+  return 'LOW' as const;
 }
 
 function stringMetadata(value: unknown) {
