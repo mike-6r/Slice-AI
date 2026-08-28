@@ -32,8 +32,13 @@ jobs:
       - run: npm run build
       - name: Changed-file lint
         run: |
-          echo "Lint base: ${LINT_CHANGED_BASE:-<empty>}"
-          git diff --name-only --diff-filter=ACMR "${LINT_CHANGED_BASE:-HEAD}...HEAD"
+          if [ -n "${LINT_CHANGED_BASE:-}" ] && git rev-parse --verify --quiet "${LINT_CHANGED_BASE}^{commit}"; then
+            echo "Lint base: ${LINT_CHANGED_BASE}"
+            git diff --name-only --diff-filter=ACMR "${LINT_CHANGED_BASE}...HEAD"
+          else
+            echo "Lint base unavailable; checking the checked-out commit."
+            export LINT_CHANGED_BASE=HEAD
+          fi
           node scripts/lint-changed.mjs
       - name: Full frontend lint baseline (known formatting debt)
         continue-on-error: true
