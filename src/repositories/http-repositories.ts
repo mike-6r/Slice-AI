@@ -2268,6 +2268,7 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
         : nullableString(value.membership, "admin intake.membership"),
     submissionStatus: stringField(value.submissionStatus, "admin intake.submissionStatus"),
     stage: stringField(value.stage, "admin intake.stage"),
+    stageLabel: stringField(value.stageLabel, "admin intake.stageLabel"),
     stageReason: stringField(value.stageReason, "admin intake.stageReason"),
     currentStageSince: stringField(value.currentStageSince, "admin intake.currentStageSince"),
     vault: vault
@@ -2299,9 +2300,15 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
       : null,
     updatedAt: stringField(value.updatedAt, "admin intake.updatedAt"),
     nextAction: stringField(value.nextAction, "admin intake.nextAction"),
+    nextActor: stringField(
+      value.nextActor,
+      "admin intake.nextActor",
+    ) as AdminIntakeRow["nextActor"],
+    needsStaffAction: Boolean(value.needsStaffAction),
     allowedActions: Array.isArray(value.allowedActions)
       ? value.allowedActions.map((item) => String(item))
       : [],
+    workType: stringField(value.workType, "admin intake.workType") as AdminIntakeRow["workType"],
     issues: Array.isArray(value.issues)
       ? value.issues.map((item) => {
           const issue = objectField(item, "admin intake issue");
@@ -3964,6 +3971,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         },
         counts: {
           all: mapInt("all"),
+          awaitingDestination: mapInt("awaitingDestination"),
           accepted: mapInt("accepted"),
           shipped: mapInt("shipped"),
           delivered: mapInt("delivered"),
@@ -4000,6 +4008,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         },
         overview: {
           all: mapInt("all"),
+          awaitingDestination: mapInt("awaitingDestination"),
           accepted: mapInt("accepted"),
           shipped: mapInt("shipped"),
           delivered: mapInt("delivered"),

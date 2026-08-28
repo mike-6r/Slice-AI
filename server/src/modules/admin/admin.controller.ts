@@ -68,7 +68,8 @@ const operationsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     sort: z.string().trim().max(40).optional(),
     sortDirection: z.enum(['asc', 'desc']).optional(),
-    fixture: z.enum(['NORMAL', 'TEST', 'ALL']).default('NORMAL'),
+    fixture: z.enum(['NORMAL', 'TEST', 'ALL']).optional(),
+    workType: z.enum(['ALL', 'PRODUCTION', 'DEMO_QA']).default('ALL'),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();

@@ -206,6 +206,7 @@ export const mockRepositories: AppRepositories = {
     async listIntake() {
       const empty = {
         all: 0,
+        awaitingDestination: 0,
         accepted: 0,
         shipped: 0,
         delivered: 0,

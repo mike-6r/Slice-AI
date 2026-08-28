@@ -58,8 +58,9 @@ type IntakeState = {
 };
 
 export function intakeStage(item: IntakeState) {
+  // A submission cannot ship before Slice has selected an authorised receiving destination.
   if (!item.intake)
-    return item.status === 'APPROVED' ? 'ACCEPTED_AWAITING_VAULT' : item.status;
+    return item.status === 'APPROVED' ? 'AWAITING_DESTINATION' : item.status;
   if (item.intake.exceptions?.length) return 'EXCEPTION';
   if (item.intake.shipment?.status === 'EXCEPTION') return 'EXCEPTION';
   if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
@@ -73,13 +74,30 @@ export function intakeStage(item: IntakeState) {
   if (item.intake.status === 'COMPLETE') return 'VAULT_READY';
   if (item.intake.status === 'RECEIVED') return 'RECEIVED';
   if (item.intake.status === 'VERIFICATION') return 'VERIFICATION';
-  if (
-    ['SHIPPING_REQUIRED', 'VAULT_SELECTED', 'ACCEPTED_AWAITING_VAULT'].includes(
-      item.intake.status,
-    )
-  )
-    return 'ACCEPTED_AWAITING_VAULT';
+  if (['SHIPPING_REQUIRED', 'VAULT_SELECTED'].includes(item.intake.status))
+    return 'AWAITING_SHIPMENT';
   return item.intake.status;
+}
+
+export type IntakeNextActor = 'COLLECTOR' | 'STAFF' | 'SYSTEM' | 'NONE';
+export type IntakeNextAction = { label: string; actor: IntakeNextActor; needsStaffAction: boolean };
+
+/** One operator-facing authority for row action, actor, and staff-attention state. */
+export function intakeNextAction(item: IntakeState & { stage: string }): IntakeNextAction {
+  if (!item.intake) return { label: 'Select destination', actor: 'STAFF', needsStaffAction: true };
+  if (item.intake.exceptions?.length || item.intake.shipment?.status === 'EXCEPTION')
+    return { label: 'Resolve exception', actor: 'STAFF', needsStaffAction: true };
+  if (!item.intake.shipment)
+    return { label: 'Await collector shipment', actor: 'COLLECTOR', needsStaffAction: false };
+  if (item.stage === 'DELIVERED_AWAITING_RECEIPT')
+    return { label: 'Confirm physical receipt', actor: 'STAFF', needsStaffAction: true };
+  if (item.intake.verification?.status === 'IN_PROGRESS')
+    return { label: 'Complete verification', actor: 'STAFF', needsStaffAction: true };
+  if (item.intake.receipt && item.intake.verification?.status !== 'VERIFIED')
+    return { label: 'Begin verification', actor: 'STAFF', needsStaffAction: true };
+  if (item.intake.status === 'COMPLETE')
+    return { label: 'Ready for custody', actor: 'NONE', needsStaffAction: false };
+  return { label: 'Monitor carrier progress', actor: 'SYSTEM', needsStaffAction: false };
 }
 
 export function nextIntakeAction(intake: NonNullable<IntakeState['intake']>) {
@@ -101,7 +119,7 @@ export function stageLabel(stage: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function intakeCounts(items: Array<{ stage: string }>) {
+export function intakeCounts(items: Array<{ stage: string; needsStaffAction?: boolean }>) {
   const oldestAt = items.length
     ? items
         .map((item) => (item as { currentStageSince?: string }).currentStageSince)
@@ -110,9 +128,8 @@ export function intakeCounts(items: Array<{ stage: string }>) {
     : null;
   return {
     all: items.length,
-    accepted: items.filter((item) =>
-      ['ACCEPTED_AWAITING_VAULT', 'VAULT_SELECTED', 'SHIPPING_REQUIRED'].includes(item.stage),
-    ).length,
+    accepted: items.filter((item) => item.stage === 'AWAITING_SHIPMENT').length,
+    awaitingDestination: items.filter((item) => item.stage === 'AWAITING_DESTINATION').length,
     shipped: items.filter((item) =>
       ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(item.stage),
     ).length,
@@ -122,9 +139,7 @@ export function intakeCounts(items: Array<{ stage: string }>) {
     verified: items.filter((item) => item.stage === 'VERIFIED').length,
     readyForVault: items.filter((item) => item.stage === 'VAULT_READY').length,
     exceptions: items.filter((item) => item.stage === 'EXCEPTION').length,
-    needsAction: items.filter((item) =>
-      Boolean((item as { allowedActions?: string[] }).allowedActions?.length),
-    ).length,
+    needsAction: items.filter((item) => Boolean(item.needsStaffAction)).length,
     oldestAt,
     oldestAtByStage: Object.fromEntries(
       [...new Set(items.map((item) => item.stage))].map((stage) => [
@@ -142,7 +157,7 @@ export function intakeCounts(items: Array<{ stage: string }>) {
 export function intakeStageReason(item: IntakeState) {
   if (!item.intake)
     return item.status === 'APPROVED'
-      ? 'Destination required before shipping'
+      ? 'Slice must select an authorised destination before shipping can begin'
       : 'Submission not accepted';
   if (item.intake.exceptions?.length) return 'Exception blocks normal intake progress';
   if (item.intake.shipment?.status === 'EXCEPTION') return 'Carrier exception requires review';
@@ -193,12 +208,13 @@ export function intakeIssues(item: {
 }
 
 export function intakeAllowedActions(item: IntakeState & { stage: string }) {
-  if (!item.intake) return item.status === 'APPROVED' ? ['SELECT_DESTINATION'] : [];
-  if (item.intake.exceptions?.length) return ['RESOLVE_EXCEPTION'];
-  if (item.stage === 'DELIVERED_AWAITING_RECEIPT') return ['CONFIRM_RECEIPT'];
-  if (item.intake.receipt && item.intake.verification?.status === 'IN_PROGRESS')
-    return ['COMPLETE_VERIFICATION'];
-  if (item.intake.receipt && item.intake.verification?.status !== 'VERIFIED')
-    return ['START_VERIFICATION'];
-  return [];
+  const next = intakeNextAction(item);
+  if (!next.needsStaffAction) return [];
+  return ({
+    'Select destination': ['SELECT_DESTINATION'],
+    'Resolve exception': ['RESOLVE_EXCEPTION'],
+    'Confirm physical receipt': ['CONFIRM_RECEIPT'],
+    'Begin verification': ['START_VERIFICATION'],
+    'Complete verification': ['COMPLETE_VERIFICATION'],
+  } as Record<string, string[]>)[next.label] ?? [];
 }

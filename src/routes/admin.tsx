@@ -479,6 +479,7 @@ function AdminConsole() {
       intakeDateFrom,
       intakeDateTo,
       intakeFixture,
+      reviewSort,
       reviewPageParam,
     ],
     queryFn: () =>
@@ -491,7 +492,10 @@ function AdminConsole() {
               carrier: intakeCarrier,
               dateFrom: intakeDateFrom,
               dateTo: intakeDateTo,
-              fixture: (intakeFixture as "NORMAL" | "TEST" | "ALL" | undefined) ?? "NORMAL",
+              workType: (["ALL", "PRODUCTION", "DEMO_QA"].includes(intakeFixture ?? "")
+                ? intakeFixture
+                : "ALL") as "ALL" | "PRODUCTION" | "DEMO_QA",
+              sort: reviewSort === "oldest-in-stage" ? "OLDEST_IN_STAGE" : "RECENTLY_UPDATED",
               page: Math.max(1, Number(reviewPageParam ?? 1)),
               pageSize: 10,
             }
@@ -912,7 +916,8 @@ function AdminConsole() {
             carrier={intakeCarrier ?? ""}
             dateFrom={intakeDateFrom ?? ""}
             dateTo={intakeDateTo ?? ""}
-            fixture={intakeFixture ?? "NORMAL"}
+            fixture={intakeFixture ?? "ALL"}
+            sort={reviewSort ?? "recently-updated"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             updateSearch={(next) =>
               void navigate({
@@ -1329,6 +1334,7 @@ function PhysicalIntakeWorkspace({
   dateFrom,
   dateTo,
   fixture,
+  sort,
   page,
   updateSearch,
 }: {
@@ -1343,6 +1349,7 @@ function PhysicalIntakeWorkspace({
   dateFrom: string;
   dateTo: string;
   fixture: string;
+  sort: string;
   page: number;
   updateSearch: (next: Record<string, string | undefined>) => void;
 }) {
@@ -1368,6 +1375,7 @@ function PhysicalIntakeWorkspace({
       dateFrom={dateFrom}
       dateTo={dateTo}
       fixture={fixture}
+      sort={sort}
       page={page}
       updateSearch={updateSearch}
     />
@@ -1377,6 +1385,8 @@ function PhysicalIntakeWorkspace({
 const intakeTabs = [
   ["", "All", "all"],
   ["NEEDS_ACTION", "Needs action", "needsAction"],
+  ["AWAITING_DESTINATION", "Awaiting destination", "awaitingDestination"],
+  ["AWAITING_SHIPMENT", "Awaiting shipment", "accepted"],
   ["IN_TRANSIT", "In transit", "shipped"],
   ["RECEIVED", "Received", "received"],
   ["VERIFICATION", "Verification", "verification"],
@@ -1393,6 +1403,7 @@ function PhysicalIntakeBoard({
   dateFrom,
   dateTo,
   fixture,
+  sort,
   page,
   updateSearch,
 }: {
@@ -1404,6 +1415,7 @@ function PhysicalIntakeBoard({
   dateFrom: string;
   dateTo: string;
   fixture: string;
+  sort: string;
   page: number;
   updateSearch: (next: Record<string, string | undefined>) => void;
 }) {
@@ -1417,8 +1429,9 @@ function PhysicalIntakeBoard({
   const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
   const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
   const [showDestinations, setShowDestinations] = useState(false);
-  const [fixtureMode, setFixtureMode] = useState<"NORMAL" | "TEST" | "ALL">(
-    (fixture as "NORMAL" | "TEST" | "ALL") ?? "NORMAL",
+  const [fixtureMode, setFixtureMode] = useState<"ALL" | "PRODUCTION" | "DEMO_QA">(
+    (["ALL", "PRODUCTION", "DEMO_QA"].includes(fixture) ? fixture : "ALL") as
+      "ALL" | "PRODUCTION" | "DEMO_QA",
   );
   const receiptChecklist = {
     packageReceived: true,
@@ -1429,7 +1442,6 @@ function PhysicalIntakeBoard({
     trackingMatches: true,
   };
   const packageCondition = "UNKNOWN";
-  const [sortMode, setSortMode] = useState("needs-action");
   const [approvalReason, setApprovalReason] = useState("");
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
@@ -1476,6 +1488,7 @@ function PhysicalIntakeBoard({
   });
   const overview = data?.overview ?? {
     all: 0,
+    awaitingDestination: 0,
     accepted: 0,
     shipped: 0,
     delivered: 0,
@@ -1490,28 +1503,7 @@ function PhysicalIntakeBoard({
   };
   const countFor = (key: (typeof intakeTabs)[number][2]) =>
     Number(overview[key as keyof typeof overview] ?? 0);
-  const rows = [...(data?.items ?? [])].sort((a, b) => {
-    if (sortMode === "newest")
-      return new Date(b.currentStageSince).getTime() - new Date(a.currentStageSince).getTime();
-    if (sortMode === "delivered")
-      return Number(Boolean(b.shipment?.deliveredAt)) - Number(Boolean(a.shipment?.deliveredAt));
-    if (sortMode === "oldest")
-      return new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime();
-    const actionRank = (row: AdminIntakeRow) =>
-      row.stage === "EXCEPTION"
-        ? 0
-        : row.stage === "DELIVERED_AWAITING_RECEIPT"
-          ? 1
-          : row.stage === "RECEIVED" || row.stage === "VERIFICATION"
-            ? 2
-            : row.stage === "ACCEPTED_AWAITING_VAULT"
-              ? 3
-              : 4;
-    return (
-      actionRank(a) - actionRank(b) ||
-      new Date(a.currentStageSince).getTime() - new Date(b.currentStageSince).getTime()
-    );
-  });
+  const rows = data?.items ?? [];
   return (
     <AdminPageSection
       title="Physical Intake"
@@ -1535,7 +1527,8 @@ function PhysicalIntakeBoard({
       </div>
       <div className="physical-intake-summary" aria-label="Intake lifecycle summary">
         {[
-          ["Awaiting shipment", overview.accepted, "ACCEPTED_AWAITING_VAULT"],
+          ["Awaiting destination", overview.awaitingDestination, "AWAITING_DESTINATION"],
+          ["Awaiting shipment", overview.accepted, "AWAITING_SHIPMENT"],
           ["In transit", overview.shipped, "IN_TRANSIT"],
           ["Carrier delivered", overview.delivered, "DELIVERED_AWAITING_RECEIPT"],
           ["Received", overview.received, "RECEIVED"],
@@ -1615,24 +1608,22 @@ function PhysicalIntakeBoard({
             aria-label="Fixture visibility"
             value={fixtureMode}
             onChange={(event) => {
-              const mode = event.target.value as "NORMAL" | "TEST" | "ALL";
+              const mode = event.target.value as "ALL" | "PRODUCTION" | "DEMO_QA";
               setFixtureMode(mode);
               updateSearch({ fixture: mode, page: "1" });
             }}
           >
-            <option value="NORMAL">Production work</option>
-            <option value="TEST">QA fixtures</option>
-            <option value="ALL">All records</option>
+            <option value="ALL">Work type: All</option>
+            <option value="PRODUCTION">Work type: Production</option>
+            <option value="DEMO_QA">Work type: Demo / QA</option>
           </select>
           <select
             aria-label="Sort intake"
-            value={sortMode}
-            onChange={(event) => setSortMode(event.target.value)}
+            value={sort}
+            onChange={(event) => updateSearch({ sort: event.target.value, page: "1" })}
           >
-            <option value="needs-action">Needs action first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="newest">Newest first</option>
-            <option value="delivered">Recently delivered</option>
+            <option value="recently-updated">Recently updated</option>
+            <option value="oldest-in-stage">Oldest in stage</option>
           </select>
           <button
             type="button"
@@ -1645,6 +1636,8 @@ function PhysicalIntakeBoard({
                 dateFrom: undefined,
                 dateTo: undefined,
                 q: undefined,
+                fixture: "ALL",
+                sort: "recently-updated",
                 page: "1",
               })
             }
@@ -1950,7 +1943,15 @@ function PhysicalIntakeRow({
           <div>
             <strong>
               {row.title}{" "}
-              {row.testFixture ? <em className="physical-intake-fixture-badge">QA</em> : null}
+              {row.workType !== "PRODUCTION" ? (
+                <em className="physical-intake-fixture-badge">
+                  {row.workType === "OWNER_DEMO"
+                    ? "DEMO"
+                    : row.workType === "CONTROLLED_QA"
+                      ? "CONTROLLED"
+                      : "TEST"}
+                </em>
+              ) : null}
             </strong>
             <small>
               {[row.variant, row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader]
@@ -1971,12 +1972,12 @@ function PhysicalIntakeRow({
       </td>
       <td>
         <span className={`admin-status-pill physical-intake-status-${row.stage.toLowerCase()}`}>
-          {intakeStageLabel(row.stage)}
+          {row.stageLabel}
         </span>
         <small>{row.stageReason}</small>
       </td>
       <td>
-        <strong>{row.vault?.displayName ?? "Destination not selected"}</strong>
+        <strong>{row.vault?.displayName ?? "Destination required"}</strong>
         <small>
           {row.vault ? `${row.vault.region}, ${row.vault.countryCode}` : "Review submission"}
         </small>
@@ -2001,8 +2002,14 @@ function PhysicalIntakeRow({
           </>
         ) : (
           <>
-            <strong>No shipment</strong>
-            <small>Collector adds tracking</small>
+            <strong>
+              {row.stage === "AWAITING_DESTINATION" ? "Not ready to ship" : "No shipment"}
+            </strong>
+            <small>
+              {row.stage === "AWAITING_DESTINATION"
+                ? "Destination selection required"
+                : "Collector adds tracking"}
+            </small>
           </>
         )}
       </td>
@@ -2039,7 +2046,9 @@ function PhysicalIntakeRow({
                 ? "Resolve issue"
                 : row.allowedActions.includes("COMPLETE_VERIFICATION")
                   ? "Complete verification"
-                  : "Open intake"}
+                  : row.nextActor === "COLLECTOR"
+                    ? "View shipment"
+                    : "Open intake"}
             </button>
           )}
         </div>
@@ -2075,36 +2084,6 @@ function PhysicalIntakeEvidence({ src, title }: { src: string | null; title: str
       onError={() => setFailed(true)}
     />
   );
-}
-
-function intakeStageLabel(stage: string) {
-  return (
-    (
-      {
-        ACCEPTED_AWAITING_VAULT: "Awaiting shipment",
-        IN_TRANSIT: "In transit",
-        DELIVERED_AWAITING_RECEIPT: "Carrier delivered",
-        RECEIVED: "Received by Slice",
-        VERIFICATION: "Awaiting verification",
-        VERIFIED: "Verified",
-        VAULT_READY: "Ready for vault",
-        DEMO_CUSTODY: "Demo custody",
-        EXCEPTION: "Exception",
-      } as Record<string, string>
-    )[stage] ?? sentence(stage)
-  );
-}
-
-function intakeNextActor(row: AdminIntakeRow) {
-  if (row.stage === "DEMO_CUSTODY") return "Staging demo complete · no production custody";
-  if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE"))
-    return "Staff action · complete staging demo intake";
-  if (row.stage === "ACCEPTED_AWAITING_VAULT") return "Collector action · add tracking";
-  if (row.stage === "DELIVERED_AWAITING_RECEIPT") return "Staff action · confirm receipt";
-  if (row.stage === "RECEIVED" || row.stage === "VERIFICATION")
-    return "Staff action · begin verification";
-  if (row.stage === "EXCEPTION") return "Staff action · resolve issue";
-  return row.nextAction === "No action" ? "No action required" : `Monitor · ${row.nextAction}`;
 }
 
 function IntakeDetailPanel({
@@ -2147,7 +2126,11 @@ function IntakeDetailPanel({
         <div>
           <div className="physical-intake-next-action">
             <small>Next action</small>
-            <strong>{intakeNextActor(row)}</strong>
+            <strong>
+              {row.nextActor === "NONE"
+                ? row.nextAction
+                : `${sentence(row.nextActor)} · ${row.nextAction}`}
+            </strong>
             <span>{row.stageReason}</span>
             {row.stage === "DELIVERED_AWAITING_RECEIPT" ? (
               <button type="button" className="button-primary" onClick={onReceipt}>
@@ -2170,7 +2153,7 @@ function IntakeDetailPanel({
             <div>
               <dt>Status</dt>
               <dd>
-                <span className="admin-status-pill">{intakeStageLabel(row.stage)}</span>
+                <span className="admin-status-pill">{row.stageLabel}</span>
               </dd>
             </div>
             <div>

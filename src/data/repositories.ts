@@ -893,6 +893,7 @@ export type AdminIntakeRow = {
   membership: string | null;
   submissionStatus: string;
   stage: string;
+  stageLabel: string;
   stageReason: string;
   currentStageSince: string;
   vault: {
@@ -912,7 +913,10 @@ export type AdminIntakeRow = {
   receipt: { confirmedAt: string; confirmedById: string } | null;
   updatedAt: string;
   nextAction: string;
+  nextActor: "COLLECTOR" | "STAFF" | "SYSTEM" | "NONE";
+  needsStaffAction: boolean;
   allowedActions: string[];
+  workType: "PRODUCTION" | "OWNER_DEMO" | "CONTROLLED_QA" | "AUTOMATED_TEST";
   issues: Array<{ code: string; label: string; severity: "LOW" | "MEDIUM" | "HIGH" }>;
   testFixture: boolean;
   carrierState: {
@@ -951,6 +955,7 @@ export type AdminIntakeRow = {
 
 export type AdminIntakeOverview = {
   all: number;
+  awaitingDestination: number;
   accepted: number;
   shipped: number;
   delivered: number;
@@ -1697,6 +1702,7 @@ export interface AdminRepository {
     sort?: string;
     sortDirection?: "asc" | "desc";
     fixture?: "NORMAL" | "TEST" | "ALL";
+    workType?: "ALL" | "PRODUCTION" | "DEMO_QA";
     limit?: number;
   }): Promise<AdminIntakeResponse>;
   setIntakeDestinationApproval(

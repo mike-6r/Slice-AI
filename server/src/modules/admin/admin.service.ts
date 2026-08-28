@@ -29,12 +29,11 @@ import {
   ageLabel,
   attention,
   intakeAllowedActions,
-  intakeCounts,
   intakeIssues,
+  intakeNextAction,
   intakeStage,
   intakeStageReason,
   isBetaFixtureSubmission,
-  nextIntakeAction,
   stageLabel,
 } from './admin-intake-projections';
 import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
@@ -2267,27 +2266,31 @@ export class AdminService {
       sort?: string;
       sortDirection?: 'asc' | 'desc';
       fixture?: 'NORMAL' | 'TEST' | 'ALL';
+      workType?: 'ALL' | 'PRODUCTION' | 'DEMO_QA';
       limit: number;
     },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
+    const workType = input.workType ?? (input.fixture === 'TEST' ? 'DEMO_QA' : input.fixture === 'NORMAL' ? 'PRODUCTION' : 'ALL');
+    const demoOrQaWhere: Prisma.AssetSubmissionWhereInput = {
+      OR: [
+        { stagingDemoPhysicalIntake: { isNot: null } },
+        { controlledBetaBypass: { isNot: null } },
+        { asset: { is: { slug: { startsWith: 'slice-demo-' } } } },
+        { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+        { declaredMetadata: { path: ['certificationNumber'], string_starts_with: 'STG-' } },
+      ],
+    };
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
-        ...(this.config.isBeta && input.fixture !== 'ALL'
-          ? [
-              {
-                OR:
-                  input.fixture === 'TEST'
-                    ? [{ asset: { is: { slug: { startsWith: 'slice-demo-' } } } }]
-                    : [
-                        { asset: { is: null } },
-                        { asset: { is: { slug: { not: { startsWith: 'slice-demo-' } } } } },
-                      ],
-              },
-            ]
+        ...(this.config.isBeta && workType !== 'ALL'
+          ? [workType === 'DEMO_QA' ? demoOrQaWhere : { NOT: [demoOrQaWhere] }]
           : []),
         ...(input.vaultId ? [{ intake: { vaultId: input.vaultId } }] : []),
+        ...(input.carrier ? [{ intake: { shipment: { carrier: input.carrier } } }] : []),
+        ...(input.dateFrom ? [{ updatedAt: { gte: new Date(`${input.dateFrom}T00:00:00.000Z`) } }] : []),
+        ...(input.dateTo ? [{ updatedAt: { lte: new Date(`${input.dateTo}T23:59:59.999Z`) } }] : []),
         ...(input.q
           ? [
               {
@@ -2350,10 +2353,38 @@ export class AdminService {
           : []),
       ],
     };
-    const rows = await this.db.assetSubmission.findMany({
-      where: intakeWhere,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: Math.max(input.limit, 5000),
+    const stageWhere = (status?: string): Prisma.AssetSubmissionWhereInput => {
+      const intake = (value: Prisma.SubmissionIntakeWhereInput): Prisma.AssetSubmissionWhereInput => ({ intake: { is: value } });
+      const noException = { exceptions: { none: { resolvedAt: null } } };
+      if (status === 'AWAITING_DESTINATION') return { status: 'APPROVED', intake: { is: null } };
+      if (status === 'AWAITING_SHIPMENT') return intake({ ...noException, status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED'] }, shipment: { is: null } });
+      if (status === 'IN_TRANSIT') return intake({ ...noException, shipment: { is: { status: { in: ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'] } } } });
+      if (status === 'DELIVERED_AWAITING_RECEIPT') return intake({ ...noException, shipment: { is: { status: 'DELIVERED' } }, receipt: { is: null } });
+      if (status === 'RECEIVED') return intake({ ...noException, status: 'RECEIVED' });
+      if (status === 'VERIFICATION') return intake({ ...noException, status: 'VERIFICATION' });
+      if (status === 'VERIFIED') return { OR: [{ asset: { is: { custodyRecord: { is: { status: 'INSPECTED' } } } } }, intake({ ...noException, verification: { is: { status: 'VERIFIED' } } })] };
+      if (status === 'READY' || status === 'VAULT_READY') return intake({ ...noException, status: 'COMPLETE' });
+      if (status === 'EXCEPTION') return { OR: [intake({ exceptions: { some: { resolvedAt: null } } }), intake({ shipment: { is: { status: 'EXCEPTION' } } })] };
+      if (status === 'NEEDS_ACTION') return { OR: [
+        { status: 'APPROVED', intake: { is: null } },
+        intake({ exceptions: { some: { resolvedAt: null } } }),
+        intake({ shipment: { is: { status: 'EXCEPTION' } } }),
+        intake({ ...noException, shipment: { is: { status: 'DELIVERED' } }, receipt: { is: null } }),
+        intake({ ...noException, status: { in: ['RECEIVED', 'VERIFICATION'] } }),
+      ] };
+      return {};
+    };
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? input.limit;
+    const selectedWhere: Prisma.AssetSubmissionWhereInput = { AND: [intakeWhere, stageWhere(input.status)] };
+    const orderBy: Prisma.AssetSubmissionOrderByWithRelationInput[] = input.sort === 'OLDEST_IN_STAGE'
+      ? [{ updatedAt: 'asc' }, { id: 'asc' }]
+      : [{ updatedAt: 'desc' }, { id: 'desc' }];
+    const [rows, total] = await Promise.all([this.db.assetSubmission.findMany({
+      where: selectedWhere,
+      orderBy,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: {
         owner: {
           select: {
@@ -2390,6 +2421,7 @@ export class AdminService {
         reviews: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, completedAt: true } },
         certificationVerifications: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
         stagingDemoPhysicalIntake: true,
+        controlledBetaBypass: { select: { id: true } },
         intake: {
           include: {
             vault: true,
@@ -2405,14 +2437,8 @@ export class AdminService {
           select: { id: true, slot: true, objectKey: true },
         },
       },
-    });
-    const visibleRows = this.config.isBeta && input.fixture !== 'ALL'
-      ? rows.filter((item) => {
-          const fixture = isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata);
-          return input.fixture === 'TEST' ? fixture : !fixture;
-        })
-      : rows;
-    const intakeIds = visibleRows.map((item) => item.intake?.id).filter((id): id is string => Boolean(id));
+    }), this.db.assetSubmission.count({ where: selectedWhere })]);
+    const intakeIds = rows.map((item) => item.intake?.id).filter((id): id is string => Boolean(id));
     const custodyEvents = await this.db.auditEvent.findMany({
       where: {
         resourceId: { in: intakeIds },
@@ -2429,7 +2455,7 @@ export class AdminService {
       history.push(event);
       historyByIntake.set(event.resourceId, history);
     }
-    const projected = await Promise.all(visibleRows.map(async (item) => {
+    const projected = await Promise.all(rows.map(async (item) => {
       const intake = item.intake;
       const demoIntake = item.stagingDemoPhysicalIntake;
       const demoEligible = this.config.isBeta && isExplicitPikachuOwnerDemoSubmission(item.id);
@@ -2451,11 +2477,19 @@ export class AdminService {
           ? String(metadata[key])
           : null;
       const issues = intakeIssues({ stage, intake });
+      const projectedNextAction = intakeNextAction({ status: item.status, stage, intake });
       const allowedActions = demoIntake
         ? []
         : demoEligible
           ? ['COMPLETE_DEMO_INTAKE']
           : intakeAllowedActions({ status: item.status, stage, intake });
+      const workType = demoIntake || demoEligible
+        ? 'OWNER_DEMO'
+        : item.controlledBetaBypass
+          ? 'CONTROLLED_QA'
+          : isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata)
+            ? 'AUTOMATED_TEST'
+            : 'PRODUCTION';
       const exception = issues[0]
         ? { code: issues[0].code, label: issues[0].label, severity: issues[0].severity }
         : null;
@@ -2493,6 +2527,7 @@ export class AdminService {
           item.owner.collectorSubscriptions[0]?.plan.displayName ?? null,
         submissionStatus: item.status,
         stage,
+        stageLabel: stageLabel(stage),
         stageReason: demoIntake
           ? 'Staging simulation only · no production shipment, receipt, or vault custody was recorded'
           : intakeStageReason({ status: item.status, intake }),
@@ -2526,10 +2561,13 @@ export class AdminService {
           ? 'Demo intake complete'
           : demoEligible
             ? 'Complete staging demo intake'
-            : intake ? nextIntakeAction(intake) : 'Await vault selection',
+            : projectedNextAction.label,
+        nextActor: demoIntake ? 'NONE' : demoEligible ? 'STAFF' : projectedNextAction.actor,
+        needsStaffAction: demoIntake ? false : demoEligible || projectedNextAction.needsStaffAction,
         allowedActions,
         issues,
-        testFixture: Boolean(demoIntake) || demoEligible || isBetaFixtureSlug(item.asset?.slug ?? '') || isBetaFixtureSubmission(item.declaredMetadata),
+        workType,
+        testFixture: workType !== 'PRODUCTION',
         carrierState: intake?.shipment
           ? { status: intake.shipment.status, lastUpdatedAt: intake.shipment.lastCheckedAt?.toISOString() ?? null, source: 'MANUAL' as const }
           : null,
@@ -2570,34 +2608,31 @@ export class AdminService {
         exception,
       };
     }));
-    const baseFiltered = projected
-      .filter(
-        (item) => !input.carrier || item.shipment?.carrier === input.carrier,
-      )
-      .filter(
-        (item) =>
-          !input.dateFrom ||
-          item.currentStageSince >= `${input.dateFrom}T00:00:00.000Z`,
-      )
-      .filter(
-        (item) =>
-          !input.dateTo ||
-          item.currentStageSince < `${input.dateTo}T23:59:59.999Z`,
-      );
-    const filtered = baseFiltered.filter((item) =>
-      !input.status
-        ? true
-        : input.status === 'NEEDS_ACTION'
-          ? item.allowedActions.length > 0
-          : input.status === 'READY'
-            ? item.stage === 'VAULT_READY'
-            : item.stage === input.status,
-    );
-    const counts = intakeCounts(baseFiltered);
-    const page = input.page ?? 1;
-    const pageSize = input.pageSize ?? input.limit;
-    const start = Math.max(0, (page - 1) * pageSize);
-    const items = filtered.slice(start, start + pageSize);
+    const overviewStages = [
+      ['AWAITING_DESTINATION', 'awaitingDestination'], ['AWAITING_SHIPMENT', 'accepted'],
+      ['IN_TRANSIT', 'shipped'], ['DELIVERED_AWAITING_RECEIPT', 'delivered'],
+      ['RECEIVED', 'received'], ['VERIFICATION', 'verification'], ['VERIFIED', 'verified'],
+      ['READY', 'readyForVault'], ['EXCEPTION', 'exceptions'], ['NEEDS_ACTION', 'needsAction'],
+    ] as const;
+    const stageMetrics = await Promise.all(overviewStages.map(async ([status, key]) => {
+      const where = { AND: [intakeWhere, stageWhere(status)] } satisfies Prisma.AssetSubmissionWhereInput;
+      const [count, oldest] = await Promise.all([
+        this.db.assetSubmission.count({ where }),
+        this.db.assetSubmission.aggregate({ where, _min: { updatedAt: true } }),
+      ]);
+      return [key, count, oldest._min.updatedAt?.toISOString() ?? null, status] as const;
+    }));
+    const counts = {
+      all: await this.db.assetSubmission.count({ where: intakeWhere }), accepted: 0, awaitingDestination: 0,
+      shipped: 0, delivered: 0, received: 0, verification: 0, verified: 0, readyForVault: 0,
+      exceptions: 0, needsAction: 0, oldestAt: null as string | null, oldestAtByStage: {} as Record<string, string | null>,
+    };
+    for (const [key, count, oldestAt, stage] of stageMetrics) {
+      counts[key] = count;
+      counts.oldestAtByStage[stage] = oldestAt;
+      if (!counts.oldestAt || (oldestAt && oldestAt < counts.oldestAt)) counts.oldestAt = oldestAt;
+    }
+    const items = projected;
     const recentActivity = items.slice(0, 8).map((item) => ({
       id: item.id,
       type: item.stage,
@@ -2614,8 +2649,8 @@ export class AdminService {
       pagination: {
         page,
         pageSize,
-        total: filtered.length,
-        totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
       },
       counts,
       overview: counts,
@@ -2633,7 +2668,7 @@ export class AdminService {
         })),
         carriers: [
           ...new Set(
-            projected
+            items
               .map((item) => item.shipment?.carrier)
               .filter((carrier): carrier is string => Boolean(carrier)),
           ),
