@@ -86,12 +86,38 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('idempotency-key', `${h.runId}-submit`)
       .send({ version: 1 });
     expect(submit.status).toBe(201);
+    const fixtureId = `${h.runId}-retired-staging-fixture`;
+    await h.db.assetSubmission.create({
+      data: {
+        id: fixtureId,
+        ownerUserId: owner.id,
+        categoryId,
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        declaredMetadata: {
+          name: 'Retired staging fixture',
+          certificationNumber: 'STG-QUEUE-EXCLUSION',
+          betaFixtureRetired: true,
+        },
+      },
+    });
     const queue = await request(h.app.getHttpServer())
       .get('/api/v1/reviews/submissions')
       .set('authorization', reviewer.auth)
       .set('x-forwarded-for', reviewer.clientIp);
     expect(queue.status).toBe(200);
     expect(queue.body.items.map((x: { id: string }) => x.id)).toContain(id);
+    expect(queue.body.items.map((x: { id: string }) => x.id)).not.toContain(
+      fixtureId,
+    );
+    const queueIncludingDemo = await request(h.app.getHttpServer())
+      .get('/api/v1/reviews/submissions?testFixture=include')
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(queueIncludingDemo.status).toBe(200);
+    expect(
+      queueIncludingDemo.body.items.map((x: { id: string }) => x.id),
+    ).toEqual(expect.arrayContaining([id, fixtureId]));
     const queueItem = queue.body.items.find(
       (item: { id: string }) => item.id === id,
     );

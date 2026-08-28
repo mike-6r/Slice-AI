@@ -1281,14 +1281,45 @@ export class SubmissionService {
     const submittedFrom = parseDateBoundary(input.submittedFrom, false);
     const submittedTo = parseDateBoundary(input.submittedTo, true);
     const search = input.q?.trim();
+    const retiredFixture: Prisma.AssetSubmissionWhereInput = {
+      declaredMetadata: { path: ['betaFixtureRetired'], equals: true },
+    };
+    const stagingFixtureCertification: Prisma.AssetSubmissionWhereInput = {
+      declaredMetadata: {
+        path: ['certificationNumber'],
+        string_starts_with: 'STG-',
+      },
+    };
     const fixtureWhere: Prisma.AssetSubmissionWhereInput = {
-      OR: [
-        { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+      OR: [retiredFixture, stagingFixtureCertification],
+    };
+    // PostgreSQL JSON predicates evaluate a missing path as NULL. A bare
+    // `NOT fixtureWhere` therefore excludes ordinary submissions that do not
+    // carry fixture-only metadata. Treat a missing marker as non-fixture
+    // explicitly, then exclude only the positive staging fixture markers.
+    const nonFixtureWhere: Prisma.AssetSubmissionWhereInput = {
+      AND: [
         {
-          declaredMetadata: {
-            path: ['certificationNumber'],
-            string_starts_with: 'STG-',
-          },
+          OR: [
+            {
+              declaredMetadata: {
+                path: ['betaFixtureRetired'],
+                equals: Prisma.AnyNull,
+              },
+            },
+            { NOT: retiredFixture },
+          ],
+        },
+        {
+          OR: [
+            {
+              declaredMetadata: {
+                path: ['certificationNumber'],
+                equals: Prisma.AnyNull,
+              },
+            },
+            { NOT: stagingFixtureCertification },
+          ],
         },
       ],
     };
@@ -1367,7 +1398,7 @@ export class SubmissionService {
           ]
         : []),
       ...(input.testFixture === 'only' ? [fixtureWhere] : []),
-      ...(input.testFixture === 'exclude' ? [{ NOT: fixtureWhere }] : []),
+      ...(input.testFixture === 'exclude' ? [nonFixtureWhere] : []),
       ...(search
         ? [
             {
