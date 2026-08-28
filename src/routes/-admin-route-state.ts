@@ -22,6 +22,8 @@ export type AdminSearch = {
   user?: string;
   asset?: string;
   membership?: string;
+  intake?: string;
+  intakeTab?: string;
   tab?: string;
   q?: string;
   plan?: string;
@@ -158,6 +160,8 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     user: nonEmptyValue("user"),
     asset: nonEmptyValue("asset"),
     membership: nonEmptyValue("membership"),
+    intake: nonEmptyValue("intake"),
+    intakeTab: nonEmptyValue("intakeTab"),
     tab:
       nonEmptyValue("tab") ?? legacyTrustTab(search.section) ?? legacyPlatformTab(search.section),
     q: nonEmptyValue("q"),

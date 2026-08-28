@@ -92,6 +92,24 @@ describe("admin route state", () => {
     });
   });
 
+  it("preserves a Physical Intake detail route and its active tab across refresh", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "intake",
+        intake: "submission-123",
+        intakeTab: "verification",
+        q: "Pikachu",
+        status: "VERIFICATION",
+      }),
+    ).toMatchObject({
+      section: "intake",
+      intake: "submission-123",
+      intakeTab: "verification",
+      q: "Pikachu",
+      status: "VERIFICATION",
+    });
+  });
+
   it("omits empty optional Accounts filters before the strict API request", () => {
     expect(
       compactAdminAccountFilters({

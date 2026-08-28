@@ -124,6 +124,8 @@ function AdminConsole() {
     tab: selectedUserTab,
     asset: selectedAsset,
     membership: selectedMembership,
+    intake: selectedIntake,
+    intakeTab,
     q: reviewQuery,
     plan: membershipPlan,
     type: trustTypeParam,
@@ -481,22 +483,25 @@ function AdminConsole() {
       intakeFixture,
       reviewSort,
       reviewPageParam,
+      selectedIntake,
     ],
     queryFn: () =>
       services.repositories.admin.listIntake(
         section === "intake"
           ? {
-              q: reviewQuery,
-              status: reviewStatus,
-              vaultId: intakeVault,
-              carrier: intakeCarrier,
-              dateFrom: intakeDateFrom,
-              dateTo: intakeDateTo,
-              workType: (["ALL", "PRODUCTION", "DEMO_QA"].includes(intakeFixture ?? "")
-                ? intakeFixture
-                : "ALL") as "ALL" | "PRODUCTION" | "DEMO_QA",
+              q: selectedIntake ?? reviewQuery,
+              status: selectedIntake ? undefined : reviewStatus,
+              vaultId: selectedIntake ? undefined : intakeVault,
+              carrier: selectedIntake ? undefined : intakeCarrier,
+              dateFrom: selectedIntake ? undefined : intakeDateFrom,
+              dateTo: selectedIntake ? undefined : intakeDateTo,
+              workType: (selectedIntake
+                ? "ALL"
+                : ["ALL", "PRODUCTION", "DEMO_QA"].includes(intakeFixture ?? "")
+                  ? intakeFixture
+                  : "ALL") as "ALL" | "PRODUCTION" | "DEMO_QA",
               sort: reviewSort === "oldest-in-stage" ? "OLDEST_IN_STAGE" : "RECENTLY_UPDATED",
-              page: Math.max(1, Number(reviewPageParam ?? 1)),
+              page: selectedIntake ? 1 : Math.max(1, Number(reviewPageParam ?? 1)),
               pageSize: 10,
             }
           : { limit: 100 },
@@ -919,6 +924,29 @@ function AdminConsole() {
             fixture={intakeFixture ?? "ALL"}
             sort={reviewSort ?? "recently-updated"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
+            selectedIntake={selectedIntake}
+            intakeTab={intakeTab}
+            openIntake={(submissionId) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "intake",
+                  intake: submissionId,
+                  intakeTab: "overview",
+                }),
+              })
+            }
+            closeIntake={() =>
+              void navigate({
+                search: (current) => ({ ...current, intake: undefined, intakeTab: undefined }),
+              })
+            }
+            selectIntakeTab={(nextTab) =>
+              void navigate({
+                search: (current) => ({ ...current, intakeTab: nextTab }),
+                replace: true,
+              })
+            }
             updateSearch={(next) =>
               void navigate({
                 search: (current) => ({ ...current, ...next, page: next.page ?? "1" }),
@@ -1336,6 +1364,11 @@ function PhysicalIntakeWorkspace({
   fixture,
   sort,
   page,
+  selectedIntake,
+  intakeTab,
+  openIntake,
+  closeIntake,
+  selectIntakeTab,
   updateSearch,
 }: {
   data: AdminIntakeResponse | undefined;
@@ -1351,6 +1384,11 @@ function PhysicalIntakeWorkspace({
   fixture: string;
   sort: string;
   page: number;
+  selectedIntake: string | undefined;
+  intakeTab: string | undefined;
+  openIntake: (submissionId: string) => void;
+  closeIntake: () => void;
+  selectIntakeTab: (tab: string) => void;
   updateSearch: (next: Record<string, string | undefined>) => void;
 }) {
   if (loading)
@@ -1377,6 +1415,11 @@ function PhysicalIntakeWorkspace({
       fixture={fixture}
       sort={sort}
       page={page}
+      selectedIntake={selectedIntake}
+      intakeTab={intakeTab}
+      openIntake={openIntake}
+      closeIntake={closeIntake}
+      selectIntakeTab={selectIntakeTab}
       updateSearch={updateSearch}
     />
   );
@@ -1405,6 +1448,11 @@ function PhysicalIntakeBoard({
   fixture,
   sort,
   page,
+  selectedIntake,
+  intakeTab,
+  openIntake,
+  closeIntake,
+  selectIntakeTab,
   updateSearch,
 }: {
   data: AdminIntakeResponse | undefined;
@@ -1417,6 +1465,11 @@ function PhysicalIntakeBoard({
   fixture: string;
   sort: string;
   page: number;
+  selectedIntake: string | undefined;
+  intakeTab: string | undefined;
+  openIntake: (submissionId: string) => void;
+  closeIntake: () => void;
+  selectIntakeTab: (tab: string) => void;
   updateSearch: (next: Record<string, string | undefined>) => void;
 }) {
   const services = useAppServices();
@@ -1427,7 +1480,6 @@ function PhysicalIntakeBoard({
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
-  const [selectedRow, setSelectedRow] = useState<AdminIntakeRow | null>(null);
   const [showDestinations, setShowDestinations] = useState(false);
   const [fixtureMode, setFixtureMode] = useState<"ALL" | "PRODUCTION" | "DEMO_QA">(
     (["ALL", "PRODUCTION", "DEMO_QA"].includes(fixture) ? fixture : "ALL") as
@@ -1504,6 +1556,47 @@ function PhysicalIntakeBoard({
   const countFor = (key: (typeof intakeTabs)[number][2]) =>
     Number(overview[key as keyof typeof overview] ?? 0);
   const rows = data?.items ?? [];
+  const selectedRow = selectedIntake
+    ? rows.find((row) => row.submissionId === selectedIntake)
+    : undefined;
+  if (selectedIntake && selectedRow) {
+    return (
+      <PhysicalIntakeDetailPage
+        row={selectedRow}
+        tab={intakeTab}
+        onClose={closeIntake}
+        onSelectTab={selectIntakeTab}
+        onReceipt={() => receipt.mutate(selectedRow.id)}
+        onStartVerification={() => verificationStart.mutate(selectedRow.id)}
+        onCompleteDemoIntake={() => demoIntake.mutate(selectedRow)}
+        receiptPending={receipt.isPending}
+        receiptFailed={receipt.isError}
+        demoPending={demoIntake.isPending}
+        demoFailed={demoIntake.isError}
+        verificationStarting={verificationStart.isPending}
+      />
+    );
+  }
+  if (selectedIntake) {
+    return (
+      <AdminPageSection
+        title="Physical Intake"
+        detail="The requested intake could not be found in the authorized intake projection."
+      >
+        <section className="physical-intake-detail-not-found admin-panel">
+          <p className="admin-console-eyebrow">Intake unavailable</p>
+          <h2>That intake is no longer available in this view.</h2>
+          <p>
+            It may have been removed from the current authorized projection. Return to Physical
+            Intake to choose a record from the live queue.
+          </p>
+          <button type="button" className="admin-secondary-button" onClick={closeIntake}>
+            Back to Physical Intake
+          </button>
+        </section>
+      </AdminPageSection>
+    );
+  }
   return (
     <AdminPageSection
       title="Physical Intake"
@@ -1687,10 +1780,7 @@ function PhysicalIntakeBoard({
                   <PhysicalIntakeRow
                     row={row}
                     key={row.id}
-                    onOpen={() => setSelectedRow(row)}
-                    onReceipt={() => setReceiptRow(row)}
-                    onStartVerification={() => verificationStart.mutate(row.id)}
-                    onCompleteDemoIntake={() => setDemoRow(row)}
+                    onOpen={() => openIntake(row.submissionId)}
                   />
                 ))}
               </tbody>
@@ -1739,13 +1829,6 @@ function PhysicalIntakeBoard({
           </div>
         </div>
       </section>
-      {selectedRow ? (
-        <IntakeDetailPanel
-          row={selectedRow}
-          onClose={() => setSelectedRow(null)}
-          onReceipt={() => setReceiptRow(selectedRow)}
-        />
-      ) : null}
       {showDestinations ? (
         <section className="physical-intake-destinations admin-panel">
           <div className="physical-intake-section-heading">
@@ -1922,19 +2005,7 @@ function PhysicalIntakeBoard({
   );
 }
 
-function PhysicalIntakeRow({
-  row,
-  onOpen,
-  onReceipt,
-  onStartVerification,
-  onCompleteDemoIntake,
-}: {
-  row: AdminIntakeRow;
-  onOpen: () => void;
-  onReceipt: () => void;
-  onStartVerification: () => void;
-  onCompleteDemoIntake: () => void;
-}) {
+function PhysicalIntakeRow({ row, onOpen }: { row: AdminIntakeRow; onOpen: () => void }) {
   return (
     <tr>
       <td>
@@ -2028,29 +2099,9 @@ function PhysicalIntakeRow({
       </td>
       <td>
         <div className="physical-intake-row-actions">
-          {row.allowedActions.includes("COMPLETE_DEMO_INTAKE") ? (
-            <button type="button" className="button-primary" onClick={onCompleteDemoIntake}>
-              Complete demo intake
-            </button>
-          ) : row.allowedActions.includes("CONFIRM_RECEIPT") ? (
-            <button type="button" className="button-primary" onClick={onReceipt}>
-              Confirm receipt
-            </button>
-          ) : row.allowedActions.includes("START_VERIFICATION") ? (
-            <button type="button" className="button-primary" onClick={onStartVerification}>
-              Start verification
-            </button>
-          ) : (
-            <button type="button" className="admin-secondary-button" onClick={onOpen}>
-              {row.allowedActions.includes("RESOLVE_EXCEPTION")
-                ? "Resolve issue"
-                : row.allowedActions.includes("COMPLETE_VERIFICATION")
-                  ? "Complete verification"
-                  : row.nextActor === "COLLECTOR"
-                    ? "View shipment"
-                    : "Open intake"}
-            </button>
-          )}
+          <button type="button" className="admin-secondary-button" onClick={onOpen}>
+            Open intake
+          </button>
         </div>
       </td>
     </tr>
@@ -2086,153 +2137,654 @@ function PhysicalIntakeEvidence({ src, title }: { src: string | null; title: str
   );
 }
 
-function IntakeDetailPanel({
+const intakeDetailTabs = [
+  ["overview", "Overview"],
+  ["shipment", "Shipment"],
+  ["verification", "Verification"],
+  ["history", "History"],
+] as const;
+
+type IntakeDetailTab = (typeof intakeDetailTabs)[number][0];
+
+function normalizeIntakeDetailTab(value: string | undefined): IntakeDetailTab {
+  return intakeDetailTabs.some(([tab]) => tab === value) ? (value as IntakeDetailTab) : "overview";
+}
+
+function intakeWorkTypeLabel(workType: AdminIntakeRow["workType"]) {
+  if (workType === "OWNER_DEMO") return "Demo";
+  if (workType === "CONTROLLED_QA") return "Controlled QA";
+  if (workType === "AUTOMATED_TEST") return "Automated test";
+  return "Production";
+}
+
+function intakeStageTone(row: AdminIntakeRow) {
+  if (row.exception || row.stage === "EXCEPTION") return "is-red";
+  if (row.stage === "AWAITING_DESTINATION" || row.stage === "DELIVERED_AWAITING_RECEIPT")
+    return "is-amber";
+  if (["VERIFIED", "VAULT_READY", "DEMO_CUSTODY"].includes(row.stage)) return "is-green";
+  return "is-blue";
+}
+
+function intakeStepState(
+  row: AdminIntakeRow,
+  step: IntakeDetailTab | "destination" | "delivery" | "receipt" | "custody",
+) {
+  if (row.exception && step !== "history") return "blocked";
+  const complete = {
+    destination: Boolean(row.vault || row.demoIntake),
+    shipment: Boolean(row.shipment || row.demoIntake),
+    delivery: Boolean(row.shipment?.deliveredAt || row.demoIntake),
+    receipt: Boolean(row.receipt || row.demoIntake),
+    verification: Boolean(
+      row.verification?.completedAt ||
+      row.demoIntake ||
+      ["VERIFIED", "VAULT_READY"].includes(row.stage),
+    ),
+    custody: Boolean(row.custodyStatus || row.demoIntake),
+  };
+  if (complete[step as keyof typeof complete]) return "complete";
+  const activeStep = !complete.destination
+    ? "destination"
+    : !complete.shipment
+      ? "shipment"
+      : !complete.delivery
+        ? "delivery"
+        : !complete.receipt
+          ? "receipt"
+          : !complete.verification
+            ? "verification"
+            : "custody";
+  return activeStep === step ? "current" : "future";
+}
+
+function IntakeDetailAction({
   row,
-  onClose,
   onReceipt,
+  onStartVerification,
+  onCompleteDemoIntake,
+  verificationStarting,
 }: {
   row: AdminIntakeRow;
-  onClose: () => void;
   onReceipt: () => void;
+  onStartVerification: () => void;
+  onCompleteDemoIntake: () => void;
+  verificationStarting: boolean;
 }) {
-  const timeline = [
-    ["Approved", row.submissionStatus === "APPROVED", row.currentStageSince],
-    ["Destination selected", Boolean(row.vault), row.currentStageSince],
-    ["Shipment submitted", Boolean(row.shipment), row.shipment?.shippedAt],
-    ["Carrier delivered", Boolean(row.shipment?.deliveredAt), row.shipment?.deliveredAt],
-    ["Received by Slice", Boolean(row.receipt), row.receipt?.confirmedAt],
-    ["Verified", ["VERIFIED", "VAULT_READY"].includes(row.stage), null],
-    ["Ready for vault", row.stage === "VAULT_READY", null],
-    ["Demo intake", Boolean(row.demoIntake), row.demoIntake?.simulatedReceiptAt],
-    ["Demo verified", Boolean(row.demoIntake), row.demoIntake?.verifiedAt],
-    ["Demo custody", Boolean(row.demoIntake), row.demoIntake?.custodyAt],
+  if (row.allowedActions.includes("COMPLETE_DEMO_INTAKE"))
+    return (
+      <button type="button" className="button-primary" onClick={onCompleteDemoIntake}>
+        Complete demo intake
+      </button>
+    );
+  if (row.allowedActions.includes("CONFIRM_RECEIPT"))
+    return (
+      <button type="button" className="button-primary" onClick={onReceipt}>
+        Confirm physical receipt
+      </button>
+    );
+  if (row.allowedActions.includes("START_VERIFICATION"))
+    return (
+      <button
+        type="button"
+        className="button-primary"
+        disabled={verificationStarting}
+        onClick={onStartVerification}
+      >
+        {verificationStarting ? "Starting…" : "Start verification"}
+      </button>
+    );
+  if (row.stage === "AWAITING_DESTINATION")
+    return (
+      <button
+        type="button"
+        className="button-primary"
+        disabled
+        title="Destination selection is not available in the authorized intake projection."
+      >
+        Select destination
+      </button>
+    );
+  return null;
+}
+
+function PhysicalIntakeDetailPage({
+  row,
+  tab,
+  onClose,
+  onSelectTab,
+  onReceipt,
+  onStartVerification,
+  onCompleteDemoIntake,
+  receiptPending,
+  receiptFailed,
+  demoPending,
+  demoFailed,
+  verificationStarting,
+}: {
+  row: AdminIntakeRow;
+  tab: string | undefined;
+  onClose: () => void;
+  onSelectTab: (tab: IntakeDetailTab) => void;
+  onReceipt: () => void;
+  onStartVerification: () => void;
+  onCompleteDemoIntake: () => void;
+  receiptPending: boolean;
+  receiptFailed: boolean;
+  demoPending: boolean;
+  demoFailed: boolean;
+  verificationStarting: boolean;
+}) {
+  const [confirmation, setConfirmation] = useState<"receipt" | "demo" | null>(null);
+  const activeTab = normalizeIntakeDetailTab(tab);
+  const steps = [
+    ["destination", "Destination"],
+    ["shipment", "Shipment"],
+    ["delivery", "Delivery"],
+    ["receipt", "Receipt"],
+    ["verification", "Verification"],
+    ["custody", "Custody"],
   ] as const;
+  const identity = [
+    row.variant,
+    row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const statusTone = intakeStageTone(row);
+  const actionDescription = row.stageReason || "No further action is currently available.";
   return (
-    <section className="physical-intake-detail admin-panel" aria-label="Intake detail">
-      <header className="physical-intake-section-heading">
-        <div>
-          <p className="admin-console-eyebrow">Intake workspace</p>
-          <h3>{row.title}</h3>
-          <p>
-            {row.variant ?? row.category ?? "Collectible"} ·{" "}
-            {row.intakeReference ?? `SLICE-${shortId(row.id)}`}
-          </p>
-        </div>
-        <button type="button" className="admin-secondary-button" onClick={onClose}>
-          Close detail
-        </button>
-      </header>
-      <div className="physical-intake-detail-grid">
-        <div>
-          <div className="physical-intake-next-action">
-            <small>Next action</small>
-            <strong>
-              {row.nextActor === "NONE"
-                ? row.nextAction
-                : `${sentence(row.nextActor)} · ${row.nextAction}`}
-            </strong>
-            <span>{row.stageReason}</span>
-            {row.stage === "DELIVERED_AWAITING_RECEIPT" ? (
-              <button type="button" className="button-primary" onClick={onReceipt}>
-                Confirm physical receipt
-              </button>
-            ) : null}
+    <section className="physical-intake-detail-page" aria-label="Physical intake detail">
+      <div className="physical-intake-detail-breadcrumb">
+        <span>Physical Intake</span>
+        <ChevronRight aria-hidden="true" />
+        <strong>Intake #{row.intakeReference ?? shortId(row.id)}</strong>
+      </div>
+      <button type="button" className="physical-intake-back-link" onClick={onClose}>
+        <ChevronLeft aria-hidden="true" /> Back to Physical Intake
+      </button>
+
+      <article className="physical-intake-detail-hero admin-panel">
+        <header className="physical-intake-detail-identity">
+          <PhysicalIntakeThumbnail src={row.thumbnailUrl} />
+          <div>
+            <div className="physical-intake-title-row">
+              <h1>{row.title}</h1>
+              {row.testFixture ? (
+                <span className="physical-intake-fixture-badge">
+                  {intakeWorkTypeLabel(row.workType)}
+                </span>
+              ) : null}
+            </div>
+            <p>{identity || row.category || "Collectible"}</p>
+            {row.assetId ? <small>Asset · {shortId(row.assetId)}</small> : null}
           </div>
-          <dl className="physical-intake-detail-facts">
-            <div>
-              <dt>Collector</dt>
-              <dd>
-                {row.collector.displayName}
-                {row.collector.username ? ` · @${row.collector.username}` : ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Destination</dt>
-              <dd>{row.vault?.displayName ?? "Not selected"}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <span className="admin-status-pill">{row.stageLabel}</span>
-              </dd>
-            </div>
-            <div>
-              <dt>Shipment</dt>
-              <dd>
-                {row.shipment
-                  ? `${row.shipment.carrier} · ${row.shipment.trackingNumber}`
-                  : "No shipment recorded"}
-              </dd>
-            </div>
-            <div>
-              <dt>Physical receipt</dt>
-              <dd>
-                {row.receipt
-                  ? `${date(row.receipt.confirmedAt)} · staff ${shortId(row.receipt.confirmedById)}`
-                  : "Not confirmed"}
-              </dd>
-            </div>
-            {row.demoIntake ? (
-              <div>
-                <dt>Demo authority</dt>
-                <dd>{row.demoIntake.destinationLabel} · simulated only</dd>
-              </div>
+          <span className={`admin-status-pill ${statusTone}`}>{row.stageLabel}</span>
+        </header>
+        <div className="physical-intake-detail-metadata">
+          <div>
+            <span>Collector</span>
+            <strong>{row.collector.displayName}</strong>
+            {row.collector.username ? <small>@{row.collector.username}</small> : null}
+          </div>
+          <div>
+            <span>Work type</span>
+            <strong>{intakeWorkTypeLabel(row.workType)}</strong>
+          </div>
+          <div>
+            <span>Intake ID</span>
+            <strong>{row.intakeReference ?? shortId(row.id)}</strong>
+          </div>
+          <div>
+            <span>Last updated</span>
+            <strong>{date(row.updatedAt)}</strong>
+          </div>
+          <div>
+            <span>Current stage</span>
+            <strong>{row.stageLabel}</strong>
+          </div>
+        </div>
+        <ol className="physical-intake-stepper" aria-label="Physical intake lifecycle">
+          {steps.map(([step, label], index) => {
+            const state = intakeStepState(row, step);
+            return (
+              <li className={`is-${state}`} key={step}>
+                <span>{index + 1}</span>
+                <strong>{label}</strong>
+                <small>
+                  {state === "complete"
+                    ? "Complete"
+                    : state === "current"
+                      ? row.stageLabel
+                      : state === "blocked"
+                        ? "Blocked"
+                        : "Not started"}
+                </small>
+              </li>
+            );
+          })}
+        </ol>
+      </article>
+
+      <nav className="physical-intake-detail-tabs" aria-label="Intake detail tabs">
+        {intakeDetailTabs.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={activeTab === value ? "is-active" : ""}
+            onClick={() => onSelectTab(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="physical-intake-detail-layout">
+        <main className="physical-intake-detail-primary">
+          {activeTab === "overview" ? <IntakeOverviewTab row={row} /> : null}
+          {activeTab === "shipment" ? <IntakeShipmentTab row={row} /> : null}
+          {activeTab === "verification" ? <IntakeVerificationTab row={row} /> : null}
+          {activeTab === "history" ? <IntakeHistoryTab row={row} /> : null}
+        </main>
+        <aside className="physical-intake-detail-rail">
+          <section
+            className={`physical-intake-next-action-card ${row.exception ? "is-blocked" : ""}`}
+          >
+            <p>Next action</p>
+            <h2>{row.nextAction}</h2>
+            <span>{actionDescription}</span>
+            <IntakeDetailAction
+              row={row}
+              onReceipt={() => setConfirmation("receipt")}
+              onStartVerification={onStartVerification}
+              onCompleteDemoIntake={() => setConfirmation("demo")}
+              verificationStarting={verificationStarting}
+            />
+            {row.stage === "AWAITING_DESTINATION" ? (
+              <small>
+                Destination selection is not available in the authorized intake projection.
+              </small>
             ) : null}
-            <div>
-              <dt>Verification</dt>
-              <dd>{row.verification?.status ?? "Not started"}</dd>
-            </div>
-          </dl>
-          <div className="physical-intake-detail-links">
+          </section>
+          <IntakeDetailFacts row={row} statusTone={statusTone} />
+          <IntakeDetailStatus row={row} />
+          <section className="physical-intake-detail-card physical-intake-detail-links-card">
+            <h2>Quick links</h2>
             <Link
               to="/operations/submissions"
               search={{ submission: row.submissionId, tab: "Overview" }}
-              className="admin-secondary-button"
             >
-              Open submission review
+              View submission <span>↗</span>
             </Link>
-            <Link
-              to="/admin"
-              search={{ section: "users", user: row.collector.id }}
-              className="admin-secondary-button"
-            >
-              Open collector account
+            {row.assetId ? (
+              <Link
+                to="/admin"
+                search={{ section: "assetOperations", asset: row.assetId, tab: "overview" }}
+              >
+                Open collectible <span>↗</span>
+              </Link>
+            ) : null}
+            <Link to="/admin" search={{ section: "users", user: row.collector.id }}>
+              View collector profile <span>↗</span>
             </Link>
+          </section>
+        </aside>
+      </div>
+      {confirmation ? (
+        <div className="physical-intake-modal" role="dialog" aria-modal="true">
+          <div className="admin-panel">
+            <p className="admin-console-eyebrow">
+              {confirmation === "demo" ? "Staging demo authority" : "Physical authority"}
+            </p>
+            <h2>{confirmation === "demo" ? "Complete Demo Intake" : "Confirm Slice receipt"}</h2>
+            <p>
+              {confirmation === "demo"
+                ? "Staging simulation only. This uses the existing guarded demo authority and does not create a production shipment, receipt, or vault custody record."
+                : "This confirms that Slice has physically received the collectible. Carrier delivery alone does not confirm receipt."}
+            </p>
+            <div className="physical-intake-modal-actions">
+              <button
+                type="button"
+                className="admin-inline-action"
+                onClick={() => setConfirmation(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                disabled={confirmation === "demo" ? demoPending : receiptPending}
+                onClick={() => {
+                  if (confirmation === "demo") onCompleteDemoIntake();
+                  else onReceipt();
+                  setConfirmation(null);
+                }}
+              >
+                {confirmation === "demo"
+                  ? demoPending
+                    ? "Completing…"
+                    : "Complete demo intake"
+                  : receiptPending
+                    ? "Confirming…"
+                    : "Confirm receipt"}
+              </button>
+            </div>
+            {(confirmation === "demo" ? demoFailed : receiptFailed) ? (
+              <p className="text-negative">
+                The authorized intake action could not be completed. No additional frontend state
+                was created.
+              </p>
+            ) : null}
           </div>
         </div>
+      ) : null}
+    </section>
+  );
+}
+
+function IntakeDetailFacts({ row, statusTone }: { row: AdminIntakeRow; statusTone: string }) {
+  return (
+    <section className="physical-intake-detail-card">
+      <h2>Intake details</h2>
+      <dl className="physical-intake-detail-facts">
         <div>
-          <h4>Lifecycle</h4>
-          <ol className="physical-intake-timeline">
-            {timeline.map(([label, done, at]) => (
-              <li className={done ? "is-done" : "is-pending"} key={label}>
-                <span aria-hidden="true" />{" "}
-                <div>
-                  <strong>{label}</strong>
-                  <small>{done ? (at ? date(at) : "Complete") : "Pending"}</small>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <dt>Stage</dt>
+          <dd>
+            <span className={`admin-status-pill ${statusTone}`}>{row.stageLabel}</span>
+          </dd>
         </div>
         <div>
-          <h4>Evidence & custody history</h4>
+          <dt>Work type</dt>
+          <dd>{intakeWorkTypeLabel(row.workType)}</dd>
+        </div>
+        <div>
+          <dt>Production work</dt>
+          <dd>{row.workType === "PRODUCTION" ? "Yes" : "No"}</dd>
+        </div>
+        <div>
+          <dt>Intake state</dt>
+          <dd>{row.submissionStatus === "APPROVED" ? "Open" : sentence(row.submissionStatus)}</dd>
+        </div>
+        {row.demoIntake ? (
+          <div>
+            <dt>Demo authority</dt>
+            <dd>Simulated only</dd>
+          </div>
+        ) : null}
+      </dl>
+    </section>
+  );
+}
+
+function IntakeDetailStatus({ row }: { row: AdminIntakeRow }) {
+  return (
+    <section className="physical-intake-detail-card">
+      <h2>Current status</h2>
+      <dl className="physical-intake-detail-facts">
+        <div>
+          <dt>Blockers</dt>
+          <dd>{row.issues.length ? row.issues.map((issue) => issue.label).join(", ") : "None"}</dd>
+        </div>
+        <div>
+          <dt>Waiting on</dt>
+          <dd>{row.nextActor === "NONE" ? "No one" : sentence(row.nextActor)}</dd>
+        </div>
+        <div>
+          <dt>Time in current stage</dt>
+          <dd>{age(row.currentStageSince)}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function IntakeOverviewTab({ row }: { row: AdminIntakeRow }) {
+  const destinationConfirmed = Boolean(row.vault || row.demoIntake);
+  return (
+    <>
+      <section className="physical-intake-workflow-card admin-panel">
+        <header>
+          <PackageCheck aria-hidden="true" />
+          <h2>Receiving destination</h2>
+        </header>
+        <div className="physical-intake-workflow-split">
+          <div className="physical-intake-empty-workflow">
+            <Truck aria-hidden="true" />
+            <h3>{destinationConfirmed ? "Destination confirmed" : "No destination confirmed"}</h3>
+            <p>
+              {destinationConfirmed
+                ? "The authoritative receiving destination is shown here."
+                : "A receiving destination must be confirmed before shipping instructions can be issued."}
+            </p>
+            {destinationConfirmed ? (
+              <strong>{row.demoIntake?.destinationLabel ?? row.vault?.displayName}</strong>
+            ) : (
+              <button type="button" className="admin-secondary-button" disabled>
+                Select destination
+              </button>
+            )}
+          </div>
+          <div className="physical-intake-destination-summary">
+            <p>Receiving destination</p>
+            {row.vault ? (
+              <>
+                <strong>{row.vault.displayName}</strong>
+                <span>
+                  {row.vault.region}, {row.vault.countryCode}
+                </span>
+              </>
+            ) : row.demoIntake ? (
+              <>
+                <strong>{row.demoIntake.destinationLabel}</strong>
+                <span>Staging simulation only</span>
+              </>
+            ) : (
+              <span>No destination is available in the authorized intake projection.</span>
+            )}
+          </div>
+        </div>
+      </section>
+      <IntakeShipmentCard row={row} />
+      <IntakeReceiptCard row={row} />
+    </>
+  );
+}
+
+function IntakeShipmentCard({ row }: { row: AdminIntakeRow }) {
+  const shipment = row.shipment;
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <Truck aria-hidden="true" />
+        <h2>Shipment</h2>
+      </header>
+      <div className="physical-intake-shipment-card">
+        <div>
+          <strong>
+            {shipment
+              ? sentence(shipment.status)
+              : row.vault
+                ? "Awaiting shipment"
+                : "Waiting for destination"}
+          </strong>
+          <p>
+            {shipment
+              ? "Carrier and tracking are shown from the authoritative intake record."
+              : row.vault
+                ? "The collector has not provided tracking yet."
+                : "Shipping instructions will be available once a destination is confirmed."}
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Carrier</dt>
+            <dd>{shipment?.carrier ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Tracking number</dt>
+            <dd>{shipment?.trackingNumber ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{shipment ? sentence(shipment.status) : "Not started"}</dd>
+          </div>
+          <div>
+            <dt>Last updated</dt>
+            <dd>{row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function IntakeReceiptCard({ row }: { row: AdminIntakeRow }) {
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <PackageCheck aria-hidden="true" />
+        <h2>Physical receipt</h2>
+      </header>
+      <div className="physical-intake-shipment-card">
+        <div>
+          <strong>
+            {row.receipt
+              ? "Received by Slice"
+              : row.demoIntake
+                ? "Demo receipt recorded"
+                : "Not received"}
+          </strong>
+          <p>
+            {row.receipt
+              ? "Physical receipt has been recorded by an authorized Slice operator."
+              : row.demoIntake
+                ? "This is a staging-only simulated receipt, not a production custody record."
+                : "This item has not been physically received by Slice staff."}
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Received by</dt>
+            <dd>{row.receipt ? shortId(row.receipt.confirmedById) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Received at</dt>
+            <dd>
+              {row.receipt
+                ? date(row.receipt.confirmedAt)
+                : row.demoIntake
+                  ? date(row.demoIntake.simulatedReceiptAt)
+                  : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt>Package condition</dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt>Notes</dt>
+            <dd>—</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function IntakeShipmentTab({ row }: { row: AdminIntakeRow }) {
+  return (
+    <>
+      <IntakeOverviewTab row={row} />
+    </>
+  );
+}
+
+function IntakeVerificationTab({ row }: { row: AdminIntakeRow }) {
+  const verification = row.verification;
+  const checks = [
+    ["Identity comparison", verification?.identityMatch],
+    ["Certification comparison", verification?.certificationMatch],
+    ["Grade comparison", verification?.gradeMatch],
+    ["Variant comparison", verification?.variantMatch],
+  ] as const;
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <ShieldCheck aria-hidden="true" />
+        <h2>Verification</h2>
+      </header>
+      <div className="physical-intake-verification-layout">
+        <div>
+          <p className="admin-console-eyebrow">Verification status</p>
+          <h3>{verification ? sentence(verification.status) : "Not started"}</h3>
+          <p>
+            {verification?.note ??
+              "No verification note is available in the authorized intake projection."}
+          </p>
+          <dl className="physical-intake-check-list">
+            {checks.map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className={value === true ? "is-pass" : value === false ? "is-fail" : ""}>
+                  {value === true ? "Match" : value === false ? "Mismatch" : "Not recorded"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <div>
+          <p className="admin-console-eyebrow">Evidence</p>
           <PhysicalIntakeEvidence src={row.thumbnailUrl} title={row.title} />
-          <ol className="physical-intake-history">
-            {row.custodyHistory
-              .slice(-5)
-              .reverse()
-              .map((event) => (
-                <li key={`${event.action}-${event.occurredAt}`}>
-                  <strong>{sentence(event.action)}</strong>
-                  <small>{date(event.occurredAt)}</small>
-                </li>
-              ))}
-          </ol>
           <p className="admin-safe-note">
             Evidence is private and shown only to authorized operators.
           </p>
         </div>
       </div>
+    </section>
+  );
+}
+
+function IntakeHistoryTab({ row }: { row: AdminIntakeRow }) {
+  if (!row.custodyHistory.length)
+    return (
+      <section className="physical-intake-workflow-card admin-panel">
+        <header>
+          <Clock3 aria-hidden="true" />
+          <h2>Intake history</h2>
+        </header>
+        <div className="physical-intake-empty-history">
+          <p>No intake-specific audit history is available in the authorized projection.</p>
+        </div>
+      </section>
+    );
+  return (
+    <section className="physical-intake-workflow-card admin-panel">
+      <header>
+        <Clock3 aria-hidden="true" />
+        <h2>Intake history</h2>
+      </header>
+      <ol className="physical-intake-history-list">
+        {row.custodyHistory
+          .slice()
+          .reverse()
+          .map((event) => (
+            <li key={`${event.action}-${event.occurredAt}`}>
+              <span aria-hidden="true" />
+              <div>
+                <strong>{sentence(event.action)}</strong>
+                <small>
+                  {event.actorUserId ? `Actor ${shortId(event.actorUserId)} · ` : ""}
+                  {date(event.occurredAt)}
+                </small>
+                {event.metadata ? (
+                  <details>
+                    <summary>Technical detail</summary>
+                    <code>{JSON.stringify(event.metadata)}</code>
+                  </details>
+                ) : null}
+              </div>
+            </li>
+          ))}
+      </ol>
     </section>
   );
 }
