@@ -385,6 +385,11 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     checklist: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
     currentValuation: string | null;
   };
+  reviewPresentation?: {
+    access: "SELF_REVIEW_BLOCKED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "UNCLAIMED";
+    required: { complete: number; total: number; blockers: number };
+    advisory: { complete: number; total: number };
+  };
   allowedActions?: {
     canClaim: boolean;
     canRelease: boolean;

@@ -1701,6 +1701,10 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       value.readiness && typeof value.readiness === "object"
         ? (objectField(value.readiness, "review readiness") as never)
         : undefined,
+    reviewPresentation:
+      value.reviewPresentation && typeof value.reviewPresentation === "object"
+        ? (objectField(value.reviewPresentation, "review presentation") as never)
+        : undefined,
     allowedActions:
       value.allowedActions && typeof value.allowedActions === "object"
         ? (objectField(value.allowedActions, "review allowed actions") as never)

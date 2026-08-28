@@ -126,6 +126,11 @@ describe('Document 010 reviewer HTTP E2E', () => {
       decisionEligible: false,
       requiredBlockers: [],
     });
+    expect(readyDetail.body.reviewPresentation).toEqual({
+      access: 'UNCLAIMED',
+      required: { complete: 3, total: 3, blockers: 0 },
+      advisory: { complete: 1, total: 3 },
+    });
     expect(readyDetail.body.readiness.progress).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'evidence', status: 'COMPLETE' }),
@@ -154,6 +159,7 @@ describe('Document 010 reviewer HTTP E2E', () => {
       nextAction: 'READY_FOR_DECISION',
       decisionEligible: true,
     });
+    expect(claimedDetail.body.reviewPresentation.access).toBe('CLAIMED_BY_ME');
     const claimedQueue = await request(h.app.getHttpServer())
       .get('/api/v1/reviews/submissions?reviewer=mine')
       .set('authorization', reviewer.auth)

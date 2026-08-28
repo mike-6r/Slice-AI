@@ -157,69 +157,53 @@ export function SubmissionOperationsPage() {
   return (
     <ReviewShell>
       <section className="admin-review-workspace">
-        <div className="admin-review-workspace-nav">
-          <button
-            type="button"
-            className="admin-review-back-link"
-            onClick={() => window.history.back()}
-          >
-            ← Back to Review Queue
-          </button>
-          <div className="admin-review-nav-actions">
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => previous && choose(previous.id)}
-              disabled={!previous}
-            >
-              Previous
-            </button>
-            <strong>{position}</strong>
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => next && choose(next.id)}
-              disabled={!next}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-        <ReviewHeader detail={review} />
-        <ReviewerBanner
-          detail={review}
-          onClaim={() => claim.mutate(selected)}
-          claiming={claim.isPending}
-          onRelease={() => release.mutate(selected)}
-          releasing={release.isPending}
+        <ReviewWorkspaceToolbar
+          position={position}
+          previous={previous?.id}
+          next={next?.id}
+          choose={choose}
         />
-        {review.status === "APPROVED" ? (
-          <PostApproval
-            detail={review}
-            onCanonicalize={() => canonicalize.mutate()}
-            canonicalizing={canonicalize.isPending}
-            error={canonicalize.error}
-          />
-        ) : null}
         <div className="admin-review-workspace-grid">
           <main className="admin-review-workspace-main">
+            <ReviewHeader detail={review} />
+            <ReviewerBanner
+              detail={review}
+              onClaim={() => claim.mutate(selected)}
+              claiming={claim.isPending}
+              onRelease={() => release.mutate(selected)}
+              releasing={release.isPending}
+            />
+            {review.status === "APPROVED" ? (
+              <PostApproval
+                detail={review}
+                onCanonicalize={() => canonicalize.mutate()}
+                canonicalizing={canonicalize.isPending}
+                error={canonicalize.error}
+              />
+            ) : null}
             <Progress detail={review} />
-            <ReviewSection title="Identity" detail={review} step="identity">
+            <ReviewSection title="Identity" detail={review} step="identity" number={1} open>
               <Identity detail={review} />
             </ReviewSection>
-            <ReviewSection title="Evidence" detail={review} step="evidence">
+            <ReviewSection title="Evidence" detail={review} step="evidence" number={2} open>
               <Evidence detail={review} onFocus={setFocusedMedia} />
             </ReviewSection>
-            <ReviewSection title="Grade & Certification" detail={review} step="certification">
+            <ReviewSection
+              title="Grade & Certification"
+              detail={review}
+              step="certification"
+              number={3}
+            >
               <Certification detail={review} />
             </ReviewSection>
-            <ReviewSection title="Market Research" detail={review} step="research">
+            <ReviewSection title="Research" detail={review} step="research" number={4}>
               <Research detail={review} />
             </ReviewSection>
             <ReviewSection
-              title="Staff Assessment"
+              title="Condition & Valuation"
               detail={review}
               step="assessment"
+              number={5}
               open={canEdit}
             >
               <Assessment
@@ -299,21 +283,66 @@ function ReviewShell({ children }: { children: ReactNode }) {
           <Link to="/admin" search={{ section: "collectibles" }}>
             Collectibles
           </Link>
+          <Link to="/admin" search={{ section: "assetOperations" }}>
+            Asset Operations
+          </Link>
+          <p className="admin-console-nav-label">Business</p>
+          <Link to="/admin" search={{ section: "memberships" }}>
+            Memberships
+          </Link>
+          <Link to="/admin" search={{ section: "payments" }}>
+            Finance & Trading
+          </Link>
+          <Link to="/admin" search={{ section: "support" }}>
+            Trust & Support
+          </Link>
+          <p className="admin-console-nav-label">Platform</p>
+          <Link to="/admin" search={{ section: "health" }}>
+            Platform Operations
+          </Link>
         </nav>
       </aside>
       <div className="admin-console-main">
-        <header className="admin-console-topbar admin-review-console-topbar">
-          <div>
-            <p>Admin Console · Review Queue</p>
-            <h1>Submission Review</h1>
-          </div>
-          <Link className="admin-review-back-link" to="/admin" search={{ section: "moderation" }}>
-            Review Queue →
-          </Link>
-        </header>
-        <main className="page-shell admin-review-detail py-8">{children}</main>
+        <main className="page-shell admin-review-detail admin-review-detail-page">{children}</main>
       </div>
     </div>
+  );
+}
+
+function ReviewWorkspaceToolbar({
+  position,
+  previous,
+  next,
+  choose,
+}: {
+  position: string;
+  previous: string | undefined;
+  next: string | undefined;
+  choose: (id: string) => void;
+}) {
+  return (
+    <header className="admin-review-workspace-toolbar">
+      <div>
+        <p className="admin-review-breadcrumb">
+          Review Queue <span>›</span> Submission Review
+        </p>
+        <h1>Submission Review</h1>
+      </div>
+      <div className="admin-review-toolbar-actions">
+        <Link className="admin-review-back-link" to="/admin" search={{ section: "moderation" }}>
+          ‹ Back to queue
+        </Link>
+        <div className="admin-review-nav-actions" aria-label="Review queue navigation">
+          <button type="button" onClick={() => previous && choose(previous)} disabled={!previous}>
+            Previous
+          </button>
+          <strong>{position}</strong>
+          <button type="button" onClick={() => next && choose(next)} disabled={!next}>
+            Next ›
+          </button>
+        </div>
+      </div>
+    </header>
   );
 }
 
@@ -441,12 +470,14 @@ function ReviewSection({
   title,
   detail,
   step,
+  number,
   children,
   open,
 }: {
   title: string;
   detail: SubmissionReviewDetail;
   step: string;
+  number: number;
   children: ReactNode;
   open?: boolean;
 }) {
@@ -457,6 +488,11 @@ function ReviewSection({
       open={open ?? item?.status !== "COMPLETE"}
     >
       <summary>
+        <span
+          className={`admin-review-section-number is-${(item?.status ?? "NEEDS_REVIEW").toLowerCase()}`}
+        >
+          {number}
+        </span>
         <div>
           <h3>{title}</h3>
           <p>{item?.summary ?? "Review required"}</p>
@@ -469,16 +505,49 @@ function ReviewSection({
 }
 function Identity({ detail }: { detail: SubmissionReviewDetail }) {
   const item = detail.collectible;
+  const source = detail.marketResearch?.observations[0];
   return (
-    <div className="admin-review-identity-grid">
-      {fact("Category", item?.category)}
-      {fact("Title", item?.title)}
-      {fact("Set", item?.set)}
-      {fact("Card number", item?.cardNumber)}
-      {fact("Year", item?.year)}
-      {fact("Variant", item?.variant)}
-      {fact("Grading", item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / ungraded")}
-      {fact("Certification", item?.certificationNumber ?? "Not required")}
+    <div className="admin-review-identity-panels">
+      <Info title="Collectible">
+        <dl className="admin-review-facts">
+          {fact("Category", item?.category)}
+          {fact("Title", item?.title)}
+          {fact("Set", item?.set)}
+          {fact("Card number", item?.cardNumber)}
+          {fact("Year", item?.year)}
+        </dl>
+      </Info>
+      <Info title="Grading">
+        <dl className="admin-review-facts">
+          {fact("Grade", item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / Ungraded")}
+          {fact("Certification", item?.certificationNumber ?? "Not required")}
+          {fact("Grading company", item?.grader ?? "Not required")}
+        </dl>
+      </Info>
+      <Info title="Reference">
+        <dl className="admin-review-facts">
+          {fact("External reference", source?.providerCode?.replaceAll("_", " ") ?? "Not attached")}
+          {fact("Source currency", source?.currency ?? "Unavailable")}
+          {fact(
+            "Last checked",
+            detail.marketResearch ? formatDate(detail.marketResearch.collectedAt) : "Not checked",
+          )}
+        </dl>
+        {source?.externalUrl ? (
+          <a
+            className="admin-review-provider-link"
+            href={source.externalUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View source ↗
+          </a>
+        ) : null}
+      </Info>
+      <p className="admin-review-section-footnote">
+        Identity information is collector-supplied and normalized by Slice where an authoritative
+        source is available.
+      </p>
     </div>
   );
 }
@@ -491,15 +560,18 @@ function Evidence({
 }) {
   const summary = detail.evidenceSummary;
   return (
-    <>
-      <p className="text-sm text-subtle">
-        {summary
-          ? String(summary.presentRequired) +
-            " of " +
-            String(summary.required) +
-            " required images accepted"
-          : "No evidence summary available"}
-      </p>
+    <div className="admin-review-evidence-layout">
+      <div className="admin-review-evidence-overview">
+        <p>Required images</p>
+        <strong>
+          {summary ? `${summary.presentRequired} of ${summary.required}` : "Unavailable"}
+        </strong>
+        <span>
+          {summary?.missingRequired
+            ? `${summary.missingRequired} required image${summary.missingRequired === 1 ? "" : "s"} missing`
+            : "All required images provided"}
+        </span>
+      </div>
       <div className="admin-review-workspace-gallery">
         {summary?.items.map((item) => (
           <button
@@ -514,13 +586,11 @@ function Evidence({
               fallback={<span>{label(item.slot)}</span>}
             />
             <strong>{label(item.slot)}</strong>
-            <small>
-              {item.required ? "Required" : "Optional"} · {label(item.status)}
-            </small>
+            <small>{label(item.status)}</small>
           </button>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 function Certification({ detail }: { detail: SubmissionReviewDetail }) {
@@ -744,41 +814,55 @@ function DecisionRail({
 }) {
   const readiness = detail.readiness;
   const actions = detail.allowedActions;
+  const presentation = detail.reviewPresentation;
+  const selfBlocked = presentation?.access === "SELF_REVIEW_BLOCKED";
+  const assignment = detail.reviewAssignment;
   return (
     <aside className="admin-review-decision-rail">
-      <section className="admin-panel-card admin-review-sticky-rail">
-        <p className="page-kicker">Next action</p>
-        <h3>{readinessTitle(detail)}</h3>
-        <p className="text-sm text-subtle">{nextActionCopy(readiness?.nextAction)}</p>
-        {readiness?.requiredBlockers.length ? (
-          <ul className="admin-review-blockers">
-            {readiness.requiredBlockers.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        ) : null}
-        <div className="admin-review-rail-readiness">
-          <h4>Required for decision</h4>
-          {readiness?.checklist
-            .filter((item) => item.required)
-            .map((item) => (
-              <div key={item.key}>
-                <span className={item.satisfied ? "is-complete" : ""}>
-                  {item.satisfied ? "✓" : "○"}
-                </span>
-                <span>{item.label}</span>
-              </div>
-            ))}
-          <h4>Optional / advisory</h4>
-          {readiness?.advisoryItems.map((item) => (
-            <div key={item.key}>
-              <span className={item.satisfied ? "is-complete" : ""}>
-                {item.satisfied ? "✓" : "○"}
-              </span>
-              <span>{item.label}</span>
-            </div>
-          ))}
+      <section className="admin-panel-card admin-review-status-card">
+        <div className="admin-review-status-card-heading">
+          <h2>Review status</h2>
+          {selfBlocked ? <StatusPill value="Self-review blocked" /> : null}
         </div>
+        <div className="admin-review-status-line">
+          <span>Claim status</span>
+          <strong>{claimLabel(assignment?.state)}</strong>
+          <small>{claimDetail(detail)}</small>
+        </div>
+        <div className="admin-review-next-action">
+          <span>Next action</span>
+          <strong>{readinessTitle(detail)}</strong>
+          <p>{nextActionCopy(readiness?.nextAction)}</p>
+        </div>
+        {selfBlocked ? (
+          <div className="admin-review-info-callout">
+            You submitted this collectible. Another authorized reviewer must claim this submission
+            before review can begin.
+          </div>
+        ) : null}
+      </section>
+      <section className="admin-panel-card admin-review-readiness-card">
+        <h2>Readiness overview</h2>
+        <div className="admin-review-rail-readiness">
+          <ReadinessLine
+            label="Required items"
+            value={`${presentation?.required.complete ?? 0} of ${presentation?.required.total ?? 0} complete`}
+            tone={presentation?.required.blockers ? "warning" : "ready"}
+          />
+          <ReadinessLine
+            label="Optional items"
+            value={`${presentation?.advisory.complete ?? 0} of ${presentation?.advisory.total ?? 0} recorded`}
+            tone="warning"
+          />
+          <ReadinessLine
+            label="Blocking issues"
+            value={String(presentation?.required.blockers ?? 0)}
+            tone={presentation?.required.blockers ? "negative" : "ready"}
+          />
+        </div>
+      </section>
+      <section className="admin-panel-card admin-review-actions-card">
+        <h2>Review actions</h2>
         {canEdit ? (
           <div className="admin-review-decision-actions">
             <button
@@ -806,10 +890,67 @@ function DecisionRail({
               Reject submission<small>Close this submission</small>
             </button>
           </div>
-        ) : null}
+        ) : (
+          <div className="admin-review-decision-actions">
+            <button type="button" className="admin-review-action is-claim" disabled>
+              {selfBlocked ? "Claim review unavailable" : "Claim review"}
+              <small>
+                {selfBlocked
+                  ? "Not available for your own submission"
+                  : "Available when this review can be claimed"}
+              </small>
+            </button>
+            <button type="button" className="admin-review-action is-changes" disabled>
+              Request changes<small>Available once claimed by you</small>
+            </button>
+            <button type="button" className="admin-review-action is-reject" disabled>
+              Reject submission<small>Available once claimed by you</small>
+            </button>
+          </div>
+        )}
       </section>
     </aside>
   );
+}
+
+function ReadinessLine({
+  label: lineLabel,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "ready" | "warning" | "negative";
+}) {
+  return (
+    <div className={`admin-review-readiness-line is-${tone}`}>
+      <span>{lineLabel}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function claimLabel(
+  state: NonNullable<SubmissionReviewDetail["reviewAssignment"]>["state"] | undefined,
+) {
+  return (
+    (
+      {
+        CLAIMED_BY_ME: "Claimed by you",
+        CLAIMED_BY_OTHER: "Claimed",
+        UNCLAIMED: "Unclaimed",
+        COMPLETED: "Completed",
+      } as Record<string, string>
+    )[state ?? "UNCLAIMED"] ?? "Unclaimed"
+  );
+}
+
+function claimDetail(detail: SubmissionReviewDetail) {
+  if (detail.allowedActions?.selfReviewForbidden) return "You cannot review your own submission.";
+  if (detail.reviewAssignment?.state === "CLAIMED_BY_OTHER")
+    return `Assigned to ${detail.reviewAssignment.reviewer?.displayName ?? "an authorized reviewer"}.`;
+  if (detail.reviewAssignment?.state === "CLAIMED_BY_ME") return "You are the active reviewer.";
+  return "This submission has not been claimed.";
 }
 function DecisionDialog({
   decision,

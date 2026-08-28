@@ -1983,6 +1983,12 @@ export class SubmissionService {
         satisfied: certificationResolved,
       },
     ];
+    const requiredComplete = requiredChecklist.filter(
+      (item) => item.satisfied,
+    ).length;
+    const advisoryComplete = advisoryItems.filter(
+      (item) => item.satisfied,
+    ).length;
     return {
       ...response,
       reviewAssignment: {
@@ -2102,6 +2108,27 @@ export class SubmissionService {
           ...advisoryItems.map((item) => ({ ...item, required: false })),
         ],
         currentValuation: latestReview?.valuationMinor?.toString() ?? null,
+      },
+      // A compact, server-authoritative presentation summary for the reviewer
+      // workspace. It deliberately mirrors, rather than replaces, readiness
+      // so clients never infer access or decision eligibility from display text.
+      reviewPresentation: {
+        access: selfReviewForbidden
+          ? 'SELF_REVIEW_BLOCKED'
+          : reviewAssignmentState === 'CLAIMED_BY_ME'
+            ? 'CLAIMED_BY_ME'
+            : reviewAssignmentState === 'CLAIMED_BY_OTHER'
+              ? 'CLAIMED_BY_OTHER'
+              : 'UNCLAIMED',
+        required: {
+          complete: requiredComplete,
+          total: requiredChecklist.length,
+          blockers: blockers.length,
+        },
+        advisory: {
+          complete: advisoryComplete,
+          total: advisoryItems.length,
+        },
       },
       allowedActions: {
         canClaim:
