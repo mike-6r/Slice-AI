@@ -1252,209 +1252,6 @@ export class SubmissionService {
     );
   }
 
-  async queue(
-    actor: Actor,
-    input: {
-      cursor?: string;
-      limit?: number;
-      q?: string;
-      priority?: 'HIGH' | 'MEDIUM' | 'LOW';
-      status?: 'SUBMITTED' | 'IN_REVIEW';
-      evidence?: 'complete' | 'missing' | 'partial';
-      research?:
-        | 'completed'
-        | 'in_progress'
-        | 'pending'
-        | 'unavailable'
-        | 'not_requested';
-      submittedFrom?: string;
-      submittedTo?: string;
-      sort?: 'submitted' | 'priority' | 'collector' | 'research' | 'evidence';
-      sortDirection?: 'asc' | 'desc';
-      page?: number;
-      pageSize?: number;
-    },
-  ) {
-    const isAdmin = actor.roles.includes('ADMIN');
-    const submittedFrom = parseDateBoundary(input.submittedFrom, false);
-    const submittedTo = parseDateBoundary(input.submittedTo, true);
-    const search = input.q?.trim();
-    const where: Prisma.AssetSubmissionWhereInput = {
-      AND: [
-        isAdmin
-          ? { status: { in: ['SUBMITTED', 'IN_REVIEW'] } }
-          : {
-              OR: [
-                { status: 'SUBMITTED', reviewerId: null },
-                { status: 'IN_REVIEW', reviewerId: actor.userId },
-              ],
-            },
-        ...(input.status ? [{ status: input.status }] : []),
-        ...(submittedFrom || submittedTo
-          ? [
-              {
-                submittedAt: {
-                  ...(submittedFrom ? { gte: submittedFrom } : {}),
-                  ...(submittedTo ? { lt: submittedTo } : {}),
-                },
-              },
-            ]
-          : []),
-        ...(search
-          ? [
-              {
-                OR: [
-                  { id: { contains: search, mode: 'insensitive' as const } },
-                  {
-                    owner: {
-                      email: { contains: search, mode: 'insensitive' as const },
-                    },
-                  },
-                  {
-                    owner: {
-                      profile: {
-                        OR: [
-                          {
-                            displayName: {
-                              contains: search,
-                              mode: 'insensitive' as const,
-                            },
-                          },
-                          {
-                            publicUsername: {
-                              contains: search,
-                              mode: 'insensitive' as const,
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  },
-                  {
-                    asset: {
-                      title: { contains: search, mode: 'insensitive' as const },
-                    },
-                  },
-                  {
-                    category: {
-                      name: { contains: search, mode: 'insensitive' as const },
-                    },
-                  },
-                ],
-              },
-            ]
-          : []),
-      ],
-    };
-    const rows = await this.prisma.assetSubmission.findMany({
-      where,
-      orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
-      include: {
-        owner: {
-          select: {
-            email: true,
-            accountStatus: true,
-            profile: { select: { displayName: true, publicUsername: true } },
-            collectorSubscriptions: {
-              where: { status: 'ACTIVE' },
-              orderBy: { updatedAt: 'desc' },
-              take: 1,
-              select: { plan: { select: { displayName: true } } },
-            },
-          },
-        },
-        category: { select: { name: true } },
-        asset: {
-          select: {
-            title: true,
-            year: true,
-            edition: true,
-            cardNumber: true,
-            collectibleSet: { select: { name: true } },
-            gradeScaleEntry: {
-              select: { label: true, company: { select: { code: true } } },
-            },
-          },
-        },
-        collectibleSet: { select: { name: true } },
-        gradeScaleEntry: {
-          select: { label: true, company: { select: { code: true } } },
-        },
-        media: {
-          select: {
-            slot: true,
-            status: true,
-            deletedAt: true,
-            objectKey: true,
-          },
-        },
-        certificationVerifications: {
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: 1,
-          select: { status: true },
-        },
-        marketResearch: {
-          orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }],
-          take: 1,
-          select: { state: true, collectedAt: true },
-        },
-      },
-    });
-    const projected = await Promise.all(
-      rows.map(async (row) => {
-        const item = reviewQueueProjection(row);
-        const front = row.media.find(
-          (media) =>
-            media.slot === 'front' &&
-            media.status === 'SAFE' &&
-            media.deletedAt === null,
-        );
-        return {
-          ...item,
-          thumbnailUrl: front
-            ? await this.storage
-                .createPrivateDownloadUrl(
-                  front.objectKey,
-                  new Date(Date.now() + 5 * 60_000),
-                )
-                .catch(() => null)
-            : null,
-        };
-      }),
-    );
-    const counts = queueCounts(projected);
-    const filtered = projected.filter((item) => {
-      if (input.priority && item.priority !== input.priority) return false;
-      if (input.evidence && !matchesEvidence(item, input.evidence))
-        return false;
-      if (input.research && !matchesResearch(item, input.research))
-        return false;
-      return true;
-    });
-    const sorted = filtered.sort((left, right) =>
-      compareQueueItems(left, right, input.sort, input.sortDirection),
-    );
-    const pageSize = input.pageSize ?? input.limit ?? 10;
-    const page = input.page ?? 1;
-    const start = Math.max(0, (page - 1) * pageSize);
-    const items = sorted.slice(start, start + pageSize);
-    const final = items[items.length - 1];
-    return {
-      items,
-      pagination: {
-        page,
-        pageSize,
-        total: filtered.length,
-        totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
-      },
-      counts,
-      summary: counts,
-      nextCursor: final
-        ? encodeCursor('review-queue', new Date(final.submittedAt), final.id)
-        : null,
-    };
-  }
-
   async operationalQueue(
     actor: Actor,
     input: {
@@ -1789,7 +1586,6 @@ export class SubmissionService {
             ? (reviewerById.get(row.reviewerId) ?? null)
             : null,
         });
-        Reflect.deleteProperty(item, 'priority');
         const front = row.media.find(
           (media) =>
             media.slot === 'front' &&
@@ -3471,10 +3267,7 @@ type ReviewQueueRow = {
 
 function reviewQueueProjection(
   submission: ReviewQueueRow,
-  context: { actorUserId: string; reviewerDisplayName: string | null } = {
-    actorUserId: '',
-    reviewerDisplayName: null,
-  },
+  context: { actorUserId: string; reviewerDisplayName: string | null },
 ) {
   const metadata =
     submission.declaredMetadata &&
@@ -3571,9 +3364,6 @@ function reviewQueueProjection(
             : 'UNCLAIMED',
       displayName: context.reviewerDisplayName,
     },
-    // Retained only for the legacy internal queue method until it is removed;
-    // the operational API and admin UI do not expose age as priority.
-    priority: reviewPriority(submittedAt),
     submittedAt: submittedAt.toISOString(),
     readinessState:
       missingRequired > 0
@@ -3641,108 +3431,6 @@ function researchStatusFor(state: string | undefined) {
   if (['IN_PROGRESS', 'PROCESSING'].includes(state))
     return 'IN_PROGRESS' as const;
   return 'PENDING' as const;
-}
-
-/** Explicit queue priority rule used until a persisted operational priority exists.
- * Age is the only authoritative operational signal currently available; membership
- * and external research never influence priority. */
-function reviewPriority(submittedAt: Date) {
-  const ageMs = Date.now() - submittedAt.getTime();
-  if (ageMs >= 7 * 24 * 60 * 60 * 1000) return 'HIGH' as const;
-  if (ageMs >= 3 * 24 * 60 * 60 * 1000) return 'MEDIUM' as const;
-  return 'LOW' as const;
-}
-
-function queueCounts(items: ReturnType<typeof reviewQueueProjection>[]) {
-  return {
-    all: items.length,
-    highPriority: items.filter((item) => item.priority === 'HIGH').length,
-    awaitingEvidence: items.filter(
-      (item) => item.evidence.status !== 'COMPLETE',
-    ).length,
-    researchPending: items.filter((item) =>
-      ['IN_PROGRESS', 'PENDING'].includes(item.research.status),
-    ).length,
-    readyToReview: items.filter(
-      (item) =>
-        item.reviewState === 'SUBMITTED' && item.evidence.status === 'COMPLETE',
-    ).length,
-  };
-}
-
-function matchesEvidence(
-  item: ReturnType<typeof reviewQueueProjection>,
-  value: 'complete' | 'missing' | 'partial',
-) {
-  if (value === 'complete') return item.evidence.status === 'COMPLETE';
-  if (value === 'partial') return item.evidence.status === 'PARTIAL';
-  return item.evidence.status !== 'COMPLETE';
-}
-
-function matchesResearch(
-  item: ReturnType<typeof reviewQueueProjection>,
-  value:
-    'completed' | 'in_progress' | 'pending' | 'unavailable' | 'not_requested',
-) {
-  if (value === 'pending')
-    return ['PENDING', 'IN_PROGRESS'].includes(item.research.status);
-  return (
-    item.research.status ===
-    (
-      {
-        completed: 'COMPLETED',
-        in_progress: 'IN_PROGRESS',
-        unavailable: 'UNAVAILABLE',
-        not_requested: 'NOT_REQUESTED',
-      } as const
-    )[value]
-  );
-}
-
-function compareQueueItems(
-  left: ReturnType<typeof reviewQueueProjection>,
-  right: ReturnType<typeof reviewQueueProjection>,
-  sort:
-    | 'submitted'
-    | 'priority'
-    | 'collector'
-    | 'research'
-    | 'evidence'
-    | undefined,
-  direction: 'asc' | 'desc' | undefined,
-) {
-  const defaultSort = sort === undefined;
-  const activeSort = sort ?? 'priority';
-  const multiplier = defaultSort || direction === 'desc' ? -1 : 1;
-  const priorityRank = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-  const leftValue =
-    activeSort === 'priority'
-      ? priorityRank[left.priority]
-      : activeSort === 'collector'
-        ? left.collector.displayName.toLowerCase()
-        : activeSort === 'research'
-          ? left.research.status
-          : activeSort === 'evidence'
-            ? left.evidence.percent
-            : left.submittedAt;
-  const rightValue =
-    activeSort === 'priority'
-      ? priorityRank[right.priority]
-      : activeSort === 'collector'
-        ? right.collector.displayName.toLowerCase()
-        : activeSort === 'research'
-          ? right.research.status
-          : activeSort === 'evidence'
-            ? right.evidence.percent
-            : right.submittedAt;
-  const result =
-    typeof leftValue === 'number' && typeof rightValue === 'number'
-      ? leftValue - rightValue
-      : String(leftValue).localeCompare(String(rightValue));
-  if (result !== 0) return result * multiplier;
-  if (defaultSort && left.submittedAt !== right.submittedAt)
-    return left.submittedAt.localeCompare(right.submittedAt);
-  return left.id.localeCompare(right.id);
 }
 
 function parseDateBoundary(value: string | undefined, end: boolean) {
