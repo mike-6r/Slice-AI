@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const requestedBase = process.env.LINT_CHANGED_BASE?.trim();
-const base = requestedBase && !/^0+$/.test(requestedBase) ? requestedBase : "HEAD";
+// Every push is checked independently. Depending on GitHub's event `before`
+// SHA made this quality gate flaky after force-pushes and history rewrites;
+// the repository is fetched with parent history, so HEAD~1 is deterministic.
+const base = "HEAD~1";
 
 function changedFiles() {
   const list = (range) =>
@@ -15,12 +17,11 @@ function changedFiles() {
       .split(/\r?\n/)
       .filter(Boolean);
   try {
-    const range = base === "HEAD" ? "HEAD" : `${base}...HEAD`;
+    const range = `${base}..HEAD`;
     return list(range);
-  } catch (error) {
-    if (base === "HEAD") throw error;
-    console.warn(`Changed-file lint base ${base} is unavailable; using HEAD~1 instead.`);
-    return list("HEAD~1..HEAD");
+  } catch {
+    console.warn("Changed-file lint parent is unavailable; checking the checked-out commit.");
+    return list("HEAD");
   }
 }
 

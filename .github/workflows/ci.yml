@@ -15,8 +15,6 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-latest
-    env:
-      LINT_CHANGED_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -32,7 +30,7 @@ jobs:
       - run: npm run build
       - name: Changed-file lint
         run: |
-          echo "Lint base: ${LINT_CHANGED_BASE:-<empty>}"
+          echo "Linting the pushed commit diff."
           node scripts/lint-changed.mjs
       - name: Full frontend lint baseline (known formatting debt)
         continue-on-error: true
