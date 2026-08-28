@@ -10,6 +10,7 @@ function changedFiles() {
     execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", range], {
       cwd: root,
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
     })
       .split(/\r?\n/)
       .filter(Boolean);
