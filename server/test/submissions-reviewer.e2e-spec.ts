@@ -104,6 +104,28 @@ describe('Document 010 reviewer HTTP E2E', () => {
       reviewer: { state: 'UNCLAIMED', displayName: null },
     });
     expect(queueItem).not.toHaveProperty('priority');
+    const readyDetail = await request(h.app.getHttpServer())
+      .get(`/api/v1/reviews/submissions/${id}`)
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(readyDetail.status).toBe(200);
+    expect(readyDetail.body.readiness).toMatchObject({
+      state: 'CLAIM_REVIEW',
+      nextAction: 'CLAIM_REVIEW',
+      decisionEligible: false,
+      requiredBlockers: [],
+    });
+    expect(readyDetail.body.readiness.progress).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'evidence', status: 'COMPLETE' }),
+        expect.objectContaining({
+          key: 'certification',
+          status: 'NOT_APPLICABLE',
+        }),
+        expect.objectContaining({ key: 'research', required: false }),
+        expect.objectContaining({ key: 'assessment', required: false }),
+      ]),
+    );
     const claim = await request(h.app.getHttpServer())
       .post(`/api/v1/reviews/submissions/${id}/claim`)
       .set('authorization', reviewer.auth)
@@ -111,6 +133,16 @@ describe('Document 010 reviewer HTTP E2E', () => {
       .set('idempotency-key', `${h.runId}-claim`)
       .send({});
     expect(claim.status).toBe(201);
+    const claimedDetail = await request(h.app.getHttpServer())
+      .get(`/api/v1/reviews/submissions/${id}`)
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(claimedDetail.status).toBe(200);
+    expect(claimedDetail.body.readiness).toMatchObject({
+      state: 'READY_FOR_DECISION',
+      nextAction: 'READY_FOR_DECISION',
+      decisionEligible: true,
+    });
     const claimedQueue = await request(h.app.getHttpServer())
       .get('/api/v1/reviews/submissions?reviewer=mine')
       .set('authorization', reviewer.auth)
@@ -151,6 +183,16 @@ describe('Document 010 reviewer HTTP E2E', () => {
         },
       }),
     ).toBe(1);
+    const changesDetail = await request(h.app.getHttpServer())
+      .get(`/api/v1/reviews/submissions/${id}`)
+      .set('authorization', reviewer.auth)
+      .set('x-forwarded-for', reviewer.clientIp);
+    expect(changesDetail.status).toBe(200);
+    expect(changesDetail.body.readiness).toMatchObject({
+      state: 'WAITING_FOR_COLLECTOR',
+      nextAction: 'WAIT_FOR_COLLECTOR',
+      decisionEligible: false,
+    });
     expect(
       await h.db.auditEvent.count({
         where: {

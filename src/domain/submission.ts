@@ -349,8 +349,35 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     } | null;
   };
   readiness?: {
-    state: "READY" | "BLOCKED" | "UNCLAIMED";
+    state:
+      | "READY_FOR_DECISION"
+      | "CLAIM_REVIEW"
+      | "REVIEWER_REQUIRED"
+      | "REVIEWER_ASSIGNED"
+      | "REQUIRED_ITEMS_REMAIN"
+      | "WAITING_FOR_COLLECTOR"
+      | "APPROVED"
+      | "REJECTED";
     blockers: string[];
+    requiredBlockers: string[];
+    advisoryItems: Array<{ key: string; label: string; satisfied: boolean }>;
+    decisionEligible: boolean;
+    nextAction:
+      | "CLAIM_REVIEW"
+      | "WAIT_FOR_REVIEWER"
+      | "COMPLETE_REQUIRED_REVIEW"
+      | "READY_FOR_DECISION"
+      | "WAIT_FOR_COLLECTOR"
+      | "CREATE_CANONICAL_ASSET"
+      | "OPEN_PHYSICAL_INTAKE"
+      | "COMPLETE";
+    progress: Array<{
+      key: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision";
+      label: string;
+      status: "COMPLETE" | "NEEDS_REVIEW" | "BLOCKED" | "OPTIONAL" | "NOT_APPLICABLE";
+      required: boolean;
+      summary: string;
+    }>;
     checklist: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
     currentValuation: string | null;
   };

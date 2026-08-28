@@ -1846,28 +1846,97 @@ export class SubmissionService {
         ? []
         : ['Certification verification requires review.']),
     ];
-    const readinessState = blockers.length
-      ? 'BLOCKED'
-      : submission!.status === 'IN_REVIEW'
-        ? 'READY'
-        : 'UNCLAIMED';
     const selfReviewForbidden = submission!.ownerUserId === actor.userId;
     const canReview =
       !selfReviewForbidden &&
       submission!.status === 'IN_REVIEW' &&
       (submission!.reviewerId === actor.userId ||
         actor.roles.includes('ADMIN'));
+    const decisionEligible = canReview && blockers.length === 0;
+    const advisoryItems = [
+      {
+        key: 'research',
+        label: 'Market research reference',
+        satisfied:
+          !response.marketResearch ||
+          !['PENDING', 'IN_PROGRESS'].includes(response.marketResearch.state),
+      },
+      {
+        key: 'condition',
+        label: 'Staff condition recorded',
+        satisfied: Boolean(latestReview?.staffCondition),
+      },
+      {
+        key: 'valuation',
+        label: 'Staff valuation recorded',
+        satisfied: Boolean(latestReview?.valuationMinor),
+      },
+    ];
+    const reviewAssignmentState =
+      submission!.status === 'IN_REVIEW'
+        ? submission!.reviewerId === actor.userId
+          ? 'CLAIMED_BY_ME'
+          : 'CLAIMED_BY_OTHER'
+        : submission!.reviewerId
+          ? 'COMPLETED'
+          : 'UNCLAIMED';
+    const readinessState =
+      submission!.status === 'APPROVED'
+        ? 'APPROVED'
+        : submission!.status === 'REJECTED'
+          ? 'REJECTED'
+          : submission!.status === 'CHANGES_REQUESTED'
+            ? 'WAITING_FOR_COLLECTOR'
+            : selfReviewForbidden
+              ? 'REVIEWER_REQUIRED'
+              : submission!.status === 'SUBMITTED'
+                ? 'CLAIM_REVIEW'
+                : reviewAssignmentState === 'CLAIMED_BY_OTHER'
+                  ? 'REVIEWER_ASSIGNED'
+                  : blockers.length
+                    ? 'REQUIRED_ITEMS_REMAIN'
+                    : 'READY_FOR_DECISION';
+    const nextAction =
+      submission!.status === 'APPROVED'
+        ? submission!.assetId
+          ? 'OPEN_PHYSICAL_INTAKE'
+          : 'CREATE_CANONICAL_ASSET'
+        : submission!.status === 'REJECTED'
+          ? 'COMPLETE'
+          : submission!.status === 'CHANGES_REQUESTED'
+            ? 'WAIT_FOR_COLLECTOR'
+            : selfReviewForbidden ||
+                reviewAssignmentState === 'CLAIMED_BY_OTHER'
+              ? 'WAIT_FOR_REVIEWER'
+              : submission!.status === 'SUBMITTED'
+                ? 'CLAIM_REVIEW'
+                : blockers.length
+                  ? 'COMPLETE_REQUIRED_REVIEW'
+                  : 'READY_FOR_DECISION';
+    const requiredChecklist = [
+      {
+        key: 'identity',
+        label: 'Identity confirmed',
+        required: true,
+        satisfied: identityConfirmed,
+      },
+      {
+        key: 'evidence',
+        label: 'Required evidence accepted',
+        required: true,
+        satisfied: evidenceComplete,
+      },
+      {
+        key: 'certification',
+        label: 'Grade & certification resolved',
+        required: true,
+        satisfied: certificationResolved,
+      },
+    ];
     return {
       ...response,
       reviewAssignment: {
-        state:
-          submission!.status === 'IN_REVIEW'
-            ? submission!.reviewerId === actor.userId
-              ? 'CLAIMED_BY_ME'
-              : 'CLAIMED_BY_OTHER'
-            : submission!.reviewerId
-              ? 'COMPLETED'
-              : 'UNCLAIMED',
+        state: reviewAssignmentState,
         reviewer: reviewer
           ? {
               id: reviewer.id,
@@ -1895,47 +1964,92 @@ export class SubmissionService {
       readiness: {
         state: readinessState,
         blockers,
-        checklist: [
+        requiredBlockers: blockers,
+        advisoryItems,
+        decisionEligible,
+        nextAction,
+        progress: [
           {
             key: 'identity',
-            label: 'Identity confirmed',
+            label: 'Identity',
+            status: identityConfirmed ? 'COMPLETE' : 'NEEDS_REVIEW',
             required: true,
-            satisfied: identityConfirmed,
+            summary: identityConfirmed
+              ? 'Identity confirmed'
+              : 'Confirm collectible identity',
           },
           {
             key: 'evidence',
-            label: 'Required evidence accepted',
+            label: 'Evidence',
+            status: evidenceComplete ? 'COMPLETE' : 'BLOCKED',
             required: true,
-            satisfied: evidenceComplete,
+            summary: evidenceComplete
+              ? `${safeMediaCount} of ${REQUIRED_MEDIA_SLOTS.length} required images accepted`
+              : `${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required image(s) missing`,
           },
           {
             key: 'certification',
-            label: 'Grade & certification resolved',
-            required: true,
-            satisfied: certificationResolved,
+            label: 'Grade & certification',
+            status: !response.collectible?.grader
+              ? 'NOT_APPLICABLE'
+              : certificationResolved
+                ? 'COMPLETE'
+                : 'BLOCKED',
+            required: Boolean(response.collectible?.grader),
+            summary: !response.collectible?.grader
+              ? 'Raw / ungraded — certification not required'
+              : certificationResolved
+                ? 'Certification resolved'
+                : 'Certification requires review',
           },
           {
             key: 'research',
-            label: 'Market research reference',
+            label: 'Market research',
+            status: advisoryItems[0].satisfied ? 'OPTIONAL' : 'NEEDS_REVIEW',
             required: false,
-            satisfied:
-              !response.marketResearch ||
-              !['PENDING', 'IN_PROGRESS'].includes(
-                response.marketResearch.state,
-              ),
+            summary: response.marketResearch
+              ? 'External reference only'
+              : 'No external reference attached',
           },
           {
-            key: 'condition',
-            label: 'Staff condition recorded',
+            key: 'assessment',
+            label: 'Staff assessment',
+            status:
+              advisoryItems[1].satisfied || advisoryItems[2].satisfied
+                ? 'OPTIONAL'
+                : 'NEEDS_REVIEW',
             required: false,
-            satisfied: Boolean(latestReview?.staffCondition),
+            summary:
+              advisoryItems[1].satisfied || advisoryItems[2].satisfied
+                ? 'Optional assessment recorded'
+                : 'Condition and valuation are optional',
           },
           {
-            key: 'valuation',
-            label: 'Staff valuation recorded',
-            required: false,
-            satisfied: Boolean(latestReview?.valuationMinor),
+            key: 'decision',
+            label: 'Decision',
+            status: ['APPROVED', 'REJECTED', 'CHANGES_REQUESTED'].includes(
+              submission!.status,
+            )
+              ? 'COMPLETE'
+              : decisionEligible
+                ? 'NEEDS_REVIEW'
+                : 'BLOCKED',
+            required: true,
+            summary:
+              submission!.status === 'APPROVED'
+                ? 'Submission approved'
+                : submission!.status === 'REJECTED'
+                  ? 'Submission rejected'
+                  : submission!.status === 'CHANGES_REQUESTED'
+                    ? 'Waiting for collector changes'
+                    : decisionEligible
+                      ? 'Ready for staff decision'
+                      : 'Complete required review first',
           },
+        ],
+        checklist: [
+          ...requiredChecklist,
+          ...advisoryItems.map((item) => ({ ...item, required: false })),
         ],
         currentValuation: latestReview?.valuationMinor?.toString() ?? null,
       },
