@@ -196,8 +196,10 @@ export function AdminAssetOperations(props: Props) {
           </div>
         </div>
       </header>
-      <Metrics counts={board.data.counts} />
-      <section className="asset-operations-workspace">
+      <div className="asset-operations-desktop-layout">
+        <div className="asset-operations-primary">
+          <Metrics counts={board.data.counts} />
+          <section className="asset-operations-workspace">
         <nav className="asset-operations-tabs" aria-label="Asset Operations queues">
           {assetOperationsTabs.map(([key, label]) => (
             <button
@@ -305,8 +307,7 @@ export function AdminAssetOperations(props: Props) {
             <X aria-hidden="true" /> Clear filters
           </button>
         </div>
-        <div className="asset-operations-layout">
-          <div className="asset-operations-table-wrap">
+            <div className="asset-operations-table-wrap">
             <div className="asset-operations-grid asset-operations-grid--head" aria-hidden="true">
               <span>Collectible</span>
               <span>Stage</span>
@@ -336,14 +337,15 @@ export function AdminAssetOperations(props: Props) {
             </div>
             <Pagination data={board.data} page={props.page} update={props.update} />
             <OperationalInsights data={board.data} onOpen={openItem} />
-          </div>
-          <QueuePreview
-            item={selectedItem}
-            onClose={() => setSelected("closed")}
-            onOpen={() => selectedItem && openItem(selectedItem)}
-          />
+            </div>
+          </section>
         </div>
-      </section>
+        <QueuePreview
+          item={selectedItem}
+          onClose={() => setSelected("closed")}
+          onOpen={() => selectedItem && openItem(selectedItem)}
+        />
+      </div>
     </main>
   );
 }
@@ -711,7 +713,7 @@ function OperationalInsights({
             ))
           ) : (
             <li>
-              <small>No post-intake operational records.</small>
+              <small>No operational records are available yet.</small>
             </li>
           )}
         </ul>

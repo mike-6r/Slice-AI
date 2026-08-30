@@ -10,8 +10,8 @@
 /* Reference-aligned queue: the visual density is intentional, but every
  * number and row is supplied by the lifecycle operations projection. */
 .asset-operations-page--reference {
-  max-width: 1920px;
-  padding-top: 22px;
+  max-width: 1760px;
+  padding: 18px 20px 26px;
 }
 .asset-operations-page--reference .asset-operations-header {
   align-items: flex-start;
@@ -54,6 +54,15 @@
 .asset-operations-view-options button:hover {
   background: rgba(64, 220, 182, 0.1);
   color: var(--accent);
+}
+.asset-operations-desktop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  align-items: start;
+}
+.asset-operations-primary {
+  min-width: 0;
 }
 .asset-operations-page--reference .asset-operations-metrics {
   grid-template-columns: repeat(6, minmax(140px, 1fr));
@@ -138,9 +147,6 @@
 }
 .asset-operations-clear:disabled {
   opacity: 0.45;
-}
-.asset-operations-page--reference .asset-operations-layout {
-  grid-template-columns: minmax(0, 1fr) 286px;
 }
 .asset-operations-page--reference .asset-operations-grid {
   grid-template-columns: minmax(236px, 1.65fr) minmax(86px, 0.62fr) minmax(152px, 1.12fr) minmax(
@@ -258,6 +264,10 @@
 .asset-operations-page--reference .asset-operations-preview {
   position: relative;
   padding: 14px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(17, 35, 46, 0.95), rgba(11, 23, 31, 0.94));
 }
 .asset-operations-preview-close {
   position: absolute;
@@ -547,7 +557,7 @@
   }
 }
 @media (max-width: 1050px) {
-  .asset-operations-page--reference .asset-operations-layout {
+  .asset-operations-desktop-layout {
     grid-template-columns: 1fr;
   }
   .asset-operations-page--reference .asset-operations-preview {

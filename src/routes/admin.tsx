@@ -790,7 +790,7 @@ function AdminConsole() {
         />
       ) : null}
       <main
-        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}`}
+        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}${section === "assetOperations" ? " admin-console-main--asset-operations" : ""}`}
       >
         <header className="admin-console-topbar">
           <button

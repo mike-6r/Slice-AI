@@ -8018,6 +8018,13 @@
   .admin-console-main--accounts .admin-console-topbar {
     display: none;
   }
+  .admin-console-main--asset-operations .admin-console-topbar > div:first-of-type {
+    display: none;
+  }
+  .admin-console-main--asset-operations .admin-console-topbar {
+    min-height: 3.25rem;
+    grid-template-columns: 1fr minmax(15rem, 22rem);
+  }
 }
 
 /* Authenticated wallet: provider-backed composition without fabricated bank or movement data. */
