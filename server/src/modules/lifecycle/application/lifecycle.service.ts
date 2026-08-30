@@ -379,6 +379,74 @@ export class LifecycleService {
     };
   }
 
+  /**
+   * The detail workspace consumes this bounded projection rather than deriving
+   * an economic state machine in React. It deliberately reuses the operations
+   * board authority so queue and detail cannot disagree about physical gates,
+   * the current stage, or the next actor.
+   */
+  async operationDetail(actor: Actor, assetId: string) {
+    const board = await this.operationsQueue(actor, {
+      q: assetId,
+      page: 1,
+      pageSize: 100,
+      sort: 'UPDATED_DESC',
+    });
+    const item = board.items.find((candidate) => candidate.id === assetId) as
+      NonNullable<Awaited<ReturnType<typeof operationsItem>>> | undefined;
+    if (!item)
+      throw new NotFoundException({
+        code: 'ASSET_OPERATION_NOT_FOUND',
+        message: 'The asset is not available in the operations workspace.',
+      });
+    const blockers = [
+      ...item.entryBlockers,
+      ...item.launchReadiness.blockers,
+      ...(item.exception ? [item.exception.type] : []),
+    ].filter((value, index, values) => values.indexOf(value) === index);
+    const issued = item.ownership.state === 'ISSUED';
+    const offeringLive = ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(
+      item.offering.state,
+    );
+    return {
+      assetId,
+      physicalPrerequisites: item.physicalPrerequisiteSummary,
+      operations: {
+        stage: item.currentStage,
+        nextAction: item.nextAction,
+        nextActor: item.nextAction.actor,
+        blockers,
+      },
+      launchReadiness: item.launchReadiness,
+      reconciliation: {
+        ownership: {
+          expectedUnits: item.ownership.totalUnits,
+          allocatedUnits: item.ownership.issuedUnits,
+          differenceUnits:
+            issued && item.ownership.totalUnits === item.ownership.issuedUnits
+              ? '0'
+              : null,
+          state: issued ? 'RECONCILED' : 'NOT_ISSUED',
+        },
+        offering: {
+          state: item.offering.state,
+          reconciled: offeringLive ? true : null,
+        },
+      },
+      availableCommands: {
+        recordValuation: item.currentStage === 'VALUATION',
+        configureOwnership: item.currentStage === 'OWNERSHIP_SETUP',
+        issueOwnership:
+          item.ownership.state === 'CONFIGURED' &&
+          item.offering.state === 'APPROVED',
+        reviewOffering: item.offering.state === 'AWAITING_APPROVAL',
+        publish: item.launchReadiness.state === 'READY',
+        activateMarket: issued && !offeringLive,
+        openOffering: issued && item.offering.state === 'APPROVED',
+      },
+    };
+  }
+
   handoff(
     actor: Actor,
     assetId: string,
@@ -1613,7 +1681,7 @@ function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
       target: 'MARKET' as const,
     };
   return {
-    label: 'Monitor market',
+    label: 'No action required',
     actor: 'NONE' as const,
     target: 'COLLECTIBLE' as const,
   };

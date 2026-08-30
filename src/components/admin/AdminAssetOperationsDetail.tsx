@@ -6,24 +6,28 @@ import {
   CircleAlert,
   ExternalLink,
   Image as ImageIcon,
+  LockKeyhole,
+  RefreshCw,
   ShieldCheck,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { AdminCollectibleDetail as Detail } from "@/data/repositories";
-import type { PublicationReadiness } from "@/domain";
+import type {
+  AdminCollectibleDetail as Detail,
+  AssetOperationDetailProjection,
+} from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
+import {
+  isEconomicActivity,
+  operationWorkspaceTabLabel,
+  operationWorkspaceTabs,
+  type OperationWorkspaceTab,
+} from "./AdminAssetOperationsDetail.presentation";
 import "@/styles/admin-operations.css";
 
-const tabs = [
-  "overview",
-  "verification",
-  "valuation",
-  "custody",
-  "market-readiness",
-  "history",
-] as const;
-type DetailTab = (typeof tabs)[number];
+const tabs = operationWorkspaceTabs;
+type DetailTab = OperationWorkspaceTab;
 
 export function AdminAssetOperationsDetail({
   assetId,
@@ -43,7 +47,7 @@ export function AdminAssetOperationsDetail({
     : "overview";
   const detail = useQuery({
     queryKey: ["admin", "asset-operations-detail", assetId],
-    queryFn: () => services.repositories.admin.getCollectibleDetail(assetId, "overview"),
+    queryFn: () => services.repositories.admin.getCollectibleDetail(assetId, "operations"),
     staleTime: 20_000,
   });
   const readiness = useQuery({
@@ -51,30 +55,23 @@ export function AdminAssetOperationsDetail({
     queryFn: () => services.repositories.lifecycle.getReadiness(assetId),
     staleTime: 10_000,
   });
-  const [providerCode, setProviderCode] = useState("");
-  const [facilityCode, setFacilityCode] = useState("");
-  const [providerRef, setProviderRef] = useState("");
-  const refresh = () => {
-    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
-    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-readiness", assetId] });
-    void client.invalidateQueries({ queryKey: ["admin", "asset-operations"] });
-  };
-  const handoff = useMutation({
-    mutationFn: () =>
-      services.repositories.lifecycle.handoff(assetId, { providerCode, facilityCode, providerRef }),
-    onSuccess: refresh,
-  });
-  const custody = useMutation({
-    mutationFn: (toStatus: string) =>
-      services.repositories.lifecycle.transitionCustody(assetId, toStatus, providerRef),
-    onSuccess: refresh,
-  });
-  const publish = useMutation({
-    mutationFn: () => services.repositories.lifecycle.publish(assetId),
-    onSuccess: refresh,
+  const operations = useQuery({
+    queryKey: ["admin", "asset-operations-projection", assetId],
+    queryFn: () => services.repositories.lifecycle.getOperationDetail(assetId),
+    staleTime: 10_000,
   });
   const [valueMinor, setValueMinor] = useState("");
   const [confidence, setConfidence] = useState("80");
+  const [policyCode, setPolicyCode] = useState("");
+  const [policyUnits, setPolicyUnits] = useState("");
+  const [policyReason, setPolicyReason] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
+    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-readiness", assetId] });
+    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
+    void client.invalidateQueries({ queryKey: ["admin", "asset-operations"] });
+  };
   const valuation = useMutation({
     mutationFn: () =>
       services.repositories.lifecycle.recordValuation(assetId, {
@@ -88,111 +85,154 @@ export function AdminAssetOperationsDetail({
       refresh();
     },
   });
+  const proposeSupply = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.proposeOwnershipSupply(assetId, {
+        policyCode,
+        totalUnits: policyUnits,
+        reason: policyReason,
+      }),
+    onSuccess: refresh,
+  });
+  const approveSupply = useMutation({
+    mutationFn: () => services.repositories.admin.approveOwnershipSupply(assetId, approvalReason),
+    onSuccess: refresh,
+  });
+  const issueSupply = useMutation({
+    mutationFn: (units: string) => services.repositories.admin.issueOwnership(assetId, units),
+    onSuccess: refresh,
+  });
+  const approveOffering = useMutation({
+    mutationFn: (offeringId: string) =>
+      services.repositories.admin.approveInitialOffering(offeringId, approvalReason),
+    onSuccess: refresh,
+  });
+  const requestOfferingChanges = useMutation({
+    mutationFn: (offeringId: string) =>
+      services.repositories.admin.requestInitialOfferingChanges(offeringId, approvalReason),
+    onSuccess: refresh,
+  });
+  const activateMarket = useMutation({
+    mutationFn: () => services.repositories.admin.activateTradingMarket(assetId),
+    onSuccess: refresh,
+  });
+  const openOffering = useMutation({
+    mutationFn: (offeringId: string) => services.repositories.admin.openInitialOffering(offeringId),
+    onSuccess: refresh,
+  });
+  const publish = useMutation({
+    mutationFn: () => services.repositories.lifecycle.publish(assetId),
+    onSuccess: refresh,
+  });
 
   if (detail.isLoading)
     return (
       <OperationDetailState
-        title="Loading operation"
-        detail="Reading the authoritative collectible and lifecycle record."
+        title="Loading asset operations"
+        detail="Reading the authoritative asset record."
       />
     );
   if (detail.isError || !detail.data)
     return (
       <OperationDetailState
-        title="Operation unavailable"
-        detail="This post-receipt operation could not be loaded safely."
+        title="Asset operations unavailable"
+        detail="The authoritative asset record could not be loaded safely."
         retry={() => void detail.refetch()}
       />
     );
   const item = detail.data;
   const front = item.media.find((media) => media.slot.toLowerCase() === "front") ?? item.media[0];
-  const completed = item.lifecycle.stages.filter((stage) => stage.state === "complete").at(-1);
+  const currentPolicy = item.issuance?.proposed;
+  const error = [
+    valuation,
+    proposeSupply,
+    approveSupply,
+    issueSupply,
+    approveOffering,
+    requestOfferingChanges,
+    activateMarket,
+    openOffering,
+    publish,
+  ].find((mutation) => mutation.isError);
   return (
-    <main className="admin-operation-detail">
+    <main className="admin-asset-workspace">
       <button type="button" className="admin-back-button" onClick={onBack}>
         <ArrowLeft aria-hidden="true" /> Asset Operations
       </button>
-      <header className="admin-operation-detail__header">
-        <div>
+      <header className="admin-asset-workspace__header">
+        <div className="admin-asset-workspace__media">
+          {front?.url ? <img src={front.url} alt={item.title} /> : <ImageIcon aria-hidden="true" />}
+        </div>
+        <div className="admin-asset-workspace__identity">
           <p className="admin-operations-breadcrumb">
-            Asset Operations <span>›</span> Operation detail
+            Asset Operations <span>›</span> Economic workspace
           </p>
           <h2>{item.title}</h2>
           <p>
-            {item.identity.year ?? "Year unavailable"} · {item.identity.set ?? "Set unavailable"} ·{" "}
-            {item.identity.cardNumber ? `#${item.identity.cardNumber}` : "Card number unavailable"}
+            {[
+              item.identity.year,
+              item.identity.set,
+              item.identity.cardNumber ? `#${item.identity.cardNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Canonical identity not fully recorded"}
           </p>
-        </div>
-        <div className="admin-operation-detail__actions">
-          <span className="admin-stage-badge">{stageLabel(item.lifecycle.current)}</span>
-          <a
-            className="admin-ops-button secondary"
-            href={`/asset/${item.slug}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Public record <ExternalLink aria-hidden="true" />
-          </a>
-        </div>
-      </header>
-      <section className="admin-operation-detail__hero">
-        <div className="admin-operation-detail__media">
-          {front?.url ? (
-            <img src={front.url} alt={item.title} />
-          ) : (
-            <div>
-              <ImageIcon aria-hidden="true" />
-              <span>No approved front media</span>
-            </div>
-          )}
-        </div>
-        <div>
-          <span className="admin-operations-intro__eyebrow">Canonical collectible</span>
-          <h3>{item.identity.category}</h3>
-          <p>
-            {item.identity.manufacturer ?? "Manufacturer unavailable"} ·{" "}
-            {item.identity.variant ?? "Standard variant"} ·{" "}
-            {item.identity.language ?? "Language unavailable"}
-          </p>
-          <div className="admin-operation-facts">
+          <div className="admin-asset-workspace__badges">
+            <span>{item.publicId}</span>
             <span>
-              <b>Collector</b>
-              {item.collector?.displayName ?? "Unavailable"}
+              {item.grading ? `${item.grading.company} ${item.grading.grade}` : "Ungraded"}
             </span>
-            <span>
-              <b>Physical intake</b>
-              {item.intake ? sentence(item.intake.status) : "Not recorded"}
-            </span>
-            <span>
-              <b>Custody</b>
-              {sentence(item.custody.status)}
-            </span>
-            <span>
-              <b>Market</b>
-              {item.market.publication === "PUBLISHED"
-                ? "Published"
-                : sentence(item.market.readiness.status)}
-            </span>
+            {item.grading?.certificationNumber ? (
+              <span>Cert {item.grading.certificationNumber}</span>
+            ) : null}
+            <span>{workType(item)}</span>
+          </div>
+          <div className="admin-asset-workspace__facts">
+            <Fact label="Collector" value={item.collector?.displayName ?? "Not recorded"} />
+            <Fact
+              label="Operation stage"
+              value={operations.data ? sentence(operations.data.operations.stage) : "Unavailable"}
+              accent
+            />
+            <Fact
+              label="Market"
+              value={marketLabel(item)}
+              accent={item.market.publication === "PUBLISHED"}
+            />
           </div>
         </div>
-      </section>
-      <section className="admin-operation-progress" aria-label="Post-receipt lifecycle">
-        <span className="admin-operations-intro__eyebrow">Lifecycle progress</span>
-        <div>
-          {item.lifecycle.stages.map((stage) => (
-            <span key={stage.key} className={`admin-progress-step ${stage.state}`}>
-              <i>{stage.state === "complete" ? "✓" : stage.state === "current" ? "•" : ""}</i>
-              {stage.label}
-            </span>
-          ))}
+        <div className="admin-asset-workspace__links">
+          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(assetId)}`}>
+            Open collectible <ExternalLink aria-hidden="true" />
+          </a>
+          {item.submissions[0] ? (
+            <a
+              href={`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`}
+            >
+              Source submission <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.intake ? (
+            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
+              Physical intake <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.collector ? (
+            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+              Collector account <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.market.publication === "PUBLISHED" ? (
+            <a href={`/asset/${item.slug}`} target="_blank" rel="noreferrer">
+              Public record <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          <button type="button" onClick={refresh}>
+            <RefreshCw aria-hidden="true" /> Refresh
+          </button>
         </div>
-        <p>
-          {completed
-            ? `Last confirmed milestone: ${completed.label}${completed.at ? ` · ${date(completed.at)}` : ""}`
-            : "No milestone has been confirmed yet."}
-        </p>
-      </section>
-      <nav className="admin-operation-detail__tabs" aria-label="Operation detail sections">
+      </header>
+      <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
         {tabs.map((value) => (
           <button
             type="button"
@@ -200,57 +240,78 @@ export function AdminAssetOperationsDetail({
             className={selected === value ? "active" : ""}
             onClick={() => onTab(value)}
           >
-            {label(value)}
+            {operationWorkspaceTabLabel(value)}
           </button>
         ))}
       </nav>
       {selected === "overview" ? (
-        <Overview
-          item={item}
-          readiness={readiness.data}
-          providerCode={providerCode}
-          facilityCode={facilityCode}
-          providerRef={providerRef}
-          setProviderCode={setProviderCode}
-          setFacilityCode={setFacilityCode}
-          setProviderRef={setProviderRef}
-          onHandoff={() => handoff.mutate()}
-          handoffPending={handoff.isPending}
-        />
+        <Overview item={item} operations={operations.data} onOpen={onTab} />
       ) : null}
-      {selected === "verification" ? <Verification item={item} /> : null}
       {selected === "valuation" ? (
         <Valuation
           item={item}
           valueMinor={valueMinor}
-          setValueMinor={setValueMinor}
           confidence={confidence}
+          setValueMinor={setValueMinor}
           setConfidence={setConfidence}
           submit={() => valuation.mutate()}
           pending={valuation.isPending}
         />
       ) : null}
-      {selected === "custody" ? (
-        <Custody
+      {selected === "ownership" ? (
+        <Ownership
           item={item}
-          providerRef={providerRef}
-          setProviderRef={setProviderRef}
-          transition={(status) => custody.mutate(status)}
-          pending={custody.isPending}
+          policyCode={policyCode}
+          policyUnits={policyUnits}
+          policyReason={policyReason}
+          approvalReason={approvalReason}
+          setPolicyCode={setPolicyCode}
+          setPolicyUnits={setPolicyUnits}
+          setPolicyReason={setPolicyReason}
+          setApprovalReason={setApprovalReason}
+          policyOptions={item.issuance?.policy.candidates ?? []}
+          propose={() => proposeSupply.mutate()}
+          approve={() => approveSupply.mutate()}
+          issue={(units) => issueSupply.mutate(units)}
+          pending={proposeSupply.isPending || approveSupply.isPending || issueSupply.isPending}
         />
       ) : null}
-      {selected === "market-readiness" ? (
-        <MarketReadiness
+      {selected === "initial-offering" ? (
+        <InitialOffering
           item={item}
-          readiness={readiness.data}
+          approvalReason={approvalReason}
+          setApprovalReason={setApprovalReason}
+          approve={() =>
+            item.initialOffering && approveOffering.mutate(item.initialOffering.offeringId)
+          }
+          requestChanges={() =>
+            item.initialOffering && requestOfferingChanges.mutate(item.initialOffering.offeringId)
+          }
+          pending={approveOffering.isPending || requestOfferingChanges.isPending}
+        />
+      ) : null}
+      {selected === "launch" ? (
+        <Launch
+          item={item}
+          operations={operations.data}
           publish={() => publish.mutate()}
-          pending={publish.isPending}
+          issue={() => currentPolicy && issueSupply.mutate(currentPolicy.units)}
+          activate={() => activateMarket.mutate()}
+          open={() => item.initialOffering && openOffering.mutate(item.initialOffering.offeringId)}
+          pending={
+            publish.isPending ||
+            issueSupply.isPending ||
+            activateMarket.isPending ||
+            openOffering.isPending
+          }
         />
       ) : null}
+      {selected === "market" ? <Market item={item} /> : null}
+      {selected === "controls" ? <Controls item={item} /> : null}
       {selected === "history" ? <History item={item} /> : null}
-      {[handoff, custody, valuation, publish].some((mutation) => mutation.isError) ? (
+      {error ? (
         <p className="admin-operation-error" role="alert">
-          The lifecycle service refused that action. Refresh the operation and readiness before
+          The server rejected that operation. No local state was changed; refresh the record before
           retrying.
         </p>
       ) : null}
@@ -260,124 +321,62 @@ export function AdminAssetOperationsDetail({
 
 function Overview({
   item,
-  readiness,
-  providerCode,
-  facilityCode,
-  providerRef,
-  setProviderCode,
-  setFacilityCode,
-  setProviderRef,
-  onHandoff,
-  handoffPending,
+  operations,
+  onOpen,
 }: {
   item: Detail;
-  readiness?: PublicationReadiness;
-  providerCode: string;
-  facilityCode: string;
-  providerRef: string;
-  setProviderCode: (value: string) => void;
-  setFacilityCode: (value: string) => void;
-  setProviderRef: (value: string) => void;
-  onHandoff: () => void;
-  handoffPending: boolean;
+  operations?: AssetOperationDetailProjection;
+  onOpen: (tab: string) => void;
 }) {
+  const action = operations?.operations.nextAction;
+  const actionTab = action ? targetTab(action.target) : "overview";
   return (
-    <div className="admin-operation-detail__grid">
+    <div className="admin-asset-workspace__grid">
       <section className="admin-operation-card admin-operation-card--wide">
-        <div className="admin-card-heading">
-          <div>
-            <span className="admin-operations-intro__eyebrow">What needs attention</span>
-            <h3>
-              {readiness?.status === "READY"
-                ? "Ready for market readiness"
-                : "Work remains before publication"}
-            </h3>
-          </div>
-          <span
-            className={`admin-readiness ${readiness?.status === "READY" ? "ready" : "blocked"}`}
-          >
-            {readiness?.status === "READY" ? (
-              <>
-                <CheckCircle2 aria-hidden="true" /> Ready
-              </>
-            ) : (
-              <>
-                <CircleAlert aria-hidden="true" /> Blocked
-              </>
-            )}
-          </span>
-        </div>
-        {readiness?.blockingCodes.length ? (
+        <CardHeading
+          eyebrow="Operations status"
+          title={action ? action.label : "Operations status unavailable"}
+          status={action?.actor === "NONE" ? "No action required" : "Action required"}
+          ready={action?.actor === "NONE"}
+        />
+        <p className="admin-detail-muted">
+          {action
+            ? `Next actor: ${sentence(action.actor)}.`
+            : "The server-side operations projection is currently unavailable."}
+        </p>
+        {operations?.operations.blockers.length ? (
           <ul className="admin-blocker-list">
-            {readiness.blockingCodes.map((code) => (
-              <li key={code}>{sentence(code)}</li>
+            {operations.operations.blockers.map((blocker) => (
+              <li key={blocker}>{sentence(blocker)}</li>
             ))}
           </ul>
-        ) : (
-          <p className="admin-detail-muted">All authoritative readiness gates are satisfied.</p>
-        )}
-        {!item.intake ? (
-          <p className="admin-detail-callout">
-            <ShieldCheck aria-hidden="true" /> No physical receipt is recorded. This collectible
-            should remain outside post-receipt operations.
-          </p>
-        ) : null}
-        {!item.intake ? (
-          <div className="admin-custody-fields">
-            <label>
-              Provider code
-              <input
-                value={providerCode}
-                onChange={(event) => setProviderCode(event.target.value)}
-                placeholder="Approved operator code"
-              />
-            </label>
-            <label>
-              Facility code
-              <input
-                value={facilityCode}
-                onChange={(event) => setFacilityCode(event.target.value)}
-                placeholder="Approved facility"
-              />
-            </label>
-            <label>
-              Handoff reference
-              <input
-                value={providerRef}
-                onChange={(event) => setProviderRef(event.target.value)}
-                placeholder="Receipt or operator reference"
-              />
-            </label>
-          </div>
         ) : null}
         <button
           type="button"
           className="admin-ops-button primary"
-          onClick={onHandoff}
-          disabled={
-            handoffPending ||
-            Boolean(item.intake) ||
-            !providerCode.trim() ||
-            !facilityCode.trim() ||
-            !providerRef.trim()
-          }
+          disabled={!action || action.actor === "NONE"}
+          onClick={() => {
+            if (action?.target === "INTAKE" && item.intake) {
+              window.location.assign(
+                `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
+              );
+              return;
+            }
+            onOpen(actionTab);
+          }}
         >
-          {" "}
-          {item.intake ? "Receipt already recorded" : "Start custody handoff"}{" "}
-          <ArrowRight aria-hidden="true" />
+          {action?.label ?? "Refresh operations"} <ArrowRight aria-hidden="true" />
         </button>
       </section>
-      <Info title="Verification">
-        <Field label="Status" value={sentence(item.verification.status)} />
-        <Field label="Decision" value={item.verification.decision} />
-        <Field
-          label="Verified at"
-          value={item.verification.verifiedAt ? date(item.verification.verifiedAt) : null}
-        />
+      <Info title="Physical prerequisite" eyebrow="Read only">
+        <Field label="Intake" value={item.intake ? sentence(item.intake.status) : "Not recorded"} />
+        <Field label="Verification" value={sentence(item.verification.status)} />
+        <Field label="Custody" value={sentence(item.custody.status)} />
+        <Field label="Location" value={item.custody.location ?? "Not recorded"} />
       </Info>
-      <Info title="Valuation">
+      <Info title="Economic snapshot" eyebrow="Authoritative">
         <Field
-          label="Current value"
+          label="Valuation"
           value={
             item.valuation.current
               ? money(item.valuation.current.minor, item.valuation.current.currency)
@@ -386,79 +385,91 @@ function Overview({
           accent
         />
         <Field
-          label="Method"
-          value={item.valuation.current ? sentence(item.valuation.current.method) : null}
+          label="Supply"
+          value={
+            item.issuance?.supply
+              ? `${item.issuance.supply.issuedUnits} / ${item.issuance.supply.totalUnits} issued`
+              : "Not configured"
+          }
+        />
+        <Field
+          label="Offering"
+          value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
         />
       </Info>
-      <Info title="Custody">
-        <Field label="Status" value={sentence(item.custody.status)} accent />
-        <Field label="Location" value={item.custody.location ?? "Restricted / not recorded"} />
+      <Info title="Launch readiness" eyebrow="Server gates">
         <Field
-          label="Secured"
-          value={item.custody.securedAt ? date(item.custody.securedAt) : null}
+          label="Publication"
+          value={operations ? sentence(operations.launchReadiness.state) : "Unavailable"}
+          accent={operations?.launchReadiness.state === "READY"}
         />
+        <Field
+          label="Market"
+          value={item.market.trading ? sentence(item.market.trading.status) : "Not configured"}
+        />
+        <Field
+          label="Restrictions"
+          value={
+            item.dossier.restrictions.length
+              ? `${item.dossier.restrictions.length} active`
+              : "None recorded"
+          }
+        />
+      </Info>
+      <Info title="Economic reconciliation" eyebrow="Read only">
+        <Field
+          label="Ownership projection"
+          value={operations?.reconciliation.ownership.state ?? "Unavailable"}
+        />
+        <Field
+          label="Offering proceeds"
+          value={
+            item.initialOffering
+              ? money(
+                  item.initialOffering.proceeds.availableMinor,
+                  item.initialOffering.proceeds.currency,
+                )
+              : "Not applicable"
+          }
+        />
+        <Field
+          label="Inventory"
+          value={
+            item.initialOffering?.inventory
+              ? `${item.initialOffering.inventory.availableUnits} available`
+              : "Not created"
+          }
+        />
+      </Info>
+      <Info title="Recent economics" eyebrow="Meaningful activity">
+        <ActivityPreview item={item} />
       </Info>
     </div>
   );
 }
-function Verification({ item }: { item: Detail }) {
-  return (
-    <div className="admin-operation-detail__grid">
-      <Info title="Identity verification">
-        <Field label="Status" value={sentence(item.verification.status)} accent />
-        <Field label="Decision" value={item.verification.decision} />
-        <Field label="Reviewer" value={item.verification.verifiedBy} />
-        <Field
-          label="Completed"
-          value={item.verification.verifiedAt ? date(item.verification.verifiedAt) : null}
-        />
-      </Info>
-      <section className="admin-operation-card">
-        <h3>Approved evidence</h3>
-        <div className="admin-evidence-grid">
-          {item.evidence.length ? (
-            item.evidence.map((media) => (
-              <div key={`${media.slot}-${media.filename}`}>
-                {media.url ? (
-                  <img src={media.url} alt={media.slot} />
-                ) : (
-                  <ImageIcon aria-hidden="true" />
-                )}
-                <span>
-                  {sentence(media.slot)} · {sentence(media.status)}
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="admin-detail-muted">No approved evidence recorded.</p>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
+
 function Valuation({
   item,
   valueMinor,
-  setValueMinor,
   confidence,
+  setValueMinor,
   setConfidence,
   submit,
   pending,
 }: {
   item: Detail;
   valueMinor: string;
-  setValueMinor: (value: string) => void;
   confidence: string;
+  setValueMinor: (value: string) => void;
   setConfidence: (value: string) => void;
   submit: () => void;
   pending: boolean;
 }) {
   return (
-    <div className="admin-operation-detail__grid">
-      <Info title="Current valuation">
+    <div className="admin-asset-workspace__grid">
+      <Info title="Current valuation" eyebrow="Staff authority">
         <Field
-          label="Supported value"
+          label="Value"
           value={
             item.valuation.current
               ? money(item.valuation.current.minor, item.valuation.current.currency)
@@ -468,187 +479,655 @@ function Valuation({
         />
         <Field
           label="Method"
-          value={item.valuation.current ? sentence(item.valuation.current.method) : null}
+          value={item.valuation.current ? sentence(item.valuation.current.method) : "Not recorded"}
         />
         <Field
           label="As of"
-          value={item.valuation.current ? date(item.valuation.current.asOf) : null}
+          value={item.valuation.current ? dateTime(item.valuation.current.asOf) : "Not recorded"}
         />
+        <Field label="Decision maker" value={item.valuation.current?.actor ?? "Not recorded"} />
       </Info>
-      <section className="admin-operation-card">
-        <h3>Record a decision</h3>
-        <p className="admin-detail-muted">
-          Use a supported value in GBP minor units. External market research remains advisory
-          evidence.
-        </p>
-        <label className="admin-form-field">
-          Value in GBP minor units
-          <input
-            value={valueMinor}
-            inputMode="numeric"
-            onChange={(event) => setValueMinor(event.target.value)}
-          />
-        </label>
-        <label className="admin-form-field">
-          Confidence (0–100)
-          <input
-            value={confidence}
-            inputMode="numeric"
-            onChange={(event) => setConfidence(event.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          className="admin-ops-button primary"
-          disabled={!valueMinor || pending}
-          onClick={submit}
-        >
-          Save valuation <ArrowRight aria-hidden="true" />
-        </button>
-      </section>
-    </div>
-  );
-}
-function Custody({
-  item,
-  providerRef,
-  setProviderRef,
-  transition,
-  pending,
-}: {
-  item: Detail;
-  providerRef: string;
-  setProviderRef: (value: string) => void;
-  transition: (status: string) => void;
-  pending: boolean;
-}) {
-  return (
-    <div className="admin-operation-detail__grid">
-      <Info title="Custody record">
-        <Field label="Current status" value={sentence(item.custody.status)} accent />
-        <Field label="Location" value={item.custody.location ?? "Restricted / not recorded"} />
-        <Field
-          label="Received"
-          value={item.custody.receivedAt ? date(item.custody.receivedAt) : null}
-        />
-        <Field
-          label="Secured"
-          value={item.custody.securedAt ? date(item.custody.securedAt) : null}
-        />
-      </Info>
-      <section className="admin-operation-card">
-        <h3>Allowed transitions</h3>
-        <p className="admin-detail-muted">
-          Transitions are validated and audited by the lifecycle service.
-        </p>
-        <label className="admin-form-field">
-          Evidence or operator reference
-          <input
-            value={providerRef}
-            onChange={(event) => setProviderRef(event.target.value)}
-            placeholder="Reference for this custody step"
-          />
-        </label>
-        <div className="admin-action-list">
-          {["RECEIVED", "INSPECTED", "SECURED", "EXCEPTION"].map((status) => (
-            <button
-              type="button"
-              key={status}
-              className="admin-ops-button secondary"
-              onClick={() => transition(status)}
-              disabled={pending}
-            >
-              {sentence(status)} <ArrowRight aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-function MarketReadiness({
-  item,
-  readiness,
-  publish,
-  pending,
-}: {
-  item: Detail;
-  readiness?: PublicationReadiness;
-  publish: () => void;
-  pending: boolean;
-}) {
-  return (
-    <div className="admin-operation-detail__grid">
       <section className="admin-operation-card admin-operation-card--wide">
-        <div className="admin-card-heading">
-          <h3>Publication gates</h3>
-          <span
-            className={`admin-readiness ${readiness?.status === "READY" ? "ready" : "blocked"}`}
-          >
-            {readiness?.status === "READY" ? "Ready" : "Blocked"}
-          </span>
+        <CardHeading eyebrow="Valuation authority" title="Record staff valuation" />
+        <p className="admin-detail-muted">
+          This creates a real GBP staff decision. Market references remain evidence; no
+          exchange-rate conversion is performed here.
+        </p>
+        <div className="admin-custody-fields">
+          <label>
+            GBP minor units
+            <input
+              value={valueMinor}
+              inputMode="numeric"
+              onChange={(event) => setValueMinor(event.target.value)}
+              placeholder="e.g. 18500"
+            />
+          </label>
+          <label>
+            Confidence (0–100)
+            <input
+              value={confidence}
+              inputMode="numeric"
+              onChange={(event) => setConfidence(event.target.value)}
+            />
+          </label>
         </div>
-        {readiness?.blockingCodes.length ? (
-          <ul className="admin-blocker-list">
-            {readiness.blockingCodes.map((code) => (
-              <li key={code}>{sentence(code)}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="admin-detail-muted">
-            Every readiness gate is satisfied. Publishing remains a deliberate staff action.
-          </p>
-        )}
         <button
           type="button"
           className="admin-ops-button primary"
           disabled={
-            readiness?.status !== "READY" || pending || item.market.publication === "PUBLISHED"
+            !/^\d+$/.test(valueMinor) ||
+            !/^\d+$/.test(confidence) ||
+            Number(confidence) > 100 ||
+            pending
           }
-          onClick={publish}
+          onClick={submit}
         >
-          {item.market.publication === "PUBLISHED" ? "Published" : "Publish to market"}{" "}
-          <ArrowRight aria-hidden="true" />
+          Record valuation <ArrowRight aria-hidden="true" />
         </button>
       </section>
-      <Info title="Market context">
-        <Field label="Publication" value={sentence(item.market.publication)} />
+      <Info title="Market reference" eyebrow="Advisory only">
         <Field
-          label="Last updated"
-          value={item.market.lastUpdated ? date(item.market.lastUpdated) : null}
+          label="Current listing"
+          value={
+            item.valuation.marketReference.currentListing
+              ? money(
+                  item.valuation.marketReference.currentListing.minor,
+                  item.valuation.marketReference.currentListing.currency,
+                )
+              : "Not recorded"
+          }
+        />
+        <Field
+          label="Recent sale"
+          value={
+            item.valuation.marketReference.recentSale
+              ? money(
+                  item.valuation.marketReference.recentSale.minor,
+                  item.valuation.marketReference.recentSale.currency,
+                )
+              : "Not recorded"
+          }
+        />
+        <Field
+          label="Reference source"
+          value={
+            item.valuation.marketReference.recentSale?.source ??
+            item.valuation.marketReference.currentListing?.source ??
+            "Not recorded"
+          }
+        />
+      </Info>
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Audit trail" title="Valuation history" />
+        <HistoryRows
+          events={item.valuation.history.map((entry) => ({
+            id: entry.id,
+            action: `${sentence(entry.status)} valuation`,
+            actor: sentence(entry.method),
+            detail: money(entry.minor, entry.currency),
+            occurredAt: entry.asOf,
+          }))}
+          empty="No valuation decisions recorded."
+        />
+      </section>
+    </div>
+  );
+}
+
+function Ownership({
+  item,
+  policyCode,
+  policyUnits,
+  policyReason,
+  approvalReason,
+  setPolicyCode,
+  setPolicyUnits,
+  setPolicyReason,
+  setApprovalReason,
+  policyOptions,
+  propose,
+  approve,
+  issue,
+  pending,
+}: {
+  item: Detail;
+  policyCode: string;
+  policyUnits: string;
+  policyReason: string;
+  approvalReason: string;
+  setPolicyCode: (value: string) => void;
+  setPolicyUnits: (value: string) => void;
+  setPolicyReason: (value: string) => void;
+  setApprovalReason: (value: string) => void;
+  policyOptions: string[];
+  propose: () => void;
+  approve: () => void;
+  issue: (units: string) => void;
+  pending: boolean;
+}) {
+  const proposed = item.issuance?.proposed;
+  const supply = item.issuance?.supply;
+  return (
+    <div className="admin-asset-workspace__grid">
+      <Info title="Ownership state" eyebrow="Authoritative ledger">
+        <Field
+          label="Supply policy"
+          value={proposed ? sentence(proposed.status) : "Not configured"}
+          accent={proposed?.status === "APPROVED"}
+        />
+        <Field
+          label="Issued supply"
+          value={supply ? `${supply.issuedUnits} of ${supply.totalUnits}` : "Not issued"}
+        />
+        <Field label="Owners" value={item.ownership.ownerCount ?? "Not issued"} />
+        <Field label="Available units" value={item.ownership.availableUnits ?? "Not issued"} />
+      </Info>
+      {!proposed ? (
+        <section className="admin-operation-card admin-operation-card--wide">
+          <CardHeading eyebrow="Supply policy" title="Propose ownership supply" />
+          <p className="admin-detail-muted">
+            The policy locks the unit count and price derived from the active valuation. It does not
+            allocate holdings or issue ownership.
+          </p>
+          <div className="admin-custody-fields">
+            <label>
+              Policy
+              <select value={policyCode} onChange={(event) => setPolicyCode(event.target.value)}>
+                <option value="">Select policy</option>
+                {policyOptions.map((code) => (
+                  <option key={code} value={code}>
+                    {sentence(code)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Total units
+              <input
+                value={policyUnits}
+                inputMode="numeric"
+                onChange={(event) => setPolicyUnits(event.target.value)}
+                placeholder={item.issuance?.policy.defaultUnits ?? "Units"}
+              />
+            </label>
+          </div>
+          <label className="admin-form-field">
+            Reason
+            <textarea
+              value={policyReason}
+              onChange={(event) => setPolicyReason(event.target.value)}
+              placeholder="Authoritative rationale (12–280 characters)"
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            disabled={
+              !policyCode ||
+              !/^\d+$/.test(policyUnits) ||
+              policyReason.trim().length < 12 ||
+              pending
+            }
+            onClick={propose}
+          >
+            Propose supply policy <ArrowRight aria-hidden="true" />
+          </button>
+        </section>
+      ) : (
+        <section className="admin-operation-card admin-operation-card--wide">
+          <CardHeading
+            eyebrow="Supply policy"
+            title="Proposed terms"
+            status={sentence(proposed.status)}
+            ready={proposed.status === "APPROVED"}
+          />
+          <div className="admin-operation-fact-grid">
+            <Fact label="Units" value={proposed.units} />
+            <Fact
+              label="Unit price"
+              value={money(proposed.pricePerUnitMinor, proposed.valuationCurrency)}
+            />
+            <Fact
+              label="Whole value"
+              value={money(proposed.valuationMinor, proposed.valuationCurrency)}
+            />
+            <Fact label="Policy" value={sentence(proposed.policyCode)} />
+          </div>
+          {proposed.status !== "APPROVED" ? (
+            <>
+              <label className="admin-form-field">
+                Approval reason
+                <textarea
+                  value={approvalReason}
+                  onChange={(event) => setApprovalReason(event.target.value)}
+                  placeholder="Authoritative approval rationale (12–280 characters)"
+                />
+              </label>
+              <button
+                type="button"
+                className="admin-ops-button primary"
+                disabled={approvalReason.trim().length < 12 || pending}
+                onClick={approve}
+              >
+                Approve supply policy <ArrowRight aria-hidden="true" />
+              </button>
+            </>
+          ) : (
+            <p className="admin-detail-callout">
+              <ShieldCheck aria-hidden="true" /> Approved policy is immutable. Ownership issuance
+              remains a separate deliberate action after the offering is approved.
+            </p>
+          )}
+        </section>
+      )}
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Positions" title="Issued ownership" />
+        <p className="admin-detail-muted">
+          Ownership is only issued from the approved policy; Initial Offering allocation occurs when
+          an approved offering is opened.
+        </p>
+        {supply ? (
+          <OwnershipHolders item={item} />
+        ) : (
+          <button
+            type="button"
+            className="admin-ops-button secondary"
+            disabled={proposed?.status !== "APPROVED" || pending}
+            onClick={() => proposed && issue(proposed.units)}
+          >
+            Issue {proposed?.units ?? ""} units <ArrowRight aria-hidden="true" />
+          </button>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function InitialOffering({
+  item,
+  approvalReason,
+  setApprovalReason,
+  approve,
+  requestChanges,
+  pending,
+}: {
+  item: Detail;
+  approvalReason: string;
+  setApprovalReason: (value: string) => void;
+  approve: () => void;
+  requestChanges: () => void;
+  pending: boolean;
+}) {
+  const offering = item.initialOffering;
+  if (!offering)
+    return (
+      <section className="admin-operation-card">
+        <CardHeading eyebrow="Collector action" title="No Initial Offering created" />
+        <p className="admin-detail-muted">
+          A collector creates terms only after the asset is published, custody/insurance gates are
+          satisfied, and an approved supply policy and valuation exist. Staff cannot fabricate
+          collector terms from this workspace.
+        </p>
+      </section>
+    );
+  const approved =
+    offering.status === "APPROVED" || offering.status === "OPEN" || offering.status === "PAUSED";
+  return (
+    <div className="admin-asset-workspace__grid">
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading
+          eyebrow="Initial Offering"
+          title={sentence(offering.status)}
+          status={sentence(offering.status)}
+          ready={approved}
+        />
+        <div className="admin-operation-fact-grid">
+          <Fact label="Total slices" value={offering.totalUnits} />
+          <Fact
+            label="Collector retained"
+            value={`${offering.retainedUnits} (${percent(offering.retainedPercentageBps)})`}
+          />
+          <Fact
+            label="Offered"
+            value={`${offering.offeredUnits} (${percent(offering.offeredPercentageBps)})`}
+          />
+          <Fact
+            label="Price / Slice"
+            value={money(offering.pricePerUnitMinor, offering.currency)}
+          />
+          <Fact
+            label="Gross offering"
+            value={money(offering.grossOfferingMinor, offering.currency)}
+          />
+          <Fact
+            label="Fee"
+            value={`${money(offering.feeMinor, offering.currency)} (${percent(offering.feeBps)})`}
+          />
+          <Fact
+            label="Collector proceeds"
+            value={money(offering.netOfferingMinor, offering.currency)}
+          />
+          <Fact label="Fee schedule" value={offering.feeScheduleVersion} />
+        </div>
+      </section>
+      <Info title="Offering gates" eyebrow="Server authority">
+        <Field label="Valuation" value={offering.valuation ? "Ready" : "Blocked"} />
+        <Field label="Custody" value={offering.readiness.custody ? "Ready" : "Blocked"} />
+        <Field label="Insurance" value={offering.readiness.insurance ? "Ready" : "Blocked"} />
+        <Field label="Publication" value={offering.readiness.publication ? "Ready" : "Blocked"} />
+        <Field label="Market" value={offering.readiness.market ? "Ready" : "Blocked"} />
+      </Info>
+      <Info title="Inventory & proceeds" eyebrow="Financial authority">
+        <Field
+          label="Available inventory"
+          value={offering.inventory?.availableUnits ?? "Not created"}
+        />
+        <Field label="Reserved" value={offering.inventory?.reservedUnits ?? "Not created"} />
+        <Field
+          label="Posted proceeds"
+          value={money(offering.proceeds.postedMinor, offering.proceeds.currency)}
+        />
+        <Field
+          label="Available proceeds"
+          value={money(offering.proceeds.availableMinor, offering.proceeds.currency)}
+        />
+      </Info>
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Preview only" title="Public Initial Offering preview" />
+        <p className="admin-detail-muted">
+          This is a read-only rendering of the authoritative terms. It does not publish, open, or
+          alter the offering.
+        </p>
+        <div className="admin-operation-fact-grid">
+          <Fact label="Collectible" value={item.title} />
+          <Fact
+            label="Valuation"
+            value={
+              offering.valuation
+                ? money(offering.valuation.minor, offering.valuation.currency)
+                : "Not recorded"
+            }
+          />
+          <Fact
+            label="Available Slices"
+            value={offering.inventory?.availableUnits ?? offering.offeredUnits}
+          />
+          <Fact
+            label="Price per Slice"
+            value={money(offering.pricePerUnitMinor, offering.currency)}
+          />
+          <Fact label="Offered" value={percent(offering.offeredPercentageBps)} />
+          <Fact label="Collector retained" value={percent(offering.retainedPercentageBps)} />
+          <Fact label="Status" value={sentence(offering.status)} />
+        </div>
+      </section>
+      {offering.status === "AWAITING_APPROVAL" || offering.status === "CHANGES_REQUESTED" ? (
+        <section className="admin-operation-card admin-operation-card--wide">
+          <CardHeading eyebrow="Staff decision" title="Review Initial Offering" />
+          <label className="admin-form-field">
+            Decision reason
+            <textarea
+              value={approvalReason}
+              onChange={(event) => setApprovalReason(event.target.value)}
+              placeholder="Decision rationale (12–280 characters)"
+            />
+          </label>
+          <div className="admin-action-list">
+            <button
+              type="button"
+              className="admin-ops-button primary"
+              disabled={approvalReason.trim().length < 12 || pending}
+              onClick={approve}
+            >
+              Approve terms <CheckCircle2 aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="admin-ops-button secondary"
+              disabled={approvalReason.trim().length < 12 || pending}
+              onClick={requestChanges}
+            >
+              Request changes <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function Launch({
+  item,
+  operations,
+  publish,
+  issue,
+  activate,
+  open,
+  pending,
+}: {
+  item: Detail;
+  operations?: AssetOperationDetailProjection;
+  publish: () => void;
+  issue: () => void;
+  activate: () => void;
+  open: () => void;
+  pending: boolean;
+}) {
+  const offering = item.initialOffering;
+  const issued = Boolean(
+    item.issuance?.supply && item.issuance.supply.issuedUnits === item.issuance.supply.totalUnits,
+  );
+  const marketOpen = item.market.trading?.status === "OPEN" && item.market.trading.tradingEnabled;
+  return (
+    <div className="admin-asset-workspace__grid">
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Controlled launch" title="Authoritative launch sequence" />
+        <p className="admin-detail-muted">
+          Each command below is validated, audited, and idempotent. Physical intake remains
+          read-only in Asset Operations.
+        </p>
+        <div className="admin-launch-steps">
+          <LaunchStep
+            label="Publish canonical asset"
+            state={
+              item.market.publication === "PUBLISHED"
+                ? "complete"
+                : operations?.availableCommands.publish
+                  ? "ready"
+                  : "blocked"
+            }
+            detail={
+              item.market.publication === "PUBLISHED"
+                ? "Published"
+                : operations?.launchReadiness.blockers.length
+                  ? operations.launchReadiness.blockers.map(sentence).join(" · ")
+                  : "Server readiness unavailable"
+            }
+            action={publish}
+            disabled={
+              item.market.publication === "PUBLISHED" ||
+              !operations?.availableCommands.publish ||
+              pending
+            }
+            actionLabel="Publish asset"
+          />
+          <LaunchStep
+            label="Approve Initial Offering"
+            state={
+              offering?.status === "APPROVED" || offering?.status === "OPEN"
+                ? "complete"
+                : "blocked"
+            }
+            detail={offering ? sentence(offering.status) : "Collector terms not created"}
+          />
+          <LaunchStep
+            label="Issue ownership"
+            state={issued ? "complete" : "blocked"}
+            detail={
+              issued
+                ? `${item.issuance?.supply?.issuedUnits} units issued`
+                : "Approved policy and offering required"
+            }
+            action={issue}
+            disabled={!operations?.availableCommands.issueOwnership || pending}
+            actionLabel="Issue ownership"
+          />
+          <LaunchStep
+            label="Activate trading market"
+            state={marketOpen ? "complete" : "blocked"}
+            detail={marketOpen ? "Trading enabled" : "Ownership must be issued"}
+            action={activate}
+            disabled={!operations?.availableCommands.activateMarket || marketOpen || pending}
+            actionLabel="Activate market"
+          />
+          <LaunchStep
+            label="Open Initial Offering"
+            state={offering?.status === "OPEN" ? "complete" : "blocked"}
+            detail={
+              offering?.status === "OPEN"
+                ? "Live for investors"
+                : "Ownership and market must be ready"
+            }
+            action={open}
+            disabled={!operations?.availableCommands.openOffering || pending}
+            actionLabel="Open offering"
+          />
+        </div>
+      </section>
+      <Info title="Launch reconciliation" eyebrow="Read only">
+        <Field label="Publication" value={sentence(item.market.publication)} />
+        <Field label="Offering" value={offering ? sentence(offering.status) : "Not created"} />
+        <Field label="Ownership" value={issued ? "Issued" : "Not issued"} />
+        <Field label="Trading" value={marketOpen ? "Open" : "Not open"} />
+      </Info>
+    </div>
+  );
+}
+
+function Market({ item }: { item: Detail }) {
+  return (
+    <div className="admin-asset-workspace__grid">
+      <Info title="Market authority" eyebrow="Publication & trading">
+        <Field
+          label="Publication"
+          value={sentence(item.market.publication)}
+          accent={item.market.publication === "PUBLISHED"}
+        />
+        <Field
+          label="Trading market"
+          value={item.market.trading ? sentence(item.market.trading.status) : "Not configured"}
+        />
+        <Field label="Trading enabled" value={item.market.trading?.tradingEnabled ? "Yes" : "No"} />
+        <Field label="Market readiness" value={sentence(item.market.readiness.status)} />
+      </Info>
+      <Info title="Market data" eyebrow="Reference only">
+        <Field
+          label="Floor"
+          value={
+            item.market.floor
+              ? money(item.market.floor.minor, item.market.floor.currency)
+              : "Not recorded"
+          }
+        />
+        <Field
+          label="Asking"
+          value={
+            item.market.asking
+              ? money(item.market.asking.minor, item.market.asking.currency)
+              : "Not recorded"
+          }
+        />
+        <Field
+          label="Recent sale average"
+          value={
+            item.market.salesAverage
+              ? money(item.market.salesAverage.minor, item.market.salesAverage.currency)
+              : "Not recorded"
+          }
         />
         <Field label="Sales observed" value={item.market.salesCount} />
+      </Info>
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Restrictions" title="Market eligibility" />
+        <p className="admin-detail-muted">
+          {item.market.readiness.blockingCodes.length
+            ? "Publication and market actions remain blocked by the server-side gates below."
+            : "No active market-readiness blocker is recorded."}
+        </p>
+        {item.market.readiness.blockingCodes.length ? (
+          <ul className="admin-blocker-list">
+            {item.market.readiness.blockingCodes.map((blocker) => (
+              <li key={blocker}>{sentence(blocker)}</li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+function Controls({ item }: { item: Detail }) {
+  return (
+    <div className="admin-asset-workspace__grid">
+      <section className="admin-operation-card admin-operation-card--wide">
+        <CardHeading eyebrow="Restrictions & controls" title="Authoritative restrictions" />
+        {item.dossier.restrictions.length ? (
+          <div className="admin-history-list">
+            {item.dossier.restrictions.map((restriction, index) => (
+              <div key={`${restriction.source}-${restriction.createdAt}-${index}`}>
+                <span>{dateTime(restriction.createdAt)}</span>
+                <strong>{sentence(restriction.status)}</strong>
+                <p>{restriction.reason}</p>
+                <small>{sentence(restriction.source)}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="admin-detail-muted">
+            No active restriction or conflict is recorded for this asset.
+          </p>
+        )}
+      </section>
+      <Info title="Physical authority" eyebrow="Read only">
+        <Field label="Physical state" value={item.dossier.snapshot.physical} />
+        <Field label="Verification" value={item.dossier.snapshot.verification} />
+        <Field label="Custody" value={item.dossier.snapshot.custody} />
+        <Field label="Why read-only" value="Physical actions belong to Physical Intake" />
+      </Info>
+      <Info title="Guardrails" eyebrow="Workflow boundaries">
+        <Field label="Ownership issue" value="Policy + offering approval required" />
+        <Field label="Offering launch" value="Issued ownership + open market required" />
+        <Field label="Publication" value="Server readiness required" />
+        <Field label="Audit" value="All staff writes are audited" />
       </Info>
     </div>
   );
 }
 function History({ item }: { item: Detail }) {
+  const events = item.activity.filter(isEconomicActivity);
   return (
     <section className="admin-operation-card">
-      <div className="admin-card-heading">
-        <h3>Lifecycle history</h3>
-        <span>{item.activity.length} recorded events</span>
-      </div>
-      {item.activity.length ? (
-        <div className="admin-history-list">
-          {item.activity.map((event) => (
-            <div key={event.id}>
-              <span>{date(event.occurredAt)}</span>
-              <strong>{sentence(event.action)}</strong>
-              <p>{event.detail ?? "No additional detail"}</p>
-              <small>{event.actor}</small>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="admin-detail-muted">No lifecycle events recorded.</p>
-      )}
+      <CardHeading eyebrow="Audit history" title="Economic & market activity" />
+      <p className="admin-detail-muted">
+        Authentication telemetry and repeated readiness polling are intentionally excluded from this
+        operational record.
+      </p>
+      <HistoryRows events={events} empty="No economic lifecycle events recorded." />
     </section>
   );
 }
-function Info({ title, children }: { title: string; children: ReactNode }) {
+function Info({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  children: ReactNode;
+}) {
   return (
     <section className="admin-operation-card">
+      {eyebrow ? <span className="admin-operations-intro__eyebrow">{eyebrow}</span> : null}
       <h3>{title}</h3>
       {children}
     </section>
@@ -661,6 +1140,138 @@ function Field({ label, value, accent }: { label: string; value: unknown; accent
       <strong className={accent ? "accent" : ""}>
         {value === null || value === undefined || value === "" ? "Not recorded" : String(value)}
       </strong>
+    </div>
+  );
+}
+function Fact({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <span>
+      <b>{label}</b>
+      <strong className={accent ? "accent" : ""}>{value}</strong>
+    </span>
+  );
+}
+function CardHeading({
+  eyebrow,
+  title,
+  status,
+  ready,
+}: {
+  eyebrow?: string;
+  title: string;
+  status?: string;
+  ready?: boolean;
+}) {
+  return (
+    <div className="admin-card-heading">
+      <div>
+        {eyebrow ? <span className="admin-operations-intro__eyebrow">{eyebrow}</span> : null}
+        <h3>{title}</h3>
+      </div>
+      {status ? (
+        <span className={`admin-readiness ${ready ? "ready" : "blocked"}`}>
+          {ready ? <CheckCircle2 aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+          {status}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+function OwnershipHolders({ item }: { item: Detail }) {
+  return item.ownership.holders?.length ? (
+    <div className="admin-history-list">
+      {item.ownership.holders.map((holder) => (
+        <div key={holder.accountId}>
+          <span>{holder.username ? `@${holder.username}` : "Ownership account"}</span>
+          <strong>{holder.displayName}</strong>
+          <p>
+            {holder.units} units{holder.percentage === null ? "" : ` · ${holder.percentage}%`}
+          </p>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="admin-detail-muted">
+      Issued supply exists; holder projection is unavailable or not yet indexed.
+    </p>
+  );
+}
+function ActivityPreview({ item }: { item: Detail }) {
+  const events = item.activity.filter(isEconomicActivity).slice(0, 3);
+  return events.length ? (
+    <HistoryRows events={events} empty="" />
+  ) : (
+    <p className="admin-detail-muted">No economic activity recorded.</p>
+  );
+}
+function HistoryRows({
+  events,
+  empty,
+}: {
+  events: Array<{
+    id: string;
+    action: string;
+    actor: string;
+    detail: string | null;
+    occurredAt: string;
+  }>;
+  empty: string;
+}) {
+  return events.length ? (
+    <div className="admin-history-list">
+      {events.map((event) => (
+        <div key={event.id}>
+          <span>{dateTime(event.occurredAt)}</span>
+          <strong>{sentence(event.action)}</strong>
+          <p>{event.detail ?? "Recorded authoritative event"}</p>
+          <small>{event.actor}</small>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="admin-detail-muted">{empty}</p>
+  );
+}
+function LaunchStep({
+  label,
+  state,
+  detail,
+  action,
+  disabled,
+  actionLabel,
+}: {
+  label: string;
+  state: "complete" | "ready" | "blocked";
+  detail: string;
+  action?: () => void;
+  disabled?: boolean;
+  actionLabel?: string;
+}) {
+  return (
+    <div className={`admin-launch-step ${state}`}>
+      <span>
+        {state === "complete" ? (
+          <CheckCircle2 aria-hidden="true" />
+        ) : state === "ready" ? (
+          <TrendingUp aria-hidden="true" />
+        ) : (
+          <LockKeyhole aria-hidden="true" />
+        )}
+      </span>
+      <div>
+        <strong>{label}</strong>
+        <p>{detail}</p>
+      </div>
+      {action && actionLabel ? (
+        <button
+          type="button"
+          className="admin-ops-button secondary"
+          disabled={disabled}
+          onClick={action}
+        >
+          {actionLabel} <ArrowRight aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -685,25 +1296,44 @@ function OperationDetailState({
     </section>
   );
 }
-function label(value: string) {
-  return value === "market-readiness"
-    ? "Market readiness"
-    : value.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+function targetTab(target: string): DetailTab {
+  if (target === "VALUATION") return "valuation";
+  if (target === "OWNERSHIP") return "ownership";
+  if (target === "MARKET") return "initial-offering";
+  return "overview";
 }
-function stageLabel(value: string) {
+function marketLabel(item: Detail) {
+  return item.initialOffering?.status === "OPEN"
+    ? "Initial Offering live"
+    : item.market.trading?.tradingEnabled
+      ? "Trading enabled"
+      : sentence(item.market.publication);
+}
+function workType(item: Detail) {
+  return item.dossier.workType === "OWNER_DEMO"
+    ? "Demo"
+    : item.dossier.workType === "CONTROLLED_QA"
+      ? "Controlled QA"
+      : item.dossier.workType === "AUTOMATED_TEST"
+        ? "Automated test"
+        : "Production";
+}
+function sentence(value: string) {
   return value
     .toLowerCase()
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
-function sentence(value: string) {
-  return stageLabel(value);
+function percent(bps: number) {
+  return `${(bps / 100).toFixed(Number.isInteger(bps / 100) ? 0 : 2)}%`;
 }
-function date(value: string) {
+function dateTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     day: "numeric",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(value));
 }
 function money(minor: string, currency: string) {

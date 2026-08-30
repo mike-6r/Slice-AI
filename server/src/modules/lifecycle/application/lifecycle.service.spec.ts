@@ -40,4 +40,21 @@ describe('Asset Operations queue authority', () => {
       target: 'VALUATION',
     });
   });
+
+  it('keeps the economic operation actions distinct from physical controls', () => {
+    expect(
+      operationsQueueTestUtils.operationsNextAction('OWNERSHIP_SETUP', []),
+    ).toEqual({
+      label: 'Configure ownership',
+      actor: 'STAFF',
+      target: 'OWNERSHIP',
+    });
+    expect(
+      operationsQueueTestUtils.operationsNextAction('MARKET_LIVE', []),
+    ).toEqual({
+      label: 'No action required',
+      actor: 'NONE',
+      target: 'COLLECTIBLE',
+    });
+  });
 });

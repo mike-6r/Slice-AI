@@ -205,6 +205,7 @@ export interface AssetLifecycleRepository {
     page?: number;
     pageSize?: number;
   }): Promise<AssetOperationsBoardResponse>;
+  getOperationDetail(assetId: string): Promise<AssetOperationDetailProjection>;
   handoff(
     assetId: string,
     input: { providerCode: string; facilityCode: string; providerRef: string },
@@ -230,6 +231,42 @@ export interface AssetLifecycleRepository {
   getReadiness(assetId: string): Promise<PublicationReadiness>;
   publish(assetId: string): Promise<unknown>;
 }
+
+export type AssetOperationDetailProjection = {
+  assetId: string;
+  physicalPrerequisites: {
+    state: string;
+    verification: string;
+    custody: string;
+    location: string | null;
+    complete: boolean;
+  };
+  operations: {
+    stage: string;
+    nextAction: { label: string; actor: "STAFF" | "SYSTEM" | "PROVIDER" | "NONE"; target: string };
+    nextActor: "STAFF" | "SYSTEM" | "PROVIDER" | "NONE";
+    blockers: string[];
+  };
+  launchReadiness: { state: "READY" | "BLOCKED"; blockers: string[] };
+  reconciliation: {
+    ownership: {
+      expectedUnits: string | null;
+      allocatedUnits: string | null;
+      differenceUnits: string | null;
+      state: "RECONCILED" | "NOT_ISSUED";
+    };
+    offering: { state: string; reconciled: boolean | null };
+  };
+  availableCommands: {
+    recordValuation: boolean;
+    configureOwnership: boolean;
+    issueOwnership: boolean;
+    reviewOffering: boolean;
+    publish: boolean;
+    activateMarket: boolean;
+    openOffering: boolean;
+  };
+};
 
 export type AdminOverview = {
   users: { active: number };

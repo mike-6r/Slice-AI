@@ -138,6 +138,13 @@ export class LifecycleController {
       : this.lifecycle.operationsQueue(req.actor!, input);
   }
 
+  @Get('admin/assets/:id/operations')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('admin.console.read')
+  operationDetail(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.lifecycle.operationDetail(req.actor!, id);
+  }
+
   @Post('admin/assets/:id/handoff')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('custody.manage')

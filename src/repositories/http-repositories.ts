@@ -5340,6 +5340,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getOperationsBoard(input) {
         return mapOperationsBoard(await client.get<unknown>("/admin/assets/operations", input));
       },
+      async getOperationDetail(assetId) {
+        return client.get<import("@/data/repositories").AssetOperationDetailProjection>(
+          `/admin/assets/${encodeURIComponent(assetId)}/operations`,
+        );
+      },
       async handoff(assetId, input) {
         return client.request(`/admin/assets/${assetId}/handoff`, {
           method: "POST",
