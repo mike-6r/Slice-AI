@@ -70,7 +70,7 @@ const operationsQuery = z
     sort: z.string().trim().max(40).optional(),
     sortDirection: z.enum(['asc', 'desc']).optional(),
     fixture: z.enum(['NORMAL', 'TEST', 'ALL']).optional(),
-    workType: z.enum(['ALL', 'PRODUCTION', 'DEMO_QA']).default('ALL'),
+    workType: z.enum(['ALL', 'PRODUCTION', 'DEMO_QA']).default('PRODUCTION'),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();

@@ -1,9 +1,11 @@
 import {
+  betaIntakeFixtureWhere,
   intakeAllowedActions,
   intakeCounts,
   intakeNextAction,
   intakeStage,
   intakeStageReason,
+  resolveIntakeWorkType,
 } from './admin-intake-projections';
 
 const base = (overrides: Partial<Parameters<typeof intakeStage>[0]> = {}) => ({
@@ -66,7 +68,9 @@ describe('admin intake projections', () => {
       actor: 'STAFF',
       needsStaffAction: true,
     });
-    expect(intakeAllowedActions({ ...item, stage })).toEqual(['CONFIRM_RECEIPT']);
+    expect(intakeAllowedActions({ ...item, stage })).toEqual([
+      'CONFIRM_RECEIPT',
+    ]);
   });
 
   it('keeps carrier delivery, Slice receipt, verification, and custody boundaries separate', () => {
@@ -141,6 +145,37 @@ describe('admin intake projections', () => {
       accepted: 1,
       needsAction: 2,
       exceptions: 1,
+    });
+  });
+});
+
+describe('Physical Intake fixture boundary', () => {
+  it('defaults legacy or missing work-type input to production', () => {
+    expect(resolveIntakeWorkType(undefined)).toBe('PRODUCTION');
+    expect(resolveIntakeWorkType('ALL')).toBe('PRODUCTION');
+    expect(resolveIntakeWorkType('PRODUCTION')).toBe('PRODUCTION');
+    expect(resolveIntakeWorkType('DEMO_QA')).toBe('DEMO_QA');
+  });
+
+  it('keeps explicit staging fixtures out of the production projection', () => {
+    expect(betaIntakeFixtureWhere()).toMatchObject({
+      OR: expect.arrayContaining([
+        {
+          owner: {
+            profile: { publicUsername: { startsWith: 'slice-demo-' } },
+          },
+        },
+        { controlledBetaBypass: { isNot: null } },
+        {
+          asset: {
+            is: {
+              OR: expect.arrayContaining([
+                { slug: { startsWith: 'qa-test-' } },
+              ]),
+            },
+          },
+        },
+      ]),
     });
   });
 });

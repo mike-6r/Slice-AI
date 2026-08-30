@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { STAGING_DEMO_PIKACHU_SUBMISSION_ID } from '../lifecycle/domain/staging-demo-physical.policy';
 
 export type AdminAttention = {
   id: string;
@@ -23,6 +24,50 @@ export function isBetaFixtureSubmission(metadata: Prisma.JsonValue | null) {
     (typeof value.certificationNumber === 'string' &&
       value.certificationNumber.startsWith('STG-'))
   );
+}
+
+/**
+ * Production Physical Intake must never be populated by the staging showcase,
+ * controlled beta bypasses, or explicit owner-demo work. The records remain
+ * queryable for controlled QA, but are not operational intake work.
+ */
+export function betaIntakeFixtureWhere(): Prisma.AssetSubmissionWhereInput {
+  return {
+    OR: [
+      { id: STAGING_DEMO_PIKACHU_SUBMISSION_ID },
+      { stagingDemoPhysicalIntake: { isNot: null } },
+      { controlledBetaBypass: { isNot: null } },
+      {
+        owner: {
+          profile: { publicUsername: { startsWith: 'slice-demo-' } },
+        },
+      },
+      {
+        asset: {
+          is: {
+            OR: [
+              { slug: { startsWith: 'slice-demo-' } },
+              { slug: { startsWith: 'qa-test-' } },
+            ],
+          },
+        },
+      },
+      { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
+      {
+        declaredMetadata: {
+          path: ['certificationNumber'],
+          string_starts_with: 'STG-',
+        },
+      },
+    ],
+  };
+}
+
+/** Legacy ALL requests are intentionally safe: they resolve to production. */
+export function resolveIntakeWorkType(
+  value: 'ALL' | 'PRODUCTION' | 'DEMO_QA' | undefined,
+): 'PRODUCTION' | 'DEMO_QA' {
+  return value === 'DEMO_QA' ? 'DEMO_QA' : 'PRODUCTION';
 }
 
 export function ageLabel(updatedAt: Date) {
@@ -208,7 +253,8 @@ export function intakeCounts(
   return {
     all: items.length,
     accepted: items.filter((item) => item.stage === 'AWAITING_SHIPMENT').length,
-    awaitingDropOff: items.filter((item) => item.stage === 'AWAITING_DROP_OFF').length,
+    awaitingDropOff: items.filter((item) => item.stage === 'AWAITING_DROP_OFF')
+      .length,
     awaitingDestination: items.filter(
       (item) => item.stage === 'AWAITING_DESTINATION',
     ).length,

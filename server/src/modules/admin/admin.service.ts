@@ -34,7 +34,9 @@ import {
   intakeNextAction,
   intakeStage,
   intakeStageReason,
+  betaIntakeFixtureWhere,
   isBetaFixtureSubmission,
+  resolveIntakeWorkType,
   stageLabel,
 } from './admin-intake-projections';
 import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
@@ -2876,31 +2878,14 @@ export class AdminService {
     },
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
-    const workType =
-      input.workType ??
-      (input.fixture === 'TEST'
-        ? 'DEMO_QA'
-        : input.fixture === 'NORMAL'
-          ? 'PRODUCTION'
-          : 'ALL');
-    const demoOrQaWhere: Prisma.AssetSubmissionWhereInput = {
-      OR: [
-        { stagingDemoPhysicalIntake: { isNot: null } },
-        { controlledBetaBypass: { isNot: null } },
-        { asset: { is: { slug: { startsWith: 'slice-demo-' } } } },
-        { declaredMetadata: { path: ['betaFixtureRetired'], equals: true } },
-        {
-          declaredMetadata: {
-            path: ['certificationNumber'],
-            string_starts_with: 'STG-',
-          },
-        },
-      ],
-    };
+    const workType = resolveIntakeWorkType(
+      input.workType ?? (input.fixture === 'TEST' ? 'DEMO_QA' : 'PRODUCTION'),
+    );
+    const demoOrQaWhere = betaIntakeFixtureWhere();
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
-        ...(this.config.isBeta && workType !== 'ALL'
+        ...(this.config.isBeta
           ? [workType === 'DEMO_QA' ? demoOrQaWhere : { NOT: [demoOrQaWhere] }]
           : []),
         ...(input.vaultId ? [{ intake: { vaultId: input.vaultId } }] : []),
@@ -3210,7 +3195,9 @@ export class AdminService {
             ? 'OWNER_DEMO'
             : item.controlledBetaBypass
               ? 'CONTROLLED_QA'
-              : isBetaFixtureSlug(item.asset?.slug ?? '') ||
+              : item.owner.profile?.publicUsername?.startsWith('slice-demo-') ||
+                  item.asset?.slug.startsWith('qa-test-') ||
+                  isBetaFixtureSlug(item.asset?.slug ?? '') ||
                   isBetaFixtureSubmission(item.declaredMetadata)
                 ? 'AUTOMATED_TEST'
                 : 'PRODUCTION';

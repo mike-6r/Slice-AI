@@ -483,7 +483,6 @@ function AdminConsole() {
       intakeCarrier,
       intakeDateFrom,
       intakeDateTo,
-      intakeFixture,
       reviewSort,
       reviewPageParam,
       selectedIntake,
@@ -498,11 +497,7 @@ function AdminConsole() {
               carrier: selectedIntake ? undefined : intakeCarrier,
               dateFrom: selectedIntake ? undefined : intakeDateFrom,
               dateTo: selectedIntake ? undefined : intakeDateTo,
-              workType: (selectedIntake
-                ? "ALL"
-                : ["ALL", "PRODUCTION", "DEMO_QA"].includes(intakeFixture ?? "")
-                  ? intakeFixture
-                  : "ALL") as "ALL" | "PRODUCTION" | "DEMO_QA",
+              workType: "PRODUCTION" as const,
               sort: reviewSort === "oldest-in-stage" ? "OLDEST_IN_STAGE" : "RECENTLY_UPDATED",
               page: selectedIntake ? 1 : Math.max(1, Number(reviewPageParam ?? 1)),
               pageSize: 10,
@@ -928,7 +923,6 @@ function AdminConsole() {
             carrier={intakeCarrier ?? ""}
             dateFrom={intakeDateFrom ?? ""}
             dateTo={intakeDateTo ?? ""}
-            fixture={intakeFixture ?? "ALL"}
             sort={reviewSort ?? "recently-updated"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             selectedIntake={selectedIntake}
@@ -1403,7 +1397,6 @@ function PhysicalIntakeWorkspace({
   carrier,
   dateFrom,
   dateTo,
-  fixture,
   sort,
   page,
   selectedIntake,
@@ -1424,7 +1417,6 @@ function PhysicalIntakeWorkspace({
   carrier: string;
   dateFrom: string;
   dateTo: string;
-  fixture: string;
   sort: string;
   page: number;
   selectedIntake: string | undefined;
@@ -1456,7 +1448,6 @@ function PhysicalIntakeWorkspace({
       carrier={carrier}
       dateFrom={dateFrom}
       dateTo={dateTo}
-      fixture={fixture}
       sort={sort}
       page={page}
       selectedIntake={selectedIntake}
@@ -1491,7 +1482,6 @@ function PhysicalIntakeBoard({
   carrier,
   dateFrom,
   dateTo,
-  fixture,
   sort,
   page,
   selectedIntake,
@@ -1509,7 +1499,6 @@ function PhysicalIntakeBoard({
   carrier: string;
   dateFrom: string;
   dateTo: string;
-  fixture: string;
   sort: string;
   page: number;
   selectedIntake: string | undefined;
@@ -1528,10 +1517,6 @@ function PhysicalIntakeBoard({
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
-  const [fixtureMode, setFixtureMode] = useState<"ALL" | "PRODUCTION" | "DEMO_QA">(
-    (["ALL", "PRODUCTION", "DEMO_QA"].includes(fixture) ? fixture : "ALL") as
-      "ALL" | "PRODUCTION" | "DEMO_QA",
-  );
   const receiptChecklist = {
     packageReceived: true,
     correctIntakeReference: true,
@@ -1544,11 +1529,10 @@ function PhysicalIntakeBoard({
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (draftSearch.trim() !== search)
-        updateSearch({ q: draftSearch.trim() || undefined, fixture: fixtureMode });
+      if (draftSearch.trim() !== search) updateSearch({ q: draftSearch.trim() || undefined });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [draftSearch, search, updateSearch, fixtureMode]);
+  }, [draftSearch, search, updateSearch]);
   const receipt = useMutation({
     mutationFn: (id: string) =>
       services.repositories.admin.confirmIntakeReceipt(id, {
@@ -1743,19 +1727,6 @@ function PhysicalIntakeBoard({
             ))}
           </select>
           <select
-            aria-label="Fixture visibility"
-            value={fixtureMode}
-            onChange={(event) => {
-              const mode = event.target.value as "ALL" | "PRODUCTION" | "DEMO_QA";
-              setFixtureMode(mode);
-              updateSearch({ fixture: mode, page: "1" });
-            }}
-          >
-            <option value="ALL">Work type: All</option>
-            <option value="PRODUCTION">Work type: Production</option>
-            <option value="DEMO_QA">Work type: Demo / QA</option>
-          </select>
-          <select
             aria-label="Sort intake"
             value={sort}
             onChange={(event) => updateSearch({ sort: event.target.value, page: "1" })}
@@ -1774,7 +1745,6 @@ function PhysicalIntakeBoard({
                 dateFrom: undefined,
                 dateTo: undefined,
                 q: undefined,
-                fixture: "ALL",
                 sort: "recently-updated",
                 page: "1",
               })
