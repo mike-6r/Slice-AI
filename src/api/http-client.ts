@@ -35,8 +35,17 @@ export const resolveApiOrigin = (
     if (!value) return false;
     try {
       const parsed = new URL(value);
+      // URL accepts some punctuation in a hostname (for example a trailing
+      // semicolon). A shell-escaped deployment value such as
+      // `https://staging.slice.test;` would otherwise pass URL parsing and
+      // make every browser API request target an invalid host.
+      const hasValidHostname = parsed.hostname
+        .split(".")
+        .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
       return (
-        (parsed.protocol === "http:" || parsed.protocol === "https:") && Boolean(parsed.hostname)
+        (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+        Boolean(parsed.hostname) &&
+        hasValidHostname
       );
     } catch {
       return false;

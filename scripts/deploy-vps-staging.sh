@@ -7,6 +7,17 @@ set -euo pipefail
 
 release_dir="${1:?usage: deploy-vps-staging.sh /opt/slice/releases/<release>}"
 api_url="${VITE_API_BASE_URL:?VITE_API_BASE_URL must be the public staging origin}"
+if [[ "${api_url}" == *';'* || "${api_url}" == *$'\n'* || "${api_url}" == *$'\r'* || "${api_url}" == *' '* ]]; then
+  echo "VITE_API_BASE_URL must be a clean public origin (for example https://staging.slicecollectable.com)." >&2
+  exit 1
+fi
+case "${api_url}" in
+  http://*|https://*) ;;
+  *)
+    echo "VITE_API_BASE_URL must start with http:// or https://." >&2
+    exit 1
+    ;;
+esac
 # Keep the client-side runtime policy aligned with the staging API. Without an
 # explicit VITE_APP_ENV, the frontend defaults to development and can render
 # retired showcase/demo controls even though the backend is in Beta mode.
@@ -19,7 +30,8 @@ fi
 
 cd "${release_dir}"
 npm ci
-VITE_APP_ENV="${frontend_app_env}" \
+NODE_ENV=production \
+  VITE_APP_ENV="${frontend_app_env}" \
   VITE_DATA_SOURCE=api \
   VITE_API_BASE_URL="${api_url}" \
   npm run build

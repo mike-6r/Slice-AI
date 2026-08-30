@@ -22,6 +22,9 @@ describe("ApiClient", () => {
     expect(resolveApiOrigin("not-an-origin", "https://staging.slice.test")).toBe(
       "https://staging.slice.test",
     );
+    expect(resolveApiOrigin("https://staging.slice.test;", "https://staging.slice.test")).toBe(
+      "https://staging.slice.test",
+    );
   });
 
   afterEach(() => {
