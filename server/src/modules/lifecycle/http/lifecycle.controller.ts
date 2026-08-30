@@ -74,7 +74,23 @@ const operationsQuery = z
     q: z.string().trim().max(160).optional(),
     category: z.string().trim().max(80).optional(),
     grader: z.string().trim().max(40).optional(),
-    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+    stage: z.string().trim().max(48).optional(),
+    valuation: z.string().trim().max(48).optional(),
+    ownership: z.string().trim().max(48).optional(),
+    offering: z.string().trim().max(48).optional(),
+    market: z.string().trim().max(48).optional(),
+    workType: z.enum(['PRODUCTION', 'OWNER_DEMO', 'CONTROLLED_QA']).optional(),
+    attention: z.enum(['REQUIRES_ATTENTION']).optional(),
+    sort: z
+      .enum([
+        'NEEDS_ACTION',
+        'UPDATED_DESC',
+        'NEWEST',
+        'STAGE_OLDEST',
+        'TITLE',
+        'READY_FIRST',
+      ])
+      .optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
     legacy: z.coerce.boolean().default(false),
@@ -132,7 +148,13 @@ export class LifecycleController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.write(req, key, () =>
-      this.lifecycle.handoff(req.actor!, id, parse(handoff, body), req.requestId ?? 'unknown', key!),
+      this.lifecycle.handoff(
+        req.actor!,
+        id,
+        parse(handoff, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
     );
   }
   @Post('admin/assets/:id/custody/transitions')
@@ -146,7 +168,13 @@ export class LifecycleController {
   ) {
     return this.write(req, key, () => {
       const input = parse(custody, body);
-      return this.lifecycle.custody(req.actor!, id, input, req.requestId ?? 'unknown', key!);
+      return this.lifecycle.custody(
+        req.actor!,
+        id,
+        input,
+        req.requestId ?? 'unknown',
+        key!,
+      );
     });
   }
   @Post('admin/assets/:id/valuations/decisions')

@@ -165,6 +165,9 @@ function AdminConsole() {
     grading: catalogueGrading,
     collector: catalogueCollector,
     workType: catalogueWorkType,
+    operationsStage,
+    operationsOffering,
+    operationsAttention,
     accountQ,
     accountType,
     accountStatus,
@@ -1102,7 +1105,14 @@ function AdminConsole() {
             query={reviewQuery ?? ""}
             category={operationsCategory ?? ""}
             grader={operationsGrader ?? ""}
-            priority={operationsPriority ?? ""}
+            stage={operationsStage ?? ""}
+            valuation={catalogueValuation ?? ""}
+            ownership={catalogueOwnership ?? ""}
+            offering={operationsOffering ?? ""}
+            market={catalogueMarket ?? ""}
+            workType={catalogueWorkType ?? ""}
+            attention={operationsAttention ?? ""}
+            sort={reviewSort ?? "NEEDS_ACTION"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             update={(patch) =>
               void navigate({ search: (current) => ({ ...current, ...patch }), replace: true })

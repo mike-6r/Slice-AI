@@ -64,6 +64,9 @@ export type AdminSearch = {
   grading?: string;
   collector?: string;
   workType?: string;
+  operationsStage?: string;
+  operationsOffering?: string;
+  operationsAttention?: string;
   accountQ?: string;
   accountType?: string;
   accountStatus?: string;
@@ -168,6 +171,9 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     grading: stringValue("grading"),
     collector: stringValue("collector"),
     workType: stringValue("workType"),
+    operationsStage: stringValue("operationsStage"),
+    operationsOffering: stringValue("operationsOffering"),
+    operationsAttention: stringValue("operationsAttention"),
     user: nonEmptyValue("user"),
     asset: nonEmptyValue("asset"),
     cataloguePreview: nonEmptyValue("cataloguePreview"),

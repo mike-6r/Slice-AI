@@ -194,7 +194,14 @@ export interface AssetLifecycleRepository {
     q?: string;
     category?: string;
     grader?: string;
-    priority?: string;
+    stage?: string;
+    valuation?: string;
+    ownership?: string;
+    offering?: string;
+    market?: string;
+    workType?: string;
+    attention?: string;
+    sort?: string;
     page?: number;
     pageSize?: number;
   }): Promise<AssetOperationsBoardResponse>;
@@ -1367,61 +1374,65 @@ export type AssetOperationsBoardItem = {
     gradeDate: string | null;
   };
   category: { name: string; set: string | null; variant: string | null };
-  research: {
-    status: "COMPLETED" | "IN_PROGRESS" | "UNAVAILABLE" | "NOT_REQUESTED";
-    asOf: string | null;
+  workType: "PRODUCTION" | "OWNER_DEMO" | "CONTROLLED_QA";
+  eligibleForAssetOperations: boolean;
+  physicalPrerequisiteSummary: {
+    state: string;
+    verification: string;
+    custody: string;
+    location: string | null;
+    complete: boolean;
   };
+  entryBlockers: string[];
+  valuation: { state: "PENDING" | "VALUED"; valueMinor: string | null; currency: string | null };
+  ownership: { state: string; issuedUnits: string | null; totalUnits: string | null };
+  offering: { state: string; offeringId: string | null };
+  market: { state: string; publicationStatus: string | null; tradingStatus: string | null };
+  launchReadiness: { state: "BLOCKED" | "READY"; blockers: string[] };
   currentStage:
-    | "AWAITING_VERIFICATION"
-    | "VERIFICATION_IN_PROGRESS"
-    | "AWAITING_VALUATION"
-    | "CUSTODY_PENDING"
-    | "VAULT_READY"
-    | "MARKET_READY"
+    | "PHYSICAL_PREREQUISITE"
+    | "VALUATION"
+    | "OWNERSHIP_SETUP"
+    | "OFFERING_SETUP"
+    | "LAUNCH_READINESS"
+    | "READY_FOR_LAUNCH"
     | "MARKET_LIVE"
-    | "EXCEPTION";
+    | "RESTRICTION";
   stageSince: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  exception: {
-    type: string;
-    severity: "HIGH" | "MEDIUM" | "LOW";
-    openedAt: string;
-    summary: string;
-    detailTab: string;
-  } | null;
-  recommendedDetailTab: string;
+  updatedAt: string;
+  attention: { required: boolean; reasons: string[]; severity: "NONE" | "MEDIUM" | "HIGH" };
+  exception: { type: string; summary: string } | null;
+  recommendedDetailTab: "overview" | "valuation" | "ownership" | "market" | "intake";
   submittedAt: string | null;
   sourceContext: {
     submissionId: string;
     receivedAt: string | null;
-    receiptConfirmedAt: string;
+    receiptConfirmedAt: string | null;
     vault: string;
   };
   assignee: { id: string; displayName: string } | null;
-  blockers: string[];
-  readiness: { status: "BLOCKED" | "READY"; blockingCodes: string[] };
-  nextAction: string;
-  eligibleActions: string[];
+  nextAction: {
+    label: string;
+    actor: "COLLECTOR" | "STAFF" | "SYSTEM" | "NONE";
+    target: "INTAKE" | "VALUATION" | "OWNERSHIP" | "MARKET" | "COLLECTIBLE";
+  };
   ageDays: number;
-  marketLifecycle?: MarketLifecycleProjection;
 };
 export type AssetOperationsBoardResponse = {
   items: AssetOperationsBoardItem[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
-  counts: Record<AssetOperationsBoardItem["currentStage"], number>;
-  operationsOverview: Array<{
-    stage: AssetOperationsBoardItem["currentStage"];
-    label: string;
-    count: number;
-  }>;
-  stageFlowToday: Array<{ type: string; label: string; count: number }>;
-  recentActivity: Array<{
-    id: string;
-    type: string;
-    title: string;
-    reference: string;
-    occurredAt: string;
-  }>;
+  counts: {
+    all: number;
+    needsAction: number;
+    valuationPending: number;
+    ownershipPending: number;
+    offeringSetup: number;
+    launchReadiness: number;
+    readyForLaunch: number;
+    marketLive: number;
+    restrictions: number;
+    physicalPrerequisite: number;
+  };
 };
 
 export type AdminCollectibleDetail = {

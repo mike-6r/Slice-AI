@@ -22,7 +22,12 @@ import {
   assertMoney,
   evaluateReadiness,
 } from '../domain/publication.policy';
-import { deriveMarketLifecycle } from '../../market-lifecycle/domain/market-lifecycle';
+import {
+  catalogueCustodyState,
+  cataloguePhysicalState,
+  catalogueVerificationState,
+  type CatalogueLifecycleInput,
+} from '../../admin/admin-catalogue-projections';
 import {
   hasStagingDemoPhysicalReadiness,
   isExplicitPikachuOwnerDemoSubmission,
@@ -38,19 +43,26 @@ type OperationsBoardInput = {
   q?: string;
   category?: string;
   grader?: string;
-  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  stage?: string;
+  valuation?: string;
+  ownership?: string;
+  offering?: string;
+  market?: string;
+  workType?: string;
+  attention?: string;
+  sort?: string;
   page?: number;
   pageSize?: number;
 };
 type OperationsStage =
-  | 'AWAITING_VERIFICATION'
-  | 'VERIFICATION_IN_PROGRESS'
-  | 'AWAITING_VALUATION'
-  | 'CUSTODY_PENDING'
-  | 'VAULT_READY'
-  | 'MARKET_READY'
+  | 'PHYSICAL_PREREQUISITE'
+  | 'VALUATION'
+  | 'OWNERSHIP_SETUP'
+  | 'OFFERING_SETUP'
+  | 'LAUNCH_READINESS'
+  | 'READY_FOR_LAUNCH'
   | 'MARKET_LIVE'
-  | 'EXCEPTION';
+  | 'RESTRICTION';
 type BoardAsset = {
   id: string;
   publicId: string;
@@ -80,7 +92,9 @@ type BoardAsset = {
     marketResearch: Array<{ state: string; collectedAt: Date }>;
     intake: {
       status: string;
+      deliveryMethod: 'SHIPMENT' | 'IN_PERSON';
       selectedAt: Date;
+      updatedAt: Date;
       receivedAt: Date | null;
       shipment: {
         status: string;
@@ -89,6 +103,8 @@ type BoardAsset = {
       } | null;
       receipt: { confirmedAt: Date } | null;
       vault: { displayName: string };
+      verification: { status: string; updatedAt: Date } | null;
+      exceptions: Array<{ code: string; severity: string; createdAt: Date }>;
     } | null;
     reviews: Array<{
       status: string;
@@ -96,7 +112,12 @@ type BoardAsset = {
       completedAt: Date | null;
     }>;
   }>;
-  valuationDecisions: Array<{ status: string; decidedAt: Date }>;
+  valuationDecisions: Array<{
+    status: string;
+    decidedAt: Date;
+    valueMinor: bigint;
+    currency: string;
+  }>;
   valuationEvidence: Array<{
     sourceType: string;
     sourceRef: string | null;
@@ -112,8 +133,10 @@ type BoardAsset = {
     issuedUnits: bigint;
   } | null;
   ownershipSupplyPolicy: { status: string } | null;
+  initialOffering: { id: string; status: string; updatedAt: Date } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   controlledBetaBypass: { id: string } | null;
+  stagingDemoPhysicalIntake: { id: string } | null;
 };
 
 export const CONTROLLED_BETA_UMBREON_FIXTURE_KEY =
@@ -201,10 +224,11 @@ export class LifecycleService {
       };
     }
     const page = input.page ?? 1;
-    const pageSize = input.pageSize ?? 10;
+    const pageSize = input.pageSize ?? 25;
     const assets = await this.db.asset.findMany({
       where: {
         status: { not: 'ARCHIVED' },
+        submissions: { some: { status: 'APPROVED' } },
         ...(input.q
           ? {
               OR: [
@@ -216,6 +240,39 @@ export class LifecycleService {
                   certificationNumber: {
                     contains: input.q,
                     mode: 'insensitive',
+                  },
+                },
+                {
+                  submissions: {
+                    some: {
+                      OR: [
+                        { id: { contains: input.q, mode: 'insensitive' } },
+                        {
+                          owner: {
+                            profile: {
+                              is: {
+                                displayName: {
+                                  contains: input.q,
+                                  mode: 'insensitive',
+                                },
+                              },
+                            },
+                          },
+                        },
+                        {
+                          owner: {
+                            profile: {
+                              is: {
+                                publicUsername: {
+                                  contains: input.q,
+                                  mode: 'insensitive',
+                                },
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
                   },
                 },
               ],
@@ -235,6 +292,7 @@ export class LifecycleService {
         collectibleSet: true,
         gradeScaleEntry: { include: { company: true } },
         submissions: {
+          where: { status: 'APPROVED' },
           orderBy: { createdAt: 'desc' },
           take: 1,
           include: {
@@ -247,7 +305,19 @@ export class LifecycleService {
               },
             },
             media: { where: { status: 'SAFE', deletedAt: null }, take: 2 },
-            intake: { include: { vault: true, shipment: true, receipt: true } },
+            intake: {
+              include: {
+                vault: true,
+                shipment: true,
+                receipt: true,
+                verification: true,
+                exceptions: {
+                  where: { resolvedAt: null },
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                },
+              },
+            },
             reviews: { orderBy: { createdAt: 'desc' }, take: 1 },
             marketResearch: {
               orderBy: { collectedAt: 'desc' },
@@ -272,61 +342,31 @@ export class LifecycleService {
         publication: true,
         ownershipSupply: true,
         ownershipSupplyPolicy: true,
+        initialOffering: true,
         tradingMarket: true,
         controlledBetaBypass: true,
+        stagingDemoPhysicalIntake: true,
       },
-      orderBy: { updatedAt: 'asc' },
+      orderBy: { updatedAt: 'desc' },
+      // The returned page is authoritative and all filters run on the server.
+      // We deliberately bound the discovery projection until the materialized
+      // operations index lands; this prevents an unbounded administrative read.
       take: 500,
     });
-    const projected = (
+    const allProjected = (
       await Promise.all(
         assets.map((asset) => operationsItem(asset, this.storage)),
       )
-    )
-      .filter(
-        (
-          item,
-        ): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
-          Boolean(item),
-      )
-      .filter(
-        (item) =>
-          !input.tab ||
-          input.tab === 'all' ||
-          tabMatches(item.currentStage, input.tab),
-      )
-      .filter((item) => !input.priority || item.priority === input.priority)
-      .sort(
-        (left, right) =>
-          priorityRank(left.priority) - priorityRank(right.priority) ||
-          new Date(left.stageSince).getTime() -
-            new Date(right.stageSince).getTime() ||
-          left.id.localeCompare(right.id),
-      );
-    const allProjected = await Promise.all(
-      assets.map((asset) => operationsItem(asset, this.storage)),
+    ).filter(
+      (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
+        Boolean(item),
     );
-    const counts = stageCounts(
-      allProjected.filter(
-        (
-          item,
-        ): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
-          Boolean(item),
-      ),
-    );
+    const counts = operationsCounts(allProjected);
+    const projected = allProjected
+      .filter((item) => operationsMatches(item, input))
+      .sort((left, right) => operationsSort(left, right, input.sort));
     const start = (page - 1) * pageSize;
     const items = projected.slice(start, start + pageSize);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const activity = await this.db.auditEvent.findMany({
-      where: { resourceType: 'asset', createdAt: { gte: today } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
-    const flow = activity.reduce<Record<string, number>>((result, event) => {
-      result[event.action] = (result[event.action] ?? 0) + 1;
-      return result;
-    }, {});
     return {
       items,
       pagination: {
@@ -336,21 +376,6 @@ export class LifecycleService {
         totalPages: Math.max(1, Math.ceil(projected.length / pageSize)),
       },
       counts,
-      operationsOverview: Object.entries(counts).map(([stage, count]) => ({
-        stage,
-        label: stageLabel(stage),
-        count,
-      })),
-      stageFlowToday: Object.entries(flow)
-        .slice(0, 8)
-        .map(([type, count]) => ({ type, label: stageLabel(type), count })),
-      recentActivity: activity.slice(0, 10).map((event) => ({
-        id: event.id,
-        type: event.action,
-        title: stageLabel(event.action),
-        reference: event.resourceId ?? '',
-        occurredAt: event.createdAt.toISOString(),
-      })),
     };
   }
 
@@ -1238,76 +1263,118 @@ export class LifecycleService {
 async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
   const submission = asset.submissions[0];
   const intake = submission?.intake;
-  if (!submission || submission.status !== 'APPROVED' || !intake?.receipt)
-    return null;
-  const review = submission.reviews[0];
   const decision = asset.valuationDecisions[0];
+  if (!submission || submission.status !== 'APPROVED') return null;
+  const lifecycle: CatalogueLifecycleInput = {
+    submissionStatus: submission.status,
+    intake: intake
+      ? {
+          status: intake.status,
+          deliveryMethod: intake.deliveryMethod,
+          shipmentStatus: intake.shipment?.status ?? null,
+          hasReceipt: Boolean(intake.receipt),
+          verificationStatus: intake.verification?.status ?? null,
+          hasOpenException: intake.exceptions.length > 0,
+        }
+      : null,
+    custodyStatus: asset.custodyRecord?.status ?? null,
+    hasValuation: Boolean(decision),
+    ownershipPolicyStatus: asset.ownershipSupplyPolicy?.status ?? null,
+    ownershipSupplyStatus: asset.ownershipSupply?.status ?? null,
+    issuedUnits: asset.ownershipSupply?.issuedUnits ?? null,
+    offeringStatus: asset.initialOffering?.status ?? null,
+    publicationStatus: asset.publication?.status ?? null,
+    marketStatus: asset.tradingMarket?.status ?? null,
+    tradingEnabled: asset.tradingMarket?.tradingEnabled ?? null,
+  };
+  const physicalState = cataloguePhysicalState(lifecycle);
+  const verificationState = catalogueVerificationState(lifecycle);
+  const custodyState = catalogueCustodyState(lifecycle);
+  const entryBlockers = physicalEntryBlockers(
+    physicalState,
+    verificationState,
+    custodyState,
+  );
+  const eligibleForAssetOperations = entryBlockers.length === 0;
   const custodyException = asset.custodyRecord?.status === 'EXCEPTION';
-  const shipmentException = intake.shipment?.status === 'EXCEPTION';
-  const publicationException = asset.publication?.status === 'UNPUBLISHED';
-  const exception =
-    shipmentException || custodyException || publicationException;
-  const verified =
-    review?.status === 'COMPLETED' ||
-    ['VERIFIED', 'PUBLISHED'].includes(asset.status);
-  const secured = asset.custodyRecord?.status === 'SECURED';
+  const intakeException = Boolean(intake?.exceptions.length);
+  const marketRestriction = asset.tradingMarket?.status === 'HALTED';
+  const exception = custodyException || intakeException;
+  const ownership = ownershipProjection(asset);
+  const offering = offeringProjection(asset);
+  const market = marketProjection(asset);
   const covered = asset.insuranceCoverage.some(
     (item) => item.status === 'ACTIVE' && item.expiresAt > new Date(),
   );
-  const readiness = evaluateReadiness({
+  const publicationReadiness = evaluateReadiness({
     cataloguePublished: asset.status !== 'ARCHIVED',
-    verificationApproved: verified,
+    verificationApproved: verificationState === 'VERIFIED',
     activeDecision: Boolean(decision),
-    custodySecured: secured,
+    custodySecured: custodyState === 'IN_CUSTODY',
     activeCoverage: covered,
     hasException: exception,
   });
-  let currentStage: OperationsStage;
-  let stageSince: Date;
-  let detailTab = 'verification';
+  const launchBlockers = [
+    ...publicationReadiness.blockingCodes,
+    ...(ownership.state === 'ISSUED' ? [] : ['OWNERSHIP_ISSUANCE_REQUIRED']),
+    ...(offering.state === 'OPEN' || offering.state === 'SOLD_OUT'
+      ? []
+      : ['INITIAL_OFFERING_REQUIRED']),
+  ];
+  const launchReadiness = {
+    state: launchBlockers.length ? ('BLOCKED' as const) : ('READY' as const),
+    blockers: [...new Set(launchBlockers)],
+  };
+  let currentStage: OperationsStage = 'PHYSICAL_PREREQUISITE';
+  let stageSince: Date = intake?.updatedAt ?? asset.updatedAt;
+  let detailTab: 'overview' | 'valuation' | 'ownership' | 'market' | 'intake' =
+    'intake';
   if (exception) {
-    currentStage = 'EXCEPTION';
+    currentStage = 'RESTRICTION';
     stageSince =
-      intake.shipment?.deliveredAt ??
+      intake?.exceptions[0]?.createdAt ??
       asset.custodyRecord?.updatedAt ??
       asset.updatedAt;
-    detailTab = custodyException
-      ? 'custody'
-      : publicationException
-        ? 'marketplace'
-        : 'shipping';
-  } else if (!verified) {
-    currentStage =
-      review?.status === 'CLAIMED'
-        ? 'VERIFICATION_IN_PROGRESS'
-        : 'AWAITING_VERIFICATION';
-    stageSince =
-      review?.createdAt ?? intake.receivedAt ?? intake.receipt.confirmedAt;
+    detailTab = 'intake';
+  } else if (!eligibleForAssetOperations) {
+    currentStage = 'PHYSICAL_PREREQUISITE';
+    stageSince = intake?.updatedAt ?? asset.updatedAt;
   } else if (!decision) {
-    currentStage = 'AWAITING_VALUATION';
-    stageSince = review?.completedAt ?? asset.updatedAt;
+    currentStage = 'VALUATION';
+    stageSince = asset.updatedAt;
     detailTab = 'valuation';
-  } else if (!secured) {
-    currentStage = 'CUSTODY_PENDING';
-    stageSince = asset.custodyRecord?.updatedAt ?? decision.decidedAt;
-    detailTab = 'custody';
-  } else if (asset.publication?.status === 'PUBLISHED') {
+  } else if (ownership.state !== 'ISSUED') {
+    currentStage = 'OWNERSHIP_SETUP';
+    stageSince =
+      asset.ownershipSupplyPolicy?.status === 'PROPOSED'
+        ? asset.updatedAt
+        : decision.decidedAt;
+    detailTab = 'ownership';
+  } else if (
+    !['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(offering.state)
+  ) {
+    currentStage = 'OFFERING_SETUP';
+    stageSince = asset.initialOffering?.updatedAt ?? asset.updatedAt;
+    detailTab = 'market';
+  } else if (market.state === 'MARKET_LIVE') {
     currentStage = 'MARKET_LIVE';
-    stageSince = asset.publication.updatedAt;
-    detailTab = 'marketplace';
-  } else if (readiness.status === 'READY') {
-    currentStage = 'MARKET_READY';
+    stageSince = asset.publication?.updatedAt ?? asset.updatedAt;
+    detailTab = 'market';
+  } else if (launchReadiness.state === 'READY') {
+    currentStage = 'READY_FOR_LAUNCH';
     stageSince =
       asset.publication?.updatedAt ??
-      asset.custodyRecord?.updatedAt ??
+      asset.initialOffering?.updatedAt ??
       decision.decidedAt;
-    detailTab = 'marketplace';
+    detailTab = 'market';
   } else {
-    currentStage = 'VAULT_READY';
-    stageSince = asset.custodyRecord?.updatedAt ?? decision.decidedAt;
-    detailTab = 'custody';
+    currentStage = 'LAUNCH_READINESS';
+    stageSince =
+      asset.publication?.updatedAt ??
+      asset.initialOffering?.updatedAt ??
+      decision.decidedAt;
+    detailTab = 'market';
   }
-  const research = submission.marketResearch[0];
   const source = asset.valuationEvidence.find(
     (item) => item.sourceType === 'STAGING_CURRENT_LISTING',
   );
@@ -1343,6 +1410,20 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
           membership: null,
         }
       : null,
+    workType: asset.stagingDemoPhysicalIntake
+      ? 'OWNER_DEMO'
+      : asset.controlledBetaBypass
+        ? 'CONTROLLED_QA'
+        : 'PRODUCTION',
+    eligibleForAssetOperations,
+    physicalPrerequisiteSummary: {
+      state: physicalState,
+      verification: verificationState,
+      custody: custodyState,
+      location: intake?.vault.displayName ?? null,
+      complete: eligibleForAssetOperations,
+    },
+    entryBlockers,
     grading: {
       company: asset.gradeScaleEntry?.company.code ?? null,
       grade:
@@ -1355,86 +1436,187 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
       set: asset.collectibleSet?.name ?? null,
       variant: asset.edition,
     },
-    research: {
-      status: research ? normalizeResearch(research.state) : 'NOT_REQUESTED',
-      asOf: research?.collectedAt.toISOString() ?? null,
-    },
     currentStage,
     stageSince: stageSince.toISOString(),
-    priority:
-      exception || ageDays >= 7 ? 'HIGH' : ageDays >= 3 ? 'MEDIUM' : 'LOW',
+    updatedAt: asset.updatedAt.toISOString(),
+    valuation: {
+      state: decision ? 'VALUED' : 'PENDING',
+      valueMinor: decision?.valueMinor.toString() ?? null,
+      currency: decision?.currency ?? null,
+    },
+    ownership,
+    offering,
+    market,
+    launchReadiness,
+    attention: {
+      required:
+        exception ||
+        marketRestriction ||
+        (eligibleForAssetOperations &&
+          currentStage !== 'MARKET_LIVE' &&
+          ageDays >= 7),
+      reasons: [
+        ...(exception
+          ? [
+              custodyException
+                ? 'Custody exception'
+                : 'Physical intake exception',
+            ]
+          : []),
+        ...(marketRestriction ? ['Secondary market halted'] : []),
+        ...(eligibleForAssetOperations &&
+        currentStage !== 'MARKET_LIVE' &&
+        ageDays >= 7
+          ? ['Operational stage is overdue']
+          : []),
+      ],
+      severity:
+        exception || marketRestriction
+          ? 'HIGH'
+          : ageDays >= 7
+            ? 'MEDIUM'
+            : 'NONE',
+    },
     exception: exception
       ? {
-          type: shipmentException
-            ? 'INTAKE_EXCEPTION'
-            : custodyException
-              ? 'CUSTODY_EXCEPTION'
-              : 'PUBLICATION_EXCEPTION',
-          severity: 'HIGH',
-          openedAt: stageSince.toISOString(),
-          summary: shipmentException
-            ? 'Shipment exception requires intake review.'
-            : custodyException
-              ? 'Custody requires operator attention.'
-              : 'Publication is not currently live.',
-          detailTab,
+          type: custodyException ? 'CUSTODY_EXCEPTION' : 'INTAKE_EXCEPTION',
+          summary: custodyException
+            ? 'Custody requires operator attention.'
+            : 'Physical intake has an unresolved exception.',
         }
       : null,
     recommendedDetailTab: detailTab,
-    marketLifecycle: deriveMarketLifecycle({
-      published: asset.publication?.status === 'PUBLISHED',
-      publicationStatus: asset.publication?.status,
-      custodyStatus: asset.custodyRecord?.status,
-      custodyBypass: Boolean(asset.controlledBetaBypass),
-      supplyPolicyStatus: asset.ownershipSupplyPolicy?.status,
-      supplyStatus: asset.ownershipSupply?.status,
-      issuedUnits: asset.ownershipSupply?.issuedUnits,
-      marketStatus: asset.tradingMarket?.status,
-      tradingEnabled: asset.tradingMarket?.tradingEnabled,
-    }),
     submittedAt: submission.submittedAt?.toISOString() ?? null,
     sourceContext: {
       submissionId: submission.id,
-      receivedAt: intake.receivedAt?.toISOString() ?? null,
-      receiptConfirmedAt: intake.receipt.confirmedAt.toISOString(),
-      vault: intake.vault.displayName,
+      receivedAt: intake?.receivedAt?.toISOString() ?? null,
+      receiptConfirmedAt: intake?.receipt?.confirmedAt.toISOString() ?? null,
+      vault: intake?.vault.displayName ?? 'Not assigned',
     },
     assignee: null,
-    blockers: readiness.blockingCodes,
-    readiness,
-    nextAction: nextActionFor(currentStage, readiness.blockingCodes),
-    eligibleActions: eligibleActionsFor(currentStage, readiness),
+    nextAction: operationsNextAction(currentStage, entryBlockers),
     ageDays,
   };
 }
 
-function nextActionFor(stage: OperationsStage, blockers: string[]) {
-  if (stage === 'EXCEPTION') return 'Resolve the lifecycle exception';
-  if (stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS')
-    return 'Review identity and evidence';
-  if (stage === 'AWAITING_VALUATION') return 'Record a supported valuation';
-  if (stage === 'CUSTODY_PENDING') return 'Confirm secure custody';
-  if (stage === 'VAULT_READY')
-    return blockers.includes('ACTIVE_COVERAGE_REQUIRED')
-      ? 'Add active insurance coverage'
-      : 'Complete market readiness';
-  if (stage === 'MARKET_READY') return 'Publish when approved';
-  return 'Monitor market listing';
+function physicalEntryBlockers(
+  physical: string,
+  verification: string,
+  custody: string,
+) {
+  const blockers: string[] = [];
+  if (!['IN_CUSTODY'].includes(physical)) blockers.push(`PHYSICAL_${physical}`);
+  if (verification !== 'VERIFIED') blockers.push('VERIFICATION_REQUIRED');
+  if (custody !== 'IN_CUSTODY') blockers.push('SECURE_CUSTODY_REQUIRED');
+  return [...new Set(blockers)];
 }
 
-function eligibleActionsFor(
-  stage: OperationsStage,
-  readiness: { status: 'BLOCKED' | 'READY'; blockingCodes: string[] },
-) {
-  const actions: string[] = ['VIEW'];
-  if (stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS')
-    actions.push('REVIEW_VERIFICATION');
-  if (stage === 'AWAITING_VALUATION') actions.push('RECORD_VALUATION');
-  if (stage === 'CUSTODY_PENDING') actions.push('UPDATE_CUSTODY');
-  if (stage === 'MARKET_READY' && readiness.status === 'READY')
-    actions.push('PUBLISH');
-  if (stage === 'EXCEPTION') actions.push('OPEN_EXCEPTION');
-  return actions;
+function ownershipProjection(asset: BoardAsset) {
+  if (
+    asset.ownershipSupply?.issuedUnits &&
+    asset.ownershipSupply.issuedUnits > 0n
+  )
+    return {
+      state: 'ISSUED',
+      issuedUnits: asset.ownershipSupply.issuedUnits.toString(),
+      totalUnits: asset.ownershipSupply.totalUnits.toString(),
+    };
+  if (
+    asset.ownershipSupply?.status === 'ACTIVE' ||
+    asset.ownershipSupplyPolicy?.status === 'ISSUED'
+  )
+    return {
+      state: 'ISSUED',
+      issuedUnits: asset.ownershipSupply?.issuedUnits.toString() ?? null,
+      totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,
+    };
+  if (asset.ownershipSupplyPolicy?.status === 'APPROVED')
+    return { state: 'CONFIGURED', issuedUnits: null, totalUnits: null };
+  if (asset.ownershipSupplyPolicy?.status === 'PROPOSED')
+    return { state: 'PENDING_APPROVAL', issuedUnits: null, totalUnits: null };
+  return { state: 'NOT_CONFIGURED', issuedUnits: null, totalUnits: null };
+}
+
+function offeringProjection(asset: BoardAsset) {
+  return {
+    state: asset.initialOffering?.status ?? 'NOT_CREATED',
+    offeringId: asset.initialOffering?.id ?? null,
+  };
+}
+
+function marketProjection(asset: BoardAsset) {
+  const state =
+    asset.publication?.status === 'PUBLISHED'
+      ? 'MARKET_LIVE'
+      : asset.tradingMarket?.status === 'HALTED'
+        ? 'PAUSED'
+        : asset.initialOffering &&
+            ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(
+              asset.initialOffering.status,
+            )
+          ? 'INITIAL_OFFERING'
+          : asset.publication?.status === 'READY'
+            ? 'READY_FOR_LAUNCH'
+            : asset.publication?.status === 'UNPUBLISHED'
+              ? 'ARCHIVED'
+              : 'NOT_ELIGIBLE';
+  return {
+    state,
+    publicationStatus: asset.publication?.status ?? null,
+    tradingStatus: asset.tradingMarket?.status ?? null,
+  };
+}
+
+function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
+  if (stage === 'RESTRICTION')
+    return {
+      label: 'Resolve restriction',
+      actor: 'STAFF' as const,
+      target: 'INTAKE' as const,
+    };
+  if (stage === 'PHYSICAL_PREREQUISITE')
+    return {
+      label: entryBlockers.includes('PHYSICAL_AWAITING_DROP_OFF')
+        ? 'Await collector drop-off'
+        : 'Complete physical prerequisites',
+      actor: 'STAFF' as const,
+      target: 'INTAKE' as const,
+    };
+  if (stage === 'VALUATION')
+    return {
+      label: 'Record valuation',
+      actor: 'STAFF' as const,
+      target: 'VALUATION' as const,
+    };
+  if (stage === 'OWNERSHIP_SETUP')
+    return {
+      label: 'Configure ownership',
+      actor: 'STAFF' as const,
+      target: 'OWNERSHIP' as const,
+    };
+  if (stage === 'OFFERING_SETUP')
+    return {
+      label: 'Configure Initial Offering',
+      actor: 'STAFF' as const,
+      target: 'MARKET' as const,
+    };
+  if (stage === 'LAUNCH_READINESS')
+    return {
+      label: 'Resolve launch blockers',
+      actor: 'STAFF' as const,
+      target: 'MARKET' as const,
+    };
+  if (stage === 'READY_FOR_LAUNCH')
+    return {
+      label: 'Open launch workspace',
+      actor: 'STAFF' as const,
+      target: 'MARKET' as const,
+    };
+  return {
+    label: 'Monitor market',
+    actor: 'NONE' as const,
+    target: 'COLLECTIBLE' as const,
+  };
 }
 
 function sourceImage(sourceRef: string | null) {
@@ -1446,61 +1628,121 @@ function sourceImage(sourceRef: string | null) {
     return null;
   }
 }
-function normalizeResearch(
-  state: string,
-): 'COMPLETED' | 'IN_PROGRESS' | 'UNAVAILABLE' | 'NOT_REQUESTED' {
-  if (state === 'COMPLETED') return 'COMPLETED';
-  if (['IN_PROGRESS', 'PENDING'].includes(state)) return 'IN_PROGRESS';
-  if (['UNAVAILABLE', 'FAILED'].includes(state)) return 'UNAVAILABLE';
-  return 'NOT_REQUESTED';
+function operationsMatches(
+  item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+  input: OperationsBoardInput,
+) {
+  if (input.tab && input.tab !== 'all') {
+    const byTab: Record<string, boolean> = {
+      'needs-action':
+        item.eligibleForAssetOperations && item.currentStage !== 'MARKET_LIVE',
+      valuation: item.currentStage === 'VALUATION',
+      ownership: item.currentStage === 'OWNERSHIP_SETUP',
+      offering: item.currentStage === 'OFFERING_SETUP',
+      'launch-readiness': item.currentStage === 'LAUNCH_READINESS',
+      'ready-for-launch': item.currentStage === 'READY_FOR_LAUNCH',
+      'market-live': item.currentStage === 'MARKET_LIVE',
+      restrictions: item.currentStage === 'RESTRICTION',
+    };
+    if (!byTab[input.tab]) return false;
+  }
+  return (
+    (!input.stage || item.currentStage === input.stage) &&
+    (!input.valuation || item.valuation.state === input.valuation) &&
+    (!input.ownership || item.ownership.state === input.ownership) &&
+    (!input.offering || item.offering.state === input.offering) &&
+    (!input.market || item.market.state === input.market) &&
+    (!input.workType || item.workType === input.workType) &&
+    (!input.attention ||
+      input.attention !== 'REQUIRES_ATTENTION' ||
+      item.attention.required)
+  );
 }
-function tabStage(value: string): OperationsStage | null {
-  const map: Record<string, OperationsStage> = {
-    verification: 'AWAITING_VERIFICATION',
-    valuation: 'AWAITING_VALUATION',
-    custody: 'CUSTODY_PENDING',
-    'vault-ready': 'VAULT_READY',
-    'market-ready': 'MARKET_READY',
-    'market-live': 'MARKET_LIVE',
-    exceptions: 'EXCEPTION',
-  };
-  return map[value] ?? null;
-}
-function tabMatches(stage: OperationsStage, tab: string) {
-  if (tab === 'needs-action') return stage !== 'MARKET_LIVE';
-  if (tab === 'verification')
+
+function operationsSort(
+  left: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+  right: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+  sort?: string,
+) {
+  if (sort === 'TITLE')
     return (
-      stage === 'AWAITING_VERIFICATION' || stage === 'VERIFICATION_IN_PROGRESS'
+      left.title.localeCompare(right.title) || left.id.localeCompare(right.id)
     );
-  return stage === tabStage(tab);
+  if (sort === 'NEWEST')
+    return (
+      new Date(right.stageSince).getTime() -
+        new Date(left.stageSince).getTime() || left.id.localeCompare(right.id)
+    );
+  if (sort === 'UPDATED_DESC')
+    return (
+      new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime() || left.id.localeCompare(right.id)
+    );
+  if (sort === 'READY_FIRST')
+    return (
+      Number(right.launchReadiness.state === 'READY') -
+        Number(left.launchReadiness.state === 'READY') ||
+      new Date(right.stageSince).getTime() -
+        new Date(left.stageSince).getTime() ||
+      left.id.localeCompare(right.id)
+    );
+  if (sort === 'STAGE_OLDEST')
+    return (
+      new Date(left.stageSince).getTime() -
+        new Date(right.stageSince).getTime() || left.id.localeCompare(right.id)
+    );
+  const severity = (item: typeof left) =>
+    item.attention.severity === 'HIGH'
+      ? 0
+      : item.attention.severity === 'MEDIUM'
+        ? 1
+        : 2;
+  return (
+    severity(left) - severity(right) ||
+    new Date(right.stageSince).getTime() -
+      new Date(left.stageSince).getTime() ||
+    left.id.localeCompare(right.id)
+  );
 }
-function priorityRank(value: string) {
-  return value === 'HIGH' ? 0 : value === 'MEDIUM' ? 1 : 2;
+
+function operationsCounts(
+  items: Array<NonNullable<Awaited<ReturnType<typeof operationsItem>>>>,
+) {
+  return {
+    all: items.length,
+    needsAction: items.filter(
+      (item) =>
+        item.eligibleForAssetOperations && item.currentStage !== 'MARKET_LIVE',
+    ).length,
+    valuationPending: items.filter((item) => item.currentStage === 'VALUATION')
+      .length,
+    ownershipPending: items.filter(
+      (item) => item.currentStage === 'OWNERSHIP_SETUP',
+    ).length,
+    offeringSetup: items.filter(
+      (item) => item.currentStage === 'OFFERING_SETUP',
+    ).length,
+    launchReadiness: items.filter(
+      (item) => item.currentStage === 'LAUNCH_READINESS',
+    ).length,
+    readyForLaunch: items.filter(
+      (item) => item.currentStage === 'READY_FOR_LAUNCH',
+    ).length,
+    marketLive: items.filter((item) => item.currentStage === 'MARKET_LIVE')
+      .length,
+    restrictions: items.filter((item) => item.currentStage === 'RESTRICTION')
+      .length,
+    physicalPrerequisite: items.filter(
+      (item) => !item.eligibleForAssetOperations,
+    ).length,
+  };
 }
-function stageCounts(items: Array<{ currentStage: OperationsStage }>) {
-  const stages: OperationsStage[] = [
-    'AWAITING_VERIFICATION',
-    'VERIFICATION_IN_PROGRESS',
-    'AWAITING_VALUATION',
-    'CUSTODY_PENDING',
-    'VAULT_READY',
-    'MARKET_READY',
-    'MARKET_LIVE',
-    'EXCEPTION',
-  ];
-  return Object.fromEntries(
-    stages.map((stage) => [
-      stage,
-      items.filter((item) => item.currentStage === stage).length,
-    ]),
-  ) as Record<OperationsStage, number>;
-}
-function stageLabel(value: string) {
-  return value
-    .toLowerCase()
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+
+/** Narrow pure helpers retained for projection regression coverage. */
+export const operationsQueueTestUtils = {
+  physicalEntryBlockers,
+  operationsNextAction,
+};
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */
 function canonicalBody(body: unknown) {
