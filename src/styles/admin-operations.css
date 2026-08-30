@@ -149,10 +149,9 @@
   opacity: 0.45;
 }
 .asset-operations-page--reference .asset-operations-grid {
-  grid-template-columns: minmax(236px, 1.65fr) minmax(86px, 0.62fr) minmax(152px, 1.12fr) minmax(
-      112px,
-      0.78fr
-    ) minmax(95px, 0.68fr) minmax(110px, 0.78fr) minmax(74px, 0.48fr) minmax(90px, 0.63fr) 38px;
+  grid-template-columns:
+    minmax(236px, 1.65fr) minmax(86px, 0.62fr) minmax(152px, 1.12fr) minmax(112px, 0.78fr)
+    minmax(95px, 0.68fr) minmax(110px, 0.78fr) minmax(74px, 0.48fr) minmax(90px, 0.63fr) 38px;
   gap: 8px;
 }
 .asset-operations-page--reference .asset-operations-grid--head {
