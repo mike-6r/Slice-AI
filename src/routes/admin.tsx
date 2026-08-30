@@ -449,9 +449,15 @@ function AdminConsole() {
               reviewer: ["unclaimed", "mine", "claimed"].includes(reviewReviewer ?? "")
                 ? (reviewReviewer as "unclaimed" | "mine" | "claimed")
                 : undefined,
-              testFixture: ["include", "only"].includes(intakeFixture ?? "")
-                ? (intakeFixture as "include" | "only")
-                : "exclude",
+              // The staging staff queue is an authoritative activity view.
+              // Include persisted demo/test records by default and label them
+              // in the table; "production only" remains an explicit filter.
+              testFixture:
+                intakeFixture === "exclude"
+                  ? "exclude"
+                  : intakeFixture === "only"
+                    ? "only"
+                    : "include",
               grader: operationsGrader,
               submittedFrom: reviewSubmittedFrom,
               submittedTo: reviewSubmittedTo,
@@ -3874,7 +3880,8 @@ function ReviewQueue({
                 label="Demo records"
                 value={filters.fixture}
                 options={[
-                  ["", "Production records"],
+                  ["", "All authorized records"],
+                  ["exclude", "Production only"],
                   ["include", "Include demo"],
                   ["only", "Demo only"],
                 ]}
