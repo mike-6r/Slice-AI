@@ -200,143 +200,145 @@ export function AdminAssetOperations(props: Props) {
         <div className="asset-operations-primary">
           <Metrics counts={board.data.counts} />
           <section className="asset-operations-workspace">
-        <nav className="asset-operations-tabs" aria-label="Asset Operations queues">
-          {assetOperationsTabs.map(([key, label]) => (
-            <button
-              type="button"
-              key={key}
-              className={selectedTab === key ? "active" : ""}
-              onClick={() => props.update({ tab: key === "all" ? undefined : key, page: "1" })}
-            >
-              {label}
-              <b>{assetOperationsTabCount(key, board.data.counts)}</b>
-            </button>
-          ))}
-        </nav>
-        <div className="asset-operations-tools asset-operations-tools--reference">
-          <label className="asset-operations-search">
-            <Search aria-hidden="true" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search collectible, collector, asset ID, submission, cert…"
-            />
-          </label>
-          <Filter
-            label="Stage"
-            value={props.stage}
-            onChange={(value) => props.update({ operationsStage: value || undefined, page: "1" })}
-          >
-            <option value="">All stages</option>
-            <option value="PHYSICAL_PREREQUISITE">Physical prerequisites</option>
-            <option value="VALUATION">Valuation</option>
-            <option value="OWNERSHIP_SETUP">Ownership</option>
-            <option value="OFFERING_SETUP">Offering setup</option>
-            <option value="LAUNCH_READINESS">Launch readiness</option>
-            <option value="READY_FOR_LAUNCH">Ready for launch</option>
-            <option value="MARKET_LIVE">Market live</option>
-            <option value="RESTRICTION">Restricted</option>
-          </Filter>
-          <Filter
-            label="Market state"
-            value={props.market}
-            onChange={(value) => props.update({ market: value || undefined, page: "1" })}
-          >
-            <option value="">All market states</option>
-            <option value="NOT_ELIGIBLE">Not live</option>
-            <option value="INITIAL_OFFERING">Initial Offering</option>
-            <option value="READY_FOR_LAUNCH">Launch review</option>
-            <option value="MARKET_LIVE">Market live</option>
-            <option value="PAUSED">Paused</option>
-          </Filter>
-          <Filter
-            label="Work type"
-            value={props.workType}
-            onChange={(value) => props.update({ workType: value || undefined, page: "1" })}
-          >
-            <option value="">All work types</option>
-            <option value="PRODUCTION">Production</option>
-            <option value="OWNER_DEMO">Owner demo</option>
-            <option value="CONTROLLED_QA">Controlled QA</option>
-          </Filter>
-          <Filter
-            label="Priority"
-            value={props.priority}
-            onChange={(value) =>
-              props.update({ operationsPriority: value || undefined, page: "1" })
-            }
-          >
-            <option value="">All priorities</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="NONE">Normal</option>
-          </Filter>
-          <Filter
-            label="Assignee"
-            value={props.assignee}
-            onChange={(value) =>
-              props.update({ operationsAssignee: value || undefined, page: "1" })
-            }
-          >
-            <option value="">All assignees</option>
-            <option value="UNASSIGNED">Unassigned</option>
-            {board.data.filterOptions.assignees.map((assignee) => (
-              <option key={assignee.id} value={assignee.id}>
-                {assignee.displayName}
-              </option>
-            ))}
-          </Filter>
-          <Filter
-            label="Sort"
-            value={props.sort}
-            onChange={(value) => props.update({ sort: value, page: "1" })}
-          >
-            <option value="NEEDS_ACTION">Needs action first</option>
-            <option value="UPDATED_DESC">Recently updated</option>
-            <option value="NEWEST">Newest stage</option>
-            <option value="STAGE_OLDEST">Oldest in stage</option>
-            <option value="TITLE">Title</option>
-            <option value="READY_FIRST">Ready for launch</option>
-          </Filter>
-          <button
-            type="button"
-            className="asset-operations-clear"
-            disabled={!activeFilters && !props.query}
-            onClick={clear}
-          >
-            <X aria-hidden="true" /> Clear filters
-          </button>
-        </div>
-            <div className="asset-operations-table-wrap">
-            <div className="asset-operations-grid asset-operations-grid--head" aria-hidden="true">
-              <span>Collectible</span>
-              <span>Stage</span>
-              <span>Readiness / next action</span>
-              <span>Offering progress</span>
-              <span>Market state</span>
-              <span>Assignee</span>
-              <span>Priority</span>
-              <span>Updated</span>
-              <span>Action</span>
-            </div>
-            <div className="asset-operations-table">
-              {board.data.items.map((item) => (
-                <OperationRow
-                  item={item}
-                  key={item.id}
-                  selected={item.id === selectedItem?.id}
-                  onSelect={() => setSelected(item.id)}
-                  onOpen={() => openItem(item)}
-                />
+            <nav className="asset-operations-tabs" aria-label="Asset Operations queues">
+              {assetOperationsTabs.map(([key, label]) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={selectedTab === key ? "active" : ""}
+                  onClick={() => props.update({ tab: key === "all" ? undefined : key, page: "1" })}
+                >
+                  {label}
+                  <b>{assetOperationsTabCount(key, board.data.counts)}</b>
+                </button>
               ))}
-              {!board.data.items.length ? (
-                <EmptyQueue
-                  filtered={Boolean(props.query || activeFilters || selectedTab !== "all")}
+            </nav>
+            <div className="asset-operations-tools asset-operations-tools--reference">
+              <label className="asset-operations-search">
+                <Search aria-hidden="true" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search collectible, collector, asset ID, submission, cert…"
                 />
-              ) : null}
+              </label>
+              <Filter
+                label="Stage"
+                value={props.stage}
+                onChange={(value) =>
+                  props.update({ operationsStage: value || undefined, page: "1" })
+                }
+              >
+                <option value="">All stages</option>
+                <option value="PHYSICAL_PREREQUISITE">Physical prerequisites</option>
+                <option value="VALUATION">Valuation</option>
+                <option value="OWNERSHIP_SETUP">Ownership</option>
+                <option value="OFFERING_SETUP">Offering setup</option>
+                <option value="LAUNCH_READINESS">Launch readiness</option>
+                <option value="READY_FOR_LAUNCH">Ready for launch</option>
+                <option value="MARKET_LIVE">Market live</option>
+                <option value="RESTRICTION">Restricted</option>
+              </Filter>
+              <Filter
+                label="Market state"
+                value={props.market}
+                onChange={(value) => props.update({ market: value || undefined, page: "1" })}
+              >
+                <option value="">All market states</option>
+                <option value="NOT_ELIGIBLE">Not live</option>
+                <option value="INITIAL_OFFERING">Initial Offering</option>
+                <option value="READY_FOR_LAUNCH">Launch review</option>
+                <option value="MARKET_LIVE">Market live</option>
+                <option value="PAUSED">Paused</option>
+              </Filter>
+              <Filter
+                label="Work type"
+                value={props.workType}
+                onChange={(value) => props.update({ workType: value || undefined, page: "1" })}
+              >
+                <option value="">All work types</option>
+                <option value="PRODUCTION">Production</option>
+                <option value="OWNER_DEMO">Owner demo</option>
+                <option value="CONTROLLED_QA">Controlled QA</option>
+              </Filter>
+              <Filter
+                label="Priority"
+                value={props.priority}
+                onChange={(value) =>
+                  props.update({ operationsPriority: value || undefined, page: "1" })
+                }
+              >
+                <option value="">All priorities</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="NONE">Normal</option>
+              </Filter>
+              <Filter
+                label="Assignee"
+                value={props.assignee}
+                onChange={(value) =>
+                  props.update({ operationsAssignee: value || undefined, page: "1" })
+                }
+              >
+                <option value="">All assignees</option>
+                <option value="UNASSIGNED">Unassigned</option>
+                {board.data.filterOptions.assignees.map((assignee) => (
+                  <option key={assignee.id} value={assignee.id}>
+                    {assignee.displayName}
+                  </option>
+                ))}
+              </Filter>
+              <Filter
+                label="Sort"
+                value={props.sort}
+                onChange={(value) => props.update({ sort: value, page: "1" })}
+              >
+                <option value="NEEDS_ACTION">Needs action first</option>
+                <option value="UPDATED_DESC">Recently updated</option>
+                <option value="NEWEST">Newest stage</option>
+                <option value="STAGE_OLDEST">Oldest in stage</option>
+                <option value="TITLE">Title</option>
+                <option value="READY_FIRST">Ready for launch</option>
+              </Filter>
+              <button
+                type="button"
+                className="asset-operations-clear"
+                disabled={!activeFilters && !props.query}
+                onClick={clear}
+              >
+                <X aria-hidden="true" /> Clear filters
+              </button>
             </div>
-            <Pagination data={board.data} page={props.page} update={props.update} />
-            <OperationalInsights data={board.data} onOpen={openItem} />
+            <div className="asset-operations-table-wrap">
+              <div className="asset-operations-grid asset-operations-grid--head" aria-hidden="true">
+                <span>Collectible</span>
+                <span>Stage</span>
+                <span>Readiness / next action</span>
+                <span>Offering progress</span>
+                <span>Market state</span>
+                <span>Assignee</span>
+                <span>Priority</span>
+                <span>Updated</span>
+                <span>Action</span>
+              </div>
+              <div className="asset-operations-table">
+                {board.data.items.map((item) => (
+                  <OperationRow
+                    item={item}
+                    key={item.id}
+                    selected={item.id === selectedItem?.id}
+                    onSelect={() => setSelected(item.id)}
+                    onOpen={() => openItem(item)}
+                  />
+                ))}
+                {!board.data.items.length ? (
+                  <EmptyQueue
+                    filtered={Boolean(props.query || activeFilters || selectedTab !== "all")}
+                  />
+                ) : null}
+              </div>
+              <Pagination data={board.data} page={props.page} update={props.update} />
+              <OperationalInsights data={board.data} onOpen={openItem} />
             </div>
           </section>
         </div>
