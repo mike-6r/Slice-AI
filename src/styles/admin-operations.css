@@ -529,6 +529,40 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 1280px) {
+  .admin-economic-workflow {
+    grid-template-columns: 1fr;
+  }
+  .admin-economic-workflow__steps {
+    grid-template-columns: repeat(5, minmax(125px, 1fr));
+    overflow-x: auto;
+  }
+  .admin-asset-workspace__content {
+    grid-template-columns: 1fr;
+  }
+  .admin-operations-rail {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .admin-economic-workflow {
+    padding: 13px;
+  }
+  .admin-economic-workflow__steps {
+    margin: 0 -3px;
+  }
+  .admin-operations-rail {
+    grid-template-columns: 1fr;
+  }
+  .admin-asset-workspace__grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-asset-workspace .admin-operation-card--wide {
+    grid-column: auto;
+  }
+}
 .admin-operations-header,
 .admin-operation-detail__header {
   display: flex;
@@ -1448,6 +1482,211 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+/* Asset Operations is an economic workspace: the workflow and operations
+ * rail intentionally differ from the Collectible and Physical Intake detail
+ * layouts while keeping their source records one click away. */
+.admin-economic-workflow {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 14px 17px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: linear-gradient(110deg, rgba(126, 85, 202, 0.12), var(--surface-elevated) 46%);
+}
+.admin-economic-workflow__intro > span {
+  display: block;
+  color: #c58bff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.admin-economic-workflow__intro p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.admin-economic-workflow__steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 6px;
+}
+.admin-economic-workflow__steps button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 7px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-economic-workflow__steps button:hover,
+.admin-economic-workflow__steps button.active {
+  background: rgba(255, 255, 255, 0.045);
+}
+.admin-economic-workflow__steps button:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  width: 5px;
+  height: 1px;
+  content: "";
+  background: var(--border);
+}
+.admin-economic-workflow__steps .complete,
+.admin-economic-workflow__steps .live {
+  color: var(--accent);
+}
+.admin-economic-workflow__steps .in_progress {
+  color: #c58bff;
+}
+.admin-economic-workflow__steps .ready {
+  color: #70c8ff;
+}
+.admin-economic-workflow__steps .blocked {
+  color: #e8ae46;
+}
+.admin-economic-workflow__index {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+.admin-economic-workflow__steps strong,
+.admin-economic-workflow__steps small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-economic-workflow__steps strong {
+  font-size: 11px;
+}
+.admin-economic-workflow__steps small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.admin-economic-workflow--unavailable {
+  display: block;
+}
+.admin-economic-workflow--unavailable > span {
+  color: #e8ae46;
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-economic-workflow--unavailable p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.admin-asset-workspace__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 272px;
+  gap: 14px;
+  align-items: start;
+}
+.admin-asset-workspace__main {
+  min-width: 0;
+}
+.admin-operations-rail {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+}
+.admin-operations-rail__section {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-elevated);
+}
+.admin-operations-rail__section.ready {
+  border-color: rgba(64, 220, 182, 0.35);
+}
+.admin-operations-rail__section.attention {
+  border-color: rgba(232, 174, 70, 0.32);
+}
+.admin-operations-rail__section h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.admin-operations-rail__section > strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.25;
+}
+.admin-operations-rail__section > p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.admin-operations-rail__section .admin-ops-button {
+  width: 100%;
+  margin-top: 12px;
+}
+.admin-operations-rail__list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-operations-rail__list li {
+  padding: 8px;
+  border-radius: 5px;
+  color: #e9b0ad;
+  background: rgba(239, 137, 133, 0.08);
+  font-size: 10px;
+}
+.admin-operations-rail__commands {
+  display: grid;
+  gap: 7px;
+}
+.admin-operations-rail__commands a,
+.admin-operations-rail__commands button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.admin-operations-rail__commands a:hover,
+.admin-operations-rail__commands button:hover {
+  border-color: rgba(64, 220, 182, 0.45);
+  color: var(--accent);
+}
+.admin-operations-rail__commands svg {
+  width: 13px;
+  flex: 0 0 auto;
 }
 .admin-asset-workspace .admin-operation-card h3 {
   margin-top: 3px;

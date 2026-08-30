@@ -247,6 +247,13 @@ export type AssetOperationDetailProjection = {
     nextActor: "STAFF" | "SYSTEM" | "PROVIDER" | "NONE";
     blockers: string[];
   };
+  /** Server-owned progression; the UI must not infer the economic stage. */
+  economicWorkflow: Array<{
+    key: "VALUATION" | "OWNERSHIP" | "INITIAL_OFFERING" | "LAUNCH" | "MARKET";
+    label: string;
+    state: "COMPLETE" | "IN_PROGRESS" | "READY" | "BLOCKED" | "NOT_STARTED" | "LIVE";
+    detail: string;
+  }>;
   launchReadiness: { state: "READY" | "BLOCKED"; blockers: string[] };
   reconciliation: {
     ownership: {

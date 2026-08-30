@@ -60,7 +60,7 @@ export function AdminAssetOperationsDetail({
     queryFn: () => services.repositories.lifecycle.getOperationDetail(assetId),
     staleTime: 10_000,
   });
-  const [valueMinor, setValueMinor] = useState("");
+  const [valuePounds, setValuePounds] = useState("");
   const [confidence, setConfidence] = useState("80");
   const [policyCode, setPolicyCode] = useState("");
   const [policyUnits, setPolicyUnits] = useState("");
@@ -75,13 +75,13 @@ export function AdminAssetOperationsDetail({
   const valuation = useMutation({
     mutationFn: () =>
       services.repositories.lifecycle.recordValuation(assetId, {
-        valueMinor,
+        valueMinor: poundsToMinor(valuePounds),
         confidence: Number(confidence),
         methodologyCode: "MANUAL_REVIEW",
         sourceType: "MANUAL",
       }),
     onSuccess: () => {
-      setValueMinor("");
+      setValuePounds("");
       refresh();
     },
   });
@@ -232,6 +232,7 @@ export function AdminAssetOperationsDetail({
           </button>
         </div>
       </header>
+      <EconomicWorkflow operations={operations.data} selected={selected} onOpen={onTab} />
       <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
         {tabs.map((value) => (
           <button
@@ -244,71 +245,80 @@ export function AdminAssetOperationsDetail({
           </button>
         ))}
       </nav>
-      {selected === "overview" ? (
-        <Overview item={item} operations={operations.data} onOpen={onTab} />
-      ) : null}
-      {selected === "valuation" ? (
-        <Valuation
-          item={item}
-          valueMinor={valueMinor}
-          confidence={confidence}
-          setValueMinor={setValueMinor}
-          setConfidence={setConfidence}
-          submit={() => valuation.mutate()}
-          pending={valuation.isPending}
-        />
-      ) : null}
-      {selected === "ownership" ? (
-        <Ownership
-          item={item}
-          policyCode={policyCode}
-          policyUnits={policyUnits}
-          policyReason={policyReason}
-          approvalReason={approvalReason}
-          setPolicyCode={setPolicyCode}
-          setPolicyUnits={setPolicyUnits}
-          setPolicyReason={setPolicyReason}
-          setApprovalReason={setApprovalReason}
-          policyOptions={item.issuance?.policy.candidates ?? []}
-          propose={() => proposeSupply.mutate()}
-          approve={() => approveSupply.mutate()}
-          issue={(units) => issueSupply.mutate(units)}
-          pending={proposeSupply.isPending || approveSupply.isPending || issueSupply.isPending}
-        />
-      ) : null}
-      {selected === "initial-offering" ? (
-        <InitialOffering
-          item={item}
-          approvalReason={approvalReason}
-          setApprovalReason={setApprovalReason}
-          approve={() =>
-            item.initialOffering && approveOffering.mutate(item.initialOffering.offeringId)
-          }
-          requestChanges={() =>
-            item.initialOffering && requestOfferingChanges.mutate(item.initialOffering.offeringId)
-          }
-          pending={approveOffering.isPending || requestOfferingChanges.isPending}
-        />
-      ) : null}
-      {selected === "launch" ? (
-        <Launch
-          item={item}
-          operations={operations.data}
-          publish={() => publish.mutate()}
-          issue={() => currentPolicy && issueSupply.mutate(currentPolicy.units)}
-          activate={() => activateMarket.mutate()}
-          open={() => item.initialOffering && openOffering.mutate(item.initialOffering.offeringId)}
-          pending={
-            publish.isPending ||
-            issueSupply.isPending ||
-            activateMarket.isPending ||
-            openOffering.isPending
-          }
-        />
-      ) : null}
-      {selected === "market" ? <Market item={item} /> : null}
-      {selected === "controls" ? <Controls item={item} /> : null}
-      {selected === "history" ? <History item={item} /> : null}
+      <div className="admin-asset-workspace__content">
+        <div className="admin-asset-workspace__main">
+          {selected === "overview" ? (
+            <Overview item={item} operations={operations.data} onOpen={onTab} />
+          ) : null}
+          {selected === "valuation" ? (
+            <Valuation
+              item={item}
+              valuePounds={valuePounds}
+              confidence={confidence}
+              setValuePounds={setValuePounds}
+              setConfidence={setConfidence}
+              submit={() => valuation.mutate()}
+              pending={valuation.isPending}
+            />
+          ) : null}
+          {selected === "ownership" ? (
+            <Ownership
+              item={item}
+              operations={operations.data}
+              policyCode={policyCode}
+              policyUnits={policyUnits}
+              policyReason={policyReason}
+              approvalReason={approvalReason}
+              setPolicyCode={setPolicyCode}
+              setPolicyUnits={setPolicyUnits}
+              setPolicyReason={setPolicyReason}
+              setApprovalReason={setApprovalReason}
+              policyOptions={item.issuance?.policy.candidates ?? []}
+              propose={() => proposeSupply.mutate()}
+              approve={() => approveSupply.mutate()}
+              issue={(units) => issueSupply.mutate(units)}
+              pending={proposeSupply.isPending || approveSupply.isPending || issueSupply.isPending}
+            />
+          ) : null}
+          {selected === "initial-offering" ? (
+            <InitialOffering
+              item={item}
+              approvalReason={approvalReason}
+              setApprovalReason={setApprovalReason}
+              approve={() =>
+                item.initialOffering && approveOffering.mutate(item.initialOffering.offeringId)
+              }
+              requestChanges={() =>
+                item.initialOffering &&
+                requestOfferingChanges.mutate(item.initialOffering.offeringId)
+              }
+              pending={approveOffering.isPending || requestOfferingChanges.isPending}
+            />
+          ) : null}
+          {selected === "launch" ? (
+            <Launch
+              item={item}
+              operations={operations.data}
+              publish={() => publish.mutate()}
+              issue={() => currentPolicy && issueSupply.mutate(currentPolicy.units)}
+              activate={() => activateMarket.mutate()}
+              open={() =>
+                item.initialOffering && openOffering.mutate(item.initialOffering.offeringId)
+              }
+              pending={
+                publish.isPending ||
+                issueSupply.isPending ||
+                activateMarket.isPending ||
+                openOffering.isPending
+              }
+            />
+          ) : null}
+          {selected === "market" ? <Market item={item} /> : null}
+          {selected === "controls" ? <Controls item={item} /> : null}
+          {selected === "history" ? <History item={item} /> : null}
+        </div>
+        <OperationsRail item={item} operations={operations.data} onOpen={onTab} />
+      </div>
       {error ? (
         <p className="admin-operation-error" role="alert">
           The server rejected that operation. No local state was changed; refresh the record before
@@ -334,14 +344,16 @@ function Overview({
     <div className="admin-asset-workspace__grid">
       <section className="admin-operation-card admin-operation-card--wide">
         <CardHeading
-          eyebrow="Operations status"
-          title={action ? action.label : "Operations status unavailable"}
+          eyebrow="Current operations stage"
+          title={
+            operations ? sentence(operations.operations.stage) : "Operations status unavailable"
+          }
           status={action?.actor === "NONE" ? "No action required" : "Action required"}
           ready={action?.actor === "NONE"}
         />
         <p className="admin-detail-muted">
           {action
-            ? `Next actor: ${sentence(action.actor)}.`
+            ? `${action.label}. Next actor: ${sentence(action.actor)}.`
             : "The server-side operations projection is currently unavailable."}
         </p>
         {operations?.operations.blockers.length ? (
@@ -369,10 +381,32 @@ function Overview({
         </button>
       </section>
       <Info title="Physical prerequisite" eyebrow="Read only">
-        <Field label="Intake" value={item.intake ? sentence(item.intake.status) : "Not recorded"} />
-        <Field label="Verification" value={sentence(item.verification.status)} />
-        <Field label="Custody" value={sentence(item.custody.status)} />
-        <Field label="Location" value={item.custody.location ?? "Not recorded"} />
+        <Field
+          label="Verification"
+          value={
+            operations
+              ? sentence(operations.physicalPrerequisites.verification)
+              : sentence(item.verification.status)
+          }
+        />
+        <Field
+          label="Custody"
+          value={
+            operations
+              ? sentence(operations.physicalPrerequisites.custody)
+              : sentence(item.custody.status)
+          }
+        />
+        <Field
+          label="Physical exceptions"
+          value={operations?.physicalPrerequisites.complete ? "None" : "See blockers"}
+        />
+        <Field
+          label="Location"
+          value={
+            operations?.physicalPrerequisites.location ?? item.custody.location ?? "Not recorded"
+          }
+        />
       </Info>
       <Info title="Economic snapshot" eyebrow="Authoritative">
         <Field
@@ -385,7 +419,7 @@ function Overview({
           accent
         />
         <Field
-          label="Supply"
+          label="Ownership"
           value={
             item.issuance?.supply
               ? `${item.issuance.supply.issuedUnits} / ${item.issuance.supply.totalUnits} issued`
@@ -396,6 +430,14 @@ function Overview({
           label="Offering"
           value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
         />
+        <Field
+          label="Price per Slice"
+          value={
+            item.initialOffering
+              ? money(item.initialOffering.pricePerUnitMinor, item.initialOffering.currency)
+              : "Not configured"
+          }
+        />
       </Info>
       <Info title="Launch readiness" eyebrow="Server gates">
         <Field
@@ -404,8 +446,14 @@ function Overview({
           accent={operations?.launchReadiness.state === "READY"}
         />
         <Field
-          label="Market"
-          value={item.market.trading ? sentence(item.market.trading.status) : "Not configured"}
+          label="Market state"
+          value={
+            item.market.publication === "PUBLISHED"
+              ? "Market live"
+              : item.market.trading
+                ? sentence(item.market.trading.status)
+                : "Not configured"
+          }
         />
         <Field
           label="Restrictions"
@@ -418,8 +466,16 @@ function Overview({
       </Info>
       <Info title="Economic reconciliation" eyebrow="Read only">
         <Field
-          label="Ownership projection"
-          value={operations?.reconciliation.ownership.state ?? "Unavailable"}
+          label="Expected ownership"
+          value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
+        />
+        <Field
+          label="Allocated ownership"
+          value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
+        />
+        <Field
+          label="Ownership difference"
+          value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
         />
         <Field
           label="Offering proceeds"
@@ -448,19 +504,189 @@ function Overview({
   );
 }
 
+function EconomicWorkflow({
+  operations,
+  selected,
+  onOpen,
+}: {
+  operations?: AssetOperationDetailProjection;
+  selected: DetailTab;
+  onOpen: (tab: string) => void;
+}) {
+  const tabFor = (key: AssetOperationDetailProjection["economicWorkflow"][number]["key"]) =>
+    key === "INITIAL_OFFERING" ? "initial-offering" : key.toLowerCase();
+  if (!operations)
+    return (
+      <section className="admin-economic-workflow admin-economic-workflow--unavailable">
+        <span>Economic workflow unavailable</span>
+        <p>Refresh to retrieve the authoritative operations projection.</p>
+      </section>
+    );
+  return (
+    <section className="admin-economic-workflow" aria-label="Economic workflow">
+      <div className="admin-economic-workflow__intro">
+        <span>Economic workflow</span>
+        <p>Backend-authoritative progression</p>
+      </div>
+      <div className="admin-economic-workflow__steps">
+        {operations.economicWorkflow.map((step, index) => {
+          const tab = tabFor(step.key);
+          return (
+            <button
+              type="button"
+              key={step.key}
+              className={`${step.state.toLowerCase()} ${selected === tab ? "active" : ""}`}
+              onClick={() => onOpen(tab)}
+            >
+              <span className="admin-economic-workflow__index">{index + 1}</span>
+              <span>
+                <strong>{step.label}</strong>
+                <small>{workflowState(step.state)}</small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function OperationsRail({
+  item,
+  operations,
+  onOpen,
+}: {
+  item: Detail;
+  operations?: AssetOperationDetailProjection;
+  onOpen: (tab: string) => void;
+}) {
+  const action = operations?.operations.nextAction;
+  const blocked = operations?.operations.blockers ?? [];
+  const commands = operations
+    ? [
+        operations.availableCommands.recordValuation && ["Record valuation", "valuation"],
+        operations.availableCommands.configureOwnership && ["Configure ownership", "ownership"],
+        operations.availableCommands.reviewOffering && [
+          "Review Initial Offering",
+          "initial-offering",
+        ],
+        operations.availableCommands.issueOwnership && ["Issue ownership", "launch"],
+        operations.availableCommands.publish && ["Review launch", "launch"],
+        operations.availableCommands.openOffering && ["Open Initial Offering", "launch"],
+        operations.availableCommands.activateMarket && ["Activate market", "launch"],
+      ].filter((command): command is [string, string] => Boolean(command))
+    : [];
+  return (
+    <aside className="admin-operations-rail" aria-label="Asset operation controls">
+      <Rail title="Next action" tone={action?.actor === "NONE" ? "ready" : "attention"}>
+        <strong>{action?.label ?? "Unavailable"}</strong>
+        <p>
+          {action
+            ? action.actor === "NONE"
+              ? "This asset has no pending economic action."
+              : `Next actor: ${sentence(action.actor)}.`
+            : "The authoritative next action could not be loaded."}
+        </p>
+        {action && action.actor !== "NONE" ? (
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            onClick={() => {
+              if (action.target === "INTAKE" && item.intake) {
+                window.location.assign(
+                  `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
+                );
+                return;
+              }
+              onOpen(targetTab(action.target));
+            }}
+          >
+            Review action <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
+      </Rail>
+      <Rail title="Blockers">
+        {blocked.length ? (
+          <ul className="admin-operations-rail__list">
+            {blocked.map((blocker) => (
+              <li key={blocker}>{sentence(blocker)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>No active operational blocker.</p>
+        )}
+      </Rail>
+      <Rail title="Available commands">
+        {commands.length ? (
+          <div className="admin-operations-rail__commands">
+            {commands.map(([label, tab]) => (
+              <button type="button" key={label} onClick={() => onOpen(tab)}>
+                {label} <ArrowRight aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>No additional server-authorized command is available.</p>
+        )}
+      </Rail>
+      <Rail title="Quick links">
+        <div className="admin-operations-rail__commands">
+          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
+            Open collectible <ExternalLink aria-hidden="true" />
+          </a>
+          {item.intake ? (
+            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
+              Open Physical Intake <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.submissions[0] ? (
+            <a
+              href={`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`}
+            >
+              View submission <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.collector ? (
+            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+              View collector <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+        </div>
+      </Rail>
+    </aside>
+  );
+}
+
+function Rail({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone?: "ready" | "attention";
+  children: ReactNode;
+}) {
+  return (
+    <section className={`admin-operations-rail__section ${tone ?? ""}`}>
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 function Valuation({
   item,
-  valueMinor,
+  valuePounds,
   confidence,
-  setValueMinor,
+  setValuePounds,
   setConfidence,
   submit,
   pending,
 }: {
   item: Detail;
-  valueMinor: string;
+  valuePounds: string;
   confidence: string;
-  setValueMinor: (value: string) => void;
+  setValuePounds: (value: string) => void;
   setConfidence: (value: string) => void;
   submit: () => void;
   pending: boolean;
@@ -495,12 +721,12 @@ function Valuation({
         </p>
         <div className="admin-custody-fields">
           <label>
-            GBP minor units
+            Valuation (GBP)
             <input
-              value={valueMinor}
-              inputMode="numeric"
-              onChange={(event) => setValueMinor(event.target.value)}
-              placeholder="e.g. 18500"
+              value={valuePounds}
+              inputMode="decimal"
+              onChange={(event) => setValuePounds(event.target.value)}
+              placeholder="e.g. 185.00"
             />
           </label>
           <label>
@@ -516,7 +742,7 @@ function Valuation({
           type="button"
           className="admin-ops-button primary"
           disabled={
-            !/^\d+$/.test(valueMinor) ||
+            !isValidPounds(valuePounds) ||
             !/^\d+$/.test(confidence) ||
             Number(confidence) > 100 ||
             pending
@@ -577,6 +803,7 @@ function Valuation({
 
 function Ownership({
   item,
+  operations,
   policyCode,
   policyUnits,
   policyReason,
@@ -592,6 +819,7 @@ function Ownership({
   pending,
 }: {
   item: Detail;
+  operations?: AssetOperationDetailProjection;
   policyCode: string;
   policyUnits: string;
   policyReason: string;
@@ -623,6 +851,38 @@ function Ownership({
         <Field label="Owners" value={item.ownership.ownerCount ?? "Not issued"} />
         <Field label="Available units" value={item.ownership.availableUnits ?? "Not issued"} />
       </Info>
+      <section className="admin-operation-card">
+        <CardHeading eyebrow="Allocation" title="Ownership reconciliation" />
+        <Field
+          label="Expected units"
+          value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
+        />
+        <Field
+          label="Allocated units"
+          value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
+        />
+        <Field
+          label="Difference"
+          value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
+        />
+        {item.initialOffering ? (
+          <>
+            <Field
+              label="Collector retained"
+              value={`${item.initialOffering.retainedUnits} (${percent(item.initialOffering.retainedPercentageBps)})`}
+            />
+            <Field
+              label="Initial Offering inventory"
+              value={`${item.initialOffering.offeredUnits} (${percent(item.initialOffering.offeredPercentageBps)})`}
+            />
+          </>
+        ) : (
+          <p className="admin-detail-muted">
+            The current authority allocates issued units when an approved Initial Offering opens. No
+            independent allocation draft exists.
+          </p>
+        )}
+      </section>
       {!proposed ? (
         <section className="admin-operation-card admin-operation-card--wide">
           <CardHeading eyebrow="Supply policy" title="Propose ownership supply" />
@@ -1006,6 +1266,12 @@ function Launch({
 }
 
 function Market({ item }: { item: Detail }) {
+  const offering = item.initialOffering;
+  const inventory = offering?.inventory;
+  const sold = inventory ? BigInt(inventory.settledUnits) : null;
+  const offered = inventory ? BigInt(inventory.offeredUnits) : null;
+  const soldPercent =
+    sold !== null && offered && offered > 0n ? Number((sold * 10_000n) / offered) : null;
   return (
     <div className="admin-asset-workspace__grid">
       <Info title="Market authority" eyebrow="Publication & trading">
@@ -1048,6 +1314,35 @@ function Market({ item }: { item: Detail }) {
         />
         <Field label="Sales observed" value={item.market.salesCount} />
       </Info>
+      <section className="admin-operation-card">
+        <CardHeading
+          eyebrow="Initial Offering progress"
+          title={offering ? sentence(offering.status) : "Not created"}
+        />
+        {offering ? (
+          <>
+            <Field label="Units offered" value={offering.offeredUnits} />
+            <Field label="Units sold" value={sold?.toString() ?? "Not available"} />
+            <Field label="Units remaining" value={inventory?.availableUnits ?? "Not available"} />
+            <Field
+              label="Percentage sold"
+              value={soldPercent === null ? "Not available" : percent(soldPercent)}
+            />
+            <Field
+              label="Gross offering"
+              value={money(offering.grossOfferingMinor, offering.currency)}
+            />
+            <Field
+              label="Collector proceeds"
+              value={money(offering.netOfferingMinor, offering.currency)}
+            />
+          </>
+        ) : (
+          <p className="admin-detail-muted">
+            No authoritative Initial Offering exists for this asset.
+          </p>
+        )}
+      </section>
       <section className="admin-operation-card admin-operation-card--wide">
         <CardHeading eyebrow="Restrictions" title="Market eligibility" />
         <p className="admin-detail-muted">
@@ -1324,8 +1619,22 @@ function sentence(value: string) {
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
+function workflowState(value: AssetOperationDetailProjection["economicWorkflow"][number]["state"]) {
+  return value === "IN_PROGRESS"
+    ? "In progress"
+    : value === "NOT_STARTED"
+      ? "Not started"
+      : sentence(value);
+}
 function percent(bps: number) {
   return `${(bps / 100).toFixed(Number.isInteger(bps / 100) ? 0 : 2)}%`;
+}
+function isValidPounds(value: string) {
+  return /^\d+(?:\.\d{1,2})?$/.test(value) && Number(value) > 0;
+}
+function poundsToMinor(value: string) {
+  const [whole = "0", fraction = ""] = value.trim().split(".");
+  return `${whole}${fraction.padEnd(2, "0")}`.replace(/^0+(?=\d)/, "");
 }
 function dateTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {

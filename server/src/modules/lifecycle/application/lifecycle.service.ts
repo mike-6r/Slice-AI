@@ -417,6 +417,7 @@ export class LifecycleService {
         nextActor: item.nextAction.actor,
         blockers,
       },
+      economicWorkflow: operationEconomicWorkflow(item),
       launchReadiness: item.launchReadiness,
       reconciliation: {
         ownership: {
@@ -1687,6 +1688,113 @@ function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
   };
 }
 
+/**
+ * Detail uses this server-owned projection verbatim. This prevents a separate
+ * React state machine from disagreeing with the queue and launch policy.
+ */
+function operationEconomicWorkflow(
+  item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+) {
+  const physicalBlocked = !item.eligibleForAssetOperations;
+  const valuationComplete = item.valuation.state === 'VALUED';
+  const ownershipComplete = item.ownership.state === 'ISSUED';
+  const offeringLive = ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(
+    item.offering.state,
+  );
+  const offeringInProgress = [
+    'AWAITING_APPROVAL',
+    'CHANGES_REQUESTED',
+    'APPROVED',
+    'PAUSED',
+  ].includes(item.offering.state);
+
+  return [
+    {
+      key: 'VALUATION' as const,
+      label: 'Valuation',
+      state: valuationComplete
+        ? ('COMPLETE' as const)
+        : item.currentStage === 'VALUATION'
+          ? ('IN_PROGRESS' as const)
+          : physicalBlocked
+            ? ('BLOCKED' as const)
+            : ('NOT_STARTED' as const),
+      detail: valuationComplete
+        ? 'Authoritative valuation recorded'
+        : 'Staff valuation required',
+    },
+    {
+      key: 'OWNERSHIP' as const,
+      label: 'Ownership',
+      state: ownershipComplete
+        ? ('COMPLETE' as const)
+        : item.currentStage === 'OWNERSHIP_SETUP' ||
+            item.ownership.state === 'CONFIGURED' ||
+            item.ownership.state === 'PENDING_APPROVAL'
+          ? ('IN_PROGRESS' as const)
+          : !valuationComplete || physicalBlocked
+            ? ('BLOCKED' as const)
+            : ('NOT_STARTED' as const),
+      detail: ownershipComplete
+        ? 'Ownership issued'
+        : 'Ownership configuration required',
+    },
+    {
+      key: 'INITIAL_OFFERING' as const,
+      label: 'Initial Offering',
+      state: offeringLive
+        ? ('COMPLETE' as const)
+        : offeringInProgress || item.currentStage === 'OFFERING_SETUP'
+          ? ('IN_PROGRESS' as const)
+          : !ownershipComplete
+            ? ('BLOCKED' as const)
+            : ('NOT_STARTED' as const),
+      detail: offeringLive
+        ? 'Initial Offering active'
+        : offeringInProgress
+          ? 'Offering terms in progress'
+          : 'Offering terms not created',
+    },
+    {
+      key: 'LAUNCH' as const,
+      label: 'Launch',
+      state:
+        item.market.state === 'MARKET_LIVE'
+          ? ('COMPLETE' as const)
+          : item.launchReadiness.state === 'READY'
+            ? ('READY' as const)
+            : offeringLive
+              ? ('BLOCKED' as const)
+              : ('NOT_STARTED' as const),
+      detail:
+        item.market.state === 'MARKET_LIVE'
+          ? 'Public record is live'
+          : item.launchReadiness.state === 'READY'
+            ? 'All launch gates satisfied'
+            : (item.launchReadiness.blockers[0] ??
+              'Launch prerequisites incomplete'),
+    },
+    {
+      key: 'MARKET' as const,
+      label: 'Market',
+      state:
+        item.market.state === 'MARKET_LIVE'
+          ? ('LIVE' as const)
+          : offeringLive
+            ? ('IN_PROGRESS' as const)
+            : item.market.state === 'PAUSED'
+              ? ('BLOCKED' as const)
+              : ('NOT_STARTED' as const),
+      detail:
+        item.market.state === 'MARKET_LIVE'
+          ? 'Market live'
+          : item.market.state === 'PAUSED'
+            ? 'Market restriction active'
+            : 'Market not live',
+    },
+  ];
+}
+
 function sourceImage(sourceRef: string | null) {
   if (!sourceRef) return null;
   try {
@@ -1810,6 +1918,7 @@ function operationsCounts(
 export const operationsQueueTestUtils = {
   physicalEntryBlockers,
   operationsNextAction,
+  operationEconomicWorkflow,
 };
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */

@@ -57,4 +57,24 @@ describe('Asset Operations queue authority', () => {
       target: 'COLLECTIBLE',
     });
   });
+
+  it('projects a live market workflow from the same server authority as the queue', () => {
+    const workflow = operationsQueueTestUtils.operationEconomicWorkflow({
+      eligibleForAssetOperations: true,
+      valuation: { state: 'VALUED' },
+      ownership: { state: 'ISSUED' },
+      offering: { state: 'OPEN' },
+      currentStage: 'MARKET_LIVE',
+      market: { state: 'MARKET_LIVE' },
+      launchReadiness: { state: 'READY', blockers: [] },
+    } as never);
+
+    expect(workflow).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'VALUATION', state: 'COMPLETE' }),
+        expect.objectContaining({ key: 'OWNERSHIP', state: 'COMPLETE' }),
+        expect.objectContaining({ key: 'MARKET', state: 'LIVE' }),
+      ]),
+    );
+  });
 });
