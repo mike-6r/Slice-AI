@@ -2793,8 +2793,13 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
     enabled: canSelectVault,
   });
   const selectVault = useMutation({
-    mutationFn: ({ vaultId, deliveryMethod }: { vaultId: string; deliveryMethod: "SHIPMENT" | "IN_PERSON" }) =>
-      repositories.collectorWorkspace.selectVault(asset.id, vaultId, deliveryMethod),
+    mutationFn: ({
+      vaultId,
+      deliveryMethod,
+    }: {
+      vaultId: string;
+      deliveryMethod: "SHIPMENT" | "IN_PERSON";
+    }) => repositories.collectorWorkspace.selectVault(asset.id, vaultId, deliveryMethod),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
       void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.detail(asset.id) });
@@ -2840,12 +2845,16 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           </small>
           {vaults.data?.map((vault) => (
             <div key={vault.id} className="collector-intake-action">
-              <strong>{vault.displayName} · {vault.region}, {vault.countryCode}</strong>
+              <strong>
+                {vault.displayName} · {vault.region}, {vault.countryCode}
+              </strong>
               {vault.acceptingShipments ? (
                 <button
                   className="collector-button"
                   disabled={selectVault.isPending}
-                  onClick={() => selectVault.mutate({ vaultId: vault.id, deliveryMethod: "SHIPMENT" })}
+                  onClick={() =>
+                    selectVault.mutate({ vaultId: vault.id, deliveryMethod: "SHIPMENT" })
+                  }
                 >
                   Ship to this location <ArrowRight aria-hidden="true" />
                 </button>
@@ -2854,7 +2863,9 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
                 <button
                   className="collector-button"
                   disabled={selectVault.isPending}
-                  onClick={() => selectVault.mutate({ vaultId: vault.id, deliveryMethod: "IN_PERSON" })}
+                  onClick={() =>
+                    selectVault.mutate({ vaultId: vault.id, deliveryMethod: "IN_PERSON" })
+                  }
                 >
                   Deliver in person <ArrowRight aria-hidden="true" />
                 </button>
@@ -2887,7 +2898,10 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           <strong>Deliver your collectible in person</strong>
           <small>{asset.intake.vault.customerSafeAddress}</small>
           <small>{asset.intake.vault.shippingInstructions}</small>
-          <p>Bring the collectible to this approved location. An authorised Slice staff member will confirm receipt; no carrier or tracking number is needed.</p>
+          <p>
+            Bring the collectible to this approved location. An authorised Slice staff member will
+            confirm receipt; no carrier or tracking number is needed.
+          </p>
         </div>
       ) : null}
       {asset.intake?.shipment ? (

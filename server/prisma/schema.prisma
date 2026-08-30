@@ -610,6 +610,12 @@ enum IntakeLocationType {
   DEMO_TEST
 }
 
+enum IntakeLocationStatus {
+  ACTIVE
+  TEMPORARILY_UNAVAILABLE
+  INACTIVE
+}
+
 enum IntakeStatus {
   VAULT_SELECTED
   SHIPPING_REQUIRED
@@ -1993,8 +1999,15 @@ model VaultIntakeLocation {
   acceptingShipments    Boolean            @default(false)
   acceptingInPerson     Boolean            @default(false)
   locationType          IntakeLocationType @default(SLICE_VAULT)
+  status                IntakeLocationStatus @default(ACTIVE)
+  receiverName          String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  postalCode            String?
   acceptedCategories    Json?
   shippingInstructions  String
+  inPersonInstructions  String?
   customerSafeAddress   String
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -2002,6 +2015,8 @@ model VaultIntakeLocation {
   preferredBySubmissions AssetSubmission[] @relation("SubmissionPreferredIntakeLocation")
 
   @@index([active, intakeAvailable, countryCode, id])
+  @@index([status, environment, countryCode, id])
+  @@unique([displayName, countryCode])
 }
 
 model SubmissionIntake {
@@ -2015,6 +2030,7 @@ model SubmissionIntake {
   shippedAt       DateTime?
   deliveredAt     DateTime?
   receivedAt      DateTime?
+  destinationSnapshot Json?
   createdAt       DateTime                   @default(now())
   updatedAt       DateTime                   @updatedAt
   submission      AssetSubmission            @relation(fields: [submissionId], references: [id], onDelete: Restrict)

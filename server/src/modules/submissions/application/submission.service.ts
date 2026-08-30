@@ -2536,14 +2536,20 @@ export class SubmissionService {
                 deliveryMethod: submission!.preferredDeliveryMethod,
                 intakeReference: `SLICE-${id.slice(-8).toUpperCase()}`,
                 status: 'SHIPPING_REQUIRED',
+                destinationSnapshot: intakeLocationSnapshot(location),
               },
               update: {},
             });
-            await audit('INTAKE_PREFERENCE_CARRIED_FORWARD', 'submission-intake', intake.id, {
-              submissionId: id,
-              locationId: location.id,
-              deliveryMethod: submission!.preferredDeliveryMethod,
-            });
+            await audit(
+              'INTAKE_PREFERENCE_CARRIED_FORWARD',
+              'submission-intake',
+              intake.id,
+              {
+                submissionId: id,
+                locationId: location.id,
+                deliveryMethod: submission!.preferredDeliveryMethod,
+              },
+            );
           }
         }
         return ownerProjection(updated);
@@ -3265,7 +3271,8 @@ export class SubmissionService {
     if (!location)
       throw new UnprocessableEntityException({
         code: 'INTAKE_LOCATION_UNAVAILABLE',
-        message: 'That intake location is no longer available for this delivery method.',
+        message:
+          'That intake location is no longer available for this delivery method.',
       });
     const categories = location.acceptedCategories;
     if (
@@ -3275,7 +3282,8 @@ export class SubmissionService {
     )
       throw new UnprocessableEntityException({
         code: 'INTAKE_LOCATION_CATEGORY_UNSUPPORTED',
-        message: 'That intake location does not accept this collectible category.',
+        message:
+          'That intake location does not accept this collectible category.',
       });
   }
 
@@ -4292,4 +4300,38 @@ function decodeCursor(
       message: 'The cursor is invalid.',
     });
   }
+}
+
+function intakeLocationSnapshot(location: {
+  id: string;
+  displayName: string;
+  locationType: string;
+  environment: string;
+  region: string;
+  countryCode: string;
+  receiverName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  postalCode: string | null;
+  customerSafeAddress: string;
+  shippingInstructions: string;
+  inPersonInstructions: string | null;
+}) {
+  return {
+    locationId: location.id,
+    displayName: location.displayName,
+    locationType: location.locationType,
+    environment: location.environment,
+    region: location.region,
+    countryCode: location.countryCode,
+    receiverName: location.receiverName,
+    addressLine1: location.addressLine1,
+    addressLine2: location.addressLine2,
+    city: location.city,
+    postalCode: location.postalCode,
+    customerSafeAddress: location.customerSafeAddress,
+    shippingInstructions: location.shippingInstructions,
+    inPersonInstructions: location.inPersonInstructions,
+  };
 }

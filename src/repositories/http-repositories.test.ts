@@ -653,6 +653,8 @@ describe("HTTP catalogue mapping", () => {
       setId: null,
       gradeScaleEntryId: null,
       declaredMetadata: { name: "Charizard" },
+      preferredIntakeLocationId: null,
+      preferredDeliveryMethod: null,
       submittedAt: null,
       reviewedAt: null,
       decisionCode: null,
@@ -689,6 +691,8 @@ describe("HTTP catalogue mapping", () => {
         setId: null,
         gradeScaleEntryId: null,
         declaredMetadata: { name: "Charizard" },
+        preferredIntakeLocationId: null,
+        preferredDeliveryMethod: null,
         submittedAt: "2026-08-08T00:00:00.000Z",
         reviewedAt: "2026-08-08T01:00:00.000Z",
         decisionCode: "INCOMPLETE_EVIDENCE",
@@ -851,6 +855,83 @@ describe("HTTP catalogue mapping", () => {
     expect(request).toHaveBeenNthCalledWith(
       2,
       "/admin/sale-proposals/proposal-1/close",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+      }),
+    );
+  });
+
+  it("uses the paginated intake-location authority and idempotent location mutations", async () => {
+    const intakeLocation = {
+      id: "beta-test-uk-intake",
+      displayName: "Slice Beta Intake — UK Test Facility",
+      locationType: "DEMO_TEST",
+      environment: "beta",
+      status: "ACTIVE",
+      active: true,
+      intakeAvailable: false,
+      operationallyApproved: false,
+      acceptingShipments: true,
+      acceptingInPerson: true,
+      region: "Greater Manchester",
+      countryCode: "GB",
+      city: null,
+      activeIntakes: 0,
+      updatedAt: "2026-08-29T12:00:00.000Z",
+    };
+    const get = vi.fn().mockResolvedValue({
+      summary: {
+        activeLocations: 1,
+        shippingEnabled: 0,
+        inPersonEnabled: 0,
+        partnerLocations: 0,
+        unavailable: 0,
+      },
+      items: [intakeLocation],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
+    const request = vi.fn().mockResolvedValue({
+      ...intakeLocation,
+      acceptingNewIntakes: false,
+      audited: true,
+    });
+    const repositories = createHttpRepositories({ get, request } as unknown as ApiClient);
+    await expect(
+      repositories.admin.listIntakeLocations({
+        q: "Manchester",
+        deliveryMethod: "IN_PERSON",
+        environment: "beta",
+        acceptingNewIntakes: false,
+        page: 1,
+      }),
+    ).resolves.toMatchObject({
+      summary: { activeLocations: 1 },
+      items: [{ id: "beta-test-uk-intake", activeIntakes: 0 }],
+    });
+    await expect(
+      repositories.admin.createIntakeLocation({
+        displayName: intakeLocation.displayName,
+        locationType: "DEMO_TEST",
+        environment: "beta",
+        status: "ACTIVE",
+        acceptingNewIntakes: false,
+        operationallyApproved: false,
+        acceptingShipments: true,
+        acceptingInPerson: true,
+        region: "Greater Manchester",
+        countryCode: "GB",
+        acceptedCategoryIds: [],
+        shippingInstructions: "",
+        reason: "Create the beta test location.",
+      }),
+    ).resolves.toMatchObject({ id: "beta-test-uk-intake", audited: true });
+    expect(get).toHaveBeenCalledWith(
+      "/admin/intake/locations",
+      expect.objectContaining({ q: "Manchester", deliveryMethod: "IN_PERSON" }),
+    );
+    expect(request).toHaveBeenCalledWith(
+      "/admin/intake/locations",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),

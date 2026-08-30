@@ -16,6 +16,10 @@ import type {
   AdminPlatformRecordsResponse,
   AdminPlatformRecord,
   AdminIntakeDetail,
+  AdminIntakeLocation,
+  AdminIntakeLocationDetail,
+  AdminIntakeLocationsResponse,
+  IntakeLocationInput,
   AdminIntakeRow,
   AdminMembershipDetailResponse,
   AdminMembershipDirectoryResponse,
@@ -2449,8 +2453,7 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
           id: stringField(intake.id, "admin intake detail.intake.id"),
           reference: stringField(intake.reference, "admin intake detail.intake.reference"),
           status: stringField(intake.status, "admin intake detail.intake.status"),
-          deliveryMethod:
-            intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
+          deliveryMethod: intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
           selectedAt: stringField(intake.selectedAt, "admin intake detail.intake.selectedAt"),
           shippedAt: nullableString(intake.shippedAt, "admin intake detail.intake.shippedAt"),
           deliveredAt: nullableString(intake.deliveredAt, "admin intake detail.intake.deliveredAt"),
@@ -2617,6 +2620,135 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
       : [],
   };
 };
+
+const intakeLocationType = (value: unknown, label: string): AdminIntakeLocation["locationType"] => {
+  if (
+    ["SLICE_VAULT", "SLICE_INTAKE", "PARTNER_STORE", "PARTNER_INTAKE", "DEMO_TEST"].includes(
+      String(value),
+    )
+  )
+    return value as AdminIntakeLocation["locationType"];
+  throw new Error(`${label} is invalid.`);
+};
+const intakeLocationStatus = (value: unknown, label: string): AdminIntakeLocation["status"] => {
+  if (["ACTIVE", "TEMPORARILY_UNAVAILABLE", "INACTIVE"].includes(String(value)))
+    return value as AdminIntakeLocation["status"];
+  throw new Error(`${label} is invalid.`);
+};
+const mapAdminIntakeLocation = (raw: unknown): AdminIntakeLocation => {
+  const value = objectField(raw, "admin intake location");
+  return {
+    id: stringField(value.id, "admin intake location.id"),
+    displayName: stringField(value.displayName, "admin intake location.displayName"),
+    locationType: intakeLocationType(value.locationType, "admin intake location.locationType"),
+    environment: value.environment === "production" ? "production" : "beta",
+    status: intakeLocationStatus(value.status, "admin intake location.status"),
+    active: Boolean(value.active),
+    intakeAvailable: Boolean(value.intakeAvailable),
+    operationallyApproved: Boolean(value.operationallyApproved),
+    acceptingShipments: Boolean(value.acceptingShipments),
+    acceptingInPerson: Boolean(value.acceptingInPerson),
+    region: stringField(value.region, "admin intake location.region"),
+    countryCode: stringField(value.countryCode, "admin intake location.countryCode"),
+    city: nullableString(value.city, "admin intake location.city"),
+    activeIntakes: Number(value.activeIntakes ?? 0),
+    updatedAt: stringField(value.updatedAt, "admin intake location.updatedAt"),
+  };
+};
+const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail => {
+  const value = objectField(raw, "admin intake location detail");
+  const locationRaw = objectField(value.location, "admin intake location detail.location");
+  const location = {
+    ...mapAdminIntakeLocation(locationRaw),
+    acceptingNewIntakes: Boolean(locationRaw.acceptingNewIntakes),
+    receiverName: nullableString(locationRaw.receiverName, "intake location.receiverName"),
+    addressLine1: nullableString(locationRaw.addressLine1, "intake location.addressLine1"),
+    addressLine2: nullableString(locationRaw.addressLine2, "intake location.addressLine2"),
+    postalCode: nullableString(locationRaw.postalCode, "intake location.postalCode"),
+    shippingInstructions: stringField(
+      locationRaw.shippingInstructions,
+      "intake location.shippingInstructions",
+    ),
+    inPersonInstructions: nullableString(
+      locationRaw.inPersonInstructions,
+      "intake location.inPersonInstructions",
+    ),
+    customerSafeAddress: stringField(
+      locationRaw.customerSafeAddress,
+      "intake location.customerSafeAddress",
+    ),
+    supportedCategories: Array.isArray(locationRaw.supportedCategories)
+      ? locationRaw.supportedCategories.map((item) => {
+          const category = objectField(item, "intake location category");
+          return {
+            id: stringField(category.id, "intake location category.id"),
+            name: stringField(category.name, "intake location category.name"),
+          };
+        })
+      : [],
+    createdAt: stringField(locationRaw.createdAt, "intake location.createdAt"),
+  };
+  return {
+    location,
+    intakes: Array.isArray(value.intakes)
+      ? value.intakes.map((item) => {
+          const intake = objectField(item, "intake location intake");
+          return {
+            id: stringField(intake.id, "intake location intake.id"),
+            submissionId: stringField(intake.submissionId, "intake location intake.submissionId"),
+            reference: stringField(intake.reference, "intake location intake.reference"),
+            title: stringField(intake.title, "intake location intake.title"),
+            collector: stringField(intake.collector, "intake location intake.collector"),
+            deliveryMethod: intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
+            stage: stringField(intake.stage, "intake location intake.stage"),
+            updatedAt: stringField(intake.updatedAt, "intake location intake.updatedAt"),
+            issue:
+              intake.issue === null
+                ? null
+                : (() => {
+                    const issue = objectField(intake.issue, "intake location issue");
+                    return {
+                      code: stringField(issue.code, "intake location issue.code"),
+                      severity: stringField(issue.severity, "intake location issue.severity"),
+                    };
+                  })(),
+          };
+        })
+      : [],
+    counts:
+      value.counts && typeof value.counts === "object"
+        ? Object.fromEntries(
+            Object.entries(value.counts as Record<string, unknown>).map(([key, count]) => [
+              key,
+              Number(count ?? 0),
+            ]),
+          )
+        : {},
+    history: Array.isArray(value.history)
+      ? value.history.map((item) => {
+          const event = objectField(item, "intake location history");
+          return {
+            id: stringField(event.id, "intake location history.id"),
+            action: stringField(event.action, "intake location history.action"),
+            actor: stringField(event.actor, "intake location history.actor"),
+            occurredAt: stringField(event.occurredAt, "intake location history.occurredAt"),
+          };
+        })
+      : [],
+  };
+};
+
+const mapIntakeLocationMutation = (value: Record<string, unknown>) => ({
+  id: stringField(value.id, "intake location mutation.id"),
+  displayName: stringField(value.displayName, "intake location mutation.displayName"),
+  status: intakeLocationStatus(value.status, "intake location mutation.status"),
+  active: Boolean(value.active),
+  acceptingNewIntakes: Boolean(value.acceptingNewIntakes),
+  acceptingShipments: Boolean(value.acceptingShipments),
+  acceptingInPerson: Boolean(value.acceptingInPerson),
+  updatedAt: stringField(value.updatedAt, "intake location mutation.updatedAt"),
+  audited: Boolean(value.audited),
+});
 
 const mapAdminMembership = (raw: unknown): AdminMembershipRow => {
   const value = objectField(raw, "admin membership row");
@@ -4273,26 +4405,56 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         await client.get<unknown>(`/admin/intake/submissions/${encodeURIComponent(submissionId)}`),
       );
     },
-    async setIntakeDestinationApproval(id, input) {
+    async listIntakeLocations(input) {
       const value = objectField(
-        await client.request<unknown>(`/admin/intake/destinations/${id}/approval`, {
+        await client.get<unknown>("/admin/intake/locations", input),
+        "admin intake locations",
+      );
+      const summary = objectField(value.summary, "admin intake locations.summary");
+      const pagination = objectField(value.pagination, "admin intake locations.pagination");
+      return {
+        summary: {
+          activeLocations: Number(summary.activeLocations ?? 0),
+          shippingEnabled: Number(summary.shippingEnabled ?? 0),
+          inPersonEnabled: Number(summary.inPersonEnabled ?? 0),
+          partnerLocations: Number(summary.partnerLocations ?? 0),
+          unavailable: Number(summary.unavailable ?? 0),
+        },
+        items: Array.isArray(value.items) ? value.items.map(mapAdminIntakeLocation) : [],
+        pagination: {
+          page: Number(pagination.page ?? 1),
+          pageSize: Number(pagination.pageSize ?? 20),
+          total: Number(pagination.total ?? 0),
+          totalPages: Number(pagination.totalPages ?? 1),
+        },
+      } satisfies AdminIntakeLocationsResponse;
+    },
+    async getIntakeLocation(id) {
+      return mapAdminIntakeLocationDetail(
+        await client.get<unknown>(`/admin/intake/locations/${encodeURIComponent(id)}`),
+      );
+    },
+    async createIntakeLocation(input) {
+      const value = objectField(
+        await client.request<unknown>("/admin/intake/locations", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "Idempotency-Key": idempotencyKey(),
-          },
+          headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
           body: JSON.stringify(input),
         }),
-        "intake destination approval",
+        "intake location create",
       );
-      return {
-        id: stringField(value.id, "intake destination.id"),
-        displayName: stringField(value.displayName, "intake destination.displayName"),
-        operationallyApproved: Boolean(value.operationallyApproved),
-        acceptingShipments: Boolean(value.acceptingShipments),
-        acceptingInPerson: Boolean(value.acceptingInPerson),
-        audited: Boolean(value.audited),
-      };
+      return mapIntakeLocationMutation(value);
+    },
+    async updateIntakeLocation(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/intake/locations/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
+          body: JSON.stringify(input),
+        }),
+        "intake location update",
+      );
+      return mapIntakeLocationMutation(value);
     },
     async confirmIntakeReceipt(id, input) {
       const value = objectField(

@@ -35,6 +35,282 @@
   --shadow-card: var(--shadow-soft);
 }
 
+/* Intake location management keeps operational configuration compact and readable. */
+.intake-locations-workspace {
+  display: grid;
+  gap: 1rem;
+}
+.intake-locations-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.intake-locations-header h2,
+.intake-locations-header h3 {
+  margin: 0.18rem 0;
+}
+.intake-locations-header p {
+  margin: 0;
+  color: var(--muted, #91a4af);
+}
+.intake-location-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.intake-location-metrics .admin-panel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.55rem;
+  padding: 1rem;
+}
+.intake-location-metrics svg {
+  color: var(--mint, #2ad7ba);
+  width: 1.2rem;
+}
+.intake-location-metrics strong {
+  font-size: 1.45rem;
+}
+.intake-location-metrics small {
+  grid-column: 2;
+  color: var(--muted, #91a4af);
+}
+.intake-location-directory {
+  display: grid;
+  gap: 1rem;
+}
+.intake-location-filters {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) repeat(2, minmax(10rem, 0.35fr));
+  gap: 0.65rem;
+}
+.intake-location-filters select,
+.intake-location-form select,
+.intake-location-form input,
+.intake-location-form textarea {
+  background: #07141c;
+  border: 1px solid #27414c;
+  border-radius: 0.4rem;
+  color: #edf8f7;
+  min-height: 2.45rem;
+  padding: 0.55rem 0.7rem;
+}
+.intake-location-table {
+  display: grid;
+  border: 1px solid #213943;
+  border-radius: 0.55rem;
+  overflow: auto;
+}
+.intake-location-table-row {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1.6fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(
+      6rem,
+      0.65fr
+    ) minmax(9rem, 0.9fr) minmax(6rem, 0.5fr) minmax(5rem, 0.5fr);
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #1d333d;
+  min-width: 65rem;
+}
+.intake-location-table-row:last-child {
+  border-bottom: 0;
+}
+.intake-location-table-head {
+  color: #7d98a3;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  background: #0c1b23;
+}
+.intake-location-table-row small {
+  display: block;
+  color: #8ba0a8;
+  margin-top: 0.2rem;
+}
+.intake-location-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #8ba0a8;
+}
+.intake-location-pagination button {
+  background: transparent;
+  border: 1px solid #2c4651;
+  color: #b9d4d6;
+  border-radius: 0.3rem;
+  min-width: 2rem;
+  min-height: 2rem;
+}
+.intake-location-pagination button:disabled {
+  opacity: 0.4;
+}
+.intake-location-pagination strong {
+  margin: 0 0.5rem;
+}
+.intake-location-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  color: #a9bdc4;
+}
+.intake-location-status-row span:not(.admin-status-pill) {
+  border-left: 1px solid #2a424c;
+  padding-left: 0.7rem;
+}
+.intake-location-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.intake-location-detail-grid h3,
+.intake-location-detail-grid h4 {
+  margin-top: 0;
+}
+.intake-location-definition {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.75fr) 1fr;
+  gap: 0.7rem 1rem;
+}
+.intake-location-definition dt {
+  color: #8ba0a8;
+}
+.intake-location-definition dd {
+  margin: 0;
+  color: #edf8f7;
+}
+.intake-location-counts {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+.intake-location-counts span {
+  background: #10252d;
+  border-radius: 0.3rem;
+  color: #a7c0c6;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.75rem;
+  text-transform: capitalize;
+}
+.intake-location-counts strong {
+  color: #39d7bd;
+  margin-right: 0.35rem;
+}
+.intake-location-history {
+  display: grid;
+}
+.intake-location-history > div {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  border-bottom: 1px solid #1d333d;
+  padding: 0.8rem 0;
+}
+.intake-location-history span,
+.intake-location-history small {
+  color: #8ba0a8;
+}
+.intake-location-state {
+  color: #a8bec5;
+  padding: 1.2rem;
+  text-align: center;
+}
+.intake-location-modal {
+  align-items: flex-start;
+  background: rgb(1 9 13 / 0.8);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow: auto;
+  padding: 2rem 1rem;
+  position: fixed;
+  z-index: 80;
+}
+.intake-location-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 58rem;
+  width: 100%;
+}
+.intake-location-form fieldset {
+  border: 1px solid #25404b;
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.intake-location-form legend {
+  color: #43d4bd;
+  font-weight: 700;
+  padding: 0 0.35rem;
+}
+.intake-location-form label {
+  color: #d4e7e8;
+  display: grid;
+  font-size: 0.82rem;
+  gap: 0.35rem;
+}
+.intake-location-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+.intake-location-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.intake-location-methods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.intake-location-methods label {
+  background: #0d2028;
+  border: 1px solid #27414c;
+  border-radius: 0.45rem;
+  padding: 0.75rem;
+}
+.intake-location-methods small,
+.intake-location-form-help {
+  color: #8ba0a8;
+}
+.intake-location-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+.intake-location-error {
+  color: #ff827b;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .intake-location-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .intake-location-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .intake-locations-header {
+    flex-direction: column;
+  }
+  .intake-location-filters,
+  .intake-location-form-grid,
+  .intake-location-methods {
+    grid-template-columns: 1fr;
+  }
+  .intake-location-history > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}
+
 /* Consolidated account detail: three operational surfaces, dense but readable. */
 .admin-account-detail-content {
   width: min(100%, 1520px);

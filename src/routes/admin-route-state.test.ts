@@ -110,6 +110,20 @@ describe("admin route state", () => {
     });
   });
 
+  it("preserves an Intake Location detail route and its active tab across refresh", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "intakeLocations",
+        location: "beta-test-uk-intake",
+        locationTab: "history",
+      }),
+    ).toMatchObject({
+      section: "intakeLocations",
+      location: "beta-test-uk-intake",
+      locationTab: "history",
+    });
+  });
+
   it("omits empty optional Accounts filters before the strict API request", () => {
     expect(
       compactAdminAccountFilters({

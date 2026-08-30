@@ -437,11 +437,13 @@ export class CollectorWorkspaceService {
           deliveryMethod,
           intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
           status: 'SHIPPING_REQUIRED',
+          destinationSnapshot: intakeLocationSnapshot(vault),
         },
         update: {
           vaultId,
           deliveryMethod,
           status: 'SHIPPING_REQUIRED',
+          destinationSnapshot: intakeLocationSnapshot(vault),
           updatedAt: new Date(),
         },
         include: { vault: true, shipment: true },
@@ -1594,4 +1596,38 @@ function completedActivity(action: string) {
   return ['VAULT', 'TRACK', 'RECEIPT', 'VERIF', 'PUBLISHED', 'ACCEPT'].some(
     (token) => action.includes(token),
   );
+}
+
+function intakeLocationSnapshot(location: {
+  id: string;
+  displayName: string;
+  locationType: string;
+  environment: string;
+  region: string;
+  countryCode: string;
+  receiverName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  postalCode: string | null;
+  customerSafeAddress: string;
+  shippingInstructions: string;
+  inPersonInstructions: string | null;
+}) {
+  return {
+    locationId: location.id,
+    displayName: location.displayName,
+    locationType: location.locationType,
+    environment: location.environment,
+    region: location.region,
+    countryCode: location.countryCode,
+    receiverName: location.receiverName,
+    addressLine1: location.addressLine1,
+    addressLine2: location.addressLine2,
+    city: location.city,
+    postalCode: location.postalCode,
+    customerSafeAddress: location.customerSafeAddress,
+    shippingInstructions: location.shippingInstructions,
+    inPersonInstructions: location.inPersonInstructions,
+  };
 }

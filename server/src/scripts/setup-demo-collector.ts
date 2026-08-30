@@ -839,59 +839,34 @@ async function ensureCollectorEntitlementsAndVaults(db: PrismaService) {
     );
   }
   // Membership plans are migration-owned and membership state is Stripe-owned.
-  // This fixture may provision vault reference data, but it must never create
-  // or reactivate a fake paid subscription.
-  const destinations = [
-    [
-      'Slice London Vault',
-      'London',
-      'GB',
-      'Ship using a tracked service. Include the intake reference on the outer packaging.',
-      'Slice Collectable\nIntake team\nLondon, United Kingdom',
-    ],
-    [
-      'Slice US East Intake',
-      'US East',
-      'US',
-      'Use protective packaging and a tracked service. Include the intake reference with your shipment.',
-      'Slice Collectable\nUS East Intake\nUnited States',
-    ],
-  ] as const;
-  for (const [
-    displayName,
-    region,
-    countryCode,
-    shippingInstructions,
-    customerSafeAddress,
-  ] of destinations) {
-    await db.vaultIntakeLocation.upsert({
-      where: { id: `staging-${countryCode.toLowerCase()}-intake` },
-      create: {
-        id: `staging-${countryCode.toLowerCase()}-intake`,
-        displayName,
-        region,
-        countryCode,
-        shippingInstructions,
-        customerSafeAddress,
-        acceptedCategories: [],
-        operationallyApproved: false,
-        acceptingShipments: false,
-        environment: 'beta',
-      },
-      update: {
-        displayName,
-        region,
-        countryCode,
-        shippingInstructions,
-        customerSafeAddress,
-        active: true,
-        intakeAvailable: true,
-        operationallyApproved: false,
-        acceptingShipments: false,
-        environment: 'beta',
-      },
-    });
-  }
+  // The demo owns one UK reference location only. It is intentionally paused
+  // until Operations configures a real customer-safe address and approves it.
+  await db.vaultIntakeLocation.upsert({
+    where: { id: 'beta-test-uk-intake' },
+    create: {
+      id: 'beta-test-uk-intake',
+      displayName: 'Slice Beta Intake — UK Test Facility',
+      region: 'Greater Manchester',
+      countryCode: 'GB',
+      locationType: 'DEMO_TEST',
+      status: 'ACTIVE',
+      shippingInstructions: '',
+      customerSafeAddress: '',
+      acceptedCategories: [],
+      intakeAvailable: false,
+      operationallyApproved: false,
+      acceptingShipments: true,
+      acceptingInPerson: false,
+      environment: 'beta',
+    },
+    update: {
+      displayName: 'Slice Beta Intake — UK Test Facility',
+      region: 'Greater Manchester',
+      countryCode: 'GB',
+      locationType: 'DEMO_TEST',
+      environment: 'beta',
+    },
+  });
 }
 
 async function ensureCollectorB(

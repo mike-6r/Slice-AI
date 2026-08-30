@@ -33,6 +33,7 @@
     "staging:demo:vault-live:check": "ts-node src/scripts/check-staging-demo-vault-live.ts",
     "staging:demo:create-disposable-user": "ts-node src/scripts/create-staging-demo-disposable-user.ts",
     "staging:demo:verify-auth": "ts-node src/scripts/verify-staging-demo-auth.ts",
+    "staging:intake-locations:reconcile": "ts-node src/scripts/reconcile-staging-intake-locations.ts",
     "staging:beta:prepare": "ts-node src/scripts/prepare-live-beta.ts",
     "staging:beta:admin": "ts-node src/scripts/provision-beta-admin.ts",
     "beta:retire-fixtures": "ts-node src/scripts/retire-beta-fixtures.ts",

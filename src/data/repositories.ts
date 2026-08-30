@@ -1000,6 +1000,87 @@ export type AdminIntakeResponse = {
   };
 };
 
+export type IntakeLocationType =
+  "SLICE_VAULT" | "SLICE_INTAKE" | "PARTNER_STORE" | "PARTNER_INTAKE" | "DEMO_TEST";
+export type IntakeLocationStatus = "ACTIVE" | "TEMPORARILY_UNAVAILABLE" | "INACTIVE";
+export type AdminIntakeLocation = {
+  id: string;
+  displayName: string;
+  locationType: IntakeLocationType;
+  environment: "beta" | "production";
+  status: IntakeLocationStatus;
+  active: boolean;
+  intakeAvailable: boolean;
+  operationallyApproved: boolean;
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
+  region: string;
+  countryCode: string;
+  city: string | null;
+  activeIntakes: number;
+  updatedAt: string;
+};
+export type AdminIntakeLocationsResponse = {
+  summary: {
+    activeLocations: number;
+    shippingEnabled: number;
+    inPersonEnabled: number;
+    partnerLocations: number;
+    unavailable: number;
+  };
+  items: AdminIntakeLocation[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+export type AdminIntakeLocationDetail = {
+  location: AdminIntakeLocation & {
+    acceptingNewIntakes: boolean;
+    receiverName: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    postalCode: string | null;
+    shippingInstructions: string;
+    inPersonInstructions: string | null;
+    customerSafeAddress: string;
+    supportedCategories: Array<{ id: string; name: string }>;
+    createdAt: string;
+  };
+  intakes: Array<{
+    id: string;
+    submissionId: string;
+    reference: string;
+    title: string;
+    collector: string;
+    deliveryMethod: "SHIPMENT" | "IN_PERSON";
+    stage: string;
+    updatedAt: string;
+    issue: { code: string; severity: string } | null;
+  }>;
+  counts: Record<string, number>;
+  history: Array<{ id: string; action: string; actor: string; occurredAt: string }>;
+};
+export type IntakeLocationInput = {
+  displayName: string;
+  locationType: IntakeLocationType;
+  environment: "beta" | "production";
+  status: IntakeLocationStatus;
+  acceptingNewIntakes: boolean;
+  operationallyApproved: boolean;
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
+  receiverName?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  region: string;
+  postalCode?: string | null;
+  countryCode: string;
+  acceptedCategoryIds: string[];
+  shippingInstructions: string;
+  inPersonInstructions?: string | null;
+  reason: string;
+  expectedUpdatedAt?: string;
+};
+
 export type AdminIntakeDetail = {
   row: AdminIntakeRow;
   intake: {
@@ -1788,20 +1869,42 @@ export interface AdminRepository {
     limit?: number;
   }): Promise<AdminIntakeResponse>;
   getIntakeDetail(submissionId: string): Promise<AdminIntakeDetail>;
-  setIntakeDestinationApproval(
+  listIntakeLocations(input?: {
+    q?: string;
+    type?: IntakeLocationType;
+    deliveryMethod?: "SHIPPING" | "IN_PERSON";
+    environment?: "beta" | "production";
+    status?: IntakeLocationStatus;
+    acceptingNewIntakes?: boolean;
+    sort?: "NAME" | "UPDATED";
+    sortDirection?: "asc" | "desc";
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminIntakeLocationsResponse>;
+  getIntakeLocation(id: string): Promise<AdminIntakeLocationDetail>;
+  createIntakeLocation(input: IntakeLocationInput): Promise<{
+    id: string;
+    displayName: string;
+    status: IntakeLocationStatus;
+    active: boolean;
+    acceptingNewIntakes: boolean;
+    acceptingShipments: boolean;
+    acceptingInPerson: boolean;
+    updatedAt: string;
+    audited: boolean;
+  }>;
+  updateIntakeLocation(
     id: string,
-    input: {
-      operationallyApproved: boolean;
-      acceptingShipments: boolean;
-      acceptingInPerson?: boolean;
-      reason: string;
-    },
+    input: IntakeLocationInput,
   ): Promise<{
     id: string;
     displayName: string;
-    operationallyApproved: boolean;
+    status: IntakeLocationStatus;
+    active: boolean;
+    acceptingNewIntakes: boolean;
     acceptingShipments: boolean;
-    acceptingInPerson?: boolean;
+    acceptingInPerson: boolean;
+    updatedAt: string;
     audited: boolean;
   }>;
   confirmIntakeReceipt(

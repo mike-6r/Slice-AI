@@ -231,6 +231,28 @@ export const mockRepositories: AppRepositories = {
     async getIntakeDetail() {
       throw new Error("Physical intake detail requires the API service.");
     },
+    async listIntakeLocations() {
+      return {
+        summary: {
+          activeLocations: 0,
+          shippingEnabled: 0,
+          inPersonEnabled: 0,
+          partnerLocations: 0,
+          unavailable: 0,
+        },
+        items: [],
+        pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+      };
+    },
+    async getIntakeLocation() {
+      throw new Error("Intake location detail requires the API service.");
+    },
+    async createIntakeLocation() {
+      throw new Error("Intake location management requires the API service.");
+    },
+    async updateIntakeLocation() {
+      throw new Error("Intake location management requires the API service.");
+    },
     async confirmIntakeReceipt() {
       throw new Error("Physical intake requires the API service.");
     },
@@ -248,9 +270,6 @@ export const mockRepositories: AppRepositories = {
     },
     async resolveIntakeException() {
       throw new Error("Physical intake requires the API service.");
-    },
-    async setIntakeDestinationApproval() {
-      throw new Error("Intake destination approval requires the API service.");
     },
     async listMemberships() {
       return {

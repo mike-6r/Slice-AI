@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import type { IntakeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
@@ -38,6 +38,76 @@ import {
   stageLabel,
 } from './admin-intake-projections';
 import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
+
+type IntakeLocationManagementInput = {
+  displayName: string;
+  locationType:
+    | 'SLICE_VAULT'
+    | 'SLICE_INTAKE'
+    | 'PARTNER_STORE'
+    | 'PARTNER_INTAKE'
+    | 'DEMO_TEST';
+  environment: 'beta' | 'production';
+  status: 'ACTIVE' | 'TEMPORARILY_UNAVAILABLE' | 'INACTIVE';
+  acceptingNewIntakes: boolean;
+  operationallyApproved: boolean;
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
+  receiverName?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  region: string;
+  postalCode?: string | null;
+  countryCode: string;
+  acceptedCategoryIds: string[];
+  shippingInstructions: string;
+  inPersonInstructions?: string | null;
+  reason: string;
+  expectedUpdatedAt?: string;
+};
+
+const activeIntakeStatuses: IntakeStatus[] = [
+  'VAULT_SELECTED',
+  'SHIPPING_REQUIRED',
+  'IN_TRANSIT',
+  'DELIVERED',
+  'RECEIVED',
+  'VERIFICATION',
+];
+
+function customerSafeLocationAddress(input: IntakeLocationManagementInput) {
+  if (!input.addressLine1) return '';
+  return [
+    input.receiverName,
+    input.addressLine1,
+    input.addressLine2,
+    input.city,
+    input.region,
+    input.postalCode,
+    input.countryCode.toUpperCase(),
+  ]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(', ');
+}
+
+function intakeLocationAuditState(location: {
+  active: boolean;
+  intakeAvailable: boolean;
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
+  status: string;
+  updatedAt: Date;
+}) {
+  return {
+    status: location.status,
+    active: location.active,
+    acceptingNewIntakes: location.intakeAvailable,
+    acceptingShipments: location.acceptingShipments,
+    acceptingInPerson: location.acceptingInPerson,
+    updatedAt: location.updatedAt.toISOString(),
+  };
+}
 
 @Injectable()
 export class AdminService {
@@ -3694,15 +3764,303 @@ export class AdminService {
     };
   }
 
-  async setIntakeDestinationApproval(
+  async listIntakeLocations(
     actor: Actor,
-    destinationId: string,
     input: {
-      operationallyApproved: boolean;
-      acceptingShipments: boolean;
-      acceptingInPerson: boolean;
-      reason: string;
+      q?: string;
+      type?:
+        | 'SLICE_VAULT'
+        | 'SLICE_INTAKE'
+        | 'PARTNER_STORE'
+        | 'PARTNER_INTAKE'
+        | 'DEMO_TEST';
+      deliveryMethod?: 'SHIPPING' | 'IN_PERSON';
+      environment?: 'beta' | 'production';
+      status?: 'ACTIVE' | 'TEMPORARILY_UNAVAILABLE' | 'INACTIVE';
+      acceptingNewIntakes?: boolean;
+      sort?: 'NAME' | 'UPDATED';
+      sortDirection?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
     },
+  ) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 20;
+    const where: Prisma.VaultIntakeLocationWhereInput = {
+      ...(input.type ? { locationType: input.type } : {}),
+      ...(input.environment ? { environment: input.environment } : {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.acceptingNewIntakes === undefined
+        ? {}
+        : { intakeAvailable: input.acceptingNewIntakes }),
+      ...(input.deliveryMethod === 'SHIPPING'
+        ? { acceptingShipments: true }
+        : input.deliveryMethod === 'IN_PERSON'
+          ? { acceptingInPerson: true }
+          : {}),
+      ...(input.q
+        ? {
+            OR: [
+              { displayName: { contains: input.q, mode: 'insensitive' } },
+              { region: { contains: input.q, mode: 'insensitive' } },
+              { countryCode: { contains: input.q, mode: 'insensitive' } },
+              { city: { contains: input.q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const direction = input.sortDirection ?? 'asc';
+    const orderBy: Prisma.VaultIntakeLocationOrderByWithRelationInput[] =
+      input.sort === 'UPDATED'
+        ? [{ updatedAt: direction }, { id: 'asc' }]
+        : [{ displayName: direction }, { id: 'asc' }];
+    const [total, locations] = await this.db.$transaction([
+      this.db.vaultIntakeLocation.count({ where }),
+      this.db.vaultIntakeLocation.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          displayName: true,
+          locationType: true,
+          environment: true,
+          status: true,
+          active: true,
+          intakeAvailable: true,
+          operationallyApproved: true,
+          acceptingShipments: true,
+          acceptingInPerson: true,
+          region: true,
+          countryCode: true,
+          city: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              intakes: { where: { status: { in: activeIntakeStatuses } } },
+            },
+          },
+        },
+      }),
+    ]);
+    const summary = await this.db.vaultIntakeLocation.aggregate({
+      _count: { _all: true },
+      where: { status: 'ACTIVE' },
+    });
+    const [shippingEnabled, inPersonEnabled, partnerLocations, unavailable] =
+      await Promise.all([
+        this.db.vaultIntakeLocation.count({
+          where: {
+            active: true,
+            intakeAvailable: true,
+            acceptingShipments: true,
+          },
+        }),
+        this.db.vaultIntakeLocation.count({
+          where: {
+            active: true,
+            intakeAvailable: true,
+            acceptingInPerson: true,
+          },
+        }),
+        this.db.vaultIntakeLocation.count({
+          where: { locationType: { in: ['PARTNER_STORE', 'PARTNER_INTAKE'] } },
+        }),
+        this.db.vaultIntakeLocation.count({
+          where: { status: { in: ['TEMPORARILY_UNAVAILABLE', 'INACTIVE'] } },
+        }),
+      ]);
+    return {
+      summary: {
+        activeLocations: summary._count._all,
+        shippingEnabled,
+        inPersonEnabled,
+        partnerLocations,
+        unavailable,
+      },
+      items: locations.map((location) => ({
+        ...location,
+        activeIntakes: location._count.intakes,
+        _count: undefined,
+        updatedAt: location.updatedAt.toISOString(),
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+    };
+  }
+
+  async intakeLocationDetail(actor: Actor, locationId: string) {
+    await this.authorization.authorize(actor, 'admin.console.read');
+    const location = await this.db.vaultIntakeLocation.findUnique({
+      where: { id: locationId },
+      include: {
+        intakes: {
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 50,
+          include: {
+            submission: {
+              select: {
+                id: true,
+                declaredMetadata: true,
+                owner: {
+                  select: {
+                    profile: {
+                      select: { displayName: true, publicUsername: true },
+                    },
+                  },
+                },
+              },
+            },
+            shipment: { select: { status: true } },
+            receipt: { select: { id: true } },
+            verification: { select: { status: true } },
+            exceptions: {
+              where: { resolvedAt: null },
+              select: { id: true, code: true, severity: true },
+            },
+          },
+        },
+        _count: {
+          select: {
+            intakes: { where: { status: { in: activeIntakeStatuses } } },
+          },
+        },
+      },
+    });
+    if (!location)
+      throw new NotFoundException({
+        code: 'INTAKE_LOCATION_NOT_FOUND',
+        message: 'Intake location not found.',
+      });
+    const [categories, history] = await Promise.all([
+      Array.isArray(location.acceptedCategories) &&
+      location.acceptedCategories.length
+        ? this.db.category.findMany({
+            where: {
+              id: {
+                in: location.acceptedCategories.filter(
+                  (id): id is string => typeof id === 'string',
+                ),
+              },
+            },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      this.db.auditEvent.findMany({
+        where: {
+          resourceType: 'vault-intake-location',
+          resourceId: location.id,
+          result: 'SUCCESS',
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+        select: {
+          id: true,
+          action: true,
+          actorType: true,
+          createdAt: true,
+          metadata: true,
+          actor: {
+            select: {
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    const intakeRows = location.intakes.map((intake) => {
+      const metadata = intake.submission.declaredMetadata;
+      const title =
+        metadata &&
+        typeof metadata === 'object' &&
+        !Array.isArray(metadata) &&
+        typeof (metadata as Record<string, unknown>).name === 'string'
+          ? String((metadata as Record<string, unknown>).name)
+          : 'Untitled collectible';
+      const issue = intake.exceptions[0] ?? null;
+      const stage = intake.exceptions.length
+        ? 'EXCEPTION'
+        : intake.receipt
+          ? intake.verification?.status === 'VERIFIED'
+            ? 'VERIFIED'
+            : intake.verification?.status === 'IN_PROGRESS'
+              ? 'VERIFICATION'
+              : 'RECEIVED'
+          : intake.deliveryMethod === 'IN_PERSON'
+            ? 'AWAITING_DROP_OFF'
+            : intake.shipment?.status === 'DELIVERED'
+              ? 'DELIVERED_AWAITING_RECEIPT'
+              : intake.shipment
+                ? 'IN_TRANSIT'
+                : 'AWAITING_SHIPMENT';
+      return {
+        id: intake.id,
+        submissionId: intake.submissionId,
+        reference: intake.intakeReference,
+        title,
+        collector:
+          intake.submission.owner.profile?.displayName ??
+          intake.submission.owner.profile?.publicUsername ??
+          'Collector',
+        deliveryMethod: intake.deliveryMethod,
+        stage,
+        updatedAt: intake.updatedAt.toISOString(),
+        issue: issue ? { code: issue.code, severity: issue.severity } : null,
+      };
+    });
+    return {
+      location: {
+        id: location.id,
+        displayName: location.displayName,
+        locationType: location.locationType,
+        environment: location.environment,
+        status: location.status,
+        active: location.active,
+        acceptingNewIntakes: location.intakeAvailable,
+        operationallyApproved: location.operationallyApproved,
+        acceptingShipments: location.acceptingShipments,
+        acceptingInPerson: location.acceptingInPerson,
+        receiverName: location.receiverName,
+        addressLine1: location.addressLine1,
+        addressLine2: location.addressLine2,
+        city: location.city,
+        region: location.region,
+        postalCode: location.postalCode,
+        countryCode: location.countryCode,
+        shippingInstructions: location.shippingInstructions,
+        inPersonInstructions: location.inPersonInstructions,
+        customerSafeAddress: location.customerSafeAddress,
+        supportedCategories: categories,
+        createdAt: location.createdAt.toISOString(),
+        updatedAt: location.updatedAt.toISOString(),
+        activeIntakes: location._count.intakes,
+      },
+      intakes: intakeRows,
+      counts: intakeRows.reduce<Record<string, number>>((counts, intake) => {
+        counts[intake.stage] = (counts[intake.stage] ?? 0) + 1;
+        return counts;
+      }, {}),
+      history: history.map((event) => ({
+        id: event.id,
+        action: event.action,
+        actor:
+          event.actor?.profile?.displayName ??
+          event.actor?.profile?.publicUsername ??
+          (event.actorType === 'SYSTEM' ? 'System' : 'Authorized staff'),
+        occurredAt: event.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async createIntakeLocation(
+    actor: Actor,
+    input: IntakeLocationManagementInput,
     requestId: string,
   ) {
     await this.authorization.authorize(
@@ -3712,87 +4070,42 @@ export class AdminService {
       undefined,
       requestId,
     );
+    await this.assertIntakeLocationInput(input);
     return this.db.$transaction(async (db) => {
-      const destination = await db.vaultIntakeLocation.findUnique({
-        where: { id: destinationId },
-      });
-      if (!destination)
-        throw new NotFoundException({
-          code: 'INTAKE_DESTINATION_NOT_FOUND',
-          message: 'Intake destination not found.',
-        });
-      if ((input.acceptingShipments || input.acceptingInPerson) && !input.operationallyApproved) {
-        throw new ConflictException({
-          code: 'INTAKE_APPROVAL_REQUIRED',
-          message:
-            'A destination must be operationally approved before accepting shipments.',
-        });
-      }
-      const updated = await db.vaultIntakeLocation.update({
-        where: { id: destinationId },
-        data: {
-          operationallyApproved: input.operationallyApproved,
-          acceptingShipments: input.acceptingShipments,
-          acceptingInPerson: input.acceptingInPerson,
-        },
-      });
-      await db.auditEvent.create({
-        data: {
-          actorUserId: actor.userId,
-          actorType: 'USER',
-          action: 'INTAKE_DESTINATION_APPROVAL_CHANGED',
-          resourceType: 'vault-intake-location',
-          resourceId: destinationId,
-          requestId,
-          result: 'SUCCESS',
-          metadata: {
-            reason: input.reason,
-            previous: {
-              operationallyApproved: destination.operationallyApproved,
-              acceptingShipments: destination.acceptingShipments,
-              acceptingInPerson: destination.acceptingInPerson,
-            },
-            next: {
-              operationallyApproved: updated.operationallyApproved,
-              acceptingShipments: updated.acceptingShipments,
-              acceptingInPerson: updated.acceptingInPerson,
-            },
+      const existing = await db.vaultIntakeLocation.findUnique({
+        where: {
+          displayName_countryCode: {
+            displayName: input.displayName,
+            countryCode: input.countryCode.toUpperCase(),
           },
         },
       });
-      return {
-        id: updated.id,
-        displayName: updated.displayName,
-        operationallyApproved: updated.operationallyApproved,
-        acceptingShipments: updated.acceptingShipments,
-        acceptingInPerson: updated.acceptingInPerson,
-        audited: true,
-      };
+      if (existing)
+        throw new ConflictException({
+          code: 'INTAKE_LOCATION_ALREADY_EXISTS',
+          message: 'A location with this name and country already exists.',
+        });
+      const location = await db.vaultIntakeLocation.create({
+        data: this.intakeLocationData(input),
+      });
+      await this.auditIntakeLocationChange(
+        db,
+        actor,
+        requestId,
+        'INTAKE_LOCATION_CREATED',
+        location.id,
+        input.reason,
+        null,
+        location,
+      );
+      return this.intakeLocationMutationProjection(location);
     });
   }
 
-  async createOrUpdateIntakeDestination(
+  async updateIntakeLocation(
     actor: Actor,
-    input: {
-      id: string;
-      displayName: string;
-      receiverName: string;
-      addressLine1: string;
-      addressLine2?: string;
-      city: string;
-      region: string;
-      postalCode: string;
-      countryCode: string;
-      acceptedCategories: string[];
-      shippingInstructions: string;
-      locationType: 'SLICE_VAULT' | 'SLICE_INTAKE' | 'PARTNER_STORE' | 'PARTNER_INTAKE' | 'DEMO_TEST';
-      environment: 'beta';
-      active: boolean;
-      acceptingShipments: boolean;
-      acceptingInPerson: boolean;
-      operationallyApproved: boolean;
-      reason: string;
-    },
+    locationId: string,
+    input: IntakeLocationManagementInput,
     requestId: string,
   ) {
     await this.authorization.authorize(
@@ -3802,126 +4115,204 @@ export class AdminService {
       undefined,
       requestId,
     );
-    if ((input.acceptingShipments || input.acceptingInPerson) && !input.operationallyApproved) {
-      throw new ConflictException({
-        code: 'INTAKE_APPROVAL_REQUIRED',
-        message:
-          'A destination must be operationally approved before accepting shipments.',
-      });
-    }
-    const categories = await this.db.category.findMany({
-      where: { name: { in: input.acceptedCategories }, status: 'ACTIVE' },
-      select: { id: true, name: true },
-    });
-    const categoryNames = new Set(
-      categories.map((category) => category.name.toLowerCase()),
-    );
-    const missingCategories = input.acceptedCategories.filter(
-      (name) => !categoryNames.has(name.toLowerCase()),
-    );
-    if (missingCategories.length) {
-      throw new NotFoundException({
-        code: 'INTAKE_CATEGORY_NOT_FOUND',
-        message: `Accepted category not found: ${missingCategories.join(', ')}`,
-      });
-    }
-    const address = [
-      input.receiverName,
-      input.addressLine1,
-      input.addressLine2,
-      input.city,
-      input.region,
-      input.postalCode,
-      input.countryCode.toUpperCase(),
-    ]
-      .filter(Boolean)
-      .join(', ');
+    await this.assertIntakeLocationInput(input);
     return this.db.$transaction(async (db) => {
       const previous = await db.vaultIntakeLocation.findUnique({
-        where: { id: input.id },
+        where: { id: locationId },
       });
-      const updated = await db.vaultIntakeLocation.upsert({
-        where: { id: input.id },
-        create: {
-          id: input.id,
+      if (!previous)
+        throw new NotFoundException({
+          code: 'INTAKE_LOCATION_NOT_FOUND',
+          message: 'Intake location not found.',
+        });
+      if (
+        input.expectedUpdatedAt &&
+        previous.updatedAt.toISOString() !== input.expectedUpdatedAt
+      )
+        throw new ConflictException({
+          code: 'INTAKE_LOCATION_STALE',
+          message:
+            'This intake location changed before your update. Refresh and retry.',
+        });
+      const duplicate = await db.vaultIntakeLocation.findFirst({
+        where: {
           displayName: input.displayName,
-          region: input.region,
           countryCode: input.countryCode.toUpperCase(),
-          active: input.active,
-          intakeAvailable: input.active,
-          operationallyApproved: input.operationallyApproved,
-          acceptingShipments: input.acceptingShipments,
-          acceptingInPerson: input.acceptingInPerson,
-          locationType: input.locationType,
-          environment: input.environment,
-          acceptedCategories: categories.map((category) => category.id),
-          shippingInstructions: input.shippingInstructions,
-          customerSafeAddress: address,
+          id: { not: locationId },
         },
-        update: {
-          displayName: input.displayName,
-          region: input.region,
-          countryCode: input.countryCode.toUpperCase(),
-          active: input.active,
-          intakeAvailable: input.active,
-          operationallyApproved: input.operationallyApproved,
-          acceptingShipments: input.acceptingShipments,
-          acceptingInPerson: input.acceptingInPerson,
-          locationType: input.locationType,
-          environment: input.environment,
-          acceptedCategories: categories.map((category) => category.id),
-          shippingInstructions: input.shippingInstructions,
-          customerSafeAddress: address,
-        },
+        select: { id: true },
       });
-      await db.auditEvent.create({
-        data: {
-          actorUserId: actor.userId,
-          actorType: 'USER',
-          action: previous
-            ? 'INTAKE_DESTINATION_UPDATED'
-            : 'INTAKE_DESTINATION_CREATED',
-          resourceType: 'vault-intake-location',
-          resourceId: updated.id,
-          requestId,
-          result: 'SUCCESS',
-          metadata: {
-            reason: input.reason,
-            previous: previous
-              ? {
-                  active: previous.active,
-                  intakeAvailable: previous.intakeAvailable,
-                  operationallyApproved: previous.operationallyApproved,
-                  acceptingShipments: previous.acceptingShipments,
-                  acceptingInPerson: previous.acceptingInPerson,
-                  locationType: previous.locationType,
-                  environment: previous.environment,
-                }
-              : null,
-            next: {
-              active: updated.active,
-              intakeAvailable: updated.intakeAvailable,
-              operationallyApproved: updated.operationallyApproved,
-              acceptingShipments: updated.acceptingShipments,
-              acceptingInPerson: updated.acceptingInPerson,
-              locationType: updated.locationType,
-              environment: updated.environment,
-            },
-          },
-        },
+      if (duplicate)
+        throw new ConflictException({
+          code: 'INTAKE_LOCATION_ALREADY_EXISTS',
+          message: 'A location with this name and country already exists.',
+        });
+      const location = await db.vaultIntakeLocation.update({
+        where: { id: locationId },
+        data: this.intakeLocationData(input),
       });
-      return {
-        id: updated.id,
-        displayName: updated.displayName,
-        active: updated.active,
-        intakeAvailable: updated.intakeAvailable,
-        operationallyApproved: updated.operationallyApproved,
-        acceptingShipments: updated.acceptingShipments,
-        acceptingInPerson: updated.acceptingInPerson,
-        locationType: updated.locationType,
-        audited: true,
-      };
+      await this.auditIntakeLocationChange(
+        db,
+        actor,
+        requestId,
+        location.status === 'INACTIVE'
+          ? 'INTAKE_LOCATION_DEACTIVATED'
+          : 'INTAKE_LOCATION_UPDATED',
+        location.id,
+        input.reason,
+        previous,
+        location,
+      );
+      return this.intakeLocationMutationProjection(location);
     });
+  }
+
+  private async assertIntakeLocationInput(
+    input: IntakeLocationManagementInput,
+  ) {
+    if (!input.acceptingShipments && !input.acceptingInPerson)
+      throw new ConflictException({
+        code: 'INTAKE_DELIVERY_METHOD_REQUIRED',
+        message: 'Configure at least one delivery method.',
+      });
+    if (
+      input.acceptingNewIntakes &&
+      (input.status !== 'ACTIVE' || !input.operationallyApproved)
+    )
+      throw new ConflictException({
+        code: 'INTAKE_LOCATION_UNAVAILABLE',
+        message:
+          'Only active, operationally approved locations may accept new intakes.',
+      });
+    if (input.locationType === 'DEMO_TEST' && input.environment !== 'beta')
+      throw new ConflictException({
+        code: 'DEMO_LOCATION_ENVIRONMENT_INVALID',
+        message: 'Demo/test locations may only be configured for beta.',
+      });
+    if (
+      input.environment === 'production' &&
+      (!input.receiverName ||
+        !input.addressLine1 ||
+        !input.city ||
+        !input.postalCode)
+    )
+      throw new ConflictException({
+        code: 'INTAKE_ADDRESS_REQUIRED',
+        message: 'Production locations require a complete address.',
+      });
+    if (
+      input.acceptingNewIntakes &&
+      (!input.receiverName ||
+        !input.addressLine1 ||
+        !input.city ||
+        !input.postalCode)
+    )
+      throw new ConflictException({
+        code: 'INTAKE_ADDRESS_REQUIRED',
+        message:
+          'A selectable intake location requires a complete customer-safe address.',
+      });
+    if (input.acceptedCategoryIds.length) {
+      const found = await this.db.category.count({
+        where: { id: { in: input.acceptedCategoryIds }, status: 'ACTIVE' },
+      });
+      if (found !== input.acceptedCategoryIds.length)
+        throw new NotFoundException({
+          code: 'INTAKE_CATEGORY_NOT_FOUND',
+          message: 'One or more supported categories are unavailable.',
+        });
+    }
+  }
+
+  private intakeLocationData(input: IntakeLocationManagementInput) {
+    const active = input.status !== 'INACTIVE';
+    return {
+      displayName: input.displayName,
+      locationType: input.locationType,
+      environment: input.environment,
+      status: input.status,
+      active,
+      intakeAvailable: active && input.acceptingNewIntakes,
+      operationallyApproved: input.operationallyApproved,
+      acceptingShipments: input.acceptingShipments,
+      acceptingInPerson: input.acceptingInPerson,
+      receiverName: input.receiverName ?? null,
+      addressLine1: input.addressLine1 ?? null,
+      addressLine2: input.addressLine2 ?? null,
+      city: input.city ?? null,
+      region: input.region,
+      postalCode: input.postalCode ?? null,
+      countryCode: input.countryCode.toUpperCase(),
+      acceptedCategories: input.acceptedCategoryIds,
+      shippingInstructions: input.shippingInstructions,
+      inPersonInstructions: input.inPersonInstructions ?? null,
+      customerSafeAddress: customerSafeLocationAddress(input),
+    };
+  }
+
+  private async auditIntakeLocationChange(
+    db: Prisma.TransactionClient,
+    actor: Actor,
+    requestId: string,
+    action: string,
+    locationId: string,
+    reason: string,
+    previous: {
+      active: boolean;
+      intakeAvailable: boolean;
+      acceptingShipments: boolean;
+      acceptingInPerson: boolean;
+      status: string;
+      updatedAt: Date;
+    } | null,
+    next: {
+      active: boolean;
+      intakeAvailable: boolean;
+      acceptingShipments: boolean;
+      acceptingInPerson: boolean;
+      status: string;
+      updatedAt: Date;
+    },
+  ) {
+    await db.auditEvent.create({
+      data: {
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action,
+        resourceType: 'vault-intake-location',
+        resourceId: locationId,
+        requestId,
+        result: 'SUCCESS',
+        metadata: {
+          reason,
+          previous: previous ? intakeLocationAuditState(previous) : null,
+          next: intakeLocationAuditState(next),
+        },
+      },
+    });
+  }
+
+  private intakeLocationMutationProjection(location: {
+    id: string;
+    displayName: string;
+    status: string;
+    active: boolean;
+    intakeAvailable: boolean;
+    acceptingShipments: boolean;
+    acceptingInPerson: boolean;
+    updatedAt: Date;
+  }) {
+    return {
+      id: location.id,
+      displayName: location.displayName,
+      status: location.status,
+      active: location.active,
+      acceptingNewIntakes: location.intakeAvailable,
+      acceptingShipments: location.acceptingShipments,
+      acceptingInPerson: location.acceptingInPerson,
+      updatedAt: location.updatedAt.toISOString(),
+      audited: true,
+    };
   }
 
   async confirmIntakeReceipt(
@@ -3979,7 +4370,7 @@ export class AdminService {
           confirmedById: actor.userId,
           shipmentRef:
             intake.deliveryMethod === 'SHIPMENT'
-              ? intake.shipment?.trackingNumber ?? null
+              ? (intake.shipment?.trackingNumber ?? null)
               : null,
           auditReference: idempotencyKey,
           packageCondition: input.packageCondition ?? 'UNKNOWN',

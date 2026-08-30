@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Headers,
+  Patch,
   Param,
   Post,
   Query,
@@ -245,44 +246,96 @@ const platformRecordsQuery = z
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
   .strict();
-const intakeApproval = z
+const intakeLocationsQuery = z
   .object({
-    operationallyApproved: z.boolean(),
-    acceptingShipments: z.boolean(),
-    acceptingInPerson: z.boolean().default(false),
-    reason: z.string().trim().min(3).max(500),
+    q: z.string().trim().max(120).optional(),
+    type: z
+      .enum([
+        'SLICE_VAULT',
+        'SLICE_INTAKE',
+        'PARTNER_STORE',
+        'PARTNER_INTAKE',
+        'DEMO_TEST',
+      ])
+      .optional(),
+    deliveryMethod: z.enum(['SHIPPING', 'IN_PERSON']).optional(),
+    environment: z.enum(['beta', 'production']).optional(),
+    status: z
+      .enum(['ACTIVE', 'TEMPORARILY_UNAVAILABLE', 'INACTIVE'])
+      .optional(),
+    acceptingNewIntakes: z.preprocess(
+      (value) => (value === 'true' ? true : value === 'false' ? false : value),
+      z.boolean().optional(),
+    ),
+    sort: z.enum(['NAME', 'UPDATED']).default('NAME'),
+    sortDirection: z.enum(['asc', 'desc']).default('asc'),
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
   })
   .strict();
-const intakeDestination = z
+const intakeLocationInput = z
   .object({
-    id: z
-      .string()
-      .trim()
-      .regex(/^[a-z0-9][a-z0-9-]{2,79}$/),
     displayName: z.string().trim().min(3).max(160),
-    receiverName: z.string().trim().min(2).max(160),
-    addressLine1: z.string().trim().min(3).max(200),
-    addressLine2: z.string().trim().max(200).optional(),
-    city: z.string().trim().min(2).max(120),
+    locationType: z.enum([
+      'SLICE_VAULT',
+      'SLICE_INTAKE',
+      'PARTNER_STORE',
+      'PARTNER_INTAKE',
+      'DEMO_TEST',
+    ]),
+    environment: z.enum(['beta', 'production']),
+    status: z.enum(['ACTIVE', 'TEMPORARILY_UNAVAILABLE', 'INACTIVE']),
+    acceptingNewIntakes: z.boolean(),
+    operationallyApproved: z.boolean(),
+    acceptingShipments: z.boolean(),
+    acceptingInPerson: z.boolean(),
+    receiverName: z.string().trim().min(2).max(160).nullable().optional(),
+    addressLine1: z.string().trim().min(3).max(200).nullable().optional(),
+    addressLine2: z.string().trim().max(200).nullable().optional(),
+    city: z.string().trim().min(2).max(120).nullable().optional(),
     region: z.string().trim().min(2).max(120),
-    postalCode: z.string().trim().min(2).max(32),
+    postalCode: z.string().trim().min(2).max(32).nullable().optional(),
     countryCode: z
       .string()
       .trim()
       .regex(/^[A-Za-z]{2}$/),
-    acceptedCategories: z.array(z.string().trim().min(2).max(120)).max(20),
-    shippingInstructions: z.string().trim().min(10).max(2000),
-    locationType: z
-      .enum(['SLICE_VAULT', 'SLICE_INTAKE', 'PARTNER_STORE', 'PARTNER_INTAKE', 'DEMO_TEST'])
-      .default('SLICE_VAULT'),
-    environment: z.literal('beta'),
-    active: z.boolean(),
-    acceptingShipments: z.boolean(),
-    acceptingInPerson: z.boolean().default(false),
-    operationallyApproved: z.boolean(),
+    acceptedCategoryIds: z
+      .array(z.string().trim().min(2).max(120))
+      .max(50)
+      .default([]),
+    shippingInstructions: z.string().trim().max(2_000).default(''),
+    inPersonInstructions: z.string().trim().max(2_000).nullable().optional(),
     reason: z.string().trim().min(3).max(500),
+    expectedUpdatedAt: z.string().datetime().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.acceptingShipments && !value.acceptingInPerson)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Configure at least one delivery method.',
+      });
+    if (
+      value.acceptingNewIntakes &&
+      (value.status !== 'ACTIVE' || !value.operationallyApproved)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Only active, operationally approved locations may accept new intakes.',
+      });
+    if (
+      value.environment === 'production' &&
+      (!value.receiverName ||
+        !value.addressLine1 ||
+        !value.city ||
+        !value.postalCode)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Production locations require a complete shipping address.',
+      });
+  });
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -371,29 +424,48 @@ export class AdminController {
   ) {
     return this.admin.intakeDetail(request.actor!, submissionId);
   }
-  @Post('intake/destinations/:id/approval')
+  @Get('intake/locations')
+  @RequirePermission('admin.console.read')
+  intakeLocations(
+    @Query() query: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.listIntakeLocations(
+      request.actor!,
+      this.parse(intakeLocationsQuery, query),
+    );
+  }
+  @Get('intake/locations/:id')
+  @RequirePermission('admin.console.read')
+  intakeLocation(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.intakeLocationDetail(request.actor!, id);
+  }
+  @Post('intake/locations')
   @RequirePermission('custody.manage')
-  approveIntakeDestination(
-    @Param('id') destinationId: string,
+  createIntakeLocation(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.admin.setIntakeDestinationApproval(
+    return this.admin.createIntakeLocation(
       request.actor!,
-      destinationId,
-      this.parse(intakeApproval, body),
+      this.parse(intakeLocationInput, body),
       request.requestId ?? 'unknown',
     );
   }
-  @Post('intake/destinations')
+  @Patch('intake/locations/:id')
   @RequirePermission('custody.manage')
-  createOrUpdateIntakeDestination(
+  updateIntakeLocation(
+    @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.admin.createOrUpdateIntakeDestination(
+    return this.admin.updateIntakeLocation(
       request.actor!,
-      this.parse(intakeDestination, body),
+      id,
+      this.parse(intakeLocationInput, body),
       request.requestId ?? 'unknown',
     );
   }

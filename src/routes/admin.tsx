@@ -58,6 +58,7 @@ import { AdminFinanceTrading } from "@/components/admin/AdminFinanceTrading";
 import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
+import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import {
@@ -126,6 +127,8 @@ function AdminConsole() {
     membership: selectedMembership,
     intake: selectedIntake,
     intakeTab,
+    location: selectedLocation,
+    locationTab,
     q: reviewQuery,
     plan: membershipPlan,
     type: trustTypeParam,
@@ -791,7 +794,11 @@ function AdminConsole() {
           </button>
           <div>
             <p>Admin Console</p>
-            <h1>{navItems.find((item) => item.id === section)?.label}</h1>
+            <h1>
+              {section === "intakeLocations"
+                ? "Intake Locations"
+                : navItems.find((item) => item.id === section)?.label}
+            </h1>
           </div>
           <label className="admin-console-search">
             <Search aria-hidden="true" />
@@ -951,6 +958,41 @@ function AdminConsole() {
               void navigate({
                 search: (current) => ({ ...current, ...next, page: next.page ?? "1" }),
                 replace: true,
+              })
+            }
+            openLocations={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "intakeLocations",
+                  intake: undefined,
+                  intakeTab: undefined,
+                }),
+              })
+            }
+          />
+        ) : section === "intakeLocations" ? (
+          <AdminIntakeLocations
+            locationId={selectedLocation}
+            tab={locationTab}
+            onBack={() =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "intake",
+                  location: undefined,
+                  locationTab: undefined,
+                }),
+              })
+            }
+            onOpen={(location, nextTab) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  section: "intakeLocations",
+                  location,
+                  locationTab: nextTab,
+                }),
               })
             }
           />
@@ -1370,6 +1412,7 @@ function PhysicalIntakeWorkspace({
   closeIntake,
   selectIntakeTab,
   updateSearch,
+  openLocations,
 }: {
   data: AdminIntakeResponse | undefined;
   loading: boolean;
@@ -1390,6 +1433,7 @@ function PhysicalIntakeWorkspace({
   closeIntake: () => void;
   selectIntakeTab: (tab: string) => void;
   updateSearch: (next: Record<string, string | undefined>) => void;
+  openLocations: () => void;
 }) {
   if (loading)
     return (
@@ -1421,6 +1465,7 @@ function PhysicalIntakeWorkspace({
       closeIntake={closeIntake}
       selectIntakeTab={selectIntakeTab}
       updateSearch={updateSearch}
+      openLocations={openLocations}
     />
   );
 }
@@ -1455,6 +1500,7 @@ function PhysicalIntakeBoard({
   closeIntake,
   selectIntakeTab,
   updateSearch,
+  openLocations,
 }: {
   data: AdminIntakeResponse | undefined;
   search: string;
@@ -1472,6 +1518,7 @@ function PhysicalIntakeBoard({
   closeIntake: () => void;
   selectIntakeTab: (tab: string) => void;
   updateSearch: (next: Record<string, string | undefined>) => void;
+  openLocations: () => void;
 }) {
   const services = useAppServices();
   const verificationStart = useMutation({
@@ -1481,7 +1528,6 @@ function PhysicalIntakeBoard({
   const [draftSearch, setDraftSearch] = useState(search);
   const [receiptRow, setReceiptRow] = useState<AdminIntakeRow | null>(null);
   const [demoRow, setDemoRow] = useState<AdminIntakeRow | null>(null);
-  const [showDestinations, setShowDestinations] = useState(false);
   const [fixtureMode, setFixtureMode] = useState<"ALL" | "PRODUCTION" | "DEMO_QA">(
     (["ALL", "PRODUCTION", "DEMO_QA"].includes(fixture) ? fixture : "ALL") as
       "ALL" | "PRODUCTION" | "DEMO_QA",
@@ -1495,7 +1541,6 @@ function PhysicalIntakeBoard({
     trackingMatches: true,
   };
   const packageCondition = "UNKNOWN";
-  const [approvalReason, setApprovalReason] = useState("");
   useEffect(() => setDraftSearch(search), [search]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1524,19 +1569,6 @@ function PhysicalIntakeBoard({
       }),
     onSuccess: () => {
       setDemoRow(null);
-      updateSearch({ page: "1" });
-    },
-  });
-  const destinationApproval = useMutation({
-    mutationFn: ({ id, approved }: { id: string; approved: boolean }) =>
-      services.repositories.admin.setIntakeDestinationApproval(id, {
-        operationallyApproved: approved,
-        acceptingShipments: approved,
-        acceptingInPerson: approved,
-        reason: approvalReason.trim(),
-      }),
-    onSuccess: () => {
-      setApprovalReason("");
       updateSearch({ page: "1" });
     },
   });
@@ -1619,12 +1651,8 @@ function PhysicalIntakeBoard({
       detail="Track incoming collectibles from approved submission through physical receipt and verification."
     >
       <div className="physical-intake-header-actions">
-        <button
-          type="button"
-          className="admin-secondary-button"
-          onClick={() => setShowDestinations((value) => !value)}
-        >
-          Receiving destinations
+        <button type="button" className="admin-secondary-button" onClick={openLocations}>
+          Receiving Locations
         </button>
         <button
           type="button"
@@ -1846,70 +1874,6 @@ function PhysicalIntakeBoard({
           </div>
         </div>
       </section>
-      {showDestinations ? (
-        <section className="physical-intake-destinations admin-panel">
-          <div className="physical-intake-section-heading">
-            <div>
-              <p className="admin-console-eyebrow">Operations configuration</p>
-              <h3>Receiving destinations</h3>
-              <p>Only approved, operator-controlled destinations can accept the delivery methods shown.</p>
-            </div>
-            <button
-              type="button"
-              className="admin-secondary-button"
-              onClick={() => setShowDestinations(false)}
-            >
-              Close
-            </button>
-          </div>
-          <input
-            className="admin-text-input"
-            value={approvalReason}
-            onChange={(event) => setApprovalReason(event.target.value)}
-            placeholder="Reason required for approval or pause"
-            aria-label="Destination approval reason"
-          />
-          {data?.filters.vaults.map((item) => (
-            <div className="physical-intake-destination" key={item.id}>
-              <div>
-                <strong>{item.displayName}</strong>
-                <small>
-                  {item.region}, {item.countryCode}
-                </small>
-              </div>
-              <span
-                className={
-                  item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
-                    ? "admin-status-pill is-green"
-                    : "admin-status-pill is-amber"
-                }
-              >
-                {item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
-                  ? `${item.locationType?.replaceAll("_", " ") ?? "Approved location"} · ${[
-                      item.acceptingShipments ? "Shipping" : "",
-                      item.acceptingInPerson ? "In person" : "",
-                    ].filter(Boolean).join(" + ")}`
-                  : "Paused"}
-              </span>
-              <button
-                type="button"
-                className="admin-secondary-button"
-                disabled={approvalReason.trim().length < 3 || destinationApproval.isPending}
-                onClick={() =>
-                  destinationApproval.mutate({
-                    id: item.id,
-                    approved: !(item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)),
-                  })
-                }
-              >
-                {item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
-                  ? "Pause intake"
-                  : "Approve & resume"}
-              </button>
-            </div>
-          ))}
-        </section>
-      ) : null}
       {receiptRow ? (
         <div
           className="physical-intake-modal"
@@ -2185,7 +2149,9 @@ function intakeWorkTypeLabel(workType: AdminIntakeRow["workType"]) {
 
 function intakeStageTone(row: AdminIntakeRow) {
   if (row.exception || row.stage === "EXCEPTION") return "is-red";
-  if (["AWAITING_DESTINATION", "AWAITING_DROP_OFF", "DELIVERED_AWAITING_RECEIPT"].includes(row.stage))
+  if (
+    ["AWAITING_DESTINATION", "AWAITING_DROP_OFF", "DELIVERED_AWAITING_RECEIPT"].includes(row.stage)
+  )
     return "is-amber";
   if (["VERIFIED", "VAULT_READY", "DEMO_CUSTODY"].includes(row.stage)) return "is-green";
   return "is-blue";
@@ -2199,7 +2165,8 @@ function intakeStepState(
   const complete = {
     destination: Boolean(row.vault || row.demoIntake),
     shipment: row.deliveryMethod === "IN_PERSON" || Boolean(row.shipment || row.demoIntake),
-    delivery: row.deliveryMethod === "IN_PERSON" || Boolean(row.shipment?.deliveredAt || row.demoIntake),
+    delivery:
+      row.deliveryMethod === "IN_PERSON" || Boolean(row.shipment?.deliveredAt || row.demoIntake),
     receipt: Boolean(row.receipt || row.demoIntake),
     verification: Boolean(
       row.verification?.completedAt ||
@@ -2245,7 +2212,9 @@ function IntakeDetailAction({
   if (row.allowedActions.includes("CONFIRM_RECEIPT"))
     return (
       <button type="button" className="button-primary" onClick={onReceipt}>
-        {row.deliveryMethod === "IN_PERSON" ? "Confirm in-person receipt" : "Confirm physical receipt"}
+        {row.deliveryMethod === "IN_PERSON"
+          ? "Confirm in-person receipt"
+          : "Confirm physical receipt"}
       </button>
     );
   if (row.allowedActions.includes("START_VERIFICATION"))
@@ -2302,20 +2271,23 @@ function PhysicalIntakeDetailPage({
 }) {
   const [confirmation, setConfirmation] = useState<"receipt" | "demo" | null>(null);
   const activeTab = normalizeIntakeDetailTab(tab);
-  const steps = row.deliveryMethod === "IN_PERSON" ? [
-    ["destination", "Destination"],
-    ["delivery", "Drop-off"],
-    ["receipt", "Receipt"],
-    ["verification", "Verification"],
-    ["custody", "Custody"],
-  ] as const : [
-    ["destination", "Destination"],
-    ["shipment", "Shipment"],
-    ["delivery", "Delivery"],
-    ["receipt", "Receipt"],
-    ["verification", "Verification"],
-    ["custody", "Custody"],
-  ] as const;
+  const steps =
+    row.deliveryMethod === "IN_PERSON"
+      ? ([
+          ["destination", "Destination"],
+          ["delivery", "Drop-off"],
+          ["receipt", "Receipt"],
+          ["verification", "Verification"],
+          ["custody", "Custody"],
+        ] as const)
+      : ([
+          ["destination", "Destination"],
+          ["shipment", "Shipment"],
+          ["delivery", "Delivery"],
+          ["receipt", "Receipt"],
+          ["verification", "Verification"],
+          ["custody", "Custody"],
+        ] as const);
   const identity = [
     row.variant,
     row.grader && row.grade ? `${row.grader} ${row.grade}` : row.grader,
@@ -2376,7 +2348,9 @@ function PhysicalIntakeDetailPage({
           </div>
           <div>
             <span>Delivery</span>
-            <strong>{row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Ship to location"}</strong>
+            <strong>
+              {row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Ship to location"}
+            </strong>
           </div>
         </div>
         <ol className="physical-intake-stepper" aria-label="Physical intake lifecycle">
@@ -2645,39 +2619,43 @@ function IntakeShipmentCard({ row }: { row: AdminIntakeRow }) {
             {row.deliveryMethod === "IN_PERSON"
               ? "Awaiting in-person drop-off"
               : shipment
-              ? sentence(shipment.status)
-              : row.vault
-                ? "Awaiting shipment"
-                : "Waiting for destination"}
+                ? sentence(shipment.status)
+                : row.vault
+                  ? "Awaiting shipment"
+                  : "Waiting for destination"}
           </strong>
           <p>
             {row.deliveryMethod === "IN_PERSON"
               ? "The collector will bring the collectible directly to the approved location. No carrier or tracking number is required."
               : shipment
-              ? "Carrier and tracking are shown from the authoritative intake record."
-              : row.vault
-                ? "The collector has not provided tracking yet."
-                : "Shipping instructions will be available once a destination is confirmed."}
+                ? "Carrier and tracking are shown from the authoritative intake record."
+                : row.vault
+                  ? "The collector has not provided tracking yet."
+                  : "Shipping instructions will be available once a destination is confirmed."}
           </p>
         </div>
-        {row.deliveryMethod === "IN_PERSON" ? null : <dl>
-          <div>
-            <dt>Carrier</dt>
-            <dd>{shipment?.carrier ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Tracking number</dt>
-            <dd>{shipment?.trackingNumber ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Status</dt>
-            <dd>{shipment ? sentence(shipment.status) : "Not started"}</dd>
-          </div>
-          <div>
-            <dt>Last updated</dt>
-            <dd>{row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}</dd>
-          </div>
-        </dl>}
+        {row.deliveryMethod === "IN_PERSON" ? null : (
+          <dl>
+            <div>
+              <dt>Carrier</dt>
+              <dd>{shipment?.carrier ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Tracking number</dt>
+              <dd>{shipment?.trackingNumber ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{shipment ? sentence(shipment.status) : "Not started"}</dd>
+            </div>
+            <div>
+              <dt>Last updated</dt>
+              <dd>
+                {row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}
+              </dd>
+            </div>
+          </dl>
+        )}
       </div>
     </section>
   );

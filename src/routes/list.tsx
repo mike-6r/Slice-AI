@@ -3636,12 +3636,18 @@ function DeliveryLocationStep({
     <div className="list-step">
       <p className="page-kicker">Step 6</p>
       <h2>Choose where you&apos;ll send your collectible.</h2>
-      <p>Your choice is saved with this private submission. Shipping instructions are issued only if Slice accepts it.</p>
+      <p>
+        Your choice is saved with this private submission. Shipping instructions are issued only if
+        Slice accepts it.
+      </p>
       {loading ? <p className="list-step-hint">Loading approved Slice intake locations…</p> : null}
       {!loading && !locations.length ? (
         <div className="list-review-fallback">
           <strong>No approved intake locations are available right now.</strong>
-          <p>Save your draft and try again later; Slice will never substitute an unapproved destination.</p>
+          <p>
+            Save your draft and try again later; Slice will never substitute an unapproved
+            destination.
+          </p>
         </div>
       ) : null}
       <div className="list-review-main">
@@ -3664,7 +3670,10 @@ function DeliveryLocationStep({
               }}
             >
               <strong>{location.displayName}</strong>
-              <span>{location.region}, {location.countryCode} · {location.locationType.replaceAll("_", " ")}</span>
+              <span>
+                {location.region}, {location.countryCode} ·{" "}
+                {location.locationType.replaceAll("_", " ")}
+              </span>
               <small>
                 {location.acceptingShipments ? "Shipping available" : ""}
                 {location.acceptingShipments && location.acceptingInPerson ? " · " : ""}
@@ -3682,7 +3691,9 @@ function DeliveryLocationStep({
               <button
                 key={method}
                 type="button"
-                className={form.preferredDeliveryMethod === method ? "button-primary" : "button-secondary"}
+                className={
+                  form.preferredDeliveryMethod === method ? "button-primary" : "button-secondary"
+                }
                 onClick={() => onChange("preferredDeliveryMethod", method)}
               >
                 {method === "SHIPMENT" ? "Ship to this location" : "Deliver in person"}
@@ -3755,7 +3766,10 @@ export function ReviewStep({
     },
     { label: "Offer percentage selected", complete: validOffer },
     { label: "Required photos uploaded", complete: evidenceReady },
-    { label: "Delivery location selected", complete: Boolean(deliveryLocation && form.preferredDeliveryMethod) },
+    {
+      label: "Delivery location selected",
+      complete: Boolean(deliveryLocation && form.preferredDeliveryMethod),
+    },
     ...(graded
       ? [
           {
@@ -3973,12 +3987,23 @@ export function ReviewStep({
             {deliveryLocation && form.preferredDeliveryMethod ? (
               <ReviewRows
                 rows={[
-                  ["Preferred intake location", `${deliveryLocation.displayName} · ${deliveryLocation.region}, ${deliveryLocation.countryCode}`],
-                  ["Delivery method", form.preferredDeliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Ship to this location"],
+                  [
+                    "Preferred intake location",
+                    `${deliveryLocation.displayName} · ${deliveryLocation.region}, ${deliveryLocation.countryCode}`,
+                  ],
+                  [
+                    "Delivery method",
+                    form.preferredDeliveryMethod === "IN_PERSON"
+                      ? "In-person drop-off"
+                      : "Ship to this location",
+                  ],
                 ]}
               />
             ) : (
-              <div className="list-review-fallback"><strong>Delivery preference not selected</strong><p>Choose an approved intake location before submitting.</p></div>
+              <div className="list-review-fallback">
+                <strong>Delivery preference not selected</strong>
+                <p>Choose an approved intake location before submitting.</p>
+              </div>
             )}
           </ReviewSummary>
 

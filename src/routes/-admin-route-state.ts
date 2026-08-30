@@ -3,6 +3,7 @@ export type AdminSection =
   | "users"
   | "moderation"
   | "intake"
+  | "intakeLocations"
   | "collectibles"
   | "valuations"
   | "custody"
@@ -24,6 +25,8 @@ export type AdminSearch = {
   membership?: string;
   intake?: string;
   intakeTab?: string;
+  location?: string;
+  locationTab?: string;
   tab?: string;
   q?: string;
   plan?: string;
@@ -80,6 +83,7 @@ const navigableSections: AdminSection[] = [
   "users",
   "moderation",
   "intake",
+  "intakeLocations",
   "collectibles",
   "assetOperations",
   "memberships",
@@ -162,6 +166,8 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     membership: nonEmptyValue("membership"),
     intake: nonEmptyValue("intake"),
     intakeTab: nonEmptyValue("intakeTab"),
+    location: nonEmptyValue("location"),
+    locationTab: nonEmptyValue("locationTab"),
     tab:
       nonEmptyValue("tab") ?? legacyTrustTab(search.section) ?? legacyPlatformTab(search.section),
     q: nonEmptyValue("q"),
