@@ -27,6 +27,16 @@ import {
   type AdminEnrichmentState,
 } from './admin-optional-enrichment';
 import {
+  catalogueAttention,
+  catalogueCustodyState,
+  catalogueMarketState,
+  catalogueNextAction,
+  catalogueOwnershipState,
+  cataloguePhysicalState,
+  catalogueVerificationState,
+  type CatalogueLifecycleInput,
+} from './admin-catalogue-projections';
+import {
   ageLabel,
   attention,
   intakeAllowedActions,
@@ -2255,11 +2265,14 @@ export class AdminService {
       category?: string;
       physicalState?: string;
       verification?: string;
+      custody?: string;
       valuation?: string;
+      ownership?: string;
       market?: string;
       grading?: string;
       collector?: string;
       fixture?: 'NORMAL' | 'TEST' | 'ALL';
+      workType?: 'ALL' | 'PRODUCTION' | 'DEMO_QA';
       needsAction?: boolean;
       sort?: string;
       sortDirection?: 'asc' | 'desc';
@@ -2269,58 +2282,47 @@ export class AdminService {
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
     const q = input.q?.trim();
-    const fixture = input.fixture ?? 'NORMAL';
-    const fixtureWhere: Prisma.AssetWhereInput = this.config.isBeta
-      ? fixture === 'ALL'
-        ? {}
-        : fixture === 'TEST'
-          ? {
+    const workType =
+      input.workType ?? (input.fixture === 'TEST' ? 'DEMO_QA' : 'PRODUCTION');
+    const demoOrQaWhere: Prisma.AssetWhereInput = {
+      OR: [
+        { slug: { startsWith: 'slice-demo-' } },
+        { slug: { startsWith: 'qa-test-' } },
+        { controlledBetaBypass: { isNot: null } },
+        { stagingDemoPhysicalIntake: { isNot: null } },
+        {
+          submissions: {
+            some: {
               OR: [
-                { slug: { startsWith: 'slice-demo-' } },
                 {
-                  submissions: {
-                    some: {
-                      OR: [
-                        {
-                          declaredMetadata: {
-                            path: ['betaFixtureRetired'],
-                            equals: true,
-                          },
-                        },
-                        {
-                          declaredMetadata: {
-                            path: ['certificationNumber'],
-                            string_starts_with: 'STG-',
-                          },
-                        },
-                      ],
-                    },
+                  owner: {
+                    profile: { publicUsername: { startsWith: 'slice-demo-' } },
+                  },
+                },
+                {
+                  declaredMetadata: {
+                    path: ['betaFixtureRetired'],
+                    equals: true,
+                  },
+                },
+                {
+                  declaredMetadata: {
+                    path: ['certificationNumber'],
+                    string_starts_with: 'STG-',
                   },
                 },
               ],
-            }
-          : {
-              slug: { not: { startsWith: 'slice-demo-' } },
-              submissions: {
-                some: {
-                  status: { notIn: ['DRAFT', 'CANCELLED'] },
-                  NOT: [
-                    {
-                      declaredMetadata: {
-                        path: ['betaFixtureRetired'],
-                        equals: true,
-                      },
-                    },
-                    {
-                      declaredMetadata: {
-                        path: ['certificationNumber'],
-                        string_starts_with: 'STG-',
-                      },
-                    },
-                  ],
-                },
-              },
-            }
+            },
+          },
+        },
+      ],
+    };
+    const fixtureWhere: Prisma.AssetWhereInput = this.config.isBeta
+      ? workType === 'ALL'
+        ? {}
+        : workType === 'DEMO_QA'
+          ? demoOrQaWhere
+          : { NOT: [demoOrQaWhere] }
       : {};
     const whereParts: Prisma.AssetWhereInput[] = [
       fixtureWhere,
@@ -2399,7 +2401,7 @@ export class AdminService {
       whereParts.push({
         gradeScaleEntry: { is: { company: { code: input.grading } } },
       });
-    if (input.valuation === 'PENDING')
+    if (input.valuation === 'PENDING' || input.valuation === 'NOT_RECORDED')
       whereParts.push({ valuationDecisions: { none: { status: 'ACTIVE' } } });
     if (input.valuation === 'VALUED')
       whereParts.push({ valuationDecisions: { some: { status: 'ACTIVE' } } });
@@ -2442,6 +2444,90 @@ export class AdminService {
           },
         ],
       });
+    if (input.verification === 'NOT_STARTED')
+      whereParts.push({
+        OR: [
+          { submissions: { none: { intake: { isNot: null } } } },
+          {
+            submissions: {
+              some: { intake: { is: { receipt: { is: null } } } },
+            },
+          },
+        ],
+      });
+    if (input.verification === 'IN_PROGRESS')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: { is: { verification: { is: { status: 'IN_PROGRESS' } } } },
+          },
+        },
+      });
+    if (input.verification === 'EXCEPTION')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: { is: { verification: { is: { status: 'BLOCKED' } } } },
+          },
+        },
+      });
+    if (input.physicalState === 'NOT_STARTED')
+      whereParts.push({ submissions: { none: { intake: { isNot: null } } } });
+    if (input.physicalState === 'AWAITING_DESTINATION')
+      whereParts.push({
+        submissions: { some: { status: 'APPROVED', intake: { is: null } } },
+      });
+    if (input.physicalState === 'AWAITING_SHIPMENT')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: {
+              is: { deliveryMethod: 'SHIPMENT', shipment: { is: null } },
+            },
+          },
+        },
+      });
+    if (input.physicalState === 'AWAITING_DROP_OFF')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: {
+              is: { deliveryMethod: 'IN_PERSON', receipt: { is: null } },
+            },
+          },
+        },
+      });
+    if (input.physicalState === 'IN_TRANSIT')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: {
+              is: {
+                shipment: {
+                  is: {
+                    status: {
+                      in: ['SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    if (input.physicalState === 'CARRIER_DELIVERED')
+      whereParts.push({
+        submissions: {
+          some: {
+            intake: {
+              is: {
+                shipment: { is: { status: 'DELIVERED' } },
+                receipt: { is: null },
+              },
+            },
+          },
+        },
+      });
     if (input.physicalState === 'AWAITING_RECEIPT')
       whereParts.push({ custodyRecord: { is: { status: 'EXPECTED' } } });
     if (input.physicalState === 'RECEIVED')
@@ -2454,7 +2540,10 @@ export class AdminService {
           },
         },
       });
-    if (input.physicalState === 'CUSTODY_READY')
+    if (
+      input.physicalState === 'CUSTODY_READY' ||
+      input.physicalState === 'READY_FOR_CUSTODY'
+    )
       whereParts.push({ custodyRecord: { is: { status: 'SECURED' } } });
     if (input.physicalState === 'EXCEPTION')
       whereParts.push({
@@ -2469,13 +2558,29 @@ export class AdminService {
           },
         ],
       });
-    if (input.market === 'LIVE')
+    if (input.custody === 'NOT_ESTABLISHED')
+      whereParts.push({ custodyRecord: { is: null } });
+    if (input.custody === 'READY_FOR_CUSTODY')
+      whereParts.push({ custodyRecord: { is: { status: 'INSPECTED' } } });
+    if (input.custody === 'IN_CUSTODY')
+      whereParts.push({ custodyRecord: { is: { status: 'SECURED' } } });
+    if (input.custody === 'EXCEPTION')
+      whereParts.push({ custodyRecord: { is: { status: 'EXCEPTION' } } });
+    if (input.ownership === 'NOT_CONFIGURED')
+      whereParts.push({ ownershipSupplyPolicy: { is: null } });
+    if (input.ownership === 'CONFIGURED')
+      whereParts.push({
+        ownershipSupplyPolicy: { is: { status: 'APPROVED' } },
+      });
+    if (input.ownership === 'ISSUED')
+      whereParts.push({ ownershipSupply: { is: { status: 'ACTIVE' } } });
+    if (input.market === 'LIVE' || input.market === 'MARKET_LIVE')
       whereParts.push({ publication: { is: { status: 'PUBLISHED' } } });
     if (input.market === 'INITIAL_OFFERING')
       whereParts.push({ initialOffering: { isNot: null } });
     if (input.market === 'PAUSED')
       whereParts.push({ tradingMarket: { is: { status: 'HALTED' } } });
-    if (input.market === 'NOT_PUBLISHED')
+    if (input.market === 'NOT_PUBLISHED' || input.market === 'NOT_ELIGIBLE')
       whereParts.push({
         OR: [
           { publication: { is: null } },
@@ -2498,7 +2603,9 @@ export class AdminService {
           ]
         : input.sort === 'newest'
           ? [{ createdAt: sortDirection }, { id: 'desc' }]
-          : [{ updatedAt: sortDirection }, { id: 'desc' }];
+          : input.sort === 'oldest'
+            ? [{ createdAt: 'asc' }, { id: 'asc' }]
+            : [{ updatedAt: sortDirection }, { id: 'desc' }];
     const [total, assets] = await Promise.all([
       this.db.asset.count({ where }),
       this.db.asset.findMany({
@@ -2545,6 +2652,9 @@ export class AdminService {
                 select: {
                   id: true,
                   status: true,
+                  deliveryMethod: true,
+                  shipment: { select: { status: true } },
+                  receipt: { select: { id: true } },
                   verification: { select: { status: true } },
                   exceptions: {
                     where: { resolvedAt: null },
@@ -2554,6 +2664,7 @@ export class AdminService {
               },
               owner: {
                 select: {
+                  id: true,
                   profile: {
                     select: { displayName: true, publicUsername: true },
                   },
@@ -2578,6 +2689,9 @@ export class AdminService {
           },
           ownershipSupplyPolicy: { select: { status: true } },
           tradingMarket: { select: { status: true, tradingEnabled: true } },
+          initialOffering: { select: { status: true } },
+          controlledBetaBypass: { select: { id: true } },
+          stagingDemoPhysicalIntake: { select: { id: true } },
         },
       }),
     ]);
@@ -2613,24 +2727,6 @@ export class AdminService {
                     },
                   },
                 },
-                { valuationDecisions: { none: { status: 'ACTIVE' } } },
-                {
-                  submissions: {
-                    some: {
-                      intake: {
-                        is: {
-                          verification: {
-                            is: {
-                              status: {
-                                in: ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED'],
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
               ],
             },
           ],
@@ -2659,11 +2755,6 @@ export class AdminService {
                     },
                   },
                 },
-                {
-                  submissions: {
-                    some: { reviews: { some: { status: 'COMPLETED' } } },
-                  },
-                },
               ],
             },
           ],
@@ -2674,9 +2765,7 @@ export class AdminService {
           AND: [
             summaryWhere,
             {
-              custodyRecord: {
-                is: { status: { in: ['RECEIVED', 'INSPECTED', 'SECURED'] } },
-              },
+              custodyRecord: { is: { status: 'SECURED' } },
             },
           ],
         },
@@ -2784,53 +2873,50 @@ export class AdminService {
               : mediaStatuses.some((status) => status === 'REJECTED')
                 ? 'REJECTED'
                 : 'IN_REVIEW';
-          const verificationState =
-            submission?.intake?.verification?.status === 'VERIFIED'
-              ? 'VERIFIED'
-              : submission?.intake?.verification?.status === 'IN_PROGRESS'
-                ? 'IN_PROGRESS'
-                : submission?.intake?.verification?.status === 'BLOCKED'
-                  ? 'MISMATCH'
-                  : submission?.reviews[0]?.status === 'COMPLETED'
-                    ? 'VERIFIED'
-                    : 'PENDING';
-          const physicalState =
-            asset.custodyRecord?.status === 'EXPECTED'
-              ? 'AWAITING_RECEIPT'
-              : asset.custodyRecord?.status === 'RECEIVED'
-                ? 'RECEIVED'
-                : asset.custodyRecord?.status === 'INSPECTED'
-                  ? 'IN_VERIFICATION'
-                  : asset.custodyRecord?.status === 'SECURED'
-                    ? 'CUSTODY_READY'
-                    : asset.custodyRecord?.status === 'EXCEPTION' ||
-                        submission?.intake?.exceptions.length
-                      ? 'EXCEPTION'
-                      : 'NOT_RECORDED';
-          const blockers = [
-            ...(physicalState === 'EXCEPTION'
-              ? ['Resolve custody/intake exception']
-              : []),
-            ...(verificationState !== 'VERIFIED'
-              ? ['Verification pending']
-              : []),
-            ...(asset.valuationDecisions.length === 0
-              ? ['Staff valuation pending']
-              : []),
-          ];
-          const nextAction =
-            physicalState === 'EXCEPTION'
-              ? 'Resolve exception'
-              : verificationState !== 'VERIFIED'
-                ? 'Continue verification'
-                : asset.valuationDecisions.length === 0
-                  ? 'Open valuation'
-                  : asset.publication?.status !== 'PUBLISHED'
-                    ? 'Open market setup'
-                    : 'Open collectible';
-          const testFixture =
-            isBetaFixtureSlug(asset.slug) ||
-            isBetaFixtureSubmission(submission?.declaredMetadata ?? null);
+          const lifecycle: CatalogueLifecycleInput = {
+            submissionStatus: submission?.status ?? null,
+            intake: submission?.intake
+              ? {
+                  status: submission.intake.status,
+                  deliveryMethod: submission.intake.deliveryMethod,
+                  shipmentStatus: submission.intake.shipment?.status ?? null,
+                  hasReceipt: Boolean(submission.intake.receipt),
+                  verificationStatus:
+                    submission.intake.verification?.status ?? null,
+                  hasOpenException: submission.intake.exceptions.length > 0,
+                }
+              : null,
+            custodyStatus: asset.custodyRecord?.status ?? null,
+            hasValuation: asset.valuationDecisions.length > 0,
+            ownershipPolicyStatus: asset.ownershipSupplyPolicy?.status ?? null,
+            ownershipSupplyStatus: asset.ownershipSupply?.status ?? null,
+            issuedUnits: asset.ownershipSupply?.issuedUnits ?? null,
+            offeringStatus: asset.initialOffering?.status ?? null,
+            publicationStatus: asset.publication?.status ?? null,
+            marketStatus: asset.tradingMarket?.status ?? null,
+            tradingEnabled: asset.tradingMarket?.tradingEnabled ?? null,
+          };
+          const physicalState = cataloguePhysicalState(lifecycle);
+          const verificationState = catalogueVerificationState(lifecycle);
+          const custodyState = catalogueCustodyState(lifecycle);
+          const ownershipState = catalogueOwnershipState(lifecycle);
+          const marketState = catalogueMarketState(lifecycle);
+          const attentionState = catalogueAttention(lifecycle);
+          const nextAction = catalogueNextAction(lifecycle);
+          const workType = asset.stagingDemoPhysicalIntake
+            ? 'OWNER_DEMO'
+            : asset.controlledBetaBypass
+              ? 'CONTROLLED_QA'
+              : isBetaFixtureSlug(asset.slug) ||
+                  isBetaFixtureSubmission(
+                    submission?.declaredMetadata ?? null,
+                  ) ||
+                  submission?.owner.profile?.publicUsername?.startsWith(
+                    'slice-demo-',
+                  )
+                ? 'AUTOMATED_TEST'
+                : 'PRODUCTION';
+          const testFixture = workType !== 'PRODUCTION';
           return {
             id: asset.id,
             publicId: asset.publicId,
@@ -2839,6 +2925,7 @@ export class AdminService {
             thumbnailUrl,
             status: asset.status,
             testFixture,
+            workType,
             identity: {
               category: asset.category.name,
               year: asset.year,
@@ -2867,6 +2954,7 @@ export class AdminService {
                     submission.owner.profile?.displayName ??
                     'Unnamed collector',
                   username: submission.owner.profile?.publicUsername ?? null,
+                  collectorId: submission.owner.id,
                 }
               : null,
             lineage: {
@@ -2877,9 +2965,11 @@ export class AdminService {
             mediaState,
             verificationState,
             valuationState: asset.valuationDecisions.length
-              ? 'ACTIVE'
-              : 'NOT_STARTED',
-            custodyState: physicalState,
+              ? 'VALUED'
+              : 'NOT_RECORDED',
+            physicalState,
+            custodyState,
+            ownershipState,
             valuation: asset.valuationDecisions[0]
               ? {
                   minor: asset.valuationDecisions[0].valueMinor.toString(),
@@ -2888,13 +2978,12 @@ export class AdminService {
                     asset.valuationDecisions[0].decidedAt.toISOString(),
                 }
               : null,
+            attention: attentionState,
             nextAction,
-            blockers,
+            blockers: attentionState.reasons,
             marketReadiness:
-              asset.publication?.status === 'PUBLISHED'
-                ? 'PUBLISHED'
-                : 'NOT_READY',
-            publicationState: asset.publication?.status ?? 'NOT_PUBLISHED',
+              marketState === 'MARKET_LIVE' ? 'PUBLISHED' : 'NOT_READY',
+            publicationState: marketState,
             ownership: {
               ownerCount: asset.ownershipSupply?.positions.length ?? 0,
               totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,

@@ -3797,6 +3797,11 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                 title: stringField(item.title, "admin catalogue.title"),
                 status: stringField(item.status, "admin catalogue.status"),
                 testFixture: Boolean(item.testFixture),
+                workType: ["PRODUCTION", "OWNER_DEMO", "CONTROLLED_QA", "AUTOMATED_TEST"].includes(
+                  String(item.workType),
+                )
+                  ? (String(item.workType) as AdminCatalogueResponse["items"][number]["workType"])
+                  : "PRODUCTION",
                 thumbnailUrl: nullableString(item.thumbnailUrl, "admin catalogue.thumbnailUrl"),
                 identity: {
                   category: stringField(identity.category, "admin catalogue.identity.category"),
@@ -3846,6 +3851,10 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                         provenance.username,
                         "admin catalogue.provenance.username",
                       ),
+                      collectorId: stringField(
+                        provenance.collectorId,
+                        "admin catalogue.provenance.collectorId",
+                      ),
                     }
                   : null,
                 lineage: item.lineage
@@ -3865,12 +3874,14 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                     }
                   : { submissionId: null, intakeId: null, reviewState: null },
                 mediaState: stringField(item.mediaState, "admin catalogue.mediaState"),
+                physicalState: stringField(item.physicalState, "admin catalogue.physicalState"),
                 verificationState: stringField(
                   item.verificationState,
                   "admin catalogue.verificationState",
                 ),
                 valuationState: stringField(item.valuationState, "admin catalogue.valuationState"),
                 custodyState: stringField(item.custodyState, "admin catalogue.custodyState"),
+                ownershipState: stringField(item.ownershipState, "admin catalogue.ownershipState"),
                 valuation: item.valuation
                   ? {
                       minor: stringField(
@@ -3887,7 +3898,31 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                       ),
                     }
                   : null,
-                nextAction: stringField(item.nextAction, "admin catalogue.nextAction"),
+                attention: (() => {
+                  const attention = objectField(item.attention ?? {}, "admin catalogue.attention");
+                  return {
+                    required: Boolean(attention.required),
+                    reasons: Array.isArray(attention.reasons)
+                      ? attention.reasons.map((reason) => String(reason))
+                      : [],
+                  };
+                })(),
+                nextAction: (() => {
+                  const nextAction = objectField(item.nextAction, "admin catalogue.nextAction");
+                  const actor = String(nextAction.actor);
+                  const target = String(nextAction.target);
+                  return {
+                    label: stringField(nextAction.label, "admin catalogue.nextAction.label"),
+                    actor: ["COLLECTOR", "STAFF", "SYSTEM", "NONE"].includes(actor)
+                      ? (actor as AdminCatalogueResponse["items"][number]["nextAction"]["actor"])
+                      : "STAFF",
+                    target: ["COLLECTIBLE", "INTAKE", "VALUATION", "OWNERSHIP", "MARKET"].includes(
+                      target,
+                    )
+                      ? (target as AdminCatalogueResponse["items"][number]["nextAction"]["target"])
+                      : "COLLECTIBLE",
+                  };
+                })(),
                 blockers: Array.isArray(item.blockers)
                   ? item.blockers.map((value) => String(value))
                   : [],

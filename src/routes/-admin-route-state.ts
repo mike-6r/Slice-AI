@@ -22,6 +22,7 @@ export type AdminSearch = {
   section: AdminSection;
   user?: string;
   asset?: string;
+  cataloguePreview?: string;
   membership?: string;
   intake?: string;
   intakeTab?: string;
@@ -55,11 +56,14 @@ export type AdminSearch = {
   catalogueCategory?: string;
   grader?: string;
   physicalState?: string;
+  custody?: string;
   verification?: string;
   valuation?: string;
+  ownership?: string;
   market?: string;
   grading?: string;
   collector?: string;
+  workType?: string;
   accountQ?: string;
   accountType?: string;
   accountStatus?: string;
@@ -156,13 +160,17 @@ export function normalizeAdminSearch(search: Record<string, unknown>): AdminSear
     catalogueCategory: stringValue("catalogueCategory"),
     grader: stringValue("grader"),
     physicalState: stringValue("physicalState"),
+    custody: stringValue("custody"),
     verification: stringValue("verification"),
     valuation: stringValue("valuation"),
+    ownership: stringValue("ownership"),
     market: stringValue("market"),
     grading: stringValue("grading"),
     collector: stringValue("collector"),
+    workType: stringValue("workType"),
     user: nonEmptyValue("user"),
     asset: nonEmptyValue("asset"),
+    cataloguePreview: nonEmptyValue("cataloguePreview"),
     membership: nonEmptyValue("membership"),
     intake: nonEmptyValue("intake"),
     intakeTab: nonEmptyValue("intakeTab"),

@@ -13,7 +13,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { AdminCatalogueAsset, AdminCatalogueResponse } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -23,23 +23,29 @@ import "@/styles/admin-catalogue.css";
 export type CatalogueFilters = {
   category: string;
   physicalState: string;
+  custody: string;
   verification: string;
   valuation: string;
+  ownership: string;
   market: string;
   grading: string;
   collector: string;
   fixture: "NORMAL" | "TEST" | "ALL";
+  workType: "ALL" | "PRODUCTION" | "DEMO_QA";
   sort: string;
 };
 const initialFilters: CatalogueFilters = {
   category: "",
   physicalState: "",
+  custody: "",
   verification: "",
   valuation: "",
+  ownership: "",
   market: "",
   grading: "",
   collector: "",
   fixture: "NORMAL",
+  workType: "PRODUCTION",
   sort: "updated",
 };
 
@@ -49,18 +55,25 @@ export function AdminCollectibleCatalogue({
   page,
   filters,
   update,
+  previewId,
+  onPreview,
   onOpen,
+  onOpenIntake,
+  onOpenCollector,
 }: {
   query: string;
   status: string;
   page: number;
   filters: CatalogueFilters;
   update: (patch: Record<string, string | undefined>) => void;
+  previewId?: string;
+  onPreview: (id: string | null) => void;
   onOpen: (assetId: string) => void;
+  onOpenIntake: (submissionId: string) => void;
+  onOpenCollector: (collectorId: string) => void;
 }) {
   const services = useAppServices();
   const [search, setSearch] = useState(query);
-  const [previewId, setPreviewId] = useState<string | null>(null);
   const catalogue = useQuery({
     queryKey: ["admin", "catalogue", query, status, page, filters],
     queryFn: () =>
@@ -75,23 +88,13 @@ export function AdminCollectibleCatalogue({
   });
   useEffect(() => setSearch(query), [query]);
   useEffect(() => {
-    setPreviewId((current) =>
-      catalogue.data?.items.some((item) => item.id === current)
-        ? current
-        : (catalogue.data?.items[0]?.id ?? null),
-    );
-  }, [catalogue.data?.items]);
-  useEffect(() => {
     const timer = window.setTimeout(() => {
       const next = search.trim() || undefined;
       if (next !== (query || undefined)) update({ q: next, page: "1" });
     }, 280);
     return () => window.clearTimeout(timer);
   }, [query, search, update]);
-  if (catalogue.isLoading)
-    return (
-      <CatalogueState title="Loading Collectibles" detail="Reading canonical Asset records." />
-    );
+  if (catalogue.isLoading) return <CatalogueLoading />;
   if (catalogue.isError || !catalogue.data)
     return (
       <CatalogueState
@@ -114,19 +117,25 @@ export function AdminCollectibleCatalogue({
         return update({
           category: nextFilters.category || undefined,
           physicalState: nextFilters.physicalState || undefined,
+          custody: nextFilters.custody || undefined,
           verification: nextFilters.verification || undefined,
           valuation: nextFilters.valuation || undefined,
+          ownership: nextFilters.ownership || undefined,
           market: nextFilters.market || undefined,
           grading: nextFilters.grading || undefined,
           collector: nextFilters.collector || undefined,
           fixture: nextFilters.fixture,
+          workType: nextFilters.workType,
           sort: nextFilters.sort === initialFilters.sort ? undefined : nextFilters.sort,
           page: "1",
         });
       }}
       update={update}
-      onPreview={setPreviewId}
+      onRefresh={() => void catalogue.refetch()}
+      onPreview={onPreview}
       onOpen={onOpen}
+      onOpenIntake={onOpenIntake}
+      onOpenCollector={onOpenCollector}
     />
   );
 }
@@ -140,8 +149,11 @@ function CatalogueContent({
   setSearch,
   setFilters,
   update,
+  onRefresh,
   onPreview,
   onOpen,
+  onOpenIntake,
+  onOpenCollector,
 }: {
   data: AdminCatalogueResponse;
   search: string;
@@ -151,31 +163,20 @@ function CatalogueContent({
   setSearch: (value: string) => void;
   setFilters: (patch: Partial<CatalogueFilters>) => void;
   update: (patch: Record<string, string | undefined>) => void;
+  onRefresh: () => void;
   onPreview: (id: string | null) => void;
   onOpen: (id: string) => void;
+  onOpenIntake: (submissionId: string) => void;
+  onOpenCollector: (collectorId: string) => void;
 }) {
   const activeFilterCount =
     Object.entries(filters).filter(([key, value]) => {
       if (key === "sort") return false;
-      if (key === "fixture") return value !== "NORMAL";
+      if (key === "fixture") return false;
+      if (key === "workType") return value !== "PRODUCTION";
       return Boolean(value);
     }).length + (status ? 1 : 0);
   const hasFilters = Boolean(search.trim()) || activeFilterCount > 0;
-  const categories = useMemo(
-    () => [...new Set(data.items.map((item) => item.identity.category))].sort(),
-    [data.items],
-  );
-  const collectors = useMemo(
-    () =>
-      [
-        ...new Set(
-          data.items
-            .map((item) => item.provenance?.collector)
-            .filter((value): value is string => Boolean(value)),
-        ),
-      ].sort(),
-    [data.items],
-  );
   return (
     <main className="admin-catalogue-page">
       <header className="admin-catalogue-header">
@@ -197,11 +198,7 @@ function CatalogueContent({
               aria-label="Search collectibles"
             />
           </label>
-          <button
-            type="button"
-            className="admin-catalogue-refresh"
-            onClick={() => window.location.reload()}
-          >
+          <button type="button" className="admin-catalogue-refresh" onClick={onRefresh}>
             <RefreshCw size={15} aria-hidden="true" /> Refresh
           </button>
         </div>
@@ -251,11 +248,10 @@ function CatalogueContent({
                 aria-label="Search collectibles"
               />
             </label>
-            <FilterSelect
+            <FilterInput
               label="Category"
               value={filters.category}
               onChange={(value) => setFilters({ category: value })}
-              options={categories}
             />
             <FilterSelect
               label="Physical state"
@@ -263,9 +259,16 @@ function CatalogueContent({
               onChange={(value) => setFilters({ physicalState: value })}
               options={[
                 "AWAITING_RECEIPT",
+                "NOT_STARTED",
+                "AWAITING_DESTINATION",
+                "AWAITING_SHIPMENT",
+                "AWAITING_DROP_OFF",
+                "IN_TRANSIT",
+                "CARRIER_DELIVERED",
                 "RECEIVED",
-                "IN_VERIFICATION",
-                "CUSTODY_READY",
+                "VERIFYING",
+                "READY_FOR_CUSTODY",
+                "IN_CUSTODY",
                 "EXCEPTION",
               ]}
             />
@@ -273,7 +276,20 @@ function CatalogueContent({
               label="Verification"
               value={filters.verification}
               onChange={(value) => setFilters({ verification: value })}
-              options={["PENDING", "VERIFIED"]}
+              options={["NOT_STARTED", "IN_PROGRESS", "VERIFIED", "EXCEPTION"]}
+            />
+            <FilterSelect
+              label="Custody"
+              value={filters.custody}
+              onChange={(value) => setFilters({ custody: value })}
+              options={[
+                "NOT_ESTABLISHED",
+                "EXPECTED",
+                "RECEIVED",
+                "READY_FOR_CUSTODY",
+                "IN_CUSTODY",
+                "EXCEPTION",
+              ]}
             />
             <FilterSelect
               label="Market"
@@ -285,7 +301,7 @@ function CatalogueContent({
               label="Sort"
               value={filters.sort}
               onChange={(value) => setFilters({ sort: value })}
-              options={["updated", "newest", "title"]}
+              options={["updated", "newest", "oldest", "title"]}
             />
             <details className="admin-catalogue-more-filters">
               <summary>
@@ -296,7 +312,7 @@ function CatalogueContent({
                   label="Valuation"
                   value={filters.valuation}
                   onChange={(value) => setFilters({ valuation: value })}
-                  options={["PENDING", "VALUED"]}
+                  options={["NOT_RECORDED", "VALUED"]}
                 />
                 <FilterSelect
                   label="Grading"
@@ -304,11 +320,16 @@ function CatalogueContent({
                   onChange={(value) => setFilters({ grading: value })}
                   options={["RAW", "GRADED"]}
                 />
-                <FilterSelect
+                <FilterInput
                   label="Collector / source"
                   value={filters.collector}
                   onChange={(value) => setFilters({ collector: value })}
-                  options={collectors}
+                />
+                <FilterSelect
+                  label="Ownership"
+                  value={filters.ownership}
+                  onChange={(value) => setFilters({ ownership: value })}
+                  options={["NOT_CONFIGURED", "PENDING_APPROVAL", "CONFIGURED", "ISSUED"]}
                 />
                 <FilterSelect
                   label="Status"
@@ -318,16 +339,12 @@ function CatalogueContent({
                 />
               </div>
             </details>
-            <label className="admin-catalogue-fixture">
-              <input
-                type="checkbox"
-                checked={filters.fixture !== "NORMAL"}
-                onChange={(event) =>
-                  setFilters({ fixture: event.target.checked ? "ALL" : "NORMAL" })
-                }
-              />{" "}
-              Include test/demo
-            </label>
+            <FilterSelect
+              label="Work type"
+              value={filters.workType}
+              onChange={(value) => setFilters({ workType: value as CatalogueFilters["workType"] })}
+              options={["PRODUCTION", "DEMO_QA", "ALL"]}
+            />
             {activeFilterCount ? (
               <button
                 type="button"
@@ -338,12 +355,15 @@ function CatalogueContent({
                     q: undefined,
                     category: undefined,
                     physicalState: undefined,
+                    custody: undefined,
                     verification: undefined,
                     valuation: undefined,
+                    ownership: undefined,
                     market: undefined,
                     grading: undefined,
                     collector: undefined,
                     fixture: "NORMAL",
+                    workType: "PRODUCTION",
                     sort: undefined,
                     page: "1",
                   });
@@ -359,7 +379,9 @@ function CatalogueContent({
               <strong>{data.pagination.total}</strong>{" "}
               {hasFilters ? "matching collectibles" : "canonical collectibles"}
             </span>
-            {filters.fixture === "NORMAL" ? <span>Work type: Production</span> : null}
+            {filters.workType !== "ALL" ? (
+              <span>Work type: {sentence(filters.workType)}</span>
+            ) : null}
           </div>
           {data.items.length ? (
             <CatalogueTable
@@ -378,7 +400,7 @@ function CatalogueContent({
               <p>
                 {hasFilters
                   ? "Try clearing a filter or searching by a shorter canonical field."
-                  : "Accepted and verified intake records will appear here once the canonical asset record is created."}
+                  : "Approved submissions appear here once an authorised canonical Asset record is explicitly created and linked."}
               </p>
             </section>
           )}
@@ -410,7 +432,13 @@ function CatalogueContent({
           </footer>
         </div>
         {selected ? (
-          <Preview item={selected} onClose={() => onPreview(null)} onOpen={onOpen} />
+          <Preview
+            item={selected}
+            onClose={() => onPreview(null)}
+            onOpen={onOpen}
+            onOpenIntake={onOpenIntake}
+            onOpenCollector={onOpenCollector}
+          />
         ) : (
           <PreviewEmpty />
         )}
@@ -473,7 +501,10 @@ function CatalogueTable({
                         : "Raw / ungraded"}
                     </small>
                     <small className="catalogue-asset-id">
-                      Asset {shortId(item.publicId)} {item.testFixture ? <em>TEST/DEMO</em> : null}
+                      Asset {shortId(item.publicId)}{" "}
+                      {item.workType !== "PRODUCTION" ? (
+                        <em>{workTypeLabel(item.workType)}</em>
+                      ) : null}
                     </small>
                   </div>
                 </div>
@@ -492,22 +523,20 @@ function CatalogueTable({
                 )}
               </td>
               <td>
-                <StatePill value={item.custodyState} />
-                <small>{physicalCaption(item.custodyState)}</small>
+                <StatePill value={item.physicalState} />
+                <small>Physical intake authority</small>
               </td>
               <td>
                 <StatePill value={item.verificationState} />
                 <small>
                   {item.verificationState === "VERIFIED"
-                    ? "Staff / provider authority"
-                    : "Verification required"}
+                    ? "Physical verification"
+                    : "Physical verification required"}
                 </small>
               </td>
               <td>
-                <StatePill value={custodyCaption(item.custodyState)} />
-                <small>
-                  {item.custodyState === "CUSTODY_READY" ? "Secure custody" : "Not established"}
-                </small>
+                <StatePill value={item.custodyState} />
+                <small>Custody authority</small>
               </td>
               <td>
                 {item.valuation ? (
@@ -517,32 +546,30 @@ function CatalogueTable({
                   </>
                 ) : (
                   <>
-                    <StatePill value="PENDING" />
+                    <StatePill value="NOT_RECORDED" />
                     <small>Staff valuation</small>
                   </>
                 )}
               </td>
               <td>
-                {item.ownership.issuedUnits ? (
+                {item.ownershipState === "ISSUED" ? (
                   <>
                     <strong>{item.ownership.issuedUnits} issued</strong>
                     <small>{item.ownership.ownerCount} positions</small>
                   </>
                 ) : (
                   <>
-                    <StatePill value="NOT_CONFIGURED" />
-                    <small>Not issued</small>
+                    <StatePill value={item.ownershipState} />
+                    <small>Ownership authority</small>
                   </>
                 )}
               </td>
               <td>
-                <StatePill
-                  value={item.marketLifecycle?.admin.publicState ?? item.publicationState}
-                />
+                <StatePill value={item.publicationState} />
                 <small>
-                  {item.blockers.length
-                    ? `${item.blockers.length} blocker${item.blockers.length === 1 ? "" : "s"}`
-                    : "All requirements met"}
+                  {item.attention.required
+                    ? `${item.attention.reasons.length} exception${item.attention.reasons.length === 1 ? "" : "s"}`
+                    : "Lifecycle status"}
                 </small>
               </td>
               <td>
@@ -554,7 +581,7 @@ function CatalogueTable({
                     onOpen(item.id);
                   }}
                 >
-                  {item.nextAction} <small>{nextActor(item.nextAction)}</small>
+                  {item.nextAction.label} <small>{sentence(item.nextAction.actor)}</small>
                 </button>
               </td>
               <td>
@@ -595,9 +622,9 @@ function CatalogueTable({
               </div>
             </div>
             <div className="mobile-state-grid">
-              <StatePill value={item.custodyState} />
+              <StatePill value={item.physicalState} />
               <StatePill value={item.verificationState} />
-              <StatePill value={item.marketLifecycle?.admin.publicState ?? item.publicationState} />
+              <StatePill value={item.publicationState} />
             </div>
             <button
               type="button"
@@ -607,7 +634,7 @@ function CatalogueTable({
                 onOpen(item.id);
               }}
             >
-              Open collectible <ArrowRight size={14} />
+              {item.nextAction.label} <ArrowRight size={14} />
             </button>
           </article>
         ))}
@@ -620,10 +647,14 @@ function Preview({
   item,
   onClose,
   onOpen,
+  onOpenIntake,
+  onOpenCollector,
 }: {
   item: AdminCatalogueAsset;
   onClose: () => void;
   onOpen: (id: string) => void;
+  onOpenIntake: (submissionId: string) => void;
+  onOpenCollector: (collectorId: string) => void;
 }) {
   return (
     <aside className="admin-catalogue-preview">
@@ -647,7 +678,7 @@ function Preview({
               : "Raw / ungraded"}
           </p>
           <strong className="catalogue-preview-id">Asset {shortId(item.publicId)}</strong>
-          {item.testFixture ? <em>TEST / DEMO FIXTURE</em> : null}
+          {item.workType !== "PRODUCTION" ? <em>{workTypeLabel(item.workType)}</em> : null}
         </div>
       </div>
       <PreviewSection title="Source & custody">
@@ -661,40 +692,30 @@ function Preview({
             : "Canonical record"}
         </p>
         <p>
-          <b>Physical:</b> {sentence(item.custodyState)}
+          <b>Physical:</b> {sentence(item.physicalState)}
         </p>
       </PreviewSection>
       <PreviewSection title="Lifecycle overview">
-        <LifecycleRow icon={<Truck />} label="Physical" value={sentence(item.custodyState)} />
-        <LifecycleRow
-          icon={<ShieldCheck />}
-          label="Verification"
-          value={sentence(item.verificationState)}
-        />
-        <LifecycleRow
-          icon={<LockKeyhole />}
-          label="Custody"
-          value={custodyCaption(item.custodyState)}
-        />
+        <LifecycleRow icon={<Truck />} label="Physical" value={item.physicalState} />
+        <LifecycleRow icon={<ShieldCheck />} label="Verification" value={item.verificationState} />
+        <LifecycleRow icon={<LockKeyhole />} label="Custody" value={item.custodyState} />
         <LifecycleRow
           icon={<ClipboardCheck />}
           label="Valuation"
           value={
-            item.valuation ? formatMinor(item.valuation.minor, item.valuation.currency) : "Pending"
+            item.valuation
+              ? formatMinor(item.valuation.minor, item.valuation.currency)
+              : "Not recorded"
           }
         />
         <LifecycleRow
           icon={<Box />}
           label="Ownership"
           value={
-            item.ownership.issuedUnits ? `${item.ownership.issuedUnits} units` : "Not configured"
+            item.ownership.issuedUnits ? `${item.ownership.issuedUnits} units` : item.ownershipState
           }
         />
-        <LifecycleRow
-          icon={<TrendingUp />}
-          label="Market"
-          value={sentence(item.marketLifecycle?.admin.publicState ?? item.publicationState)}
-        />
+        <LifecycleRow icon={<TrendingUp />} label="Market" value={item.publicationState} />
       </PreviewSection>
       <PreviewSection title="Canonical identity">
         <p>
@@ -707,7 +728,13 @@ function Preview({
           {item.identity.category} {item.identity.edition ? `· ${item.identity.edition}` : ""}
         </p>
       </PreviewSection>
-      {item.blockers.length ? (
+      <PreviewSection title="Next action">
+        <p>
+          <b>{item.nextAction.label}</b>
+        </p>
+        <p>Next actor: {sentence(item.nextAction.actor)}</p>
+      </PreviewSection>
+      {item.attention.required ? (
         <PreviewSection title="Current blockers">
           <ul>
             {item.blockers.map((blocker) => (
@@ -716,6 +743,26 @@ function Preview({
           </ul>
         </PreviewSection>
       ) : null}
+      <PreviewSection title="Quick links">
+        {item.lineage.submissionId ? (
+          <button
+            type="button"
+            className="admin-catalogue-preview__link"
+            onClick={() => onOpenIntake(item.lineage.submissionId!)}
+          >
+            Open Physical Intake <ArrowRight size={13} />
+          </button>
+        ) : null}
+        {item.provenance ? (
+          <button
+            type="button"
+            className="admin-catalogue-preview__link"
+            onClick={() => onOpenCollector(item.provenance!.collectorId)}
+          >
+            Open collector <ArrowRight size={13} />
+          </button>
+        ) : null}
+      </PreviewSection>
       <button
         type="button"
         className="admin-catalogue-preview__open"
@@ -801,6 +848,23 @@ function FilterSelect({
     </label>
   );
 }
+
+function FilterInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="admin-catalogue-filter-input">
+      <span className="sr-only">{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={label} />
+    </label>
+  );
+}
 function StatePill({ value }: { value: string }) {
   return (
     <span className={`catalogue-state catalogue-state--${value.toLowerCase()}`}>
@@ -831,16 +895,11 @@ function relativeDate(value: string) {
 function shortId(value: string) {
   return value.replace(/^ast_/i, "").slice(-7).toUpperCase();
 }
-function physicalCaption(value: string) {
-  if (value === "AWAITING_RECEIPT") return "Awaiting arrival";
-  if (value === "CUSTODY_READY") return "Physically secured";
-  return "—";
-}
-function custodyCaption(value: string) {
-  return value === "CUSTODY_READY" ? "IN_CUSTODY" : "NOT_ESTABLISHED";
-}
-function nextActor(action: string) {
-  return /drop off|shipment|destination/i.test(action) ? "Collector" : "Staff";
+function workTypeLabel(value: AdminCatalogueAsset["workType"]) {
+  if (value === "OWNER_DEMO") return "Demo";
+  if (value === "CONTROLLED_QA") return "Controlled";
+  if (value === "AUTOMATED_TEST") return "Test";
+  return "Production";
 }
 function sentence(value: string) {
   return value
@@ -867,5 +926,23 @@ function CatalogueState({
         </button>
       ) : null}
     </section>
+  );
+}
+
+function CatalogueLoading() {
+  return (
+    <main className="admin-catalogue-page" aria-busy="true" aria-label="Loading collectibles">
+      <div className="admin-catalogue-loading-heading" />
+      <section className="admin-catalogue-summary">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div className="admin-catalogue-skeleton" key={index} />
+        ))}
+      </section>
+      <section className="admin-catalogue-loading-table">
+        {Array.from({ length: 7 }, (_, index) => (
+          <div className="admin-catalogue-skeleton" key={index} />
+        ))}
+      </section>
+    </main>
   );
 }

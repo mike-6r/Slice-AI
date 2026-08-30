@@ -50,6 +50,24 @@ describe("admin route state", () => {
     });
   });
 
+  it("preserves catalogue work type, downstream filters, and selected preview across refresh", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "collectibles",
+        workType: "DEMO_QA",
+        custody: "READY_FOR_CUSTODY",
+        ownership: "NOT_CONFIGURED",
+        cataloguePreview: "asset-123",
+      }),
+    ).toMatchObject({
+      section: "collectibles",
+      workType: "DEMO_QA",
+      custody: "READY_FOR_CUSTODY",
+      ownership: "NOT_CONFIGURED",
+      cataloguePreview: "asset-123",
+    });
+  });
+
   it("preserves the paginated Accounts directory view in URL state", () => {
     expect(
       normalizeAdminSearch({

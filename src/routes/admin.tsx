@@ -124,6 +124,7 @@ function AdminConsole() {
     section,
     tab: selectedUserTab,
     asset: selectedAsset,
+    cataloguePreview,
     membership: selectedMembership,
     intake: selectedIntake,
     intakeTab,
@@ -156,11 +157,14 @@ function AdminConsole() {
     catalogueCategory,
     grader: operationsGrader,
     physicalState: cataloguePhysicalState,
+    custody: catalogueCustody,
     verification: catalogueVerification,
     valuation: catalogueValuation,
+    ownership: catalogueOwnership,
     market: catalogueMarket,
     grading: catalogueGrading,
     collector: catalogueCollector,
+    workType: catalogueWorkType,
     accountQ,
     accountType,
     accountStatus,
@@ -1046,12 +1050,16 @@ function AdminConsole() {
             filters={{
               category: catalogueCategory ?? "",
               physicalState: cataloguePhysicalState ?? "",
+              custody: catalogueCustody ?? "",
               verification: catalogueVerification ?? "",
               valuation: catalogueValuation ?? "",
+              ownership: catalogueOwnership ?? "",
               market: catalogueMarket ?? "",
               grading: catalogueGrading ?? "",
               collector: catalogueCollector ?? "",
               fixture: (intakeFixture as "NORMAL" | "TEST" | "ALL" | undefined) ?? "NORMAL",
+              workType:
+                (catalogueWorkType as "ALL" | "PRODUCTION" | "DEMO_QA" | undefined) ?? "PRODUCTION",
               sort: reviewSort ?? "updated",
             }}
             update={(patch) =>
@@ -1064,10 +1072,27 @@ function AdminConsole() {
                 replace: true,
               })
             }
+            previewId={cataloguePreview}
+            onPreview={(assetId) =>
+              void navigate({
+                search: (current) => ({ ...current, cataloguePreview: assetId ?? undefined }),
+                replace: true,
+              })
+            }
             onOpen={(assetId) =>
               void navigate({
                 search: (current) => ({ ...current, section: "collectibles", asset: assetId }),
                 replace: true,
+              })
+            }
+            onOpenIntake={(submissionId) =>
+              void navigate({
+                search: (current) => ({ ...current, section: "intake", intake: submissionId }),
+              })
+            }
+            onOpenCollector={(collectorId) =>
+              void navigate({
+                search: (current) => ({ ...current, section: "users", user: collectorId }),
               })
             }
           />

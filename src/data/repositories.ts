@@ -1734,19 +1734,28 @@ export type AdminCatalogueAsset = {
     submittedAt: string | null;
     collector: string;
     username: string | null;
+    collectorId: string;
   } | null;
   testFixture: boolean;
+  workType: "PRODUCTION" | "OWNER_DEMO" | "CONTROLLED_QA" | "AUTOMATED_TEST";
   mediaState: string;
+  physicalState: string;
   verificationState: string;
   valuationState: string;
   custodyState: string;
+  ownershipState: string;
   lineage: {
     submissionId: string | null;
     intakeId: string | null;
     reviewState: string | null;
   };
   valuation: { minor: string; currency: string; decidedAt: string } | null;
-  nextAction: string;
+  attention: { required: boolean; reasons: string[] };
+  nextAction: {
+    label: string;
+    actor: "COLLECTOR" | "STAFF" | "SYSTEM" | "NONE";
+    target: "COLLECTIBLE" | "INTAKE" | "VALUATION" | "OWNERSHIP" | "MARKET";
+  };
   blockers: string[];
   marketReadiness: string;
   publicationState: string;
@@ -1845,11 +1854,14 @@ export interface AdminRepository {
     category?: string;
     physicalState?: string;
     verification?: string;
+    custody?: string;
     valuation?: string;
+    ownership?: string;
     market?: string;
     grading?: string;
     collector?: string;
     fixture?: "NORMAL" | "TEST" | "ALL";
+    workType?: "ALL" | "PRODUCTION" | "DEMO_QA";
     needsAction?: boolean;
     sort?: string;
     sortDirection?: "asc" | "desc";
