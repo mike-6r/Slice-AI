@@ -81,6 +81,8 @@ const operationsQuery = z
     market: z.string().trim().max(48).optional(),
     workType: z.enum(['PRODUCTION', 'OWNER_DEMO', 'CONTROLLED_QA']).optional(),
     attention: z.enum(['REQUIRES_ATTENTION']).optional(),
+    priority: z.enum(['HIGH', 'MEDIUM', 'NONE']).optional(),
+    assignee: z.string().trim().max(128).optional(),
     sort: z
       .enum([
         'NEEDS_ACTION',

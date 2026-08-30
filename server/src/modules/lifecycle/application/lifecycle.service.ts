@@ -50,6 +50,8 @@ type OperationsBoardInput = {
   market?: string;
   workType?: string;
   attention?: string;
+  priority?: string;
+  assignee?: string;
   sort?: string;
   page?: number;
   pageSize?: number;
@@ -91,6 +93,7 @@ type BoardAsset = {
     media: Array<{ slot: string; status: string; objectKey: string }>;
     marketResearch: Array<{ state: string; collectedAt: Date }>;
     intake: {
+      id: string;
       status: string;
       deliveryMethod: 'SHIPMENT' | 'IN_PERSON';
       selectedAt: Date;
@@ -133,7 +136,20 @@ type BoardAsset = {
     issuedUnits: bigint;
   } | null;
   ownershipSupplyPolicy: { status: string } | null;
-  initialOffering: { id: string; status: string; updatedAt: Date } | null;
+  initialOffering: {
+    id: string;
+    status: string;
+    updatedAt: Date;
+    currency: string;
+    totalUnits: bigint;
+    offeredUnits: bigint;
+    pricePerUnitMinor: bigint;
+    inventory: {
+      availableUnits: bigint;
+      reservedUnits: bigint;
+      settledUnits: bigint;
+    } | null;
+  } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   controlledBetaBypass: { id: string } | null;
   stagingDemoPhysicalIntake: { id: string } | null;
@@ -342,7 +358,7 @@ export class LifecycleService {
         publication: true,
         ownershipSupply: true,
         ownershipSupplyPolicy: true,
-        initialOffering: true,
+        initialOffering: { include: { inventory: true } },
         tradingMarket: true,
         controlledBetaBypass: true,
         stagingDemoPhysicalIntake: true,
@@ -361,8 +377,14 @@ export class LifecycleService {
       (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
         Boolean(item),
     );
-    const counts = operationsCounts(allProjected);
-    const projected = allProjected
+    // Asset Operations starts after Physical Intake has established custody.
+    // Keep pre-custody work in the Intake workspace; never pad this board with
+    // upstream records just to make its queue look populated.
+    const operationalItems = allProjected.filter(
+      (item) => item.eligibleForAssetOperations,
+    );
+    const counts = operationsCounts(operationalItems);
+    const projected = operationalItems
       .filter((item) => operationsMatches(item, input))
       .sort((left, right) => operationsSort(left, right, input.sort));
     const start = (page - 1) * pageSize;
@@ -376,6 +398,8 @@ export class LifecycleService {
         totalPages: Math.max(1, Math.ceil(projected.length / pageSize)),
       },
       counts,
+      filterOptions: operationsFilterOptions(),
+      insights: operationsInsights(operationalItems),
     };
   }
 
@@ -1558,6 +1582,7 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     submittedAt: submission.submittedAt?.toISOString() ?? null,
     sourceContext: {
       submissionId: submission.id,
+      intakeId: intake?.id ?? null,
       receivedAt: intake?.receivedAt?.toISOString() ?? null,
       receiptConfirmedAt: intake?.receipt?.confirmedAt.toISOString() ?? null,
       vault: intake?.vault.displayName ?? 'Not assigned',
@@ -1607,9 +1632,16 @@ function ownershipProjection(asset: BoardAsset) {
 }
 
 function offeringProjection(asset: BoardAsset) {
+  const offering = asset.initialOffering;
   return {
-    state: asset.initialOffering?.status ?? 'NOT_CREATED',
-    offeringId: asset.initialOffering?.id ?? null,
+    state: offering?.status ?? 'NOT_CREATED',
+    offeringId: offering?.id ?? null,
+    totalUnits: offering?.totalUnits.toString() ?? null,
+    offeredUnits: offering?.offeredUnits.toString() ?? null,
+    soldUnits: offering?.inventory?.settledUnits.toString() ?? null,
+    availableUnits: offering?.inventory?.availableUnits.toString() ?? null,
+    pricePerUnitMinor: offering?.pricePerUnitMinor.toString() ?? null,
+    currency: offering?.currency ?? null,
   };
 }
 
@@ -1815,10 +1847,9 @@ function operationsMatches(
       valuation: item.currentStage === 'VALUATION',
       ownership: item.currentStage === 'OWNERSHIP_SETUP',
       offering: item.currentStage === 'OFFERING_SETUP',
-      'launch-readiness': item.currentStage === 'LAUNCH_READINESS',
       'ready-for-launch': item.currentStage === 'READY_FOR_LAUNCH',
       'market-live': item.currentStage === 'MARKET_LIVE',
-      restrictions: item.currentStage === 'RESTRICTION',
+      exceptions: Boolean(item.exception),
     };
     if (!byTab[input.tab]) return false;
   }
@@ -1831,7 +1862,10 @@ function operationsMatches(
     (!input.workType || item.workType === input.workType) &&
     (!input.attention ||
       input.attention !== 'REQUIRES_ATTENTION' ||
-      item.attention.required)
+      item.attention.required) &&
+    (!input.priority || item.attention.severity === input.priority) &&
+    (!input.assignee ||
+      (input.assignee === 'UNASSIGNED' ? item.assignee === null : false))
   );
 }
 
@@ -1908,9 +1942,91 @@ function operationsCounts(
       .length,
     restrictions: items.filter((item) => item.currentStage === 'RESTRICTION')
       .length,
-    physicalPrerequisite: items.filter(
-      (item) => !item.eligibleForAssetOperations,
-    ).length,
+    exceptions: items.filter((item) => item.exception !== null).length,
+    physicalPrerequisite: 0,
+  };
+}
+
+function operationsFilterOptions() {
+  // Assignment is not persisted on the canonical lifecycle record yet. Keep
+  // the selector present but empty instead of projecting made-up operators.
+  return {
+    assignees: [] as Array<{ id: string; displayName: string }>,
+  };
+}
+
+function operationsInsights(
+  items: Array<NonNullable<Awaited<ReturnType<typeof operationsItem>>>>,
+) {
+  const exceptionItems = items.filter((item) => item.exception !== null);
+  const blockedItems = items.filter(
+    (item) =>
+      item.exception === null &&
+      (item.currentStage === 'LAUNCH_READINESS' ||
+        item.market.state === 'PAUSED'),
+  );
+  const atRiskItems = items.filter(
+    (item) =>
+      item.exception === null &&
+      !blockedItems.includes(item) &&
+      item.attention.severity === 'MEDIUM',
+  );
+  const blockerCounts = new Map<string, number>();
+  for (const item of items) {
+    for (const blocker of [
+      ...item.entryBlockers,
+      ...item.launchReadiness.blockers,
+      ...(item.exception ? [item.exception.type] : []),
+    ]) {
+      blockerCounts.set(blocker, (blockerCounts.get(blocker) ?? 0) + 1);
+    }
+  }
+  const ownership = items.filter(
+    (item) => item.currentStage === 'OWNERSHIP_SETUP',
+  );
+  return {
+    health: {
+      onTrack:
+        items.length -
+        exceptionItems.length -
+        blockedItems.length -
+        atRiskItems.length,
+      atRisk: atRiskItems.length,
+      blocked: blockedItems.length,
+      exceptions: exceptionItems.length,
+    },
+    recentlyUpdated: [...items]
+      .sort(
+        (left, right) =>
+          new Date(right.updatedAt).getTime() -
+          new Date(left.updatedAt).getTime(),
+      )
+      .slice(0, 3)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        stage: item.currentStage,
+        updatedAt: item.updatedAt,
+      })),
+    blockers: [...blockerCounts.entries()]
+      .map(([code, count]) => ({ code, count }))
+      .sort(
+        (left, right) =>
+          right.count - left.count || left.code.localeCompare(right.code),
+      )
+      .slice(0, 4),
+    ownership: {
+      total: ownership.length,
+      draft: ownership.filter(
+        (item) => item.ownership.state === 'NOT_CONFIGURED',
+      ).length,
+      pending: ownership.filter(
+        (item) => item.ownership.state === 'PENDING_APPROVAL',
+      ).length,
+      configured: ownership.filter(
+        (item) => item.ownership.state === 'CONFIGURED',
+      ).length,
+    },
   };
 }
 
@@ -1919,6 +2035,9 @@ export const operationsQueueTestUtils = {
   physicalEntryBlockers,
   operationsNextAction,
   operationEconomicWorkflow,
+  operationsMatches,
+  operationsCounts,
+  operationsInsights,
 };
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */

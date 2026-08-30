@@ -6,10 +6,9 @@ export const assetOperationsTabs = [
   ["valuation", "Valuation"],
   ["ownership", "Ownership setup"],
   ["offering", "Offering setup"],
-  ["launch-readiness", "Launch readiness"],
   ["ready-for-launch", "Ready for launch"],
   ["market-live", "Market live"],
-  ["restrictions", "Restrictions / exceptions"],
+  ["exceptions", "Exceptions"],
 ] as const;
 
 export function assetOperationsTabCount(
@@ -24,10 +23,9 @@ export function assetOperationsTabCount(
         valuation: counts.valuationPending,
         ownership: counts.ownershipPending,
         offering: counts.offeringSetup,
-        "launch-readiness": counts.launchReadiness,
         "ready-for-launch": counts.readyForLaunch,
         "market-live": counts.marketLive,
-        restrictions: counts.restrictions,
+        exceptions: counts.exceptions,
       } as Record<string, number>
     )[tab] ?? 0
   );
@@ -40,8 +38,8 @@ export function assetOperationsEmptyCopy(filtered: boolean) {
         detail: "Adjust the server-side search or filters to widen this view.",
       }
     : {
-        title: "No assets are ready for Asset Operations",
+        title: "No post-intake assets are active in Asset Operations",
         detail:
-          "Canonical assets appear here after physical intake, verification, and custody are complete.",
+          "Assets appear here after verified receipt and custody have been established in Physical Intake.",
       };
 }

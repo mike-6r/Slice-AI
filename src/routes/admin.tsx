@@ -168,6 +168,7 @@ function AdminConsole() {
     operationsStage,
     operationsOffering,
     operationsAttention,
+    operationsAssignee,
     accountQ,
     accountType,
     accountStatus,
@@ -1103,15 +1104,11 @@ function AdminConsole() {
           <AdminAssetOperations
             tab={selectedUserTab}
             query={reviewQuery ?? ""}
-            category={operationsCategory ?? ""}
-            grader={operationsGrader ?? ""}
             stage={operationsStage ?? ""}
-            valuation={catalogueValuation ?? ""}
-            ownership={catalogueOwnership ?? ""}
-            offering={operationsOffering ?? ""}
             market={catalogueMarket ?? ""}
             workType={catalogueWorkType ?? ""}
-            attention={operationsAttention ?? ""}
+            priority={operationsPriority ?? ""}
+            assignee={operationsAssignee ?? ""}
             sort={reviewSort ?? "NEEDS_ACTION"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}
             update={(patch) =>

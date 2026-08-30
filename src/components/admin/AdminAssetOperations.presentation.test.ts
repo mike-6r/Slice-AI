@@ -15,6 +15,7 @@ const counts = {
   readyForLaunch: 1,
   marketLive: 3,
   restrictions: 1,
+  exceptions: 1,
   physicalPrerequisite: 4,
 };
 
@@ -26,10 +27,9 @@ describe("Asset Operations presentation", () => {
       "valuation",
       "ownership",
       "offering",
-      "launch-readiness",
       "ready-for-launch",
       "market-live",
-      "restrictions",
+      "exceptions",
     ]);
     expect(assetOperationsTabs.map(([key]) => key)).not.toContain("custody");
     expect(assetOperationsTabs.map(([key]) => key)).not.toContain("verification");
@@ -41,7 +41,9 @@ describe("Asset Operations presentation", () => {
   });
 
   it("distinguishes no queue data from a server-filtered no-match result", () => {
-    expect(assetOperationsEmptyCopy(false).title).toBe("No assets are ready for Asset Operations");
+    expect(assetOperationsEmptyCopy(false).title).toBe(
+      "No post-intake assets are active in Asset Operations",
+    );
     expect(assetOperationsEmptyCopy(true).title).toBe("No assets match this queue view");
   });
 });

@@ -7,6 +7,581 @@
   min-width: 0;
 }
 
+/* Reference-aligned queue: the visual density is intentional, but every
+ * number and row is supplied by the lifecycle operations projection. */
+.asset-operations-page--reference {
+  max-width: 1920px;
+  padding-top: 22px;
+}
+.asset-operations-page--reference .asset-operations-header {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.asset-operations-page--reference .asset-operations-header h2 {
+  font-size: 29px;
+}
+.asset-operations-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.asset-operations-view-menu {
+  position: relative;
+}
+.asset-operations-view-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #0b1922;
+  box-shadow: 0 15px 28px rgba(0, 0, 0, 0.32);
+}
+.asset-operations-view-options button {
+  border: 0;
+  border-radius: 5px;
+  padding: 8px 9px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 11px;
+  text-align: left;
+}
+.asset-operations-view-options button:hover {
+  background: rgba(64, 220, 182, 0.1);
+  color: var(--accent);
+}
+.asset-operations-page--reference .asset-operations-metrics {
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 9px;
+  margin-bottom: 17px;
+}
+.asset-operations-page--reference .asset-operations-metric {
+  min-height: 84px;
+  padding: 13px 14px;
+  background: linear-gradient(135deg, rgba(17, 35, 46, 0.95), rgba(11, 23, 31, 0.94));
+}
+.asset-operations-page--reference .asset-operations-metric.green svg {
+  color: #7fd259;
+}
+.asset-operations-page--reference .asset-operations-metric b {
+  font-size: 23px;
+  line-height: 1;
+}
+.asset-operations-page--reference .asset-operations-metric small {
+  display: block;
+  margin-top: 5px;
+}
+.asset-operations-page--reference .asset-operations-workspace {
+  overflow: visible;
+}
+.asset-operations-page--reference .asset-operations-tabs {
+  padding: 0 13px;
+}
+.asset-operations-page--reference .asset-operations-tabs button {
+  padding: 13px 10px 11px;
+  font-size: 11px;
+}
+.asset-operations-tools--reference {
+  display: grid;
+  grid-template-columns: minmax(245px, 1.65fr) repeat(5, minmax(103px, 0.72fr)) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 13px;
+}
+.asset-operations-tools--reference .asset-operations-search {
+  min-height: 36px;
+  height: 36px;
+}
+.asset-operations-filter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.asset-operations-filter > span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.asset-operations-filter select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding-right: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  font-size: 11px;
+}
+.asset-operations-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.asset-operations-clear svg {
+  width: 14px;
+}
+.asset-operations-clear:disabled {
+  opacity: 0.45;
+}
+.asset-operations-page--reference .asset-operations-layout {
+  grid-template-columns: minmax(0, 1fr) 286px;
+}
+.asset-operations-page--reference .asset-operations-grid {
+  grid-template-columns: minmax(236px, 1.65fr) minmax(86px, 0.62fr) minmax(152px, 1.12fr) minmax(
+      112px,
+      0.78fr
+    ) minmax(95px, 0.68fr) minmax(110px, 0.78fr) minmax(74px, 0.48fr) minmax(90px, 0.63fr) 38px;
+  gap: 8px;
+}
+.asset-operations-page--reference .asset-operations-grid--head {
+  padding: 10px 13px;
+  font-size: 8px;
+}
+.asset-operations-page--reference .asset-operations-row {
+  min-height: 91px;
+  padding: 9px 13px;
+}
+.asset-operations-page--reference .asset-operations-thumb {
+  width: 37px;
+  height: 53px;
+}
+.asset-operations-page--reference .asset-operations-identity {
+  gap: 9px;
+}
+.asset-operations-page--reference .asset-operations-identity strong {
+  font-size: 12px;
+}
+.asset-operations-page--reference .asset-operations-identity small {
+  margin-top: 2px;
+}
+.asset-operations-page--reference .asset-operations-identity em {
+  margin-top: 3px;
+}
+.asset-operations-offering strong,
+.asset-operations-updated strong,
+.asset-operations-assignee strong {
+  display: block;
+  font-size: 11px;
+}
+.asset-operations-offering small,
+.asset-operations-updated small,
+.asset-operations-assignee small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.asset-operations-offering > div {
+  width: 100%;
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(129, 153, 167, 0.2);
+}
+.asset-operations-offering i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #59c8a9, #7bc351);
+}
+.asset-operations-assignee {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.asset-operations-assignee > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #b9ecff;
+  background: #175286;
+  font-size: 8px;
+  font-weight: 700;
+}
+.asset-operations-assignee > div {
+  min-width: 0;
+}
+.asset-operations-assignee strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-operations-priority {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 99px;
+  padding: 4px 7px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.priority-none {
+  color: #9bcab9;
+  background: rgba(48, 205, 174, 0.1);
+}
+.priority-medium {
+  color: #e8b356;
+  background: rgba(232, 174, 70, 0.12);
+}
+.priority-high {
+  color: #f09b98;
+  background: rgba(239, 137, 133, 0.13);
+}
+.asset-operations-page--reference .asset-operations-open {
+  border-color: rgba(154, 183, 196, 0.3);
+  color: var(--text-primary);
+}
+.asset-operations-page--reference .asset-operations-open:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.asset-operations-page--reference .asset-operations-preview {
+  position: relative;
+  padding: 14px;
+}
+.asset-operations-preview-close {
+  position: absolute;
+  top: 11px;
+  right: 9px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  color: var(--text-muted);
+  background: transparent;
+}
+.asset-operations-preview-close svg {
+  width: 15px;
+}
+.asset-operations-preview-identity {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.asset-operations-preview-identity .asset-operations-thumb {
+  width: 68px;
+  height: 96px;
+}
+.asset-operations-preview-identity h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.asset-operations-preview-identity p {
+  margin-bottom: 6px;
+}
+.asset-operations-preview-identity strong {
+  display: block;
+  color: var(--accent);
+  font-size: 10px;
+}
+.asset-operations-preview-identity small {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.asset-operations-preview-stage {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-operations-preview-stage > span,
+.asset-operations-preview-section > span,
+.asset-operations-preview-workflow > span,
+.asset-operations-preview-links > span,
+.asset-operations-insights > article > span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.asset-operations-preview-stage > strong {
+  display: inline-flex;
+  margin-top: 7px;
+  border-radius: 99px;
+  padding: 4px 7px;
+  background: rgba(80, 170, 247, 0.12);
+  font-size: 10px;
+}
+.asset-operations-preview-stage p {
+  margin: 5px 0 0;
+  font-size: 10px;
+}
+.asset-operations-preview-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-operations-preview-section dl {
+  margin-top: 7px;
+}
+.asset-operations-preview-section dl div {
+  padding: 5px 0;
+  border: 0;
+  font-size: 10px;
+}
+.asset-operations-preview-section dd {
+  max-width: 145px;
+  color: var(--text-primary);
+}
+.asset-operations-preview-workflow {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-operations-preview-workflow > div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  margin-top: 9px;
+}
+.asset-operations-preview-workflow > div > div {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-muted);
+}
+.asset-operations-preview-workflow > div > div:not(:last-child)::after {
+  position: absolute;
+  top: 10px;
+  left: calc(50% + 12px);
+  width: calc(100% - 14px);
+  height: 1px;
+  content: "";
+  background: var(--border);
+}
+.asset-operations-preview-workflow i {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+}
+.asset-operations-preview-workflow small {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-operations-preview-workflow .complete {
+  color: var(--accent);
+}
+.asset-operations-preview-workflow .current {
+  color: #62b0f8;
+}
+.asset-operations-preview-links {
+  display: grid;
+  gap: 7px;
+  padding-top: 12px;
+}
+.asset-operations-preview-links button,
+.asset-operations-preview-links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0;
+  padding: 7px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+}
+.asset-operations-preview-links button:hover,
+.asset-operations-preview-links a:hover {
+  color: var(--accent);
+}
+.asset-operations-insights {
+  display: grid;
+  grid-template-columns: 1.15fr 1.2fr 1.15fr 1.25fr;
+  gap: 10px;
+  padding: 13px;
+  border-top: 1px solid var(--border);
+  background: rgba(8, 19, 27, 0.54);
+}
+.asset-operations-insights > article {
+  min-height: 133px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(11, 24, 33, 0.65);
+}
+.asset-operations-donut {
+  display: grid;
+  width: 75px;
+  height: 75px;
+  place-content: center;
+  margin: 10px 12px 0 0;
+  float: left;
+  border-radius: 50%;
+  text-align: center;
+}
+.asset-operations-donut::before {
+  position: absolute;
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  content: "";
+  background: #0d1c26;
+}
+.asset-operations-donut b,
+.asset-operations-donut small {
+  position: relative;
+  z-index: 1;
+}
+.asset-operations-donut b {
+  font-size: 14px;
+}
+.asset-operations-donut small {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+.asset-operations-insights dl {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+}
+.asset-operations-insights dl div,
+.asset-operations-insight-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.asset-operations-insights dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+.asset-operations-insight-list {
+  display: grid;
+  gap: 6px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.asset-operations-insight-list button {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: left;
+}
+.asset-operations-insight-list strong {
+  font-size: 10px;
+}
+.asset-operations-insight-list small {
+  font-size: 9px;
+}
+.asset-operations-insight-number {
+  display: block;
+  margin-top: 13px;
+  color: #f08b88;
+  font-size: 25px;
+}
+.asset-operations-insight-number.violet {
+  color: #c287ff;
+}
+.asset-operations-insight-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  border: 1px solid rgba(64, 220, 182, 0.4);
+  border-radius: 5px;
+  padding: 6px 8px;
+  color: var(--accent);
+  background: transparent;
+  font-size: 9px;
+}
+.asset-operations-insight-action svg {
+  width: 12px;
+}
+@media (max-width: 1560px) {
+  .asset-operations-tools--reference {
+    grid-template-columns: minmax(230px, 1.7fr) repeat(3, minmax(115px, 0.8fr)) auto;
+  }
+  .asset-operations-page--reference .asset-operations-grid {
+    min-width: 1130px;
+  }
+  .asset-operations-page--reference .asset-operations-grid--head {
+    min-width: 1130px;
+  }
+  .asset-operations-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1050px) {
+  .asset-operations-page--reference .asset-operations-layout {
+    grid-template-columns: 1fr;
+  }
+  .asset-operations-page--reference .asset-operations-preview {
+    display: none;
+  }
+  .asset-operations-tools--reference {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .asset-operations-tools--reference .asset-operations-search {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
+  .asset-operations-header-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .asset-operations-header-actions .admin-ops-button {
+    flex: 1;
+    justify-content: center;
+  }
+  .asset-operations-page--reference .asset-operations-metrics,
+  .asset-operations-tools--reference,
+  .asset-operations-insights {
+    grid-template-columns: 1fr;
+  }
+  .asset-operations-tools--reference .asset-operations-search {
+    grid-column: auto;
+  }
+  .asset-operations-insights > article {
+    min-height: 0;
+  }
+}
+
 /* Post-custody Asset Operations queue. Physical intake remains a linked
  * prerequisite, never an operational stage on this screen. */
 .asset-operations-page {

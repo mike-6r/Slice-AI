@@ -58,6 +58,60 @@ describe('Asset Operations queue authority', () => {
     });
   });
 
+  it('keeps pre-custody assets out of the post-intake operations queue', () => {
+    const pendingPhysical = {
+      eligibleForAssetOperations: false,
+      currentStage: 'PHYSICAL_PREREQUISITE',
+      market: { state: 'NOT_ELIGIBLE' },
+      exception: null,
+      attention: { severity: 'NONE' },
+    } as { eligibleForAssetOperations: boolean };
+    const postIntake = {
+      eligibleForAssetOperations: true,
+      currentStage: 'VALUATION',
+      market: { state: 'NOT_ELIGIBLE' },
+      exception: null,
+      attention: { severity: 'NONE' },
+    } as {
+      eligibleForAssetOperations: boolean;
+      currentStage: string;
+      market: { state: string };
+      exception: null;
+      attention: { severity: string };
+    };
+    expect(
+      [pendingPhysical, postIntake].filter(
+        (item) => item.eligibleForAssetOperations,
+      ),
+    ).toEqual([postIntake]);
+    expect(
+      operationsQueueTestUtils.operationsMatches(postIntake as never, {
+        tab: 'valuation',
+      }),
+    ).toBe(true);
+  });
+
+  it('derives queue insights from lifecycle blockers instead of static dashboard values', () => {
+    const item = {
+      exception: { type: 'INTAKE_EXCEPTION' },
+      currentStage: 'RESTRICTION',
+      market: { state: 'NOT_ELIGIBLE' },
+      attention: { severity: 'HIGH' },
+      entryBlockers: ['VERIFICATION_REQUIRED'],
+      launchReadiness: { blockers: ['INITIAL_OFFERING_REQUIRED'] },
+      ownership: { state: 'NOT_CONFIGURED' },
+      updatedAt: new Date('2026-08-30T00:00:00.000Z').toISOString(),
+      id: 'asset-1',
+      title: 'Authoritative asset',
+    } as never;
+    expect(operationsQueueTestUtils.operationsInsights([item])).toMatchObject({
+      health: { exceptions: 1 },
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: 'VERIFICATION_REQUIRED', count: 1 }),
+      ]),
+    });
+  });
+
   it('projects a live market workflow from the same server authority as the queue', () => {
     const workflow = operationsQueueTestUtils.operationEconomicWorkflow({
       eligibleForAssetOperations: true,

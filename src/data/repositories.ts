@@ -201,6 +201,8 @@ export interface AssetLifecycleRepository {
     market?: string;
     workType?: string;
     attention?: string;
+    priority?: string;
+    assignee?: string;
     sort?: string;
     page?: number;
     pageSize?: number;
@@ -1430,7 +1432,16 @@ export type AssetOperationsBoardItem = {
   entryBlockers: string[];
   valuation: { state: "PENDING" | "VALUED"; valueMinor: string | null; currency: string | null };
   ownership: { state: string; issuedUnits: string | null; totalUnits: string | null };
-  offering: { state: string; offeringId: string | null };
+  offering: {
+    state: string;
+    offeringId: string | null;
+    totalUnits: string | null;
+    offeredUnits: string | null;
+    soldUnits: string | null;
+    availableUnits: string | null;
+    pricePerUnitMinor: string | null;
+    currency: string | null;
+  };
   market: { state: string; publicationStatus: string | null; tradingStatus: string | null };
   launchReadiness: { state: "BLOCKED" | "READY"; blockers: string[] };
   currentStage:
@@ -1450,6 +1461,7 @@ export type AssetOperationsBoardItem = {
   submittedAt: string | null;
   sourceContext: {
     submissionId: string;
+    intakeId: string | null;
     receivedAt: string | null;
     receiptConfirmedAt: string | null;
     vault: string;
@@ -1475,7 +1487,15 @@ export type AssetOperationsBoardResponse = {
     readyForLaunch: number;
     marketLive: number;
     restrictions: number;
+    exceptions: number;
     physicalPrerequisite: number;
+  };
+  filterOptions: { assignees: { id: string; displayName: string }[] };
+  insights: {
+    health: { onTrack: number; atRisk: number; blocked: number; exceptions: number };
+    recentlyUpdated: { id: string; title: string; stage: string; updatedAt: string }[];
+    blockers: { code: string; count: number }[];
+    ownership: { total: number; draft: number; pending: number; configured: number };
   };
 };
 
