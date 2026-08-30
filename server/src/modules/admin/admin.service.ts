@@ -2586,6 +2586,9 @@ export class AdminService {
     };
     const [
       summaryTotal,
+      needsAttention,
+      inPhysicalIntake,
+      verified,
       inCustody,
       verificationPending,
       valuationPending,
@@ -2594,6 +2597,78 @@ export class AdminService {
       ownerPositions,
     ] = await Promise.all([
       this.db.asset.count({ where: summaryWhere }),
+      this.db.asset.count({
+        where: {
+          AND: [
+            summaryWhere,
+            {
+              OR: [
+                { custodyRecord: { is: { status: 'EXCEPTION' } } },
+                {
+                  submissions: {
+                    some: {
+                      intake: {
+                        is: { exceptions: { some: { resolvedAt: null } } },
+                      },
+                    },
+                  },
+                },
+                { valuationDecisions: { none: { status: 'ACTIVE' } } },
+                {
+                  submissions: {
+                    some: {
+                      intake: {
+                        is: {
+                          verification: {
+                            is: {
+                              status: {
+                                in: ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED'],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      this.db.asset.count({
+        where: {
+          AND: [
+            summaryWhere,
+            { submissions: { some: { intake: { isNot: null } } } },
+          ],
+        },
+      }),
+      this.db.asset.count({
+        where: {
+          AND: [
+            summaryWhere,
+            {
+              OR: [
+                {
+                  submissions: {
+                    some: {
+                      intake: {
+                        is: { verification: { is: { status: 'VERIFIED' } } },
+                      },
+                    },
+                  },
+                },
+                {
+                  submissions: {
+                    some: { reviews: { some: { status: 'COMPLETED' } } },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
       this.db.asset.count({
         where: {
           AND: [
@@ -2849,6 +2924,9 @@ export class AdminService {
       },
       summary: {
         total: summaryTotal,
+        needsAttention,
+        inPhysicalIntake,
+        verified,
         inCustody,
         verificationPending,
         valuationPending,

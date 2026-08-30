@@ -3924,6 +3924,9 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           const summary = objectField(value.summary ?? {}, "admin collectibles summary");
           return {
             total: Number(summary.total ?? 0),
+            needsAttention: Number(summary.needsAttention ?? 0),
+            inPhysicalIntake: Number(summary.inPhysicalIntake ?? 0),
+            verified: Number(summary.verified ?? 0),
             inCustody: Number(summary.inCustody ?? 0),
             verificationPending: Number(summary.verificationPending ?? 0),
             valuationPending: Number(summary.valuationPending ?? 0),

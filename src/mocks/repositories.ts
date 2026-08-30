@@ -142,6 +142,9 @@ export const mockRepositories: AppRepositories = {
         },
         summary: {
           total: 0,
+          needsAttention: 0,
+          inPhysicalIntake: 0,
+          verified: 0,
           inCustody: 0,
           verificationPending: 0,
           valuationPending: 0,

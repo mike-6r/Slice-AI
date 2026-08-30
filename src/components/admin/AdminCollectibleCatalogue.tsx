@@ -1,4 +1,18 @@
-import { ArrowRight, ChevronDown, Search, X } from "lucide-react";
+import {
+  ArrowRight,
+  Box,
+  ChevronDown,
+  CircleAlert,
+  ClipboardCheck,
+  LockKeyhole,
+  MoreVertical,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  TrendingUp,
+  Truck,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AdminCatalogueAsset, AdminCatalogueResponse } from "@/data/repositories";
@@ -60,6 +74,13 @@ export function AdminCollectibleCatalogue({
     staleTime: 20_000,
   });
   useEffect(() => setSearch(query), [query]);
+  useEffect(() => {
+    setPreviewId((current) =>
+      catalogue.data?.items.some((item) => item.id === current)
+        ? current
+        : (catalogue.data?.items[0]?.id ?? null),
+    );
+  }, [catalogue.data?.items]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const next = search.trim() || undefined;
@@ -159,25 +180,64 @@ function CatalogueContent({
     <main className="admin-catalogue-page">
       <header className="admin-catalogue-header">
         <div>
-          <p className="admin-catalogue-breadcrumb">
-            Admin Console <span>›</span> Collectibles
-          </p>
-          <h2>Collectibles</h2>
+          <p className="admin-catalogue-eyebrow">Admin console</p>
+          <div className="admin-catalogue-title-row">
+            <h2>Collectibles</h2>
+            <span className="admin-catalogue-authority">Canonical Asset authority</span>
+          </div>
           <p>Slice&apos;s authoritative catalogue of canonical collectible assets.</p>
         </div>
-        <span className="admin-catalogue-authority">Canonical Asset authority</span>
+        <div className="admin-catalogue-header-actions">
+          <label className="admin-catalogue-global-search">
+            <Search aria-hidden="true" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search collectibles…"
+              aria-label="Search collectibles"
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-catalogue-refresh"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw size={15} aria-hidden="true" /> Refresh
+          </button>
+        </div>
       </header>
       <section className="admin-catalogue-summary" aria-label="Catalogue summary">
-        <Metric label="Total collectibles" value={data.summary.total} />
-        <Metric label="In custody" value={data.summary.inCustody} />
+        <Metric label="Total collectibles" value={data.summary.total} icon={<Box />} />
         <Metric
-          label="Verification pending"
-          value={data.summary.verificationPending}
+          label="Needs attention"
+          value={data.summary.needsAttention}
+          icon={<CircleAlert />}
           tone="amber"
         />
-        <Metric label="Valuation pending" value={data.summary.valuationPending} tone="amber" />
-        <Metric label="Market live" value={data.summary.marketLive} tone="green" />
-        <Metric label="Exceptions" value={data.summary.exceptions} tone="red" />
+        <Metric
+          label="In physical intake"
+          value={data.summary.inPhysicalIntake}
+          icon={<Truck />}
+          tone="blue"
+        />
+        <Metric
+          label="Verified"
+          value={data.summary.verified}
+          icon={<ShieldCheck />}
+          tone="green"
+        />
+        <Metric
+          label="In custody"
+          value={data.summary.inCustody}
+          icon={<LockKeyhole />}
+          tone="purple"
+        />
+        <Metric
+          label="Market live"
+          value={data.summary.marketLive}
+          icon={<TrendingUp />}
+          tone="green"
+        />
       </section>
       <section className="admin-catalogue-workspace">
         <div className="admin-catalogue-main">
@@ -187,7 +247,7 @@ function CatalogueContent({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title, set, card number, cert, collector or ID"
+                placeholder="Search title, set, card number, cert #, asset ID, collector…"
                 aria-label="Search collectibles"
               />
             </label>
@@ -216,34 +276,10 @@ function CatalogueContent({
               options={["PENDING", "VERIFIED"]}
             />
             <FilterSelect
-              label="Valuation"
-              value={filters.valuation}
-              onChange={(value) => setFilters({ valuation: value })}
-              options={["PENDING", "VALUED"]}
-            />
-            <FilterSelect
               label="Market"
               value={filters.market}
               onChange={(value) => setFilters({ market: value })}
               options={["NOT_PUBLISHED", "INITIAL_OFFERING", "LIVE", "PAUSED"]}
-            />
-            <FilterSelect
-              label="Grading"
-              value={filters.grading}
-              onChange={(value) => setFilters({ grading: value })}
-              options={["RAW", "GRADED"]}
-            />
-            <FilterSelect
-              label="Collector / source"
-              value={filters.collector}
-              onChange={(value) => setFilters({ collector: value })}
-              options={collectors}
-            />
-            <FilterSelect
-              label="Status"
-              value={status}
-              onChange={(value) => update({ status: value || undefined, page: "1" })}
-              options={["DRAFT", "IN_REVIEW", "VERIFIED", "PUBLISHED", "ARCHIVED"]}
             />
             <FilterSelect
               label="Sort"
@@ -251,6 +287,37 @@ function CatalogueContent({
               onChange={(value) => setFilters({ sort: value })}
               options={["updated", "newest", "title"]}
             />
+            <details className="admin-catalogue-more-filters">
+              <summary>
+                More filters <ChevronDown size={13} />
+              </summary>
+              <div>
+                <FilterSelect
+                  label="Valuation"
+                  value={filters.valuation}
+                  onChange={(value) => setFilters({ valuation: value })}
+                  options={["PENDING", "VALUED"]}
+                />
+                <FilterSelect
+                  label="Grading"
+                  value={filters.grading}
+                  onChange={(value) => setFilters({ grading: value })}
+                  options={["RAW", "GRADED"]}
+                />
+                <FilterSelect
+                  label="Collector / source"
+                  value={filters.collector}
+                  onChange={(value) => setFilters({ collector: value })}
+                  options={collectors}
+                />
+                <FilterSelect
+                  label="Status"
+                  value={status}
+                  onChange={(value) => update({ status: value || undefined, page: "1" })}
+                  options={["DRAFT", "IN_REVIEW", "VERIFIED", "PUBLISHED", "ARCHIVED"]}
+                />
+              </div>
+            </details>
             <label className="admin-catalogue-fixture">
               <input
                 type="checkbox"
@@ -292,11 +359,7 @@ function CatalogueContent({
               <strong>{data.pagination.total}</strong>{" "}
               {hasFilters ? "matching collectibles" : "canonical collectibles"}
             </span>
-            <span>
-              {data.summary.ownerPositions
-                ? `${data.summary.ownerPositions} active owner positions`
-                : "Ownership issuance is separate"}
-            </span>
+            {filters.fixture === "NORMAL" ? <span>Work type: Production</span> : null}
           </div>
           {data.items.length ? (
             <CatalogueTable
@@ -373,14 +436,16 @@ function CatalogueTable({
         <thead>
           <tr>
             <th>Collectible</th>
-            <th>Grade / cert</th>
-            <th>Physical state</th>
+            <th>Collector / source</th>
+            <th>Physical</th>
             <th>Verification</th>
+            <th>Custody</th>
             <th>Valuation</th>
-            <th>Market</th>
             <th>Ownership</th>
+            <th>Market</th>
+            <th>Next action</th>
             <th>Updated</th>
-            <th>Action</th>
+            <th aria-label="More actions" />
           </tr>
         </thead>
         <tbody>
@@ -403,28 +468,46 @@ function CatalogueTable({
                         : "Card unavailable"}
                     </small>
                     <small>
-                      {item.publicId} {item.testFixture ? <em>TEST/DEMO</em> : null}
+                      {item.identity.grading
+                        ? `${item.identity.grading.company} ${item.identity.grading.grade} · Cert ${item.identity.grading.certStatus === "ON_FILE" ? "on file" : "unavailable"}`
+                        : "Raw / ungraded"}
+                    </small>
+                    <small className="catalogue-asset-id">
+                      Asset {shortId(item.publicId)} {item.testFixture ? <em>TEST/DEMO</em> : null}
                     </small>
                   </div>
                 </div>
               </td>
               <td>
-                {item.identity.grading ? (
+                {item.provenance ? (
                   <>
-                    <strong>
-                      {item.identity.grading.company} {item.identity.grading.grade}
-                    </strong>
-                    <small>{item.identity.grading.label}</small>
+                    <strong>{item.provenance.collector}</strong>
+                    <small>
+                      {item.provenance.username ? `@${item.provenance.username}` : "Collector"}
+                    </small>
+                    <small>Submission #{shortId(item.provenance.submissionId)}</small>
                   </>
                 ) : (
-                  <span>Ungraded</span>
+                  <span>Canonical source</span>
                 )}
               </td>
               <td>
                 <StatePill value={item.custodyState} />
+                <small>{physicalCaption(item.custodyState)}</small>
               </td>
               <td>
                 <StatePill value={item.verificationState} />
+                <small>
+                  {item.verificationState === "VERIFIED"
+                    ? "Staff / provider authority"
+                    : "Verification required"}
+                </small>
+              </td>
+              <td>
+                <StatePill value={custodyCaption(item.custodyState)} />
+                <small>
+                  {item.custodyState === "CUSTODY_READY" ? "Secure custody" : "Not established"}
+                </small>
               </td>
               <td>
                 {item.valuation ? (
@@ -433,13 +516,11 @@ function CatalogueTable({
                     <small>Staff authority</small>
                   </>
                 ) : (
-                  <span>Not started</span>
+                  <>
+                    <StatePill value="PENDING" />
+                    <small>Staff valuation</small>
+                  </>
                 )}
-              </td>
-              <td>
-                <StatePill
-                  value={item.marketLifecycle?.admin.publicState ?? item.publicationState}
-                />
               </td>
               <td>
                 {item.ownership.issuedUnits ? (
@@ -448,8 +529,33 @@ function CatalogueTable({
                     <small>{item.ownership.ownerCount} positions</small>
                   </>
                 ) : (
-                  <span>Not issued</span>
+                  <>
+                    <StatePill value="NOT_CONFIGURED" />
+                    <small>Not issued</small>
+                  </>
                 )}
+              </td>
+              <td>
+                <StatePill
+                  value={item.marketLifecycle?.admin.publicState ?? item.publicationState}
+                />
+                <small>
+                  {item.blockers.length
+                    ? `${item.blockers.length} blocker${item.blockers.length === 1 ? "" : "s"}`
+                    : "All requirements met"}
+                </small>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="catalogue-next-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(item.id);
+                  }}
+                >
+                  {item.nextAction} <small>{nextActor(item.nextAction)}</small>
+                </button>
               </td>
               <td>
                 <time dateTime={item.updatedAt}>{relativeDate(item.updatedAt)}</time>
@@ -457,13 +563,14 @@ function CatalogueTable({
               <td>
                 <button
                   type="button"
-                  className="admin-catalogue-open"
+                  className="catalogue-more-actions"
+                  aria-label={`Open actions for ${item.title}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpen(item.id);
                   }}
                 >
-                  Open <ArrowRight size={14} aria-hidden="true" />
+                  <MoreVertical size={16} />
                 </button>
               </td>
             </tr>
@@ -521,7 +628,7 @@ function Preview({
   return (
     <aside className="admin-catalogue-preview">
       <div className="admin-catalogue-preview__header">
-        <span>Collectible preview</span>
+        <span>Selected collectible</span>
         <button type="button" onClick={onClose} aria-label="Close preview">
           <X size={16} />
         </button>
@@ -530,10 +637,65 @@ function Preview({
         <CollectibleThumbnail src={item.thumbnailUrl} />
         <div>
           <h3>{item.title}</h3>
-          <p>{item.publicId}</p>
+          <p>
+            {item.identity.year ?? "Year unavailable"}{" "}
+            {item.identity.set ? `· ${item.identity.set}` : ""}
+          </p>
+          <p>
+            {item.identity.grading
+              ? `${item.identity.grading.company} ${item.identity.grading.grade}`
+              : "Raw / ungraded"}
+          </p>
+          <strong className="catalogue-preview-id">Asset {shortId(item.publicId)}</strong>
           {item.testFixture ? <em>TEST / DEMO FIXTURE</em> : null}
         </div>
       </div>
+      <PreviewSection title="Source & custody">
+        <p>
+          <b>Collector:</b> {item.provenance?.collector ?? "Canonical source unavailable"}
+        </p>
+        <p>
+          <b>Source:</b>{" "}
+          {item.lineage.submissionId
+            ? `Submission #${shortId(item.lineage.submissionId)}`
+            : "Canonical record"}
+        </p>
+        <p>
+          <b>Physical:</b> {sentence(item.custodyState)}
+        </p>
+      </PreviewSection>
+      <PreviewSection title="Lifecycle overview">
+        <LifecycleRow icon={<Truck />} label="Physical" value={sentence(item.custodyState)} />
+        <LifecycleRow
+          icon={<ShieldCheck />}
+          label="Verification"
+          value={sentence(item.verificationState)}
+        />
+        <LifecycleRow
+          icon={<LockKeyhole />}
+          label="Custody"
+          value={custodyCaption(item.custodyState)}
+        />
+        <LifecycleRow
+          icon={<ClipboardCheck />}
+          label="Valuation"
+          value={
+            item.valuation ? formatMinor(item.valuation.minor, item.valuation.currency) : "Pending"
+          }
+        />
+        <LifecycleRow
+          icon={<Box />}
+          label="Ownership"
+          value={
+            item.ownership.issuedUnits ? `${item.ownership.issuedUnits} units` : "Not configured"
+          }
+        />
+        <LifecycleRow
+          icon={<TrendingUp />}
+          label="Market"
+          value={sentence(item.marketLifecycle?.admin.publicState ?? item.publicationState)}
+        />
+      </PreviewSection>
       <PreviewSection title="Canonical identity">
         <p>
           {item.identity.year ?? "Year unavailable"} · {item.identity.set ?? "Set unavailable"} ·{" "}
@@ -543,33 +705,6 @@ function Preview({
         </p>
         <p>
           {item.identity.category} {item.identity.edition ? `· ${item.identity.edition}` : ""}
-        </p>
-      </PreviewSection>
-      <PreviewSection title="Source lineage">
-        <p>Submission: {item.lineage.submissionId ?? "Not linked"}</p>
-        <p>Intake: {item.lineage.intakeId ?? "Not created"}</p>
-        <p>Collector: {item.provenance?.collector ?? "Unavailable"}</p>
-      </PreviewSection>
-      <PreviewSection title="Lifecycle">
-        <p>
-          <b>Physical:</b> {sentence(item.custodyState)}
-        </p>
-        <p>
-          <b>Verification:</b> {sentence(item.verificationState)}
-        </p>
-        <p>
-          <b>Valuation:</b>{" "}
-          {item.valuation
-            ? formatMinor(item.valuation.minor, item.valuation.currency)
-            : "Not started"}
-        </p>
-        <p>
-          <b>Market:</b>{" "}
-          {sentence(item.marketLifecycle?.admin.publicState ?? item.publicationState)}
-        </p>
-        <p>
-          <b>Ownership:</b>{" "}
-          {item.ownership.issuedUnits ? `${item.ownership.issuedUnits} units issued` : "Not issued"}
         </p>
       </PreviewSection>
       {item.blockers.length ? (
@@ -610,11 +745,33 @@ function PreviewSection({ title, children }: { title: string; children: ReactNod
     </section>
   );
 }
-function Metric({ label, value, tone }: { label: string; value: number; tone?: string }) {
+function LifecycleRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="catalogue-lifecycle-row">
+      <span>{icon}</span>
+      <b>{label}</b>
+      <StatePill value={value} />
+    </div>
+  );
+}
+function Metric({
+  label,
+  value,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: number;
+  tone?: string;
+  icon: ReactNode;
+}) {
   return (
     <div className={`admin-catalogue-metric ${tone ? `is-${tone}` : ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <i aria-hidden="true">{icon}</i>
     </div>
   );
 }
@@ -670,6 +827,20 @@ function relativeDate(value: string) {
   const age = Date.now() - new Date(value).getTime();
   if (age < 86_400_000) return `${Math.max(1, Math.round(age / 3_600_000))}h ago`;
   return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+function shortId(value: string) {
+  return value.replace(/^ast_/i, "").slice(-7).toUpperCase();
+}
+function physicalCaption(value: string) {
+  if (value === "AWAITING_RECEIPT") return "Awaiting arrival";
+  if (value === "CUSTODY_READY") return "Physically secured";
+  return "—";
+}
+function custodyCaption(value: string) {
+  return value === "CUSTODY_READY" ? "IN_CUSTODY" : "NOT_ESTABLISHED";
+}
+function nextActor(action: string) {
+  return /drop off|shipment|destination/i.test(action) ? "Collector" : "Staff";
 }
 function sentence(value: string) {
   return value

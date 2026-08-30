@@ -1760,6 +1760,9 @@ export type AdminCatalogueResponse = {
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   summary: {
     total: number;
+    needsAttention: number;
+    inPhysicalIntake: number;
+    verified: number;
     inCustody: number;
     verificationPending: number;
     valuationPending: number;
