@@ -58,7 +58,7 @@ describe('Asset Operations queue authority', () => {
     });
   });
 
-  it('keeps pre-custody assets out of the post-intake operations queue', () => {
+  it('keeps pre-custody assets visible and routes their next action to Intake', () => {
     const pendingPhysical = {
       eligibleForAssetOperations: false,
       currentStage: 'PHYSICAL_PREREQUISITE',
@@ -79,11 +79,12 @@ describe('Asset Operations queue authority', () => {
       exception: null;
       attention: { severity: string };
     };
+    expect([pendingPhysical, postIntake]).toHaveLength(2);
     expect(
-      [pendingPhysical, postIntake].filter(
-        (item) => item.eligibleForAssetOperations,
-      ),
-    ).toEqual([postIntake]);
+      operationsQueueTestUtils.operationsMatches(pendingPhysical as never, {
+        tab: 'needs-action',
+      }),
+    ).toBe(true);
     expect(
       operationsQueueTestUtils.operationsMatches(postIntake as never, {
         tab: 'valuation',

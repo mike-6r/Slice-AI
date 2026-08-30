@@ -38,8 +38,8 @@ export function assetOperationsEmptyCopy(filtered: boolean) {
         detail: "Adjust the server-side search or filters to widen this view.",
       }
     : {
-        title: "No post-intake assets are active in Asset Operations",
+        title: "No canonical assets are active in Asset Operations",
         detail:
-          "Assets appear here after verified receipt and custody have been established in Physical Intake.",
+          "Canonical assets appear here with their current physical and market lifecycle state.",
       };
 }

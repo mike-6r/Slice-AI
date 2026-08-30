@@ -505,7 +505,7 @@ function AdminConsole() {
               carrier: selectedIntake ? undefined : intakeCarrier,
               dateFrom: selectedIntake ? undefined : intakeDateFrom,
               dateTo: selectedIntake ? undefined : intakeDateTo,
-              workType: "PRODUCTION" as const,
+              workType: "ALL" as const,
               sort: reviewSort === "oldest-in-stage" ? "OLDEST_IN_STAGE" : "RECENTLY_UPDATED",
               page: selectedIntake ? 1 : Math.max(1, Number(reviewPageParam ?? 1)),
               pageSize: 10,

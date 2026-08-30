@@ -377,12 +377,11 @@ export class LifecycleService {
       (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
         Boolean(item),
     );
-    // Asset Operations starts after Physical Intake has established custody.
-    // Keep pre-custody work in the Intake workspace; never pad this board with
-    // upstream records just to make its queue look populated.
-    const operationalItems = allProjected.filter(
-      (item) => item.eligibleForAssetOperations,
-    );
+    // This is the canonical-asset operations board. A canonical record remains
+    // operationally relevant before custody is established: its next action
+    // must be routed back to Physical Intake instead of disappearing from the
+    // staff surface. The item itself never exposes a custody mutation here.
+    const operationalItems = allProjected;
     const counts = operationsCounts(operationalItems);
     const projected = operationalItems
       .filter((item) => operationsMatches(item, input))
@@ -1843,7 +1842,8 @@ function operationsMatches(
   if (input.tab && input.tab !== 'all') {
     const byTab: Record<string, boolean> = {
       'needs-action':
-        item.eligibleForAssetOperations && item.currentStage !== 'MARKET_LIVE',
+        item.currentStage === 'PHYSICAL_PREREQUISITE' ||
+        item.attention.required,
       valuation: item.currentStage === 'VALUATION',
       ownership: item.currentStage === 'OWNERSHIP_SETUP',
       offering: item.currentStage === 'OFFERING_SETUP',
@@ -1922,7 +1922,7 @@ function operationsCounts(
     all: items.length,
     needsAction: items.filter(
       (item) =>
-        item.eligibleForAssetOperations && item.currentStage !== 'MARKET_LIVE',
+        item.currentStage === 'PHYSICAL_PREREQUISITE' || item.attention.required,
     ).length,
     valuationPending: items.filter((item) => item.currentStage === 'VALUATION')
       .length,
@@ -1943,7 +1943,9 @@ function operationsCounts(
     restrictions: items.filter((item) => item.currentStage === 'RESTRICTION')
       .length,
     exceptions: items.filter((item) => item.exception !== null).length,
-    physicalPrerequisite: 0,
+    physicalPrerequisite: items.filter(
+      (item) => item.currentStage === 'PHYSICAL_PREREQUISITE',
+    ).length,
   };
 }
 

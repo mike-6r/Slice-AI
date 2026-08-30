@@ -63,11 +63,14 @@ export function betaIntakeFixtureWhere(): Prisma.AssetSubmissionWhereInput {
   };
 }
 
-/** Legacy ALL requests are intentionally safe: they resolve to production. */
+/** ALL is the staff staging view. Each non-production record is explicitly
+ * tagged in the response; production deployment does not use this fixture
+ * partition at all. */
 export function resolveIntakeWorkType(
   value: 'ALL' | 'PRODUCTION' | 'DEMO_QA' | undefined,
-): 'PRODUCTION' | 'DEMO_QA' {
-  return value === 'DEMO_QA' ? 'DEMO_QA' : 'PRODUCTION';
+): 'ALL' | 'PRODUCTION' | 'DEMO_QA' {
+  if (value === 'DEMO_QA' || value === 'ALL') return value;
+  return 'PRODUCTION';
 }
 
 export function ageLabel(updatedAt: Date) {

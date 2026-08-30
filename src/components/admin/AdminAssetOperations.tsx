@@ -101,7 +101,7 @@ export function AdminAssetOperations(props: Props) {
     return (
       <OperationsState
         title="Loading Asset Operations"
-        detail="Reading the authoritative post-intake operations board."
+        detail="Reading the authoritative canonical-asset operations board."
       />
     );
   if (board.isError || !board.data)
@@ -136,7 +136,8 @@ export function AdminAssetOperations(props: Props) {
           </p>
           <h2>Asset Operations</h2>
           <span>
-            Manage post-receipt assets from valuation through launch and live market operations.
+            Manage canonical assets from physical prerequisites through valuation, launch and live
+            market operations.
           </span>
         </div>
         <div className="asset-operations-header-actions">
@@ -225,6 +226,7 @@ export function AdminAssetOperations(props: Props) {
             onChange={(value) => props.update({ operationsStage: value || undefined, page: "1" })}
           >
             <option value="">All stages</option>
+            <option value="PHYSICAL_PREREQUISITE">Physical prerequisites</option>
             <option value="VALUATION">Valuation</option>
             <option value="OWNERSHIP_SETUP">Ownership</option>
             <option value="OFFERING_SETUP">Offering setup</option>

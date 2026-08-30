@@ -3046,13 +3046,13 @@ export class AdminService {
   ) {
     await this.authorization.authorize(actor, 'admin.console.read');
     const workType = resolveIntakeWorkType(
-      input.workType ?? (input.fixture === 'TEST' ? 'DEMO_QA' : 'PRODUCTION'),
+      input.workType ?? (input.fixture === 'TEST' ? 'DEMO_QA' : 'ALL'),
     );
     const demoOrQaWhere = betaIntakeFixtureWhere();
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
-        ...(this.config.isBeta
+        ...(this.config.isBeta && workType !== 'ALL'
           ? [workType === 'DEMO_QA' ? demoOrQaWhere : { NOT: [demoOrQaWhere] }]
           : []),
         ...(input.vaultId ? [{ intake: { vaultId: input.vaultId } }] : []),

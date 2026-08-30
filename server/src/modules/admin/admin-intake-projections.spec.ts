@@ -150,9 +150,9 @@ describe('admin intake projections', () => {
 });
 
 describe('Physical Intake fixture boundary', () => {
-  it('defaults legacy or missing work-type input to production', () => {
+  it('keeps the staff staging board inclusive unless production is explicitly selected', () => {
     expect(resolveIntakeWorkType(undefined)).toBe('PRODUCTION');
-    expect(resolveIntakeWorkType('ALL')).toBe('PRODUCTION');
+    expect(resolveIntakeWorkType('ALL')).toBe('ALL');
     expect(resolveIntakeWorkType('PRODUCTION')).toBe('PRODUCTION');
     expect(resolveIntakeWorkType('DEMO_QA')).toBe('DEMO_QA');
   });
