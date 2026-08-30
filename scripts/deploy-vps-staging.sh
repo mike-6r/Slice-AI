@@ -40,6 +40,16 @@ npx prisma validate
 npx prisma migrate deploy
 npm run build
 
+# Browser HTML can remain open across an immutable release switch. Keep the
+# previously served content-addressed assets alongside the new build so those
+# pages can finish loading and restore their session rather than receiving a
+# 404 for an old JavaScript or CSS chunk. New assets always win; this copies
+# only files absent from the release being activated.
+previous_release="$(readlink -f /opt/slice/current 2>/dev/null || true)"
+if [[ -n "${previous_release}" && "${previous_release}" != "${release_dir}" && -d "${previous_release}/dist/client/assets" ]]; then
+  cp --archive --no-clobber "${previous_release}/dist/client/assets/." "${release_dir}/dist/client/assets/"
+fi
+
 ln -sfn "${release_dir}" /opt/slice/current
 # Staging systemd units run from /opt/slice/app. Keep both release pointers
 # aligned so a successful build actually activates the release being checked.
