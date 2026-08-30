@@ -1380,6 +1380,7 @@ export class AdminService {
           intake: {
             select: {
               status: true,
+              deliveryMethod: true,
               shipment: { select: { status: true } },
               receipt: { select: { id: true } },
             },
@@ -2918,8 +2919,15 @@ export class AdminService {
       if (status === 'AWAITING_SHIPMENT')
         return intake({
           ...noException,
+          deliveryMethod: 'SHIPMENT',
           status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED'] },
           shipment: { is: null },
+        });
+      if (status === 'AWAITING_DROP_OFF')
+        return intake({
+          ...noException,
+          deliveryMethod: 'IN_PERSON',
+          receipt: { is: null },
         });
       if (status === 'IN_TRANSIT')
         return intake({
@@ -2969,6 +2977,12 @@ export class AdminService {
             intake({ shipment: { is: { status: 'EXCEPTION' } } }),
             intake({
               ...noException,
+              deliveryMethod: 'IN_PERSON',
+              receipt: { is: null },
+            }),
+            intake({
+              ...noException,
+              deliveryMethod: 'SHIPMENT',
               shipment: { is: { status: 'DELIVERED' } },
               receipt: { is: null },
             }),
@@ -3210,6 +3224,7 @@ export class AdminService {
                 confirmedById: intake.receipt.confirmedById,
               }
             : null,
+          deliveryMethod: intake?.deliveryMethod ?? null,
           updatedAt: item.updatedAt.toISOString(),
           nextAction: demoIntake
             ? 'Demo intake complete'
@@ -3282,6 +3297,7 @@ export class AdminService {
     const overviewStages = [
       ['AWAITING_DESTINATION', 'awaitingDestination'],
       ['AWAITING_SHIPMENT', 'accepted'],
+      ['AWAITING_DROP_OFF', 'awaitingDropOff'],
       ['IN_TRANSIT', 'shipped'],
       ['DELIVERED_AWAITING_RECEIPT', 'delivered'],
       ['RECEIVED', 'received'],
@@ -3314,6 +3330,7 @@ export class AdminService {
     const counts = {
       all: await this.db.assetSubmission.count({ where: intakeWhere }),
       accepted: 0,
+      awaitingDropOff: 0,
       awaitingDestination: 0,
       shipped: 0,
       delivered: 0,
@@ -3347,6 +3364,8 @@ export class AdminService {
         displayName: true,
         operationallyApproved: true,
         acceptingShipments: true,
+        acceptingInPerson: true,
+        locationType: true,
         environment: true,
         region: true,
         countryCode: true,
@@ -3370,6 +3389,8 @@ export class AdminService {
           code: vault.id.slice(0, 6).toUpperCase(),
           operationallyApproved: vault.operationallyApproved,
           acceptingShipments: vault.acceptingShipments,
+          acceptingInPerson: vault.acceptingInPerson,
+          locationType: vault.locationType,
           environment: vault.environment,
           region: vault.region,
           countryCode: vault.countryCode,
@@ -3425,6 +3446,7 @@ export class AdminService {
             id: true,
             intakeReference: true,
             status: true,
+            deliveryMethod: true,
             selectedAt: true,
             shippedAt: true,
             deliveredAt: true,
@@ -3440,6 +3462,8 @@ export class AdminService {
                 intakeAvailable: true,
                 operationallyApproved: true,
                 acceptingShipments: true,
+                acceptingInPerson: true,
+                locationType: true,
                 environment: true,
               },
             },
@@ -3578,6 +3602,7 @@ export class AdminService {
             id: submission.intake.id,
             reference: submission.intake.intakeReference,
             status: submission.intake.status,
+            deliveryMethod: submission.intake.deliveryMethod,
             selectedAt: submission.intake.selectedAt.toISOString(),
             shippedAt: submission.intake.shippedAt?.toISOString() ?? null,
             deliveredAt: submission.intake.deliveredAt?.toISOString() ?? null,
@@ -3593,6 +3618,8 @@ export class AdminService {
               operationallyApproved:
                 submission.intake.vault.operationallyApproved,
               acceptingShipments: submission.intake.vault.acceptingShipments,
+              acceptingInPerson: submission.intake.vault.acceptingInPerson,
+              locationType: submission.intake.vault.locationType,
               environment: submission.intake.vault.environment,
             },
             shipment: submission.intake.shipment
@@ -3673,6 +3700,7 @@ export class AdminService {
     input: {
       operationallyApproved: boolean;
       acceptingShipments: boolean;
+      acceptingInPerson: boolean;
       reason: string;
     },
     requestId: string,
@@ -3693,7 +3721,7 @@ export class AdminService {
           code: 'INTAKE_DESTINATION_NOT_FOUND',
           message: 'Intake destination not found.',
         });
-      if (input.acceptingShipments && !input.operationallyApproved) {
+      if ((input.acceptingShipments || input.acceptingInPerson) && !input.operationallyApproved) {
         throw new ConflictException({
           code: 'INTAKE_APPROVAL_REQUIRED',
           message:
@@ -3705,6 +3733,7 @@ export class AdminService {
         data: {
           operationallyApproved: input.operationallyApproved,
           acceptingShipments: input.acceptingShipments,
+          acceptingInPerson: input.acceptingInPerson,
         },
       });
       await db.auditEvent.create({
@@ -3721,10 +3750,12 @@ export class AdminService {
             previous: {
               operationallyApproved: destination.operationallyApproved,
               acceptingShipments: destination.acceptingShipments,
+              acceptingInPerson: destination.acceptingInPerson,
             },
             next: {
               operationallyApproved: updated.operationallyApproved,
               acceptingShipments: updated.acceptingShipments,
+              acceptingInPerson: updated.acceptingInPerson,
             },
           },
         },
@@ -3734,6 +3765,7 @@ export class AdminService {
         displayName: updated.displayName,
         operationallyApproved: updated.operationallyApproved,
         acceptingShipments: updated.acceptingShipments,
+        acceptingInPerson: updated.acceptingInPerson,
         audited: true,
       };
     });
@@ -3753,9 +3785,11 @@ export class AdminService {
       countryCode: string;
       acceptedCategories: string[];
       shippingInstructions: string;
+      locationType: 'SLICE_VAULT' | 'SLICE_INTAKE' | 'PARTNER_STORE' | 'PARTNER_INTAKE' | 'DEMO_TEST';
       environment: 'beta';
       active: boolean;
       acceptingShipments: boolean;
+      acceptingInPerson: boolean;
       operationallyApproved: boolean;
       reason: string;
     },
@@ -3768,7 +3802,7 @@ export class AdminService {
       undefined,
       requestId,
     );
-    if (input.acceptingShipments && !input.operationallyApproved) {
+    if ((input.acceptingShipments || input.acceptingInPerson) && !input.operationallyApproved) {
       throw new ConflictException({
         code: 'INTAKE_APPROVAL_REQUIRED',
         message:
@@ -3817,6 +3851,8 @@ export class AdminService {
           intakeAvailable: input.active,
           operationallyApproved: input.operationallyApproved,
           acceptingShipments: input.acceptingShipments,
+          acceptingInPerson: input.acceptingInPerson,
+          locationType: input.locationType,
           environment: input.environment,
           acceptedCategories: categories.map((category) => category.id),
           shippingInstructions: input.shippingInstructions,
@@ -3830,6 +3866,8 @@ export class AdminService {
           intakeAvailable: input.active,
           operationallyApproved: input.operationallyApproved,
           acceptingShipments: input.acceptingShipments,
+          acceptingInPerson: input.acceptingInPerson,
+          locationType: input.locationType,
           environment: input.environment,
           acceptedCategories: categories.map((category) => category.id),
           shippingInstructions: input.shippingInstructions,
@@ -3855,6 +3893,8 @@ export class AdminService {
                   intakeAvailable: previous.intakeAvailable,
                   operationallyApproved: previous.operationallyApproved,
                   acceptingShipments: previous.acceptingShipments,
+                  acceptingInPerson: previous.acceptingInPerson,
+                  locationType: previous.locationType,
                   environment: previous.environment,
                 }
               : null,
@@ -3863,6 +3903,8 @@ export class AdminService {
               intakeAvailable: updated.intakeAvailable,
               operationallyApproved: updated.operationallyApproved,
               acceptingShipments: updated.acceptingShipments,
+              acceptingInPerson: updated.acceptingInPerson,
+              locationType: updated.locationType,
               environment: updated.environment,
             },
           },
@@ -3875,6 +3917,8 @@ export class AdminService {
         intakeAvailable: updated.intakeAvailable,
         operationallyApproved: updated.operationallyApproved,
         acceptingShipments: updated.acceptingShipments,
+        acceptingInPerson: updated.acceptingInPerson,
+        locationType: updated.locationType,
         audited: true,
       };
     });
@@ -3897,6 +3941,7 @@ export class AdminService {
         include: {
           shipment: true,
           receipt: true,
+          vault: true,
           submission: { select: { ownerUserId: true } },
         },
       });
@@ -3919,7 +3964,10 @@ export class AdminService {
           code: 'RECEIPT_ALREADY_CONFIRMED',
           message: 'This intake has already been received by Slice.',
         });
-      if (!intake.shipment || intake.shipment.status !== 'DELIVERED')
+      if (
+        intake.deliveryMethod === 'SHIPMENT' &&
+        (!intake.shipment || intake.shipment.status !== 'DELIVERED')
+      )
         throw new ConflictException({
           code: 'DELIVERY_NOT_CONFIRMED',
           message: 'Confirm carrier delivery before recording Slice receipt.',
@@ -3929,7 +3977,10 @@ export class AdminService {
         data: {
           intakeId,
           confirmedById: actor.userId,
-          shipmentRef: intake.shipment.trackingNumber,
+          shipmentRef:
+            intake.deliveryMethod === 'SHIPMENT'
+              ? intake.shipment?.trackingNumber ?? null
+              : null,
           auditReference: idempotencyKey,
           packageCondition: input.packageCondition ?? 'UNKNOWN',
           checklist: input.checklist,
@@ -3944,11 +3995,19 @@ export class AdminService {
         data: {
           actorUserId: actor.userId,
           actorType: 'USER',
-          action: 'INTAKE_RECEIPT_CONFIRMED',
+          action:
+            intake.deliveryMethod === 'IN_PERSON'
+              ? 'INTAKE_IN_PERSON_RECEIPT_CONFIRMED'
+              : 'INTAKE_RECEIPT_CONFIRMED',
           resourceType: 'intake',
           resourceId: intakeId,
           result: 'SUCCESS',
-          metadata: { submissionId: intake.submissionId, idempotencyKey },
+          metadata: {
+            submissionId: intake.submissionId,
+            idempotencyKey,
+            deliveryMethod: intake.deliveryMethod,
+            locationId: intake.vaultId,
+          },
         },
       });
       await db.notification.create({

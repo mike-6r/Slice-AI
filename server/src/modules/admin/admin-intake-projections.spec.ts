@@ -47,6 +47,28 @@ describe('admin intake projections', () => {
     expect(intakeAllowedActions({ ...item, stage })).toEqual([]);
   });
 
+  it('keeps an in-person handoff out of carrier and tracking states', () => {
+    const item = base({
+      intake: {
+        status: 'SHIPPING_REQUIRED',
+        deliveryMethod: 'IN_PERSON',
+        shipment: null,
+        receipt: null,
+        verification: null,
+        exceptions: [],
+      },
+    });
+    const stage = intakeStage(item);
+
+    expect(stage).toBe('AWAITING_DROP_OFF');
+    expect(intakeNextAction({ ...item, stage })).toEqual({
+      label: 'Confirm in-person receipt',
+      actor: 'STAFF',
+      needsStaffAction: true,
+    });
+    expect(intakeAllowedActions({ ...item, stage })).toEqual(['CONFIRM_RECEIPT']);
+  });
+
   it('keeps carrier delivery, Slice receipt, verification, and custody boundaries separate', () => {
     const delivered = base({
       intake: {

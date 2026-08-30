@@ -895,6 +895,7 @@ export type AdminIntakeRow = {
   stage: string;
   stageLabel: string;
   stageReason: string;
+  deliveryMethod: "SHIPMENT" | "IN_PERSON" | null;
   currentStageSince: string;
   vault: {
     id: string;
@@ -957,6 +958,7 @@ export type AdminIntakeOverview = {
   all: number;
   awaitingDestination: number;
   accepted: number;
+  awaitingDropOff?: number;
   shipped: number;
   delivered: number;
   received: number;
@@ -987,6 +989,8 @@ export type AdminIntakeResponse = {
       code: string | null;
       operationallyApproved?: boolean;
       acceptingShipments?: boolean;
+      acceptingInPerson?: boolean;
+      locationType?: string;
       environment?: string;
       region?: string;
       countryCode?: string;
@@ -1002,6 +1006,7 @@ export type AdminIntakeDetail = {
     id: string;
     reference: string;
     status: string;
+    deliveryMethod: "SHIPMENT" | "IN_PERSON";
     selectedAt: string;
     shippedAt: string | null;
     deliveredAt: string | null;
@@ -1016,6 +1021,8 @@ export type AdminIntakeDetail = {
       intakeAvailable: boolean;
       operationallyApproved: boolean;
       acceptingShipments: boolean;
+      acceptingInPerson: boolean;
+      locationType: string;
       environment: string;
     };
     shipment: {
@@ -1783,12 +1790,18 @@ export interface AdminRepository {
   getIntakeDetail(submissionId: string): Promise<AdminIntakeDetail>;
   setIntakeDestinationApproval(
     id: string,
-    input: { operationallyApproved: boolean; acceptingShipments: boolean; reason: string },
+    input: {
+      operationallyApproved: boolean;
+      acceptingShipments: boolean;
+      acceptingInPerson?: boolean;
+      reason: string;
+    },
   ): Promise<{
     id: string;
     displayName: string;
     operationallyApproved: boolean;
     acceptingShipments: boolean;
+    acceptingInPerson?: boolean;
     audited: boolean;
   }>;
   confirmIntakeReceipt(
@@ -2058,7 +2071,11 @@ export interface CollectorWorkspaceRepository {
     planCode?: "STARTER" | "PRO" | "ELITE",
   ): Promise<CollectorMembershipActionResult>;
   listVaults(): Promise<CollectorVaultProjection[]>;
-  selectVault(submissionId: string, vaultId: string): Promise<unknown>;
+  selectVault(
+    submissionId: string,
+    vaultId: string,
+    deliveryMethod: "SHIPMENT" | "IN_PERSON",
+  ): Promise<unknown>;
   addShipment(
     submissionId: string,
     input: { carrier: string; trackingNumber: string; shippedAt: string; notes?: string },
@@ -2156,6 +2173,9 @@ export type CollectorVaultProjection = {
   displayName: string;
   region: string;
   countryCode: string;
+  locationType: "SLICE_VAULT" | "SLICE_INTAKE" | "PARTNER_STORE" | "PARTNER_INTAKE" | "DEMO_TEST";
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
   acceptedCategories: unknown;
   shippingInstructions: string;
   customerSafeAddress: string;

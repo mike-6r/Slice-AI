@@ -2786,14 +2786,15 @@ function MembershipRail({ membership }: { membership?: CollectorSubscriptionProj
 function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
   const { repositories } = useAppServices();
   const client = useQueryClient();
-  const canSelectVault = asset.submissionStatus === "APPROVED" && !asset.intake?.shipment;
+  const canSelectVault = asset.submissionStatus === "APPROVED" && !asset.intake;
   const vaults = useQuery({
     queryKey: ["collector-workspace", "vaults"],
     queryFn: repositories.collectorWorkspace.listVaults,
     enabled: canSelectVault,
   });
   const selectVault = useMutation({
-    mutationFn: (vaultId: string) => repositories.collectorWorkspace.selectVault(asset.id, vaultId),
+    mutationFn: ({ vaultId, deliveryMethod }: { vaultId: string; deliveryMethod: "SHIPMENT" | "IN_PERSON" }) =>
+      repositories.collectorWorkspace.selectVault(asset.id, vaultId, deliveryMethod),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.overview });
       void client.invalidateQueries({ queryKey: queryKeys.collectorWorkspace.detail(asset.id) });
@@ -2831,22 +2832,34 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
       </Link>
       {canSelectVault ? (
         <div className="collector-intake-action">
-          <strong>Choose a vault</strong>
+          <strong>Choose where you&apos;ll send your collectible</strong>
           <small>
             {asset.intake
               ? `Current destination: ${asset.intake.vault.displayName}. You can change it until shipment starts.`
               : "Your submission has been accepted for physical intake. Select a customer-safe destination to continue."}
           </small>
           {vaults.data?.map((vault) => (
-            <button
-              key={vault.id}
-              className="collector-button"
-              disabled={selectVault.isPending}
-              onClick={() => selectVault.mutate(vault.id)}
-            >
-              {vault.displayName} · {vault.countryCode}
-              <ArrowRight aria-hidden="true" />
-            </button>
+            <div key={vault.id} className="collector-intake-action">
+              <strong>{vault.displayName} · {vault.region}, {vault.countryCode}</strong>
+              {vault.acceptingShipments ? (
+                <button
+                  className="collector-button"
+                  disabled={selectVault.isPending}
+                  onClick={() => selectVault.mutate({ vaultId: vault.id, deliveryMethod: "SHIPMENT" })}
+                >
+                  Ship to this location <ArrowRight aria-hidden="true" />
+                </button>
+              ) : null}
+              {vault.acceptingInPerson ? (
+                <button
+                  className="collector-button"
+                  disabled={selectVault.isPending}
+                  onClick={() => selectVault.mutate({ vaultId: vault.id, deliveryMethod: "IN_PERSON" })}
+                >
+                  Deliver in person <ArrowRight aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
           ))}
           {vaults.isFetched && !vaults.data?.length ? (
             <div className="collector-intake-empty" role="status">
@@ -2859,11 +2872,23 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
           ) : null}
         </div>
       ) : null}
-      {asset.intake?.status === "SHIPPING_REQUIRED" && !asset.intake.shipment ? (
+      {asset.intake?.status === "SHIPPING_REQUIRED" &&
+      asset.intake.deliveryMethod === "SHIPMENT" &&
+      !asset.intake.shipment ? (
         <ShipmentForm
           submitting={addShipment.isPending}
           onSubmit={(input) => addShipment.mutate(input)}
         />
+      ) : null}
+      {asset.intake?.status === "SHIPPING_REQUIRED" &&
+      asset.intake.deliveryMethod === "IN_PERSON" &&
+      !asset.intake.receivedAt ? (
+        <div className="collector-intake-action">
+          <strong>Deliver your collectible in person</strong>
+          <small>{asset.intake.vault.customerSafeAddress}</small>
+          <small>{asset.intake.vault.shippingInstructions}</small>
+          <p>Bring the collectible to this approved location. An authorised Slice staff member will confirm receipt; no carrier or tracking number is needed.</p>
+        </div>
       ) : null}
       {asset.intake?.shipment ? (
         <div className="collector-intake-status">

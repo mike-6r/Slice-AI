@@ -61,6 +61,8 @@ type DraftInput = {
   gradeScaleEntryId?: string | null;
   declaredMetadata?: Record<string, unknown> | null;
   marketResearchId?: string;
+  preferredIntakeLocationId?: string | null;
+  preferredDeliveryMethod?: 'SHIPMENT' | 'IN_PERSON' | null;
 };
 type UpdateInput = DraftInput & { version: number };
 type IdentityCorrectionInput = {
@@ -143,6 +145,7 @@ export class SubmissionService {
         await this.assertCollectorCapacity(actor, db);
         assertGradeMetadata(input.declaredMetadata);
         await this.assertReferences(db, input);
+        await this.assertIntakePreference(db, input);
         const gradeReference = await this.assertGradeReference(
           db,
           input.declaredMetadata,
@@ -165,6 +168,8 @@ export class SubmissionService {
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
             normalizedCertificationNumber,
+            preferredIntakeLocationId: input.preferredIntakeLocationId ?? null,
+            preferredDeliveryMethod: input.preferredDeliveryMethod ?? null,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
           },
           include: { media: true },
@@ -792,6 +797,7 @@ export class SubmissionService {
           }
         }
         const wasAiReviewSkipped = isAiReviewSkipped(current.declaredMetadata);
+        await this.assertIntakePreference(db, input);
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -802,6 +808,8 @@ export class SubmissionService {
             setId: input.setId ?? null,
             gradeScaleEntryId: input.gradeScaleEntryId ?? null,
             normalizedCertificationNumber,
+            preferredIntakeLocationId: input.preferredIntakeLocationId ?? null,
+            preferredDeliveryMethod: input.preferredDeliveryMethod ?? null,
             declaredMetadata: jsonMetadata(input.declaredMetadata),
             version: { increment: 1 },
           },
@@ -1176,6 +1184,11 @@ export class SubmissionService {
           );
         }
         await this.assertReferences(db, { categoryId: submission.categoryId });
+        await this.assertIntakePreference(db, {
+          categoryId: submission.categoryId,
+          preferredIntakeLocationId: submission.preferredIntakeLocationId,
+          preferredDeliveryMethod: submission.preferredDeliveryMethod,
+        });
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
@@ -2422,6 +2435,7 @@ export class SubmissionService {
             },
             asset: { select: { title: true } },
             owner: { select: { accountStatus: true } },
+            preferredIntakeLocation: true,
           },
         });
         if (!submission) this.notFound();
@@ -2492,6 +2506,46 @@ export class SubmissionService {
           requestedItems: input.requestedItems ?? [],
           version: updated.version,
         });
+        if (
+          decision === 'APPROVED' &&
+          submission!.preferredIntakeLocation &&
+          submission!.preferredDeliveryMethod
+        ) {
+          const location = submission!.preferredIntakeLocation;
+          const supportsMethod =
+            submission!.preferredDeliveryMethod === 'SHIPMENT'
+              ? location.acceptingShipments
+              : location.acceptingInPerson;
+          const acceptedCategories = Array.isArray(location.acceptedCategories)
+            ? location.acceptedCategories
+            : [];
+          if (
+            location.active &&
+            location.intakeAvailable &&
+            location.operationallyApproved &&
+            location.environment === this.config.appEnvironment &&
+            supportsMethod &&
+            (!acceptedCategories.length ||
+              acceptedCategories.includes(submission!.categoryId))
+          ) {
+            const intake = await db.submissionIntake.upsert({
+              where: { submissionId: id },
+              create: {
+                submissionId: id,
+                vaultId: location.id,
+                deliveryMethod: submission!.preferredDeliveryMethod,
+                intakeReference: `SLICE-${id.slice(-8).toUpperCase()}`,
+                status: 'SHIPPING_REQUIRED',
+              },
+              update: {},
+            });
+            await audit('INTAKE_PREFERENCE_CARRIED_FORWARD', 'submission-intake', intake.id, {
+              submissionId: id,
+              locationId: location.id,
+              deliveryMethod: submission!.preferredDeliveryMethod,
+            });
+          }
+        }
         return ownerProjection(updated);
       },
     );
@@ -3186,6 +3240,45 @@ export class SubmissionService {
     }
   }
 
+  private async assertIntakePreference(db: Db, input: DraftInput) {
+    const hasLocation = Boolean(input.preferredIntakeLocationId);
+    const hasMethod = Boolean(input.preferredDeliveryMethod);
+    if (hasLocation !== hasMethod)
+      throw new UnprocessableEntityException({
+        code: 'INTAKE_PREFERENCE_INCOMPLETE',
+        message: 'Choose both a Slice intake location and a delivery method.',
+      });
+    if (!hasLocation || !input.preferredDeliveryMethod) return;
+    const location = await db.vaultIntakeLocation.findFirst({
+      where: {
+        id: input.preferredIntakeLocationId!,
+        active: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+        environment: this.config.appEnvironment,
+        ...(input.preferredDeliveryMethod === 'SHIPMENT'
+          ? { acceptingShipments: true }
+          : { acceptingInPerson: true }),
+      },
+      select: { id: true, acceptedCategories: true },
+    });
+    if (!location)
+      throw new UnprocessableEntityException({
+        code: 'INTAKE_LOCATION_UNAVAILABLE',
+        message: 'That intake location is no longer available for this delivery method.',
+      });
+    const categories = location.acceptedCategories;
+    if (
+      Array.isArray(categories) &&
+      categories.length > 0 &&
+      !categories.includes(input.categoryId)
+    )
+      throw new UnprocessableEntityException({
+        code: 'INTAKE_LOCATION_CATEGORY_UNSUPPORTED',
+        message: 'That intake location does not accept this collectible category.',
+      });
+  }
+
   private notFound(): never {
     throw new NotFoundException({
       code: 'SUBMISSION_NOT_FOUND',
@@ -3347,6 +3440,8 @@ function ownerProjection(submission: {
   setId: string | null;
   gradeScaleEntryId: string | null;
   declaredMetadata: Prisma.JsonValue | null;
+  preferredIntakeLocationId: string | null;
+  preferredDeliveryMethod: string | null;
   submittedAt: Date | null;
   reviewedAt: Date | null;
   decisionCode: string | null;
@@ -3389,6 +3484,8 @@ function ownerProjection(submission: {
     setId: submission.setId,
     gradeScaleEntryId: submission.gradeScaleEntryId,
     declaredMetadata: submission.declaredMetadata,
+    preferredIntakeLocationId: submission.preferredIntakeLocationId,
+    preferredDeliveryMethod: submission.preferredDeliveryMethod,
     submittedAt: submission.submittedAt?.toISOString() ?? null,
     reviewedAt: submission.reviewedAt?.toISOString() ?? null,
     decisionCode: submission.decisionCode,

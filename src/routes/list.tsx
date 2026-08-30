@@ -51,6 +51,7 @@ import { formatDate } from "@/lib/format";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { mediaStatusLabel, submissionName, submissionStatusLabel } from "./-list-presentation";
 import { isValidPercent } from "./-list-validation";
+import type { CollectorVaultProjection } from "@/data/repositories";
 
 export const Route = createFileRoute("/list")({
   head: () => ({ meta: [{ title: "List an asset | Slice" }] }),
@@ -103,6 +104,8 @@ type ListingForm = {
   collectorReviewerNotes: string;
   aiReviewSkipped: boolean;
   customerReference: CreateSubmissionDraft["declaredMetadata"]["customerReference"];
+  preferredIntakeLocationId?: string;
+  preferredDeliveryMethod?: "SHIPMENT" | "IN_PERSON" | "";
 };
 
 const blank: ListingForm = {
@@ -133,6 +136,8 @@ const blank: ListingForm = {
   collectorReviewerNotes: "",
   aiReviewSkipped: false,
   customerReference: undefined,
+  preferredIntakeLocationId: "",
+  preferredDeliveryMethod: "",
 };
 
 export function SubmissionPage() {
@@ -184,6 +189,12 @@ export function SubmissionPage() {
     enabled: session.isAuthenticated && Boolean(form.grader),
     staleTime: 5 * 60_000,
   });
+  const intakeLocations = useQuery({
+    queryKey: ["collector-workspace", "intake-locations", form.categoryId],
+    queryFn: () => services.repositories.collectorWorkspace.listVaults(),
+    enabled: session.isAuthenticated && Boolean(form.categoryId),
+    staleTime: 60_000,
+  });
   const draftStorageKey = currentUser.data ? `slice:list-draft:${currentUser.data.id}` : null;
   const detail = useQuery({
     queryKey: ["submissions", draft?.id],
@@ -222,6 +233,8 @@ export function SubmissionPage() {
         gradeScaleEntryId: form.gradeScaleEntryId || null,
         currentStep: nextStep ?? 1,
         declaredMetadata: metadataOverride ?? metadata,
+        preferredIntakeLocationId: form.preferredIntakeLocationId || null,
+        preferredDeliveryMethod: form.preferredDeliveryMethod || null,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
       });
       return {
@@ -260,6 +273,8 @@ export function SubmissionPage() {
         gradeScaleEntryId: form.gradeScaleEntryId || null,
         currentStep: nextStep ?? step,
         declaredMetadata: metadataOverride ?? metadata,
+        preferredIntakeLocationId: form.preferredIntakeLocationId || null,
+        preferredDeliveryMethod: form.preferredDeliveryMethod || null,
         ...(marketResearch ? { marketResearchId: marketResearch.id } : {}),
       });
       return {
@@ -433,7 +448,7 @@ export function SubmissionPage() {
     if (!saved) return;
     setDraft(saved);
     version.current = saved.version;
-    setStep(Math.min(Math.max(saved.currentStep || 1, 1), 6));
+    setStep(Math.min(Math.max(saved.currentStep || 1, 1), 7));
   }, [draft, draftStorageKey, drafts.data]);
   const hydratedDraftId = useRef<string | null>(null);
   useEffect(() => {
@@ -491,6 +506,8 @@ export function SubmissionPage() {
       collectorReviewerNotes: text("collectorReviewerNotes"),
       aiReviewSkipped: saved.aiReviewStatus === "AI_REVIEW_SKIPPED",
       customerReference,
+      preferredIntakeLocationId: detail.data.preferredIntakeLocationId ?? "",
+      preferredDeliveryMethod: detail.data.preferredDeliveryMethod ?? "",
     };
     hydratedDraftId.current = detail.data.id;
     setForm(hydratedForm);
@@ -652,12 +669,16 @@ export function SubmissionPage() {
         return;
       }
     }
+    if (step === 6 && (!form.preferredIntakeLocationId || !form.preferredDeliveryMethod)) {
+      setLocalError("Choose an approved intake location and delivery method before continuing.");
+      return;
+    }
     const metadataOverride = acknowledgeMarketFallback
       ? metadataFromForm(effectiveForm)
       : undefined;
     if (acknowledgeMarketFallback) setForm(effectiveForm);
-    if (draft) update.mutate({ nextStep: Math.min(step + 1, 6), metadataOverride });
-    else create.mutate({ nextStep: Math.min(step + 1, 6), metadataOverride });
+    if (draft) update.mutate({ nextStep: Math.min(step + 1, 7), metadataOverride });
+    else create.mutate({ nextStep: Math.min(step + 1, 7), metadataOverride });
   };
   const selectPhoto = (slot: string, file: File, existing?: SubmissionMedia) => {
     const error = fileError(file);
@@ -757,6 +778,7 @@ export function SubmissionPage() {
     form.marketCheckStatus &&
     isValidPercent(form.offerIntentPercent) &&
     evidenceReady &&
+    Boolean(form.preferredIntakeLocationId && form.preferredDeliveryMethod) &&
     (gradedCard
       ? certificationVerified
       : form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
@@ -882,6 +904,14 @@ export function SubmissionPage() {
             />
           ) : null}
           {step === 6 ? (
+            <DeliveryLocationStep
+              form={form}
+              locations={intakeLocations.data ?? []}
+              loading={intakeLocations.isLoading}
+              onChange={change}
+            />
+          ) : null}
+          {step === 7 ? (
             <ReviewStep
               form={form}
               category={selectedCategory?.name ?? "Not selected"}
@@ -889,6 +919,9 @@ export function SubmissionPage() {
               submission={submission}
               preGrade={preGrade.data?.current ?? null}
               evidenceReady={evidenceReady}
+              deliveryLocation={intakeLocations.data?.find(
+                (location) => location.id === form.preferredIntakeLocationId,
+              )}
               onEdit={setStep}
               onTermsChange={changeTermsAcknowledged}
             />
@@ -915,7 +948,7 @@ export function SubmissionPage() {
                 "Your first save creates a private draft"
               )}
             </span>
-            {step < 6 ? (
+            {step < 7 ? (
               <button
                 type="button"
                 className="button-primary"
@@ -930,7 +963,9 @@ export function SubmissionPage() {
                       ? "Continue to AI review"
                       : step === 5
                         ? "Save and continue"
-                        : "Continue"}{" "}
+                        : step === 6
+                          ? "Review submission"
+                          : "Continue"}{" "}
                 <ChevronRight aria-hidden="true" />
               </button>
             ) : (
@@ -995,6 +1030,7 @@ function StepProgress({
     "Check the market",
     "Add photos",
     "AI Card Review",
+    "Delivery location",
     "Review & submit",
   ];
   return (
@@ -1006,7 +1042,8 @@ function StepProgress({
             number === 1 ||
             (available && number <= 4) ||
             (number === 5 && evidenceReady) ||
-            (number === 6 && evidenceReady);
+            (number === 6 && evidenceReady) ||
+            (number === 7 && evidenceReady);
           return (
             <li
               key={label}
@@ -3577,6 +3614,92 @@ function RawPreGradePanel({
   );
 }
 
+function DeliveryLocationStep({
+  form,
+  locations,
+  loading,
+  onChange,
+}: {
+  form: ListingForm;
+  locations: CollectorVaultProjection[];
+  loading: boolean;
+  onChange: <K extends keyof ListingForm>(key: K, value: ListingForm[K]) => void;
+}) {
+  const selected = locations.find((location) => location.id === form.preferredIntakeLocationId);
+  const methods = selected
+    ? ([
+        ...(selected.acceptingShipments ? (["SHIPMENT"] as const) : []),
+        ...(selected.acceptingInPerson ? (["IN_PERSON"] as const) : []),
+      ] as const)
+    : [];
+  return (
+    <div className="list-step">
+      <p className="page-kicker">Step 6</p>
+      <h2>Choose where you&apos;ll send your collectible.</h2>
+      <p>Your choice is saved with this private submission. Shipping instructions are issued only if Slice accepts it.</p>
+      {loading ? <p className="list-step-hint">Loading approved Slice intake locations…</p> : null}
+      {!loading && !locations.length ? (
+        <div className="list-review-fallback">
+          <strong>No approved intake locations are available right now.</strong>
+          <p>Save your draft and try again later; Slice will never substitute an unapproved destination.</p>
+        </div>
+      ) : null}
+      <div className="list-review-main">
+        {locations.map((location) => {
+          const selectedLocation = location.id === form.preferredIntakeLocationId;
+          return (
+            <button
+              type="button"
+              key={location.id}
+              className={`list-review-summary ${selectedLocation ? "is-selected" : ""}`}
+              onClick={() => {
+                onChange("preferredIntakeLocationId", location.id);
+                const onlyMethod =
+                  location.acceptingShipments && !location.acceptingInPerson
+                    ? "SHIPMENT"
+                    : location.acceptingInPerson && !location.acceptingShipments
+                      ? "IN_PERSON"
+                      : "";
+                onChange("preferredDeliveryMethod", onlyMethod);
+              }}
+            >
+              <strong>{location.displayName}</strong>
+              <span>{location.region}, {location.countryCode} · {location.locationType.replaceAll("_", " ")}</span>
+              <small>
+                {location.acceptingShipments ? "Shipping available" : ""}
+                {location.acceptingShipments && location.acceptingInPerson ? " · " : ""}
+                {location.acceptingInPerson ? "In-person drop-off available" : ""}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      {selected ? (
+        <section className="list-review-summary">
+          <h3>How will you deliver your collectible?</h3>
+          <div className="list-guided-actions">
+            {methods.map((method) => (
+              <button
+                key={method}
+                type="button"
+                className={form.preferredDeliveryMethod === method ? "button-primary" : "button-secondary"}
+                onClick={() => onChange("preferredDeliveryMethod", method)}
+              >
+                {method === "SHIPMENT" ? "Ship to this location" : "Deliver in person"}
+              </button>
+            ))}
+          </div>
+          <p className="list-step-hint">
+            {form.preferredDeliveryMethod === "IN_PERSON"
+              ? "If accepted, you can bring the collectible directly to this approved Slice intake location. No tracking number is needed."
+              : "If accepted, we’ll provide shipping instructions for this location."}
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function ReviewStep({
   form,
   category,
@@ -3584,6 +3707,7 @@ export function ReviewStep({
   submission,
   preGrade,
   evidenceReady,
+  deliveryLocation,
   onEdit,
   onTermsChange,
 }: {
@@ -3593,6 +3717,7 @@ export function ReviewStep({
   submission?: SubmissionDetail;
   preGrade: RawCardPreGrade | null;
   evidenceReady: boolean;
+  deliveryLocation?: CollectorVaultProjection;
   onEdit: (step: number) => void;
   onTermsChange: (checked: boolean) => void;
 }) {
@@ -3630,6 +3755,7 @@ export function ReviewStep({
     },
     { label: "Offer percentage selected", complete: validOffer },
     { label: "Required photos uploaded", complete: evidenceReady },
+    { label: "Delivery location selected", complete: Boolean(deliveryLocation && form.preferredDeliveryMethod) },
     ...(graded
       ? [
           {
@@ -3837,6 +3963,23 @@ export function ReviewStep({
                 <span className="list-review-empty-photo">No ready photos yet</span>
               ) : null}
             </div>
+          </ReviewSummary>
+
+          <ReviewSummary
+            title="Delivery"
+            icon={<ShieldCheck aria-hidden="true" />}
+            onEdit={() => onEdit(6)}
+          >
+            {deliveryLocation && form.preferredDeliveryMethod ? (
+              <ReviewRows
+                rows={[
+                  ["Preferred intake location", `${deliveryLocation.displayName} · ${deliveryLocation.region}, ${deliveryLocation.countryCode}`],
+                  ["Delivery method", form.preferredDeliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Ship to this location"],
+                ]}
+              />
+            ) : (
+              <div className="list-review-fallback"><strong>Delivery preference not selected</strong><p>Choose an approved intake location before submitting.</p></div>
+            )}
           </ReviewSummary>
 
           <ReviewSummary

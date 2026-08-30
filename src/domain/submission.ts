@@ -10,6 +10,8 @@ export interface AssetSubmission {
   setId: string | null;
   gradeScaleEntryId: string | null;
   declaredMetadata: Record<string, unknown> | null;
+  preferredIntakeLocationId?: string | null;
+  preferredDeliveryMethod?: "SHIPMENT" | "IN_PERSON" | null;
   submittedAt: ISODateTime | null;
   reviewedAt: ISODateTime | null;
   decisionCode: string | null;
@@ -483,6 +485,8 @@ export interface CreateSubmissionDraft {
     aiReviewStatus?: "AI_REVIEW_SKIPPED";
     customerReference?: CustomerReference;
   };
+  preferredIntakeLocationId?: string | null;
+  preferredDeliveryMethod?: "SHIPMENT" | "IN_PERSON" | null;
   marketResearchId?: string;
 }
 

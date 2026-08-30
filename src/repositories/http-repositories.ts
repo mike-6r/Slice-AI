@@ -1241,7 +1241,7 @@ const mapSubmission = (raw: unknown): AssetSubmission => {
   if (
     !Number.isSafeInteger(currentStep) ||
     (currentStep as number) < 1 ||
-    (currentStep as number) > 6
+    (currentStep as number) > 7
   )
     throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid submission current step from service.");
   return {
@@ -1253,6 +1253,14 @@ const mapSubmission = (raw: unknown): AssetSubmission => {
     setId: nullableString(value.setId, "submission.setId"),
     gradeScaleEntryId: nullableString(value.gradeScaleEntryId, "submission.gradeScaleEntryId"),
     declaredMetadata: metadata as Record<string, unknown> | null,
+    preferredIntakeLocationId: nullableString(
+      value.preferredIntakeLocationId,
+      "submission.preferredIntakeLocationId",
+    ),
+    preferredDeliveryMethod:
+      value.preferredDeliveryMethod === "SHIPMENT" || value.preferredDeliveryMethod === "IN_PERSON"
+        ? value.preferredDeliveryMethod
+        : null,
     submittedAt: nullableString(value.submittedAt, "submission.submittedAt") as ISODateTime | null,
     reviewedAt: nullableString(value.reviewedAt, "submission.reviewedAt") as ISODateTime | null,
     decisionCode: nullableString(value.decisionCode, "submission.decisionCode"),
@@ -2271,6 +2279,10 @@ const mapAdminIntake = (raw: unknown): AdminIntakeRow => {
     stage: stringField(value.stage, "admin intake.stage"),
     stageLabel: stringField(value.stageLabel, "admin intake.stageLabel"),
     stageReason: stringField(value.stageReason, "admin intake.stageReason"),
+    deliveryMethod:
+      value.deliveryMethod === "SHIPMENT" || value.deliveryMethod === "IN_PERSON"
+        ? value.deliveryMethod
+        : null,
     currentStageSince: stringField(value.currentStageSince, "admin intake.currentStageSince"),
     vault: vault
       ? {
@@ -2437,6 +2449,8 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
           id: stringField(intake.id, "admin intake detail.intake.id"),
           reference: stringField(intake.reference, "admin intake detail.intake.reference"),
           status: stringField(intake.status, "admin intake detail.intake.status"),
+          deliveryMethod:
+            intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
           selectedAt: stringField(intake.selectedAt, "admin intake detail.intake.selectedAt"),
           shippedAt: nullableString(intake.shippedAt, "admin intake detail.intake.shippedAt"),
           deliveredAt: nullableString(intake.deliveredAt, "admin intake detail.intake.deliveredAt"),
@@ -2459,6 +2473,11 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
               intakeAvailable: Boolean(destination.intakeAvailable),
               operationallyApproved: Boolean(destination.operationallyApproved),
               acceptingShipments: Boolean(destination.acceptingShipments),
+              acceptingInPerson: Boolean(destination.acceptingInPerson),
+              locationType: stringField(
+                destination.locationType,
+                "admin intake detail.destination.locationType",
+              ),
               environment: stringField(
                 destination.environment,
                 "admin intake detail.destination.environment",
@@ -4237,6 +4256,8 @@ const adminRepository = (client: ApiClient): AdminRepository => {
                 code: string | null;
                 operationallyApproved?: boolean;
                 acceptingShipments?: boolean;
+                acceptingInPerson?: boolean;
+                locationType?: string;
                 environment?: string;
                 region?: string;
                 countryCode?: string;
@@ -4269,6 +4290,7 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         displayName: stringField(value.displayName, "intake destination.displayName"),
         operationallyApproved: Boolean(value.operationallyApproved),
         acceptingShipments: Boolean(value.acceptingShipments),
+        acceptingInPerson: Boolean(value.acceptingInPerson),
         audited: Boolean(value.audited),
       };
     },
@@ -5516,10 +5538,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           "/collector-workspace/vaults",
         );
       },
-      async selectVault(submissionId, vaultId) {
+      async selectVault(submissionId, vaultId, deliveryMethod) {
         return client.request(
           `/collector-workspace/collectibles/${encodeURIComponent(submissionId)}/vault`,
-          { method: "POST", body: { vaultId } },
+          { method: "POST", body: { vaultId, deliveryMethod } },
         );
       },
       async addShipment(submissionId, input) {

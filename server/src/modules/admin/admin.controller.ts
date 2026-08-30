@@ -249,6 +249,7 @@ const intakeApproval = z
   .object({
     operationallyApproved: z.boolean(),
     acceptingShipments: z.boolean(),
+    acceptingInPerson: z.boolean().default(false),
     reason: z.string().trim().min(3).max(500),
   })
   .strict();
@@ -271,9 +272,13 @@ const intakeDestination = z
       .regex(/^[A-Za-z]{2}$/),
     acceptedCategories: z.array(z.string().trim().min(2).max(120)).max(20),
     shippingInstructions: z.string().trim().min(10).max(2000),
+    locationType: z
+      .enum(['SLICE_VAULT', 'SLICE_INTAKE', 'PARTNER_STORE', 'PARTNER_INTAKE', 'DEMO_TEST'])
+      .default('SLICE_VAULT'),
     environment: z.literal('beta'),
     active: z.boolean(),
     acceptingShipments: z.boolean(),
+    acceptingInPerson: z.boolean().default(false),
     operationallyApproved: z.boolean(),
     reason: z.string().trim().min(3).max(500),
   })

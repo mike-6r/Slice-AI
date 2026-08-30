@@ -34,11 +34,13 @@ const metadata = z.record(z.unknown()).nullable().optional();
 const draft = z
   .object({
     categoryId: id,
-    currentStep: z.number().int().min(1).max(6).optional(),
+    currentStep: z.number().int().min(1).max(7).optional(),
     setId: id.nullable().optional(),
     gradeScaleEntryId: id.nullable().optional(),
     declaredMetadata: metadata,
     marketResearchId: id.optional(),
+    preferredIntakeLocationId: id.nullable().optional(),
+    preferredDeliveryMethod: z.enum(['SHIPMENT', 'IN_PERSON']).nullable().optional(),
   })
   .strict();
 const draftPatch = draft.extend({ version: z.number().int().min(1) }).strict();

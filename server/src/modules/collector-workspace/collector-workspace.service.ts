@@ -77,6 +77,7 @@ type WorkspaceItem = {
   intake: {
     id: string;
     status: string;
+    deliveryMethod: 'SHIPMENT' | 'IN_PERSON';
     intakeReference: string;
     vault: {
       id: string;
@@ -348,7 +349,7 @@ export class CollectorWorkspaceService {
         active: true,
         intakeAvailable: true,
         operationallyApproved: true,
-        acceptingShipments: true,
+        OR: [{ acceptingShipments: true }, { acceptingInPerson: true }],
         environment: this.config?.appEnvironment ?? 'development',
       },
       orderBy: [{ countryCode: 'asc' }, { displayName: 'asc' }],
@@ -357,6 +358,9 @@ export class CollectorWorkspaceService {
         displayName: true,
         region: true,
         countryCode: true,
+        locationType: true,
+        acceptingShipments: true,
+        acceptingInPerson: true,
         acceptedCategories: true,
         shippingInstructions: true,
         customerSafeAddress: true,
@@ -364,14 +368,19 @@ export class CollectorWorkspaceService {
     });
   }
 
-  async selectVault(userId: string, submissionId: string, vaultId: string) {
+  async selectVault(
+    userId: string,
+    submissionId: string,
+    vaultId: string,
+    deliveryMethod: 'SHIPMENT' | 'IN_PERSON',
+  ) {
     const submission = await this.db.assetSubmission.findFirst({
       where: { id: submissionId, ownerUserId: userId },
       select: {
         id: true,
         status: true,
         categoryId: true,
-        intake: { include: { shipment: true, vault: true } },
+        intake: { include: { shipment: true, receipt: true, vault: true } },
       },
     });
     if (!submission)
@@ -385,7 +394,7 @@ export class CollectorWorkspaceService {
         message:
           'A vault can only be selected after staff accepts the submission.',
       });
-    if (submission.intake?.shipment)
+    if (submission.intake?.shipment || submission.intake?.receipt)
       throw new ConflictException({
         code: 'SHIPMENT_ALREADY_STARTED',
         message: 'The destination cannot be changed after shipment starts.',
@@ -396,7 +405,9 @@ export class CollectorWorkspaceService {
         active: true,
         intakeAvailable: true,
         operationallyApproved: true,
-        acceptingShipments: true,
+        ...(deliveryMethod === 'SHIPMENT'
+          ? { acceptingShipments: true }
+          : { acceptingInPerson: true }),
         environment: this.config?.appEnvironment ?? 'development',
       },
     });
@@ -423,11 +434,13 @@ export class CollectorWorkspaceService {
         create: {
           submissionId,
           vaultId,
+          deliveryMethod,
           intakeReference: `SLICE-${submissionId.slice(-8).toUpperCase()}`,
           status: 'SHIPPING_REQUIRED',
         },
         update: {
           vaultId,
+          deliveryMethod,
           status: 'SHIPPING_REQUIRED',
           updatedAt: new Date(),
         },
@@ -451,6 +464,7 @@ export class CollectorWorkspaceService {
               ? { id: previousVault.id, displayName: previousVault.displayName }
               : null,
             next: { id: vault.id, displayName: vault.displayName },
+            deliveryMethod,
             reason:
               'Collector selected an operator-approved intake destination before shipment.',
           },
@@ -484,6 +498,12 @@ export class CollectorWorkspaceService {
         code: 'RECEIPT_ALREADY_CONFIRMED',
         message:
           'Shipment details cannot be changed after Slice confirms receipt.',
+      });
+    if (intake.deliveryMethod !== 'SHIPMENT')
+      throw new ConflictException({
+        code: 'DELIVERY_METHOD_IN_PERSON',
+        message:
+          'This collectible is set for in-person delivery and does not need shipment tracking.',
       });
     const carrier = input.carrier.trim();
     const trackingNumber = input.trackingNumber.trim();
@@ -1088,6 +1108,7 @@ function assetView(submission: WorkspaceSubmission): WorkspaceItem {
       ? {
           id: submission.intake.id,
           status: submission.intake.status,
+          deliveryMethod: submission.intake.deliveryMethod,
           intakeReference: submission.intake.intakeReference,
           vault: {
             id: submission.intake.vault.id,
@@ -1227,10 +1248,21 @@ function requestFor(asset: WorkspaceItem): CollectorRequestView[] {
         category: 'SHIPPING' as const,
         priority: 'BLOCKING' as const,
         reason:
-          'Your approved collectible is ready. When the package is physically sent, add the carrier and tracking details.',
-        badge: 'Ship your collectible',
-        action: 'Ship your collectible',
-        actionLabel: 'Ship your collectible',
+          asset.intake.deliveryMethod === 'IN_PERSON'
+            ? 'Bring your approved collectible to the selected Slice intake location. An authorised staff member will confirm physical receipt.'
+            : 'Your approved collectible is ready. When the package is physically sent, add the carrier and tracking details.',
+        badge:
+          asset.intake.deliveryMethod === 'IN_PERSON'
+            ? 'Deliver in person'
+            : 'Ship your collectible',
+        action:
+          asset.intake.deliveryMethod === 'IN_PERSON'
+            ? 'Deliver in person'
+            : 'Ship your collectible',
+        actionLabel:
+          asset.intake.deliveryMethod === 'IN_PERSON'
+            ? 'View drop-off instructions'
+            : 'Ship your collectible',
         targetRoute: 'custody',
       },
     ];
@@ -1441,7 +1473,9 @@ function nextActionFor(
     intake?.status === 'SHIPPING_REQUIRED' &&
     !intake.shipment
   )
-    return 'Ship your collectible';
+    return intake.deliveryMethod === 'IN_PERSON'
+      ? 'Deliver your collectible in person'
+      : 'Ship your collectible';
   if (status === 'APPROVED') return 'Approved';
   if (stage === 'SUBMITTED' || stage === 'REVIEW')
     return 'Awaiting staff review';

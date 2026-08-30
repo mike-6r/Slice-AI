@@ -1430,6 +1430,7 @@ const intakeTabs = [
   ["NEEDS_ACTION", "Needs action", "needsAction"],
   ["AWAITING_DESTINATION", "Awaiting destination", "awaitingDestination"],
   ["AWAITING_SHIPMENT", "Awaiting shipment", "accepted"],
+  ["AWAITING_DROP_OFF", "Awaiting drop-off", "awaitingDropOff"],
   ["IN_TRANSIT", "In transit", "shipped"],
   ["RECEIVED", "Received", "received"],
   ["VERIFICATION", "Verification", "verification"],
@@ -1531,6 +1532,7 @@ function PhysicalIntakeBoard({
       services.repositories.admin.setIntakeDestinationApproval(id, {
         operationallyApproved: approved,
         acceptingShipments: approved,
+        acceptingInPerson: approved,
         reason: approvalReason.trim(),
       }),
     onSuccess: () => {
@@ -1542,6 +1544,7 @@ function PhysicalIntakeBoard({
     all: 0,
     awaitingDestination: 0,
     accepted: 0,
+    awaitingDropOff: 0,
     shipped: 0,
     delivered: 0,
     received: 0,
@@ -1635,6 +1638,7 @@ function PhysicalIntakeBoard({
         {[
           ["Awaiting destination", overview.awaitingDestination, "AWAITING_DESTINATION"],
           ["Awaiting shipment", overview.accepted, "AWAITING_SHIPMENT"],
+          ["Awaiting drop-off", overview.awaitingDropOff ?? 0, "AWAITING_DROP_OFF"],
           ["In transit", overview.shipped, "IN_TRANSIT"],
           ["Carrier delivered", overview.delivered, "DELIVERED_AWAITING_RECEIPT"],
           ["Received", overview.received, "RECEIVED"],
@@ -1848,7 +1852,7 @@ function PhysicalIntakeBoard({
             <div>
               <p className="admin-console-eyebrow">Operations configuration</p>
               <h3>Receiving destinations</h3>
-              <p>Only approved, operator-controlled destinations can accept shipments.</p>
+              <p>Only approved, operator-controlled destinations can accept the delivery methods shown.</p>
             </div>
             <button
               type="button"
@@ -1875,13 +1879,16 @@ function PhysicalIntakeBoard({
               </div>
               <span
                 className={
-                  item.operationallyApproved && item.acceptingShipments
+                  item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
                     ? "admin-status-pill is-green"
                     : "admin-status-pill is-amber"
                 }
               >
-                {item.operationallyApproved && item.acceptingShipments
-                  ? "Approved · accepting shipments"
+                {item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
+                  ? `${item.locationType?.replaceAll("_", " ") ?? "Approved location"} · ${[
+                      item.acceptingShipments ? "Shipping" : "",
+                      item.acceptingInPerson ? "In person" : "",
+                    ].filter(Boolean).join(" + ")}`
                   : "Paused"}
               </span>
               <button
@@ -1891,12 +1898,12 @@ function PhysicalIntakeBoard({
                 onClick={() =>
                   destinationApproval.mutate({
                     id: item.id,
-                    approved: !(item.operationallyApproved && item.acceptingShipments),
+                    approved: !(item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)),
                   })
                 }
               >
-                {item.operationallyApproved && item.acceptingShipments
-                  ? "Pause shipments"
+                {item.operationallyApproved && (item.acceptingShipments || item.acceptingInPerson)
+                  ? "Pause intake"
                   : "Approve & resume"}
               </button>
             </div>
@@ -2087,12 +2094,18 @@ function PhysicalIntakeRow({ row, onOpen }: { row: AdminIntakeRow; onOpen: () =>
         ) : (
           <>
             <strong>
-              {row.stage === "AWAITING_DESTINATION" ? "Not ready to ship" : "No shipment"}
+              {row.deliveryMethod === "IN_PERSON"
+                ? "In-person drop-off"
+                : row.stage === "AWAITING_DESTINATION"
+                  ? "Not ready to ship"
+                  : "No shipment"}
             </strong>
             <small>
-              {row.stage === "AWAITING_DESTINATION"
-                ? "Destination selection required"
-                : "Collector adds tracking"}
+              {row.deliveryMethod === "IN_PERSON"
+                ? "No carrier or tracking required"
+                : row.stage === "AWAITING_DESTINATION"
+                  ? "Destination selection required"
+                  : "Collector adds tracking"}
             </small>
           </>
         )}
@@ -2172,7 +2185,7 @@ function intakeWorkTypeLabel(workType: AdminIntakeRow["workType"]) {
 
 function intakeStageTone(row: AdminIntakeRow) {
   if (row.exception || row.stage === "EXCEPTION") return "is-red";
-  if (row.stage === "AWAITING_DESTINATION" || row.stage === "DELIVERED_AWAITING_RECEIPT")
+  if (["AWAITING_DESTINATION", "AWAITING_DROP_OFF", "DELIVERED_AWAITING_RECEIPT"].includes(row.stage))
     return "is-amber";
   if (["VERIFIED", "VAULT_READY", "DEMO_CUSTODY"].includes(row.stage)) return "is-green";
   return "is-blue";
@@ -2185,8 +2198,8 @@ function intakeStepState(
   if (row.exception && step !== "history") return "blocked";
   const complete = {
     destination: Boolean(row.vault || row.demoIntake),
-    shipment: Boolean(row.shipment || row.demoIntake),
-    delivery: Boolean(row.shipment?.deliveredAt || row.demoIntake),
+    shipment: row.deliveryMethod === "IN_PERSON" || Boolean(row.shipment || row.demoIntake),
+    delivery: row.deliveryMethod === "IN_PERSON" || Boolean(row.shipment?.deliveredAt || row.demoIntake),
     receipt: Boolean(row.receipt || row.demoIntake),
     verification: Boolean(
       row.verification?.completedAt ||
@@ -2232,7 +2245,7 @@ function IntakeDetailAction({
   if (row.allowedActions.includes("CONFIRM_RECEIPT"))
     return (
       <button type="button" className="button-primary" onClick={onReceipt}>
-        Confirm physical receipt
+        {row.deliveryMethod === "IN_PERSON" ? "Confirm in-person receipt" : "Confirm physical receipt"}
       </button>
     );
   if (row.allowedActions.includes("START_VERIFICATION"))
@@ -2289,7 +2302,13 @@ function PhysicalIntakeDetailPage({
 }) {
   const [confirmation, setConfirmation] = useState<"receipt" | "demo" | null>(null);
   const activeTab = normalizeIntakeDetailTab(tab);
-  const steps = [
+  const steps = row.deliveryMethod === "IN_PERSON" ? [
+    ["destination", "Destination"],
+    ["delivery", "Drop-off"],
+    ["receipt", "Receipt"],
+    ["verification", "Verification"],
+    ["custody", "Custody"],
+  ] as const : [
     ["destination", "Destination"],
     ["shipment", "Shipment"],
     ["delivery", "Delivery"],
@@ -2354,6 +2373,10 @@ function PhysicalIntakeDetailPage({
           <div>
             <span>Current stage</span>
             <strong>{row.stageLabel}</strong>
+          </div>
+          <div>
+            <span>Delivery</span>
+            <strong>{row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Ship to location"}</strong>
           </div>
         </div>
         <ol className="physical-intake-stepper" aria-label="Physical intake lifecycle">
@@ -2452,7 +2475,9 @@ function PhysicalIntakeDetailPage({
             <p>
               {confirmation === "demo"
                 ? "Staging simulation only. This uses the existing guarded demo authority and does not create a production shipment, receipt, or vault custody record."
-                : "This confirms that Slice has physically received the collectible. Carrier delivery alone does not confirm receipt."}
+                : row.deliveryMethod === "IN_PERSON"
+                  ? "This records an authorised staff-confirmed in-person physical receipt. No carrier or tracking record is created."
+                  : "This confirms that Slice has physically received the collectible. Carrier delivery alone does not confirm receipt."}
             </p>
             <div className="physical-intake-modal-actions">
               <button
@@ -2516,6 +2541,10 @@ function IntakeDetailFacts({ row, statusTone }: { row: AdminIntakeRow; statusTon
         <div>
           <dt>Intake state</dt>
           <dd>{row.submissionStatus === "APPROVED" ? "Open" : sentence(row.submissionStatus)}</dd>
+        </div>
+        <div>
+          <dt>Delivery</dt>
+          <dd>{row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Shipment"}</dd>
         </div>
         {row.demoIntake ? (
           <div>
@@ -2608,26 +2637,30 @@ function IntakeShipmentCard({ row }: { row: AdminIntakeRow }) {
     <section className="physical-intake-workflow-card admin-panel">
       <header>
         <Truck aria-hidden="true" />
-        <h2>Shipment</h2>
+        <h2>{row.deliveryMethod === "IN_PERSON" ? "In-person drop-off" : "Shipment"}</h2>
       </header>
       <div className="physical-intake-shipment-card">
         <div>
           <strong>
-            {shipment
+            {row.deliveryMethod === "IN_PERSON"
+              ? "Awaiting in-person drop-off"
+              : shipment
               ? sentence(shipment.status)
               : row.vault
                 ? "Awaiting shipment"
                 : "Waiting for destination"}
           </strong>
           <p>
-            {shipment
+            {row.deliveryMethod === "IN_PERSON"
+              ? "The collector will bring the collectible directly to the approved location. No carrier or tracking number is required."
+              : shipment
               ? "Carrier and tracking are shown from the authoritative intake record."
               : row.vault
                 ? "The collector has not provided tracking yet."
                 : "Shipping instructions will be available once a destination is confirmed."}
           </p>
         </div>
-        <dl>
+        {row.deliveryMethod === "IN_PERSON" ? null : <dl>
           <div>
             <dt>Carrier</dt>
             <dd>{shipment?.carrier ?? "—"}</dd>
@@ -2644,7 +2677,7 @@ function IntakeShipmentCard({ row }: { row: AdminIntakeRow }) {
             <dt>Last updated</dt>
             <dd>{row.carrierState?.lastUpdatedAt ? date(row.carrierState.lastUpdatedAt) : "—"}</dd>
           </div>
-        </dl>
+        </dl>}
       </div>
     </section>
   );

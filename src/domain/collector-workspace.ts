@@ -36,6 +36,7 @@ export type CollectorWorkspaceAsset = {
   intake: {
     id: string;
     status: string;
+    deliveryMethod: "SHIPMENT" | "IN_PERSON";
     intakeReference: string;
     vault: {
       id: string;

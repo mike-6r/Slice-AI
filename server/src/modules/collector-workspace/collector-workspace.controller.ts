@@ -184,13 +184,17 @@ export class CollectorWorkspaceController {
     @Req() request: AuthenticatedRequest,
   ) {
     const input = z
-      .object({ vaultId: z.string().min(1) })
+      .object({
+        vaultId: z.string().min(1),
+        deliveryMethod: z.enum(['SHIPMENT', 'IN_PERSON']),
+      })
       .strict()
       .parse(body);
     return this.workspace.selectVault(
       this.collectorId(request),
       submissionId,
       input.vaultId,
+      input.deliveryMethod,
     );
   }
 

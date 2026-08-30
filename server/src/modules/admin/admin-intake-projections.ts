@@ -66,6 +66,7 @@ type IntakeState = {
   status: string;
   intake: {
     status: string;
+    deliveryMethod?: 'SHIPMENT' | 'IN_PERSON';
     shipment: { status: string } | null;
     receipt: unknown;
     verification?: { status: string } | null;
@@ -79,6 +80,8 @@ export function intakeStage(item: IntakeState) {
     return item.status === 'APPROVED' ? 'AWAITING_DESTINATION' : item.status;
   if (item.intake.exceptions?.length) return 'EXCEPTION';
   if (item.intake.shipment?.status === 'EXCEPTION') return 'EXCEPTION';
+  if (item.intake.deliveryMethod === 'IN_PERSON' && !item.intake.receipt)
+    return 'AWAITING_DROP_OFF';
   if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
     return 'DELIVERED_AWAITING_RECEIPT';
   if (
@@ -126,6 +129,12 @@ export function intakeNextAction(
       actor: 'STAFF',
       needsStaffAction: true,
     };
+  if (item.intake.deliveryMethod === 'IN_PERSON' && !item.intake.receipt)
+    return {
+      label: 'Confirm in-person receipt',
+      actor: 'STAFF',
+      needsStaffAction: true,
+    };
   if (!item.intake.shipment)
     return {
       label: 'Await collector shipment',
@@ -165,6 +174,8 @@ export function intakeNextAction(
 
 export function nextIntakeAction(intake: NonNullable<IntakeState['intake']>) {
   if (intake.exceptions?.length) return 'Resolve intake exception';
+  if (intake.deliveryMethod === 'IN_PERSON' && !intake.receipt)
+    return 'Await in-person drop-off';
   if (!intake.shipment) return 'Collector needs to add tracking';
   if (intake.shipment.status === 'DELIVERED' && !intake.receipt)
     return 'Staff needs to confirm receipt';
@@ -197,6 +208,7 @@ export function intakeCounts(
   return {
     all: items.length,
     accepted: items.filter((item) => item.stage === 'AWAITING_SHIPMENT').length,
+    awaitingDropOff: items.filter((item) => item.stage === 'AWAITING_DROP_OFF').length,
     awaitingDestination: items.filter(
       (item) => item.stage === 'AWAITING_DESTINATION',
     ).length,
@@ -238,6 +250,8 @@ export function intakeStageReason(item: IntakeState) {
     return 'Exception blocks normal intake progress';
   if (item.intake.shipment?.status === 'EXCEPTION')
     return 'Carrier exception requires review';
+  if (item.intake.deliveryMethod === 'IN_PERSON' && !item.intake.receipt)
+    return 'Waiting for collector in-person drop-off at the approved location';
   if (item.intake.shipment?.status === 'DELIVERED' && !item.intake.receipt)
     return 'Delivered by carrier · awaiting Slice receipt';
   if (!item.intake.shipment)
@@ -260,6 +274,7 @@ export function intakeStageReason(item: IntakeState) {
 export function intakeIssues(item: {
   stage: string;
   intake: {
+    deliveryMethod?: 'SHIPMENT' | 'IN_PERSON';
     shipment: { status: string } | null;
     receipt: unknown;
     verification?: { status: string } | null;
@@ -277,7 +292,10 @@ export function intakeIssues(item: {
       label: 'No destination',
       severity: 'HIGH',
     });
-  else if (!item.intake.shipment)
+  else if (
+    (item.intake.deliveryMethod ?? 'SHIPMENT') === 'SHIPMENT' &&
+    !item.intake.shipment
+  )
     issues.push({
       code: 'TRACKING_MISSING',
       label: 'Tracking missing',
@@ -317,6 +335,7 @@ export function intakeAllowedActions(item: IntakeState & { stage: string }) {
     (
       {
         'Resolve exception': ['RESOLVE_EXCEPTION'],
+        'Confirm in-person receipt': ['CONFIRM_RECEIPT'],
         'Confirm physical receipt': ['CONFIRM_RECEIPT'],
         'Begin verification': ['START_VERIFICATION'],
         'Complete verification': ['COMPLETE_VERIFICATION'],

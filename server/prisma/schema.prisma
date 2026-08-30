@@ -593,6 +593,23 @@ enum IntakeShipmentStatus {
   UNKNOWN
 }
 
+/// The collector's chosen handoff method. Shipment remains the legacy-safe
+/// default so historical intake records retain their existing semantics.
+enum IntakeDeliveryMethod {
+  SHIPMENT
+  IN_PERSON
+}
+
+/// A neutral operational classification: not every authorised receiving
+/// location is a long-term Slice vault.
+enum IntakeLocationType {
+  SLICE_VAULT
+  SLICE_INTAKE
+  PARTNER_STORE
+  PARTNER_INTAKE
+  DEMO_TEST
+}
+
 enum IntakeStatus {
   VAULT_SELECTED
   SHIPPING_REQUIRED
@@ -1485,6 +1502,8 @@ model AssetSubmission {
   gradeScaleEntryId             String?
   declaredMetadata              Json?
   normalizedCertificationNumber String?
+  preferredIntakeLocationId      String?
+  preferredDeliveryMethod        IntakeDeliveryMethod?
   submittedAt                   DateTime?
   reviewedAt                    DateTime?
   reviewerId                    String?
@@ -1502,6 +1521,7 @@ model AssetSubmission {
   reviews                       VerificationReview[]
   marketResearch                SubmissionMarketResearch[]
   intake                        SubmissionIntake?
+  preferredIntakeLocation       VaultIntakeLocation?             @relation("SubmissionPreferredIntakeLocation", fields: [preferredIntakeLocationId], references: [id], onDelete: SetNull)
   preGrades                     RawCardPreGrade[]
   controlledBetaBypass          ControlledBetaPhysicalBypass?
   stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
@@ -1511,6 +1531,7 @@ model AssetSubmission {
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
+  @@index([preferredIntakeLocationId])
 }
 
 /// A provider-backed or staff-confirmed certification lookup. Provider data is
@@ -1970,12 +1991,15 @@ model VaultIntakeLocation {
   operationallyApproved Boolean            @default(false)
   environment           String             @default("beta")
   acceptingShipments    Boolean            @default(false)
+  acceptingInPerson     Boolean            @default(false)
+  locationType          IntakeLocationType @default(SLICE_VAULT)
   acceptedCategories    Json?
   shippingInstructions  String
   customerSafeAddress   String
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   intakes               SubmissionIntake[]
+  preferredBySubmissions AssetSubmission[] @relation("SubmissionPreferredIntakeLocation")
 
   @@index([active, intakeAvailable, countryCode, id])
 }
@@ -1984,6 +2008,7 @@ model SubmissionIntake {
   id              String                     @id @default(cuid())
   submissionId    String                     @unique
   vaultId         String
+  deliveryMethod  IntakeDeliveryMethod       @default(SHIPMENT)
   status          IntakeStatus               @default(VAULT_SELECTED)
   intakeReference String                     @unique
   selectedAt      DateTime                   @default(now())
