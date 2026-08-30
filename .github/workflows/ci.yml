@@ -29,6 +29,11 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Changed-file lint
+        env:
+          # This job installs the frontend toolchain only. The backend and
+          # Discord jobs run their own complete lint gates after installing
+          # their respective toolchains.
+          LINT_CHANGED_SCOPES: frontend
         run: |
           echo "Linting the pushed commit diff."
           node scripts/lint-changed.mjs

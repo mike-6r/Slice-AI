@@ -2,6 +2,21 @@ import { execFileSync } from "node:child_process";
 import { relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const requestedScopes = new Set(
+  (process.env.LINT_CHANGED_SCOPES ?? "frontend,backend,discord")
+    .split(",")
+    .map((scope) => scope.trim().toLowerCase())
+    .filter(Boolean),
+);
+const validScopes = new Set(["frontend", "backend", "discord"]);
+
+for (const scope of requestedScopes) {
+  if (!validScopes.has(scope)) {
+    throw new Error(
+      `Unknown LINT_CHANGED_SCOPES value \"${scope}\". Use frontend, backend, and/or discord.`,
+    );
+  }
+}
 // Every push is checked independently. Depending on GitHub's event `before`
 // SHA made this quality gate flaky after force-pushes and history rewrites;
 // the repository is fetched with parent history, so HEAD~1 is deterministic.
@@ -53,13 +68,19 @@ function runEslint(label, cwd, filesToLint) {
 }
 
 const files = changedFiles();
-const frontend = files.filter((file) => /^(src|scripts)\/.*\.(?:[cm]?[jt]sx?|[cm]?js)$/.test(file));
-const backend = files
-  .filter((file) => /^server\/(?:src|test)\/.*\.ts$/.test(file))
-  .map((file) => relative(resolve(root, "server"), resolve(root, file)));
-const discord = files
-  .filter((file) => /^apps\/discord-bot\/(?:src|test)\/.*\.ts$/.test(file))
-  .map((file) => relative(resolve(root, "apps/discord-bot"), resolve(root, file)));
+const frontend = requestedScopes.has("frontend")
+  ? files.filter((file) => /^(src|scripts)\/.*\.(?:[cm]?[jt]sx?|[cm]?js)$/.test(file))
+  : [];
+const backend = requestedScopes.has("backend")
+  ? files
+      .filter((file) => /^server\/(?:src|test)\/.*\.ts$/.test(file))
+      .map((file) => relative(resolve(root, "server"), resolve(root, file)))
+  : [];
+const discord = requestedScopes.has("discord")
+  ? files
+      .filter((file) => /^apps\/discord-bot\/(?:src|test)\/.*\.ts$/.test(file))
+      .map((file) => relative(resolve(root, "apps/discord-bot"), resolve(root, file)))
+  : [];
 
 if (!frontend.length && !backend.length && !discord.length) {
   console.log("PASS changed-file lint: no lintable changed source files.");

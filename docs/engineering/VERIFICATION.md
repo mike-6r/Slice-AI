@@ -10,7 +10,9 @@ PREREQUISITE MISSING**, and **KNOWN BASELINE DEBT**. The frontend full lint is
 intentionally visible but not a passing gate until the dedicated formatting
 wave; use `npm run lint` to see it. `npm run lint:changed` is enforced for
 changed frontend/server/Discord source files. Set `LINT_CHANGED_BASE=<git ref>`
-to lint a PR range.
+to lint a PR range. Set `LINT_CHANGED_SCOPES=frontend`, `backend`, `discord`,
+or a comma-separated combination when the available install only contains a
+specific package toolchain.
 
 Discord database integration is explicit:
 
