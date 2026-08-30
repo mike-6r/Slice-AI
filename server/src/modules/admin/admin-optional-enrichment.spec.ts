@@ -90,19 +90,21 @@ describe('admin optional enrichment', () => {
           category: { name: 'Cards', slug: 'cards' },
           collectibleSet: null,
           gradeScaleEntry: null,
-          submissions: [{
-            id: 'submission-1',
-            status: 'APPROVED',
-            declaredMetadata: null,
-            submittedAt: now,
-            reviewedAt: now,
-            decisionCode: null,
-            decisionNote: null,
-            owner: null,
-            media: [],
-            reviews: [],
-            intake: null,
-          }],
+          submissions: [
+            {
+              id: 'submission-1',
+              status: 'APPROVED',
+              declaredMetadata: null,
+              submittedAt: now,
+              reviewedAt: now,
+              decisionCode: null,
+              decisionNote: null,
+              owner: null,
+              media: [],
+              reviews: [],
+              intake: null,
+            },
+          ],
           valuationDecisions: [],
           valuationEvidence: [],
           marketSnapshots: [],
@@ -121,7 +123,9 @@ describe('admin optional enrichment', () => {
           vaultPublicEvents: [],
         }),
       },
-      auditEvent: { findMany: jest.fn().mockRejectedValue(new Error('audit secret')) },
+      auditEvent: {
+        findMany: jest.fn().mockRejectedValue(new Error('audit secret')),
+      },
       assetSubmission: { count: jest.fn() },
       financialAccount: { findFirst: jest.fn() },
     };
@@ -130,7 +134,11 @@ describe('admin optional enrichment', () => {
       { authorize: jest.fn().mockResolvedValue(undefined) } as never,
       { isBeta: false } as never,
       { createPrivateDownloadUrl: jest.fn() } as never,
-      { adminProjection: jest.fn().mockRejectedValue(new Error('ownership secret')) } as never,
+      {
+        adminProjection: jest
+          .fn()
+          .mockRejectedValue(new Error('ownership secret')),
+      } as never,
       {} as never,
       {} as never,
     );
@@ -146,5 +154,35 @@ describe('admin optional enrichment', () => {
     expect(detail.enrichment.auditHistory).toBe('UNAVAILABLE');
     expect(detail.enrichment.ownershipIssuance).toBe('UNAVAILABLE');
     expect(detail.enrichment.initialOfferingProceeds).toBe('NOT_APPLICABLE');
+    expect(detail.dossier).toMatchObject({
+      workType: 'PRODUCTION',
+      snapshot: {
+        physical: 'AWAITING_DESTINATION',
+        verification: 'NOT_STARTED',
+        custody: 'NOT_ESTABLISHED',
+        valuation: 'NOT_RECORDED',
+        ownership: 'NOT_CONFIGURED',
+        market: 'NOT_ELIGIBLE',
+      },
+      provenance: {
+        origin: 'COLLECTOR_SUBMISSION',
+        submissionId: 'submission-1',
+        submissionStatus: 'APPROVED',
+      },
+    });
+    expect(detail.dossier.relatedRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'SOURCE_SUBMISSION',
+          id: 'submission-1',
+        }),
+        expect.objectContaining({
+          kind: 'OWNERSHIP',
+          id: null,
+          status: 'NOT_CONFIGURED',
+        }),
+      ]),
+    );
+    expect(detail.dossier.restrictions).toEqual([]);
   });
 });

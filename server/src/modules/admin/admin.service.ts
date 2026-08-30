@@ -9122,7 +9122,18 @@ export class AdminService {
                 },
               },
             },
-            intake: { include: { vault: true, shipment: true, receipt: true } },
+            intake: {
+              include: {
+                vault: true,
+                shipment: true,
+                receipt: true,
+                verification: true,
+                exceptions: {
+                  where: { resolvedAt: null },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+            },
           },
         },
         valuationDecisions: {
@@ -9154,6 +9165,7 @@ export class AdminService {
           include: { events: { orderBy: { occurredAt: 'asc' } } },
         },
         controlledBetaBypass: true,
+        stagingDemoPhysicalIntake: true,
         publication: true,
         insuranceCoverage: {
           where: {
@@ -9333,6 +9345,43 @@ export class AdminService {
       stages.find((stage) => stage.state === 'current')?.key ??
       stages.filter((stage) => stage.state === 'complete').at(-1)?.key ??
       asset.status;
+    const catalogueLifecycle: CatalogueLifecycleInput = {
+      submissionStatus: approved?.status ?? null,
+      intake: intake
+        ? {
+            status: intake.status,
+            deliveryMethod: intake.deliveryMethod,
+            shipmentStatus: intake.shipment?.status ?? null,
+            hasReceipt: Boolean(intake.receipt),
+            verificationStatus: intake.verification?.status ?? null,
+            hasOpenException: intake.exceptions.length > 0,
+          }
+        : null,
+      custodyStatus: asset.custodyRecord?.status ?? null,
+      hasValuation: Boolean(activeDecision),
+      ownershipPolicyStatus: asset.ownershipSupplyPolicy?.status ?? null,
+      ownershipSupplyStatus: asset.ownershipSupply?.status ?? null,
+      issuedUnits: asset.ownershipSupply?.issuedUnits ?? null,
+      offeringStatus: asset.initialOffering?.status ?? null,
+      publicationStatus: asset.publication?.status ?? null,
+      marketStatus: asset.tradingMarket?.status ?? null,
+      tradingEnabled: asset.tradingMarket?.tradingEnabled ?? null,
+    };
+    const physicalState = cataloguePhysicalState(catalogueLifecycle);
+    const verificationState = catalogueVerificationState(catalogueLifecycle);
+    const custodyState = catalogueCustodyState(catalogueLifecycle);
+    const ownershipState = catalogueOwnershipState(catalogueLifecycle);
+    const marketState = catalogueMarketState(catalogueLifecycle);
+    const attentionState = catalogueAttention(catalogueLifecycle);
+    const workType = asset.stagingDemoPhysicalIntake
+      ? 'OWNER_DEMO'
+      : asset.controlledBetaBypass
+        ? 'CONTROLLED_QA'
+        : isBetaFixtureSlug(asset.slug) ||
+            isBetaFixtureSubmission(approved?.declaredMetadata ?? null) ||
+            approved?.owner?.profile?.publicUsername?.startsWith('slice-demo-')
+          ? 'AUTOMATED_TEST'
+          : 'PRODUCTION';
     const [activityResult, issuanceResult, acceptedResult, proceedsResult] =
       await Promise.all([
         loadOptionalAdminEnrichment(
@@ -9685,6 +9734,7 @@ export class AdminService {
             id: intake.id,
             status: intake.status,
             vault: intake.vault.displayName,
+            deliveryMethod: intake.deliveryMethod,
             tracking: intake.shipment?.trackingNumber ?? null,
             carrier: intake.shipment?.carrier ?? null,
             shippedAt: intake.shipment?.shippedAt.toISOString() ?? null,
@@ -9858,6 +9908,112 @@ export class AdminService {
         note: submission.decisionNote,
       })),
       evidence: signedMedia,
+      dossier: {
+        workType,
+        snapshot: {
+          physical: physicalState,
+          verification: verificationState,
+          custody: custodyState,
+          valuation: activeDecision ? 'VALUED' : 'NOT_RECORDED',
+          ownership: ownershipState,
+          market: marketState,
+        },
+        provenance: approved
+          ? {
+              origin: 'COLLECTOR_SUBMISSION',
+              submissionId: approved.id,
+              submissionStatus: approved.status,
+              submittedAt: approved.submittedAt?.toISOString() ?? null,
+              acceptedAt: approved.reviewedAt?.toISOString() ?? null,
+              canonicalizedAt: asset.createdAt.toISOString(),
+              canonicalizedBy:
+                latestReview?.reviewer.profile?.displayName ?? null,
+              canonicalizationBasis: latestReview?.decision ?? null,
+            }
+          : null,
+        relatedRecords: [
+          ...(approved
+            ? [
+                {
+                  kind: 'SOURCE_SUBMISSION',
+                  label: 'Source submission',
+                  id: approved.id,
+                  status: approved.status,
+                },
+              ]
+            : []),
+          ...(intake
+            ? [
+                {
+                  kind: 'PHYSICAL_INTAKE',
+                  label: 'Physical intake',
+                  id: intake.intakeReference,
+                  status: physicalState,
+                },
+              ]
+            : []),
+          {
+            kind: 'CUSTODY',
+            label: 'Custody record',
+            id: null,
+            status: custodyState,
+          },
+          {
+            kind: 'VALUATION',
+            label: 'Valuation record',
+            id: activeDecision?.id ?? null,
+            status: activeDecision ? 'VALUED' : 'NOT_RECORDED',
+          },
+          {
+            kind: 'OWNERSHIP',
+            label: 'Ownership structure',
+            id: asset.ownershipSupply?.assetId ?? null,
+            status: ownershipState,
+          },
+          {
+            kind: 'INITIAL_OFFERING',
+            label: 'Initial offering',
+            id: asset.initialOffering?.id ?? null,
+            status: asset.initialOffering?.status ?? 'NOT_CREATED',
+          },
+          {
+            kind: 'MARKET',
+            label: 'Market listing',
+            id: asset.publication?.id ?? null,
+            status: marketState,
+          },
+        ],
+        restrictions: [
+          ...(intake?.exceptions.map((exception) => ({
+            source: 'PHYSICAL_INTAKE',
+            reason: exception.notes || exception.code,
+            status: exception.severity,
+            createdAt: exception.createdAt.toISOString(),
+          })) ?? []),
+          ...(asset.custodyRecord?.status === 'EXCEPTION'
+            ? [
+                {
+                  source: 'CUSTODY',
+                  reason: 'Custody exception requires resolution.',
+                  status: 'ACTIVE',
+                  createdAt: asset.updatedAt.toISOString(),
+                },
+              ]
+            : []),
+          ...attentionState.reasons
+            .filter(
+              (reason) =>
+                reason !== 'Physical intake exception' &&
+                reason !== 'Verification exception',
+            )
+            .map((reason) => ({
+              source: 'CATALOGUE',
+              reason,
+              status: 'ACTIVE',
+              createdAt: asset.updatedAt.toISOString(),
+            })),
+        ],
+      },
     };
   }
 }

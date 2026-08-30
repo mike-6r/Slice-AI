@@ -1588,6 +1588,7 @@ export type AdminCollectibleDetail = {
     id: string;
     status: string;
     vault: string | null;
+    deliveryMethod: "SHIPMENT" | "IN_PERSON";
     tracking: string | null;
     carrier: string | null;
     shippedAt: string | null;
@@ -1667,6 +1668,46 @@ export type AdminCollectibleDetail = {
     note: string | null;
   }>;
   evidence: Array<{ slot: string; filename: string; status: string; url: string | null }>;
+  dossier: {
+    workType: "PRODUCTION" | "OWNER_DEMO" | "CONTROLLED_QA" | "AUTOMATED_TEST";
+    snapshot: {
+      physical: string;
+      verification: string;
+      custody: string;
+      valuation: string;
+      ownership: string;
+      market: string;
+    };
+    provenance: {
+      origin: "COLLECTOR_SUBMISSION";
+      submissionId: string;
+      submissionStatus: string;
+      submittedAt: string | null;
+      acceptedAt: string | null;
+      canonicalizedAt: string;
+      canonicalizedBy: string | null;
+      canonicalizationBasis: string | null;
+    } | null;
+    relatedRecords: Array<{
+      kind:
+        | "SOURCE_SUBMISSION"
+        | "PHYSICAL_INTAKE"
+        | "CUSTODY"
+        | "VALUATION"
+        | "OWNERSHIP"
+        | "INITIAL_OFFERING"
+        | "MARKET";
+      label: string;
+      id: string | null;
+      status: string;
+    }>;
+    restrictions: Array<{
+      source: string;
+      reason: string;
+      status: string;
+      createdAt: string;
+    }>;
+  };
   initialOffering: {
     offeringId: string;
     status: string;
