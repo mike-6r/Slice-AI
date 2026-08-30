@@ -42,7 +42,7 @@ describe("Asset Operations presentation", () => {
 
   it("distinguishes no queue data from a server-filtered no-match result", () => {
     expect(assetOperationsEmptyCopy(false).title).toBe(
-      "No post-intake assets are active in Asset Operations",
+      "No canonical assets are active in Asset Operations",
     );
     expect(assetOperationsEmptyCopy(true).title).toBe("No assets match this queue view");
   });
