@@ -136,8 +136,7 @@ export function AdminAssetOperations(props: Props) {
           </p>
           <h2>Asset Operations</h2>
           <span>
-            Manage canonical assets from physical prerequisites through valuation, launch and live
-            market operations.
+            Manage post-receipt assets from valuation through launch and live market operations.
           </span>
         </div>
         <div className="asset-operations-header-actions">
@@ -229,7 +228,7 @@ export function AdminAssetOperations(props: Props) {
                   props.update({ operationsStage: value || undefined, page: "1" })
                 }
               >
-                <option value="">All stages</option>
+                <option value="">Stage</option>
                 <option value="PHYSICAL_PREREQUISITE">Physical prerequisites</option>
                 <option value="VALUATION">Valuation</option>
                 <option value="OWNERSHIP_SETUP">Ownership</option>
@@ -244,7 +243,7 @@ export function AdminAssetOperations(props: Props) {
                 value={props.market}
                 onChange={(value) => props.update({ market: value || undefined, page: "1" })}
               >
-                <option value="">All market states</option>
+                <option value="">Market state</option>
                 <option value="NOT_ELIGIBLE">Not live</option>
                 <option value="INITIAL_OFFERING">Initial Offering</option>
                 <option value="READY_FOR_LAUNCH">Launch review</option>
@@ -256,7 +255,7 @@ export function AdminAssetOperations(props: Props) {
                 value={props.workType}
                 onChange={(value) => props.update({ workType: value || undefined, page: "1" })}
               >
-                <option value="">All work types</option>
+                <option value="">Work type</option>
                 <option value="PRODUCTION">Production</option>
                 <option value="OWNER_DEMO">Owner demo</option>
                 <option value="CONTROLLED_QA">Controlled QA</option>
@@ -268,7 +267,7 @@ export function AdminAssetOperations(props: Props) {
                   props.update({ operationsPriority: value || undefined, page: "1" })
                 }
               >
-                <option value="">All priorities</option>
+                <option value="">Priority</option>
                 <option value="HIGH">High</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="NONE">Normal</option>
@@ -280,7 +279,7 @@ export function AdminAssetOperations(props: Props) {
                   props.update({ operationsAssignee: value || undefined, page: "1" })
                 }
               >
-                <option value="">All assignees</option>
+                <option value="">Assignee</option>
                 <option value="UNASSIGNED">Unassigned</option>
                 {board.data.filterOptions.assignees.map((assignee) => (
                   <option key={assignee.id} value={assignee.id}>
@@ -293,7 +292,7 @@ export function AdminAssetOperations(props: Props) {
                 value={props.sort}
                 onChange={(value) => props.update({ sort: value, page: "1" })}
               >
-                <option value="NEEDS_ACTION">Needs action first</option>
+                <option value="NEEDS_ACTION">Sort: Needs action first</option>
                 <option value="UPDATED_DESC">Recently updated</option>
                 <option value="NEWEST">Newest stage</option>
                 <option value="STAGE_OLDEST">Oldest in stage</option>
@@ -431,7 +430,7 @@ function OperationRow({
             {item.category.set ? ` · ${item.category.set}` : ""}
             {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
           </small>
-          <em>{item.publicId}</em>
+          <em>Asset ID: {shortIdentifier(item.publicId)}</em>
           <small>
             Collector:{" "}
             {item.collector?.username
@@ -939,6 +938,9 @@ function initials(value: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+function shortIdentifier(value: string) {
+  return value.length > 19 ? `${value.slice(0, 15)}…` : value;
 }
 function sentence(value: string) {
   return value

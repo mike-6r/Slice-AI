@@ -21,6 +21,7 @@ const counts = {
 
 describe("Asset Operations presentation", () => {
   it("uses economic operations tabs and excludes physical workflow stages", () => {
+    expect(assetOperationsTabs[0]).toEqual(["all", "All Active"]);
     expect(assetOperationsTabs.map(([key]) => key)).toEqual([
       "all",
       "needs-action",

@@ -10,12 +10,15 @@
 /* Reference-aligned queue: the visual density is intentional, but every
  * number and row is supplied by the lifecycle operations projection. */
 .asset-operations-page--reference {
-  max-width: 1760px;
-  padding: 18px 20px 26px;
+  max-width: 1740px;
+  padding: 18px 28px 26px;
 }
 .asset-operations-page--reference .asset-operations-header {
   align-items: flex-start;
   margin-bottom: 18px;
+}
+.asset-operations-page--reference .asset-operations-header-actions {
+  margin-top: 40px;
 }
 .asset-operations-page--reference .asset-operations-header h2 {
   font-size: 29px;
@@ -74,6 +77,34 @@
   padding: 13px 14px;
   background: linear-gradient(135deg, rgba(17, 35, 46, 0.95), rgba(11, 23, 31, 0.94));
 }
+.asset-operations-page--reference .asset-operations-metric > svg {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(64, 220, 182, 0.14);
+}
+.asset-operations-page--reference .asset-operations-metric.amber > svg {
+  color: #e8ae46;
+  background: rgba(232, 174, 70, 0.13);
+}
+.asset-operations-page--reference .asset-operations-metric.green > svg {
+  color: #80d15a;
+  background: rgba(128, 209, 90, 0.13);
+}
+.asset-operations-page--reference .asset-operations-metric.red > svg {
+  color: #ef8985;
+  background: rgba(239, 137, 133, 0.13);
+}
+.asset-operations-page--reference .asset-operations-metric span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .asset-operations-page--reference .asset-operations-metric.green svg {
   color: #7fd259;
 }
@@ -97,8 +128,10 @@
 }
 .asset-operations-tools--reference {
   display: grid;
-  grid-template-columns: minmax(245px, 1.65fr) repeat(5, minmax(103px, 0.72fr)) auto;
-  align-items: end;
+  grid-template-columns:
+    minmax(245px, 1.7fr) repeat(5, minmax(76px, 0.68fr)) minmax(145px, 1fr)
+    auto;
+  align-items: center;
   gap: 8px;
   padding: 13px;
 }
@@ -107,21 +140,21 @@
   height: 36px;
 }
 .asset-operations-filter {
-  display: grid;
-  gap: 4px;
+  display: block;
   min-width: 0;
 }
 .asset-operations-filter > span {
-  color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .asset-operations-filter select {
   width: 100%;
   min-width: 0;
-  min-height: 36px;
+  height: 36px;
   padding-right: 22px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -159,12 +192,12 @@
   font-size: 8px;
 }
 .asset-operations-page--reference .asset-operations-row {
-  min-height: 91px;
-  padding: 9px 13px;
+  min-height: 78px;
+  padding: 7px 13px;
 }
 .asset-operations-page--reference .asset-operations-thumb {
-  width: 37px;
-  height: 53px;
+  width: 41px;
+  height: 61px;
 }
 .asset-operations-page--reference .asset-operations-identity {
   gap: 9px;
@@ -177,6 +210,28 @@
 }
 .asset-operations-page--reference .asset-operations-identity em {
   margin-top: 3px;
+}
+.asset-operations-page--reference .asset-operations-state-cell > span {
+  border-radius: 99px;
+  padding: 4px 7px;
+  background: rgba(118, 151, 169, 0.14);
+  font-size: 9px;
+}
+.asset-operations-page--reference .asset-operations-state-cell > .state-blue {
+  color: #78bcff;
+  background: rgba(84, 170, 247, 0.16);
+}
+.asset-operations-page--reference .asset-operations-state-cell > .state-violet {
+  color: #c48cff;
+  background: rgba(143, 99, 199, 0.16);
+}
+.asset-operations-page--reference .asset-operations-state-cell > .state-mint {
+  color: #57d8b6;
+  background: rgba(64, 220, 182, 0.14);
+}
+.asset-operations-page--reference .asset-operations-state-cell > .state-red {
+  color: #ef8985;
+  background: rgba(239, 137, 133, 0.15);
 }
 .asset-operations-offering strong,
 .asset-operations-updated strong,

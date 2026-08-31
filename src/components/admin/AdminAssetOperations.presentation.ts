@@ -1,7 +1,7 @@
 import type { AssetOperationsBoardResponse } from "@/data/repositories";
 
 export const assetOperationsTabs = [
-  ["all", "All"],
+  ["all", "All Active"],
   ["needs-action", "Needs action"],
   ["valuation", "Valuation"],
   ["ownership", "Ownership setup"],

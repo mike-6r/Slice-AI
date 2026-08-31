@@ -736,7 +736,9 @@ function AdminConsole() {
   );
 
   return (
-    <div className="admin-console-shell">
+    <div
+      className={`admin-console-shell${section === "assetOperations" ? " admin-console-shell--asset-operations" : ""}`}
+    >
       <aside className={`admin-console-sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="admin-console-brand">
           <Wordmark />
