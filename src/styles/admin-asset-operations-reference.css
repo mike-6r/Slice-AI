@@ -22,7 +22,7 @@
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: 1rem 0.5rem 0.75rem 2rem;
+    padding: 1rem 0 0.75rem 2rem;
   }
 
   .asset-operations-page--reference .asset-operations-header {
@@ -226,9 +226,15 @@
   }
 
   .asset-operations-page--reference .asset-operations-pagination {
-    min-height: 2.5rem;
-    padding: 0.55rem 0.75rem;
+    min-height: 1.85rem;
+    padding: 0.25rem 0.75rem;
     font-size: 0.64rem;
+  }
+
+  .asset-operations-page--reference .asset-operations-pagination button {
+    width: 1.35rem;
+    height: 1.35rem;
+    min-height: 0;
   }
 
   .asset-operations-page--reference .asset-operations-insights {
@@ -295,6 +301,7 @@
     width: auto;
     min-width: 0;
     max-height: calc(100vh - 1.5rem);
+    height: calc(100vh - 7.8rem);
     overflow-y: auto;
     padding: 0.85rem;
     border: 1px solid var(--border);
