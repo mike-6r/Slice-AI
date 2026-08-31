@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  assetOperationsBlockerSummary,
   assetOperationsEmptyCopy,
+  assetOperationsMarketPresentation,
   assetOperationsTabCount,
   assetOperationsTabs,
 } from "./AdminAssetOperations.presentation";
@@ -46,5 +48,21 @@ describe("Asset Operations presentation", () => {
       "No canonical assets are active in Asset Operations",
     );
     expect(assetOperationsEmptyCopy(true).title).toBe("No assets match this queue view");
+  });
+
+  it("separates blocked asset count from repeated blocking conditions", () => {
+    expect(assetOperationsBlockerSummary(8, [{ count: 16 }, { count: 8 }, { count: 8 }])).toEqual({
+      assets: 8,
+      conditions: 32,
+    });
+  });
+
+  it("presents a historical publication conflict without duplicating restriction badges", () => {
+    expect(assetOperationsMarketPresentation("RESTRICTED")).toEqual({
+      state: "Historical published",
+      detail: "Currently blocked",
+      tone: "muted",
+    });
+    expect(assetOperationsMarketPresentation("MARKET_LIVE")?.tone).toBe("mint");
   });
 });

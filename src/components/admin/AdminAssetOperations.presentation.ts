@@ -43,3 +43,33 @@ export function assetOperationsEmptyCopy(filtered: boolean) {
           "Canonical assets appear here with their current physical and market lifecycle state.",
       };
 }
+
+export function assetOperationsMarketPresentation(state: string) {
+  if (state === "RESTRICTED") {
+    return {
+      state: "Historical published",
+      detail: "Currently blocked",
+      tone: "muted",
+    } as const;
+  }
+  if (state === "MARKET_LIVE") {
+    return { state: "Market live", detail: "Trading", tone: "mint" } as const;
+  }
+  if (state === "READY_FOR_LAUNCH") {
+    return { state: "Launch review", detail: "Awaiting approval", tone: "blue" } as const;
+  }
+  if (state === "INITIAL_OFFERING") {
+    return { state: "Initial Offering", detail: "Offering active", tone: "violet" } as const;
+  }
+  return null;
+}
+
+export function assetOperationsBlockerSummary(
+  needsAction: number,
+  blockers: Array<{ count: number }>,
+) {
+  return {
+    assets: needsAction,
+    conditions: blockers.reduce((total, blocker) => total + blocker.count, 0),
+  };
+}

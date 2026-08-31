@@ -21,7 +21,9 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { AssetOperationsBoardItem, AssetOperationsBoardResponse } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import {
+  assetOperationsBlockerSummary,
   assetOperationsEmptyCopy,
+  assetOperationsMarketPresentation,
   assetOperationsTabCount,
   assetOperationsTabs,
 } from "./AdminAssetOperations.presentation";
@@ -233,7 +235,7 @@ export function AdminAssetOperations(props: Props) {
                   props.update({ operationsStage: value || undefined, page: "1" })
                 }
               >
-                <option value="">Stage</option>
+                <option value="">All stages</option>
                 <option value="PHYSICAL_PREREQUISITE">Physical prerequisites</option>
                 <option value="VALUATION">Valuation</option>
                 <option value="OWNERSHIP_SETUP">Ownership</option>
@@ -248,7 +250,7 @@ export function AdminAssetOperations(props: Props) {
                 value={props.market}
                 onChange={(value) => props.update({ market: value || undefined, page: "1" })}
               >
-                <option value="">Market state</option>
+                <option value="">All market states</option>
                 <option value="NOT_ELIGIBLE">Not live</option>
                 <option value="INITIAL_OFFERING">Initial Offering</option>
                 <option value="READY_FOR_LAUNCH">Launch review</option>
@@ -261,19 +263,19 @@ export function AdminAssetOperations(props: Props) {
                 value={props.workType}
                 onChange={(value) => props.update({ workType: value || undefined, page: "1" })}
               >
-                <option value="">Work type</option>
+                <option value="">All work types</option>
                 <option value="PRODUCTION">Production</option>
                 <option value="OWNER_DEMO">Owner demo</option>
                 <option value="CONTROLLED_QA">Controlled QA</option>
               </Filter>
               <Filter
-                label="Priority"
+                label="Review"
                 value={props.attention}
                 onChange={(value) =>
                   props.update({ operationsAttention: value || undefined, page: "1" })
                 }
               >
-                <option value="">Priority</option>
+                <option value="">All review states</option>
                 <option value="REQUIRES_ATTENTION">Review required</option>
               </Filter>
               <Filter
@@ -283,7 +285,7 @@ export function AdminAssetOperations(props: Props) {
                   props.update({ operationsAssignee: value || undefined, page: "1" })
                 }
               >
-                <option value="">Assignee</option>
+                <option value="">All assignees</option>
                 <option value="UNASSIGNED">Unassigned</option>
                 {board.data.filterOptions.assignees.map((assignee) => (
                   <option key={assignee.id} value={assignee.id}>
@@ -312,17 +314,17 @@ export function AdminAssetOperations(props: Props) {
                 <X aria-hidden="true" /> Clear filters
               </button>
             </div>
-            <div className="asset-operations-table-wrap">
-              <div className="asset-operations-grid asset-operations-grid--head" aria-hidden="true">
-                <span>Collectible</span>
-                <span>Stage</span>
-                <span>Readiness / next action</span>
-                <span>Offering progress</span>
-                <span>Market state</span>
-                <span>Assignee</span>
-                <span>Priority</span>
-                <span>Updated</span>
-                <span>Action</span>
+            <div className="asset-operations-table-wrap" role="table" aria-label="Active assets">
+              <div className="asset-operations-grid asset-operations-grid--head" role="row">
+                <span role="columnheader">Collectible</span>
+                <span role="columnheader">Stage</span>
+                <span role="columnheader">Readiness / next action</span>
+                <span role="columnheader">Offering progress</span>
+                <span role="columnheader">Market state</span>
+                <span role="columnheader">Assignee</span>
+                <span role="columnheader">Review</span>
+                <span role="columnheader">Updated</span>
+                <span role="columnheader">Action</span>
               </div>
               <div className="asset-operations-table">
                 {board.data.items.map((item) => (
@@ -374,7 +376,7 @@ export function AdminAssetOperations(props: Props) {
 
 function Metrics({ counts }: { counts: AssetOperationsBoardResponse["counts"] }) {
   const cards = [
-    ["Active assets in operations", counts.all, Boxes, "mint", "Across all stages"],
+    ["Active assets in operations", counts.all, Boxes, "neutral", "Across all stages"],
     ["Needs action", counts.needsAction, CircleAlert, "amber", "Requires immediate attention"],
     ["Ready for launch", counts.readyForLaunch, Rocket, "green", "Cleared for launch review"],
     ["Market live", counts.marketLive, TrendingUp, "mint", "Trading on marketplace"],
@@ -384,7 +386,11 @@ function Metrics({ counts }: { counts: AssetOperationsBoardResponse["counts"] })
   return (
     <section className="asset-operations-metrics" aria-label="Asset Operations summary">
       {cards.map(([label, value, Icon, tone, detail]) => (
-        <article key={label} className={`asset-operations-metric ${tone}`}>
+        <article
+          key={label}
+          className={`asset-operations-metric ${tone} ${value === 0 ? "is-zero" : ""}`}
+          title={`${label}: ${value}. ${detail}`}
+        >
           <Icon aria-hidden="true" />
           <div>
             <span>{label}</span>
@@ -414,6 +420,7 @@ function Filter({
       <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
         {children}
       </select>
+      <ChevronDown aria-hidden="true" />
     </label>
   );
 }
@@ -435,6 +442,16 @@ function OperationRow({
     <article
       className={`asset-operations-grid asset-operations-row ${selected ? "selected" : ""}`}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      tabIndex={0}
+      aria-label={`Select ${item.title}`}
+      aria-selected={selected}
+      role="row"
     >
       <button
         type="button"
@@ -444,15 +461,15 @@ function OperationRow({
           onOpen();
         }}
       >
-        <Thumbnail src={item.thumbnailUrl} />
+        <Thumbnail src={item.thumbnailUrl} alt={item.title} />
         <span>
-          <strong>{item.title}</strong>
+          <strong title={item.title}>{item.title}</strong>
           <small>
             {item.category.name}
             {item.category.set ? ` · ${item.category.set}` : ""}
             {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
           </small>
-          <em>Asset ID: {shortIdentifier(item.publicId)}</em>
+          <em title={item.publicId}>Asset ID: {shortIdentifier(item.publicId)}</em>
           <small>
             Collector:{" "}
             {item.collector?.username
@@ -478,17 +495,7 @@ function OperationRow({
         </div>
         <small>{progress.detail}</small>
       </div>
-      <State
-        state={sentence(item.market.state)}
-        detail={tableMarketDetail(item)}
-        tone={
-          item.market.state === "MARKET_LIVE"
-            ? "mint"
-            : item.market.state === "PAUSED" || item.market.state === "RESTRICTED"
-              ? "red"
-              : "muted"
-        }
-      />
+      <State {...tableMarketPresentation(item)} />
       <div className="asset-operations-assignee">
         <span>{initials(item.assignee?.displayName ?? "Unassigned")}</span>
         <div>
@@ -559,7 +566,7 @@ function RowActions({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen: 
 
 function State({ state, detail, tone }: { state: string; detail: string; tone: string }) {
   return (
-    <div className="asset-operations-state-cell">
+    <div className="asset-operations-state-cell" title={`${state}: ${detail}`}>
       <span className={`state-${tone}`}>{state}</span>
       <small>{detail}</small>
     </div>
@@ -576,7 +583,7 @@ function Attention({ item }: { item: AssetOperationsBoardItem }) {
     </span>
   );
 }
-function Thumbnail({ src }: { src: string | null }) {
+function Thumbnail({ src, alt = "" }: { src: string | null; alt?: string }) {
   const [failed, setFailed] = useState(false);
   return !src || failed ? (
     <span className="asset-operations-thumb fallback">
@@ -586,7 +593,7 @@ function Thumbnail({ src }: { src: string | null }) {
     <img
       className="asset-operations-thumb"
       src={src}
-      alt=""
+      alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}
     />
@@ -623,14 +630,14 @@ function QueuePreview({
       </button>
       <span>Selected asset</span>
       <div className="asset-operations-preview-identity">
-        <Thumbnail src={item.thumbnailUrl} />
+        <Thumbnail src={item.thumbnailUrl} alt={item.title} />
         <div>
-          <h3>{item.title}</h3>
+          <h3 title={item.title}>{item.title}</h3>
           <p>
             {item.category.name}
             {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
           </p>
-          <strong>{item.publicId}</strong>
+          <strong title={item.publicId}>{item.publicId}</strong>
           <small>
             Collector:{" "}
             {item.collector?.username
@@ -653,7 +660,7 @@ function QueuePreview({
           ["Units sold", progress.label],
           ["Initial offer price", money(item.offering.pricePerUnitMinor, item.offering.currency)],
           ["Total valuation", money(item.valuation.valueMinor, item.valuation.currency)],
-          ["Valuation date", item.valuation.state === "VALUED" ? formatDate(item.stageSince) : "—"],
+          ["Valuation state", sentence(item.valuation.state)],
         ]}
       />
       <BlockerPreview item={item} blockers={blockers} />
@@ -757,7 +764,10 @@ function OperationalInsights({
 }) {
   const health = data.insights.health;
   const total = Math.max(1, health.onTrack + health.atRisk + health.blocked + health.exceptions);
-  const first = data.items[0];
+  const blockerSummary = assetOperationsBlockerSummary(
+    data.counts.needsAction,
+    data.insights.blockers,
+  );
   return (
     <section className="asset-operations-insights" aria-label="Operational insights">
       <article>
@@ -773,19 +783,31 @@ function OperationalInsights({
         </div>
         <dl>
           <div>
-            <dt>On track</dt>
+            <dt>
+              <i className="health-dot on-track" aria-hidden="true" />
+              On track
+            </dt>
             <dd>{health.onTrack}</dd>
           </div>
           <div>
-            <dt>At risk</dt>
+            <dt>
+              <i className="health-dot at-risk" aria-hidden="true" />
+              At risk
+            </dt>
             <dd>{health.atRisk}</dd>
           </div>
           <div>
-            <dt>Blocked</dt>
+            <dt>
+              <i className="health-dot blocked" aria-hidden="true" />
+              Blocked
+            </dt>
             <dd>{health.blocked}</dd>
           </div>
           <div>
-            <dt>Exceptions</dt>
+            <dt>
+              <i className="health-dot exception" aria-hidden="true" />
+              Exceptions
+            </dt>
             <dd>{health.exceptions}</dd>
           </div>
         </dl>
@@ -819,14 +841,16 @@ function OperationalInsights({
       </article>
       <article>
         <span>Blockers needing review</span>
-        <strong className="asset-operations-insight-number">
-          {data.insights.blockers.reduce((totalCount, blocker) => totalCount + blocker.count, 0)}
-        </strong>
+        <strong className="asset-operations-insight-number">{blockerSummary.assets}</strong>
+        <small className="asset-operations-insight-caption">
+          {blockerSummary.assets === 1 ? "Asset" : "Assets"} blocked · {blockerSummary.conditions}{" "}
+          {blockerSummary.conditions === 1 ? "condition" : "conditions"}
+        </small>
         <ul className="asset-operations-insight-list">
           {data.insights.blockers.length ? (
             data.insights.blockers.map((blocker) => (
               <li key={blocker.code}>
-                <small>{sentence(blocker.code)}</small>
+                <small title={sentence(blocker.code)}>{sentence(blocker.code)}</small>
                 <b>{blocker.count}</b>
               </li>
             ))
@@ -851,21 +875,27 @@ function OperationalInsights({
         <strong className="asset-operations-insight-number violet">
           {data.insights.ownership.total}
         </strong>
-        <dl>
-          <div>
-            <dt>Draft created</dt>
-            <dd>{data.insights.ownership.draft}</dd>
-          </div>
-          <div>
-            <dt>Pending review</dt>
-            <dd>{data.insights.ownership.pending}</dd>
-          </div>
-          <div>
-            <dt>Configured</dt>
-            <dd>{data.insights.ownership.configured}</dd>
-          </div>
-        </dl>
-        {first ? (
+        {data.insights.ownership.total ? (
+          <dl>
+            <div>
+              <dt>Draft created</dt>
+              <dd>{data.insights.ownership.draft}</dd>
+            </div>
+            <div>
+              <dt>Pending review</dt>
+              <dd>{data.insights.ownership.pending}</dd>
+            </div>
+            <div>
+              <dt>Configured</dt>
+              <dd>{data.insights.ownership.configured}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="asset-operations-insight-empty">
+            No assets are awaiting ownership issuance.
+          </p>
+        )}
+        {data.insights.ownership.total ? (
           <button
             className="asset-operations-insight-action"
             type="button"
@@ -1038,6 +1068,15 @@ function tableMarketDetail(item: AssetOperationsBoardItem) {
   if (item.market.state === "READY_FOR_LAUNCH") return "Launch review";
   if (item.market.state === "INITIAL_OFFERING") return "Offering active";
   return "Not launched";
+}
+function tableMarketPresentation(item: AssetOperationsBoardItem) {
+  return (
+    assetOperationsMarketPresentation(item.market.state) ?? {
+      state: sentence(item.market.state),
+      detail: tableMarketDetail(item),
+      tone: "muted",
+    }
+  );
 }
 function nextActionDetail(item: AssetOperationsBoardItem) {
   const reason =
