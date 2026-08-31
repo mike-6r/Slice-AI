@@ -26,6 +26,7 @@ import {
   assetOperationsTabs,
 } from "./AdminAssetOperations.presentation";
 import "@/styles/admin-operations.css";
+import "@/styles/admin-asset-operations-reference.css";
 
 type Props = {
   tab?: string;
