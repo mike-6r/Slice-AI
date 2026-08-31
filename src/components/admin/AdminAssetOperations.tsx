@@ -23,9 +23,11 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import {
   assetOperationsBlockerSummary,
   assetOperationsEmptyCopy,
+  assetOperationsHealthSegments,
   assetOperationsMarketPresentation,
   assetOperationsTabCount,
   assetOperationsTabs,
+  resolveAssetOperationsSelection,
 } from "./AdminAssetOperations.presentation";
 import "@/styles/admin-operations.css";
 import "@/styles/admin-asset-operations-reference.css";
@@ -85,10 +87,17 @@ export function AdminAssetOperations(props: Props) {
   });
 
   useEffect(() => setSearch(props.query), [props.query]);
-  useEffect(
-    () => setSelected(props.selectedId === "closed" ? "closed" : (props.selectedId ?? null)),
-    [props.selectedId],
-  );
+  useEffect(() => {
+    setSelected((current) => resolveAssetOperationsSelection(current, props.selectedId));
+  }, [props.selectedId]);
+  useEffect(() => {
+    if (!viewMenuOpen) return;
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setViewMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeMenu);
+    return () => window.removeEventListener("keydown", closeMenu);
+  }, [viewMenuOpen]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = search.trim() || undefined;
@@ -155,9 +164,10 @@ export function AdminAssetOperations(props: Props) {
               type="button"
               className="admin-ops-button primary"
               aria-expanded={viewMenuOpen}
+              aria-haspopup="menu"
               onClick={() => setViewMenuOpen((open) => !open)}
             >
-              New operational view <ChevronDown aria-hidden="true" />
+              Operational views <ChevronDown aria-hidden="true" />
             </button>
             {viewMenuOpen ? (
               <div className="asset-operations-view-options" role="menu">
@@ -225,7 +235,8 @@ export function AdminAssetOperations(props: Props) {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search collectible, collector, asset ID, submission, cert…"
+                  placeholder="Search collectible, collector, asset ID, cert…"
+                  aria-label="Search Asset Operations"
                 />
               </label>
               <Filter
@@ -348,7 +359,9 @@ export function AdminAssetOperations(props: Props) {
               <Pagination data={board.data} page={props.page} update={props.update} />
               <OperationalInsights
                 data={board.data}
-                onOpen={openItem}
+                onOpen={(itemId) =>
+                  props.update({ section: "assetOperations", asset: itemId, tab: "overview" })
+                }
                 onReviewBlockers={() =>
                   props.update({
                     tab: "needs-action",
@@ -365,7 +378,7 @@ export function AdminAssetOperations(props: Props) {
           item={selectedItem}
           onClose={() => {
             setSelected("closed");
-            props.update({ operationsSelected: "closed" });
+            props.update({ operationsSelected: undefined });
           }}
           onOpen={() => selectedItem && openItem(selectedItem)}
         />
@@ -438,6 +451,14 @@ function OperationRow({
 }) {
   const progress = offeringProgress(item);
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeMenu);
+    return () => window.removeEventListener("keydown", closeMenu);
+  }, [menuOpen]);
   return (
     <article
       className={`asset-operations-grid asset-operations-row ${selected ? "selected" : ""}`}
@@ -464,13 +485,21 @@ function OperationRow({
         <Thumbnail src={item.thumbnailUrl} alt={item.title} />
         <span>
           <strong title={item.title}>{item.title}</strong>
-          <small>
+          <small title={item.category.set ?? item.category.name}>
             {item.category.name}
             {item.category.set ? ` · ${item.category.set}` : ""}
             {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
           </small>
-          <em title={item.publicId}>Asset ID: {shortIdentifier(item.publicId)}</em>
-          <small>
+          <em title={`${item.publicId} — open the asset to copy the full ID`}>
+            Asset ID: {shortIdentifier(item.publicId)}
+          </em>
+          <small
+            title={
+              item.collector?.username
+                ? `@${item.collector.username}`
+                : (item.collector?.displayName ?? "Unavailable")
+            }
+          >
             Collector:{" "}
             {item.collector?.username
               ? `@${item.collector.username}`
@@ -515,6 +544,7 @@ function OperationRow({
           onClick={() => setMenuOpen((open) => !open)}
           aria-label={`Actions for ${item.title}`}
           aria-expanded={menuOpen}
+          aria-haspopup="menu"
         >
           <MoreHorizontal aria-hidden="true" />
         </button>
@@ -586,7 +616,7 @@ function Attention({ item }: { item: AssetOperationsBoardItem }) {
 function Thumbnail({ src, alt = "" }: { src: string | null; alt?: string }) {
   const [failed, setFailed] = useState(false);
   return !src || failed ? (
-    <span className="asset-operations-thumb fallback">
+    <span className="asset-operations-thumb fallback" role="img" aria-label="Media unavailable">
       <ImageIcon aria-hidden="true" />
     </span>
   ) : (
@@ -609,6 +639,19 @@ function QueuePreview({
   onClose: () => void;
   onOpen: () => void;
 }) {
+  useEffect(() => {
+    if (!item) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !document.querySelector(".asset-operations-view-options, .asset-operations-row-menu")
+      )
+        onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [item, onClose]);
+
   if (!item) return null;
   const progress = offeringProgress(item);
   const blockers = [
@@ -619,94 +662,102 @@ function QueuePreview({
     ]),
   ];
   return (
-    <aside className="asset-operations-preview">
+    <>
       <button
         type="button"
-        className="asset-operations-preview-close"
+        className="asset-operations-preview-backdrop"
         onClick={onClose}
-        aria-label="Close selected asset"
-      >
-        <X aria-hidden="true" />
-      </button>
-      <span>Selected asset</span>
-      <div className="asset-operations-preview-identity">
-        <Thumbnail src={item.thumbnailUrl} alt={item.title} />
-        <div>
-          <h3 title={item.title}>{item.title}</h3>
-          <p>
-            {item.category.name}
-            {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
-          </p>
-          <strong title={item.publicId}>{item.publicId}</strong>
-          <small>
-            Collector:{" "}
-            {item.collector?.username
-              ? `@${item.collector.username}`
-              : (item.collector?.displayName ?? "Unavailable")}
-          </small>
-        </div>
-      </div>
-      <div className="asset-operations-preview-stage">
-        <span>Stage</span>
-        <strong className={`state-${stageTone(item.currentStage)}`}>
-          {stageLabel(item.currentStage)}
-        </strong>
-        <p>{stageDetail(item)}</p>
-      </div>
-      <PreviewSection
-        title="Economic snapshot"
-        rows={[
-          ["Total Slices", item.ownership.totalUnits ?? item.offering.totalUnits ?? "—"],
-          ["Units sold", progress.label],
-          ["Initial offer price", money(item.offering.pricePerUnitMinor, item.offering.currency)],
-          ["Total valuation", money(item.valuation.valueMinor, item.valuation.currency)],
-          ["Valuation state", sentence(item.valuation.state)],
-        ]}
+        aria-label="Close selected asset drawer"
       />
-      <BlockerPreview item={item} blockers={blockers} />
-      <div className="asset-operations-preview-workflow">
-        <span>Lifecycle / economic workflow</span>
-        <div>
-          {workflowSteps(item).map(([label, tone], index) => (
-            <div className={tone} key={label}>
-              <i>{index + 1}</i>
-              <small>{label}</small>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="asset-operations-preview-links">
-        <span>Quick links</span>
-        <button type="button" onClick={onOpen}>
-          Open Asset Operations <ArrowRight aria-hidden="true" />
-        </button>
-        <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
-          View Collectible <ExternalLink aria-hidden="true" />
-        </a>
-        <a
-          href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
+      <aside className="asset-operations-preview" aria-label={`Selected asset: ${item.title}`}>
+        <button
+          type="button"
+          className="asset-operations-preview-close"
+          onClick={onClose}
+          aria-label="Close selected asset"
         >
-          View Source Submission <ExternalLink aria-hidden="true" />
-        </a>
-        {item.sourceContext.intakeId ? (
+          <X aria-hidden="true" />
+        </button>
+        <span>Selected asset</span>
+        <div className="asset-operations-preview-identity">
+          <Thumbnail src={item.thumbnailUrl} alt={item.title} />
+          <div>
+            <h3 title={item.title}>{item.title}</h3>
+            <p>
+              {item.category.name}
+              {item.grading.certNumber ? ` · Cert ${item.grading.certNumber}` : ""}
+            </p>
+            <strong title={item.publicId}>{item.publicId}</strong>
+            <small>
+              Collector:{" "}
+              {item.collector?.username
+                ? `@${item.collector.username}`
+                : (item.collector?.displayName ?? "Unavailable")}
+            </small>
+          </div>
+        </div>
+        <div className="asset-operations-preview-stage">
+          <span>Stage</span>
+          <strong className={`state-${stageTone(item.currentStage)}`}>
+            {stageLabel(item.currentStage)}
+          </strong>
+          <p>{stageDetail(item)}</p>
+        </div>
+        <PreviewSection
+          title="Economic snapshot"
+          rows={[
+            ["Total Slices", item.ownership.totalUnits ?? item.offering.totalUnits ?? "—"],
+            ["Units sold", progress.label === "Not launched" ? "—" : progress.label],
+            ["Initial offer price", money(item.offering.pricePerUnitMinor, item.offering.currency)],
+            ["Total valuation", money(item.valuation.valueMinor, item.valuation.currency)],
+            ["Valuation state", sentence(item.valuation.state)],
+          ]}
+        />
+        <BlockerPreview item={item} blockers={blockers} />
+        <div className="asset-operations-preview-workflow">
+          <span>Lifecycle / economic workflow</span>
+          <div role="list" aria-label="Economic workflow progress">
+            {workflowSteps(item).map(([label, tone], index) => (
+              <div className={tone} key={label} role="listitem">
+                <i>{index + 1}</i>
+                <small>{label}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="asset-operations-preview-links">
+          <span>Quick links</span>
+          <button type="button" onClick={onOpen}>
+            Open Asset Operations <ArrowRight aria-hidden="true" />
+          </button>
+          <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
+            View Collectible <ExternalLink aria-hidden="true" />
+          </a>
           <a
-            href={`/admin?section=intake&intake=${encodeURIComponent(item.sourceContext.intakeId)}`}
+            href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
           >
-            Open Physical Intake <ExternalLink aria-hidden="true" />
+            View Source Submission <ExternalLink aria-hidden="true" />
           </a>
-        ) : null}
-        {item.collector ? (
-          <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
-            View Collector <ExternalLink aria-hidden="true" />
-          </a>
-        ) : null}
-        {item.market.state === "MARKET_LIVE" ? (
-          <a href={`/asset/${encodeURIComponent(item.slug)}`}>
-            Open Public Listing <ExternalLink aria-hidden="true" />
-          </a>
-        ) : null}
-      </div>
-    </aside>
+          {item.sourceContext.intakeId ? (
+            <a
+              href={`/admin?section=intake&intake=${encodeURIComponent(item.sourceContext.intakeId)}`}
+            >
+              Open Physical Intake <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.collector ? (
+            <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
+              View Collector <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.market.state === "MARKET_LIVE" ? (
+            <a href={`/asset/${encodeURIComponent(item.slug)}`}>
+              Open Public Listing <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -758,12 +809,15 @@ function OperationalInsights({
   onOpenOwnership,
 }: {
   data: AssetOperationsBoardResponse;
-  onOpen: (item: AssetOperationsBoardItem) => void;
+  onOpen: (itemId: string) => void;
   onReviewBlockers: () => void;
   onOpenOwnership: () => void;
 }) {
   const health = data.insights.health;
-  const total = Math.max(1, health.onTrack + health.atRisk + health.blocked + health.exceptions);
+  const classifiedTotal = health.onTrack + health.atRisk + health.blocked + health.exceptions;
+  const total = Math.max(1, classifiedTotal);
+  const healthSegments = assetOperationsHealthSegments(health);
+  const maxBlockerCount = Math.max(1, ...data.insights.blockers.map((entry) => entry.count));
   const blockerSummary = assetOperationsBlockerSummary(
     data.counts.needsAction,
     data.insights.blockers,
@@ -771,46 +825,39 @@ function OperationalInsights({
   return (
     <section className="asset-operations-insights" aria-label="Operational insights">
       <article>
-        <span>Operational insights</span>
-        <div
-          className="asset-operations-donut"
-          style={{
-            background: `conic-gradient(var(--accent) 0 ${(health.onTrack / total) * 100}%, #e8ae46 0 ${((health.onTrack + health.atRisk) / total) * 100}%, #ef8985 0 ${((health.onTrack + health.atRisk + health.blocked) / total) * 100}%, #8f63c7 0 100%)`,
-          }}
-        >
-          <b>{data.counts.all}</b>
-          <small>active</small>
+        <span>Operational health</span>
+        <div className="asset-operations-health-content">
+          <div
+            className="asset-operations-donut"
+            role="img"
+            aria-label={
+              healthSegments.length
+                ? `${data.counts.all} active assets; ${healthSegments.map((entry) => `${entry.label} ${entry.value}, ${entry.percent}%`).join("; ")}`
+                : `${data.counts.all} active assets; no health classifications`
+            }
+            style={{
+              background: classifiedTotal
+                ? `conic-gradient(var(--accent) 0 ${(health.onTrack / total) * 100}%, #e8ae46 0 ${((health.onTrack + health.atRisk) / total) * 100}%, #ef8985 0 ${((health.onTrack + health.atRisk + health.blocked) / total) * 100}%, #9c6ad5 0 100%)`
+                : "rgba(119, 143, 154, 0.24)",
+            }}
+          >
+            <b>{data.counts.all}</b>
+            <small>Active</small>
+          </div>
+          <dl>
+            {healthSegments.map((entry) => (
+              <div key={entry.key}>
+                <dt>
+                  <i className={`health-dot ${entry.key}`} aria-hidden="true" />
+                  {entry.label}
+                </dt>
+                <dd>
+                  {entry.value} <small>{entry.percent}%</small>
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
-        <dl>
-          <div>
-            <dt>
-              <i className="health-dot on-track" aria-hidden="true" />
-              On track
-            </dt>
-            <dd>{health.onTrack}</dd>
-          </div>
-          <div>
-            <dt>
-              <i className="health-dot at-risk" aria-hidden="true" />
-              At risk
-            </dt>
-            <dd>{health.atRisk}</dd>
-          </div>
-          <div>
-            <dt>
-              <i className="health-dot blocked" aria-hidden="true" />
-              Blocked
-            </dt>
-            <dd>{health.blocked}</dd>
-          </div>
-          <div>
-            <dt>
-              <i className="health-dot exception" aria-hidden="true" />
-              Exceptions
-            </dt>
-            <dd>{health.exceptions}</dd>
-          </div>
-        </dl>
       </article>
       <article>
         <span>Recent meaningful activity</span>
@@ -821,13 +868,16 @@ function OperationalInsights({
                 <button
                   type="button"
                   onClick={() => {
-                    const item = data.items.find((candidate) => candidate.id === record.id);
-                    if (item) onOpen(item);
+                    onOpen(record.id);
                   }}
                 >
                   <strong>{record.title}</strong>
                   <small>
-                    {stageLabel(record.stage)} · {relativeTime(record.updatedAt)}
+                    {activityDescription(
+                      data.items.find((candidate) => candidate.id === record.id),
+                      record.stage,
+                    )}
+                    <time dateTime={record.updatedAt}>{relativeTime(record.updatedAt)}</time>
                   </small>
                 </button>
               </li>
@@ -841,17 +891,29 @@ function OperationalInsights({
       </article>
       <article>
         <span>Blockers needing review</span>
-        <strong className="asset-operations-insight-number">{blockerSummary.assets}</strong>
-        <small className="asset-operations-insight-caption">
-          {blockerSummary.assets === 1 ? "Asset" : "Assets"} blocked · {blockerSummary.conditions}{" "}
-          {blockerSummary.conditions === 1 ? "condition" : "conditions"}
-        </small>
+        <div className="asset-operations-insight-stat">
+          <strong className="asset-operations-insight-number">{blockerSummary.assets}</strong>
+          <span>{blockerSummary.assets === 1 ? "Asset blocked" : "Assets blocked"}</span>
+          <small>
+            {blockerSummary.conditions} active blocking{" "}
+            {blockerSummary.conditions === 1 ? "condition" : "conditions"}
+          </small>
+        </div>
         <ul className="asset-operations-insight-list">
           {data.insights.blockers.length ? (
             data.insights.blockers.map((blocker) => (
-              <li key={blocker.code}>
-                <small title={sentence(blocker.code)}>{sentence(blocker.code)}</small>
-                <b>{blocker.count}</b>
+              <li className="asset-operations-blocker-reason" key={blocker.code}>
+                <span>
+                  <small title={sentence(blocker.code)}>{sentence(blocker.code)}</small>
+                  <b>{blocker.count}</b>
+                </span>
+                <i aria-hidden="true">
+                  <span
+                    style={{
+                      width: `${Math.round((blocker.count / maxBlockerCount) * 100)}%`,
+                    }}
+                  />
+                </i>
               </li>
             ))
           ) : (
@@ -907,6 +969,14 @@ function OperationalInsights({
       </article>
     </section>
   );
+}
+
+function activityDescription(item: AssetOperationsBoardItem | undefined, stage: string) {
+  if (item?.exception) return blockerLabel(item.exception.type);
+  if (stage === "RESTRICTION") return "Restriction review updated";
+  if (stage === "MARKET_LIVE") return "Market activity updated";
+  if (stage === "READY_FOR_LAUNCH") return "Launch readiness updated";
+  return `${stageLabel(stage)} status updated`;
 }
 
 function Pagination({

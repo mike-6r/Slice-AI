@@ -73,3 +73,34 @@ export function assetOperationsBlockerSummary(
     conditions: blockers.reduce((total, blocker) => total + blocker.count, 0),
   };
 }
+
+export function assetOperationsHealthSegments(health: {
+  onTrack: number;
+  atRisk: number;
+  blocked: number;
+  exceptions: number;
+}) {
+  const total = health.onTrack + health.atRisk + health.blocked + health.exceptions;
+  const entries = [
+    { key: "on-track", label: "On track", value: health.onTrack },
+    { key: "at-risk", label: "At risk", value: health.atRisk },
+    { key: "blocked", label: "Blocked", value: health.blocked },
+    { key: "exception", label: "Exceptions", value: health.exceptions },
+  ] as const;
+
+  return entries
+    .filter((entry) => entry.value > 0)
+    .map((entry) => ({
+      ...entry,
+      percent: total ? Math.round((entry.value / total) * 100) : 0,
+    }));
+}
+
+export function resolveAssetOperationsSelection(
+  current: string | "closed" | null,
+  incoming: string | undefined,
+) {
+  if (incoming) return incoming;
+  if (current && current !== "closed") return "closed";
+  return current;
+}

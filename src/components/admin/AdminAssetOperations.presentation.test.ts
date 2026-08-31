@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   assetOperationsBlockerSummary,
   assetOperationsEmptyCopy,
+  assetOperationsHealthSegments,
   assetOperationsMarketPresentation,
   assetOperationsTabCount,
   assetOperationsTabs,
+  resolveAssetOperationsSelection,
 } from "./AdminAssetOperations.presentation";
 
 const counts = {
@@ -64,5 +66,24 @@ describe("Asset Operations presentation", () => {
       tone: "muted",
     });
     expect(assetOperationsMarketPresentation("MARKET_LIVE")?.tone).toBe("mint");
+  });
+
+  it("omits zero-value operational health legend entries and preserves percentages", () => {
+    expect(
+      assetOperationsHealthSegments({ onTrack: 0, atRisk: 0, blocked: 0, exceptions: 8 }),
+    ).toEqual([{ key: "exception", label: "Exceptions", value: 8, percent: 100 }]);
+    expect(
+      assetOperationsHealthSegments({ onTrack: 6, atRisk: 2, blocked: 0, exceptions: 2 }),
+    ).toEqual([
+      { key: "on-track", label: "On track", value: 6, percent: 60 },
+      { key: "at-risk", label: "At risk", value: 2, percent: 20 },
+      { key: "exception", label: "Exceptions", value: 2, percent: 20 },
+    ]);
+  });
+
+  it("keeps the first-load preview while treating a removed URL selection as closed", () => {
+    expect(resolveAssetOperationsSelection(null, undefined)).toBeNull();
+    expect(resolveAssetOperationsSelection("asset-123", undefined)).toBe("closed");
+    expect(resolveAssetOperationsSelection("closed", "asset-456")).toBe("asset-456");
   });
 });

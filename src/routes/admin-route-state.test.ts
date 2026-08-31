@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   compactAdminAccountFilters,
+  isAdminNavItemActive,
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
@@ -24,6 +25,13 @@ describe("admin route state", () => {
     expect(pipelineSection("verified")).toBe("assetOperations");
     expect(operationsTab("valued")).toBe("valuation");
     expect(operationsTab("unknown")).toBe("verification");
+  });
+
+  it("selects exactly one Admin navigation item for Asset Operations", () => {
+    const items = ["intake", "collectibles", "assetOperations"] as const;
+    expect(items.filter((item) => isAdminNavItemActive("assetOperations", item))).toEqual([
+      "assetOperations",
+    ]);
   });
 
   it("preserves catalogue filters in URL state", () => {

@@ -63,6 +63,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import {
   compactAdminAccountFilters,
+  isAdminNavItemActive,
   normalizeAdminSearch,
   operationsTab,
   pipelineSection,
@@ -759,7 +760,8 @@ function AdminConsole() {
                 <button
                   type="button"
                   key={id}
-                  className={section === id ? "is-active" : ""}
+                  className={isAdminNavItemActive(section, id) ? "is-active" : ""}
+                  aria-current={isAdminNavItemActive(section, id) ? "page" : undefined}
                   onClick={() => select(id)}
                 >
                   <Icon aria-hidden="true" />

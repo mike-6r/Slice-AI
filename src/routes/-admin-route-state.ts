@@ -128,6 +128,10 @@ export function normalizeAdminSection(value: unknown): AdminSection {
   return isAdminSection(value) ? value : "control";
 }
 
+export function isAdminNavItemActive(section: AdminSection, item: AdminSection) {
+  return section === item;
+}
+
 function legacyTrustTab(value: unknown) {
   const mapping: Record<string, string> = {
     compliance: "compliance",
