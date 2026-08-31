@@ -768,6 +768,7 @@
 /* Selected asset rail */
 .asset-operations-page--reference .asset-operations-preview {
   position: sticky;
+  display: block;
   top: 0.75rem;
   width: auto;
   min-width: 0;
