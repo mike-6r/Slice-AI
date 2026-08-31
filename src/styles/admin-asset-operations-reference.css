@@ -496,3 +496,125 @@
     height: 8rem;
   }
 }
+
+/* Tablet and mobile use operational cards instead of preserving a desktop
+ * grid inside a horizontal scroller. Every field remains visible and the
+ * row itself still drives the selected-asset preview/navigation behavior. */
+@media (max-width: 900px) {
+  .asset-operations-page--reference .asset-operations-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .asset-operations-page--reference .asset-operations-table-wrap {
+    overflow: visible;
+  }
+
+  .asset-operations-page--reference .asset-operations-grid--head {
+    display: none;
+  }
+
+  .asset-operations-page--reference .asset-operations-grid.asset-operations-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 0 0.65rem;
+    padding: 0.85rem;
+    gap: 0.75rem 1rem;
+    align-items: start;
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    background: linear-gradient(135deg, rgba(17, 35, 46, 0.92), rgba(8, 20, 27, 0.94));
+  }
+
+  .asset-operations-page--reference .asset-operations-row.selected {
+    min-height: 0;
+    margin: 0 0 0.65rem;
+    border-color: rgba(44, 223, 186, 0.82);
+    box-shadow: inset 3px 0 #29dcb6;
+  }
+
+  .asset-operations-page--reference .asset-operations-row > .asset-operations-identity {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 0 2.5rem 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .asset-operations-page--reference .asset-operations-identity strong,
+  .asset-operations-page--reference .asset-operations-identity small,
+  .asset-operations-page--reference .asset-operations-identity em {
+    white-space: normal;
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(n + 2):nth-child(-n + 8) {
+    min-width: 0;
+  }
+
+  .asset-operations-page--reference
+    .asset-operations-row
+    > :nth-child(n + 2):nth-child(-n + 8)::before {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(2)::before {
+    content: "Stage";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(3)::before {
+    content: "Next action";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(4)::before {
+    content: "Offering";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(5)::before {
+    content: "Market";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(6)::before {
+    content: "Assignee";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(7)::before {
+    content: "Priority";
+  }
+
+  .asset-operations-page--reference .asset-operations-row > :nth-child(8)::before {
+    content: "Updated";
+  }
+
+  .asset-operations-page--reference .asset-operations-state-cell small,
+  .asset-operations-page--reference .asset-operations-next small,
+  .asset-operations-page--reference .asset-operations-assignee small {
+    white-space: normal;
+  }
+
+  .asset-operations-page--reference .asset-operations-row-actions {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.7rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .asset-operations-page--reference .asset-operations-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .asset-operations-page--reference .asset-operations-grid.asset-operations-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
