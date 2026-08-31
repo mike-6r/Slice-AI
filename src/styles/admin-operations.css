@@ -10,18 +10,18 @@
 /* Reference-aligned queue: the visual density is intentional, but every
  * number and row is supplied by the lifecycle operations projection. */
 .asset-operations-page--reference {
-  max-width: 1740px;
-  padding: 14px 28px 22px;
+  max-width: 1780px;
+  padding: 10px 24px 16px;
 }
 .asset-operations-page--reference .asset-operations-header {
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .asset-operations-page--reference .asset-operations-header-actions {
-  margin-top: 40px;
+  margin-top: 18px;
 }
 .asset-operations-page--reference .asset-operations-header h2 {
-  font-size: 29px;
+  font-size: 28px;
 }
 .asset-operations-header-actions {
   display: flex;
@@ -147,8 +147,8 @@
 }
 .asset-operations-desktop-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 21vw, 350px);
+  gap: 14px;
   align-items: start;
 }
 .asset-operations-primary {
@@ -156,17 +156,17 @@
 }
 .asset-operations-page--reference .asset-operations-metrics {
   grid-template-columns: repeat(6, minmax(140px, 1fr));
-  gap: 9px;
-  margin-bottom: 17px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .asset-operations-page--reference .asset-operations-metric {
-  min-height: 84px;
-  padding: 13px 14px;
+  min-height: 68px;
+  padding: 10px 11px;
   background: linear-gradient(135deg, rgba(17, 35, 46, 0.95), rgba(11, 23, 31, 0.94));
 }
 .asset-operations-page--reference .asset-operations-metric > svg {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   padding: 8px;
   border-radius: 50%;
@@ -187,7 +187,7 @@
 }
 .asset-operations-page--reference .asset-operations-metric span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -196,22 +196,29 @@
   color: #7fd259;
 }
 .asset-operations-page--reference .asset-operations-metric b {
-  font-size: 23px;
+  margin-top: 2px;
+  font-size: 21px;
   line-height: 1;
 }
 .asset-operations-page--reference .asset-operations-metric small {
   display: block;
-  margin-top: 5px;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .asset-operations-page--reference .asset-operations-workspace {
   overflow: visible;
 }
 .asset-operations-page--reference .asset-operations-tabs {
-  padding: 0 13px;
+  gap: 0;
+  padding: 0 10px;
+  scrollbar-width: none;
 }
 .asset-operations-page--reference .asset-operations-tabs button {
-  padding: 13px 10px 11px;
-  font-size: 11px;
+  padding: 10px 9px 9px;
+  font-size: 10px;
 }
 .asset-operations-tools--reference {
   display: grid;
@@ -219,12 +226,12 @@
     minmax(245px, 1.7fr) repeat(5, minmax(76px, 0.68fr)) minmax(145px, 1fr)
     auto;
   align-items: center;
-  gap: 8px;
-  padding: 13px;
+  gap: 7px;
+  padding: 9px 10px;
 }
 .asset-operations-tools--reference .asset-operations-search {
-  min-height: 36px;
-  height: 36px;
+  min-height: 34px;
+  height: 34px;
 }
 .asset-operations-filter {
   display: block;
@@ -241,19 +248,19 @@
 .asset-operations-filter select {
   width: 100%;
   min-width: 0;
-  height: 36px;
+  height: 34px;
   padding-right: 22px;
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-elevated);
-  font-size: 11px;
+  font-size: 10px;
 }
 .asset-operations-clear {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 36px;
+  min-height: 34px;
   margin: 0;
   padding: 0 8px;
   border: 0;
@@ -270,35 +277,36 @@
 }
 .asset-operations-page--reference .asset-operations-grid {
   grid-template-columns:
-    minmax(236px, 1.65fr) minmax(86px, 0.62fr) minmax(152px, 1.12fr) minmax(112px, 0.78fr)
-    minmax(95px, 0.68fr) minmax(110px, 0.78fr) minmax(74px, 0.48fr) minmax(90px, 0.63fr) 38px;
-  gap: 8px;
+    minmax(225px, 20fr) minmax(92px, 10fr) minmax(160px, 18fr) minmax(115px, 11fr)
+    minmax(105px, 10fr) minmax(110px, 10fr) minmax(88px, 8fr) minmax(88px, 8fr) 34px;
+  gap: 7px;
 }
 .asset-operations-page--reference .asset-operations-grid--head {
-  padding: 10px 13px;
+  padding: 8px 11px;
   font-size: 8px;
 }
 .asset-operations-page--reference .asset-operations-row {
-  min-height: 72px;
-  padding: 7px 13px;
+  min-height: 64px;
+  padding: 6px 11px;
 }
 .asset-operations-page--reference .asset-operations-row.selected {
   position: relative;
   z-index: 1;
   margin: -1px 0;
   border: 1px solid rgba(44, 223, 186, 0.82);
-  box-shadow: inset 3px 0 #29dcb6;
-  background: linear-gradient(90deg, rgba(21, 117, 103, 0.18), rgba(11, 27, 35, 0.7));
+  box-shadow: inset 2px 0 #29dcb6;
+  background: linear-gradient(90deg, rgba(21, 117, 103, 0.11), rgba(11, 27, 35, 0.5));
 }
 .asset-operations-page--reference .asset-operations-thumb {
-  width: 41px;
-  height: 61px;
+  width: 40px;
+  height: 56px;
 }
 .asset-operations-page--reference .asset-operations-identity {
   gap: 9px;
 }
 .asset-operations-page--reference .asset-operations-identity strong {
   font-size: 12px;
+  line-height: 1.15;
 }
 .asset-operations-page--reference .asset-operations-identity small {
   margin-top: 2px;
@@ -306,9 +314,44 @@
 .asset-operations-page--reference .asset-operations-identity em {
   margin-top: 3px;
 }
+.asset-operations-page--reference .asset-operations-identity small,
+.asset-operations-page--reference .asset-operations-identity em,
+.asset-operations-page--reference .asset-operations-state-cell small,
+.asset-operations-page--reference .asset-operations-next small {
+  margin-top: 2px;
+  font-size: 9px;
+  line-height: 1.2;
+}
+.asset-operations-page--reference .asset-operations-state-cell small,
+.asset-operations-page--reference .asset-operations-next small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-operations-page--reference .asset-operations-next strong {
+  position: relative;
+  overflow: hidden;
+  padding-left: 9px;
+  color: var(--text-primary);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-operations-page--reference .asset-operations-next strong::before {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  content: "";
+  background: #e8ae46;
+}
 .asset-operations-page--reference .asset-operations-state-cell > span {
   border-radius: 99px;
-  padding: 4px 7px;
+  padding: 3px 6px;
   background: rgba(118, 151, 169, 0.14);
   font-size: 9px;
 }
@@ -332,20 +375,20 @@
 .asset-operations-updated strong,
 .asset-operations-assignee strong {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
 }
 .asset-operations-offering small,
 .asset-operations-updated small,
 .asset-operations-assignee small {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--text-muted);
   font-size: 9px;
 }
 .asset-operations-offering > div {
   width: 100%;
   height: 5px;
-  margin-top: 6px;
+  margin-top: 4px;
   overflow: hidden;
   border-radius: 10px;
   background: rgba(129, 153, 167, 0.2);
@@ -388,7 +431,7 @@
   gap: 5px;
   width: fit-content;
   border-radius: 99px;
-  padding: 4px 7px;
+  padding: 3px 6px;
   font-size: 9px;
   font-weight: 700;
 }
@@ -456,7 +499,7 @@
 .asset-operations-page--reference .asset-operations-preview {
   position: sticky;
   top: 12px;
-  padding: 14px;
+  padding: 13px;
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -485,12 +528,12 @@
   border-bottom: 1px solid var(--border);
 }
 .asset-operations-preview-identity .asset-operations-thumb {
-  width: 68px;
-  height: 96px;
+  width: 76px;
+  height: 100px;
 }
 .asset-operations-preview-identity h3 {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.3;
 }
 .asset-operations-preview-identity p {
@@ -536,14 +579,14 @@
   font-size: 10px;
 }
 .asset-operations-preview-section {
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
 .asset-operations-preview-section dl {
   margin-top: 7px;
 }
 .asset-operations-preview-section dl div {
-  padding: 5px 0;
+  padding: 4px 0;
   border: 0;
   font-size: 10px;
 }
@@ -551,8 +594,46 @@
   max-width: 145px;
   color: var(--text-primary);
 }
+.asset-operations-preview-blocker > a {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) 14px;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 0 0;
+  border: 0;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.asset-operations-preview-blocker > a > i {
+  width: 6px;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #e8ae46;
+}
+.asset-operations-preview-blocker > a > div {
+  min-width: 0;
+}
+.asset-operations-preview-blocker > a strong,
+.asset-operations-preview-blocker > a small {
+  display: block;
+}
+.asset-operations-preview-blocker > a strong {
+  font-size: 10px;
+}
+.asset-operations-preview-blocker > a small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.asset-operations-preview-blocker > a > svg {
+  width: 13px;
+  margin-top: 3px;
+  color: var(--accent);
+}
 .asset-operations-preview-workflow {
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
 .asset-operations-preview-workflow > div {
@@ -604,7 +685,7 @@
 .asset-operations-preview-links {
   display: grid;
   gap: 7px;
-  padding-top: 12px;
+  padding-top: 10px;
 }
 .asset-operations-preview-links button,
 .asset-operations-preview-links a {
@@ -629,14 +710,14 @@
 .asset-operations-insights {
   display: grid;
   grid-template-columns: 1.15fr 1.2fr 1.15fr 1.25fr;
-  gap: 10px;
-  padding: 13px;
+  gap: 8px;
+  padding: 10px;
   border-top: 1px solid var(--border);
   background: rgba(8, 19, 27, 0.54);
 }
 .asset-operations-insights > article {
-  min-height: 133px;
-  padding: 12px;
+  min-height: 120px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: rgba(11, 24, 33, 0.65);

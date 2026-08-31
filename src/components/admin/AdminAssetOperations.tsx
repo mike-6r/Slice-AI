@@ -74,7 +74,9 @@ export function AdminAssetOperations(props: Props) {
         assignee: props.assignee || undefined,
         sort: props.sort || "NEEDS_ACTION",
         page: props.page,
-        pageSize: 25,
+        // Keeps the queue and its operational insights in one desktop view
+        // while retaining true server-side pagination.
+        pageSize: 6,
       }),
     staleTime: 15_000,
   });
@@ -264,14 +266,14 @@ export function AdminAssetOperations(props: Props) {
                 <option value="CONTROLLED_QA">Controlled QA</option>
               </Filter>
               <Filter
-                label="Attention"
+                label="Priority"
                 value={props.attention}
                 onChange={(value) =>
                   props.update({ operationsAttention: value || undefined, page: "1" })
                 }
               >
-                <option value="">Attention</option>
-                <option value="REQUIRES_ATTENTION">Requires attention</option>
+                <option value="">Priority</option>
+                <option value="REQUIRES_ATTENTION">Review required</option>
               </Filter>
               <Filter
                 label="Assignee"
@@ -317,7 +319,7 @@ export function AdminAssetOperations(props: Props) {
                 <span>Offering progress</span>
                 <span>Market state</span>
                 <span>Assignee</span>
-                <span>Attention</span>
+                <span>Priority</span>
                 <span>Updated</span>
                 <span>Action</span>
               </div>
@@ -341,7 +343,18 @@ export function AdminAssetOperations(props: Props) {
                 ) : null}
               </div>
               <Pagination data={board.data} page={props.page} update={props.update} />
-              <OperationalInsights data={board.data} onOpen={openItem} />
+              <OperationalInsights
+                data={board.data}
+                onOpen={openItem}
+                onReviewBlockers={() =>
+                  props.update({
+                    tab: "needs-action",
+                    operationsAttention: "REQUIRES_ATTENTION",
+                    page: "1",
+                  })
+                }
+                onOpenOwnership={() => props.update({ tab: "ownership", page: "1" })}
+              />
             </div>
           </section>
         </div>
@@ -450,12 +463,12 @@ function OperationRow({
       </button>
       <State
         state={stageLabel(item.currentStage)}
-        detail={stageDetail(item)}
+        detail={tableStageDetail(item)}
         tone={stageTone(item.currentStage)}
       />
       <div className="asset-operations-next">
         <strong>{item.nextAction.label}</strong>
-        <small>{nextActionDetail(item)}</small>
+        <small>{tableNextActionDetail(item)}</small>
       </div>
       <div className="asset-operations-offering">
         <strong>{progress.label}</strong>
@@ -466,7 +479,7 @@ function OperationRow({
       </div>
       <State
         state={sentence(item.market.state)}
-        detail={marketDetail(item)}
+        detail={tableMarketDetail(item)}
         tone={
           item.market.state === "MARKET_LIVE"
             ? "mint"
@@ -558,7 +571,7 @@ function Attention({ item }: { item: AssetOperationsBoardItem }) {
   }
   return (
     <span className="asset-operations-attention attention-required">
-      <i aria-hidden="true" /> Requires attention
+      <i aria-hidden="true" /> Review required
     </span>
   );
 }
@@ -642,14 +655,7 @@ function QueuePreview({
           ["Valuation date", item.valuation.state === "VALUED" ? formatDate(item.stageSince) : "—"],
         ]}
       />
-      <PreviewSection
-        title="Blockers"
-        rows={
-          blockers.length
-            ? blockers.slice(0, 3).map((blocker) => [sentence(blocker), ""])
-            : [["No active blockers", ""]]
-        }
-      />
+      <BlockerPreview item={item} blockers={blockers} />
       <div className="asset-operations-preview-workflow">
         <span>Lifecycle / economic workflow</span>
         <div>
@@ -712,12 +718,41 @@ function PreviewSection({ title, rows }: { title: string; rows: Array<[string, s
   );
 }
 
+function BlockerPreview({
+  item,
+  blockers,
+}: {
+  item: AssetOperationsBoardItem;
+  blockers: string[];
+}) {
+  const primary = item.exception?.type ?? blockers[0];
+  if (!primary) return <PreviewSection title="Blockers" rows={[["No active blockers", ""]]} />;
+
+  return (
+    <section className="asset-operations-preview-section asset-operations-preview-blocker">
+      <span>Blockers</span>
+      <a href="/admin?section=assetOperations&operationsAttention=REQUIRES_ATTENTION">
+        <i aria-hidden="true" />
+        <div>
+          <strong>{blockerLabel(primary)}</strong>
+          <small>{blockerExplanation(item, primary)}</small>
+        </div>
+        <ArrowRight aria-hidden="true" />
+      </a>
+    </section>
+  );
+}
+
 function OperationalInsights({
   data,
   onOpen,
+  onReviewBlockers,
+  onOpenOwnership,
 }: {
   data: AssetOperationsBoardResponse;
   onOpen: (item: AssetOperationsBoardItem) => void;
+  onReviewBlockers: () => void;
+  onOpenOwnership: () => void;
 }) {
   const health = data.insights.health;
   const total = Math.max(1, health.onTrack + health.atRisk + health.blocked + health.exceptions);
@@ -755,7 +790,7 @@ function OperationalInsights({
         </dl>
       </article>
       <article>
-        <span>Recently updated records</span>
+        <span>Recent meaningful activity</span>
         <ul className="asset-operations-insight-list">
           {data.insights.recentlyUpdated.length ? (
             data.insights.recentlyUpdated.map((record) => (
@@ -800,6 +835,15 @@ function OperationalInsights({
             </li>
           )}
         </ul>
+        {data.insights.blockers.length ? (
+          <button
+            className="asset-operations-insight-action"
+            type="button"
+            onClick={onReviewBlockers}
+          >
+            Review blockers <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
       </article>
       <article>
         <span>Assets awaiting ownership issuance</span>
@@ -824,7 +868,7 @@ function OperationalInsights({
           <button
             className="asset-operations-insight-action"
             type="button"
-            onClick={() => onOpen(first)}
+            onClick={onOpenOwnership}
           >
             Open ownership queue <ArrowRight aria-hidden="true" />
           </button>
@@ -969,6 +1013,15 @@ function stageDetail(item: AssetOperationsBoardItem) {
           ? "Launch review ready"
           : item.nextAction.label;
 }
+function tableStageDetail(item: AssetOperationsBoardItem) {
+  if (item.currentStage === "RESTRICTION") return "Physical conflict";
+  if (item.currentStage === "VALUATION") return "Valuation needed";
+  if (item.currentStage === "MARKET_LIVE") return "Live on marketplace";
+  if (item.currentStage === "READY_FOR_LAUNCH") return "Ready for review";
+  if (item.currentStage === "OWNERSHIP_SETUP") return "Ownership work";
+  if (item.currentStage === "OFFERING_SETUP") return "Configure offering";
+  return compactLabel(item.nextAction.label, "Review required");
+}
 function marketDetail(item: AssetOperationsBoardItem) {
   return item.market.state === "RESTRICTED"
     ? "Historical state conflict"
@@ -978,6 +1031,13 @@ function marketDetail(item: AssetOperationsBoardItem) {
         ? "Trading"
         : "Not launched";
 }
+function tableMarketDetail(item: AssetOperationsBoardItem) {
+  if (item.market.state === "RESTRICTED") return "Historical published state";
+  if (item.market.state === "MARKET_LIVE") return "Trading";
+  if (item.market.state === "READY_FOR_LAUNCH") return "Launch review";
+  if (item.market.state === "INITIAL_OFFERING") return "Offering active";
+  return "Not launched";
+}
 function nextActionDetail(item: AssetOperationsBoardItem) {
   const reason =
     item.exception?.summary ?? item.attention.reasons[0] ?? item.launchReadiness.blockers[0];
@@ -986,6 +1046,15 @@ function nextActionDetail(item: AssetOperationsBoardItem) {
     : item.nextAction.actor === "NONE"
       ? "Monitoring live market activity"
       : `Next actor: ${sentence(item.nextAction.actor)}`;
+}
+function tableNextActionDetail(item: AssetOperationsBoardItem) {
+  if (item.currentStage === "RESTRICTION") return "Physical authority incomplete";
+  if (item.currentStage === "VALUATION") return "Establish fair value";
+  if (item.currentStage === "OWNERSHIP_SETUP") return "Review ownership structure";
+  if (item.currentStage === "OFFERING_SETUP") return "Set terms and price";
+  if (item.currentStage === "LAUNCH_READINESS") return "Final launch review";
+  if (item.market.state === "MARKET_LIVE") return "Monitor market activity";
+  return compactLabel(nextActionDetail(item), "Staff review required");
 }
 function offeringProgress(item: AssetOperationsBoardItem) {
   const offered = item.offering.offeredUnits;
@@ -1050,6 +1119,21 @@ function shortIdentifier(value: string) {
 }
 function workTypeLabel(value: AssetOperationsBoardItem["workType"]) {
   return value === "OWNER_DEMO" ? "Demo" : "Controlled QA";
+}
+function compactLabel(value: string, fallback: string) {
+  const normalized = sentence(value).replace(/\.$/, "");
+  return normalized.length > 34 ? `${normalized.slice(0, 31)}…` : normalized || fallback;
+}
+function blockerLabel(value: string) {
+  return value === "LIFECYCLE_PHYSICAL_MARKET_CONFLICT"
+    ? "Physical authority conflict"
+    : compactLabel(value, "Operational review required");
+}
+function blockerExplanation(item: AssetOperationsBoardItem, blocker: string) {
+  if (blocker === "LIFECYCLE_PHYSICAL_MARKET_CONFLICT") {
+    return "Published market state conflicts with incomplete verification or custody authority.";
+  }
+  return item.exception?.summary ?? "This operational blocker requires staff review.";
 }
 function sentence(value: string) {
   return value
