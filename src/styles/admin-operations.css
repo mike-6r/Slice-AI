@@ -11,7 +11,7 @@
  * number and row is supplied by the lifecycle operations projection. */
 .asset-operations-page--reference {
   max-width: 1740px;
-  padding: 18px 28px 26px;
+  padding: 14px 28px 22px;
 }
 .asset-operations-page--reference .asset-operations-header {
   align-items: flex-start;
@@ -57,6 +57,93 @@
 .asset-operations-view-options button:hover {
   background: rgba(64, 220, 182, 0.1);
   color: var(--accent);
+}
+.asset-operations-skeleton-header,
+.asset-operations-skeleton-metrics,
+.asset-operations-skeleton-workspace,
+.asset-operations-skeleton-preview {
+  --skeleton: linear-gradient(90deg, #10212a 25%, #18313b 38%, #10212a 58%);
+}
+.asset-operations-skeleton-header {
+  display: grid;
+  width: min(450px, 60%);
+  gap: 10px;
+  margin: 3px 0 22px;
+}
+.asset-operations-skeleton-header i,
+.asset-operations-skeleton-header b,
+.asset-operations-skeleton-header span,
+.asset-operations-skeleton-metrics i,
+.asset-operations-skeleton-workspace > i,
+.asset-operations-skeleton-workspace > span,
+.asset-operations-skeleton-preview > i {
+  display: block;
+  border-radius: 6px;
+  background: var(--skeleton);
+  background-size: 200% 100%;
+  animation: asset-operations-shimmer 1.4s infinite linear;
+}
+.asset-operations-skeleton-header i {
+  width: 35%;
+  height: 10px;
+}
+.asset-operations-skeleton-header b {
+  width: 50%;
+  height: 28px;
+}
+.asset-operations-skeleton-header span {
+  width: 100%;
+  height: 12px;
+}
+.asset-operations-skeleton-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 17px;
+}
+.asset-operations-skeleton-metrics i {
+  min-height: 84px;
+}
+.asset-operations-skeleton-workspace {
+  display: grid;
+  gap: 12px;
+  min-height: 450px;
+  padding: 15px;
+}
+.asset-operations-skeleton-workspace > i:first-child {
+  width: 65%;
+  height: 34px;
+}
+.asset-operations-skeleton-workspace > i:nth-child(2) {
+  width: 100%;
+  height: 37px;
+}
+.asset-operations-skeleton-workspace > span {
+  width: 100%;
+  height: 59px;
+}
+.asset-operations-skeleton-preview {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 470px;
+}
+.asset-operations-skeleton-preview > i:nth-child(1) {
+  height: 16px;
+  width: 38%;
+}
+.asset-operations-skeleton-preview > i:nth-child(2) {
+  height: 106px;
+  width: 100%;
+}
+.asset-operations-skeleton-preview > i:nth-child(3) {
+  height: 220px;
+  width: 100%;
+}
+@keyframes asset-operations-shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 .asset-operations-desktop-layout {
   display: grid;
@@ -192,8 +279,16 @@
   font-size: 8px;
 }
 .asset-operations-page--reference .asset-operations-row {
-  min-height: 78px;
+  min-height: 72px;
   padding: 7px 13px;
+}
+.asset-operations-page--reference .asset-operations-row.selected {
+  position: relative;
+  z-index: 1;
+  margin: -1px 0;
+  border: 1px solid rgba(44, 223, 186, 0.82);
+  box-shadow: inset 3px 0 #29dcb6;
+  background: linear-gradient(90deg, rgba(21, 117, 103, 0.18), rgba(11, 27, 35, 0.7));
 }
 .asset-operations-page--reference .asset-operations-thumb {
   width: 41px;
@@ -287,25 +382,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.asset-operations-priority {
+.asset-operations-page--reference .asset-operations-attention {
   display: inline-flex;
+  align-items: center;
+  gap: 5px;
   width: fit-content;
   border-radius: 99px;
   padding: 4px 7px;
   font-size: 9px;
   font-weight: 700;
 }
-.priority-none {
-  color: #9bcab9;
-  background: rgba(48, 205, 174, 0.1);
+.asset-operations-page--reference .attention-none {
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
 }
-.priority-medium {
-  color: #e8b356;
-  background: rgba(232, 174, 70, 0.12);
-}
-.priority-high {
+.asset-operations-page--reference .attention-required {
   color: #f09b98;
   background: rgba(239, 137, 133, 0.13);
+}
+.asset-operations-page--reference .attention-required i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .asset-operations-page--reference .asset-operations-open {
   border-color: rgba(154, 183, 196, 0.3);
@@ -315,8 +415,47 @@
   border-color: var(--accent);
   color: var(--accent);
 }
-.asset-operations-page--reference .asset-operations-preview {
+.asset-operations-row-actions {
   position: relative;
+  justify-self: end;
+}
+.asset-operations-row-menu {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: 185px;
+  overflow: hidden;
+  border: 1px solid #34505d;
+  border-radius: 7px;
+  background: #0b1922;
+  box-shadow: 0 15px 32px rgba(0, 0, 0, 0.42);
+}
+.asset-operations-row-menu button,
+.asset-operations-row-menu a {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(68, 96, 110, 0.5);
+  padding: 9px 10px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+  text-decoration: none;
+}
+.asset-operations-row-menu > :last-child {
+  border-bottom: 0;
+}
+.asset-operations-row-menu button:hover,
+.asset-operations-row-menu a:hover {
+  color: var(--accent);
+  background: rgba(64, 220, 182, 0.08);
+}
+.asset-operations-page--reference .asset-operations-preview {
+  position: sticky;
+  top: 12px;
   padding: 14px;
   min-width: 0;
   border: 1px solid var(--border);

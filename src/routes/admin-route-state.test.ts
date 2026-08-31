@@ -68,6 +68,22 @@ describe("admin route state", () => {
     });
   });
 
+  it("preserves the Asset Operations selected rail and server-side attention filter", () => {
+    expect(
+      normalizeAdminSearch({
+        section: "assetOperations",
+        operationsSelected: "asset-123",
+        operationsAttention: "REQUIRES_ATTENTION",
+        operationsStage: "VALUATION",
+      }),
+    ).toMatchObject({
+      section: "assetOperations",
+      operationsSelected: "asset-123",
+      operationsAttention: "REQUIRES_ATTENTION",
+      operationsStage: "VALUATION",
+    });
+  });
+
   it("preserves the paginated Accounts directory view in URL state", () => {
     expect(
       normalizeAdminSearch({

@@ -58,7 +58,7 @@ describe('Asset Operations queue authority', () => {
     });
   });
 
-  it('keeps pre-custody assets visible and routes their next action to Intake', () => {
+  it('keeps ordinary pre-custody assets in Physical Intake, not the economic queue', () => {
     const pendingPhysical = {
       eligibleForAssetOperations: false,
       currentStage: 'PHYSICAL_PREREQUISITE',
@@ -79,17 +79,54 @@ describe('Asset Operations queue authority', () => {
       exception: null;
       attention: { severity: string };
     };
-    expect([pendingPhysical, postIntake]).toHaveLength(2);
+    const lifecycleConflict = {
+      ...pendingPhysical,
+      exception: { type: 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT' },
+      attention: { severity: 'HIGH' },
+    };
+    expect(
+      operationsQueueTestUtils.isOperationsQueueMember(
+        pendingPhysical as never,
+      ),
+    ).toBe(false);
+    expect(
+      operationsQueueTestUtils.isOperationsQueueMember(postIntake as never),
+    ).toBe(true);
+    expect(
+      operationsQueueTestUtils.isOperationsQueueMember(
+        lifecycleConflict as never,
+      ),
+    ).toBe(true);
     expect(
       operationsQueueTestUtils.operationsMatches(pendingPhysical as never, {
         tab: 'needs-action',
       }),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      operationsQueueTestUtils.operationsMatches(lifecycleConflict as never, {
+        tab: 'needs-action',
+      }),
+    ).toBe(false);
     expect(
       operationsQueueTestUtils.operationsMatches(postIntake as never, {
         tab: 'valuation',
       }),
     ).toBe(true);
+  });
+
+  it('flags a published market record with incomplete physical authority as a conflict', () => {
+    expect(
+      operationsQueueTestUtils.hasLifecycleMarketConflict(false, 'MARKET_LIVE'),
+    ).toBe(true);
+    expect(
+      operationsQueueTestUtils.hasLifecycleMarketConflict(true, 'MARKET_LIVE'),
+    ).toBe(false);
+    expect(
+      operationsQueueTestUtils.hasLifecycleMarketConflict(
+        false,
+        'NOT_ELIGIBLE',
+      ),
+    ).toBe(false);
   });
 
   it('derives queue insights from lifecycle blockers instead of static dashboard values', () => {

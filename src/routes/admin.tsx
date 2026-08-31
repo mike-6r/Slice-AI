@@ -169,6 +169,7 @@ function AdminConsole() {
     operationsOffering,
     operationsAttention,
     operationsAssignee,
+    operationsSelected,
     accountQ,
     accountType,
     accountStatus,
@@ -185,7 +186,6 @@ function AdminConsole() {
     accountLastActive,
     accountSort: accountSortParam,
     accountPage: accountPageParam,
-    priority: operationsPriority,
   } = Route.useSearch();
   const { user: selectedUser } = Route.useSearch();
   const membershipStatus = [
@@ -1111,11 +1111,12 @@ function AdminConsole() {
         ) : section === "assetOperations" ? (
           <AdminAssetOperations
             tab={selectedUserTab}
+            selectedId={operationsSelected}
             query={reviewQuery ?? ""}
             stage={operationsStage ?? ""}
             market={catalogueMarket ?? ""}
             workType={catalogueWorkType ?? ""}
-            priority={operationsPriority ?? ""}
+            attention={operationsAttention ?? ""}
             assignee={operationsAssignee ?? ""}
             sort={reviewSort ?? "NEEDS_ACTION"}
             page={Math.max(1, Number(reviewPageParam ?? 1))}

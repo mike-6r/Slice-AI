@@ -29,11 +29,12 @@ import "@/styles/admin-operations.css";
 
 type Props = {
   tab?: string;
+  selectedId?: string;
   query: string;
   stage: string;
   market: string;
   workType: string;
-  priority: string;
+  attention: string;
   assignee: string;
   sort: string;
   page: number;
@@ -44,7 +45,9 @@ export function AdminAssetOperations(props: Props) {
   const services = useAppServices();
   const [search, setSearch] = useState(props.query);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [selected, setSelected] = useState<string | "closed" | null>(null);
+  const [selected, setSelected] = useState<string | "closed" | null>(
+    props.selectedId === "closed" ? "closed" : (props.selectedId ?? null),
+  );
   const selectedTab = assetOperationsTabs.some(([key]) => key === props.tab) ? props.tab! : "all";
   const board = useQuery({
     queryKey: [
@@ -55,7 +58,7 @@ export function AdminAssetOperations(props: Props) {
       props.stage,
       props.market,
       props.workType,
-      props.priority,
+      props.attention,
       props.assignee,
       props.sort,
       props.page,
@@ -67,7 +70,7 @@ export function AdminAssetOperations(props: Props) {
         stage: props.stage || undefined,
         market: props.market || undefined,
         workType: props.workType || undefined,
-        priority: props.priority || undefined,
+        attention: props.attention || undefined,
         assignee: props.assignee || undefined,
         sort: props.sort || "NEEDS_ACTION",
         page: props.page,
@@ -77,6 +80,10 @@ export function AdminAssetOperations(props: Props) {
   });
 
   useEffect(() => setSearch(props.query), [props.query]);
+  useEffect(
+    () => setSelected(props.selectedId === "closed" ? "closed" : (props.selectedId ?? null)),
+    [props.selectedId],
+  );
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = search.trim() || undefined;
@@ -89,7 +96,7 @@ export function AdminAssetOperations(props: Props) {
     props.stage,
     props.market,
     props.workType,
-    props.priority,
+    props.attention,
     props.assignee,
   ].filter(Boolean).length;
   const selectedItem =
@@ -97,13 +104,7 @@ export function AdminAssetOperations(props: Props) {
       ? null
       : (board.data?.items.find((item) => item.id === selected) ?? board.data?.items[0] ?? null);
 
-  if (board.isLoading)
-    return (
-      <OperationsState
-        title="Loading Asset Operations"
-        detail="Reading the authoritative canonical-asset operations board."
-      />
-    );
+  if (board.isLoading) return <OperationsLoading />;
   if (board.isError || !board.data)
     return (
       <OperationsState
@@ -121,6 +122,7 @@ export function AdminAssetOperations(props: Props) {
       operationsStage: undefined,
       market: undefined,
       workType: undefined,
+      operationsAttention: undefined,
       operationsPriority: undefined,
       operationsAssignee: undefined,
       tab: undefined,
@@ -249,6 +251,7 @@ export function AdminAssetOperations(props: Props) {
                 <option value="READY_FOR_LAUNCH">Launch review</option>
                 <option value="MARKET_LIVE">Market live</option>
                 <option value="PAUSED">Paused</option>
+                <option value="RESTRICTED">Restricted</option>
               </Filter>
               <Filter
                 label="Work type"
@@ -261,16 +264,14 @@ export function AdminAssetOperations(props: Props) {
                 <option value="CONTROLLED_QA">Controlled QA</option>
               </Filter>
               <Filter
-                label="Priority"
-                value={props.priority}
+                label="Attention"
+                value={props.attention}
                 onChange={(value) =>
-                  props.update({ operationsPriority: value || undefined, page: "1" })
+                  props.update({ operationsAttention: value || undefined, page: "1" })
                 }
               >
-                <option value="">Priority</option>
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="NONE">Normal</option>
+                <option value="">Attention</option>
+                <option value="REQUIRES_ATTENTION">Requires attention</option>
               </Filter>
               <Filter
                 label="Assignee"
@@ -316,7 +317,7 @@ export function AdminAssetOperations(props: Props) {
                 <span>Offering progress</span>
                 <span>Market state</span>
                 <span>Assignee</span>
-                <span>Priority</span>
+                <span>Attention</span>
                 <span>Updated</span>
                 <span>Action</span>
               </div>
@@ -326,7 +327,10 @@ export function AdminAssetOperations(props: Props) {
                     item={item}
                     key={item.id}
                     selected={item.id === selectedItem?.id}
-                    onSelect={() => setSelected(item.id)}
+                    onSelect={() => {
+                      setSelected(item.id);
+                      props.update({ operationsSelected: item.id });
+                    }}
                     onOpen={() => openItem(item)}
                   />
                 ))}
@@ -343,7 +347,10 @@ export function AdminAssetOperations(props: Props) {
         </div>
         <QueuePreview
           item={selectedItem}
-          onClose={() => setSelected("closed")}
+          onClose={() => {
+            setSelected("closed");
+            props.update({ operationsSelected: "closed" });
+          }}
           onOpen={() => selectedItem && openItem(selectedItem)}
         />
       </div>
@@ -409,6 +416,7 @@ function OperationRow({
   onOpen: () => void;
 }) {
   const progress = offeringProgress(item);
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <article
       className={`asset-operations-grid asset-operations-row ${selected ? "selected" : ""}`}
@@ -436,6 +444,7 @@ function OperationRow({
             {item.collector?.username
               ? `@${item.collector.username}`
               : (item.collector?.displayName ?? "Unavailable")}
+            {item.workType !== "PRODUCTION" ? ` · ${workTypeLabel(item.workType)}` : ""}
           </small>
         </span>
       </button>
@@ -461,7 +470,7 @@ function OperationRow({
         tone={
           item.market.state === "MARKET_LIVE"
             ? "mint"
-            : item.market.state === "PAUSED"
+            : item.market.state === "PAUSED" || item.market.state === "RESTRICTED"
               ? "red"
               : "muted"
         }
@@ -473,27 +482,64 @@ function OperationRow({
           <small>{item.assignee ? "Assigned" : "No staff assignment"}</small>
         </div>
       </div>
-      <span
-        className={`asset-operations-priority priority-${item.attention.severity.toLowerCase()}`}
-      >
-        {priorityLabel(item.attention.severity)}
-      </span>
+      <Attention item={item} />
       <div className="asset-operations-updated">
         <strong>{relativeTime(item.updatedAt)}</strong>
         <small>{formatDate(item.updatedAt)}</small>
       </div>
-      <button
-        type="button"
-        className="asset-operations-open"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpen();
-        }}
-        aria-label={`Open ${item.title}`}
-      >
-        <MoreHorizontal aria-hidden="true" />
-      </button>
+      <div className="asset-operations-row-actions" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          className="asset-operations-open"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={`Actions for ${item.title}`}
+          aria-expanded={menuOpen}
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </button>
+        {menuOpen ? <RowActions item={item} onOpen={onOpen} /> : null}
+      </div>
     </article>
+  );
+}
+
+function RowActions({ item, onOpen }: { item: AssetOperationsBoardItem; onOpen: () => void }) {
+  return (
+    <div className="asset-operations-row-menu" role="menu">
+      <button type="button" role="menuitem" onClick={onOpen}>
+        Open Asset Operations
+      </button>
+      <a role="menuitem" href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
+        View Collectible
+      </a>
+      <a
+        role="menuitem"
+        href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
+      >
+        View source submission
+      </a>
+      {item.sourceContext.intakeId ? (
+        <a
+          role="menuitem"
+          href={`/admin?section=intake&intake=${encodeURIComponent(item.sourceContext.intakeId)}`}
+        >
+          Open Physical Intake
+        </a>
+      ) : null}
+      {item.collector ? (
+        <a
+          role="menuitem"
+          href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}
+        >
+          View collector
+        </a>
+      ) : null}
+      {item.market.state === "MARKET_LIVE" ? (
+        <a role="menuitem" href={`/asset/${encodeURIComponent(item.slug)}`}>
+          Open public listing
+        </a>
+      ) : null}
+    </div>
   );
 }
 
@@ -503,6 +549,17 @@ function State({ state, detail, tone }: { state: string; detail: string; tone: s
       <span className={`state-${tone}`}>{state}</span>
       <small>{detail}</small>
     </div>
+  );
+}
+
+function Attention({ item }: { item: AssetOperationsBoardItem }) {
+  if (!item.attention.required) {
+    return <span className="asset-operations-attention attention-none">—</span>;
+  }
+  return (
+    <span className="asset-operations-attention attention-required">
+      <i aria-hidden="true" /> Requires attention
+    </span>
   );
 }
 function Thumbnail({ src }: { src: string | null }) {
@@ -611,6 +668,11 @@ function QueuePreview({
         </button>
         <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
           View Collectible <ExternalLink aria-hidden="true" />
+        </a>
+        <a
+          href={`/admin?section=moderation&submission=${encodeURIComponent(item.sourceContext.submissionId)}`}
+        >
+          View Source Submission <ExternalLink aria-hidden="true" />
         </a>
         {item.sourceContext.intakeId ? (
           <a
@@ -842,8 +904,50 @@ function OperationsState({
     </section>
   );
 }
+
+function OperationsLoading() {
+  return (
+    <main className="asset-operations-page asset-operations-page--reference">
+      <div className="asset-operations-skeleton-header">
+        <i />
+        <b />
+        <span />
+      </div>
+      <div className="asset-operations-desktop-layout" aria-label="Loading Asset Operations">
+        <div className="asset-operations-primary">
+          <div className="asset-operations-skeleton-metrics">
+            {Array.from({ length: 6 }, (_, index) => (
+              <i key={index} />
+            ))}
+          </div>
+          <section className="asset-operations-workspace asset-operations-skeleton-workspace">
+            <i />
+            <i />
+            {Array.from({ length: 5 }, (_, index) => (
+              <span key={index} />
+            ))}
+          </section>
+        </div>
+        <aside className="asset-operations-preview asset-operations-skeleton-preview">
+          <i />
+          <i />
+          <i />
+        </aside>
+      </div>
+    </main>
+  );
+}
 function stageLabel(stage: string) {
-  return sentence(stage).replace("Prerequisite", "Prerequisites");
+  const labels: Record<string, string> = {
+    PHYSICAL_PREREQUISITE: "Physical blocked",
+    OWNERSHIP_SETUP: "Ownership",
+    OFFERING_SETUP: "Offering setup",
+    LAUNCH_READINESS: "Launch review",
+    READY_FOR_LAUNCH: "Ready for launch",
+    MARKET_LIVE: "Market live",
+    RESTRICTION: "Restricted",
+  };
+  return labels[stage] ?? sentence(stage);
 }
 function stageTone(stage: string) {
   return stage === "MARKET_LIVE" || stage === "READY_FOR_LAUNCH"
@@ -855,23 +959,28 @@ function stageTone(stage: string) {
         : "violet";
 }
 function stageDetail(item: AssetOperationsBoardItem) {
-  return item.currentStage === "VALUATION"
-    ? "Valuation needed"
-    : item.currentStage === "MARKET_LIVE"
-      ? "Live on marketplace"
-      : item.launchReadiness.state === "READY"
-        ? "Launch review ready"
-        : item.nextAction.label;
+  return item.currentStage === "RESTRICTION"
+    ? (item.exception?.summary ?? "Operational restriction requires review")
+    : item.currentStage === "VALUATION"
+      ? "Valuation needed"
+      : item.currentStage === "MARKET_LIVE"
+        ? "Live on marketplace"
+        : item.launchReadiness.state === "READY"
+          ? "Launch review ready"
+          : item.nextAction.label;
 }
 function marketDetail(item: AssetOperationsBoardItem) {
-  return item.market.tradingStatus
-    ? sentence(item.market.tradingStatus)
-    : item.market.state === "MARKET_LIVE"
-      ? "Trading"
-      : "Not launched";
+  return item.market.state === "RESTRICTED"
+    ? "Historical state conflict"
+    : item.market.tradingStatus
+      ? sentence(item.market.tradingStatus)
+      : item.market.state === "MARKET_LIVE"
+        ? "Trading"
+        : "Not launched";
 }
 function nextActionDetail(item: AssetOperationsBoardItem) {
-  const reason = item.attention.reasons[0] ?? item.launchReadiness.blockers[0];
+  const reason =
+    item.exception?.summary ?? item.attention.reasons[0] ?? item.launchReadiness.blockers[0];
   return reason
     ? sentence(reason)
     : item.nextAction.actor === "NONE"
@@ -928,9 +1037,6 @@ function percentage(value: string, total: string) {
     ? Math.max(0, Math.min(100, Math.round((Number(value) / denominator) * 100)))
     : 0;
 }
-function priorityLabel(value: AssetOperationsBoardItem["attention"]["severity"]) {
-  return value === "NONE" ? "Normal" : sentence(value);
-}
 function initials(value: string) {
   return value
     .split(/\s+/)
@@ -941,6 +1047,9 @@ function initials(value: string) {
 }
 function shortIdentifier(value: string) {
   return value.length > 19 ? `${value.slice(0, 15)}…` : value;
+}
+function workTypeLabel(value: AssetOperationsBoardItem["workType"]) {
+  return value === "OWNER_DEMO" ? "Demo" : "Controlled QA";
 }
 function sentence(value: string) {
   return value

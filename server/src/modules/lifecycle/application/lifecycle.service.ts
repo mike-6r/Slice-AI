@@ -377,11 +377,11 @@ export class LifecycleService {
       (item): item is NonNullable<Awaited<ReturnType<typeof operationsItem>>> =>
         Boolean(item),
     );
-    // This is the canonical-asset operations board. A canonical record remains
-    // operationally relevant before custody is established: its next action
-    // must be routed back to Physical Intake instead of disappearing from the
-    // staff surface. The item itself never exposes a custody mutation here.
-    const operationalItems = allProjected;
+    // Asset Operations is the post-custody economic work queue. Normal
+    // pre-custody records belong to Physical Intake and must not inflate this
+    // queue's work or attention counts. A lifecycle conflict is deliberately
+    // retained so staff can resolve an impossible historical state.
+    const operationalItems = allProjected.filter(isOperationsQueueMember);
     const counts = operationsCounts(operationalItems);
     const projected = operationalItems
       .filter((item) => operationsMatches(item, input))
@@ -1382,19 +1382,32 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
   const physicalState = cataloguePhysicalState(lifecycle);
   const verificationState = catalogueVerificationState(lifecycle);
   const custodyState = catalogueCustodyState(lifecycle);
-  const entryBlockers = physicalEntryBlockers(
+  const physicalBlockers = physicalEntryBlockers(
     physicalState,
     verificationState,
     custodyState,
   );
-  const eligibleForAssetOperations = entryBlockers.length === 0;
+  const eligibleForAssetOperations = physicalBlockers.length === 0;
   const custodyException = asset.custodyRecord?.status === 'EXCEPTION';
   const intakeException = Boolean(intake?.exceptions.length);
   const marketRestriction = asset.tradingMarket?.status === 'HALTED';
-  const exception = custodyException || intakeException;
+  const rawMarket = marketProjection(asset);
+  // A published market record cannot be operationally healthy while the
+  // canonical asset is not physically verified and secured. This is a data
+  // integrity conflict, not a live-market success state.
+  const lifecycleConflict = hasLifecycleMarketConflict(
+    eligibleForAssetOperations,
+    rawMarket.state,
+  );
+  const entryBlockers = lifecycleConflict
+    ? [...physicalBlockers, 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT']
+    : physicalBlockers;
+  const exception = custodyException || intakeException || lifecycleConflict;
   const ownership = ownershipProjection(asset);
   const offering = offeringProjection(asset);
-  const market = marketProjection(asset);
+  const market = lifecycleConflict
+    ? { ...rawMarket, state: 'RESTRICTED' }
+    : rawMarket;
   const covered = asset.insuranceCoverage.some(
     (item) => item.status === 'ACTIVE' && item.expiresAt > new Date(),
   );
@@ -1541,40 +1554,35 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     market,
     launchReadiness,
     attention: {
-      required:
-        exception ||
-        marketRestriction ||
-        (eligibleForAssetOperations &&
-          currentStage !== 'MARKET_LIVE' &&
-          ageDays >= 7),
+      // Attention is reserved for a real operable issue. Age without an
+      // authority-backed SLA is not a priority signal.
+      required: exception || marketRestriction,
       reasons: [
         ...(exception
           ? [
               custodyException
                 ? 'Custody exception'
-                : 'Physical intake exception',
+                : intakeException
+                  ? 'Physical intake exception'
+                  : 'Published market state conflicts with incomplete physical authority',
             ]
           : []),
         ...(marketRestriction ? ['Secondary market halted'] : []),
-        ...(eligibleForAssetOperations &&
-        currentStage !== 'MARKET_LIVE' &&
-        ageDays >= 7
-          ? ['Operational stage is overdue']
-          : []),
       ],
-      severity:
-        exception || marketRestriction
-          ? 'HIGH'
-          : ageDays >= 7
-            ? 'MEDIUM'
-            : 'NONE',
+      severity: exception || marketRestriction ? 'HIGH' : 'NONE',
     },
     exception: exception
       ? {
-          type: custodyException ? 'CUSTODY_EXCEPTION' : 'INTAKE_EXCEPTION',
+          type: custodyException
+            ? 'CUSTODY_EXCEPTION'
+            : intakeException
+              ? 'INTAKE_EXCEPTION'
+              : 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT',
           summary: custodyException
             ? 'Custody requires operator attention.'
-            : 'Physical intake has an unresolved exception.',
+            : intakeException
+              ? 'Physical intake has an unresolved exception.'
+              : 'A published market record conflicts with incomplete physical authority.',
         }
       : null,
     recommendedDetailTab: detailTab,
@@ -1841,9 +1849,7 @@ function operationsMatches(
 ) {
   if (input.tab && input.tab !== 'all') {
     const byTab: Record<string, boolean> = {
-      'needs-action':
-        item.currentStage === 'PHYSICAL_PREREQUISITE' ||
-        item.attention.required,
+      'needs-action': item.attention.required,
       valuation: item.currentStage === 'VALUATION',
       ownership: item.currentStage === 'OWNERSHIP_SETUP',
       offering: item.currentStage === 'OFFERING_SETUP',
@@ -1867,6 +1873,19 @@ function operationsMatches(
     (!input.assignee ||
       (input.assignee === 'UNASSIGNED' ? item.assignee === null : false))
   );
+}
+
+function isOperationsQueueMember(
+  item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+) {
+  return item.eligibleForAssetOperations || item.exception !== null;
+}
+
+function hasLifecycleMarketConflict(
+  eligibleForAssetOperations: boolean,
+  marketState: string,
+) {
+  return !eligibleForAssetOperations && marketState === 'MARKET_LIVE';
 }
 
 function operationsSort(
@@ -1920,10 +1939,7 @@ function operationsCounts(
 ) {
   return {
     all: items.length,
-    needsAction: items.filter(
-      (item) =>
-        item.currentStage === 'PHYSICAL_PREREQUISITE' || item.attention.required,
-    ).length,
+    needsAction: items.filter((item) => item.attention.required).length,
     valuationPending: items.filter((item) => item.currentStage === 'VALUATION')
       .length,
     ownershipPending: items.filter(
@@ -2036,6 +2052,8 @@ function operationsInsights(
 export const operationsQueueTestUtils = {
   physicalEntryBlockers,
   operationsNextAction,
+  isOperationsQueueMember,
+  hasLifecycleMarketConflict,
   operationEconomicWorkflow,
   operationsMatches,
   operationsCounts,
