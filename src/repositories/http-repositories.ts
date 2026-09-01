@@ -4871,16 +4871,34 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
       );
     },
-    async pauseInitialOffering(id) {
+    async pauseInitialOffering(id, input) {
       return client.request<InitialOfferingProjection>(
         `/admin/initial-offerings/${encodeURIComponent(id)}/pause`,
-        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+        { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
       );
     },
-    async cancelInitialOffering(id) {
+    async resumeInitialOffering(id, input) {
+      return client.request<InitialOfferingProjection>(
+        `/admin/initial-offerings/${encodeURIComponent(id)}/open`,
+        { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async cancelInitialOffering(id, input) {
       return client.request<InitialOfferingProjection>(
         `/admin/initial-offerings/${encodeURIComponent(id)}/cancel`,
-        { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } },
+        { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async haltTradingMarket(id, input) {
+      return client.request<{ assetId: string; status: string }>(
+        `/admin/trading/markets/${encodeURIComponent(id)}/halt`,
+        { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
+      );
+    },
+    async resumeTradingMarket(id, input) {
+      return client.request<{ assetId: string; status: string }>(
+        `/admin/trading/markets/${encodeURIComponent(id)}/resume`,
+        { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
       );
     },
   };
@@ -5344,6 +5362,13 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return client.get<import("@/data/repositories").AssetOperationDetailProjection>(
           `/admin/assets/${encodeURIComponent(assetId)}/operations`,
         );
+      },
+      async setOperationalControl(assetId, input) {
+        return client.request(`/admin/assets/${encodeURIComponent(assetId)}/operational-control`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        });
       },
       async handoff(assetId, input) {
         return client.request(`/admin/assets/${assetId}/handoff`, {

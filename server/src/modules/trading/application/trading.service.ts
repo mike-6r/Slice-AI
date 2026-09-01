@@ -37,7 +37,10 @@ import { Inject } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../../config/app-config';
 import { isBetaFixtureSlug } from '../../../config/beta-policy';
 import { calculateInitialOfferingSettlement } from '../../initial-offering/domain/initial-offering';
-import { OBJECT_STORAGE, type ObjectStoragePort } from '../../submissions/ports/submission-storage.ports';
+import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../../submissions/ports/submission-storage.ports';
 import { FinancialLedgerService } from '../../finance/application/financial-ledger.service';
 
 export { formatOwnershipPercent } from '../../ownership/domain/ownership-percent';
@@ -48,6 +51,7 @@ import {
   tradeCompletedEvent,
 } from '../../outbox/domain/domain-event';
 import { buildPublicOwnershipBreakdown } from '../domain/public-ownership-breakdown';
+import { hasStagingDemoPhysicalReadiness } from '../../lifecycle/domain/staging-demo-physical.policy';
 
 type Db = Prisma.TransactionClient;
 type OrderInput = {
@@ -83,7 +87,9 @@ export class TradingService {
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
     private readonly outbox: OutboxWriter = new OutboxWriter(),
     @Optional() private readonly capabilities?: AccountCapabilityService,
-    @Optional() @Inject(OBJECT_STORAGE) private readonly storage?: ObjectStoragePort,
+    @Optional()
+    @Inject(OBJECT_STORAGE)
+    private readonly storage?: ObjectStoragePort,
     @Optional() private readonly ledger?: FinancialLedgerService,
   ) {}
 
@@ -154,90 +160,144 @@ export class TradingService {
       select: { totalUnits: true, issuedUnits: true, status: true },
     });
     if (!supply || supply.status !== 'ACTIVE' || supply.totalUnits < 1n)
-      throw conflict('OWNERSHIP_NOT_TRADABLE', 'Ownership issuance is not active for this asset.');
+      throw conflict(
+        'OWNERSHIP_NOT_TRADABLE',
+        'Ownership issuance is not active for this asset.',
+      );
 
-    const [asks, bids, snapshot, policy, account, cashAccount] = await Promise.all([
-      this.bookLevels(assetId, 'SELL', 100, 'asc'),
-      this.bookLevels(assetId, 'BUY', 100, 'desc'),
-      this.db.assetMarketSnapshot.findFirst({
-        where: { assetId, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } },
-        orderBy: { asOf: 'desc' },
-        select: { estimatedMarketValueMinor: true },
-      }),
-      this.db.ownershipSupplyPolicy.findUnique({
-        where: { assetId },
-        select: { status: true, pricePerUnitMinor: true },
-      }),
-      actor
-        ? this.db.ownershipAccount.findUnique({ where: { userId: actor.userId } })
-        : Promise.resolve(null),
-      actor
-        ? this.db.financialAccount.findFirst({
-            where: { ownerType: 'USER', ownerUserId: actor.userId, code: 'CASH_AVAILABLE', currency: 'GBP' },
-            include: { balance: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const [asks, bids, snapshot, policy, account, cashAccount] =
+      await Promise.all([
+        this.bookLevels(assetId, 'SELL', 100, 'asc'),
+        this.bookLevels(assetId, 'BUY', 100, 'desc'),
+        this.db.assetMarketSnapshot.findFirst({
+          where: {
+            assetId,
+            status: 'LIVE',
+            markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+          },
+          orderBy: { asOf: 'desc' },
+          select: { estimatedMarketValueMinor: true },
+        }),
+        this.db.ownershipSupplyPolicy.findUnique({
+          where: { assetId },
+          select: { status: true, pricePerUnitMinor: true },
+        }),
+        actor
+          ? this.db.ownershipAccount.findUnique({
+              where: { userId: actor.userId },
+            })
+          : Promise.resolve(null),
+        actor
+          ? this.db.financialAccount.findFirst({
+              where: {
+                ownerType: 'USER',
+                ownerUserId: actor.userId,
+                code: 'CASH_AVAILABLE',
+                currency: 'GBP',
+              },
+              include: { balance: true },
+            })
+          : Promise.resolve(null),
+      ]);
     const position = account
-      ? await this.db.ownershipPosition.findUnique({ where: { assetId_accountId: { assetId, accountId: account.id } } })
+      ? await this.db.ownershipPosition.findUnique({
+          where: { assetId_accountId: { assetId, accountId: account.id } },
+        })
       : null;
     const total = supply.totalUnits;
     const owned = position?.settledUnits ?? 0n;
-    const availableOwned = position ? position.settledUnits - position.reservedUnits : 0n;
+    const availableOwned = position
+      ? position.settledUnits - position.reservedUnits
+      : 0n;
     const levels = input.side === 'BUY' ? asks : bids;
-    const available = input.side === 'BUY'
-      ? levels.reduce((sum, level) => sum + BigInt(level.units), 0n)
-      : (availableOwned > 0n ? availableOwned : 0n);
+    const available =
+      input.side === 'BUY'
+        ? levels.reduce((sum, level) => sum + BigInt(level.units), 0n)
+        : availableOwned > 0n
+          ? availableOwned
+          : 0n;
     const bestBookPrice = levels[0] ? BigInt(levels[0].priceMinor) : null;
-    const fallbackPrice = policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
-      ? policy.pricePerUnitMinor
-      : snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null;
+    const fallbackPrice =
+      policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
+        ? policy.pricePerUnitMinor
+        : snapshot && total > 0n
+          ? snapshot.estimatedMarketValueMinor / total
+          : null;
     const marketPrice = bestBookPrice ?? fallbackPrice;
-    const limitPrice = input.limitPriceMinor ? BigInt(input.limitPriceMinor) : marketPrice;
+    const limitPrice = input.limitPriceMinor
+      ? BigInt(input.limitPriceMinor)
+      : marketPrice;
     const requestedSlicesFromAmount = input.desiredAmountMinor
-      ? unitsForBudget(levels, BigInt(input.desiredAmountMinor), limitPrice, marketPrice)
+      ? unitsForBudget(
+          levels,
+          BigInt(input.desiredAmountMinor),
+          limitPrice,
+          marketPrice,
+        )
       : null;
-    const requestedSlicesFromQuantity = input.desiredSlices ? BigInt(input.desiredSlices) : null;
-    const requestedBps = input.desiredOwnershipPercent ? parseOwnershipBps(input.desiredOwnershipPercent) : null;
+    const requestedSlicesFromQuantity = input.desiredSlices
+      ? BigInt(input.desiredSlices)
+      : null;
+    const requestedBps = input.desiredOwnershipPercent
+      ? parseOwnershipBps(input.desiredOwnershipPercent)
+      : null;
     const numerator = requestedBps === null ? 0n : requestedBps * total;
     const lowerSlices = numerator / 10_000n;
     const exact = numerator % 10_000n === 0n;
     const upperSlices = exact ? lowerSlices : lowerSlices + 1n;
-    const requestedSlices = requestedSlicesFromQuantity !== null
-      ? requestedSlicesFromQuantity
-      : requestedSlicesFromAmount !== null
-      ? requestedSlicesFromAmount
-      : exact ? lowerSlices : null;
-    const requestedOwnershipPercent = requestedSlices !== null
-      ? formatOwnershipPercent(requestedSlices, total)
-      : input.desiredOwnershipPercent!;
-    const maximumExceeded = requestedSlices !== null && available > 0n && requestedSlices > available;
-    const executable = requestedSlices && limitPrice
-      ? executableProjection(levels, input.side, requestedSlices, limitPrice)
-      : { units: 0n, gross: 0n, worst: null };
+    const requestedSlices =
+      requestedSlicesFromQuantity !== null
+        ? requestedSlicesFromQuantity
+        : requestedSlicesFromAmount !== null
+          ? requestedSlicesFromAmount
+          : exact
+            ? lowerSlices
+            : null;
+    const requestedOwnershipPercent =
+      requestedSlices !== null
+        ? formatOwnershipPercent(requestedSlices, total)
+        : input.desiredOwnershipPercent!;
+    const maximumExceeded =
+      requestedSlices !== null && available > 0n && requestedSlices > available;
+    const executable =
+      requestedSlices && limitPrice
+        ? executableProjection(levels, input.side, requestedSlices, limitPrice)
+        : { units: 0n, gross: 0n, worst: null };
     const open = requestedSlices ? requestedSlices - executable.units : 0n;
-    const grossAtLimit = requestedSlices && limitPrice ? requestedSlices * limitPrice : null;
+    const grossAtLimit =
+      requestedSlices && limitPrice ? requestedSlices * limitPrice : null;
     const crossesCurrentLiquidity = Boolean(
       limitPrice !== null &&
-        bestBookPrice !== null &&
-        (input.side === 'BUY'
-          ? limitPrice >= bestBookPrice
-          : limitPrice <= bestBookPrice),
+      bestBookPrice !== null &&
+      (input.side === 'BUY'
+        ? limitPrice >= bestBookPrice
+        : limitPrice <= bestBookPrice),
     );
     const estimatedFeeBps = crossesCurrentLiquidity
       ? market.takerFeeBps
       : market.makerFeeBps;
-    const fee = grossAtLimit === null ? null : feeMinor(grossAtLimit, estimatedFeeBps);
+    const fee =
+      grossAtLimit === null ? null : feeMinor(grossAtLimit, estimatedFeeBps);
     const cashTotal = cashAccount?.balance
-      ? accountAuthority(cashAccount.normalSide, cashAccount.balance.postedDebitMinor, cashAccount.balance.postedCreditMinor) - cashAccount.balance.reservedMinor
+      ? accountAuthority(
+          cashAccount.normalSide,
+          cashAccount.balance.postedDebitMinor,
+          cashAccount.balance.postedCreditMinor,
+        ) - cashAccount.balance.reservedMinor
       : null;
     const onePercentSlices = total % 100n === 0n ? total / 100n : null;
-    const onePercentValue = onePercentSlices !== null && marketPrice !== null ? onePercentSlices * marketPrice : null;
-    const resultingUnits = requestedSlices === null
-      ? null
-      : input.side === 'BUY'
-        ? owned + requestedSlices
-        : (owned > requestedSlices ? owned - requestedSlices : 0n);
+    const onePercentValue =
+      onePercentSlices !== null && marketPrice !== null
+        ? onePercentSlices * marketPrice
+        : null;
+    const resultingUnits =
+      requestedSlices === null
+        ? null
+        : input.side === 'BUY'
+          ? owned + requestedSlices
+          : owned > requestedSlices
+            ? owned - requestedSlices
+            : 0n;
     return {
       assetId: input.assetId,
       side: input.side,
@@ -249,46 +309,84 @@ export class TradingService {
       availableOwnershipPercent: formatOwnershipPercent(available, total),
       ownedSlices: owned.toString(),
       ownedOwnershipPercent: formatOwnershipPercent(owned, total),
-      resultingOwnershipPercent: resultingUnits === null ? null : formatOwnershipPercent(resultingUnits, total),
-      remainingOwnershipPercent: input.side === 'SELL' && resultingUnits !== null ? formatOwnershipPercent(resultingUnits, total) : null,
+      resultingOwnershipPercent:
+        resultingUnits === null
+          ? null
+          : formatOwnershipPercent(resultingUnits, total),
+      remainingOwnershipPercent:
+        input.side === 'SELL' && resultingUnits !== null
+          ? formatOwnershipPercent(resultingUnits, total)
+          : null,
       slicePriceMinor: marketPrice?.toString() ?? null,
-      impliedWholeValueMinor: marketPrice === null ? null : (marketPrice * total).toString(),
-      externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,
+      impliedWholeValueMinor:
+        marketPrice === null ? null : (marketPrice * total).toString(),
+      externalReferenceMinor:
+        snapshot?.estimatedMarketValueMinor.toString() ?? null,
       onePercentSlices: onePercentSlices?.toString() ?? null,
       onePercentValueMinor: onePercentValue?.toString() ?? null,
       limitPriceMinor: limitPrice?.toString() ?? null,
-      estimatedCostMinor: requestedSlices && limitPrice
-        ? (executable.gross + (open > 0n && limitPrice ? open * limitPrice : 0n)).toString()
-        : null,
-      estimatedAveragePriceMinor: requestedSlices && requestedSlices > 0n && limitPrice
-        ? ((executable.gross + (open > 0n ? open * limitPrice : 0n)) / requestedSlices).toString()
-        : null,
-      estimatedReservationMinor: grossAtLimit === null || fee === null ? null : (grossAtLimit + fee).toString(),
+      estimatedCostMinor:
+        requestedSlices && limitPrice
+          ? (
+              executable.gross +
+              (open > 0n && limitPrice ? open * limitPrice : 0n)
+            ).toString()
+          : null,
+      estimatedAveragePriceMinor:
+        requestedSlices && requestedSlices > 0n && limitPrice
+          ? (
+              (executable.gross + (open > 0n ? open * limitPrice : 0n)) /
+              requestedSlices
+            ).toString()
+          : null,
+      estimatedReservationMinor:
+        grossAtLimit === null || fee === null
+          ? null
+          : (grossAtLimit + fee).toString(),
       feeMinor: fee?.toString() ?? null,
-      feeRole: fee === null ? null : crossesCurrentLiquidity ? 'TAKER' : 'MAKER',
+      feeRole:
+        fee === null ? null : crossesCurrentLiquidity ? 'TAKER' : 'MAKER',
       executableSlices: executable.units.toString(),
       openSlices: open.toString(),
       bestMarketPriceMinor: bestBookPrice?.toString() ?? null,
       worstExpectedPriceMinor: executable.worst?.toString() ?? null,
       lowerSnap: input.desiredSlices
         ? null
-        : { slices: lowerSlices.toString(), ownershipPercent: formatOwnershipPercent(lowerSlices, total) },
-      upperSnap: input.desiredSlices || exact
-        ? null
-        : { slices: upperSlices.toString(), ownershipPercent: formatOwnershipPercent(upperSlices, total) },
+        : {
+            slices: lowerSlices.toString(),
+            ownershipPercent: formatOwnershipPercent(lowerSlices, total),
+          },
+      upperSnap:
+        input.desiredSlices || exact
+          ? null
+          : {
+              slices: upperSlices.toString(),
+              ownershipPercent: formatOwnershipPercent(upperSlices, total),
+            },
       hasImmediateLiquidity: executable.units > 0n,
       marketStatus: market.status,
-      eligibility: actor === null || actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
+      eligibility:
+        actor === null || actor.status === 'ACTIVE' ? 'ELIGIBLE' : 'INELIGIBLE',
       availableCashMinor: cashTotal?.toString() ?? null,
       cashShortfallMinor:
-        input.side === 'BUY' && cashTotal !== null && grossAtLimit !== null && fee !== null && grossAtLimit + fee > cashTotal
+        input.side === 'BUY' &&
+        cashTotal !== null &&
+        grossAtLimit !== null &&
+        fee !== null &&
+        grossAtLimit + fee > cashTotal
           ? (grossAtLimit + fee - cashTotal).toString()
           : null,
       maximumExceeded,
       requestedAmountMinor: input.desiredAmountMinor ?? null,
-      projectedRemainingAvailableIfFullyFilled: input.side === 'BUY'
-        ? formatOwnershipPercent(available > (requestedSlices ?? 0n) ? available - (requestedSlices ?? 0n) : 0n, total)
-        : null,
+      projectedRemainingAvailableIfFullyFilled:
+        input.side === 'BUY'
+          ? formatOwnershipPercent(
+              available > (requestedSlices ?? 0n)
+                ? available - (requestedSlices ?? 0n)
+                : 0n,
+              total,
+            )
+          : null,
     };
   }
 
@@ -297,39 +395,69 @@ export class TradingService {
       where: { slug, status: 'PUBLISHED' },
       select: { id: true },
     });
-    if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
-    const [market, supply, asks, bids, snapshot, policy, offering, positions] = await Promise.all([
-      this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
-      this.db.ownershipAssetSupply.findUnique({
-        where: { assetId: asset.id },
-        select: { totalUnits: true, issuedUnits: true, status: true },
-      }),
-      this.bookLevels(asset.id, 'SELL', 100, 'asc'),
-      this.bookLevels(asset.id, 'BUY', 100, 'desc'),
-      this.db.assetMarketSnapshot.findFirst({ where: { assetId: asset.id, status: 'LIVE', markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' } }, orderBy: { asOf: 'desc' }, select: { estimatedMarketValueMinor: true } }),
-      this.db.ownershipSupplyPolicy.findUnique({ where: { assetId: asset.id }, select: { status: true, pricePerUnitMinor: true, valuationCurrency: true } }),
-      this.db.initialOffering.findUnique({ where: { assetId: asset.id }, select: { retainedUnits: true, originatingCollectorUserId: true } }),
-      this.db.ownershipPosition.findMany({
-        where: { assetId: asset.id, account: { status: 'ACTIVE' } },
-        select: {
-          settledUnits: true,
-          account: { select: { type: true, userId: true, status: true } },
-        },
-      }),
-    ]);
+    if (!asset)
+      throw new NotFoundException({
+        code: 'ASSET_NOT_FOUND',
+        message: 'Resource not found.',
+      });
+    const [market, supply, asks, bids, snapshot, policy, offering, positions] =
+      await Promise.all([
+        this.db.tradingMarket.findUnique({ where: { assetId: asset.id } }),
+        this.db.ownershipAssetSupply.findUnique({
+          where: { assetId: asset.id },
+          select: { totalUnits: true, issuedUnits: true, status: true },
+        }),
+        this.bookLevels(asset.id, 'SELL', 100, 'asc'),
+        this.bookLevels(asset.id, 'BUY', 100, 'desc'),
+        this.db.assetMarketSnapshot.findFirst({
+          where: {
+            assetId: asset.id,
+            status: 'LIVE',
+            markSource: { not: 'EXTERNAL_REFERENCE_FALLBACK' },
+          },
+          orderBy: { asOf: 'desc' },
+          select: { estimatedMarketValueMinor: true },
+        }),
+        this.db.ownershipSupplyPolicy.findUnique({
+          where: { assetId: asset.id },
+          select: {
+            status: true,
+            pricePerUnitMinor: true,
+            valuationCurrency: true,
+          },
+        }),
+        this.db.initialOffering.findUnique({
+          where: { assetId: asset.id },
+          select: { retainedUnits: true, originatingCollectorUserId: true },
+        }),
+        this.db.ownershipPosition.findMany({
+          where: { assetId: asset.id, account: { status: 'ACTIVE' } },
+          select: {
+            settledUnits: true,
+            account: { select: { type: true, userId: true, status: true } },
+          },
+        }),
+      ]);
     // Public supply is issued supply, never the planned cap. Ownership
     // positions are the settled unit authority; orders only describe listing
     // availability and must not be mixed into the ownership bar.
     const total = supply?.issuedUnits ?? 0n;
-    const available = asks.reduce((sum, level) => sum + BigInt(level.units), 0n);
+    const available = asks.reduce(
+      (sum, level) => sum + BigInt(level.units),
+      0n,
+    );
     const bestAsk = asks[0] ? BigInt(asks[0].priceMinor) : null;
     const bestBid = bids[0] ? BigInt(bids[0].priceMinor) : null;
-    const slicePrice = bestAsk ?? bestBid ?? (
-      policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
+    const slicePrice =
+      bestAsk ??
+      bestBid ??
+      (policy?.status === 'ISSUED' && policy.pricePerUnitMinor !== null
         ? policy.pricePerUnitMinor
-        : snapshot && total > 0n ? snapshot.estimatedMarketValueMinor / total : null
-    );
-    const onePercentSlices = total > 0n && total % 100n === 0n ? total / 100n : null;
+        : snapshot && total > 0n
+          ? snapshot.estimatedMarketValueMinor / total
+          : null);
+    const onePercentSlices =
+      total > 0n && total % 100n === 0n ? total / 100n : null;
     const notYetIssued = total === 0n;
     const ownershipBreakdown = buildPublicOwnershipBreakdown({
       issuedUnits: total,
@@ -342,13 +470,22 @@ export class TradingService {
       currency: policy?.valuationCurrency ?? 'GBP',
       totalSlices: total.toString(),
       availableSlices: available.toString(),
-      availableOwnershipPercent: notYetIssued ? 'Not yet available' : formatOwnershipPercent(available, total),
-      ownershipIncrementPercent: notYetIssued ? 'Not available yet' : formatOwnershipPercent(1n, total),
+      availableOwnershipPercent: notYetIssued
+        ? 'Not yet available'
+        : formatOwnershipPercent(available, total),
+      ownershipIncrementPercent: notYetIssued
+        ? 'Not available yet'
+        : formatOwnershipPercent(1n, total),
       slicePriceMinor: slicePrice?.toString() ?? null,
-      impliedWholeValueMinor: slicePrice === null ? null : (slicePrice * total).toString(),
-      externalReferenceMinor: snapshot?.estimatedMarketValueMinor.toString() ?? null,
+      impliedWholeValueMinor:
+        slicePrice === null ? null : (slicePrice * total).toString(),
+      externalReferenceMinor:
+        snapshot?.estimatedMarketValueMinor.toString() ?? null,
       onePercentSlices: onePercentSlices?.toString() ?? null,
-      onePercentValueMinor: onePercentSlices !== null && slicePrice !== null ? (onePercentSlices * slicePrice).toString() : null,
+      onePercentValueMinor:
+        onePercentSlices !== null && slicePrice !== null
+          ? (onePercentSlices * slicePrice).toString()
+          : null,
       bestAskMinor: bestAsk?.toString() ?? null,
       bestBidMinor: bestBid?.toString() ?? null,
       hasImmediateLiquidity: available > 0n,
@@ -553,9 +690,15 @@ export class TradingService {
         new Date(Date.now() + 86_400_000),
       );
       if (acquired.state === 'FINGERPRINT_CONFLICT')
-        throw conflict('IDEMPOTENCY_KEY_CONFLICT', 'The request key cannot be reused.');
+        throw conflict(
+          'IDEMPOTENCY_KEY_CONFLICT',
+          'The request key cannot be reused.',
+        );
       if (acquired.state === 'EXISTING_IN_PROGRESS')
-        throw conflict('PERSISTENCE_CONFLICT', 'The request is already in progress.');
+        throw conflict(
+          'PERSISTENCE_CONFLICT',
+          'The request is already in progress.',
+        );
       if (acquired.state === 'EXISTING_COMPLETED')
         return {
           ...(acquired.record.response!.body as { orderId: string }),
@@ -568,8 +711,12 @@ export class TradingService {
         select: {
           status: true,
           publication: { select: { status: true } },
-          ownershipSupply: { select: { status: true, issuedUnits: true, totalUnits: true } },
-          ownershipSupplyPolicy: { select: { status: true, pricePerUnitMinor: true } },
+          ownershipSupply: {
+            select: { status: true, issuedUnits: true, totalUnits: true },
+          },
+          ownershipSupplyPolicy: {
+            select: { status: true, pricePerUnitMinor: true },
+          },
         },
       });
       if (
@@ -577,11 +724,15 @@ export class TradingService {
         asset.status !== 'PUBLISHED' ||
         asset.publication?.status !== 'PUBLISHED' ||
         asset.ownershipSupply?.status !== 'ACTIVE' ||
-        asset.ownershipSupply.issuedUnits !== asset.ownershipSupply.totalUnits ||
+        asset.ownershipSupply.issuedUnits !==
+          asset.ownershipSupply.totalUnits ||
         asset.ownershipSupplyPolicy?.status !== 'ISSUED' ||
         asset.ownershipSupplyPolicy.pricePerUnitMinor === null
       )
-        throw conflict('TREASURY_LISTING_BLOCKED', 'The asset is not fully issued for Treasury liquidity.');
+        throw conflict(
+          'TREASURY_LISTING_BLOCKED',
+          'The asset is not fully issued for Treasury liquidity.',
+        );
       if (market.status !== 'OPEN' || !market.tradingEnabled)
         throw conflict('MARKET_NOT_OPEN', 'Trading market is not open.');
 
@@ -593,19 +744,38 @@ export class TradingService {
         units: input.units,
         limitPriceMinor: input.limitPriceMinor,
       });
-      if (normalized.limitPriceMinor !== asset.ownershipSupplyPolicy.pricePerUnitMinor)
-        throw conflict('TREASURY_PRICE_MISMATCH', 'Treasury listings must use the issued Slice price.');
+      if (
+        normalized.limitPriceMinor !==
+        asset.ownershipSupplyPolicy.pricePerUnitMinor
+      )
+        throw conflict(
+          'TREASURY_PRICE_MISMATCH',
+          'Treasury listings must use the issued Slice price.',
+        );
       const gross = checkedGross(normalized.limitPriceMinor, normalized.units);
       if (gross < market.minimumNotionalMinor)
-        throw conflict('INVALID_ORDER_NOTIONAL', 'Order does not satisfy the market minimum notional.');
+        throw conflict(
+          'INVALID_ORDER_NOTIONAL',
+          'Order does not satisfy the market minimum notional.',
+        );
       if (input.reason.trim().length < 10)
-        throw conflict('TREASURY_LISTING_REASON_REQUIRED', 'A clear listing reason is required.');
+        throw conflict(
+          'TREASURY_LISTING_REASON_REQUIRED',
+          'A clear listing reason is required.',
+        );
 
       const treasury = await db.ownershipAccount.findFirst({
-        where: { type: 'TREASURY', status: 'ACTIVE', positions: { some: { assetId: canonicalAssetId } } },
+        where: {
+          type: 'TREASURY',
+          status: 'ACTIVE',
+          positions: { some: { assetId: canonicalAssetId } },
+        },
       });
       if (!treasury)
-        throw conflict('OWNERSHIP_INVARIANT_VIOLATION', 'Ownership Treasury is unavailable.');
+        throw conflict(
+          'OWNERSHIP_INVARIANT_VIOLATION',
+          'Ownership Treasury is unavailable.',
+        );
       const orderId = randomUUID();
       const ownershipReservationId = await this.reserveAccountUnits(
         db,
@@ -638,7 +808,10 @@ export class TradingService {
       });
       await db.tradingMarket.update({
         where: { assetId: canonicalAssetId },
-        data: { nextPrioritySequence: { increment: 1n }, version: { increment: 1 } },
+        data: {
+          nextPrioritySequence: { increment: 1n },
+          version: { increment: 1 },
+        },
       });
       await this.history(db, order.id, null, 'OPEN', 'TREASURY_ORDER_OPENED');
       await this.outbox.append(
@@ -676,10 +849,15 @@ export class TradingService {
         createdAt: new Date(),
       });
       const result = { orderId: order.id };
-      await tx.idempotency.complete(identity, { status: 201, body: result }, new Date());
+      await tx.idempotency.complete(
+        identity,
+        { status: 201, body: result },
+        new Date(),
+      );
       return { ...result, replayed: false };
     });
-    if (!placed.replayed) await this.matchMarket(canonicalAssetId, actor, requestId);
+    if (!placed.replayed)
+      await this.matchMarket(canonicalAssetId, actor, requestId);
     const order = await this.db.tradingOrder.findUnique({
       where: { id: placed.orderId },
       include: {
@@ -707,8 +885,16 @@ export class TradingService {
         },
       },
     });
-    if (!order) throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found.' });
-    return this.publicOrder(order, this.publicAssetSlug(order.asset.slug), order.asset.ownershipSupply?.totalUnits);
+    if (!order)
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'Order not found.',
+      });
+    return this.publicOrder(
+      order,
+      this.publicAssetSlug(order.asset.slug),
+      order.asset.ownershipSupply?.totalUnits,
+    );
   }
 
   async cancel(actor: Actor, orderId: string, requestId: string, key: string) {
@@ -829,7 +1015,20 @@ export class TradingService {
         );
         await tradingTestFailurePoint('expiry.after-order-update');
         await this.releaseRemainder(db, order);
-        await this.outbox.append(db, orderLifecycleEvent({ eventType: eventType.orderExpired, orderId: updated.id, assetId: updated.assetId, side: updated.side, units: updated.originalUnits.toString(), status: 'EXPIRED', actorUserId: this.orderActorUserId(updated), correlationId: requestId, occurredAt: updated.updatedAt }));
+        await this.outbox.append(
+          db,
+          orderLifecycleEvent({
+            eventType: eventType.orderExpired,
+            orderId: updated.id,
+            assetId: updated.assetId,
+            side: updated.side,
+            units: updated.originalUnits.toString(),
+            status: 'EXPIRED',
+            actorUserId: this.orderActorUserId(updated),
+            correlationId: requestId,
+            occurredAt: updated.updatedAt,
+          }),
+        );
         const tx = createIdentityTransaction(db);
         await tx.audit.append({
           id: randomUUID(),
@@ -941,15 +1140,19 @@ export class TradingService {
       page?: number;
       pageSize?: number;
       side?: 'BUY' | 'SELL';
-      status?: 'OPEN' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED' | 'REJECTED' | 'EXPIRED';
+      status?:
+        | 'OPEN'
+        | 'PARTIALLY_FILLED'
+        | 'FILLED'
+        | 'CANCELLED'
+        | 'REJECTED'
+        | 'EXPIRED';
       assetClass?: string;
       from?: string;
     } = {},
   ) {
     const query = input.q?.trim();
-    const assetFilters: Prisma.AssetWhereInput[] = [
-      { status: 'PUBLISHED' },
-    ];
+    const assetFilters: Prisma.AssetWhereInput[] = [{ status: 'PUBLISHED' }];
     if (query) {
       assetFilters.push({
         OR: [
@@ -970,7 +1173,11 @@ export class TradingService {
       ...(input.side ? { side: input.side } : {}),
       ...(input.status
         ? input.status === 'OPEN'
-          ? { status: { in: ['OPEN', 'PARTIALLY_FILLED'] as TradingOrderStatus[] } }
+          ? {
+              status: {
+                in: ['OPEN', 'PARTIALLY_FILLED'] as TradingOrderStatus[],
+              },
+            }
           : { status: input.status }
         : {}),
       ...(input.from ? { createdAt: { gte: new Date(input.from) } } : {}),
@@ -1007,7 +1214,9 @@ export class TradingService {
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      ...(paged ? { skip: ((input.page ?? 1) - 1) * pageSize, take: pageSize } : { take: limit + 1 }),
+      ...(paged
+        ? { skip: ((input.page ?? 1) - 1) * pageSize, take: pageSize }
+        : { take: limit + 1 }),
     });
     const total = paged ? await this.db.tradingOrder.count({ where }) : null;
     const page = rows.slice(0, limit);
@@ -1022,7 +1231,11 @@ export class TradingService {
           ),
         ),
       ),
-      nextCursor: paged ? null : rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+      nextCursor: paged
+        ? null
+        : rows.length > limit
+          ? (page.at(-1)?.id ?? null)
+          : null,
       ...(paged
         ? {
             page: input.page,
@@ -1045,14 +1258,14 @@ export class TradingService {
     const [openCount, rows] = await Promise.all([
       this.db.tradingOrder.count({ where }),
       this.db.tradingOrder.findMany({
-      where: {
-        userId,
-        status: { in: [...activeStatuses] },
-        asset: { status: 'PUBLISHED' },
-      },
-      include: { asset: { select: { slug: true, title: true } } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 3,
+        where: {
+          userId,
+          status: { in: [...activeStatuses] },
+          asset: { status: 'PUBLISHED' },
+        },
+        include: { asset: { select: { slug: true, title: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 3,
       }),
     ]);
     return {
@@ -1120,26 +1333,30 @@ export class TradingService {
     });
     const page = rows.slice(0, limit);
     return {
-      items: await Promise.all(page.map(async (row) => ({
-        executionId: row.id,
-        assetSlug: this.publicAssetSlug(row.asset.slug),
-        assetSummary: await this.publicAssetSummary(row.asset),
-        side: row.buyOrder.userId === userId ? 'BUY' : 'SELL',
-        units: row.units.toString(),
-        priceMinor: row.priceMinor.toString(),
-        feeMinor:
-          row.buyOrder.userId === userId
-            ? row.buyerFeeMinor.toString()
-            : row.sellerFeeMinor.toString(),
-        grossMinor: row.grossMinor.toString(),
-        netMinor: (
-          row.grossMinor +
-          (row.buyOrder.userId === userId ? row.buyerFeeMinor : -row.sellerFeeMinor)
-        ).toString(),
-        settlementStatus: row.settlementStatus,
-        marketSequence: row.marketSequence.toString(),
-        executedAt: row.executedAt.toISOString(),
-      }))),
+      items: await Promise.all(
+        page.map(async (row) => ({
+          executionId: row.id,
+          assetSlug: this.publicAssetSlug(row.asset.slug),
+          assetSummary: await this.publicAssetSummary(row.asset),
+          side: row.buyOrder.userId === userId ? 'BUY' : 'SELL',
+          units: row.units.toString(),
+          priceMinor: row.priceMinor.toString(),
+          feeMinor:
+            row.buyOrder.userId === userId
+              ? row.buyerFeeMinor.toString()
+              : row.sellerFeeMinor.toString(),
+          grossMinor: row.grossMinor.toString(),
+          netMinor: (
+            row.grossMinor +
+            (row.buyOrder.userId === userId
+              ? row.buyerFeeMinor
+              : -row.sellerFeeMinor)
+          ).toString(),
+          settlementStatus: row.settlementStatus,
+          marketSequence: row.marketSequence.toString(),
+          executedAt: row.executedAt.toISOString(),
+        })),
+      ),
       nextCursor:
         rows.length > limit && page.at(-1)
           ? this.encodeExecutionCursor(page.at(-1)!, userId)
@@ -1225,6 +1442,11 @@ export class TradingService {
     actor: Actor,
     assetId: string,
     status: 'OPEN' | 'HALTED' | 'CLOSED',
+    control: {
+      reason: string;
+      confirmation: string;
+      expectedStatus: 'OPEN' | 'HALTED' | 'CLOSED';
+    },
     requestId: string,
     key: string,
   ) {
@@ -1235,7 +1457,7 @@ export class TradingService {
       key,
     };
     const hash = createHash('sha256')
-      .update(`${assetId}\n${status}`)
+      .update(`${assetId}\n${status}\n${JSON.stringify(control)}`)
       .digest('hex');
     return this.db.$transaction(async (db) => {
       const tx = createIdentityTransaction(db);
@@ -1260,6 +1482,54 @@ export class TradingService {
           status: string;
         };
       const market = await this.lockMarket(db, assetId);
+      if (market.status !== control.expectedStatus)
+        throw conflict(
+          'TRADING_MARKET_STALE',
+          'The market state changed. Refresh before retrying.',
+        );
+      if (status === 'OPEN') {
+        const authority = await db.asset.findUnique({
+          where: { id: assetId },
+          select: {
+            status: true,
+            publication: { select: { status: true } },
+            custodyRecord: { select: { status: true } },
+            controlledBetaBypass: { select: { id: true } },
+            stagingDemoPhysicalIntake: { select: { status: true } },
+            operationalControl: { select: { status: true } },
+            insuranceCoverage: {
+              where: {
+                status: 'ACTIVE',
+                effectiveAt: { lte: new Date() },
+                expiresAt: { gt: new Date() },
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        });
+        if (authority?.operationalControl?.status === 'FROZEN')
+          throw conflict(
+            'ASSET_OPERATIONS_FROZEN',
+            'Trading cannot resume while asset operations are frozen.',
+          );
+        if (
+          !authority ||
+          authority.status !== 'PUBLISHED' ||
+          authority.publication?.status !== 'PUBLISHED' ||
+          (authority.custodyRecord?.status !== 'SECURED' &&
+            !authority.controlledBetaBypass &&
+            !hasStagingDemoPhysicalReadiness(
+              Boolean(this.config?.isBeta),
+              authority.stagingDemoPhysicalIntake,
+            )) ||
+          authority.insuranceCoverage.length !== 1
+        )
+          throw conflict(
+            'TRADING_READINESS_BLOCKED',
+            'Trading cannot resume until publication, custody, and insurance gates are satisfied.',
+          );
+      }
       const updated = await db.tradingMarket.update({
         where: { assetId },
         data: { status, version: { increment: 1 } },
@@ -1274,7 +1544,13 @@ export class TradingService {
         requestId,
         sessionId: actor.sessionId as never,
         result: 'SUCCESS',
-        metadata: { assetId, fromStatus: market.status, toStatus: status },
+        metadata: {
+          assetId,
+          fromStatus: market.status,
+          toStatus: status,
+          reason: control.reason.trim(),
+          confirmation: control.confirmation,
+        },
         createdAt: new Date(),
       });
       const result = { assetId, status: updated.status };
@@ -1315,17 +1591,30 @@ export class TradingService {
         new Date(Date.now() + 86_400_000),
       );
       if (acquired.state === 'FINGERPRINT_CONFLICT')
-        throw conflict('IDEMPOTENCY_KEY_CONFLICT', 'The request key cannot be reused.');
+        throw conflict(
+          'IDEMPOTENCY_KEY_CONFLICT',
+          'The request key cannot be reused.',
+        );
       if (acquired.state === 'EXISTING_IN_PROGRESS')
-        throw conflict('PERSISTENCE_CONFLICT', 'The request is already in progress.');
+        throw conflict(
+          'PERSISTENCE_CONFLICT',
+          'The request is already in progress.',
+        );
       if (acquired.state === 'EXISTING_COMPLETED')
-        return acquired.record.response!.body as { assetId: string; status: string };
+        return acquired.record.response!.body as {
+          assetId: string;
+          status: string;
+        };
 
       const resolved = await db.asset.findFirst({
         where: { OR: [{ id: assetId }, { publicId: assetId }] },
         select: { id: true },
       });
-      if (!resolved) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
+      if (!resolved)
+        throw new NotFoundException({
+          code: 'ASSET_NOT_FOUND',
+          message: 'Resource not found.',
+        });
       await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${resolved.id} FOR UPDATE`;
       const asset = await db.asset.findUnique({
         where: { id: resolved.id },
@@ -1333,17 +1622,30 @@ export class TradingService {
           id: true,
           status: true,
           publication: { select: { status: true } },
-          ownershipSupply: { select: { status: true, totalUnits: true, issuedUnits: true } },
+          ownershipSupply: {
+            select: { status: true, totalUnits: true, issuedUnits: true },
+          },
           ownershipSupplyPolicy: { select: { status: true } },
           tradingMarket: { select: { status: true, tradingEnabled: true } },
+          operationalControl: { select: { status: true } },
         },
       });
-      if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Resource not found.' });
+      if (!asset)
+        throw new NotFoundException({
+          code: 'ASSET_NOT_FOUND',
+          message: 'Resource not found.',
+        });
+      if (asset.operationalControl?.status === 'FROZEN')
+        throw conflict(
+          'ASSET_OPERATIONS_FROZEN',
+          'Trading activation is blocked while asset operations are frozen.',
+        );
       if (
         asset.status !== 'PUBLISHED' ||
         asset.publication?.status !== 'PUBLISHED' ||
         asset.ownershipSupply?.status !== 'ACTIVE' ||
-        asset.ownershipSupply.issuedUnits !== asset.ownershipSupply.totalUnits ||
+        asset.ownershipSupply.issuedUnits !==
+          asset.ownershipSupply.totalUnits ||
         asset.ownershipSupplyPolicy?.status !== 'ISSUED'
       )
         throw conflict(
@@ -1351,9 +1653,16 @@ export class TradingService {
           'The market requires a published asset with fully issued ownership and an issued supply policy.',
         );
       if (asset.tradingMarket) {
-        if (asset.tradingMarket.status === 'OPEN' && asset.tradingMarket.tradingEnabled) {
+        if (
+          asset.tradingMarket.status === 'OPEN' &&
+          asset.tradingMarket.tradingEnabled
+        ) {
           const result = { assetId: resolved.id, status: 'OPEN' };
-          await tx.idempotency.complete(identity, { status: 200, body: result }, new Date());
+          await tx.idempotency.complete(
+            identity,
+            { status: 200, body: result },
+            new Date(),
+          );
           return result;
         }
         throw conflict(
@@ -1396,7 +1705,11 @@ export class TradingService {
         createdAt: new Date(),
       });
       const result = { assetId: resolved.id, status: market.status };
-      await tx.idempotency.complete(identity, { status: 201, body: result }, new Date());
+      await tx.idempotency.complete(
+        identity,
+        { status: 201, body: result },
+        new Date(),
+      );
       return result;
     });
   }
@@ -1426,20 +1739,38 @@ export class TradingService {
     });
     const gross = checkedGross(price, units);
     const buyIsMaker = buy.prioritySequence! < sell.prioritySequence!;
-    const initialOffering = sell.principalType === 'INITIAL_OFFERING' && sell.initialOfferingId
-      ? await db.initialOffering.findUnique({ where: { id: sell.initialOfferingId }, include: { inventory: true } })
-      : null;
-    if (sell.principalType === 'INITIAL_OFFERING' && (!initialOffering || (initialOffering.status !== 'OPEN' && initialOffering.status !== 'PARTIALLY_FILLED') || price !== initialOffering.pricePerUnitMinor))
-      throw conflict('INITIAL_OFFERING_SETTLEMENT_INVALID', 'Initial offering terms are not available for settlement.');
+    const initialOffering =
+      sell.principalType === 'INITIAL_OFFERING' && sell.initialOfferingId
+        ? await db.initialOffering.findUnique({
+            where: { id: sell.initialOfferingId },
+            include: { inventory: true },
+          })
+        : null;
+    if (
+      sell.principalType === 'INITIAL_OFFERING' &&
+      (!initialOffering ||
+        (initialOffering.status !== 'OPEN' &&
+          initialOffering.status !== 'PARTIALLY_FILLED') ||
+        price !== initialOffering.pricePerUnitMinor)
+    )
+      throw conflict(
+        'INITIAL_OFFERING_SETTLEMENT_INVALID',
+        'Initial offering terms are not available for settlement.',
+      );
     const buyerUserId = buy.userId;
     if (!buyerUserId)
-      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
+      throw conflict(
+        'SETTLEMENT_INVARIANT_VIOLATION',
+        'A customer buyer is required.',
+      );
     const returnedFundsHold = await db.complianceHold.findFirst({
       where: {
         userId: buyerUserId,
         scope: 'ACCOUNT',
         status: 'ACTIVE',
-        reasonCode: { in: ['RETURNED_FUNDS_DEFICIT', 'RETURNED_FUNDS_RESERVATION_REVIEW'] },
+        reasonCode: {
+          in: ['RETURNED_FUNDS_DEFICIT', 'RETURNED_FUNDS_RESERVATION_REVIEW'],
+        },
       },
       select: { id: true },
     });
@@ -1452,18 +1783,48 @@ export class TradingService {
       ? 0n
       : feeMinor(gross, buyIsMaker ? market.makerFeeBps : market.takerFeeBps);
     const sellerFee = initialOffering
-      ? calculateInitialOfferingSettlement(gross, initialOffering.feeBps).feeMinor
+      ? calculateInitialOfferingSettlement(gross, initialOffering.feeBps)
+          .feeMinor
       : feeMinor(gross, buyIsMaker ? market.takerFeeBps : market.makerFeeBps);
     const sequence = market.nextExecutionSequence;
     const correlationId = `trade:${market.assetId}:${sequence}`;
-    await this.settleOwnership(db, market.assetId, sell, buyerUserId, units, correlationId);
+    await this.settleOwnership(
+      db,
+      market.assetId,
+      sell,
+      buyerUserId,
+      units,
+      correlationId,
+    );
     await tradingTestFailurePoint('execution.after-ownership');
-    await this.settleCash(db, buy, sell, units, gross, buyerFee, sellerFee, market.takerFeeBps, correlationId, initialOffering);
+    await this.settleCash(
+      db,
+      buy,
+      sell,
+      units,
+      gross,
+      buyerFee,
+      sellerFee,
+      market.takerFeeBps,
+      correlationId,
+      initialOffering,
+    );
     await tradingTestFailurePoint('execution.after-cash');
     if (sell.principalType === 'USER') {
       if (!sell.userId)
-        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer seller is missing.');
-      await this.disposeSellerLots(db, sell.userId, market.assetId, units, gross, sellerFee, correlationId);
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'A customer seller is missing.',
+        );
+      await this.disposeSellerLots(
+        db,
+        sell.userId,
+        market.assetId,
+        units,
+        gross,
+        sellerFee,
+        correlationId,
+      );
     }
     await this.createBuyerLot(
       db,
@@ -1518,11 +1879,58 @@ export class TradingService {
     const updatedSell = await this.applyFill(db, sell, units, price);
     if (initialOffering && initialOffering.inventory) {
       const terminal = updatedSell.status === 'FILLED';
-      await db.initialOfferingInventory.update({ where: { offeringId: initialOffering.id }, data: { reservedUnits: { decrement: units }, settledUnits: { increment: units } } });
-      const updatedOffering = await db.initialOffering.update({ where: { id: initialOffering.id }, data: { status: terminal ? 'SOLD_OUT' : 'PARTIALLY_FILLED', closedAt: terminal ? new Date() : null } });
-      await this.outbox.append(db, initialOfferingLifecycleEvent({ eventType: terminal ? eventType.initialOfferingSoldOut : eventType.initialOfferingPartiallyFilled, offeringId: updatedOffering.id, assetId: updatedOffering.assetId, status: updatedOffering.status, offeredUnits: updatedOffering.offeredUnits.toString(), retainedUnits: updatedOffering.retainedUnits.toString(), correlationId, actorUserId: actor.userId, occurredAt: updatedOffering.updatedAt, eventSuffix: execution.id }));
+      await db.initialOfferingInventory.update({
+        where: { offeringId: initialOffering.id },
+        data: {
+          reservedUnits: { decrement: units },
+          settledUnits: { increment: units },
+        },
+      });
+      const updatedOffering = await db.initialOffering.update({
+        where: { id: initialOffering.id },
+        data: {
+          status: terminal ? 'SOLD_OUT' : 'PARTIALLY_FILLED',
+          closedAt: terminal ? new Date() : null,
+        },
+      });
+      await this.outbox.append(
+        db,
+        initialOfferingLifecycleEvent({
+          eventType: terminal
+            ? eventType.initialOfferingSoldOut
+            : eventType.initialOfferingPartiallyFilled,
+          offeringId: updatedOffering.id,
+          assetId: updatedOffering.assetId,
+          status: updatedOffering.status,
+          offeredUnits: updatedOffering.offeredUnits.toString(),
+          retainedUnits: updatedOffering.retainedUnits.toString(),
+          correlationId,
+          actorUserId: actor.userId,
+          occurredAt: updatedOffering.updatedAt,
+          eventSuffix: execution.id,
+        }),
+      );
     }
-    for (const order of [updatedBuy, updatedSell]) await this.outbox.append(db, orderLifecycleEvent({ eventType: order.status === 'FILLED' ? eventType.orderFilled : eventType.orderPartiallyFilled, orderId: order.id, assetId: order.assetId, side: order.side, units: units.toString(), priceMinor: price.toString(), status: order.status as 'PARTIALLY_FILLED' | 'FILLED', actorUserId: this.orderActorUserId(order), correlationId: execution.correlationId, occurredAt: execution.executedAt, eventSuffix: execution.id }));
+    for (const order of [updatedBuy, updatedSell])
+      await this.outbox.append(
+        db,
+        orderLifecycleEvent({
+          eventType:
+            order.status === 'FILLED'
+              ? eventType.orderFilled
+              : eventType.orderPartiallyFilled,
+          orderId: order.id,
+          assetId: order.assetId,
+          side: order.side,
+          units: units.toString(),
+          priceMinor: price.toString(),
+          status: order.status as 'PARTIALLY_FILLED' | 'FILLED',
+          actorUserId: this.orderActorUserId(order),
+          correlationId: execution.correlationId,
+          occurredAt: execution.executedAt,
+          eventSuffix: execution.id,
+        }),
+      );
     await tradingTestFailurePoint('execution.after-order-updates');
     const tx = createIdentityTransaction(db);
     await tx.audit.append({
@@ -1574,7 +1982,11 @@ export class TradingService {
       const reservation = await db.ownershipReservation.findUnique({
         where: { id: order.ownershipReservationId },
       });
-      if (!reservation || reservation.status !== 'ACTIVE' || reservation.units < units)
+      if (
+        !reservation ||
+        reservation.status !== 'ACTIVE' ||
+        reservation.units < units
+      )
         throw conflict(
           'SETTLEMENT_INVARIANT_VIOLATION',
           'Ownership reservation invariant failed.',
@@ -1662,7 +2074,10 @@ export class TradingService {
       where: { assetId_accountId: { assetId, accountId } },
     });
     if (!position || position.settledUnits - position.reservedUnits < units)
-      throw conflict('INSUFFICIENT_OWNERSHIP', 'Insufficient available ownership units.');
+      throw conflict(
+        'INSUFFICIENT_OWNERSHIP',
+        'Insufficient available ownership units.',
+      );
     const reservation = await db.ownershipReservation.create({
       data: {
         id: randomUUID(),
@@ -1693,7 +2108,10 @@ export class TradingService {
     initialOffering: { id: string; beneficiaryUserId: string } | null = null,
   ) {
     if (!buyOrder.userId)
-      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'A customer buyer is required.');
+      throw conflict(
+        'SETTLEMENT_INVARIANT_VIOLATION',
+        'A customer buyer is required.',
+      );
     const [buyer, seller, fees] = await Promise.all([
       this.cashAccount(db, buyOrder.userId),
       this.settlementSellerCashAccount(db, sellOrder, initialOffering),
@@ -1702,7 +2120,10 @@ export class TradingService {
     await this.lockFinancialAccounts(db, [buyer.id, seller.id, fees.id]);
     const reserveReduction =
       checkedGross(buyOrder.limitPriceMinor, units) +
-      feeMinor(checkedGross(buyOrder.limitPriceMinor, units), maximumBuyerFeeBps);
+      feeMinor(
+        checkedGross(buyOrder.limitPriceMinor, units),
+        maximumBuyerFeeBps,
+      );
     const reservation = await db.cashReservation.findUnique({
       where: { id: buyOrder.cashReservationId! },
     });
@@ -1726,13 +2147,19 @@ export class TradingService {
       await db.accountBalance.upsert({
         where: { accountId: seller.id },
         create: { accountId: seller.id, postedDebitMinor: gross - sellerFee },
-        update: { postedDebitMinor: { increment: gross - sellerFee }, version: { increment: 1 } },
+        update: {
+          postedDebitMinor: { increment: gross - sellerFee },
+          version: { increment: 1 },
+        },
       });
     } else {
       await db.accountBalance.upsert({
         where: { accountId: seller.id },
         create: { accountId: seller.id, postedCreditMinor: gross - sellerFee },
-        update: { postedCreditMinor: { increment: gross - sellerFee }, version: { increment: 1 } },
+        update: {
+          postedCreditMinor: { increment: gross - sellerFee },
+          version: { increment: 1 },
+        },
       });
     }
     if (buyerFee + sellerFee > 0n)
@@ -1747,10 +2174,14 @@ export class TradingService {
     const journal = await db.journalTransaction.create({
       data: {
         id: randomUUID(),
-        type: initialOffering ? 'INITIAL_OFFERING_SETTLEMENT' : 'TRADE_SETTLEMENT',
+        type: initialOffering
+          ? 'INITIAL_OFFERING_SETTLEMENT'
+          : 'TRADE_SETTLEMENT',
         currency: 'GBP',
         correlationId,
-        descriptionCode: initialOffering ? 'INITIAL_OFFERING_SETTLEMENT_WITH_FEE' : 'TRADING_EXECUTION_WITH_FEE',
+        descriptionCode: initialOffering
+          ? 'INITIAL_OFFERING_SETTLEMENT_WITH_FEE'
+          : 'TRADING_EXECUTION_WITH_FEE',
         createdByUserId: this.orderActorUserId(buyOrder),
       },
     });
@@ -1817,10 +2248,20 @@ export class TradingService {
         'Ownership reservation is unavailable.',
       );
     const reservation = sellOrder.ownershipReservationId
-      ? await db.ownershipReservation.findUnique({ where: { id: sellOrder.ownershipReservationId } })
+      ? await db.ownershipReservation.findUnique({
+          where: { id: sellOrder.ownershipReservationId },
+        })
       : null;
-    if (!reservation || reservation.status !== 'ACTIVE' || reservation.accountId !== seller.id || reservation.units < units)
-      throw conflict('SETTLEMENT_CONFLICT', 'Ownership reservation is unavailable.');
+    if (
+      !reservation ||
+      reservation.status !== 'ACTIVE' ||
+      reservation.accountId !== seller.id ||
+      reservation.units < units
+    )
+      throw conflict(
+        'SETTLEMENT_CONFLICT',
+        'Ownership reservation is unavailable.',
+      );
     const buyerPosition = await db.ownershipPosition.upsert({
       where: { assetId_accountId: { assetId, accountId: buyer.id } },
       create: { id: randomUUID(), assetId, accountId: buyer.id },
@@ -2022,8 +2463,17 @@ export class TradingService {
             version: { increment: 1 },
           },
         });
-        if (order.principalType === 'INITIAL_OFFERING' && order.initialOfferingId)
-          await db.initialOfferingInventory.update({ where: { offeringId: order.initialOfferingId }, data: { reservedUnits: { decrement: order.remainingUnits }, availableUnits: { increment: order.remainingUnits } } });
+        if (
+          order.principalType === 'INITIAL_OFFERING' &&
+          order.initialOfferingId
+        )
+          await db.initialOfferingInventory.update({
+            where: { offeringId: order.initialOfferingId },
+            data: {
+              reservedUnits: { decrement: order.remainingUnits },
+              availableUnits: { increment: order.remainingUnits },
+            },
+          });
         await db.ownershipReservation.update({
           where: { id: reservation.id },
           data: { status: 'RELEASED' },
@@ -2108,9 +2558,15 @@ export class TradingService {
       averageFillPriceMinor: order.averageFillPriceMinor?.toString() ?? null,
       createdAt: order.createdAt.toISOString(),
       closedAt: order.closedAt?.toISOString() ?? null,
-      requestedOwnershipPercent: totalUnits ? formatOwnershipPercent(order.originalUnits, totalUnits) : null,
-      filledOwnershipPercent: totalUnits ? formatOwnershipPercent(order.filledUnits, totalUnits) : null,
-      remainingOwnershipPercent: totalUnits ? formatOwnershipPercent(order.remainingUnits, totalUnits) : null,
+      requestedOwnershipPercent: totalUnits
+        ? formatOwnershipPercent(order.originalUnits, totalUnits)
+        : null,
+      filledOwnershipPercent: totalUnits
+        ? formatOwnershipPercent(order.filledUnits, totalUnits)
+        : null,
+      remainingOwnershipPercent: totalUnits
+        ? formatOwnershipPercent(order.remainingUnits, totalUnits)
+        : null,
     };
   }
 
@@ -2125,11 +2581,15 @@ export class TradingService {
     const frontMedia =
       media.find((item) => item.slot.toLowerCase() === 'front') ?? media[0];
     const objectKey = frontMedia?.objectKey;
-    const thumbnailUrl = objectKey && this.storage
-      ? await this.storage
-          .createPrivateDownloadUrl(objectKey, new Date(Date.now() + 5 * 60_000))
-          .catch(() => null)
-      : null;
+    const thumbnailUrl =
+      objectKey && this.storage
+        ? await this.storage
+            .createPrivateDownloadUrl(
+              objectKey,
+              new Date(Date.now() + 5 * 60_000),
+            )
+            .catch(() => null)
+        : null;
     return {
       slug: this.publicAssetSlug(asset.slug) ?? null,
       title: asset.title,
@@ -2142,12 +2602,17 @@ export class TradingService {
   private orderActorUserId(order: TradingOrder) {
     const actorUserId = order.actorUserId ?? order.userId;
     if (!actorUserId)
-      throw conflict('TRADING_INVARIANT_VIOLATION', 'Trading order actor is unavailable.');
+      throw conflict(
+        'TRADING_INVARIANT_VIOLATION',
+        'Trading order actor is unavailable.',
+      );
     return actorUserId;
   }
 
   private publicAssetSlug(slug: string) {
-    return this.config?.isBeta === true && isBetaFixtureSlug(slug) ? undefined : slug;
+    return this.config?.isBeta === true && isBetaFixtureSlug(slug)
+      ? undefined
+      : slug;
   }
 
   private async marketForInput(assetId: string) {
@@ -2286,7 +2751,9 @@ export class TradingService {
     );
   }
   private async feeAccount(db: Db, initialOffering = false) {
-    const code = initialOffering ? 'INITIAL_OFFERING_FEE_REVENUE' : 'TRADING_FEE_REVENUE';
+    const code = initialOffering
+      ? 'INITIAL_OFFERING_FEE_REVENUE'
+      : 'TRADING_FEE_REVENUE';
     return (
       (await db.financialAccount.findFirst({
         where: {
@@ -2318,35 +2785,84 @@ export class TradingService {
   }
 
   private async ownershipAccountForOrder(db: Db, order: TradingOrder) {
-    if (order.principalType === 'TREASURY' || order.principalType === 'INITIAL_OFFERING') {
+    if (
+      order.principalType === 'TREASURY' ||
+      order.principalType === 'INITIAL_OFFERING'
+    ) {
       const reservation = order.ownershipReservationId
-        ? await db.ownershipReservation.findUnique({ where: { id: order.ownershipReservationId } })
+        ? await db.ownershipReservation.findUnique({
+            where: { id: order.ownershipReservationId },
+          })
         : null;
       if (!reservation)
-        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Treasury ownership reservation is unavailable.');
-      const account = await db.ownershipAccount.findUnique({ where: { id: reservation.accountId } });
-      const expectedType = order.principalType === 'TREASURY' ? 'TREASURY' : 'INITIAL_OFFERING';
-      if (!account || account.type !== expectedType || account.status !== 'ACTIVE')
-        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'The selling inventory account is unavailable.');
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'Treasury ownership reservation is unavailable.',
+        );
+      const account = await db.ownershipAccount.findUnique({
+        where: { id: reservation.accountId },
+      });
+      const expectedType =
+        order.principalType === 'TREASURY' ? 'TREASURY' : 'INITIAL_OFFERING';
+      if (
+        !account ||
+        account.type !== expectedType ||
+        account.status !== 'ACTIVE'
+      )
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'The selling inventory account is unavailable.',
+        );
       return account;
     }
     if (!order.userId)
-      throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Customer ownership account is unavailable.');
+      throw conflict(
+        'SETTLEMENT_INVARIANT_VIOLATION',
+        'Customer ownership account is unavailable.',
+      );
     return this.ownershipAccount(db, order.userId);
   }
 
-  private async settlementSellerCashAccount(db: Db, order: TradingOrder, initialOffering: { beneficiaryUserId: string } | null = null) {
+  private async settlementSellerCashAccount(
+    db: Db,
+    order: TradingOrder,
+    initialOffering: { beneficiaryUserId: string } | null = null,
+  ) {
     if (order.principalType === 'INITIAL_OFFERING') {
-      if (!initialOffering) throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Initial offering beneficiary is unavailable.');
+      if (!initialOffering)
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'Initial offering beneficiary is unavailable.',
+        );
       await this.lockUsers(db, [initialOffering.beneficiaryUserId]);
       return (
-        (await db.financialAccount.findFirst({ where: { ownerType: 'USER', ownerUserId: initialOffering.beneficiaryUserId, code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: 'GBP' } })) ??
-        db.financialAccount.create({ data: { id: randomUUID(), ownerType: 'USER', ownerUserId: initialOffering.beneficiaryUserId, accountType: 'LIABILITY', code: 'COLLECTOR_PROCEEDS_AVAILABLE', currency: 'GBP', normalSide: 'CREDIT' } })
+        (await db.financialAccount.findFirst({
+          where: {
+            ownerType: 'USER',
+            ownerUserId: initialOffering.beneficiaryUserId,
+            code: 'COLLECTOR_PROCEEDS_AVAILABLE',
+            currency: 'GBP',
+          },
+        })) ??
+        db.financialAccount.create({
+          data: {
+            id: randomUUID(),
+            ownerType: 'USER',
+            ownerUserId: initialOffering.beneficiaryUserId,
+            accountType: 'LIABILITY',
+            code: 'COLLECTOR_PROCEEDS_AVAILABLE',
+            currency: 'GBP',
+            normalSide: 'CREDIT',
+          },
+        })
       );
     }
     if (order.principalType !== 'TREASURY') {
       if (!order.userId)
-        throw conflict('SETTLEMENT_INVARIANT_VIOLATION', 'Customer cash account is unavailable.');
+        throw conflict(
+          'SETTLEMENT_INVARIANT_VIOLATION',
+          'Customer cash account is unavailable.',
+        );
       return this.cashAccount(db, order.userId);
     }
     return (
@@ -2393,8 +2909,13 @@ function conflict(code: string, message: string): never {
 
 function parseOwnershipBps(value: string) {
   const [whole, fraction = ''] = value.split('.');
-  const bps = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
-  if (bps < 0n || bps > 10_000n) throw conflict('INVALID_OWNERSHIP_PERCENT', 'Ownership percentage must be between 0% and 100%.');
+  const bps =
+    BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+  if (bps < 0n || bps > 10_000n)
+    throw conflict(
+      'INVALID_OWNERSHIP_PERCENT',
+      'Ownership percentage must be between 0% and 100%.',
+    );
   return bps;
 }
 
@@ -2412,12 +2933,19 @@ function unitsForBudget(
     const price = BigInt(level.priceMinor);
     if (limit !== null && price > limit) break;
     const affordable = remaining / price;
-    const fill = affordable < BigInt(level.units) ? affordable : BigInt(level.units);
+    const fill =
+      affordable < BigInt(level.units) ? affordable : BigInt(level.units);
     if (fill <= 0n) break;
     units += fill;
     remaining -= fill * price;
   }
-  if (units === 0n && levels.length === 0 && fallbackPrice && fallbackPrice > 0n) return budget / fallbackPrice;
+  if (
+    units === 0n &&
+    levels.length === 0 &&
+    fallbackPrice &&
+    fallbackPrice > 0n
+  )
+    return budget / fallbackPrice;
   return units;
 }
 
@@ -2433,8 +2961,10 @@ function executableProjection(
   let worst: bigint | null = null;
   for (const level of levels) {
     const price = BigInt(level.priceMinor);
-    if ((side === 'BUY' && price > limit) || (side === 'SELL' && price < limit)) break;
-    const fill = remaining < BigInt(level.units) ? remaining : BigInt(level.units);
+    if ((side === 'BUY' && price > limit) || (side === 'SELL' && price < limit))
+      break;
+    const fill =
+      remaining < BigInt(level.units) ? remaining : BigInt(level.units);
     if (fill <= 0n) break;
     units += fill;
     gross += fill * price;

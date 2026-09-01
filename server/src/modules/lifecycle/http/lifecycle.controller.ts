@@ -114,6 +114,29 @@ const stagingDemoPhysicalIntake = z
     confirmation: z.literal(STAGING_DEMO_PHYSICAL_CONFIRMATION),
   })
   .strict();
+const operationalControl = z
+  .object({
+    command: z.enum(['FREEZE', 'UNFREEZE']),
+    reason: z.string().trim().min(12).max(500),
+    confirmation: z.enum([
+      'FREEZE_ASSET_OPERATIONS',
+      'UNFREEZE_ASSET_OPERATIONS',
+    ]),
+    expectedVersion: z.number().int().min(0),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expected =
+      value.command === 'FREEZE'
+        ? 'FREEZE_ASSET_OPERATIONS'
+        : 'UNFREEZE_ASSET_OPERATIONS';
+    if (value.confirmation !== expected)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['confirmation'],
+        message: `Confirmation must be ${expected}.`,
+      });
+  });
 
 @Controller()
 export class LifecycleController {
@@ -145,6 +168,26 @@ export class LifecycleController {
   @RequirePermission('admin.console.read')
   operationDetail(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.lifecycle.operationDetail(req.actor!, id);
+  }
+
+  @Post('admin/assets/:id/operational-control')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('trading.manage')
+  operationalControl(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.lifecycle.setOperationalControl(
+        req.actor!,
+        id,
+        parse(operationalControl, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
   }
 
   @Post('admin/assets/:id/handoff')

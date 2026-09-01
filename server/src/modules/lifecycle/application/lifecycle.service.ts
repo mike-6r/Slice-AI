@@ -151,6 +151,15 @@ type BoardAsset = {
     } | null;
   } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
+  operationalControl: {
+    status: string;
+    reason: string;
+    version: number;
+    frozenAt: Date | null;
+    unfrozenAt: Date | null;
+    updatedAt: Date;
+    updatedByUserId: string;
+  } | null;
   controlledBetaBypass: { id: string } | null;
   stagingDemoPhysicalIntake: { id: string } | null;
 };
@@ -312,6 +321,7 @@ export class LifecycleService {
         ownershipSupplyPolicy: true,
         initialOffering: { include: { inventory: true } },
         tradingMarket: true,
+        operationalControl: true,
         controlledBetaBypass: true,
         stagingDemoPhysicalIntake: true,
       },
@@ -383,6 +393,154 @@ export class LifecycleService {
     const offeringLive = ['OPEN', 'PARTIALLY_FILLED', 'SOLD_OUT'].includes(
       item.offering.state,
     );
+    const [control, positions, offering, events] = await Promise.all([
+      this.db.assetOperationalControl.findUnique({ where: { assetId } }),
+      this.db.ownershipPosition.findMany({
+        where: { assetId, settledUnits: { gt: 0n } },
+        select: {
+          settledUnits: true,
+          account: { select: { type: true, userId: true } },
+        },
+      }),
+      this.db.initialOffering.findUnique({
+        where: { assetId },
+        select: {
+          id: true,
+          status: true,
+          beneficiaryUserId: true,
+          inventory: {
+            select: {
+              settledUnits: true,
+              reservedUnits: true,
+              availableUnits: true,
+            },
+          },
+        },
+      }),
+      this.db.auditEvent.findMany({
+        where: {
+          OR: [
+            { resourceId: assetId },
+            ...(item.offering.offeringId
+              ? [{ resourceId: item.offering.offeringId }]
+              : []),
+          ],
+          action: {
+            in: [
+              'ASSET_OPERATIONAL_FREEZE_APPLIED',
+              'ASSET_OPERATIONAL_FREEZE_RELEASED',
+              'TRADING_MARKET_STATUS_CHANGED',
+              'INITIAL_OFFERING_PAUSED',
+              'INITIAL_OFFERING_CANCELLED',
+            ],
+          },
+        },
+        select: {
+          action: true,
+          metadata: true,
+          createdAt: true,
+          actor: {
+            select: {
+              profile: { select: { displayName: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+    ]);
+    const investorOwnedUnits = authoritativeInvestorOwnedUnits(
+      positions,
+      offering?.beneficiaryUserId ?? null,
+    );
+    const investorProtectionActive = investorOwnedUnits > 0n;
+    const integrityIncidents = operationIntegrityIncidents(item);
+    const frozen = control?.status === 'FROZEN';
+    const latestReason = (action: string) => {
+      const metadata = events.find(
+        (event) => event.action === action,
+      )?.metadata;
+      if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+        return null;
+      const reason = (metadata as Record<string, unknown>).reason;
+      return typeof reason === 'string' ? reason : null;
+    };
+    const restrictions = [
+      ...(frozen
+        ? [
+            {
+              type: 'OPERATIONAL_FREEZE',
+              scope: 'ASSET_OPERATIONS',
+              source: 'ADMINISTRATIVE_CONTROL',
+              reason: control.reason,
+              status: 'ACTIVE',
+              actor:
+                events.find(
+                  (event) =>
+                    event.action === 'ASSET_OPERATIONAL_FREEZE_APPLIED',
+                )?.actor?.profile?.displayName ?? 'Authorised staff',
+              createdAt:
+                control.frozenAt?.toISOString() ??
+                control.createdAt.toISOString(),
+              updatedAt: control.updatedAt.toISOString(),
+              resolution:
+                'Resolve the reason, then release the operational freeze.',
+            },
+          ]
+        : []),
+      ...(item.market.tradingStatus === 'HALTED'
+        ? [
+            {
+              type: 'TRADING_HALT',
+              scope: 'SECONDARY_MARKET',
+              source: 'TRADING_AUTHORITY',
+              reason:
+                latestReason('TRADING_MARKET_STATUS_CHANGED') ??
+                'The secondary market is administratively halted.',
+              status: 'ACTIVE',
+              actor:
+                events.find(
+                  (event) => event.action === 'TRADING_MARKET_STATUS_CHANGED',
+                )?.actor?.profile?.displayName ?? 'Authorised staff',
+              createdAt:
+                events
+                  .find(
+                    (event) => event.action === 'TRADING_MARKET_STATUS_CHANGED',
+                  )
+                  ?.createdAt.toISOString() ?? item.updatedAt,
+              updatedAt: item.updatedAt,
+              resolution: frozen
+                ? 'Release the operational freeze before resuming trading.'
+                : 'Re-evaluate market readiness, then resume trading.',
+            },
+          ]
+        : []),
+      ...(offering?.status === 'PAUSED'
+        ? [
+            {
+              type: 'OFFERING_PAUSE',
+              scope: 'INITIAL_OFFERING',
+              source: 'OFFERING_AUTHORITY',
+              reason:
+                latestReason('INITIAL_OFFERING_PAUSED') ??
+                'The Initial Offering is paused.',
+              status: 'ACTIVE',
+              actor:
+                events.find(
+                  (event) => event.action === 'INITIAL_OFFERING_PAUSED',
+                )?.actor?.profile?.displayName ?? 'Authorised staff',
+              createdAt:
+                events
+                  .find((event) => event.action === 'INITIAL_OFFERING_PAUSED')
+                  ?.createdAt.toISOString() ?? item.updatedAt,
+              updatedAt: item.updatedAt,
+              resolution: frozen
+                ? 'Release the operational freeze before resuming the offering.'
+                : 'Re-evaluate readiness, then resume the Initial Offering.',
+            },
+          ]
+        : []),
+    ];
     return {
       assetId,
       physicalPrerequisites: item.physicalPrerequisiteSummary,
@@ -410,17 +568,260 @@ export class LifecycleService {
         },
       },
       availableCommands: {
-        recordValuation: item.currentStage === 'VALUATION',
-        configureOwnership: item.currentStage === 'OWNERSHIP_SETUP',
+        recordValuation: !frozen && item.currentStage === 'VALUATION',
+        configureOwnership: !frozen && item.currentStage === 'OWNERSHIP_SETUP',
         issueOwnership:
+          !frozen &&
           item.ownership.state === 'CONFIGURED' &&
           item.offering.state === 'APPROVED',
-        reviewOffering: item.offering.state === 'AWAITING_APPROVAL',
-        publish: item.launchReadiness.state === 'READY',
-        activateMarket: issued && !offeringLive,
-        openOffering: issued && item.offering.state === 'APPROVED',
+        reviewOffering: !frozen && item.offering.state === 'AWAITING_APPROVAL',
+        publish: !frozen && item.launchReadiness.state === 'READY',
+        activateMarket: !frozen && issued && !offeringLive,
+        openOffering: !frozen && issued && item.offering.state === 'APPROVED',
+      },
+      controls: {
+        version: control?.version ?? 0,
+        operational: {
+          status: frozen ? 'FROZEN' : 'ACTIVE',
+          reason: control?.reason ?? null,
+          frozenAt: control?.frozenAt?.toISOString() ?? null,
+          unfrozenAt: control?.unfrozenAt?.toISOString() ?? null,
+          updatedAt: control?.updatedAt.toISOString() ?? null,
+        },
+        investorProtection: {
+          active: investorProtectionActive,
+          investorOwnedUnits: investorOwnedUnits.toString(),
+          reason: investorProtectionActive
+            ? 'Authoritative investor-owned units exist. Ownership, trade, and economic history are immutable.'
+            : 'No investor-owned units are currently recorded.',
+          protectedCommands: investorProtectionActive
+            ? [
+                'DELETE_ASSET',
+                'RESET_OWNERSHIP',
+                'DELETE_POSITIONS',
+                'REWRITE_PURCHASES',
+                'REDUCE_ISSUED_SUPPLY',
+                'RESET_PRE_LAUNCH',
+                'HIDE_OWNER_RECORD',
+                'REPLACE_CANONICAL_ASSET',
+              ]
+            : [],
+          ownerVisibilityRequired: investorProtectionActive,
+        },
+        restrictions,
+        integrityIncidents,
+        commands: {
+          freeze: {
+            available: !frozen,
+            confirmation: 'FREEZE_ASSET_OPERATIONS',
+            unavailableReason: frozen ? 'Operations are already frozen.' : null,
+          },
+          unfreeze: {
+            available: frozen && integrityIncidents.length === 0,
+            confirmation: 'UNFREEZE_ASSET_OPERATIONS',
+            unavailableReason: !frozen
+              ? 'Operations are not frozen.'
+              : integrityIncidents.length
+                ? 'Resolve lifecycle integrity incidents before releasing the freeze.'
+                : null,
+          },
+          pauseOffering: {
+            available: ['OPEN', 'PARTIALLY_FILLED'].includes(
+              offering?.status ?? '',
+            ),
+            expectedStatus: offering?.status ?? null,
+            confirmation: 'PAUSE_INITIAL_OFFERING',
+          },
+          resumeOffering: {
+            available: !frozen && offering?.status === 'PAUSED',
+            expectedStatus: offering?.status ?? null,
+            confirmation: 'RESUME_INITIAL_OFFERING',
+          },
+          cancelOffering: {
+            available:
+              !investorProtectionActive &&
+              (offering?.inventory?.settledUnits ?? 0n) === 0n &&
+              [
+                'DRAFT',
+                'AWAITING_APPROVAL',
+                'CHANGES_REQUESTED',
+                'APPROVED',
+                'PAUSED',
+              ].includes(offering?.status ?? ''),
+            expectedStatus: offering?.status ?? null,
+            confirmation: 'CANCEL_UNLAUNCHED_OFFERING',
+            unavailableReason: investorProtectionActive
+              ? 'Investor ownership makes offering cancellation destructive.'
+              : (offering?.inventory?.settledUnits ?? 0n) > 0n
+                ? 'Executed investor allocations prevent cancellation.'
+                : 'Only an unlaunched, unexecuted offering can be cancelled.',
+          },
+          haltMarket: {
+            available: item.market.tradingStatus === 'OPEN',
+            expectedStatus: item.market.tradingStatus,
+            confirmation: 'HALT_TRADING',
+          },
+          resumeMarket: {
+            available:
+              !frozen &&
+              integrityIncidents.length === 0 &&
+              item.market.tradingStatus === 'HALTED',
+            expectedStatus: item.market.tradingStatus,
+            confirmation: 'RESUME_TRADING',
+          },
+        },
+        lockedActions: [
+          'Hard-delete canonical asset',
+          'Reset issued ownership',
+          'Delete investor positions',
+          'Rewrite completed purchases',
+          'Reduce issued supply',
+          'Reset lifecycle to pre-launch',
+          'Hide investor owner record',
+          'Replace canonical asset identity',
+        ].map((label) => ({
+          label,
+          reason: investorProtectionActive
+            ? 'Locked because investor-owned units exist.'
+            : 'No destructive administrative endpoint exists; use audited compensating actions.',
+        })),
       },
     };
+  }
+
+  setOperationalControl(
+    actor: Actor,
+    assetId: string,
+    input: {
+      command: 'FREEZE' | 'UNFREEZE';
+      reason: string;
+      confirmation: 'FREEZE_ASSET_OPERATIONS' | 'UNFREEZE_ASSET_OPERATIONS';
+      expectedVersion: number;
+    },
+    requestId: string,
+    key: string,
+  ) {
+    this.recentAuth.require(actor);
+    return this.mutate(
+      actor,
+      `lifecycle.operational-control:${assetId}`,
+      'POST',
+      `/v1/admin/assets/${assetId}/operational-control`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${assetId} FOR UPDATE`;
+        await this.asset(db, assetId);
+        const current = await db.assetOperationalControl.findUnique({
+          where: { assetId },
+        });
+        const currentVersion = current?.version ?? 0;
+        if (input.expectedVersion !== currentVersion)
+          throw new ConflictException({
+            code: 'OPERATIONAL_CONTROL_STALE',
+            message:
+              'The operational control changed. Refresh before retrying.',
+          });
+        const target = input.command === 'FREEZE' ? 'FROZEN' : 'ACTIVE';
+        if (current?.status === target)
+          return {
+            assetId,
+            status: target,
+            version: current.version,
+            replayed: true,
+          };
+        if (input.command === 'UNFREEZE') {
+          const authority = await db.asset.findUnique({
+            where: { id: assetId },
+            select: {
+              publication: { select: { status: true } },
+              tradingMarket: { select: { status: true } },
+              custodyRecord: { select: { status: true } },
+              submissions: {
+                where: { status: 'APPROVED' },
+                take: 1,
+                select: {
+                  intake: {
+                    select: {
+                      receipt: { select: { id: true } },
+                      verification: { select: { status: true } },
+                      exceptions: {
+                        where: { resolvedAt: null },
+                        select: { id: true },
+                        take: 1,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          });
+          const intake = authority?.submissions[0]?.intake;
+          const marketPublished =
+            authority?.publication?.status === 'PUBLISHED' ||
+            authority?.tradingMarket?.status === 'OPEN';
+          const physicalComplete =
+            authority?.custodyRecord?.status === 'SECURED' &&
+            Boolean(intake?.receipt) &&
+            intake?.verification?.status === 'VERIFIED' &&
+            !intake.exceptions.length;
+          if (marketPublished && !physicalComplete)
+            throw new ConflictException({
+              code: 'LIFECYCLE_INTEGRITY_INCIDENT_ACTIVE',
+              message:
+                'Resolve lifecycle integrity incidents before releasing the freeze.',
+            });
+        }
+        const now = new Date();
+        const updated = await db.assetOperationalControl.upsert({
+          where: { assetId },
+          create: {
+            assetId,
+            status: target,
+            reason: input.reason.trim(),
+            frozenAt: target === 'FROZEN' ? now : null,
+            unfrozenAt: target === 'ACTIVE' ? now : null,
+            updatedByUserId: actor.userId,
+          },
+          update: {
+            status: target,
+            reason: input.reason.trim(),
+            frozenAt: target === 'FROZEN' ? now : current?.frozenAt,
+            unfrozenAt: target === 'ACTIVE' ? now : null,
+            updatedByUserId: actor.userId,
+            version: { increment: 1 },
+          },
+        });
+        if (target === 'FROZEN') {
+          await db.tradingMarket.updateMany({
+            where: { assetId, status: 'OPEN' },
+            data: { status: 'HALTED', version: { increment: 1 } },
+          });
+        }
+        await audit(
+          target === 'FROZEN'
+            ? 'ASSET_OPERATIONAL_FREEZE_APPLIED'
+            : 'ASSET_OPERATIONAL_FREEZE_RELEASED',
+          'asset',
+          assetId,
+          {
+            assetId,
+            reason: input.reason.trim(),
+            fromStatus: current?.status ?? 'ACTIVE',
+            toStatus: target,
+            version: updated.version,
+            marketAutomaticallyHalted: target === 'FROZEN',
+          },
+        );
+        return {
+          assetId,
+          status: target,
+          version: updated.version,
+          replayed: false,
+        };
+      },
+    );
   }
 
   handoff(
@@ -661,7 +1062,7 @@ export class LifecycleService {
             code: 'VALUATION_EVIDENCE_INVALID',
             message: 'Confidence must be a whole percentage.',
           });
-        await this.asset(db, assetId);
+        await this.assertOperationsActive(db, assetId);
         const at = new Date();
         await db.valuationEvidence.create({
           data: {
@@ -747,7 +1148,7 @@ export class LifecycleService {
             code: 'COVERAGE_INVALID',
             message: 'Coverage dates are invalid.',
           });
-        await this.asset(db, assetId);
+        await this.assertOperationsActive(db, assetId);
         const coverage = await db.insuranceCoverage.create({
           data: {
             id: randomUUID(),
@@ -1172,6 +1573,7 @@ export class LifecycleService {
         },
         controlledBetaBypass: true,
         stagingDemoPhysicalIntake: true,
+        operationalControl: true,
       },
     });
     if (!asset)
@@ -1193,6 +1595,15 @@ export class LifecycleService {
       activeCoverage: asset.insuranceCoverage.length > 0,
       hasException: asset.custodyRecord?.status === 'EXCEPTION',
     });
+    if (asset.operationalControl?.status === 'FROZEN')
+      return {
+        assetId,
+        ...evaluated,
+        status: 'BLOCKED' as const,
+        blockingCodes: [
+          ...new Set([...evaluated.blockingCodes, 'OPERATIONAL_FREEZE_ACTIVE']),
+        ],
+      };
     return { assetId, ...evaluated };
   }
   private async asset(db: Db, id: string) {
@@ -1201,6 +1612,24 @@ export class LifecycleService {
       throw new NotFoundException({
         code: 'ASSET_NOT_FOUND',
         message: 'Asset not found.',
+      });
+    return asset;
+  }
+
+  private async assertOperationsActive(db: Db, assetId: string) {
+    const asset = await db.asset.findUnique({
+      where: { id: assetId },
+      include: { operationalControl: true },
+    });
+    if (!asset)
+      throw new NotFoundException({
+        code: 'ASSET_NOT_FOUND',
+        message: 'Asset not found.',
+      });
+    if (asset.operationalControl?.status === 'FROZEN')
+      throw new ConflictException({
+        code: 'ASSET_OPERATIONS_FROZEN',
+        message: 'Asset operations are frozen pending authorised review.',
       });
     return asset;
   }
@@ -1343,6 +1772,7 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
   const custodyException = asset.custodyRecord?.status === 'EXCEPTION';
   const intakeException = Boolean(intake?.exceptions.length);
   const marketRestriction = asset.tradingMarket?.status === 'HALTED';
+  const operationalFreeze = asset.operationalControl?.status === 'FROZEN';
   const rawMarket = marketProjection(asset);
   // A published market record cannot be operationally healthy while the
   // canonical asset is not physically verified and secured. This is a data
@@ -1351,15 +1781,22 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
     eligibleForAssetOperations,
     rawMarket.state,
   );
-  const entryBlockers = lifecycleConflict
-    ? [...physicalBlockers, 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT']
-    : physicalBlockers;
-  const exception = custodyException || intakeException || lifecycleConflict;
+  const entryBlockers = [
+    ...physicalBlockers,
+    ...(lifecycleConflict ? ['LIFECYCLE_PHYSICAL_MARKET_CONFLICT'] : []),
+    ...(operationalFreeze ? ['OPERATIONAL_FREEZE_ACTIVE'] : []),
+  ];
+  const exception =
+    custodyException ||
+    intakeException ||
+    lifecycleConflict ||
+    operationalFreeze;
   const ownership = ownershipProjection(asset);
   const offering = offeringProjection(asset);
-  const market = lifecycleConflict
-    ? { ...rawMarket, state: 'RESTRICTED' }
-    : rawMarket;
+  const market =
+    lifecycleConflict || operationalFreeze
+      ? { ...rawMarket, state: 'RESTRICTED' }
+      : rawMarket;
   const covered = asset.insuranceCoverage.some(
     (item) => item.status === 'ACTIVE' && item.expiresAt > new Date(),
   );
@@ -1521,6 +1958,7 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
             ]
           : []),
         ...(marketRestriction ? ['Secondary market halted'] : []),
+        ...(operationalFreeze ? ['Administrative operational freeze'] : []),
       ],
       severity: exception || marketRestriction ? 'HIGH' : 'NONE',
     },
@@ -1530,12 +1968,16 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
             ? 'CUSTODY_EXCEPTION'
             : intakeException
               ? 'INTAKE_EXCEPTION'
-              : 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT',
+              : lifecycleConflict
+                ? 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT'
+                : 'OPERATIONAL_FREEZE_ACTIVE',
           summary: custodyException
             ? 'Custody requires operator attention.'
             : intakeException
               ? 'Physical intake has an unresolved exception.'
-              : 'A published market record conflicts with incomplete physical authority.',
+              : lifecycleConflict
+                ? 'A published market record conflicts with incomplete physical authority.'
+                : 'Administrative operations are frozen pending authorised review.',
         }
       : null,
     recommendedDetailTab: detailTab,
@@ -1678,6 +2120,72 @@ function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
     actor: 'NONE' as const,
     target: 'COLLECTIBLE' as const,
   };
+}
+
+function operationIntegrityIncidents(
+  item: NonNullable<Awaited<ReturnType<typeof operationsItem>>>,
+) {
+  const incidents: Array<{
+    code: string;
+    title: string;
+    detail: string;
+    status: 'OPEN';
+    resolution: string;
+  }> = [];
+  if (item.exception?.type === 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT')
+    incidents.push({
+      code: 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT',
+      title: 'Published market conflicts with physical authority',
+      detail:
+        'A public or trading record exists while verification and custody prerequisites are incomplete.',
+      status: 'OPEN',
+      resolution:
+        'Resolve the authoritative Physical Intake and custody records; do not reset market or ownership history.',
+    });
+  if (
+    item.ownership.totalUnits &&
+    item.ownership.issuedUnits &&
+    item.ownership.totalUnits !== item.ownership.issuedUnits
+  )
+    incidents.push({
+      code: 'OWNERSHIP_SUPPLY_MISMATCH',
+      title: 'Issued ownership does not reconcile',
+      detail: `Issued ${item.ownership.issuedUnits} of ${item.ownership.totalUnits} authoritative units.`,
+      status: 'OPEN',
+      resolution:
+        'Use the ownership reconciliation workflow and an audited compensating entry.',
+    });
+  if (
+    item.offering.totalUnits &&
+    item.ownership.totalUnits &&
+    BigInt(item.offering.totalUnits) > BigInt(item.ownership.totalUnits)
+  )
+    incidents.push({
+      code: 'OFFERING_EXCEEDS_OWNERSHIP_SUPPLY',
+      title: 'Offering exceeds issued ownership',
+      detail:
+        'Initial Offering terms exceed the authoritative ownership supply.',
+      status: 'OPEN',
+      resolution:
+        'Pause the offering and reconcile the immutable ownership and offering ledgers.',
+    });
+  return incidents;
+}
+
+function authoritativeInvestorOwnedUnits(
+  positions: Array<{
+    settledUnits: bigint;
+    account: { type: string; userId: string | null };
+  }>,
+  originatingCollectorUserId: string | null,
+) {
+  return positions
+    .filter(
+      (position) =>
+        position.account.type === 'USER' &&
+        position.account.userId !== originatingCollectorUserId,
+    )
+    .reduce((sum, position) => sum + position.settledUnits, 0n);
 }
 
 /**
@@ -2088,6 +2596,8 @@ export const operationsQueueTestUtils = {
   operationsInsights,
   operationsSearchWhere,
   operationLaunchGates,
+  operationIntegrityIncidents,
+  authoritativeInvestorOwnedUnits,
 };
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */

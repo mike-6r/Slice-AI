@@ -234,6 +234,11 @@ enum TradingMarketStatus {
   CLOSED
 }
 
+enum AssetOperationalControlStatus {
+  ACTIVE
+  FROZEN
+}
+
 enum TradingOrderSide {
   BUY
   SELL
@@ -1429,11 +1434,30 @@ model Asset {
   initialOffering               InitialOffering?
   initialOfferingInventory      InitialOfferingInventory[]
   certificationClaims           GradingCertificationClaim[]
+  operationalControl            AssetOperationalControl?
 
   @@unique([gradeScaleEntryId, certificationNumber])
   @@index([status, categoryId, id])
   @@index([setId, status, id])
   @@index([title, id])
+}
+
+/// Administrative progression gate. This record never rewrites ownership,
+/// offering, trade, custody, or publication history; it only prevents new
+/// operational progression until an authorised operator removes the freeze.
+model AssetOperationalControl {
+  assetId         String                        @id
+  status          AssetOperationalControlStatus @default(ACTIVE)
+  reason          String
+  version         Int                           @default(1)
+  frozenAt        DateTime?
+  unfrozenAt      DateTime?
+  updatedByUserId String
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  asset           Asset                         @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt, assetId])
 }
 
 model PublicCollectorProfile {
@@ -1508,8 +1532,8 @@ model AssetSubmission {
   gradeScaleEntryId             String?
   declaredMetadata              Json?
   normalizedCertificationNumber String?
-  preferredIntakeLocationId      String?
-  preferredDeliveryMethod        IntakeDeliveryMethod?
+  preferredIntakeLocationId     String?
+  preferredDeliveryMethod       IntakeDeliveryMethod?
   submittedAt                   DateTime?
   reviewedAt                    DateTime?
   reviewerId                    String?
@@ -1527,7 +1551,7 @@ model AssetSubmission {
   reviews                       VerificationReview[]
   marketResearch                SubmissionMarketResearch[]
   intake                        SubmissionIntake?
-  preferredIntakeLocation       VaultIntakeLocation?             @relation("SubmissionPreferredIntakeLocation", fields: [preferredIntakeLocationId], references: [id], onDelete: SetNull)
+  preferredIntakeLocation       VaultIntakeLocation?               @relation("SubmissionPreferredIntakeLocation", fields: [preferredIntakeLocationId], references: [id], onDelete: SetNull)
   preGrades                     RawCardPreGrade[]
   controlledBetaBypass          ControlledBetaPhysicalBypass?
   stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
@@ -1858,38 +1882,38 @@ model ControlledBetaPhysicalBypass {
 /// Explicit staging-only simulated physical authority. This is never a
 /// production shipment, Slice receipt, verification, or vault-custody record.
 model StagingDemoPhysicalIntake {
-  id                   String          @id @default(cuid())
-  submissionId         String          @unique
-  assetId              String          @unique
-  fixtureKey           String
-  status               String          @default("DEMO_INTAKE")
-  destinationLabel     String
-  simulationNote       String
-  identityMatch        Boolean
-  certificationMatch   Boolean
-  gradeMatch           Boolean
-  variantMatch         Boolean
-  simulatedReceiptAt   DateTime
-  verifiedAt           DateTime
-  custodyAt            DateTime
-  completedByUserId    String
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-  submission           AssetSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
-  asset                Asset           @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  completedBy          User            @relation("StagingDemoPhysicalIntakeActor", fields: [completedByUserId], references: [id], onDelete: Restrict)
+  id                 String          @id @default(cuid())
+  submissionId       String          @unique
+  assetId            String          @unique
+  fixtureKey         String
+  status             String          @default("DEMO_INTAKE")
+  destinationLabel   String
+  simulationNote     String
+  identityMatch      Boolean
+  certificationMatch Boolean
+  gradeMatch         Boolean
+  variantMatch       Boolean
+  simulatedReceiptAt DateTime
+  verifiedAt         DateTime
+  custodyAt          DateTime
+  completedByUserId  String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  submission         AssetSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  asset              Asset           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  completedBy        User            @relation("StagingDemoPhysicalIntakeActor", fields: [completedByUserId], references: [id], onDelete: Restrict)
 
   @@index([completedByUserId, createdAt, id])
 }
 
 model VerificationReview {
-  id           String                   @id @default(cuid())
-  submissionId String
-  reviewerId   String
-  status       VerificationReviewStatus @default(CLAIMED)
-  decision     String?
-  reasonCode   String?
-  note         String?
+  id                  String                   @id @default(cuid())
+  submissionId        String
+  reviewerId          String
+  status              VerificationReviewStatus @default(CLAIMED)
+  decision            String?
+  reasonCode          String?
+  note                String?
   staffCondition      String?
   staffConditionNote  String?
   valuationMinor      BigInt?
@@ -1897,11 +1921,11 @@ model VerificationReview {
   valuationBasis      String?
   valuationConfidence Int?
   valuationNote       String?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  completedAt  DateTime?
-  submission   AssetSubmission          @relation(fields: [submissionId], references: [id], onDelete: Restrict)
-  reviewer     User                     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  completedAt         DateTime?
+  submission          AssetSubmission          @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  reviewer            User                     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
 
   @@index([submissionId, createdAt, id])
   @@index([reviewerId, status, createdAt, id])
@@ -1988,57 +2012,57 @@ model CollectorSubscriptionStatusHistory {
 /// Customer-safe intake destinations. Facility/security metadata is kept out
 /// of this projection and remains staff-controlled.
 model VaultIntakeLocation {
-  id                    String             @id @default(cuid())
-  displayName           String
-  region                String
-  countryCode           String
-  active                Boolean            @default(true)
-  intakeAvailable       Boolean            @default(true)
-  operationallyApproved Boolean            @default(false)
-  environment           String             @default("beta")
-  acceptingShipments    Boolean            @default(false)
-  acceptingInPerson     Boolean            @default(false)
-  locationType          IntakeLocationType @default(SLICE_VAULT)
-  status                IntakeLocationStatus @default(ACTIVE)
-  receiverName          String?
-  addressLine1          String?
-  addressLine2          String?
-  city                  String?
-  postalCode            String?
-  acceptedCategories    Json?
-  shippingInstructions  String
-  inPersonInstructions  String?
-  customerSafeAddress   String
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  intakes               SubmissionIntake[]
-  preferredBySubmissions AssetSubmission[] @relation("SubmissionPreferredIntakeLocation")
+  id                     String               @id @default(cuid())
+  displayName            String
+  region                 String
+  countryCode            String
+  active                 Boolean              @default(true)
+  intakeAvailable        Boolean              @default(true)
+  operationallyApproved  Boolean              @default(false)
+  environment            String               @default("beta")
+  acceptingShipments     Boolean              @default(false)
+  acceptingInPerson      Boolean              @default(false)
+  locationType           IntakeLocationType   @default(SLICE_VAULT)
+  status                 IntakeLocationStatus @default(ACTIVE)
+  receiverName           String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  postalCode             String?
+  acceptedCategories     Json?
+  shippingInstructions   String
+  inPersonInstructions   String?
+  customerSafeAddress    String
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  intakes                SubmissionIntake[]
+  preferredBySubmissions AssetSubmission[]    @relation("SubmissionPreferredIntakeLocation")
 
+  @@unique([displayName, countryCode])
   @@index([active, intakeAvailable, countryCode, id])
   @@index([status, environment, countryCode, id])
-  @@unique([displayName, countryCode])
 }
 
 model SubmissionIntake {
-  id              String                     @id @default(cuid())
-  submissionId    String                     @unique
-  vaultId         String
-  deliveryMethod  IntakeDeliveryMethod       @default(SHIPMENT)
-  status          IntakeStatus               @default(VAULT_SELECTED)
-  intakeReference String                     @unique
-  selectedAt      DateTime                   @default(now())
-  shippedAt       DateTime?
-  deliveredAt     DateTime?
-  receivedAt      DateTime?
+  id                  String                     @id @default(cuid())
+  submissionId        String                     @unique
+  vaultId             String
+  deliveryMethod      IntakeDeliveryMethod       @default(SHIPMENT)
+  status              IntakeStatus               @default(VAULT_SELECTED)
+  intakeReference     String                     @unique
+  selectedAt          DateTime                   @default(now())
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  receivedAt          DateTime?
   destinationSnapshot Json?
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
-  submission      AssetSubmission            @relation(fields: [submissionId], references: [id], onDelete: Restrict)
-  vault           VaultIntakeLocation        @relation(fields: [vaultId], references: [id], onDelete: Restrict)
-  shipment        IntakeShipment?
-  receipt         IntakeReceiptConfirmation?
-  verification    IntakeVerification?
-  exceptions      IntakeException[]
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  submission          AssetSubmission            @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  vault               VaultIntakeLocation        @relation(fields: [vaultId], references: [id], onDelete: Restrict)
+  shipment            IntakeShipment?
+  receipt             IntakeReceiptConfirmation?
+  verification        IntakeVerification?
+  exceptions          IntakeException[]
 
   @@index([vaultId, status, updatedAt, id])
 }
@@ -2061,14 +2085,14 @@ model IntakeShipment {
 }
 
 model IntakeReceiptConfirmation {
-  id             String           @id @default(cuid())
-  intakeId       String           @unique
-  confirmedAt    DateTime         @default(now())
-  confirmedById  String
-  shipmentRef    String?
-  auditReference String?
-  intake         SubmissionIntake @relation(fields: [intakeId], references: [id], onDelete: Restrict)
-  confirmedBy    User             @relation("ReceiptConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  id               String           @id @default(cuid())
+  intakeId         String           @unique
+  confirmedAt      DateTime         @default(now())
+  confirmedById    String
+  shipmentRef      String?
+  auditReference   String?
+  intake           SubmissionIntake @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+  confirmedBy      User             @relation("ReceiptConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
   packageCondition String?
   checklist        Json?
   notes            String?
@@ -2080,22 +2104,22 @@ model IntakeReceiptConfirmation {
 /// Slice-owned verification authority for the physical intake handoff. This
 /// is deliberately separate from shipment delivery and from financial review.
 model IntakeVerification {
-  id                    String                   @id @default(cuid())
-  intakeId              String                   @unique
-  status                IntakeVerificationStatus @default(NOT_STARTED)
-  identityMatch         Boolean?
-  certificationMatch    Boolean?
-  gradeMatch            Boolean?
-  variantMatch          Boolean?
-  note                  String?
-  startedById           String?
-  completedById         String?
-  startedAt             DateTime?
-  completedAt           DateTime?
-  completionIdempotencyKey String?              @unique
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
-  intake                SubmissionIntake        @relation(fields: [intakeId], references: [id], onDelete: Restrict)
+  id                       String                   @id @default(cuid())
+  intakeId                 String                   @unique
+  status                   IntakeVerificationStatus @default(NOT_STARTED)
+  identityMatch            Boolean?
+  certificationMatch       Boolean?
+  gradeMatch               Boolean?
+  variantMatch             Boolean?
+  note                     String?
+  startedById              String?
+  completedById            String?
+  startedAt                DateTime?
+  completedAt              DateTime?
+  completionIdempotencyKey String?                  @unique
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  intake                   SubmissionIntake         @relation(fields: [intakeId], references: [id], onDelete: Restrict)
 
   @@index([status, updatedAt, id])
 }

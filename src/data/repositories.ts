@@ -208,6 +208,15 @@ export interface AssetLifecycleRepository {
     pageSize?: number;
   }): Promise<AssetOperationsBoardResponse>;
   getOperationDetail(assetId: string): Promise<AssetOperationDetailProjection>;
+  setOperationalControl(
+    assetId: string,
+    input: {
+      command: "FREEZE" | "UNFREEZE";
+      reason: string;
+      confirmation: "FREEZE_ASSET_OPERATIONS" | "UNFREEZE_ASSET_OPERATIONS";
+      expectedVersion: number;
+    },
+  ): Promise<{ assetId: string; status: string; version: number; replayed: boolean }>;
   handoff(
     assetId: string,
     input: { providerCode: string; facilityCode: string; providerRef: string },
@@ -283,6 +292,58 @@ export type AssetOperationDetailProjection = {
     activateMarket: boolean;
     openOffering: boolean;
   };
+  controls: {
+    version: number;
+    operational: {
+      status: "ACTIVE" | "FROZEN";
+      reason: string | null;
+      frozenAt: string | null;
+      unfrozenAt: string | null;
+      updatedAt: string | null;
+    };
+    investorProtection: {
+      active: boolean;
+      investorOwnedUnits: string;
+      reason: string;
+      protectedCommands: string[];
+      ownerVisibilityRequired: boolean;
+    };
+    restrictions: Array<{
+      type: string;
+      scope: string;
+      source: string;
+      reason: string;
+      status: string;
+      actor: string;
+      createdAt: string;
+      updatedAt: string;
+      resolution: string;
+    }>;
+    integrityIncidents: Array<{
+      code: string;
+      title: string;
+      detail: string;
+      status: "OPEN";
+      resolution: string;
+    }>;
+    commands: {
+      freeze: ControlCommandAvailability;
+      unfreeze: ControlCommandAvailability;
+      pauseOffering: ControlCommandAvailability;
+      resumeOffering: ControlCommandAvailability;
+      cancelOffering: ControlCommandAvailability;
+      haltMarket: ControlCommandAvailability;
+      resumeMarket: ControlCommandAvailability;
+    };
+    lockedActions: Array<{ label: string; reason: string }>;
+  };
+};
+
+export type ControlCommandAvailability = {
+  available: boolean;
+  confirmation: string;
+  expectedStatus?: string | null;
+  unavailableReason?: string | null;
 };
 
 export type AdminOverview = {
@@ -2220,8 +2281,26 @@ export interface AdminRepository {
   approveInitialOffering(id: string, reason: string): Promise<InitialOfferingProjection>;
   requestInitialOfferingChanges(id: string, reason: string): Promise<InitialOfferingProjection>;
   openInitialOffering(id: string): Promise<InitialOfferingProjection>;
-  pauseInitialOffering(id: string): Promise<InitialOfferingProjection>;
-  cancelInitialOffering(id: string): Promise<InitialOfferingProjection>;
+  pauseInitialOffering(
+    id: string,
+    input: { reason: string; confirmation: "PAUSE_INITIAL_OFFERING"; expectedStatus: string },
+  ): Promise<InitialOfferingProjection>;
+  resumeInitialOffering(
+    id: string,
+    input: { reason: string; confirmation: "RESUME_INITIAL_OFFERING"; expectedStatus: "PAUSED" },
+  ): Promise<InitialOfferingProjection>;
+  cancelInitialOffering(
+    id: string,
+    input: { reason: string; confirmation: "CANCEL_UNLAUNCHED_OFFERING"; expectedStatus: string },
+  ): Promise<InitialOfferingProjection>;
+  haltTradingMarket(
+    id: string,
+    input: { reason: string; confirmation: "HALT_TRADING"; expectedStatus: "OPEN" },
+  ): Promise<{ assetId: string; status: string }>;
+  resumeTradingMarket(
+    id: string,
+    input: { reason: string; confirmation: "RESUME_TRADING"; expectedStatus: "HALTED" },
+  ): Promise<{ assetId: string; status: string }>;
 }
 
 export interface MarketRepository {

@@ -206,4 +206,45 @@ describe('Asset Operations queue authority', () => {
       ]),
     );
   });
+
+  it('activates the investor-protection boundary only for non-originator user positions', () => {
+    const positions = [
+      {
+        settledUnits: 400n,
+        account: { type: 'USER', userId: 'collector-1' },
+      },
+      {
+        settledUnits: 125n,
+        account: { type: 'USER', userId: 'investor-1' },
+      },
+      {
+        settledUnits: 475n,
+        account: { type: 'INITIAL_OFFERING', userId: null },
+      },
+    ];
+
+    expect(
+      operationsQueueTestUtils.authoritativeInvestorOwnedUnits(
+        positions,
+        'collector-1',
+      ),
+    ).toBe(125n);
+  });
+
+  it('reports lifecycle contradictions without inferring a destructive reset', () => {
+    const incidents = operationsQueueTestUtils.operationIntegrityIncidents({
+      exception: { type: 'LIFECYCLE_PHYSICAL_MARKET_CONFLICT' },
+      ownership: { totalUnits: '1000', issuedUnits: '900' },
+      offering: { totalUnits: '1100' },
+    } as never);
+
+    expect(incidents.map((incident) => incident.code)).toEqual([
+      'LIFECYCLE_PHYSICAL_MARKET_CONFLICT',
+      'OWNERSHIP_SUPPLY_MISMATCH',
+      'OFFERING_EXCEEDS_OWNERSHIP_SUPPLY',
+    ]);
+    expect(incidents.every((incident) => incident.resolution.length > 20)).toBe(
+      true,
+    );
+  });
 });

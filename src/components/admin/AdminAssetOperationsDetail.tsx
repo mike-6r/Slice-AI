@@ -7,8 +7,12 @@ import {
   ExternalLink,
   Image as ImageIcon,
   LockKeyhole,
+  PauseCircle,
+  PlayCircle,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
+  Snowflake,
   TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
@@ -28,6 +32,20 @@ import "@/styles/admin-operations.css";
 
 const tabs = operationWorkspaceTabs;
 type DetailTab = OperationWorkspaceTab;
+type AssetControlAction =
+  | "FREEZE"
+  | "UNFREEZE"
+  | "PAUSE_OFFERING"
+  | "RESUME_OFFERING"
+  | "CANCEL_OFFERING"
+  | "HALT_MARKET"
+  | "RESUME_MARKET";
+type PendingControl = {
+  action: AssetControlAction;
+  label: string;
+  confirmation: string;
+  expectedStatus?: string | null;
+};
 
 export function AdminAssetOperationsDetail({
   assetId,
@@ -61,6 +79,9 @@ export function AdminAssetOperationsDetail({
   const [policyUnits, setPolicyUnits] = useState("");
   const [policyReason, setPolicyReason] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
+  const [pendingControl, setPendingControl] = useState<PendingControl | null>(null);
+  const [controlReason, setControlReason] = useState("");
+  const [controlConfirmation, setControlConfirmation] = useState("");
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
@@ -118,6 +139,58 @@ export function AdminAssetOperationsDetail({
     mutationFn: () => services.repositories.lifecycle.publish(assetId),
     onSuccess: refresh,
   });
+  const assetControl = useMutation({
+    mutationFn: async () => {
+      if (!pendingControl || !operations.data)
+        throw new Error("No authoritative control command is selected.");
+      const offeringId = item.initialOffering?.offeringId;
+      if (pendingControl.action === "FREEZE" || pendingControl.action === "UNFREEZE")
+        return services.repositories.lifecycle.setOperationalControl(assetId, {
+          command: pendingControl.action,
+          reason: controlReason,
+          confirmation: pendingControl.confirmation as
+            "FREEZE_ASSET_OPERATIONS" | "UNFREEZE_ASSET_OPERATIONS",
+          expectedVersion: operations.data.controls.version,
+        });
+      if (!offeringId && pendingControl.action.includes("OFFERING"))
+        throw new Error("No authoritative Initial Offering exists.");
+      if (pendingControl.action === "PAUSE_OFFERING")
+        return services.repositories.admin.pauseInitialOffering(offeringId!, {
+          reason: controlReason,
+          confirmation: "PAUSE_INITIAL_OFFERING",
+          expectedStatus: pendingControl.expectedStatus ?? "",
+        });
+      if (pendingControl.action === "RESUME_OFFERING")
+        return services.repositories.admin.resumeInitialOffering(offeringId!, {
+          reason: controlReason,
+          confirmation: "RESUME_INITIAL_OFFERING",
+          expectedStatus: "PAUSED",
+        });
+      if (pendingControl.action === "CANCEL_OFFERING")
+        return services.repositories.admin.cancelInitialOffering(offeringId!, {
+          reason: controlReason,
+          confirmation: "CANCEL_UNLAUNCHED_OFFERING",
+          expectedStatus: pendingControl.expectedStatus ?? "",
+        });
+      if (pendingControl.action === "HALT_MARKET")
+        return services.repositories.admin.haltTradingMarket(assetId, {
+          reason: controlReason,
+          confirmation: "HALT_TRADING",
+          expectedStatus: "OPEN",
+        });
+      return services.repositories.admin.resumeTradingMarket(assetId, {
+        reason: controlReason,
+        confirmation: "RESUME_TRADING",
+        expectedStatus: "HALTED",
+      });
+    },
+    onSuccess: () => {
+      setPendingControl(null);
+      setControlReason("");
+      setControlConfirmation("");
+      refresh();
+    },
+  });
 
   if (detail.isLoading)
     return (
@@ -147,6 +220,7 @@ export function AdminAssetOperationsDetail({
     activateMarket,
     openOffering,
     publish,
+    assetControl,
   ].find((mutation) => mutation.isError);
   return (
     <main className="admin-asset-workspace">
@@ -252,7 +326,9 @@ export function AdminAssetOperationsDetail({
           </button>
         ))}
       </nav>
-      <div className="admin-asset-workspace__content">
+      <div
+        className={`admin-asset-workspace__content ${selected === "controls" ? "admin-asset-workspace__content--controls" : ""}`}
+      >
         <div className="admin-asset-workspace__main">
           {selected === "overview" ? (
             <Overview item={item} operations={operations.data} onOpen={onTab} />
@@ -321,10 +397,30 @@ export function AdminAssetOperationsDetail({
             />
           ) : null}
           {selected === "market" ? <Market item={item} /> : null}
-          {selected === "controls" ? <Controls item={item} /> : null}
+          {selected === "controls" ? (
+            <Controls
+              item={item}
+              operations={operations.data}
+              pending={pendingControl}
+              reason={controlReason}
+              confirmation={controlConfirmation}
+              executing={assetControl.isPending}
+              setReason={setControlReason}
+              setConfirmation={setControlConfirmation}
+              select={setPendingControl}
+              cancel={() => {
+                setPendingControl(null);
+                setControlReason("");
+                setControlConfirmation("");
+              }}
+              execute={() => assetControl.mutate()}
+            />
+          ) : null}
           {selected === "history" ? <History item={item} /> : null}
         </div>
-        <OperationsRail item={item} operations={operations.data} onOpen={onTab} />
+        {selected === "controls" ? null : (
+          <OperationsRail item={item} operations={operations.data} onOpen={onTab} />
+        )}
       </div>
       {error ? (
         <p className="admin-operation-error" role="alert">
@@ -1446,41 +1542,359 @@ function Market({ item }: { item: Detail }) {
     </div>
   );
 }
-function Controls({ item }: { item: Detail }) {
-  return (
-    <div className="admin-asset-workspace__grid">
+function Controls({
+  item,
+  operations,
+  pending,
+  reason,
+  confirmation,
+  executing,
+  setReason,
+  setConfirmation,
+  select,
+  cancel,
+  execute,
+}: {
+  item: Detail;
+  operations?: AssetOperationDetailProjection;
+  pending: PendingControl | null;
+  reason: string;
+  confirmation: string;
+  executing: boolean;
+  setReason: (value: string) => void;
+  setConfirmation: (value: string) => void;
+  select: (value: PendingControl) => void;
+  cancel: () => void;
+  execute: () => void;
+}) {
+  const controls = operations?.controls;
+  if (!controls)
+    return (
       <section className="admin-operation-card admin-operation-card--wide">
-        <CardHeading eyebrow="Restrictions & controls" title="Authoritative restrictions" />
+        <CardHeading eyebrow="Administrative control center" title="Controls unavailable" />
+        <p className="admin-detail-muted">
+          The authoritative control projection could not be loaded. No administrative command is
+          available until the record is refreshed.
+        </p>
+      </section>
+    );
+  const command = controls.commands;
+  const choose = (
+    action: AssetControlAction,
+    label: string,
+    value: { confirmation: string; expectedStatus?: string | null },
+  ) =>
+    select({
+      action,
+      label,
+      confirmation: value.confirmation,
+      expectedStatus: value.expectedStatus,
+    });
+  return (
+    <div className="admin-control-center">
+      <div className="admin-control-center__main">
+        <section className="admin-operation-card admin-control-status">
+          <CardHeading
+            eyebrow="Administrative control center"
+            title={
+              controls.operational.status === "FROZEN"
+                ? "Asset operations frozen"
+                : "Asset operations active"
+            }
+            status={controls.operational.status === "FROZEN" ? "Action required" : "Controlled"}
+            ready={controls.operational.status !== "FROZEN"}
+          />
+          <p className="admin-detail-muted">
+            {controls.operational.reason ??
+              "No administrative freeze is active. Lifecycle authority remains with the owning services."}
+          </p>
+          <div className="admin-control-status__facts">
+            <Field label="Control version" value={controls.version} />
+            <Field
+              label="Last control change"
+              value={
+                controls.operational.updatedAt ? dateTime(controls.operational.updatedAt) : "None"
+              }
+            />
+            <Field label="Physical authority" value="Read only in this workspace" />
+          </div>
+        </section>
+
+        <section className="admin-operation-card">
+          <CardHeading eyebrow="Active policy state" title="Restrictions" />
+          {controls.restrictions.length ? (
+            <div className="admin-control-restrictions">
+              {controls.restrictions.map((restriction) => (
+                <article key={`${restriction.type}-${restriction.createdAt}`}>
+                  <div>
+                    <strong>{sentence(restriction.type)}</strong>
+                    <span>{sentence(restriction.status)}</span>
+                  </div>
+                  <p>{restriction.reason}</p>
+                  <dl>
+                    <dt>Scope</dt>
+                    <dd>{sentence(restriction.scope)}</dd>
+                    <dt>Source</dt>
+                    <dd>{sentence(restriction.source)}</dd>
+                    <dt>Actor</dt>
+                    <dd>{restriction.actor}</dd>
+                    <dt>Applied</dt>
+                    <dd>{dateTime(restriction.createdAt)}</dd>
+                  </dl>
+                  <small>{restriction.resolution}</small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-detail-muted">
+              No active asset, offering, or market restriction is recorded.
+            </p>
+          )}
+        </section>
+
+        <section className="admin-operation-card">
+          <CardHeading eyebrow="Safe commands" title="Operational controls" />
+          <div className="admin-control-actions">
+            <ControlButton
+              icon={<Snowflake aria-hidden="true" />}
+              title="Freeze asset operations"
+              detail="Stops new economic progression and halts an open market without rewriting history."
+              enabled={command.freeze.available}
+              unavailable={command.freeze.unavailableReason}
+              onClick={() => choose("FREEZE", "Freeze asset operations", command.freeze)}
+            />
+            <ControlButton
+              icon={<PlayCircle aria-hidden="true" />}
+              title="Release operational freeze"
+              detail="Restores command eligibility after integrity incidents are resolved."
+              enabled={command.unfreeze.available}
+              unavailable={command.unfreeze.unavailableReason}
+              onClick={() => choose("UNFREEZE", "Release operational freeze", command.unfreeze)}
+            />
+            <ControlButton
+              icon={<PauseCircle aria-hidden="true" />}
+              title="Pause Initial Offering"
+              detail="Pauses an active offering and safely releases its open order reservation."
+              enabled={command.pauseOffering.available}
+              unavailable={command.pauseOffering.unavailableReason}
+              onClick={() =>
+                choose("PAUSE_OFFERING", "Pause Initial Offering", command.pauseOffering)
+              }
+            />
+            <ControlButton
+              icon={<PlayCircle aria-hidden="true" />}
+              title="Resume Initial Offering"
+              detail="Re-evaluates authoritative gates before reopening a paused offering."
+              enabled={command.resumeOffering.available}
+              unavailable={command.resumeOffering.unavailableReason}
+              onClick={() =>
+                choose("RESUME_OFFERING", "Resume Initial Offering", command.resumeOffering)
+              }
+            />
+            <ControlButton
+              icon={<ShieldAlert aria-hidden="true" />}
+              title="Halt secondary market"
+              detail="Prevents new matching while retaining orders, executions, and ownership history."
+              enabled={command.haltMarket.available}
+              unavailable={command.haltMarket.unavailableReason}
+              onClick={() => choose("HALT_MARKET", "Halt secondary market", command.haltMarket)}
+            />
+            <ControlButton
+              icon={<PlayCircle aria-hidden="true" />}
+              title="Resume secondary market"
+              detail="Reopens trading only when the administrative and integrity gates permit it."
+              enabled={command.resumeMarket.available}
+              unavailable={command.resumeMarket.unavailableReason}
+              onClick={() =>
+                choose("RESUME_MARKET", "Resume secondary market", command.resumeMarket)
+              }
+            />
+            <ControlButton
+              icon={<CircleAlert aria-hidden="true" />}
+              title="Cancel unlaunched offering"
+              detail="Available only before execution and before investor ownership exists."
+              enabled={command.cancelOffering.available}
+              unavailable={command.cancelOffering.unavailableReason}
+              danger
+              onClick={() =>
+                choose("CANCEL_OFFERING", "Cancel unlaunched offering", command.cancelOffering)
+              }
+            />
+          </div>
+        </section>
+
+        {pending ? (
+          <section className="admin-operation-card admin-control-confirmation">
+            <CardHeading
+              eyebrow="Material command"
+              title={pending.label}
+              status="Confirmation required"
+            />
+            <p>
+              This action is permissioned, idempotent, stale-state protected, and audit logged. It
+              does not delete historical records.
+            </p>
+            <label>
+              Operator reason
+              <textarea
+                value={reason}
+                maxLength={500}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="Explain the operational reason (minimum 12 characters)."
+              />
+            </label>
+            <label>
+              Type <strong>{pending.confirmation}</strong> to confirm
+              <input
+                value={confirmation}
+                onChange={(event) => setConfirmation(event.target.value)}
+                placeholder={pending.confirmation}
+              />
+            </label>
+            <div className="admin-control-confirmation__actions">
+              <button type="button" onClick={cancel} disabled={executing}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={execute}
+                disabled={
+                  executing || reason.trim().length < 12 || confirmation !== pending.confirmation
+                }
+              >
+                {executing ? "Applying…" : pending.label}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {item.dossier.restrictions.length ? (
-          <div className="admin-history-list">
-            {item.dossier.restrictions.map((restriction, index) => (
-              <div key={`${restriction.source}-${restriction.createdAt}-${index}`}>
-                <span>{dateTime(restriction.createdAt)}</span>
-                <strong>{sentence(restriction.status)}</strong>
-                <p>{restriction.reason}</p>
-                <small>{sentence(restriction.source)}</small>
+          <section className="admin-operation-card">
+            <CardHeading eyebrow="Related authority" title="Compliance record" />
+            <div className="admin-history-list">
+              {item.dossier.restrictions.map((restriction, index) => (
+                <div key={`${restriction.source}-${restriction.createdAt}-${index}`}>
+                  <span>{dateTime(restriction.createdAt)}</span>
+                  <strong>{sentence(restriction.status)}</strong>
+                  <p>{restriction.reason}</p>
+                  <small>{sentence(restriction.source)}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      <aside className="admin-control-center__rail">
+        <section
+          className={`admin-operation-card admin-investor-boundary ${
+            controls.investorProtection.active ? "active" : ""
+          }`}
+        >
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <span>Investor protection boundary</span>
+            <h3>{controls.investorProtection.active ? "Locked" : "Monitoring"}</h3>
+            <p>{controls.investorProtection.reason}</p>
+          </div>
+          <Field
+            label="Investor-owned units"
+            value={controls.investorProtection.investorOwnedUnits}
+          />
+          <Field
+            label="Owner record visibility"
+            value={
+              controls.investorProtection.ownerVisibilityRequired ? "Required" : "Standard policy"
+            }
+          />
+          <Field
+            label="Public discoverability"
+            value={item.market.publication === "PUBLISHED" ? "Published" : "Not published"}
+          />
+        </section>
+
+        <section className="admin-operation-card">
+          <CardHeading
+            eyebrow="Lifecycle authority"
+            title="Integrity incidents"
+            status={
+              controls.integrityIncidents.length
+                ? `${controls.integrityIncidents.length} open`
+                : "Clear"
+            }
+            ready={!controls.integrityIncidents.length}
+          />
+          {controls.integrityIncidents.length ? (
+            <div className="admin-integrity-list">
+              {controls.integrityIncidents.map((incident) => (
+                <article key={incident.code}>
+                  <strong>{incident.title}</strong>
+                  <p>{incident.detail}</p>
+                  <small>{incident.resolution}</small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-detail-muted">
+              No authoritative lifecycle contradiction is detected.
+            </p>
+          )}
+        </section>
+
+        <section className="admin-operation-card">
+          <CardHeading eyebrow="Informational only" title="Permanently guarded actions" />
+          <div className="admin-locked-actions">
+            {controls.lockedActions.map((action) => (
+              <div key={action.label}>
+                <LockKeyhole aria-hidden="true" />
+                <span>
+                  <strong>{action.label}</strong>
+                  <small>{action.reason}</small>
+                </span>
               </div>
             ))}
           </div>
-        ) : (
-          <p className="admin-detail-muted">
-            No active restriction or conflict is recorded for this asset.
-          </p>
-        )}
-      </section>
-      <Info title="Physical authority" eyebrow="Read only">
-        <Field label="Physical state" value={item.dossier.snapshot.physical} />
-        <Field label="Verification" value={item.dossier.snapshot.verification} />
-        <Field label="Custody" value={item.dossier.snapshot.custody} />
-        <Field label="Why read-only" value="Physical actions belong to Physical Intake" />
-      </Info>
-      <Info title="Guardrails" eyebrow="Workflow boundaries">
-        <Field label="Ownership issue" value="Policy + offering approval required" />
-        <Field label="Offering launch" value="Issued ownership + open market required" />
-        <Field label="Publication" value="Server readiness required" />
-        <Field label="Audit" value="All staff writes are audited" />
-      </Info>
+        </section>
+      </aside>
     </div>
+  );
+}
+
+function ControlButton({
+  icon,
+  title,
+  detail,
+  enabled,
+  unavailable,
+  danger,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  enabled: boolean;
+  unavailable?: string | null;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={danger ? "danger" : ""}
+      onClick={onClick}
+      disabled={!enabled}
+      title={
+        !enabled ? (unavailable ?? "Unavailable in the current authoritative state.") : undefined
+      }
+    >
+      {icon}
+      <span>
+        <strong>{title}</strong>
+        <small>{enabled ? detail : (unavailable ?? "Unavailable in the current state.")}</small>
+      </span>
+      {enabled ? <ArrowRight aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}
+    </button>
   );
 }
 function History({ item }: { item: Detail }) {

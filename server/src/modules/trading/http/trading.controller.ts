@@ -33,28 +33,56 @@ const orderInput = z
   .strict();
 const treasuryListingInput = z
   .object({
-    units: z.string().regex(/^[1-9]\d*$/).max(32),
-    limitPriceMinor: z.string().regex(/^[1-9]\d*$/).max(32),
+    units: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .max(32),
+    limitPriceMinor: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .max(32),
     timeInForce: z.literal('GTC').default('GTC'),
     reason: z.string().trim().min(10).max(500),
+  })
+  .strict();
+const marketControlInput = z
+  .object({
+    reason: z.string().trim().min(12).max(500),
+    confirmation: z.enum(['HALT_TRADING', 'RESUME_TRADING']),
+    expectedStatus: z.enum(['OPEN', 'HALTED', 'CLOSED']),
   })
   .strict();
 const ownershipPreviewInput = z
   .object({
     assetId: z.string().min(1).max(128),
     side: z.enum(['BUY', 'SELL']),
-    desiredSlices: z.string().regex(/^[1-9]\d*$/).max(32).optional(),
-    desiredOwnershipPercent: z.string().regex(/^\d{1,3}(?:\.\d{1,4})?$/).optional(),
-    desiredAmountMinor: z.string().regex(/^[1-9]\d*$/).optional(),
-    limitPriceMinor: z.string().regex(/^[1-9]\d*$/).optional(),
+    desiredSlices: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .max(32)
+      .optional(),
+    desiredOwnershipPercent: z
+      .string()
+      .regex(/^\d{1,3}(?:\.\d{1,4})?$/)
+      .optional(),
+    desiredAmountMinor: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .optional(),
+    limitPriceMinor: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .optional(),
     timeInForce: z.enum(['GTC', 'IOC']).default('GTC'),
   })
   .strict()
   .refine(
     (value) =>
-      [value.desiredSlices, value.desiredOwnershipPercent, value.desiredAmountMinor].filter(
-        Boolean,
-      ).length === 1,
+      [
+        value.desiredSlices,
+        value.desiredOwnershipPercent,
+        value.desiredAmountMinor,
+      ].filter(Boolean).length === 1,
   );
 const page = z
   .object({
@@ -64,7 +92,16 @@ const page = z
     pageSize: z.coerce.number().int().min(1).max(50).optional(),
     q: z.string().trim().max(120).optional(),
     side: z.enum(['BUY', 'SELL']).optional(),
-    status: z.enum(['OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED']).optional(),
+    status: z
+      .enum([
+        'OPEN',
+        'PARTIALLY_FILLED',
+        'FILLED',
+        'CANCELLED',
+        'REJECTED',
+        'EXPIRED',
+      ])
+      .optional(),
     assetClass: z.string().trim().max(120).optional(),
     from: z.string().datetime().optional(),
   })
@@ -104,9 +141,10 @@ export class TradingController {
 
   @Post('market/assets/:slug/ownership/preview')
   publicOwnershipPreview(@Param('slug') slug: string, @Body() body: unknown) {
-    const bodyRecord = body && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : {};
+    const bodyRecord =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
     const input = this.parse(ownershipPreviewInput, {
       ...bodyRecord,
       assetId: slug,
@@ -169,7 +207,12 @@ export class TradingController {
   @UseGuards(AccessTokenGuard)
   ownOrders(@Query() query: unknown, @Req() req: AuthenticatedRequest) {
     const input = this.parse(page, query);
-    return this.trading.ownOrders(req.actor!.userId, input.cursor, input.limit, input);
+    return this.trading.ownOrders(
+      req.actor!.userId,
+      input.cursor,
+      input.limit,
+      input,
+    );
   }
 
   @Get('trading/executions')
@@ -205,7 +248,11 @@ export class TradingController {
   ) {
     const input = this.parse(treasuryListingInput, body);
     this.requireKey(key);
-    await this.limiter.enforce('adminMutation', req.ip ?? 'unknown', req.actor!.userId);
+    await this.limiter.enforce(
+      'adminMutation',
+      req.ip ?? 'unknown',
+      req.actor!.userId,
+    );
     return this.trading.placeTreasuryListing(
       req.actor!,
       assetId,
@@ -220,9 +267,16 @@ export class TradingController {
   @RequirePermission('trading.manage')
   async halt(
     @Param('assetId') assetId: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
+    const input = this.parse(marketControlInput, body);
+    if (input.confirmation !== 'HALT_TRADING')
+      throw new BadRequestException({
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'Trading halt confirmation is invalid.',
+      });
     this.requireKey(key);
     await this.limiter.enforce(
       'adminMutation',
@@ -233,6 +287,7 @@ export class TradingController {
       req.actor!,
       assetId,
       'HALTED',
+      input,
       req.requestId ?? 'unknown',
       key!,
     );
@@ -265,9 +320,16 @@ export class TradingController {
   @RequirePermission('trading.manage')
   async resume(
     @Param('assetId') assetId: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
+    const input = this.parse(marketControlInput, body);
+    if (input.confirmation !== 'RESUME_TRADING')
+      throw new BadRequestException({
+        code: 'CONFIRMATION_REQUIRED',
+        message: 'Trading resume confirmation is invalid.',
+      });
     this.requireKey(key);
     await this.limiter.enforce(
       'adminMutation',
@@ -278,6 +340,7 @@ export class TradingController {
       req.actor!,
       assetId,
       'OPEN',
+      input,
       req.requestId ?? 'unknown',
       key!,
     );

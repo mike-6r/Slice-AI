@@ -440,8 +440,17 @@ export const mockRepositories: AppRepositories = {
     async pauseInitialOffering() {
       throw new Error("Initial offering pause requires the API service.");
     },
+    async resumeInitialOffering() {
+      throw new Error("Initial offering resume requires the API service.");
+    },
     async cancelInitialOffering() {
       throw new Error("Initial offering cancellation requires the API service.");
+    },
+    async haltTradingMarket() {
+      throw new Error("Trading market controls require the API service.");
+    },
+    async resumeTradingMarket() {
+      throw new Error("Trading market controls require the API service.");
     },
     async search() {
       return { items: [] };
@@ -636,6 +645,9 @@ export const mockRepositories: AppRepositories = {
     },
     async getOperationDetail() {
       throw new Error("Asset operations require the API service.");
+    },
+    async setOperationalControl() {
+      throw new Error("Asset operational controls require the API service.");
     },
     async handoff() {
       throw new Error("Lifecycle operations require the API service.");
