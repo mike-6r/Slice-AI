@@ -265,6 +265,60 @@ describe("HTTP catalogue mapping", () => {
     expect(get).toHaveBeenCalledWith("/admin/operations/overview");
   });
 
+  it("keeps an unavailable Stripe platform balance unavailable in Finance", async () => {
+    const get = vi.fn().mockResolvedValue({
+      kpis: {
+        totalCustomerCashMinor: "12000",
+        availableCustomerCashMinor: "9000",
+        reservedFundsMinor: "3000",
+        pendingDepositsMinor: "0",
+        pendingWithdrawalsMinor: "0",
+        openOrders: 0,
+        executionsToday: 0,
+      },
+      payoutLiquidity: {
+        providerMode: "stripe_sandbox",
+        liquiditySource: "STRIPE_PLATFORM_PAYMENTS_BALANCE",
+        providerAvailableMinor: null,
+        providerPendingMinor: null,
+        availableAfterReservationsMinor: null,
+        customerCashLiabilityMinor: "12000",
+        withdrawalEligibleLiabilityMinor: "9000",
+        settlingMinor: "0",
+        activeReservationMinor: "0",
+        payoutLiquidityCoverageBps: null,
+        providerLiquidityStatus: "UNAVAILABLE",
+        nextAvailabilityAt: null,
+        checkedAt: "2026-09-01T00:00:00.000Z",
+        warning: true,
+      },
+      overview: {
+        totalVolumeMinor: "0",
+        buyVolumeMinor: "0",
+        sellVolumeMinor: "0",
+        totalFeesMinor: "0",
+        netFeesMinor: "0",
+        history: [],
+      },
+      orderSummary: { total: 0, buy: 0, sell: 0, open: 0 },
+      executionSummary: { total: 0, buyInitiated: 0, sellInitiated: 0 },
+      reconciliationSummary: [],
+      recentActivity: [],
+    });
+    const repositories = createHttpRepositories({ get } as unknown as ApiClient);
+
+    await expect(repositories.admin.getFinanceDashboard()).resolves.toMatchObject({
+      kpis: { availableCustomerCashMinor: "9000" },
+      payoutLiquidity: {
+        liquiditySource: "STRIPE_PLATFORM_PAYMENTS_BALANCE",
+        providerAvailableMinor: null,
+        availableAfterReservationsMinor: null,
+        providerLiquidityStatus: "UNAVAILABLE",
+      },
+    });
+    expect(get).toHaveBeenCalledWith("/admin/finance/dashboard");
+  });
+
   it("maps public market fields without inventing a generic price or ownership", () => {
     const asset = mapMarketAsset(dto);
     expect(asset.sliceValuation).toMatchObject({

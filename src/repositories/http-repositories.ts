@@ -3390,6 +3390,10 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
         kpis.totalCustomerCashMinor,
         "finance.kpis.totalCustomerCashMinor",
       ),
+      availableCustomerCashMinor: mapMinor(
+        kpis.availableCustomerCashMinor,
+        "finance.kpis.availableCustomerCashMinor",
+      ),
       reservedFundsMinor: mapMinor(kpis.reservedFundsMinor, "finance.kpis.reservedFundsMinor"),
       pendingDepositsMinor: mapMinor(
         kpis.pendingDepositsMinor,
@@ -3485,9 +3489,14 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
             if (!["AVAILABLE", "INSUFFICIENT", "UNAVAILABLE", "NOT_APPLICABLE"].includes(status)) {
               throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid payout liquidity status.");
             }
+            const source = String(liquidity.liquiditySource);
+            if (!["STRIPE_PLATFORM_PAYMENTS_BALANCE", "NOT_APPLICABLE"].includes(source)) {
+              throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid payout liquidity source.");
+            }
             return {
               currency: "GBP" as const,
               providerMode: stringField(liquidity.providerMode, "payout liquidity.providerMode"),
+              liquiditySource: source as "STRIPE_PLATFORM_PAYMENTS_BALANCE" | "NOT_APPLICABLE",
               providerAvailableMinor: nullableString(
                 liquidity.providerAvailableMinor,
                 "payout liquidity.providerAvailableMinor",
@@ -3495,6 +3504,10 @@ const mapAdminFinanceDashboard = (raw: unknown): AdminFinanceDashboard => {
               providerPendingMinor: nullableString(
                 liquidity.providerPendingMinor,
                 "payout liquidity.providerPendingMinor",
+              ),
+              availableAfterReservationsMinor: nullableString(
+                liquidity.availableAfterReservationsMinor,
+                "payout liquidity.availableAfterReservationsMinor",
               ),
               customerCashLiabilityMinor: mapMinor(
                 liquidity.customerCashLiabilityMinor,

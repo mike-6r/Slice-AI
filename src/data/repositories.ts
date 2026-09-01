@@ -742,6 +742,7 @@ export type AdminFinanceDashboard = {
   currency: "GBP";
   kpis: {
     totalCustomerCashMinor: string;
+    availableCustomerCashMinor: string;
     reservedFundsMinor: string;
     pendingDepositsMinor: string;
     pendingWithdrawalsMinor: string;
@@ -765,8 +766,10 @@ export type AdminFinanceDashboard = {
   payoutLiquidity?: {
     currency: "GBP";
     providerMode: string;
+    liquiditySource: "STRIPE_PLATFORM_PAYMENTS_BALANCE" | "NOT_APPLICABLE";
     providerAvailableMinor: string | null;
     providerPendingMinor: string | null;
+    availableAfterReservationsMinor: string | null;
     customerCashLiabilityMinor: string;
     withdrawalEligibleLiabilityMinor: string;
     settlingMinor: string;

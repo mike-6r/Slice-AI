@@ -3418,11 +3418,11 @@ function ControlCenterRevamp({
             value={center.financialOperations.withdrawalEligibleMinor}
           />
           <ControlFinanceMetric
-            label="Stripe available"
+            label="Stripe platform available"
             value={center.financialOperations.providerAvailableMinor}
           />
           <ControlFinanceMetric
-            label="Stripe pending"
+            label="Stripe platform pending"
             value={center.financialOperations.providerPendingMinor}
           />
           <ControlFinanceMetric
@@ -3455,7 +3455,8 @@ function ControlCenterRevamp({
         </div>
         {center.financialOperations.warning ? (
           <div className="admin-finance-warning">
-            <AlertTriangle aria-hidden="true" /> Payout liquidity is below eligible withdrawals.{" "}
+            <AlertTriangle aria-hidden="true" /> Stripe platform available balance is below eligible
+            customer withdrawal liabilities.{" "}
             <button type="button" onClick={() => open("payments")}>
               Open Finance <ArrowRight aria-hidden="true" />
             </button>

@@ -20,7 +20,8 @@ export type WithdrawalPreflightProjection = {
   grossMinor: string;
   feeMinor: string;
   netPayoutMinor: string;
-  maturityStatus: 'MATURED' | 'PARTIALLY_SETTLING' | 'SETTLING' | 'NOT_AVAILABLE';
+  maturityStatus:
+    'MATURED' | 'PARTIALLY_SETTLING' | 'SETTLING' | 'NOT_AVAILABLE';
   customerEligibilityStatus:
     'AVAILABLE' | 'MATURITY_PENDING' | 'INSUFFICIENT_CASH';
   providerLiquidityStatus: ProviderLiquidityStatus;
@@ -31,8 +32,10 @@ export type WithdrawalPreflightProjection = {
 export type ProviderLiquidityProjection = {
   currency: 'GBP';
   providerMode: 'stripe_sandbox' | 'stripe_live' | 'local';
+  liquiditySource: 'STRIPE_PLATFORM_PAYMENTS_BALANCE' | 'NOT_APPLICABLE';
   providerAvailableMinor: string | null;
   providerPendingMinor: string | null;
+  availableAfterReservationsMinor: string | null;
   customerCashLiabilityMinor: string;
   withdrawalEligibleLiabilityMinor: string;
   settlingMinor: string;
@@ -274,7 +277,11 @@ export class WithdrawalPreflightService {
             ownerType: 'USER',
             currency: 'GBP',
             code: {
-              in: ['CASH_AVAILABLE', 'COLLECTOR_PROCEEDS_AVAILABLE', 'BACS_RISK_HOLD'],
+              in: [
+                'CASH_AVAILABLE',
+                'COLLECTOR_PROCEEDS_AVAILABLE',
+                'BACS_RISK_HOLD',
+              ],
             },
           },
           include: { balance: true },
@@ -307,44 +314,52 @@ export class WithdrawalPreflightService {
     withdrawalEligibleLiabilityMinor = maxZero(
       withdrawalEligibleLiabilityMinor - settlingMinor,
     );
-    const providerAvailableMinor =
-      snapshot.status === 'NOT_APPLICABLE' ? null : snapshot.availableMinor;
+    const providerBalanceAvailable = snapshot.status === 'AVAILABLE';
     const capacity = this.providerCapacity(snapshot, activeReservationMinor);
     const coverageBps =
-      withdrawalEligibleLiabilityMinor > 0n
+      providerBalanceAvailable && withdrawalEligibleLiabilityMinor > 0n
         ? Number(
             (maxZero(capacity) * 10_000n) / withdrawalEligibleLiabilityMinor,
           )
         : null;
+    const providerLiquidityStatus: ProviderLiquidityStatus =
+      snapshot.status === 'NOT_APPLICABLE'
+        ? 'NOT_APPLICABLE'
+        : snapshot.status === 'UNAVAILABLE'
+          ? 'UNAVAILABLE'
+          : snapshot.availableMinor < 0n ||
+              capacity < withdrawalEligibleLiabilityMinor
+            ? 'INSUFFICIENT'
+            : 'AVAILABLE';
     return {
       currency: 'GBP',
       providerMode: this.config.providerMode,
-      providerAvailableMinor: providerAvailableMinor?.toString() ?? null,
-      providerPendingMinor:
+      liquiditySource:
         snapshot.status === 'NOT_APPLICABLE'
-          ? null
-          : snapshot.pendingMinor.toString(),
+          ? 'NOT_APPLICABLE'
+          : 'STRIPE_PLATFORM_PAYMENTS_BALANCE',
+      // A failed provider read is unknown, not a confirmed zero balance.
+      providerAvailableMinor: providerBalanceAvailable
+        ? snapshot.availableMinor.toString()
+        : null,
+      providerPendingMinor: providerBalanceAvailable
+        ? snapshot.pendingMinor.toString()
+        : null,
+      availableAfterReservationsMinor: providerBalanceAvailable
+        ? capacity.toString()
+        : null,
       customerCashLiabilityMinor: customerCashLiabilityMinor.toString(),
       withdrawalEligibleLiabilityMinor:
         withdrawalEligibleLiabilityMinor.toString(),
       settlingMinor: settlingMinor.toString(),
       activeReservationMinor: activeReservationMinor.toString(),
       payoutLiquidityCoverageBps: coverageBps,
-      providerLiquidityStatus:
-        snapshot.status === 'NOT_APPLICABLE'
-          ? 'NOT_APPLICABLE'
-          : snapshot.status === 'UNAVAILABLE'
-            ? 'UNAVAILABLE'
-            : snapshot.availableMinor < 0n ||
-                capacity < withdrawalEligibleLiabilityMinor
-              ? 'INSUFFICIENT'
-              : 'AVAILABLE',
+      providerLiquidityStatus,
       nextAvailabilityAt: snapshot.nextAvailabilityAt?.toISOString() ?? null,
       checkedAt: snapshot.checkedAt.toISOString(),
       warning:
-        snapshot.status === 'UNAVAILABLE' ||
-        (snapshot.status !== 'NOT_APPLICABLE' &&
-          capacity < withdrawalEligibleLiabilityMinor),
+        providerLiquidityStatus === 'UNAVAILABLE' ||
+        providerLiquidityStatus === 'INSUFFICIENT',
     };
   }
 
@@ -363,6 +378,9 @@ export class WithdrawalPreflightService {
       return this.cached.snapshot;
     try {
       const stripe = this.stripeFactory.get();
+      // No Stripe-Account context is supplied: this is the Stripe platform
+      // Payments Balance. Treasury Financial Account and Connect balances are
+      // deliberately not liquidity sources for this withdrawal rail.
       const balance = await stripe.balance.retrieve();
       const availableMinor = sumBalanceEntries(balance.available);
       const pendingMinor = sumBalanceEntries(balance.pending);
@@ -435,15 +453,26 @@ export class WithdrawalPreflightService {
     if (this.config.bacsInternalTradeHoldDays === undefined)
       return settled?.providerAvailableOn ?? null;
     const held = await this.db.moneyMovement.findMany({
-      where: { userId, type: 'DEPOSIT', status: 'HELD', providerAvailableOn: { not: null } },
+      where: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'HELD',
+        providerAvailableOn: { not: null },
+      },
       select: { providerAvailableOn: true },
     });
-    const heldAt = held
-      .map((item) => item.providerAvailableOn
-        ? new Date(item.providerAvailableOn.getTime() + this.config.bacsInternalTradeHoldDays! * 86_400_000)
-        : null)
-      .filter((item): item is Date => Boolean(item && item > now))
-      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+    const heldAt =
+      held
+        .map((item) =>
+          item.providerAvailableOn
+            ? new Date(
+                item.providerAvailableOn.getTime() +
+                  this.config.bacsInternalTradeHoldDays! * 86_400_000,
+              )
+            : null,
+        )
+        .filter((item): item is Date => Boolean(item && item > now))
+        .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
     return earliestDate(settled?.providerAvailableOn ?? null, heldAt);
   }
 

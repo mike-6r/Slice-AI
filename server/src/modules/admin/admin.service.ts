@@ -8244,7 +8244,7 @@ export class AdminService {
     ] = await Promise.all([
       this.db.financialAccount.findMany({
         where: { ownerType: 'USER', currency: 'GBP' },
-        select: { normalSide: true, balance: true },
+        select: { code: true, normalSide: true, balance: true },
       }),
       this.db.moneyMovement.findMany({
         where: { status: { in: [...pendingStates] } },
@@ -8326,6 +8326,7 @@ export class AdminService {
       }),
     ]);
     let customerCash = 0n;
+    let availableCustomerCash = 0n;
     let reservedFunds = 0n;
     for (const account of accounts) {
       const balance = account.balance;
@@ -8336,6 +8337,13 @@ export class AdminService {
           : balance.postedCreditMinor - balance.postedDebitMinor;
       customerCash += gross;
       reservedFunds += balance.reservedMinor;
+      if (
+        account.code === 'CASH_AVAILABLE' ||
+        account.code === 'COLLECTOR_PROCEEDS_AVAILABLE'
+      ) {
+        const available = gross - balance.reservedMinor;
+        availableCustomerCash += available > 0n ? available : 0n;
+      }
     }
     const pendingDeposits = pendingMovements
       .filter((movement) => movement.type === 'DEPOSIT')
@@ -8442,6 +8450,7 @@ export class AdminService {
       currency: 'GBP',
       kpis: {
         totalCustomerCashMinor: customerCash.toString(),
+        availableCustomerCashMinor: availableCustomerCash.toString(),
         reservedFundsMinor: reservedFunds.toString(),
         pendingDepositsMinor: pendingDeposits.toString(),
         pendingWithdrawalsMinor: pendingWithdrawals.toString(),

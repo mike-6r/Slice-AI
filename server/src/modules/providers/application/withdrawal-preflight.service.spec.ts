@@ -5,11 +5,19 @@ const now = new Date('2026-08-25T12:00:00.000Z');
 function service(options?: {
   availableMinor?: number;
   pendingMinor?: number;
+  snapshotError?: boolean;
   walletAvailableMinor?: string;
   walletWithdrawableMinor?: string;
   activeReservationMinor?: bigint;
   maturityMinor?: bigint;
   maturityAt?: Date;
+  adminAccounts?: Array<{
+    code: 'CASH_AVAILABLE' | 'COLLECTOR_PROCEEDS_AVAILABLE' | 'BACS_RISK_HOLD';
+    normalSide: 'DEBIT' | 'CREDIT';
+    postedDebitMinor: bigint;
+    postedCreditMinor: bigint;
+    reservedMinor?: bigint;
+  }>;
 }) {
   const optionsWithDefaults = {
     availableMinor: 100_000,
@@ -19,20 +27,17 @@ function service(options?: {
     activeReservationMinor: 0n,
     maturityMinor: 0n,
     maturityAt: new Date('2026-09-01T00:00:00.000Z'),
+    adminAccounts: [],
     ...options,
   };
   const db = {
     moneyMovement: {
-      aggregate: jest
-        .fn()
-        .mockResolvedValue({
-          _sum: { amountMinor: optionsWithDefaults.maturityMinor },
-        }),
-      findFirst: jest
-        .fn()
-        .mockResolvedValue({
-          providerAvailableOn: optionsWithDefaults.maturityAt,
-        }),
+      aggregate: jest.fn().mockResolvedValue({
+        _sum: { amountMinor: optionsWithDefaults.maturityMinor },
+      }),
+      findFirst: jest.fn().mockResolvedValue({
+        providerAvailableOn: optionsWithDefaults.maturityAt,
+      }),
     },
     providerLiquidityReservation: {
       aggregate: jest.fn().mockResolvedValue({
@@ -43,6 +48,19 @@ function service(options?: {
         .fn()
         .mockResolvedValue({ id: 'reservation-1', status: 'ACTIVE' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    financialAccount: {
+      findMany: jest.fn().mockResolvedValue(
+        optionsWithDefaults.adminAccounts.map((account) => ({
+          code: account.code,
+          normalSide: account.normalSide,
+          balance: {
+            postedDebitMinor: account.postedDebitMinor,
+            postedCreditMinor: account.postedCreditMinor,
+            reservedMinor: account.reservedMinor ?? 0n,
+          },
+        })),
+      ),
     },
     $transaction: jest.fn(async (callback: (transaction: unknown) => unknown) =>
       callback({
@@ -66,16 +84,19 @@ function service(options?: {
       reservedMinor: '0',
     }),
   };
-  const stripe = {
-    balance: {
-      retrieve: jest.fn().mockResolvedValue({
+  const retrieve = optionsWithDefaults.snapshotError
+    ? jest.fn().mockRejectedValue(new Error('Stripe balance unavailable'))
+    : jest.fn().mockResolvedValue({
         available: [
           { amount: optionsWithDefaults.availableMinor, currency: 'gbp' },
         ],
         pending: [
           { amount: optionsWithDefaults.pendingMinor, currency: 'gbp' },
         ],
-      }),
+      });
+  const stripe = {
+    balance: {
+      retrieve,
     },
     balanceTransactions: {
       list: jest.fn().mockResolvedValue({ data: [] }),
@@ -212,6 +233,105 @@ describe('WithdrawalPreflightService', () => {
       response: expect.objectContaining({
         code: 'PROVIDER_LIQUIDITY_UNAVAILABLE',
       }),
+    });
+  });
+
+  it('projects the Stripe platform Payments Balance after active reservations', async () => {
+    const { service: preflight, stripe } = service({
+      availableMinor: 25_000,
+      pendingMinor: 9_400,
+      activeReservationMinor: 6_000n,
+      maturityMinor: 2_000n,
+      adminAccounts: [
+        {
+          code: 'CASH_AVAILABLE',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 16_000n,
+          reservedMinor: 3_000n,
+        },
+        {
+          code: 'COLLECTOR_PROCEEDS_AVAILABLE',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 8_000n,
+        },
+        {
+          code: 'BACS_RISK_HOLD',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 5_000n,
+        },
+      ],
+    });
+
+    const projection = await preflight.adminProjection();
+
+    expect(stripe.balance.retrieve).toHaveBeenCalledWith();
+    expect(projection).toMatchObject({
+      liquiditySource: 'STRIPE_PLATFORM_PAYMENTS_BALANCE',
+      providerAvailableMinor: '25000',
+      providerPendingMinor: '9400',
+      activeReservationMinor: '6000',
+      availableAfterReservationsMinor: '19000',
+      customerCashLiabilityMinor: '29000',
+      withdrawalEligibleLiabilityMinor: '19000',
+      payoutLiquidityCoverageBps: 10_000,
+      providerLiquidityStatus: 'AVAILABLE',
+      warning: false,
+    });
+  });
+
+  it('excludes pending Stripe funds from available withdrawal liquidity', async () => {
+    const { service: preflight } = service({
+      availableMinor: 0,
+      pendingMinor: 99_999,
+      adminAccounts: [
+        {
+          code: 'CASH_AVAILABLE',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 500n,
+        },
+      ],
+    });
+
+    const projection = await preflight.adminProjection();
+
+    expect(projection).toMatchObject({
+      providerAvailableMinor: '0',
+      providerPendingMinor: '99999',
+      availableAfterReservationsMinor: '0',
+      withdrawalEligibleLiabilityMinor: '500',
+      payoutLiquidityCoverageBps: 0,
+      providerLiquidityStatus: 'INSUFFICIENT',
+      warning: true,
+    });
+  });
+
+  it('keeps provider liquidity unavailable when Stripe balance retrieval fails', async () => {
+    const { service: preflight } = service({
+      snapshotError: true,
+      adminAccounts: [
+        {
+          code: 'CASH_AVAILABLE',
+          normalSide: 'CREDIT',
+          postedDebitMinor: 0n,
+          postedCreditMinor: 500n,
+        },
+      ],
+    });
+
+    const projection = await preflight.adminProjection();
+
+    expect(projection).toMatchObject({
+      liquiditySource: 'STRIPE_PLATFORM_PAYMENTS_BALANCE',
+      providerAvailableMinor: null,
+      providerPendingMinor: null,
+      availableAfterReservationsMinor: null,
+      payoutLiquidityCoverageBps: null,
+      providerLiquidityStatus: 'UNAVAILABLE',
+      warning: true,
     });
   });
 });

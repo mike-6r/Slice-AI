@@ -3,13 +3,11 @@ import {
   ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
-  BarChart3,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Landmark,
-  ListFilter,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -108,6 +106,40 @@ const titleCase = (value: unknown) =>
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const liquidityState = (status: unknown) => {
+  switch (status) {
+    case "AVAILABLE":
+      return "Healthy";
+    case "INSUFFICIENT":
+      return "Insufficient";
+    case "UNAVAILABLE":
+      return "Unavailable";
+    case "NOT_APPLICABLE":
+      return "Not applicable";
+    default:
+      return "—";
+  }
+};
+
+const liquidityTone = (status: unknown) => {
+  switch (status) {
+    case "AVAILABLE":
+      return "green";
+    case "INSUFFICIENT":
+      return "red";
+    case "UNAVAILABLE":
+      return "gold";
+    default:
+      return "blue";
+  }
+};
+
+const providerMoney = (minor: unknown, status: unknown) =>
+  status === "UNAVAILABLE" ? "Unavailable" : money(minor);
+
+const providerCoverage = (coverage: number | null | undefined, status: unknown) =>
+  status === "UNAVAILABLE" ? "Unavailable" : formatCoverage(coverage);
 
 function identity(value: unknown) {
   if (!value || typeof value !== "object") return { id: "", name: "—", email: "" };
@@ -260,49 +292,53 @@ export function AdminFinanceTrading({
         </div>
       </header>
 
-      <div className="admin-finance-kpis">
-        <FinanceKpi
-          icon={<WalletCards />}
-          label="Total customer cash"
-          value={money(dashboard?.kpis.totalCustomerCashMinor)}
-          detail="Authoritative GBP wallet balances"
-        />
-        <FinanceKpi
-          icon={<Landmark />}
-          label="Reserved funds"
-          value={money(dashboard?.kpis.reservedFundsMinor)}
-          detail="Locked in open orders"
-          tone="blue"
-        />
-        <FinanceKpi
-          icon={<ArrowDownToLine />}
-          label="Pending deposits"
-          value={money(dashboard?.kpis.pendingDepositsMinor)}
-          detail="Pending money movements"
-          tone="purple"
-        />
-        <FinanceKpi
-          icon={<ArrowUpRight />}
-          label="Pending withdrawals"
-          value={money(dashboard?.kpis.pendingWithdrawalsMinor)}
-          detail="Pending money movements"
-          tone="gold"
-        />
-        <FinanceKpi
-          icon={<ListFilter />}
-          label="Open orders"
-          value={number(dashboard?.kpis.openOrders)}
-          detail="Across all assets"
-          tone="cyan"
-        />
-        <FinanceKpi
-          icon={<BarChart3 />}
-          label="Executions today"
-          value={number(dashboard?.kpis.executionsToday)}
-          detail="Authoritative trading executions"
-          tone="red"
-        />
-      </div>
+      <section className="admin-finance-authority-section">
+        <div className="admin-finance-authority-heading">
+          <div>
+            <h3>Customer liabilities</h3>
+            <p>
+              Slice internal ledger authority. Separate from provider liquidity and company revenue.
+            </p>
+          </div>
+          <span>GBP</span>
+        </div>
+        <div className="admin-finance-kpis">
+          <FinanceKpi
+            icon={<WalletCards />}
+            label="Total customer cash"
+            value={money(dashboard.kpis.totalCustomerCashMinor)}
+            detail="All customer GBP liabilities"
+          />
+          <FinanceKpi
+            icon={<Landmark />}
+            label="Available customer cash"
+            value={money(dashboard.kpis.availableCustomerCashMinor)}
+            detail="Eligible ledger balance"
+            tone="cyan"
+          />
+          <FinanceKpi
+            icon={<Landmark />}
+            label="Reserved funds"
+            value={money(dashboard.kpis.reservedFundsMinor)}
+            detail="Orders and withdrawals"
+            tone="blue"
+          />
+          <FinanceKpi
+            icon={<ArrowDownToLine />}
+            label="Pending deposits"
+            value={money(dashboard.kpis.pendingDepositsMinor)}
+            detail="Pending money movements"
+            tone="purple"
+          />
+          <FinanceKpi
+            icon={<ArrowUpRight />}
+            label="Pending withdrawals"
+            value={money(dashboard.kpis.pendingWithdrawalsMinor)}
+            detail="Pending money movements"
+            tone="gold"
+          />
+        </div>
+      </section>
 
       <div className="admin-finance-layout">
         <div className="admin-finance-main-card">
@@ -443,51 +479,76 @@ export function AdminFinanceTrading({
             className={`admin-finance-side-card${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
           >
             <div className="admin-finance-side-heading">
-              <h3>Payout liquidity</h3>
-              <span>{titleCase(dashboard?.payoutLiquidity?.providerLiquidityStatus)}</span>
+              <h3>Stripe platform liquidity</h3>
+              <span>
+                {dashboard?.payoutLiquidity?.liquiditySource === "STRIPE_PLATFORM_PAYMENTS_BALANCE"
+                  ? "GBP Payments Balance"
+                  : liquidityState(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
+              </span>
             </div>
             <div className="admin-finance-side-grid">
               <Metric
-                label="Stripe available"
-                value={money(dashboard?.payoutLiquidity?.providerAvailableMinor)}
-                tone={dashboard?.payoutLiquidity?.warning ? "gold" : "green"}
+                label="Available GBP Payments Balance"
+                value={providerMoney(
+                  dashboard?.payoutLiquidity?.providerAvailableMinor,
+                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
+                )}
+                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
               />
               <Metric
-                label="Stripe pending"
-                value={money(dashboard?.payoutLiquidity?.providerPendingMinor)}
+                label="Pending GBP Payments Balance"
+                value={providerMoney(
+                  dashboard?.payoutLiquidity?.providerPendingMinor,
+                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
+                )}
                 tone="purple"
               />
               <Metric
-                label="Withdrawal liabilities"
+                label="Active withdrawal reservations"
+                value={money(dashboard?.payoutLiquidity?.activeReservationMinor)}
+                tone="blue"
+              />
+              <Metric
+                label="Available after reservations"
+                value={providerMoney(
+                  dashboard?.payoutLiquidity?.availableAfterReservationsMinor,
+                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
+                )}
+                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
+              />
+              <Metric
+                label="Eligible withdrawal liabilities"
                 value={money(dashboard?.payoutLiquidity?.withdrawalEligibleLiabilityMinor)}
                 tone="cyan"
               />
               <Metric
-                label="Settling for withdrawal"
-                value={money(dashboard?.payoutLiquidity?.settlingMinor)}
-                tone="gold"
+                label="Liquidity coverage"
+                value={providerCoverage(
+                  dashboard?.payoutLiquidity?.payoutLiquidityCoverageBps,
+                  dashboard?.payoutLiquidity?.providerLiquidityStatus,
+                )}
+                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
               />
               <Metric
-                label="Payout liquidity coverage"
-                value={formatCoverage(dashboard?.payoutLiquidity?.payoutLiquidityCoverageBps)}
-                tone={dashboard?.payoutLiquidity?.warning ? "gold" : "green"}
-              />
-              <Metric
-                label="Reserved for payouts"
-                value={money(dashboard?.payoutLiquidity?.activeReservationMinor)}
-                tone="blue"
+                label="Liquidity state"
+                value={liquidityState(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
+                tone={liquidityTone(dashboard?.payoutLiquidity?.providerLiquidityStatus)}
               />
             </div>
             <p
               className={`admin-finance-muted${dashboard?.payoutLiquidity?.warning ? " is-warning" : ""}`}
             >
-              {dashboard?.payoutLiquidity?.warning
-                ? dashboard.payoutLiquidity.nextAvailabilityAt
-                  ? `Provider liquidity is below eligible withdrawal liabilities. Expected availability: ${date(dashboard.payoutLiquidity.nextAvailabilityAt)}.`
-                  : "Provider liquidity is below eligible withdrawal liabilities. Review before approving payouts."
-                : dashboard?.payoutLiquidity?.providerLiquidityStatus === "NOT_APPLICABLE"
-                  ? "No external payout rail is configured in this environment."
-                  : "Available provider liquidity is sufficient for eligible withdrawals."}
+              {dashboard?.payoutLiquidity?.providerLiquidityStatus === "UNAVAILABLE"
+                ? "Stripe Platform Payments Balance could not be retrieved. Provider liquidity is unavailable until Stripe responds; withdrawal preflight remains fail-closed."
+                : dashboard?.payoutLiquidity?.warning
+                  ? "Stripe platform available balance is below eligible customer withdrawal liabilities. Pending GBP is not spendable for withdrawals."
+                  : dashboard?.payoutLiquidity?.providerLiquidityStatus === "NOT_APPLICABLE"
+                    ? "No external payout rail is configured in this environment."
+                    : "Stripe platform available balance covers current eligible withdrawal liabilities. Pending GBP is not spendable for withdrawals."}
+            </p>
+            <p className="admin-finance-authority-note">
+              Customer withdrawals use the Stripe Platform Payments Balance. Treasury / Financial
+              Account and Connect account balances are not liquidity sources for this rail.
             </p>
           </section>
           <section className="admin-finance-side-card">

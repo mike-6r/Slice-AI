@@ -354,6 +354,7 @@ export const mockRepositories: AppRepositories = {
         currency: "GBP" as const,
         kpis: {
           totalCustomerCashMinor: "0",
+          availableCustomerCashMinor: "0",
           reservedFundsMinor: "0",
           pendingDepositsMinor: "0",
           pendingWithdrawalsMinor: "0",
