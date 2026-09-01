@@ -372,143 +372,147 @@ function Overview({
       ) : null}
 
       <div className="admin-operations-overview__grid">
-        <Info title="Economic Snapshot">
-          <Field
-            label="Valuation"
-            value={
-              item.valuation.current
-                ? money(item.valuation.current.minor, item.valuation.current.currency)
-                : "Not recorded"
-            }
-            accent
-          />
-          <Field
-            label="Ownership state"
-            value={item.issuance ? sentence(item.issuance.status) : "Not configured"}
-          />
-          <Field
-            label="Total units"
-            value={
-              item.issuance?.supply?.totalUnits ?? item.ownership.totalUnits ?? "Not configured"
-            }
-          />
-          <Field
-            label="Offering state"
-            value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
-          />
-          <Field
-            label="Price per Slice"
-            value={
-              item.initialOffering
-                ? money(item.initialOffering.pricePerUnitMinor, item.initialOffering.currency)
-                : "Not configured"
-            }
-          />
-          <Field label="Market state" value={marketLabel(item)} />
-          <Field
-            label="Gross offering"
-            value={
-              item.initialOffering
-                ? money(item.initialOffering.grossOfferingMinor, item.initialOffering.currency)
-                : "Not applicable"
-            }
-          />
-          <Field
-            label="Offering fee"
-            value={
-              item.initialOffering
-                ? `${money(item.initialOffering.feeMinor, item.initialOffering.currency)} (${percent(item.initialOffering.feeBps)})`
-                : "Not applicable"
-            }
-          />
-          <Field
-            label="Collector proceeds"
-            value={
-              item.initialOffering
-                ? money(item.initialOffering.netOfferingMinor, item.initialOffering.currency)
-                : "Not applicable"
-            }
-          />
-        </Info>
-
-        {operations ? (
-          <section className="admin-operation-card admin-operations-overview__gates">
-            <CardHeading
-              title="Launch Readiness"
-              status={
-                operations.launchReadiness.state === "READY"
-                  ? "Ready"
-                  : `${operations.launchReadiness.blockers.length} blocked`
+        <div className="admin-operations-overview__column">
+          <Info title="Economic Snapshot">
+            <Field
+              label="Valuation"
+              value={
+                item.valuation.current
+                  ? money(item.valuation.current.minor, item.valuation.current.currency)
+                  : "Not recorded"
               }
-              ready={operations.launchReadiness.state === "READY"}
+              accent
             />
-            <p className="admin-detail-muted">
-              Required launch conditions are evaluated independently by the lifecycle service.
-            </p>
-            <div className="admin-launch-gates">
-              {operations.launchReadiness.gates.map((gate) => (
-                <div
-                  key={gate.blockerCode}
-                  className={`admin-launch-gate ${gate.state.toLowerCase()}`}
-                >
-                  {gate.state === "SATISFIED" ? (
-                    <CheckCircle2 aria-hidden="true" />
-                  ) : (
-                    <CircleAlert aria-hidden="true" />
-                  )}
-                  <span>{gate.label}</span>
-                  <strong>{gate.state === "SATISFIED" ? "Satisfied" : "Blocked"}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
+            <Field
+              label="Ownership state"
+              value={item.issuance ? sentence(item.issuance.status) : "Not configured"}
+            />
+            <Field
+              label="Total units"
+              value={
+                item.issuance?.supply?.totalUnits ?? item.ownership.totalUnits ?? "Not configured"
+              }
+            />
+            <Field
+              label="Offering state"
+              value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
+            />
+            <Field
+              label="Price per Slice"
+              value={
+                item.initialOffering
+                  ? money(item.initialOffering.pricePerUnitMinor, item.initialOffering.currency)
+                  : "Not configured"
+              }
+            />
+            <Field label="Market state" value={marketLabel(item)} />
+            <Field
+              label="Gross offering"
+              value={
+                item.initialOffering
+                  ? money(item.initialOffering.grossOfferingMinor, item.initialOffering.currency)
+                  : "Not applicable"
+              }
+            />
+            <Field
+              label="Offering fee"
+              value={
+                item.initialOffering
+                  ? `${money(item.initialOffering.feeMinor, item.initialOffering.currency)} (${percent(item.initialOffering.feeBps)})`
+                  : "Not applicable"
+              }
+            />
+            <Field
+              label="Collector proceeds"
+              value={
+                item.initialOffering
+                  ? money(item.initialOffering.netOfferingMinor, item.initialOffering.currency)
+                  : "Not applicable"
+              }
+            />
+          </Info>
 
-        <Info title="Economic Reconciliation">
-          <Field
-            label="Expected ownership"
-            value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
-          />
-          <Field
-            label="Allocated ownership"
-            value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
-          />
-          <Field
-            label="Ownership difference"
-            value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
-          />
-          <Field
-            label="Offered inventory"
-            value={item.initialOffering?.inventory?.offeredUnits ?? "Not created"}
-          />
-          <Field
-            label="Reserved units"
-            value={item.initialOffering?.inventory?.reservedUnits ?? "Not created"}
-          />
-          <Field
-            label="Executed units"
-            value={item.initialOffering?.inventory?.settledUnits ?? "Not created"}
-          />
-          <Field
-            label="Available units"
-            value={item.initialOffering?.inventory?.availableUnits ?? "Not created"}
-          />
-          <Field
-            label="Available proceeds"
-            value={
-              item.initialOffering
-                ? money(
-                    item.initialOffering.proceeds.availableMinor,
-                    item.initialOffering.proceeds.currency,
-                  )
-                : "Not applicable"
-            }
-          />
-        </Info>
+          <Info title="Economic Reconciliation">
+            <Field
+              label="Expected ownership"
+              value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
+            />
+            <Field
+              label="Allocated ownership"
+              value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
+            />
+            <Field
+              label="Ownership difference"
+              value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
+            />
+            <Field
+              label="Offered inventory"
+              value={item.initialOffering?.inventory?.offeredUnits ?? "Not created"}
+            />
+            <Field
+              label="Reserved units"
+              value={item.initialOffering?.inventory?.reservedUnits ?? "Not created"}
+            />
+            <Field
+              label="Executed units"
+              value={item.initialOffering?.inventory?.settledUnits ?? "Not created"}
+            />
+            <Field
+              label="Available units"
+              value={item.initialOffering?.inventory?.availableUnits ?? "Not created"}
+            />
+            <Field
+              label="Available proceeds"
+              value={
+                item.initialOffering
+                  ? money(
+                      item.initialOffering.proceeds.availableMinor,
+                      item.initialOffering.proceeds.currency,
+                    )
+                  : "Not applicable"
+              }
+            />
+          </Info>
+        </div>
 
-        <Info title="Recent Meaningful Activity">
-          <ActivityPreview item={item} />
-        </Info>
+        <div className="admin-operations-overview__column">
+          {operations ? (
+            <section className="admin-operation-card admin-operations-overview__gates">
+              <CardHeading
+                title="Launch Readiness"
+                status={
+                  operations.launchReadiness.state === "READY"
+                    ? "Ready"
+                    : `${operations.launchReadiness.blockers.length} blocked`
+                }
+                ready={operations.launchReadiness.state === "READY"}
+              />
+              <p className="admin-detail-muted">
+                Required launch conditions are evaluated independently by the lifecycle service.
+              </p>
+              <div className="admin-launch-gates">
+                {operations.launchReadiness.gates.map((gate) => (
+                  <div
+                    key={gate.blockerCode}
+                    className={`admin-launch-gate ${gate.state.toLowerCase()}`}
+                  >
+                    {gate.state === "SATISFIED" ? (
+                      <CheckCircle2 aria-hidden="true" />
+                    ) : (
+                      <CircleAlert aria-hidden="true" />
+                    )}
+                    <span>{gate.label}</span>
+                    <strong>{gate.state === "SATISFIED" ? "Satisfied" : "Blocked"}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <Info title="Recent Meaningful Activity">
+            <ActivityPreview item={item} />
+          </Info>
+        </div>
       </div>
     </div>
   );
@@ -553,7 +557,7 @@ function EconomicWorkflow({
     <section className="admin-economic-workflow" aria-label="Economic workflow">
       <div className="admin-economic-workflow__intro">
         <span>Economic workflow</span>
-        <p>Backend-authoritative progression</p>
+        <p>Valuation through live market</p>
       </div>
       <div className="admin-economic-workflow__steps">
         {operations.economicWorkflow.map((step, index) => {
