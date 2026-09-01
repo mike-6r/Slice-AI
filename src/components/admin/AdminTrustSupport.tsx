@@ -150,7 +150,7 @@ export function AdminTrustSupport({
   };
   if (failed)
     return (
-      <section className="admin-trust-page">
+      <section className="admin-trust-page admin-list-workspace">
         <TrustState
           title="Trust & Support is unavailable"
           detail="The current operational authority could not be loaded safely. Counts will be available when it responds."
@@ -160,13 +160,13 @@ export function AdminTrustSupport({
     );
   if (dashboardLoading && !dashboard)
     return (
-      <section className="admin-trust-page">
+      <section className="admin-trust-page admin-list-workspace">
         <TableLoading />
       </section>
     );
   if (!dashboard)
     return (
-      <section className="admin-trust-page">
+      <section className="admin-trust-page admin-list-workspace">
         <TrustState
           title="Trust & Support is unavailable"
           detail="The current operational authority did not return a usable response."
@@ -175,8 +175,8 @@ export function AdminTrustSupport({
       </section>
     );
   return (
-    <section className="admin-trust-page">
-      <header className="admin-trust-header">
+    <section className="admin-trust-page admin-list-workspace">
+      <header className="admin-trust-header admin-list-workspace__heading">
         <div>
           <p className="admin-trust-breadcrumb">
             Trust &amp; Support <span>›</span> Trust &amp; Support Overview

@@ -59,6 +59,7 @@ import { AdminTrustSupport } from "@/components/admin/AdminTrustSupport";
 import { AdminPlatformOperations } from "@/components/admin/AdminPlatformOperations";
 import { AdminReviewMedia } from "@/components/admin/AdminReviewMedia";
 import { AdminIntakeLocations } from "@/components/admin/AdminIntakeLocations";
+import "@/styles/admin-workspace-shell.css";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { queryKeys } from "@/queries/keys";
 import {
@@ -3671,8 +3672,8 @@ function ReviewQueue({
       />
     );
   return (
-    <div className="admin-review-queue">
-      <div className="admin-review-queue-heading">
+    <div className="admin-review-queue admin-list-workspace">
+      <div className="admin-review-queue-heading admin-list-workspace__heading">
         <div>
           <p className="admin-breadcrumb">
             Admin Console <span>/</span> Review Queue
@@ -4604,8 +4605,8 @@ function AccountsWorkspace({
     },
   ] as const;
   return (
-    <div className="admin-console-content admin-accounts-content admin-accounts-revamp">
-      <section className="admin-console-heading admin-accounts-heading">
+    <div className="admin-console-content admin-list-workspace admin-accounts-content admin-accounts-revamp">
+      <section className="admin-console-heading admin-list-workspace__heading admin-accounts-heading">
         <div>
           <p className="admin-console-eyebrow">Admin Console / Accounts</p>
           <h2>Accounts</h2>
@@ -7623,8 +7624,8 @@ function AdminPageSection({
   children: ReactNode;
 }) {
   return (
-    <div className="admin-console-content">
-      <section className="admin-console-heading">
+    <div className="admin-console-content admin-list-workspace">
+      <section className="admin-console-heading admin-list-workspace__heading">
         <div>
           <p className="admin-console-eyebrow">Admin Console</p>
           <h2>{title}</h2>

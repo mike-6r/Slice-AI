@@ -218,7 +218,7 @@ export function AdminFinanceTrading({
 
   if (failed)
     return (
-      <section className="admin-finance-page">
+      <section className="admin-finance-page admin-list-workspace">
         <EmptyState
           title="Finance & Trading is unavailable"
           detail="The current finance authority could not be loaded safely. Balances and activity will be available when it responds."
@@ -228,7 +228,7 @@ export function AdminFinanceTrading({
     );
   if (dashboardLoading && !dashboard)
     return (
-      <section className="admin-finance-page">
+      <section className="admin-finance-page admin-list-workspace">
         <div className="admin-finance-table-loading">
           <span />
           <span />
@@ -239,7 +239,7 @@ export function AdminFinanceTrading({
     );
   if (!dashboard)
     return (
-      <section className="admin-finance-page">
+      <section className="admin-finance-page admin-list-workspace">
         <EmptyState
           title="Finance & Trading is unavailable"
           detail="The current finance authority did not return a usable response."
@@ -249,8 +249,8 @@ export function AdminFinanceTrading({
     );
 
   return (
-    <section className="admin-finance-page">
-      <header className="admin-finance-header">
+    <section className="admin-finance-page admin-list-workspace">
+      <header className="admin-finance-header admin-list-workspace__heading">
         <div>
           <p className="admin-finance-breadcrumb">
             Finance &amp; Trading <span>›</span> Finance Dashboard

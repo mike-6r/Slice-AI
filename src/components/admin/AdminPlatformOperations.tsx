@@ -213,8 +213,8 @@ export function AdminPlatformOperations({
   const loading = dashboardLoading || (activeTab !== "health" && recordsLoading);
   const pageInfo = records?.pagination ?? { page, pageSize: 10, total: 0, totalPages: 0 };
   return (
-    <section className="admin-platform-page">
-      <header className="admin-platform-header">
+    <section className="admin-platform-page admin-list-workspace">
+      <header className="admin-platform-header admin-list-workspace__heading">
         <div>
           <p className="admin-platform-breadcrumb">
             Admin Console <span>›</span> Platform Dashboard

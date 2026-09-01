@@ -1,0 +1,85 @@
+/*
+ * Shared top-level Admin Console workspace geometry.
+ *
+ * Physical Intake is the canonical list-page shell. Feature-specific styles
+ * continue to own their tables, cards and controls; this contract only keeps
+ * the page inset and heading rhythm consistent across primary navigation.
+ */
+.admin-list-workspace {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 1.7rem 2rem 2.5rem;
+}
+
+.admin-list-workspace__heading {
+  display: flex;
+  min-width: 0;
+  min-height: 4.65rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.admin-list-workspace__heading h2 {
+  margin: 0.35rem 0 0;
+  color: #f4f8f7;
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 2.6vw, 2.1rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.admin-list-workspace__heading > div:first-child > p:first-child {
+  margin: 0;
+  color: #38dcb5;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.admin-list-workspace__heading > div:first-child > p:last-child,
+.admin-list-workspace__heading > div:first-child > span:last-child {
+  display: block;
+  max-width: 43rem;
+  margin: 0.45rem 0 0;
+  color: #95a7b3;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+/* The catalogue places its title and authority badge in an intermediate row. */
+.admin-list-workspace__heading .admin-catalogue-title-row h2 {
+  margin-top: 0.35rem;
+}
+
+/* Asset Operations previously used a denser, page-specific inset. */
+.asset-operations-page--reference.admin-list-workspace {
+  padding: 1.7rem 2rem 2.5rem;
+}
+
+@media (max-width: 920px) {
+  .admin-list-workspace,
+  .asset-operations-page--reference.admin-list-workspace {
+    padding: 1.3rem 1rem 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-list-workspace__heading {
+    display: grid;
+    min-height: 0;
+    align-items: start;
+  }
+
+  .admin-list-workspace__heading h2 {
+    font-size: 1.75rem;
+  }
+}

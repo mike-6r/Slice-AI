@@ -144,8 +144,8 @@ export function AdminAssetOperations(props: Props) {
     });
 
   return (
-    <main className="asset-operations-page asset-operations-page--reference">
-      <header className="asset-operations-header">
+    <main className="asset-operations-page asset-operations-page--reference admin-list-workspace">
+      <header className="asset-operations-header admin-list-workspace__heading">
         <div>
           <p>
             Admin Console <span>›</span> Asset Operations
@@ -1052,7 +1052,7 @@ function OperationsState({
 
 function OperationsLoading() {
   return (
-    <main className="asset-operations-page asset-operations-page--reference">
+    <main className="asset-operations-page asset-operations-page--reference admin-list-workspace">
       <div className="asset-operations-skeleton-header">
         <i />
         <b />

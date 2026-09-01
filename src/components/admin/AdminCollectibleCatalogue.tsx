@@ -178,8 +178,8 @@ function CatalogueContent({
     }).length + (status ? 1 : 0);
   const hasFilters = Boolean(search.trim()) || activeFilterCount > 0;
   return (
-    <main className="admin-catalogue-page">
-      <header className="admin-catalogue-header">
+    <main className="admin-catalogue-page admin-list-workspace">
+      <header className="admin-catalogue-header admin-list-workspace__heading">
         <div>
           <p className="admin-catalogue-eyebrow">Admin console</p>
           <div className="admin-catalogue-title-row">
@@ -931,7 +931,11 @@ function CatalogueState({
 
 function CatalogueLoading() {
   return (
-    <main className="admin-catalogue-page" aria-busy="true" aria-label="Loading collectibles">
+    <main
+      className="admin-catalogue-page admin-list-workspace"
+      aria-busy="true"
+      aria-label="Loading collectibles"
+    >
       <div className="admin-catalogue-loading-heading" />
       <section className="admin-catalogue-summary">
         {Array.from({ length: 6 }, (_, index) => (

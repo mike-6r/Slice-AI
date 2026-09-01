@@ -120,8 +120,8 @@ export function AdminMemberships({
     query || plan || status || billing || usage || fixture !== "ALL" || needsAction,
   );
   return (
-    <main className="admin-memberships-page">
-      <header className="admin-memberships-header">
+    <main className="admin-memberships-page admin-list-workspace">
+      <header className="admin-memberships-header admin-list-workspace__heading">
         <div>
           <p className="admin-memberships-eyebrow">ADMIN CONSOLE / MEMBERSHIPS</p>
           <h2>Memberships</h2>
@@ -683,7 +683,7 @@ function Select({
 }
 function MembershipLoading() {
   return (
-    <main className="admin-memberships-page">
+    <main className="admin-memberships-page admin-list-workspace">
       <div className="admin-membership-loading">
         <span />
         <span />
