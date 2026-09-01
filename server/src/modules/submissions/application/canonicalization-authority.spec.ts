@@ -85,6 +85,12 @@ describe('canonicalization authority', () => {
           version,
           reviewerId: 'reviewer-1',
           declaredMetadata: { name: 'Approval boundary card' },
+          reviewMetadata: {
+            evidenceReviews: {
+              front: { state: 'ACCEPTED' },
+              back: { state: 'ACCEPTED' },
+            },
+          },
           gradeScaleEntryId: null,
           normalizedCertificationNumber: null,
           media: updated.media,

@@ -630,6 +630,12 @@ export const mockRepositories: AppRepositories = {
     async getDetail() {
       throw new Error("Review requires the API service.");
     },
+    async listEligibleReviewers() {
+      return [];
+    },
+    async assignReviewer() {
+      throw new Error("Review requires the API service.");
+    },
     async claim() {
       throw new Error("Review requires the API service.");
     },
@@ -658,6 +664,21 @@ export const mockRepositories: AppRepositories = {
       throw new Error("Review requires the API service.");
     },
     async updateFinding() {
+      throw new Error("Review requires the API service.");
+    },
+    async acceptEvidence() {
+      throw new Error("Review requires the API service.");
+    },
+    async flagEvidence() {
+      throw new Error("Review requires the API service.");
+    },
+    async addResearchReference() {
+      throw new Error("Review requires the API service.");
+    },
+    async removeResearchReference() {
+      throw new Error("Review requires the API service.");
+    },
+    async addResearchNote() {
       throw new Error("Review requires the API service.");
     },
     async manualVerifyCertification() {

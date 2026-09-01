@@ -141,8 +141,18 @@ export interface SubmissionReviewRepository {
     pageSize?: number;
   }): Promise<SubmissionReviewQueueResponse>;
   getDetail(id: string): Promise<SubmissionReviewDetail>;
+  listEligibleReviewers(
+    id: string,
+  ): Promise<Array<{ id: string; displayName: string; username: string | null; roles: string[] }>>;
+  assignReviewer(
+    id: string,
+    input: { version: number; reviewerId: string | null; reason?: string },
+  ): Promise<{ submissionId: string; status: string; reviewerId: string | null; version: number }>;
   claim(id: string, version: number): Promise<{ submissionId: string; status: string }>;
-  release(id: string, version: number): Promise<{ submissionId: string; status: string; version: number }>;
+  release(
+    id: string,
+    version: number,
+  ): Promise<{ submissionId: string; status: string; version: number }>;
   recalculateReadiness(
     id: string,
     input: { version: number; reason: string },
@@ -170,6 +180,7 @@ export interface SubmissionReviewRepository {
       reasonCode: string;
       note?: string;
       requestedItems?: string[];
+      requestedFindingIds?: string[];
       customerMessage?: string;
     },
   ): Promise<AssetSubmission>;
@@ -205,6 +216,43 @@ export interface SubmissionReviewRepository {
     findingId: string,
     input: { version: number; status: "OPEN" | "RESOLVED" | "DISMISSED"; resolutionNote?: string },
   ): Promise<{ findingId: string; submissionId: string; status: string; version: number }>;
+  acceptEvidence(
+    id: string,
+    mediaId: string,
+    input: { version: number; note?: string },
+  ): Promise<{ submissionId: string; mediaId: string; reviewState: string; version: number }>;
+  flagEvidence(
+    id: string,
+    mediaId: string,
+    input: { version: number; note?: string; customerAction?: boolean },
+  ): Promise<{
+    submissionId: string;
+    mediaId: string;
+    reviewState: string;
+    findingId: string;
+    version: number;
+  }>;
+  addResearchReference(
+    id: string,
+    input: {
+      version: number;
+      provider: string;
+      url?: string;
+      referenceId?: string;
+      currency?: string;
+      valueMinor?: string;
+      note?: string;
+    },
+  ): Promise<{ submissionId: string; referenceId: string; version: number }>;
+  removeResearchReference(
+    id: string,
+    referenceId: string,
+    input: { version: number; note?: string },
+  ): Promise<{ submissionId: string; referenceId: string; version: number }>;
+  addResearchNote(
+    id: string,
+    input: { version: number; note: string },
+  ): Promise<{ submissionId: string; version: number }>;
   manualVerifyCertification(
     id: string,
     input: {
@@ -215,7 +263,10 @@ export interface SubmissionReviewRepository {
       providerReference?: string;
     },
   ): Promise<unknown>;
-  canonicalize(id: string): Promise<{
+  canonicalize(
+    id: string,
+    version: number,
+  ): Promise<{
     submissionId: string;
     assetId: string;
     publicId: string;

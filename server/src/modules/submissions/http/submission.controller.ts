@@ -77,6 +77,7 @@ const decision = z
       .min(1)
       .max(10)
       .optional(),
+    requestedFindingIds: z.array(id).max(20).optional(),
     customerMessage: z.string().trim().min(1).max(2000).optional(),
   })
   .strict();
@@ -118,7 +119,11 @@ const reviewIdentity = z
   .object({
     version: z.coerce.number().int().min(1),
     name: z.string().trim().min(1).max(255),
-    year: z.string().trim().regex(/^\d{4}$/).optional(),
+    year: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/)
+      .optional(),
     set: z.string().trim().max(255).optional(),
     cardNumber: z.string().trim().max(80).optional(),
     variant: z.string().trim().max(255).optional(),
@@ -128,7 +133,14 @@ const reviewIdentity = z
 const reviewFinding = z
   .object({
     version: z.coerce.number().int().min(1),
-    section: z.enum(['identity', 'evidence', 'certification', 'research', 'assessment', 'decision']),
+    section: z.enum([
+      'identity',
+      'evidence',
+      'certification',
+      'research',
+      'assessment',
+      'decision',
+    ]),
     title: z.string().trim().min(1).max(180),
     detail: z.string().trim().max(2000).optional(),
     severity: z.enum(['ADVISORY', 'BLOCKING']),
@@ -147,6 +159,44 @@ const reviewRecovery = z
     version: z.coerce.number().int().min(1),
     reason: z.string().trim().min(1).max(2000),
   })
+  .strict();
+const reviewerAssignment = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    reviewerId: id.nullable(),
+    reason: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict();
+const evidenceReview = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    note: z.string().trim().max(2000).optional(),
+    customerAction: z.boolean().optional(),
+  })
+  .strict();
+const researchReference = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    provider: z.string().trim().min(1).max(120),
+    url: z.string().url().optional(),
+    referenceId: z.string().trim().max(255).optional(),
+    currency: z
+      .string()
+      .trim()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
+    valueMinor: z.string().regex(/^\d+$/).max(24).optional(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+const researchNote = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    note: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+const canonicalize = z
+  .object({ version: z.coerce.number().int().min(1) })
   .strict();
 const queueQuery = z
   .object({
@@ -361,6 +411,7 @@ export class SubmissionController {
   @RequirePermission('catalogue.manage')
   createAndLinkCanonicalAsset(
     @Param('id') submissionId: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
@@ -368,6 +419,7 @@ export class SubmissionController {
       this.submissions.createAndLinkCanonicalAsset(
         req.actor!,
         submissionId,
+        parse(canonicalize, body),
         req.requestId ?? 'unknown',
         key!,
       ),
@@ -564,6 +616,34 @@ export class SubmissionController {
   detail(@Param('id') submissionId: string, @Req() req: AuthenticatedRequest) {
     return this.submissions.reviewDetail(req.actor!, submissionId);
   }
+  @Get('reviews/submissions/:id/reviewers')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  eligibleReviewers(
+    @Param('id') submissionId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.submissions.listEligibleReviewers(req.actor!, submissionId);
+  }
+  @Post('reviews/submissions/:id/assignment')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  assignment(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.assignPrimaryReviewer(
+        req.actor!,
+        submissionId,
+        parse(reviewerAssignment, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
   @Post('reviews/submissions/:id/claim')
   @UseGuards(AccessTokenGuard, PermissionGuard)
   @RequirePermission('submission.review')
@@ -694,6 +774,107 @@ export class SubmissionController {
         submissionId,
         findingId,
         parse(reviewFindingStatus, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/evidence/:mediaId/accept')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  acceptEvidence(
+    @Param('id') submissionId: string,
+    @Param('mediaId') mediaId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.acceptEvidence(
+        req.actor!,
+        submissionId,
+        mediaId,
+        parse(evidenceReview, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/evidence/:mediaId/flag')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  flagEvidence(
+    @Param('id') submissionId: string,
+    @Param('mediaId') mediaId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.flagEvidence(
+        req.actor!,
+        submissionId,
+        mediaId,
+        parse(evidenceReview, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/research/references')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  addResearchReference(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.addResearchReference(
+        req.actor!,
+        submissionId,
+        parse(researchReference, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Patch('reviews/submissions/:id/research/references/:referenceId/remove')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  removeResearchReference(
+    @Param('id') submissionId: string,
+    @Param('referenceId') referenceId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.removeResearchReference(
+        req.actor!,
+        submissionId,
+        referenceId,
+        parse(evidenceReview, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/research/notes')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  addResearchNote(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.addResearchNote(
+        req.actor!,
+        submissionId,
+        parse(researchNote, body),
         req.requestId ?? 'unknown',
         key!,
       ),

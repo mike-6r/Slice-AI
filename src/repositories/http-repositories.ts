@@ -1710,6 +1710,9 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       value.changeRequest && typeof value.changeRequest === "object"
         ? (objectField(value.changeRequest, "change request") as never)
         : null,
+    researchReferences: Array.isArray(value.researchReferences)
+      ? (value.researchReferences as never)
+      : undefined,
     relatedItems: Array.isArray(value.relatedItems) ? (value.relatedItems as never) : undefined,
     reviewAssignment:
       value.reviewAssignment && typeof value.reviewAssignment === "object"
@@ -5390,6 +5393,36 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getDetail(id) {
         return mapReviewDetail(await client.get<unknown>(`/reviews/submissions/${id}`));
       },
+      async listEligibleReviewers(id) {
+        const value = await client.get<unknown>(`/reviews/submissions/${id}/reviewers`);
+        if (!Array.isArray(value))
+          throw new ApiError("CLIENT_CONTRACT_ERROR", "Invalid eligible reviewer list.");
+        return value.map((raw) => {
+          const item = objectField(raw, "eligible reviewer");
+          return {
+            id: stringField(item.id, "eligible reviewer.id"),
+            displayName: stringField(item.displayName, "eligible reviewer.displayName"),
+            username: nullableString(item.username, "eligible reviewer.username"),
+            roles: Array.isArray(item.roles) ? item.roles.map(String) : [],
+          };
+        });
+      },
+      async assignReviewer(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/assignment`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review assignment",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "assignment.submissionId"),
+          status: stringField(response.status, "assignment.status"),
+          reviewerId: nullableString(response.reviewerId, "assignment.reviewerId"),
+          version: Number(response.version),
+        };
+      },
       async claim(id, version) {
         const response = objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/claim`, {
@@ -5421,11 +5454,14 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       },
       async recalculateReadiness(id, input) {
         const response = objectField(
-          await client.request<unknown>(`/reviews/submissions/${id}/recovery/recalculate-readiness`, {
-            method: "POST",
-            body: input,
-            headers: { "Idempotency-Key": idempotencyKey() },
-          }),
+          await client.request<unknown>(
+            `/reviews/submissions/${id}/recovery/recalculate-readiness`,
+            {
+              method: "POST",
+              body: input,
+              headers: { "Idempotency-Key": idempotencyKey() },
+            },
+          ),
           "review readiness recovery",
         );
         return {
@@ -5542,6 +5578,89 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           version: Number(response.version),
         };
       },
+      async acceptEvidence(id, mediaId, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/evidence/${mediaId}/accept`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "evidence acceptance",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "evidence acceptance.submissionId"),
+          mediaId: stringField(response.mediaId, "evidence acceptance.mediaId"),
+          reviewState: stringField(response.reviewState, "evidence acceptance.reviewState"),
+          version: Number(response.version),
+        };
+      },
+      async flagEvidence(id, mediaId, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/evidence/${mediaId}/flag`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "evidence flag",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "evidence flag.submissionId"),
+          mediaId: stringField(response.mediaId, "evidence flag.mediaId"),
+          reviewState: stringField(response.reviewState, "evidence flag.reviewState"),
+          findingId: stringField(response.findingId, "evidence flag.findingId"),
+          version: Number(response.version),
+        };
+      },
+      async addResearchReference(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/research/references`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "research reference",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "research reference.submissionId"),
+          referenceId: stringField(response.referenceId, "research reference.referenceId"),
+          version: Number(response.version),
+        };
+      },
+      async removeResearchReference(id, referenceId, input) {
+        const response = objectField(
+          await client.request<unknown>(
+            `/reviews/submissions/${id}/research/references/${referenceId}/remove`,
+            {
+              method: "PATCH",
+              body: input,
+              headers: { "Idempotency-Key": idempotencyKey() },
+            },
+          ),
+          "research reference removal",
+        );
+        return {
+          submissionId: stringField(
+            response.submissionId,
+            "research reference removal.submissionId",
+          ),
+          referenceId: stringField(response.referenceId, "research reference removal.referenceId"),
+          version: Number(response.version),
+        };
+      },
+      async addResearchNote(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/research/notes`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "research note",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "research note.submissionId"),
+          version: Number(response.version),
+        };
+      },
       async manualVerifyCertification(id, input) {
         return client.request<unknown>(`/reviews/submissions/${id}/certification/manual-verify`, {
           method: "POST",
@@ -5549,10 +5668,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           headers: { "Idempotency-Key": idempotencyKey() },
         });
       },
-      async canonicalize(id) {
+      async canonicalize(id, version) {
         const response = objectField(
           await client.request<unknown>(`/admin/submissions/${id}/canonicalize`, {
             method: "POST",
+            body: { version },
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "canonical collectible",

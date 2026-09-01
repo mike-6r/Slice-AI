@@ -93,6 +93,31 @@ type ReviewFindingStatusInput = {
   status: 'RESOLVED' | 'DISMISSED' | 'OPEN';
   resolutionNote?: string;
 };
+type ReviewerAssignmentInput = {
+  version: number;
+  reviewerId: string | null;
+  reason?: string;
+};
+type EvidenceReviewInput = {
+  version: number;
+  note?: string;
+  customerAction?: boolean;
+};
+type ResearchReferenceInput = {
+  version: number;
+  provider: string;
+  url?: string;
+  referenceId?: string;
+  currency?: string;
+  valueMinor?: string;
+  note?: string;
+};
+type ReviewEvidenceState = 'PENDING' | 'ACCEPTED' | 'FLAGGED';
+type ReviewMetadata = Record<string, unknown> & {
+  evidenceReviews?: Record<string, Record<string, unknown>>;
+  researchReferences?: Array<Record<string, unknown>>;
+  researchNotes?: Array<Record<string, unknown>>;
+};
 
 const metadataAllowedKeys = new Set([
   'name',
@@ -505,16 +530,23 @@ export class SubmissionService {
   async createAndLinkCanonicalAsset(
     actor: Actor,
     submissionId: string,
-    requestId: string,
-    key: string,
+    inputOrRequestId: { version: number } | string,
+    requestIdOrKey: string,
+    keyMaybe?: string,
   ) {
+    const input =
+      typeof inputOrRequestId === 'string' ? null : inputOrRequestId;
+    const requestId =
+      typeof inputOrRequestId === 'string' ? inputOrRequestId : requestIdOrKey;
+    const key =
+      typeof inputOrRequestId === 'string' ? requestIdOrKey : keyMaybe!;
     await this.authorization?.authorize(actor, 'catalogue.manage');
     return this.mutate(
       actor,
       `submission.canonicalize:${submissionId}`,
       'POST',
       `/v1/admin/submissions/${submissionId}/canonicalize`,
-      {},
+      input ?? {},
       requestId,
       key,
       async (db, audit) => {
@@ -526,6 +558,7 @@ export class SubmissionService {
             status: true,
             assetId: true,
             ownerUserId: true,
+            version: true,
             categoryId: true,
             setId: true,
             gradeScaleEntryId: true,
@@ -535,6 +568,8 @@ export class SubmissionService {
           },
         });
         if (!submission) this.notFound();
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        if (input) assertExpectedVersion(submission!.version, input.version);
         if (submission!.status !== 'APPROVED') {
           throw new ConflictException({
             code: 'SUBMISSION_STATE_CONFLICT',
@@ -634,7 +669,7 @@ export class SubmissionService {
         }
         await db.assetSubmission.update({
           where: { id: submission!.id },
-          data: { assetId: asset.id },
+          data: { assetId: asset.id, version: { increment: 1 } },
         });
         await audit(
           'CANONICAL_ASSET_CREATED_AND_LINKED',
@@ -944,6 +979,20 @@ export class SubmissionService {
                 status: 'PENDING_UPLOAD',
               },
             });
+        const updatedSubmission = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata(
+              resetEvidenceReview(
+                reviewMetadata(submission.reviewMetadata),
+                media.id,
+                submission.version + 1,
+              ),
+            ),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
         await audit(
           'SUBMISSION_MEDIA_INTENT_CREATED',
           'submission-media',
@@ -959,6 +1008,7 @@ export class SubmissionService {
             objectKey,
             expiresAt: intent.expiresAt.toISOString(),
           },
+          submissionVersion: updatedSubmission.version,
         };
       },
     );
@@ -1226,6 +1276,12 @@ export class SubmissionService {
         await audit('SUBMISSION_SUBMITTED', 'submission', id, {
           version: updated.version,
         });
+        if (submission.status === 'CHANGES_REQUESTED') {
+          await audit('SUBMISSION_COLLECTOR_RESUBMITTED', 'submission', id, {
+            previousStatus: submission.status,
+            version: updated.version,
+          });
+        }
         await this.outbox.append(
           db,
           customerResourceEvent({
@@ -1769,7 +1825,9 @@ export class SubmissionService {
             reviewer: {
               select: {
                 id: true,
-                profile: { select: { displayName: true, publicUsername: true } },
+                profile: {
+                  select: { displayName: true, publicUsername: true },
+                },
               },
             },
           },
@@ -1841,6 +1899,7 @@ export class SubmissionService {
         select: {
           id: true,
           action: true,
+          actorUserId: true,
           actorType: true,
           metadata: true,
           createdAt: true,
@@ -1948,36 +2007,116 @@ export class SubmissionService {
               review.status === 'CLAIMED',
           )
       : null;
-    const contributors = Array.from(
-      new Map(
-        submission!.reviews.map((review) => [
-          review.reviewerId,
-          {
-            id: review.reviewerId,
-            displayName: review.reviewer.profile?.displayName ?? 'Reviewer',
-            username: review.reviewer.profile?.publicUsername ?? null,
-            lastContributedAt: review.updatedAt.toISOString(),
-          },
-        ]),
-      ).values(),
+    const meaningfulActivity = new Set([
+      'SUBMISSION_REVIEW_PRIMARY_ASSIGNED',
+      'SUBMISSION_REVIEW_PRIMARY_REASSIGNED',
+      'SUBMISSION_REVIEW_PRIMARY_CLEARED',
+      'SUBMISSION_REVIEW_EVIDENCE_ACCEPTED',
+      'SUBMISSION_REVIEW_EVIDENCE_FLAGGED',
+      'SUBMISSION_REVIEW_IDENTITY_CONFIRMED',
+      'SUBMISSION_REVIEW_FINDING_CREATED',
+      'SUBMISSION_REVIEW_FINDING_UPDATED',
+      'SUBMISSION_REVIEW_NOTE_UPDATED',
+      'SUBMISSION_STAFF_CONDITION_UPDATED',
+      'SUBMISSION_STAFF_VALUATION_UPDATED',
+      'SUBMISSION_REVIEW_RESEARCH_REFERENCE_ADDED',
+      'SUBMISSION_REVIEW_RESEARCH_REFERENCE_REMOVED',
+      'SUBMISSION_REVIEW_RESEARCH_NOTE_ADDED',
+      'CERT_VERIFIED',
+      'CERT_VERIFICATION_MISMATCH',
+      'SUBMISSION_REVIEW_READINESS_RECALCULATED',
+      'SUBMISSION_APPROVED',
+      'SUBMISSION_REJECTED',
+      'SUBMISSION_CHANGES_REQUESTED',
+      'CANONICAL_ASSET_CREATED_AND_LINKED',
+    ]);
+    const contributionLabel = (action: string) =>
+      (
+        ({
+          SUBMISSION_REVIEW_EVIDENCE_ACCEPTED: 'Evidence accepted',
+          SUBMISSION_REVIEW_EVIDENCE_FLAGGED: 'Evidence flagged',
+          SUBMISSION_REVIEW_IDENTITY_CONFIRMED: 'Identity confirmed',
+          SUBMISSION_REVIEW_RESEARCH_REFERENCE_ADDED:
+            'Research reference added',
+          SUBMISSION_REVIEW_RESEARCH_REFERENCE_REMOVED:
+            'Research reference removed',
+          SUBMISSION_REVIEW_RESEARCH_NOTE_ADDED: 'Research note added',
+          SUBMISSION_STAFF_CONDITION_UPDATED: 'Staff assessment added',
+          SUBMISSION_STAFF_VALUATION_UPDATED: 'Staff valuation added',
+          SUBMISSION_APPROVED: 'Submission approved',
+          SUBMISSION_REJECTED: 'Submission rejected',
+          SUBMISSION_CHANGES_REQUESTED: 'Changes requested',
+        }) as Record<string, string>
+      )[action] ?? 'Review action recorded';
+    const contributorMap = new Map<
+      string,
+      {
+        id: string;
+        displayName: string;
+        username: string | null;
+        lastContributedAt: string;
+        contributionLabel: string;
+      }
+    >();
+    for (const review of submission!.reviews) {
+      contributorMap.set(review.reviewerId, {
+        id: review.reviewerId,
+        displayName: review.reviewer.profile?.displayName ?? 'Reviewer',
+        username: review.reviewer.profile?.publicUsername ?? null,
+        lastContributedAt: review.updatedAt.toISOString(),
+        contributionLabel: review.staffCondition
+          ? 'Staff assessment added'
+          : review.note
+            ? 'Internal note added'
+            : 'Review contribution',
+      });
+    }
+    for (const item of activity) {
+      if (!item.actorUserId || !meaningfulActivity.has(item.action)) continue;
+      const current = contributorMap.get(item.actorUserId);
+      if (
+        !current ||
+        current.lastContributedAt < item.createdAt.toISOString()
+      ) {
+        contributorMap.set(item.actorUserId, {
+          id: item.actorUserId,
+          displayName: item.actor?.profile?.displayName ?? 'Reviewer',
+          username: item.actor?.profile?.publicUsername ?? null,
+          lastContributedAt: item.createdAt.toISOString(),
+          contributionLabel: contributionLabel(item.action),
+        });
+      }
+    }
+    const contributors = Array.from(contributorMap.values()).sort(
+      (left, right) =>
+        right.lastContributedAt.localeCompare(left.lastContributedAt),
     );
-    const safeMediaCount = submission!.media.filter(
+    const reviewStateMetadata = reviewMetadata(submission!.reviewMetadata);
+    const acceptedMediaCount = submission!.media.filter(
       (media) =>
         REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
         media.status === 'SAFE' &&
-        media.deletedAt === null,
+        media.deletedAt === null &&
+        evidenceReviewState(reviewStateMetadata, media.id) === 'ACCEPTED',
+    ).length;
+    const flaggedMediaCount = submission!.media.filter(
+      (media) =>
+        REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
+        evidenceReviewState(reviewStateMetadata, media.id) === 'FLAGGED',
     ).length;
     const certification = submission!.certificationVerifications[0] ?? null;
     const identityConfirmed = Boolean(
       response.collectible?.title &&
       response.collectible.title !== 'Untitled submission',
     );
-    const evidenceComplete = safeMediaCount === REQUIRED_MEDIA_SLOTS.length;
-    const certificationResolved =
-      !response.collectible?.grader ||
-      !response.collectible.certificationNumber ||
-      certification?.status === 'VERIFIED' ||
-      certification?.status === 'MANUAL_REVIEW';
+    const evidenceComplete = acceptedMediaCount === REQUIRED_MEDIA_SLOTS.length;
+    const certificationResolved = !response.collectible?.grader
+      ? true
+      : Boolean(
+          response.collectible.certificationNumber &&
+          (certification?.status === 'VERIFIED' ||
+            certification?.status === 'MANUAL_REVIEW'),
+        );
     const openFindings = submission!.reviewFindings.filter(
       (finding) => finding.status === 'OPEN',
     );
@@ -1986,10 +2125,12 @@ export class SubmissionService {
     );
     const blockers = [
       ...(identityConfirmed ? [] : ['Collectible identity is incomplete.']),
-      ...(evidenceComplete
+      ...(acceptedMediaCount === REQUIRED_MEDIA_SLOTS.length
         ? []
         : [
-            `${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required evidence item(s) missing.`,
+            flaggedMediaCount
+              ? `${flaggedMediaCount} required evidence item(s) flagged for correction.`
+              : `${REQUIRED_MEDIA_SLOTS.length - acceptedMediaCount} required evidence item(s) still need review.`,
           ]),
       ...(certificationResolved
         ? []
@@ -2075,7 +2216,10 @@ export class SubmissionService {
       {
         key: 'certification',
         label: 'Grade & certification resolved',
-        required: Boolean(response.collectible?.grader),
+        // Raw submissions still pass through this workflow gate; their
+        // certification step is resolved as not applicable rather than
+        // removed from the required review count.
+        required: true,
         satisfied: certificationResolved,
       },
     ];
@@ -2155,8 +2299,8 @@ export class SubmissionService {
             status: evidenceComplete ? 'COMPLETE' : 'BLOCKED',
             required: true,
             summary: evidenceComplete
-              ? `${safeMediaCount} of ${REQUIRED_MEDIA_SLOTS.length} required images accepted`
-              : `${REQUIRED_MEDIA_SLOTS.length - safeMediaCount} required image(s) missing`,
+              ? `${acceptedMediaCount} of ${REQUIRED_MEDIA_SLOTS.length} required images accepted`
+              : `${acceptedMediaCount} of ${REQUIRED_MEDIA_SLOTS.length} required images accepted`,
           },
           {
             key: 'certification',
@@ -2219,7 +2363,8 @@ export class SubmissionService {
           ...requiredChecklist,
           ...advisoryItems.map((item) => ({ ...item, required: false })),
         ],
-        currentValuation: latestValuationReview?.valuationMinor?.toString() ?? null,
+        currentValuation:
+          latestValuationReview?.valuationMinor?.toString() ?? null,
       },
       // A compact, server-authoritative presentation summary for the reviewer
       // workspace. It deliberately mirrors, rather than replaces, readiness
@@ -2245,7 +2390,8 @@ export class SubmissionService {
       allowedActions: {
         canClaim:
           !selfReviewForbidden &&
-          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status),
+          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
+          (!submission!.reviewerId || submission!.reviewerId === actor.userId),
         canRelease:
           !selfReviewForbidden &&
           submission!.status === 'IN_REVIEW' &&
@@ -2285,7 +2431,8 @@ export class SubmissionService {
         lastUpdated: submission!.updatedAt.toISOString(),
         canClaim:
           !selfReviewForbidden &&
-          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status),
+          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
+          (!submission!.reviewerId || submission!.reviewerId === actor.userId),
         canRelease:
           !selfReviewForbidden &&
           submission!.status === 'IN_REVIEW' &&
@@ -2300,6 +2447,185 @@ export class SubmissionService {
           submission!.status === 'APPROVED' && Boolean(submission!.assetId),
       },
     };
+  }
+
+  async listEligibleReviewers(actor: Actor, id: string) {
+    const submission = await this.prisma.assetSubmission.findUnique({
+      where: { id },
+      select: { ownerUserId: true },
+    });
+    if (!submission) this.notFound();
+    const assignments = await this.prisma.roleAssignment.findMany({
+      where: {
+        revokedAt: null,
+        role: { in: ['ADMIN', 'ASSET_REVIEWER'] },
+        user: {
+          accountStatus: 'ACTIVE',
+          id: { not: submission!.ownerUserId },
+        },
+      },
+      orderBy: [
+        { user: { profile: { displayName: 'asc' } } },
+        { userId: 'asc' },
+      ],
+      select: {
+        userId: true,
+        role: true,
+        user: {
+          select: {
+            id: true,
+            profile: { select: { displayName: true, publicUsername: true } },
+          },
+        },
+      },
+    });
+    const reviewers = new Map<
+      string,
+      {
+        id: string;
+        displayName: string;
+        username: string | null;
+        roles: string[];
+      }
+    >();
+    for (const assignment of assignments) {
+      const current = reviewers.get(assignment.userId);
+      if (current) {
+        current.roles.push(assignment.role);
+      } else {
+        reviewers.set(assignment.userId, {
+          id: assignment.user.id,
+          displayName: assignment.user.profile?.displayName ?? 'Reviewer',
+          username: assignment.user.profile?.publicUsername ?? null,
+          roles: [assignment.role],
+        });
+      }
+    }
+    return Array.from(reviewers.values());
+  }
+
+  assignPrimaryReviewer(
+    actor: Actor,
+    id: string,
+    input: ReviewerAssignmentInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.assignment:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/assignment`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+        `;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            ownerUserId: true,
+            status: true,
+            reviewerId: true,
+            version: true,
+          },
+        });
+        if (!submission) this.notFound();
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        if (input) assertExpectedVersion(submission!.version, input.version);
+        if (!['SUBMITTED', 'IN_REVIEW'].includes(submission!.status))
+          this.stateConflict();
+        if (
+          input.reviewerId !== submission!.reviewerId &&
+          !input.reason?.trim()
+        ) {
+          throw new UnprocessableEntityException({
+            code: 'REVIEW_ASSIGNMENT_REASON_REQUIRED',
+            message:
+              'Give a reason when reassigning or clearing the primary reviewer.',
+          });
+        }
+        let reviewer: {
+          id: string;
+          profile: {
+            displayName: string;
+            publicUsername: string | null;
+          } | null;
+        } | null = null;
+        if (input.reviewerId) {
+          reviewer = await db.user.findFirst({
+            where: {
+              id: input.reviewerId,
+              accountStatus: 'ACTIVE',
+              roleAssignments: {
+                some: {
+                  role: { in: ['ADMIN', 'ASSET_REVIEWER'] },
+                  revokedAt: null,
+                },
+              },
+            },
+            select: {
+              id: true,
+              profile: { select: { displayName: true, publicUsername: true } },
+            },
+          });
+          if (!reviewer) {
+            throw new UnprocessableEntityException({
+              code: 'REVIEWER_NOT_ELIGIBLE',
+              message:
+                'That account is inactive or is not authorized to review submissions.',
+            });
+          }
+        }
+        if (input.reviewerId === submission!.reviewerId) {
+          return {
+            submissionId: id,
+            status: submission!.status,
+            reviewerId: submission!.reviewerId,
+            version: submission!.version,
+          };
+        }
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            status: 'IN_REVIEW',
+            reviewerId: input.reviewerId,
+            version: { increment: 1 },
+          },
+          select: { status: true, reviewerId: true, version: true },
+        });
+        if (reviewer) {
+          await db.verificationReview.create({
+            data: {
+              id: randomUUID(),
+              submissionId: id,
+              reviewerId: reviewer.id,
+              status: 'CLAIMED',
+            },
+          });
+        }
+        const action = input.reviewerId
+          ? submission!.reviewerId
+            ? 'SUBMISSION_REVIEW_PRIMARY_REASSIGNED'
+            : 'SUBMISSION_REVIEW_PRIMARY_ASSIGNED'
+          : 'SUBMISSION_REVIEW_PRIMARY_CLEARED';
+        await audit(action, 'submission', id, {
+          previousReviewerId: submission!.reviewerId,
+          newReviewerId: input.reviewerId,
+          reason: input.reason ? redactNote(input.reason) : null,
+          version: updated.version,
+        });
+        return {
+          submissionId: id,
+          status: updated.status,
+          reviewerId: updated.reviewerId,
+          version: updated.version,
+        };
+      },
+    );
   }
 
   claim(
@@ -2336,6 +2662,13 @@ export class SubmissionService {
             status: submission!.status,
             version: submission!.version,
           };
+        }
+        if (submission!.reviewerId) {
+          throw new ConflictException({
+            code: 'PRIMARY_REVIEWER_ASSIGNED',
+            message:
+              'Another primary reviewer is assigned. Use reviewer management to reassign.',
+          });
         }
         const updated = await db.assetSubmission.update({
           where: { id },
@@ -2437,23 +2770,527 @@ export class SubmissionService {
         `;
         const submission = await db.assetSubmission.findUnique({
           where: { id },
-          select: { ownerUserId: true, status: true, version: true },
+          select: {
+            ownerUserId: true,
+            status: true,
+            version: true,
+            assetId: true,
+            declaredMetadata: true,
+            reviewMetadata: true,
+            gradeScaleEntryId: true,
+            normalizedCertificationNumber: true,
+            media: {
+              select: { id: true, slot: true, status: true, deletedAt: true },
+            },
+            certificationVerifications: {
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+              select: { status: true },
+            },
+            reviewFindings: {
+              select: { title: true, status: true, severity: true },
+            },
+          },
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
         assertExpectedVersion(submission!.version, input.version);
+        const metadata = reviewedMetadata(submission!);
+        const reviewState = reviewMetadata(submission!.reviewMetadata);
+        const identityComplete = Boolean(stringMetadata(metadata.name));
+        const acceptedEvidence = (submission!.media ?? []).filter(
+          (media) =>
+            REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
+            media.status === 'SAFE' &&
+            media.deletedAt === null &&
+            evidenceReviewState(reviewState, media.id) === 'ACCEPTED',
+        ).length;
+        const evidenceComplete =
+          acceptedEvidence === REQUIRED_MEDIA_SLOTS.length;
+        const certificationComplete = !submission!.gradeScaleEntryId
+          ? true
+          : Boolean(
+              submission!.normalizedCertificationNumber &&
+              ['VERIFIED', 'MANUAL_REVIEW'].includes(
+                submission!.certificationVerifications?.[0]?.status ?? '',
+              ),
+            );
+        const blockers = [
+          ...(identityComplete ? [] : ['Collectible identity is incomplete.']),
+          ...(evidenceComplete
+            ? []
+            : [
+                `${REQUIRED_MEDIA_SLOTS.length - acceptedEvidence} required evidence item(s) still need review.`,
+              ]),
+          ...(certificationComplete
+            ? []
+            : ['Certification verification requires review.']),
+          ...(submission!.reviewFindings ?? [])
+            .filter(
+              (finding) =>
+                finding.status === 'OPEN' && finding.severity === 'BLOCKING',
+            )
+            .map((finding) => finding.title),
+        ];
+        const decisionEligible =
+          submission!.status === 'IN_REVIEW' && blockers.length === 0;
+        const nextAction =
+          submission!.status === 'APPROVED'
+            ? submission!.assetId
+              ? 'OPEN_PHYSICAL_INTAKE'
+              : 'CREATE_CANONICAL_ASSET'
+            : submission!.status === 'REJECTED'
+              ? 'COMPLETE'
+              : submission!.status === 'CHANGES_REQUESTED'
+                ? 'WAIT_FOR_COLLECTOR'
+                : decisionEligible
+                  ? 'READY_FOR_DECISION'
+                  : 'COMPLETE_REQUIRED_REVIEW';
         const recalculatedAt = new Date();
-        await audit('SUBMISSION_REVIEW_READINESS_RECALCULATED', 'submission', id, {
-          reason: redactNote(input.reason),
-          before: { status: submission!.status, version: submission!.version },
-          after: { status: submission!.status, version: submission!.version },
-        });
+        await audit(
+          'SUBMISSION_REVIEW_READINESS_RECALCULATED',
+          'submission',
+          id,
+          {
+            reason: redactNote(input.reason),
+            before: {
+              status: submission!.status,
+              version: submission!.version,
+            },
+            after: { status: submission!.status, version: submission!.version },
+            blockers,
+            decisionEligible,
+          },
+        );
         return {
           submissionId: id,
           status: submission!.status,
           version: submission!.version,
           recalculatedAt: recalculatedAt.toISOString(),
+          readiness: {
+            blockers,
+            decisionEligible,
+            nextAction,
+            availableCommands: decisionEligible
+              ? ['APPROVE', 'REQUEST_CHANGES', 'REJECT']
+              : ['REVIEW'],
+          },
         };
+      },
+    );
+  }
+
+  acceptEvidence(
+    actor: Actor,
+    id: string,
+    mediaId: string,
+    input: EvidenceReviewInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.evidence.accept:${id}:${mediaId}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/evidence/${mediaId}/accept`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
+        const media = await db.submissionMedia.findFirst({
+          where: { id: mediaId, submissionId: id, deletedAt: null },
+        });
+        if (!media) this.notFound();
+        if (media!.status !== 'SAFE') {
+          throw new ConflictException({
+            code: 'EVIDENCE_NOT_REVIEWABLE',
+            message: 'Only safely scanned evidence can be accepted.',
+          });
+        }
+        const user = await db.user.findUnique({
+          where: { id: actor.userId },
+          select: { profile: { select: { displayName: true } } },
+        });
+        const metadata = reviewMetadata(
+          (
+            await db.assetSubmission.findUniqueOrThrow({
+              where: { id },
+              select: { reviewMetadata: true },
+            })
+          ).reviewMetadata,
+        );
+        const now = new Date();
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata(
+              withEvidenceReview(metadata, mediaId, {
+                state: 'ACCEPTED',
+                reviewedBy: {
+                  id: actor.userId,
+                  displayName: user?.profile?.displayName ?? 'Reviewer',
+                },
+                reviewedAt: now.toISOString(),
+                reviewNote: input.note ? redactNote(input.note) : null,
+                revision: input.version,
+                history: Array.isArray(
+                  evidenceReviewEntry(metadata, mediaId)?.history,
+                )
+                  ? evidenceReviewEntry(metadata, mediaId)?.history
+                  : [],
+              }),
+            ),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
+        await audit(
+          'SUBMISSION_REVIEW_EVIDENCE_ACCEPTED',
+          'submission-media',
+          mediaId,
+          {
+            submissionId: id,
+            reviewId: review.id,
+            note: input.note ? redactNote(input.note) : null,
+            version: updated.version,
+          },
+        );
+        return {
+          submissionId: id,
+          mediaId,
+          reviewState: 'ACCEPTED',
+          version: updated.version,
+        };
+      },
+    );
+  }
+
+  flagEvidence(
+    actor: Actor,
+    id: string,
+    mediaId: string,
+    input: EvidenceReviewInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.evidence.flag:${id}:${mediaId}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/evidence/${mediaId}/flag`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
+        const media = await db.submissionMedia.findFirst({
+          where: { id: mediaId, submissionId: id, deletedAt: null },
+        });
+        if (!media) this.notFound();
+        const user = await db.user.findUnique({
+          where: { id: actor.userId },
+          select: { profile: { select: { displayName: true } } },
+        });
+        const current = await db.assetSubmission.findUniqueOrThrow({
+          where: { id },
+          select: { reviewMetadata: true },
+        });
+        const metadata = reviewMetadata(current.reviewMetadata);
+        const now = new Date();
+        const title = `${formatReviewEvidenceSlot(media!.slot)} evidence needs review`;
+        const existingFinding = await db.submissionReviewFinding.findFirst({
+          where: {
+            submissionId: id,
+            section: 'evidence',
+            title,
+            status: 'OPEN',
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+        const finding =
+          existingFinding ??
+          (await db.submissionReviewFinding.create({
+            data: {
+              id: randomUUID(),
+              submissionId: id,
+              section: 'evidence',
+              title,
+              detail: input.note
+                ? redactNote(input.note)
+                : 'Evidence was flagged from the review workspace.',
+              severity: 'BLOCKING',
+              customerAction: input.customerAction ?? true,
+              createdByUserId: actor.userId,
+            },
+          }));
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata(
+              withEvidenceReview(metadata, mediaId, {
+                state: 'FLAGGED',
+                reviewedBy: {
+                  id: actor.userId,
+                  displayName: user?.profile?.displayName ?? 'Reviewer',
+                },
+                reviewedAt: now.toISOString(),
+                reviewNote: input.note ? redactNote(input.note) : null,
+                findingId: finding.id,
+                revision: input.version,
+                history: Array.isArray(
+                  evidenceReviewEntry(metadata, mediaId)?.history,
+                )
+                  ? evidenceReviewEntry(metadata, mediaId)?.history
+                  : [],
+              }),
+            ),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
+        await audit(
+          'SUBMISSION_REVIEW_EVIDENCE_FLAGGED',
+          'submission-media',
+          mediaId,
+          {
+            submissionId: id,
+            reviewId: review.id,
+            findingId: finding.id,
+            customerAction: finding.customerAction,
+            note: input.note ? redactNote(input.note) : null,
+            version: updated.version,
+          },
+        );
+        return {
+          submissionId: id,
+          mediaId,
+          reviewState: 'FLAGGED',
+          findingId: finding.id,
+          version: updated.version,
+        };
+      },
+    );
+  }
+
+  addResearchReference(
+    actor: Actor,
+    id: string,
+    input: ResearchReferenceInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.research.reference.add:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/research/references`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
+        if (!input.url && !input.referenceId) {
+          throw new UnprocessableEntityException({
+            code: 'RESEARCH_REFERENCE_REQUIRED',
+            message: 'Add a URL or provider reference identifier.',
+          });
+        }
+        const current = await db.assetSubmission.findUniqueOrThrow({
+          where: { id },
+          select: { reviewMetadata: true },
+        });
+        const actorUser = await db.user.findUnique({
+          where: { id: actor.userId },
+          select: { profile: { select: { displayName: true } } },
+        });
+        const metadata = reviewMetadata(current.reviewMetadata);
+        const referenceId = randomUUID();
+        const now = new Date();
+        const reference = {
+          id: referenceId,
+          provider: redactNote(input.provider).slice(0, 120),
+          url: input.url ?? null,
+          referenceId: input.referenceId?.trim() || null,
+          currency: input.currency?.trim().toUpperCase() ?? null,
+          valueMinor: input.valueMinor ?? null,
+          status: 'ACTIVE',
+          addedBy: {
+            id: actor.userId,
+            displayName: actorUser?.profile?.displayName ?? 'Reviewer',
+          },
+          addedAt: now.toISOString(),
+          removedAt: null,
+          note: input.note ? redactNote(input.note) : null,
+        };
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata({
+              ...metadata,
+              researchReferences: [
+                ...(metadata.researchReferences ?? []),
+                reference,
+              ],
+            }),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
+        await audit(
+          'SUBMISSION_REVIEW_RESEARCH_REFERENCE_ADDED',
+          'submission',
+          id,
+          {
+            reviewId: review.id,
+            referenceId,
+            provider: reference.provider,
+            currency: reference.currency,
+            valueMinor: reference.valueMinor,
+            version: updated.version,
+          },
+        );
+        return { submissionId: id, referenceId, version: updated.version };
+      },
+    );
+  }
+
+  removeResearchReference(
+    actor: Actor,
+    id: string,
+    referenceId: string,
+    input: EvidenceReviewInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.research.reference.remove:${id}:${referenceId}`,
+      'PATCH',
+      `/v1/reviews/submissions/${id}/research/references/${referenceId}/remove`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
+        const current = await db.assetSubmission.findUniqueOrThrow({
+          where: { id },
+          select: { reviewMetadata: true },
+        });
+        const metadata = reviewMetadata(current.reviewMetadata);
+        const reference = (metadata.researchReferences ?? []).find(
+          (item) => item.id === referenceId && item.status === 'ACTIVE',
+        );
+        if (!reference) this.notFound();
+        const now = new Date();
+        const references = (metadata.researchReferences ?? []).map((item) =>
+          item.id === referenceId
+            ? {
+                ...item,
+                status: 'REMOVED',
+                removedAt: now.toISOString(),
+                removedBy: { id: actor.userId },
+                removalNote: input.note ? redactNote(input.note) : null,
+              }
+            : item,
+        );
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata({
+              ...metadata,
+              researchReferences: references,
+            }),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
+        await audit(
+          'SUBMISSION_REVIEW_RESEARCH_REFERENCE_REMOVED',
+          'submission',
+          id,
+          {
+            reviewId: review.id,
+            referenceId,
+            reason: input.note ? redactNote(input.note) : null,
+            version: updated.version,
+          },
+        );
+        return { submissionId: id, referenceId, version: updated.version };
+      },
+    );
+  }
+
+  addResearchNote(
+    actor: Actor,
+    id: string,
+    input: { version: number; note: string },
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.research.note:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/research/notes`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
+        const current = await db.assetSubmission.findUniqueOrThrow({
+          where: { id },
+          select: { reviewMetadata: true },
+        });
+        const metadata = reviewMetadata(current.reviewMetadata);
+        const note = {
+          id: randomUUID(),
+          authorId: actor.userId,
+          note: redactNote(input.note),
+          createdAt: new Date().toISOString(),
+        };
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata({
+              ...metadata,
+              researchNotes: [...(metadata.researchNotes ?? []), note],
+            }),
+            version: { increment: 1 },
+          },
+          select: { version: true },
+        });
+        await audit('SUBMISSION_REVIEW_RESEARCH_NOTE_ADDED', 'submission', id, {
+          reviewId: review.id,
+          note: note.note,
+          version: updated.version,
+        });
+        return { submissionId: id, version: updated.version };
       },
     );
   }
@@ -2604,6 +3441,7 @@ export class SubmissionService {
       reasonCode: string;
       note?: string;
       requestedItems?: string[];
+      requestedFindingIds?: string[];
       customerMessage?: string;
     },
     requestId: string,
@@ -2635,6 +3473,7 @@ export class SubmissionService {
             asset: { select: { title: true } },
             owner: { select: { accountStatus: true } },
             preferredIntakeLocation: true,
+            reviewFindings: true,
           },
         });
         if (!submission) this.notFound();
@@ -2645,15 +3484,42 @@ export class SubmissionService {
           assertRequiredSafeMedia(submission!.media);
           assertReviewDecisionReady(submission!);
         }
+        if (decision === 'CHANGES_REQUESTED') {
+          if (!input.customerMessage?.trim() || !input.requestedItems?.length) {
+            throw new UnprocessableEntityException({
+              code: 'CHANGE_REQUEST_DETAILS_REQUIRED',
+              message:
+                'Select at least one requested update and provide a customer-facing message.',
+            });
+          }
+          const requestedFindingIds = input.requestedFindingIds ?? [];
+          const allowedFindingIds = new Set(
+            submission!.reviewFindings
+              .filter(
+                (finding) =>
+                  finding.status === 'OPEN' && finding.customerAction,
+              )
+              .map((finding) => finding.id),
+          );
+          if (
+            requestedFindingIds.some(
+              (findingId) => !allowedFindingIds.has(findingId),
+            )
+          ) {
+            throw new UnprocessableEntityException({
+              code: 'CHANGE_REQUEST_FINDING_INVALID',
+              message:
+                'Only open collector-action findings can be included in a change request.',
+            });
+          }
+        }
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
             status: decision,
             reviewedAt: new Date(),
             reviewerId:
-              decision === 'CHANGES_REQUESTED'
-                ? null
-                : submission!.reviewerId,
+              decision === 'CHANGES_REQUESTED' ? null : submission!.reviewerId,
             decisionCode: input.reasonCode,
             decisionNote:
               decision === 'CHANGES_REQUESTED'
@@ -2717,6 +3583,7 @@ export class SubmissionService {
           reviewId: review.id,
           reasonCode: input.reasonCode,
           requestedItems: input.requestedItems ?? [],
+          requestedFindingIds: input.requestedFindingIds ?? [],
           customerMessageRecorded: Boolean(input.customerMessage),
           version: updated.version,
         });
@@ -2997,7 +3864,11 @@ export class SubmissionService {
           customerAction: finding.customerAction,
           version: submission.version,
         });
-        return { findingId: finding.id, submissionId: id, version: submission.version };
+        return {
+          findingId: finding.id,
+          submissionId: id,
+          version: submission.version,
+        };
       },
     );
   }
@@ -3047,7 +3918,12 @@ export class SubmissionService {
           status: updatedFinding.status,
           version: submission.version,
         });
-        return { findingId, submissionId: id, status: updatedFinding.status, version: submission.version };
+        return {
+          findingId,
+          submissionId: id,
+          status: updatedFinding.status,
+          version: submission.version,
+        };
       },
     );
   }
@@ -3494,6 +4370,11 @@ export class SubmissionService {
             gradeEra: entry.gradeEra,
             verifiedAt: status === 'VERIFIED' ? new Date() : null,
           },
+        });
+        await audit('CERT_MANUAL_VERIFICATION_RECORDED', 'submission', id, {
+          verificationId: verification.id,
+          status,
+          providerReference: verification.providerReference,
         });
         if (status === 'MISMATCH')
           await audit('CERT_VERIFICATION_MISMATCH', 'submission', id, {
@@ -4168,6 +5049,104 @@ function reviewedMetadata(submission: {
   return { ...declared, ...reviewed };
 }
 
+function reviewMetadata(
+  value: Prisma.JsonValue | null | undefined,
+): ReviewMetadata {
+  return isRecord(value) ? (value as ReviewMetadata) : {};
+}
+
+function evidenceReviewEntry(metadata: ReviewMetadata, mediaId: string) {
+  const entry = metadata.evidenceReviews?.[mediaId];
+  return entry && typeof entry === 'object' ? entry : null;
+}
+
+function evidenceReviewState(
+  metadata: ReviewMetadata,
+  mediaId: string,
+): ReviewEvidenceState {
+  const state = evidenceReviewEntry(metadata, mediaId)?.state;
+  return state === 'ACCEPTED' || state === 'FLAGGED' ? state : 'PENDING';
+}
+
+function withEvidenceReview(
+  metadata: ReviewMetadata,
+  mediaId: string,
+  entry: Record<string, unknown>,
+) {
+  return {
+    ...metadata,
+    evidenceReviews: {
+      ...(metadata.evidenceReviews ?? {}),
+      [mediaId]: entry,
+    },
+  } as ReviewMetadata;
+}
+
+function resetEvidenceReview(
+  metadata: ReviewMetadata,
+  mediaId: string,
+  revision: number,
+) {
+  const previous = evidenceReviewEntry(metadata, mediaId);
+  const history = Array.isArray(previous?.history)
+    ? previous.history.filter((item): item is Record<string, unknown> =>
+        isRecord(item),
+      )
+    : [];
+  if (previous?.state && previous.state !== 'PENDING') {
+    history.push({
+      state: previous.state,
+      reviewedBy: previous.reviewedBy ?? null,
+      reviewedAt: previous.reviewedAt ?? null,
+      reviewNote: previous.reviewNote ?? null,
+      replacedAt: new Date().toISOString(),
+    });
+  }
+  return withEvidenceReview(metadata, mediaId, {
+    state: 'PENDING',
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+    revision,
+    history,
+  });
+}
+
+function researchReferenceProjection(metadata: ReviewMetadata) {
+  return (metadata.researchReferences ?? [])
+    .filter((item) => typeof item.id === 'string')
+    .map((item) => {
+      const addedBy = isRecord(item.addedBy) ? item.addedBy : {};
+      return {
+        id: String(item.id),
+        provider: String(item.provider ?? 'Manual reference'),
+        url: typeof item.url === 'string' ? item.url : null,
+        referenceId:
+          typeof item.referenceId === 'string' ? item.referenceId : null,
+        currency: typeof item.currency === 'string' ? item.currency : null,
+        valueMinor:
+          typeof item.valueMinor === 'string' ? item.valueMinor : null,
+        status:
+          item.status === 'REMOVED'
+            ? ('REMOVED' as const)
+            : ('ACTIVE' as const),
+        addedBy: {
+          id: typeof addedBy.id === 'string' ? addedBy.id : 'unknown',
+          displayName:
+            typeof addedBy.displayName === 'string'
+              ? addedBy.displayName
+              : 'Reviewer',
+        },
+        addedAt:
+          typeof item.addedAt === 'string'
+            ? item.addedAt
+            : new Date(0).toISOString(),
+        removedAt: typeof item.removedAt === 'string' ? item.removedAt : null,
+        note: typeof item.note === 'string' ? item.note : null,
+      };
+    });
+}
+
 function assertReviewDecisionReady(submission: {
   declaredMetadata: Prisma.JsonValue | null;
   reviewMetadata?: Prisma.JsonValue | null;
@@ -4176,6 +5155,13 @@ function assertReviewDecisionReady(submission: {
   normalizedCertificationNumber: string | null;
   certificationVerifications: Array<{ status: string }>;
   owner: { accountStatus: string };
+  media: Array<{
+    id: string;
+    slot: string;
+    status: string;
+    deletedAt: Date | null;
+  }>;
+  reviewFindings: Array<{ status: string; severity: string; title: string }>;
 }) {
   const metadata = reviewedMetadata(submission);
   const hasIdentity = Boolean(
@@ -4185,6 +5171,23 @@ function assertReviewDecisionReady(submission: {
     throw new ConflictException({
       code: 'REVIEW_IDENTITY_REQUIRED',
       message: 'Collectible identity must be confirmed before acceptance.',
+    });
+  const reviewStateMetadata = reviewMetadata(submission.reviewMetadata);
+  const requiredMedia = submission.media.filter(
+    (media) =>
+      REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
+      media.status === 'SAFE' &&
+      media.deletedAt === null,
+  );
+  const acceptedMedia = requiredMedia.filter(
+    (media) =>
+      evidenceReviewState(reviewStateMetadata, media.id) === 'ACCEPTED',
+  );
+  if (acceptedMedia.length !== REQUIRED_MEDIA_SLOTS.length)
+    throw new ConflictException({
+      code: 'REVIEW_EVIDENCE_BLOCKED',
+      message:
+        'Every required evidence item must be accepted by an eligible reviewer.',
     });
   if (submission.owner.accountStatus !== 'ACTIVE')
     throw new ConflictException({
@@ -4202,6 +5205,14 @@ function assertReviewDecisionReady(submission: {
     throw new ConflictException({
       code: 'REVIEW_CERTIFICATION_BLOCKED',
       message: 'Certification verification must be resolved before acceptance.',
+    });
+  const blockingFindings = (submission.reviewFindings ?? []).filter(
+    (finding) => finding.status === 'OPEN' && finding.severity === 'BLOCKING',
+  );
+  if (blockingFindings.length)
+    throw new ConflictException({
+      code: 'REVIEW_FINDINGS_BLOCKED',
+      message: `Resolve ${blockingFindings.length} blocking review finding(s) before acceptance.`,
     });
 }
 
@@ -4405,6 +5416,7 @@ function reviewDetailContextProjection(
   activity: Array<{
     id: string;
     action: string;
+    actorUserId: string | null;
     actorType: string;
     metadata: Prisma.JsonValue | null;
     createdAt: Date;
@@ -4425,11 +5437,22 @@ function reviewDetailContextProjection(
     context?.asset?.title ??
     'Untitled submission';
   const requiredSlots = new Set<string>(REQUIRED_MEDIA_SLOTS);
+  const reviewStateMetadata = reviewMetadata(submission.reviewMetadata);
   const safeMedia = submission.media.filter(
     (item) => item.status === 'SAFE' && item.deletedAt === null,
   );
   const presentRequired = safeMedia.filter((item) =>
     requiredSlots.has(item.slot),
+  ).length;
+  const acceptedRequired = safeMedia.filter(
+    (item) =>
+      requiredSlots.has(item.slot) &&
+      evidenceReviewState(reviewStateMetadata, item.id) === 'ACCEPTED',
+  ).length;
+  const flaggedRequired = safeMedia.filter(
+    (item) =>
+      requiredSlots.has(item.slot) &&
+      evidenceReviewState(reviewStateMetadata, item.id) === 'FLAGGED',
   ).length;
   const optional = submission.media.filter(
     (item) => !requiredSlots.has(item.slot) && item.deletedAt === null,
@@ -4473,6 +5496,11 @@ function reviewDetailContextProjection(
     : {};
   const requestedItems = Array.isArray(changeMetadata.requestedItems)
     ? changeMetadata.requestedItems.filter(
+        (item): item is string => typeof item === 'string',
+      )
+    : [];
+  const requestedFindingIds = Array.isArray(changeMetadata.requestedFindingIds)
+    ? changeMetadata.requestedFindingIds.filter(
         (item): item is string => typeof item === 'string',
       )
     : [];
@@ -4540,14 +5568,16 @@ function reviewDetailContextProjection(
     evidenceSummary: {
       required: requiredSlots.size,
       presentRequired,
+      acceptedRequired,
+      flaggedRequired,
       optional,
       presentOptional,
       missingRequired: requiredSlots.size - presentRequired,
-      percent: Math.round((presentRequired / requiredSlots.size) * 100),
+      percent: Math.round((acceptedRequired / requiredSlots.size) * 100),
       status:
-        presentRequired === requiredSlots.size
+        acceptedRequired === requiredSlots.size
           ? 'COMPLETE'
-          : presentRequired
+          : acceptedRequired
             ? 'PARTIAL'
             : 'MISSING_REQUIRED',
       items: submission.media
@@ -4557,6 +5587,36 @@ function reviewDetailContextProjection(
           slot: item.slot,
           status: item.status,
           required: requiredSlots.has(item.slot),
+          reviewState: evidenceReviewState(reviewStateMetadata, item.id),
+          reviewedBy: (() => {
+            const reviewedBy = evidenceReviewEntry(
+              reviewStateMetadata,
+              item.id,
+            )?.reviewedBy;
+            if (!isRecord(reviewedBy) || typeof reviewedBy.id !== 'string')
+              return null;
+            return {
+              id: reviewedBy.id,
+              displayName:
+                typeof reviewedBy.displayName === 'string'
+                  ? reviewedBy.displayName
+                  : 'Reviewer',
+            };
+          })(),
+          reviewedAt: (() => {
+            const value = evidenceReviewEntry(
+              reviewStateMetadata,
+              item.id,
+            )?.reviewedAt;
+            return typeof value === 'string' ? value : null;
+          })(),
+          reviewNote: (() => {
+            const value = evidenceReviewEntry(
+              reviewStateMetadata,
+              item.id,
+            )?.reviewNote;
+            return typeof value === 'string' ? value : null;
+          })(),
           mimeType: item.mimeType,
           sizeBytes: item.sizeBytes,
           uploadedAt: item.updatedAt.toISOString(),
@@ -4573,6 +5633,9 @@ function reviewDetailContextProjection(
     customerReference: isRecord(metadata.customerReference)
       ? metadata.customerReference
       : null,
+    researchReferences: researchReferenceProjection(
+      reviewMetadata(submission.reviewMetadata),
+    ),
     reviewChecklist: [
       {
         key: 'front',
@@ -4602,6 +5665,7 @@ function reviewDetailContextProjection(
     activity: activity.map((item) => ({
       id: item.id,
       action: item.action,
+      actorUserId: item.actorUserId,
       actor:
         item.actor?.profile?.displayName ??
         (item.actorType === 'SYSTEM' ? 'System' : 'Staff'),
@@ -4628,6 +5692,7 @@ function reviewDetailContextProjection(
             reasonCode: submission.decisionCode,
             message: submission.decisionNote,
             requestedItems,
+            requestedFindingIds,
             requestedAt: submission.reviewedAt?.toISOString() ?? null,
           }
         : null,

@@ -290,6 +290,8 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
   evidenceSummary?: {
     required: number;
     presentRequired: number;
+    acceptedRequired: number;
+    flaggedRequired: number;
     optional: number;
     presentOptional: number;
     missingRequired: number;
@@ -300,6 +302,10 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
       slot: string;
       status: SubmissionMedia["status"];
       required: boolean;
+      reviewState: "PENDING" | "ACCEPTED" | "FLAGGED";
+      reviewedBy: { id: string; displayName: string } | null;
+      reviewedAt: ISODateTime | null;
+      reviewNote: string | null;
       mimeType: string;
       sizeBytes: number;
       uploadedAt: ISODateTime;
@@ -325,8 +331,22 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     reasonCode: string | null;
     message: string | null;
     requestedItems: string[];
+    requestedFindingIds?: string[];
     requestedAt: ISODateTime | null;
   } | null;
+  researchReferences?: Array<{
+    id: string;
+    provider: string;
+    url: string | null;
+    referenceId: string | null;
+    currency: string | null;
+    valueMinor: string | null;
+    status: "ACTIVE" | "REMOVED";
+    addedBy: { id: string; displayName: string };
+    addedAt: ISODateTime;
+    removedAt: ISODateTime | null;
+    note: string | null;
+  }>;
   relatedItems?: Array<{
     id: string;
     status: string;
@@ -354,11 +374,13 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
       displayName: string;
       username: string | null;
       lastContributedAt: ISODateTime;
+      contributionLabel?: string;
     }>;
   };
   reviewFindings?: Array<{
     id: string;
-    section: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision" | string;
+    section:
+      "identity" | "evidence" | "certification" | "research" | "assessment" | "decision" | string;
     title: string;
     detail: string | null;
     severity: "ADVISORY" | "BLOCKING";
@@ -447,6 +469,7 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
       displayName: string;
       username: string | null;
       lastContributedAt: ISODateTime;
+      contributionLabel?: string;
     }>;
     nextAction: NonNullable<SubmissionReviewDetail["readiness"]>["nextAction"];
     nextActionLabel: NonNullable<SubmissionReviewDetail["readiness"]>["state"];
