@@ -245,55 +245,7 @@ export class LifecycleService {
       where: {
         status: { not: 'ARCHIVED' },
         submissions: { some: { status: 'APPROVED' } },
-        ...(input.q
-          ? {
-              OR: [
-                { title: { contains: input.q, mode: 'insensitive' } },
-                { publicId: { contains: input.q, mode: 'insensitive' } },
-                { slug: { contains: input.q, mode: 'insensitive' } },
-                { cardNumber: { contains: input.q, mode: 'insensitive' } },
-                {
-                  certificationNumber: {
-                    contains: input.q,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  submissions: {
-                    some: {
-                      OR: [
-                        { id: { contains: input.q, mode: 'insensitive' } },
-                        {
-                          owner: {
-                            profile: {
-                              is: {
-                                displayName: {
-                                  contains: input.q,
-                                  mode: 'insensitive',
-                                },
-                              },
-                            },
-                          },
-                        },
-                        {
-                          owner: {
-                            profile: {
-                              is: {
-                                publicUsername: {
-                                  contains: input.q,
-                                  mode: 'insensitive',
-                                },
-                              },
-                            },
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
+        ...(input.q ? operationsSearchWhere(input.q) : {}),
         ...(input.category ? { category: { slug: input.category } } : {}),
         ...(input.grader
           ? {
@@ -1429,6 +1381,7 @@ async function operationsItem(asset: BoardAsset, storage: ObjectStoragePort) {
   const launchReadiness = {
     state: launchBlockers.length ? ('BLOCKED' as const) : ('READY' as const),
     blockers: [...new Set(launchBlockers)],
+    gates: operationLaunchGates(launchBlockers),
   };
   let currentStage: OperationsStage = 'PHYSICAL_PREREQUISITE';
   let stageSince: Date = intake?.updatedAt ?? asset.updatedAt;
@@ -1706,19 +1659,19 @@ function operationsNextAction(stage: OperationsStage, entryBlockers: string[]) {
     return {
       label: 'Configure Initial Offering',
       actor: 'STAFF' as const,
-      target: 'MARKET' as const,
+      target: 'INITIAL_OFFERING' as const,
     };
   if (stage === 'LAUNCH_READINESS')
     return {
       label: 'Resolve launch blockers',
       actor: 'STAFF' as const,
-      target: 'MARKET' as const,
+      target: 'LAUNCH' as const,
     };
   if (stage === 'READY_FOR_LAUNCH')
     return {
       label: 'Open launch workspace',
       actor: 'STAFF' as const,
-      target: 'MARKET' as const,
+      target: 'LAUNCH' as const,
     };
   return {
     label: 'No action required',
@@ -1873,6 +1826,81 @@ function operationsMatches(
     (!input.assignee ||
       (input.assignee === 'UNASSIGNED' ? item.assignee === null : false))
   );
+}
+
+function operationsSearchWhere(query: string): Prisma.AssetWhereInput {
+  return {
+    OR: [
+      // Detail routes address the canonical record by its internal UUID. Keep
+      // that exact authority in the same bounded search used by the queue.
+      { id: query },
+      { title: { contains: query, mode: 'insensitive' } },
+      { publicId: { contains: query, mode: 'insensitive' } },
+      { slug: { contains: query, mode: 'insensitive' } },
+      { cardNumber: { contains: query, mode: 'insensitive' } },
+      {
+        certificationNumber: {
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+      {
+        submissions: {
+          some: {
+            OR: [
+              { id: { contains: query, mode: 'insensitive' } },
+              {
+                owner: {
+                  profile: {
+                    is: {
+                      displayName: {
+                        contains: query,
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                owner: {
+                  profile: {
+                    is: {
+                      publicUsername: {
+                        contains: query,
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    ],
+  };
+}
+
+const operationLaunchGateDefinitions = [
+  ['CATALOGUE_NOT_PUBLISHED', 'Catalogue record active'],
+  ['VERIFICATION_NOT_APPROVED', 'Physical verification approved'],
+  ['VALUATION_REQUIRED', 'Authoritative valuation recorded'],
+  ['CUSTODY_NOT_SECURED', 'Secure custody established'],
+  ['ACTIVE_COVERAGE_REQUIRED', 'Active insurance coverage'],
+  ['LIFECYCLE_EXCEPTION', 'No lifecycle exception'],
+  ['OWNERSHIP_ISSUANCE_REQUIRED', 'Ownership supply issued'],
+  ['INITIAL_OFFERING_REQUIRED', 'Initial Offering active'],
+] as const;
+
+function operationLaunchGates(blockers: readonly string[]) {
+  const active = new Set(blockers);
+  return operationLaunchGateDefinitions.map(([blockerCode, label]) => ({
+    blockerCode,
+    label,
+    state: active.has(blockerCode)
+      ? ('BLOCKED' as const)
+      : ('SATISFIED' as const),
+  }));
 }
 
 function isOperationsQueueMember(
@@ -2058,6 +2086,8 @@ export const operationsQueueTestUtils = {
   operationsMatches,
   operationsCounts,
   operationsInsights,
+  operationsSearchWhere,
+  operationLaunchGates,
 };
 
 /** Request DTOs use bigint for GBP minor units; native JSON cannot encode bigint. */

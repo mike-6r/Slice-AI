@@ -56,6 +56,12 @@ describe('Asset Operations queue authority', () => {
       actor: 'NONE',
       target: 'COLLECTIBLE',
     });
+    expect(
+      operationsQueueTestUtils.operationsNextAction('OFFERING_SETUP', []),
+    ).toMatchObject({ target: 'INITIAL_OFFERING' });
+    expect(
+      operationsQueueTestUtils.operationsNextAction('READY_FOR_LAUNCH', []),
+    ).toMatchObject({ target: 'LAUNCH' });
   });
 
   it('keeps ordinary pre-custody assets in Physical Intake, not the economic queue', () => {
@@ -166,6 +172,37 @@ describe('Asset Operations queue authority', () => {
         expect.objectContaining({ key: 'VALUATION', state: 'COMPLETE' }),
         expect.objectContaining({ key: 'OWNERSHIP', state: 'COMPLETE' }),
         expect.objectContaining({ key: 'MARKET', state: 'LIVE' }),
+      ]),
+    );
+  });
+
+  it('finds an operations detail record by its canonical internal asset id', () => {
+    const query = '43212b2a-225c-4253-a1bd-47facaf6fd73';
+    expect(operationsQueueTestUtils.operationsSearchWhere(query)).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([{ id: query }]),
+      }),
+    );
+  });
+
+  it('projects every authoritative launch gate with its exact blocking state', () => {
+    const gates = operationsQueueTestUtils.operationLaunchGates([
+      'ACTIVE_COVERAGE_REQUIRED',
+      'INITIAL_OFFERING_REQUIRED',
+    ]);
+
+    expect(gates).toHaveLength(8);
+    expect(gates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          blockerCode: 'ACTIVE_COVERAGE_REQUIRED',
+          label: 'Active insurance coverage',
+          state: 'BLOCKED',
+        }),
+        expect.objectContaining({
+          blockerCode: 'VERIFICATION_NOT_APPROVED',
+          state: 'SATISFIED',
+        }),
       ]),
     );
   });

@@ -2233,14 +2233,14 @@
 }
 .admin-asset-workspace {
   display: grid;
-  gap: 18px;
-  padding: 28px clamp(18px, 3vw, 44px) 42px;
+  gap: 14px;
+  padding: 24px clamp(18px, 2.4vw, 36px) 36px;
 }
 .admin-asset-workspace__header {
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) minmax(178px, 220px);
-  gap: 20px;
-  padding: 18px;
+  grid-template-columns: 104px minmax(0, 1fr) minmax(300px, 380px);
+  gap: 16px;
+  padding: 15px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-elevated);
@@ -2248,7 +2248,7 @@
 .admin-asset-workspace__media {
   display: grid;
   place-items: center;
-  min-height: 150px;
+  min-height: 132px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -2323,6 +2323,7 @@
 }
 .admin-asset-workspace__links {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: 7px;
 }
@@ -2455,17 +2456,24 @@
   font-size: 9px;
 }
 .admin-economic-workflow--unavailable {
-  display: block;
+  display: flex;
+  grid-template-columns: none;
+  justify-content: space-between;
+  gap: 18px;
 }
-.admin-economic-workflow--unavailable > span {
+.admin-economic-workflow--unavailable > div > span {
   color: #e8ae46;
   font-size: 12px;
   font-weight: 600;
 }
-.admin-economic-workflow--unavailable p {
+.admin-economic-workflow--unavailable > div > p {
   margin: 4px 0 0;
   color: var(--text-muted);
   font-size: 11px;
+}
+.admin-economic-workflow--unavailable .admin-ops-button {
+  flex: 0 0 auto;
+  align-self: center;
 }
 .admin-asset-workspace__content {
   display: grid;
@@ -2475,6 +2483,100 @@
 }
 .admin-asset-workspace__main {
   min-width: 0;
+}
+.admin-operations-overview {
+  display: grid;
+  gap: 12px;
+}
+.admin-operations-overview__stage {
+  padding: 15px 17px;
+  background:
+    linear-gradient(105deg, rgba(48, 205, 174, 0.08), transparent 48%), var(--surface-elevated);
+}
+.admin-operations-overview__stage .admin-card-heading h3 {
+  margin-bottom: 4px;
+}
+.admin-operations-overview__stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(120px, 0.75fr) minmax(110px, 0.5fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+.admin-operations-overview__stage-grid > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(4, 14, 20, 0.35);
+}
+.admin-operations-overview__stage-grid span {
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.admin-operations-overview__stage-grid strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-operations-overview__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.admin-operations-overview__grid > .admin-operation-card {
+  padding: 15px 16px;
+}
+.admin-operations-overview__gates {
+  min-width: 0;
+}
+.admin-launch-gates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.admin-launch-gate {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(4, 14, 20, 0.28);
+}
+.admin-launch-gate svg {
+  width: 14px;
+  height: 14px;
+}
+.admin-launch-gate span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-launch-gate strong {
+  font-size: 9px;
+  font-weight: 600;
+}
+.admin-launch-gate.satisfied svg,
+.admin-launch-gate.satisfied strong {
+  color: var(--accent);
+}
+.admin-launch-gate.blocked {
+  border-color: rgba(232, 174, 70, 0.24);
+}
+.admin-launch-gate.blocked svg,
+.admin-launch-gate.blocked strong {
+  color: #e8ae46;
 }
 .admin-operations-rail {
   position: sticky;
@@ -2531,6 +2633,9 @@
 .admin-operations-rail__commands {
   display: grid;
   gap: 7px;
+}
+.admin-operations-rail__section > .admin-operations-rail__commands {
+  margin-top: 10px;
 }
 .admin-operations-rail__commands a,
 .admin-operations-rail__commands button {
@@ -2627,6 +2732,22 @@
 .admin-launch-step .admin-ops-button {
   white-space: nowrap;
 }
+@media (max-width: 1280px) {
+  .admin-economic-workflow {
+    grid-template-columns: 1fr;
+  }
+  .admin-economic-workflow__steps {
+    grid-template-columns: repeat(5, minmax(125px, 1fr));
+    overflow-x: auto;
+  }
+  .admin-asset-workspace__content {
+    grid-template-columns: 1fr;
+  }
+  .admin-operations-rail {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 1050px) {
   .admin-operation-row,
   .admin-operations-queue-head {
@@ -2650,6 +2771,9 @@
   }
   .admin-operation-card--wide {
     grid-column: 1/-1;
+  }
+  .admin-operations-overview__stage-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (max-width: 760px) {
@@ -2749,6 +2873,18 @@
   }
   .admin-asset-workspace__grid {
     grid-template-columns: 1fr;
+  }
+  .admin-operations-overview__grid,
+  .admin-launch-gates,
+  .admin-operations-rail,
+  .admin-operations-overview__stage-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-economic-workflow--unavailable {
+    display: grid;
+  }
+  .admin-economic-workflow--unavailable .admin-ops-button {
+    justify-self: start;
   }
   .admin-launch-step {
     grid-template-columns: 28px minmax(0, 1fr);

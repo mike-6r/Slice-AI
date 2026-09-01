@@ -256,7 +256,15 @@ export type AssetOperationDetailProjection = {
     state: "COMPLETE" | "IN_PROGRESS" | "READY" | "BLOCKED" | "NOT_STARTED" | "LIVE";
     detail: string;
   }>;
-  launchReadiness: { state: "READY" | "BLOCKED"; blockers: string[] };
+  launchReadiness: {
+    state: "READY" | "BLOCKED";
+    blockers: string[];
+    gates: Array<{
+      blockerCode: string;
+      label: string;
+      state: "SATISFIED" | "BLOCKED";
+    }>;
+  };
   reconciliation: {
     ownership: {
       expectedUnits: string | null;

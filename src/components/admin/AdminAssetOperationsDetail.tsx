@@ -50,11 +50,6 @@ export function AdminAssetOperationsDetail({
     queryFn: () => services.repositories.admin.getCollectibleDetail(assetId, "operations"),
     staleTime: 20_000,
   });
-  const readiness = useQuery({
-    queryKey: ["admin", "asset-operations-readiness", assetId],
-    queryFn: () => services.repositories.lifecycle.getReadiness(assetId),
-    staleTime: 10_000,
-  });
   const operations = useQuery({
     queryKey: ["admin", "asset-operations-projection", assetId],
     queryFn: () => services.repositories.lifecycle.getOperationDetail(assetId),
@@ -68,7 +63,6 @@ export function AdminAssetOperationsDetail({
   const [approvalReason, setApprovalReason] = useState("");
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
-    void client.invalidateQueries({ queryKey: ["admin", "asset-operations-readiness", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations"] });
   };
@@ -191,7 +185,13 @@ export function AdminAssetOperationsDetail({
             <Fact label="Collector" value={item.collector?.displayName ?? "Not recorded"} />
             <Fact
               label="Operation stage"
-              value={operations.data ? sentence(operations.data.operations.stage) : "Unavailable"}
+              value={
+                operations.data
+                  ? sentence(operations.data.operations.stage)
+                  : operations.isLoading
+                    ? "Loading"
+                    : "Projection unavailable"
+              }
               accent
             />
             <Fact
@@ -232,7 +232,14 @@ export function AdminAssetOperationsDetail({
           </button>
         </div>
       </header>
-      <EconomicWorkflow operations={operations.data} selected={selected} onOpen={onTab} />
+      <EconomicWorkflow
+        operations={operations.data}
+        selected={selected}
+        onOpen={onTab}
+        loading={operations.isLoading}
+        error={operations.isError}
+        retry={() => void operations.refetch()}
+      />
       <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
         {tabs.map((value) => (
           <button
@@ -332,174 +339,177 @@ export function AdminAssetOperationsDetail({
 function Overview({
   item,
   operations,
-  onOpen,
 }: {
   item: Detail;
   operations?: AssetOperationDetailProjection;
   onOpen: (tab: string) => void;
 }) {
   const action = operations?.operations.nextAction;
-  const actionTab = action ? targetTab(action.target) : "overview";
   return (
-    <div className="admin-asset-workspace__grid">
-      <section className="admin-operation-card admin-operation-card--wide">
-        <CardHeading
-          eyebrow="Current operations stage"
-          title={
-            operations ? sentence(operations.operations.stage) : "Operations status unavailable"
-          }
-          status={action?.actor === "NONE" ? "No action required" : "Action required"}
-          ready={action?.actor === "NONE"}
-        />
-        <p className="admin-detail-muted">
-          {action
-            ? `${action.label}. Next actor: ${sentence(action.actor)}.`
-            : "The server-side operations projection is currently unavailable."}
-        </p>
-        {operations?.operations.blockers.length ? (
-          <ul className="admin-blocker-list">
-            {operations.operations.blockers.map((blocker) => (
-              <li key={blocker}>{sentence(blocker)}</li>
-            ))}
-          </ul>
-        ) : null}
-        <button
-          type="button"
-          className="admin-ops-button primary"
-          disabled={!action || action.actor === "NONE"}
-          onClick={() => {
-            if (action?.target === "INTAKE" && item.intake) {
-              window.location.assign(
-                `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
-              );
-              return;
+    <div className="admin-operations-overview">
+      {operations ? (
+        <section className="admin-operation-card admin-operations-overview__stage">
+          <CardHeading
+            title={sentence(operations.operations.stage)}
+            status={action?.actor === "NONE" ? "No action required" : "Action required"}
+            ready={action?.actor === "NONE"}
+          />
+          <div className="admin-operations-overview__stage-grid">
+            <div>
+              <span>Next action</span>
+              <strong>{action?.label ?? "No action projected"}</strong>
+            </div>
+            <div>
+              <span>Next actor</span>
+              <strong>{action ? sentence(action.actor) : "Not assigned"}</strong>
+            </div>
+            <div>
+              <span>Operational blockers</span>
+              <strong>{operations.operations.blockers.length}</strong>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="admin-operations-overview__grid">
+        <Info title="Economic Snapshot">
+          <Field
+            label="Valuation"
+            value={
+              item.valuation.current
+                ? money(item.valuation.current.minor, item.valuation.current.currency)
+                : "Not recorded"
             }
-            onOpen(actionTab);
-          }}
-        >
-          {action?.label ?? "Refresh operations"} <ArrowRight aria-hidden="true" />
-        </button>
-      </section>
-      <Info title="Physical prerequisite" eyebrow="Read only">
-        <Field
-          label="Verification"
-          value={
-            operations
-              ? sentence(operations.physicalPrerequisites.verification)
-              : sentence(item.verification.status)
-          }
-        />
-        <Field
-          label="Custody"
-          value={
-            operations
-              ? sentence(operations.physicalPrerequisites.custody)
-              : sentence(item.custody.status)
-          }
-        />
-        <Field
-          label="Physical exceptions"
-          value={operations?.physicalPrerequisites.complete ? "None" : "See blockers"}
-        />
-        <Field
-          label="Location"
-          value={
-            operations?.physicalPrerequisites.location ?? item.custody.location ?? "Not recorded"
-          }
-        />
-      </Info>
-      <Info title="Economic snapshot" eyebrow="Authoritative">
-        <Field
-          label="Valuation"
-          value={
-            item.valuation.current
-              ? money(item.valuation.current.minor, item.valuation.current.currency)
-              : "Not recorded"
-          }
-          accent
-        />
-        <Field
-          label="Ownership"
-          value={
-            item.issuance?.supply
-              ? `${item.issuance.supply.issuedUnits} / ${item.issuance.supply.totalUnits} issued`
-              : "Not configured"
-          }
-        />
-        <Field
-          label="Offering"
-          value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
-        />
-        <Field
-          label="Price per Slice"
-          value={
-            item.initialOffering
-              ? money(item.initialOffering.pricePerUnitMinor, item.initialOffering.currency)
-              : "Not configured"
-          }
-        />
-      </Info>
-      <Info title="Launch readiness" eyebrow="Server gates">
-        <Field
-          label="Publication"
-          value={operations ? sentence(operations.launchReadiness.state) : "Unavailable"}
-          accent={operations?.launchReadiness.state === "READY"}
-        />
-        <Field
-          label="Market state"
-          value={
-            item.market.publication === "PUBLISHED"
-              ? "Market live"
-              : item.market.trading
-                ? sentence(item.market.trading.status)
+            accent
+          />
+          <Field
+            label="Ownership state"
+            value={item.issuance ? sentence(item.issuance.status) : "Not configured"}
+          />
+          <Field
+            label="Total units"
+            value={
+              item.issuance?.supply?.totalUnits ?? item.ownership.totalUnits ?? "Not configured"
+            }
+          />
+          <Field
+            label="Offering state"
+            value={item.initialOffering ? sentence(item.initialOffering.status) : "Not created"}
+          />
+          <Field
+            label="Price per Slice"
+            value={
+              item.initialOffering
+                ? money(item.initialOffering.pricePerUnitMinor, item.initialOffering.currency)
                 : "Not configured"
-          }
-        />
-        <Field
-          label="Restrictions"
-          value={
-            item.dossier.restrictions.length
-              ? `${item.dossier.restrictions.length} active`
-              : "None recorded"
-          }
-        />
-      </Info>
-      <Info title="Economic reconciliation" eyebrow="Read only">
-        <Field
-          label="Expected ownership"
-          value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
-        />
-        <Field
-          label="Allocated ownership"
-          value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
-        />
-        <Field
-          label="Ownership difference"
-          value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
-        />
-        <Field
-          label="Offering proceeds"
-          value={
-            item.initialOffering
-              ? money(
-                  item.initialOffering.proceeds.availableMinor,
-                  item.initialOffering.proceeds.currency,
-                )
-              : "Not applicable"
-          }
-        />
-        <Field
-          label="Inventory"
-          value={
-            item.initialOffering?.inventory
-              ? `${item.initialOffering.inventory.availableUnits} available`
-              : "Not created"
-          }
-        />
-      </Info>
-      <Info title="Recent economics" eyebrow="Meaningful activity">
-        <ActivityPreview item={item} />
-      </Info>
+            }
+          />
+          <Field label="Market state" value={marketLabel(item)} />
+          <Field
+            label="Gross offering"
+            value={
+              item.initialOffering
+                ? money(item.initialOffering.grossOfferingMinor, item.initialOffering.currency)
+                : "Not applicable"
+            }
+          />
+          <Field
+            label="Offering fee"
+            value={
+              item.initialOffering
+                ? `${money(item.initialOffering.feeMinor, item.initialOffering.currency)} (${percent(item.initialOffering.feeBps)})`
+                : "Not applicable"
+            }
+          />
+          <Field
+            label="Collector proceeds"
+            value={
+              item.initialOffering
+                ? money(item.initialOffering.netOfferingMinor, item.initialOffering.currency)
+                : "Not applicable"
+            }
+          />
+        </Info>
+
+        {operations ? (
+          <section className="admin-operation-card admin-operations-overview__gates">
+            <CardHeading
+              title="Launch Readiness"
+              status={
+                operations.launchReadiness.state === "READY"
+                  ? "Ready"
+                  : `${operations.launchReadiness.blockers.length} blocked`
+              }
+              ready={operations.launchReadiness.state === "READY"}
+            />
+            <p className="admin-detail-muted">
+              Required launch conditions are evaluated independently by the lifecycle service.
+            </p>
+            <div className="admin-launch-gates">
+              {operations.launchReadiness.gates.map((gate) => (
+                <div
+                  key={gate.blockerCode}
+                  className={`admin-launch-gate ${gate.state.toLowerCase()}`}
+                >
+                  {gate.state === "SATISFIED" ? (
+                    <CheckCircle2 aria-hidden="true" />
+                  ) : (
+                    <CircleAlert aria-hidden="true" />
+                  )}
+                  <span>{gate.label}</span>
+                  <strong>{gate.state === "SATISFIED" ? "Satisfied" : "Blocked"}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <Info title="Economic Reconciliation">
+          <Field
+            label="Expected ownership"
+            value={operations?.reconciliation.ownership.expectedUnits ?? "Not issued"}
+          />
+          <Field
+            label="Allocated ownership"
+            value={operations?.reconciliation.ownership.allocatedUnits ?? "Not issued"}
+          />
+          <Field
+            label="Ownership difference"
+            value={operations?.reconciliation.ownership.differenceUnits ?? "Not available"}
+          />
+          <Field
+            label="Offered inventory"
+            value={item.initialOffering?.inventory?.offeredUnits ?? "Not created"}
+          />
+          <Field
+            label="Reserved units"
+            value={item.initialOffering?.inventory?.reservedUnits ?? "Not created"}
+          />
+          <Field
+            label="Executed units"
+            value={item.initialOffering?.inventory?.settledUnits ?? "Not created"}
+          />
+          <Field
+            label="Available units"
+            value={item.initialOffering?.inventory?.availableUnits ?? "Not created"}
+          />
+          <Field
+            label="Available proceeds"
+            value={
+              item.initialOffering
+                ? money(
+                    item.initialOffering.proceeds.availableMinor,
+                    item.initialOffering.proceeds.currency,
+                  )
+                : "Not applicable"
+            }
+          />
+        </Info>
+
+        <Info title="Recent Meaningful Activity">
+          <ActivityPreview item={item} />
+        </Info>
+      </div>
     </div>
   );
 }
@@ -508,18 +518,35 @@ function EconomicWorkflow({
   operations,
   selected,
   onOpen,
+  loading,
+  error,
+  retry,
 }: {
   operations?: AssetOperationDetailProjection;
   selected: DetailTab;
   onOpen: (tab: string) => void;
+  loading: boolean;
+  error: boolean;
+  retry: () => void;
 }) {
   const tabFor = (key: AssetOperationDetailProjection["economicWorkflow"][number]["key"]) =>
     key === "INITIAL_OFFERING" ? "initial-offering" : key.toLowerCase();
   if (!operations)
     return (
       <section className="admin-economic-workflow admin-economic-workflow--unavailable">
-        <span>Economic workflow unavailable</span>
-        <p>Refresh to retrieve the authoritative operations projection.</p>
+        <div>
+          <span>{loading ? "Loading economic workflow" : "Economic workflow unavailable"}</span>
+          <p>
+            {error
+              ? "The lifecycle projection could not be loaded. The canonical record remains available and no state was inferred locally."
+              : "Reading backend-authoritative progression."}
+          </p>
+        </div>
+        {error ? (
+          <button type="button" className="admin-ops-button" onClick={retry}>
+            Retry projection <RefreshCw aria-hidden="true" />
+          </button>
+        ) : null}
       </section>
     );
   return (
@@ -562,83 +589,132 @@ function OperationsRail({
 }) {
   const action = operations?.operations.nextAction;
   const blocked = operations?.operations.blockers ?? [];
-  const commands = operations
+  const location =
+    operations?.physicalPrerequisites.location ??
+    item.intake?.vault ??
+    (item.custody.location ? sentence(item.custody.location) : null) ??
+    "Not recorded";
+  const primaryTarget = action?.actor === "NONE" ? null : targetTab(action?.target ?? "");
+  const commands: Array<[string, DetailTab]> = operations
     ? [
-        operations.availableCommands.recordValuation && ["Record valuation", "valuation"],
-        operations.availableCommands.configureOwnership && ["Configure ownership", "ownership"],
-        operations.availableCommands.reviewOffering && [
-          "Review Initial Offering",
-          "initial-offering",
-        ],
-        operations.availableCommands.issueOwnership && ["Issue ownership", "launch"],
-        operations.availableCommands.publish && ["Review launch", "launch"],
-        operations.availableCommands.openOffering && ["Open Initial Offering", "launch"],
-        operations.availableCommands.activateMarket && ["Activate market", "launch"],
-      ].filter((command): command is [string, string] => Boolean(command))
+        operations.availableCommands.recordValuation &&
+          (["Record valuation", "valuation"] as [string, DetailTab]),
+        operations.availableCommands.configureOwnership &&
+          (["Configure ownership", "ownership"] as [string, DetailTab]),
+        operations.availableCommands.reviewOffering &&
+          (["Review Initial Offering", "initial-offering"] as [string, DetailTab]),
+        operations.availableCommands.issueOwnership &&
+          (["Issue ownership", "launch"] as [string, DetailTab]),
+        operations.availableCommands.publish &&
+          (["Review launch", "launch"] as [string, DetailTab]),
+        operations.availableCommands.openOffering &&
+          (["Open Initial Offering", "launch"] as [string, DetailTab]),
+        operations.availableCommands.activateMarket &&
+          (["Activate market", "launch"] as [string, DetailTab]),
+      ]
+        .filter((command): command is [string, DetailTab] => Boolean(command))
+        .filter(([, tab]) => tab !== primaryTarget)
     : [];
   return (
     <aside className="admin-operations-rail" aria-label="Asset operation controls">
-      <Rail title="Next action" tone={action?.actor === "NONE" ? "ready" : "attention"}>
-        <strong>{action?.label ?? "Unavailable"}</strong>
-        <p>
-          {action
-            ? action.actor === "NONE"
+      {operations ? (
+        <Rail title="Next Action" tone={action?.actor === "NONE" ? "ready" : "attention"}>
+          <strong>{action?.label ?? "No action projected"}</strong>
+          <p>
+            {action?.actor === "NONE"
               ? "This asset has no pending economic action."
-              : `Next actor: ${sentence(action.actor)}.`
-            : "The authoritative next action could not be loaded."}
-        </p>
-        {action && action.actor !== "NONE" ? (
-          <button
-            type="button"
-            className="admin-ops-button primary"
-            onClick={() => {
-              if (action.target === "INTAKE" && item.intake) {
-                window.location.assign(
-                  `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
-                );
-                return;
-              }
-              onOpen(targetTab(action.target));
-            }}
-          >
-            Review action <ArrowRight aria-hidden="true" />
-          </button>
-        ) : null}
-      </Rail>
-      <Rail title="Blockers">
-        {blocked.length ? (
-          <ul className="admin-operations-rail__list">
-            {blocked.map((blocker) => (
-              <li key={blocker}>{sentence(blocker)}</li>
-            ))}
-          </ul>
-        ) : (
-          <p>No active operational blocker.</p>
-        )}
-      </Rail>
-      <Rail title="Available commands">
-        {commands.length ? (
+              : `Next actor: ${sentence(action?.actor ?? "STAFF")}.`}
+          </p>
+          {action && action.actor !== "NONE" ? (
+            <button
+              type="button"
+              className="admin-ops-button primary"
+              onClick={() => {
+                if (action.target === "INTAKE" && item.intake) {
+                  window.location.assign(
+                    `/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`,
+                  );
+                  return;
+                }
+                onOpen(targetTab(action.target));
+              }}
+            >
+              Review action <ArrowRight aria-hidden="true" />
+            </button>
+          ) : null}
+        </Rail>
+      ) : null}
+      {operations ? (
+        <Rail title="Blockers">
+          {blocked.length ? (
+            <ul className="admin-operations-rail__list">
+              {blocked.map((blocker) => (
+                <li key={blocker}>{sentence(blocker)}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>No active operational blocker.</p>
+          )}
+        </Rail>
+      ) : null}
+      {operations ? (
+        <Rail title="Available Commands">
+          {commands.length ? (
+            <div className="admin-operations-rail__commands">
+              {commands.map(([label, tab]) => (
+                <button type="button" key={label} onClick={() => onOpen(tab)}>
+                  {label} <ArrowRight aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p>No additional server-authorized command is available.</p>
+          )}
+        </Rail>
+      ) : null}
+      <Rail title="Physical Prerequisites">
+        <Field
+          label="Verification"
+          value={
+            operations
+              ? sentence(operations.physicalPrerequisites.verification)
+              : sentence(item.verification.status)
+          }
+        />
+        <Field
+          label="Custody"
+          value={
+            operations
+              ? sentence(operations.physicalPrerequisites.custody)
+              : sentence(item.custody.status)
+          }
+        />
+        <Field
+          label="Physical exceptions"
+          value={
+            operations
+              ? operations.physicalPrerequisites.complete
+                ? "None"
+                : "Requires attention"
+              : item.intake?.exception
+                ? "Requires attention"
+                : "None recorded"
+          }
+        />
+        <Field label="Intake location" value={location} />
+        {item.intake ? (
           <div className="admin-operations-rail__commands">
-            {commands.map(([label, tab]) => (
-              <button type="button" key={label} onClick={() => onOpen(tab)}>
-                {label} <ArrowRight aria-hidden="true" />
-              </button>
-            ))}
+            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
+              Open Physical Intake <ExternalLink aria-hidden="true" />
+            </a>
           </div>
-        ) : (
-          <p>No additional server-authorized command is available.</p>
-        )}
+        ) : null}
       </Rail>
       <Rail title="Quick links">
         <div className="admin-operations-rail__commands">
           <a href={`/admin?section=collectibles&asset=${encodeURIComponent(item.id)}`}>
             Open collectible <ExternalLink aria-hidden="true" />
           </a>
-          {item.intake ? (
-            <a href={`/admin?section=intake&intake=${encodeURIComponent(item.intake.id)}`}>
-              Open Physical Intake <ExternalLink aria-hidden="true" />
-            </a>
-          ) : null}
           {item.submissions[0] ? (
             <a
               href={`/admin?section=moderation&submission=${encodeURIComponent(item.submissions[0].id)}`}
@@ -649,6 +725,11 @@ function OperationsRail({
           {item.collector ? (
             <a href={`/admin?section=users&user=${encodeURIComponent(item.collector.id)}`}>
               View collector <ExternalLink aria-hidden="true" />
+            </a>
+          ) : null}
+          {item.market.publication === "PUBLISHED" ? (
+            <a href={`/asset/${item.slug}`} target="_blank" rel="noreferrer">
+              Open public record <ExternalLink aria-hidden="true" />
             </a>
           ) : null}
         </div>
@@ -1492,7 +1573,7 @@ function OwnershipHolders({ item }: { item: Detail }) {
   );
 }
 function ActivityPreview({ item }: { item: Detail }) {
-  const events = item.activity.filter(isEconomicActivity).slice(0, 3);
+  const events = item.activity.filter(isEconomicActivity).slice(0, 5);
   return events.length ? (
     <HistoryRows events={events} empty="" />
   ) : (
@@ -1594,7 +1675,9 @@ function OperationDetailState({
 function targetTab(target: string): DetailTab {
   if (target === "VALUATION") return "valuation";
   if (target === "OWNERSHIP") return "ownership";
-  if (target === "MARKET") return "initial-offering";
+  if (target === "INITIAL_OFFERING") return "initial-offering";
+  if (target === "LAUNCH") return "launch";
+  if (target === "MARKET") return "market";
   return "overview";
 }
 function marketLabel(item: Detail) {
