@@ -161,6 +161,7 @@ export interface SubmissionReviewRepository {
     id: string,
     decision: "CHANGES_REQUESTED" | "APPROVED" | "REJECTED",
     input: {
+      version: number;
       reasonCode: string;
       note?: string;
       requestedItems?: string[];

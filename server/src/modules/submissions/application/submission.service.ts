@@ -2023,12 +2023,15 @@ export class SubmissionService {
       {
         key: 'certification',
         label: 'Grade & certification resolved',
-        required: true,
+        required: Boolean(response.collectible?.grader),
         satisfied: certificationResolved,
       },
     ];
     const requiredComplete = requiredChecklist.filter(
-      (item) => item.satisfied,
+      (item) => item.required && item.satisfied,
+    ).length;
+    const requiredTotal = requiredChecklist.filter(
+      (item) => item.required,
     ).length;
     const advisoryComplete = advisoryItems.filter(
       (item) => item.satisfied,
@@ -2105,24 +2108,21 @@ export class SubmissionService {
           {
             key: 'research',
             label: 'Market research',
-            status: advisoryItems[0].satisfied ? 'OPTIONAL' : 'NEEDS_REVIEW',
+            status: 'OPTIONAL',
             required: false,
             summary: response.marketResearch
-              ? 'External reference only'
-              : 'No external reference attached',
+              ? 'Optional — reference available'
+              : 'Optional — not recorded',
           },
           {
             key: 'assessment',
             label: 'Staff assessment',
-            status:
-              advisoryItems[1].satisfied || advisoryItems[2].satisfied
-                ? 'OPTIONAL'
-                : 'NEEDS_REVIEW',
+            status: 'OPTIONAL',
             required: false,
             summary:
               advisoryItems[1].satisfied || advisoryItems[2].satisfied
-                ? 'Optional assessment recorded'
-                : 'Condition and valuation are optional',
+                ? 'Optional — staff assessment recorded'
+                : 'Optional — not recorded',
           },
           {
             key: 'decision',
@@ -2166,7 +2166,7 @@ export class SubmissionService {
               : 'UNCLAIMED',
         required: {
           complete: requiredComplete,
-          total: requiredChecklist.length,
+          total: requiredTotal,
           blockers: blockers.length,
         },
         advisory: {
@@ -2185,6 +2185,46 @@ export class SubmissionService {
         canRequestChanges: claimedByActor,
         canReject: claimedByActor,
         selfReviewForbidden,
+      },
+      reviewWorkspace: {
+        requiredItems: requiredChecklist.filter((item) => item.required),
+        optionalItems: advisoryItems,
+        requiredComplete,
+        requiredTotal,
+        optionalRecorded: advisoryComplete,
+        optionalTotal: advisoryItems.length,
+        blockingIssues: blockers,
+        primaryBlocker:
+          submission!.status === 'APPROVED' || submission!.status === 'REJECTED'
+            ? null
+            : selfReviewForbidden
+              ? 'Self-review is prohibited for this submission.'
+              : (blockers[0] ?? null),
+        claimState: reviewAssignmentState,
+        reviewer: reviewer
+          ? {
+              id: reviewer.id,
+              displayName: reviewer.profile?.displayName ?? 'Reviewer',
+              username: reviewer.profile?.publicUsername ?? null,
+            }
+          : null,
+        selfReviewBlocked: selfReviewForbidden,
+        nextAction,
+        nextActionLabel: readinessState,
+        lastUpdated: submission!.updatedAt.toISOString(),
+        canClaim:
+          !selfReviewForbidden &&
+          submission!.status === 'SUBMITTED' &&
+          !submission!.reviewerId,
+        canRelease: canManageClaim,
+        canEdit: claimedByActor,
+        canApprove: decisionEligible,
+        canRequestChanges: claimedByActor,
+        canReject: claimedByActor,
+        canCanonicalize:
+          submission!.status === 'APPROVED' && !submission!.assetId,
+        canOpenPhysicalIntake:
+          submission!.status === 'APPROVED' && Boolean(submission!.assetId),
       },
     };
   }
@@ -2402,6 +2442,7 @@ export class SubmissionService {
     id: string,
     decision: 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED',
     input: {
+      version: number;
       reasonCode: string;
       note?: string;
       requestedItems?: string[];
@@ -2445,6 +2486,7 @@ export class SubmissionService {
           submission!.reviewerId !== actor.userId
         )
           this.stateConflict();
+        assertExpectedVersion(submission!.version, input.version);
         if (decision === 'APPROVED') {
           assertRequiredSafeMedia(submission!.media);
           assertReviewDecisionReady(submission!);
@@ -2456,7 +2498,14 @@ export class SubmissionService {
             reviewedAt: new Date(),
             reviewerId: decision === 'CHANGES_REQUESTED' ? null : actor.userId,
             decisionCode: input.reasonCode,
-            decisionNote: input.note ? redactNote(input.note) : null,
+            decisionNote:
+              decision === 'CHANGES_REQUESTED'
+                ? input.customerMessage
+                  ? redactNote(input.customerMessage)
+                  : null
+                : input.note
+                  ? redactNote(input.note)
+                  : null,
             version: { increment: 1 },
           },
           include: { media: { orderBy: { slot: 'asc' } } },
@@ -2489,6 +2538,13 @@ export class SubmissionService {
                   : eventType.submissionApproved,
               submissionId: id,
               status: decision,
+              ...(decision === 'CHANGES_REQUESTED' &&
+              input.requestedItems?.length
+                ? { requestedItems: input.requestedItems }
+                : {}),
+              ...(decision === 'CHANGES_REQUESTED' && input.customerMessage
+                ? { customerMessage: input.customerMessage }
+                : {}),
               actorUserId: submission!.ownerUserId,
               correlationId: requestId,
               occurredAt: updated.reviewedAt ?? new Date(),
@@ -2504,6 +2560,7 @@ export class SubmissionService {
           reviewId: review.id,
           reasonCode: input.reasonCode,
           requestedItems: input.requestedItems ?? [],
+          customerMessageRecorded: Boolean(input.customerMessage),
           version: updated.version,
         });
         if (
@@ -3846,6 +3903,9 @@ type ReviewDetailRow = {
   assetId: string | null;
   status: string;
   submittedAt: Date | null;
+  reviewedAt: Date | null;
+  decisionCode: string | null;
+  decisionNote: string | null;
   createdAt: Date;
   categoryId: string;
   setId: string | null;
@@ -4073,6 +4133,17 @@ function reviewDetailContextProjection(
           .map(([key, value]) => [key, String(value)]),
       )
     : {};
+  const changeAudit = activity.find(
+    (item) => item.action === 'SUBMISSION_CHANGES_REQUESTED',
+  );
+  const changeMetadata = isRecord(changeAudit?.metadata)
+    ? changeAudit.metadata
+    : {};
+  const requestedItems = Array.isArray(changeMetadata.requestedItems)
+    ? changeMetadata.requestedItems.filter(
+        (item): item is string => typeof item === 'string',
+      )
+    : [];
   return {
     collectorSummary: context
       ? {
@@ -4218,6 +4289,15 @@ function reviewDetailContextProjection(
           createdAt: review.createdAt.toISOString(),
         })),
     },
+    changeRequest:
+      submission.status === 'CHANGES_REQUESTED'
+        ? {
+            reasonCode: submission.decisionCode,
+            message: submission.decisionNote,
+            requestedItems,
+            requestedAt: submission.reviewedAt?.toISOString() ?? null,
+          }
+        : null,
     relatedItems: related.map((item) => ({
       id: item.id,
       status: item.status,

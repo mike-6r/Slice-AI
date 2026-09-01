@@ -99,6 +99,33 @@ describe('NotificationRoutingService private order delivery', () => {
       ]),
     );
   });
+  it('preserves a recorded change request in collector delivery payloads', () => {
+    const routes = new NotificationRoutingService().route({
+      id: 'row-changes-1',
+      eventId: 'submission.changesrequested:submission-1',
+      eventType: 'submission.changesrequested',
+      schemaVersion: 1,
+      actorUserId: 'user-1',
+      occurredAt: new Date(),
+      payload: {
+        submissionId: 'submission-1',
+        status: 'CHANGES_REQUESTED',
+        requestedItems: ['Replacement image'],
+        customerMessage: 'Please upload a clear front image.',
+      },
+    } as never);
+    expect(routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: 'IN_APP',
+          payload: expect.objectContaining({
+            requestedItems: ['Replacement image'],
+            customerMessage: 'Please upload a clear front image.',
+          }),
+        }),
+      ]),
+    );
+  });
   it('routes a submitted collectible to private Collector Actions', () => {
     const routes = new NotificationRoutingService().route({
       id: 'row-4',

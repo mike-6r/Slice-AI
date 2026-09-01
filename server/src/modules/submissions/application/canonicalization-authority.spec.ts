@@ -20,20 +20,22 @@ function submissionService(
     undefined,
     outbox as never,
   );
-  (service as unknown as { mutate: (...args: Array<unknown>) => unknown }).mutate =
-    async (...args) => {
-      const work = args[7] as (
-        transaction: Record<string, unknown>,
-        audit: (...auditArgs: Array<unknown>) => Promise<void>,
-      ) => Promise<unknown>;
-      return work(db, async () => undefined);
-    };
+  (
+    service as unknown as { mutate: (...args: Array<unknown>) => unknown }
+  ).mutate = async (...args) => {
+    const work = args[7] as (
+      transaction: Record<string, unknown>,
+      audit: (...auditArgs: Array<unknown>) => Promise<void>,
+    ) => Promise<unknown>;
+    return work(db, async () => undefined);
+  };
   return service;
 }
 
 describe('canonicalization authority', () => {
   it('approves once without touching Asset authority and rejects a second decision', async () => {
     let status = 'IN_REVIEW';
+    let version = 1;
     const now = new Date();
     const outbox = { append: jest.fn().mockResolvedValue(undefined) };
     const updated = {
@@ -51,8 +53,28 @@ describe('canonicalization authority', () => {
       createdAt: now,
       updatedAt: now,
       media: [
-        { id: 'front', slot: 'front', mimeType: 'image/jpeg', sizeBytes: 1, status: 'SAFE', scanResultCode: null, deletedAt: null, createdAt: now, updatedAt: now },
-        { id: 'back', slot: 'back', mimeType: 'image/jpeg', sizeBytes: 1, status: 'SAFE', scanResultCode: null, deletedAt: null, createdAt: now, updatedAt: now },
+        {
+          id: 'front',
+          slot: 'front',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1,
+          status: 'SAFE',
+          scanResultCode: null,
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'back',
+          slot: 'back',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1,
+          status: 'SAFE',
+          scanResultCode: null,
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
       ],
     };
     const db = {
@@ -60,6 +82,7 @@ describe('canonicalization authority', () => {
         findUnique: jest.fn().mockImplementation(async () => ({
           ownerUserId: 'collector-1',
           status,
+          version,
           reviewerId: 'reviewer-1',
           declaredMetadata: { name: 'Approval boundary card' },
           gradeScaleEntryId: null,
@@ -71,11 +94,14 @@ describe('canonicalization authority', () => {
         })),
         update: jest.fn().mockImplementation(async () => {
           status = 'APPROVED';
-          return updated;
+          version += 1;
+          return { ...updated, version };
         }),
       },
       gradingCertificationClaim: { updateMany: jest.fn() },
-      verificationReview: { create: jest.fn().mockResolvedValue({ id: 'review-1' }) },
+      verificationReview: {
+        create: jest.fn().mockResolvedValue({ id: 'review-1' }),
+      },
     };
     const service = submissionService(db, outbox);
 
@@ -84,21 +110,24 @@ describe('canonicalization authority', () => {
         reviewer,
         'submission-1',
         'APPROVED',
-        { reasonCode: 'READY' },
+        { version: 1, reasonCode: 'READY' },
         'request-1',
         'key-1',
       ),
     ).resolves.toMatchObject({ id: 'submission-1', status: 'APPROVED' });
+    status = 'IN_REVIEW';
     await expect(
       service.decide(
         reviewer,
         'submission-1',
         'APPROVED',
-        { reasonCode: 'READY' },
+        { version: 1, reasonCode: 'READY' },
         'request-2',
         'key-2',
       ),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'SUBMISSION_VERSION_CONFLICT' }),
+    });
 
     expect(db.assetSubmission.update).toHaveBeenCalledTimes(1);
     expect(outbox.append).toHaveBeenCalledTimes(1);
@@ -172,20 +201,33 @@ describe('canonicalization authority', () => {
       vaultCustodyRecord: { create: jest.fn() },
     };
     const service = submissionService(db);
-    (service as unknown as { mutate: (...args: Array<unknown>) => unknown }).mutate =
-      async (...args) => {
-        const work = args[7] as (
-          transaction: typeof db,
-          writeAudit: typeof audit,
-        ) => Promise<unknown>;
-        return work(db, audit);
-      };
+    (
+      service as unknown as { mutate: (...args: Array<unknown>) => unknown }
+    ).mutate = async (...args) => {
+      const work = args[7] as (
+        transaction: typeof db,
+        writeAudit: typeof audit,
+      ) => Promise<unknown>;
+      return work(db, audit);
+    };
 
     await expect(
-      service.linkApprovedAsset(reviewer, 'submission-1', 'asset-1', 'request-1', 'key-1'),
+      service.linkApprovedAsset(
+        reviewer,
+        'submission-1',
+        'asset-1',
+        'request-1',
+        'key-1',
+      ),
     ).resolves.toEqual({ submissionId: 'submission-1', assetId: 'asset-1' });
     await expect(
-      service.linkApprovedAsset(reviewer, 'submission-1', 'asset-1', 'request-2', 'key-2'),
+      service.linkApprovedAsset(
+        reviewer,
+        'submission-1',
+        'asset-1',
+        'request-2',
+        'key-2',
+      ),
     ).resolves.toEqual({ submissionId: 'submission-1', assetId: 'asset-1' });
 
     expect(db.assetSubmission.update).toHaveBeenCalledTimes(2);
@@ -240,14 +282,15 @@ describe('canonicalization authority', () => {
       valuationDecision: { create: jest.fn() },
     };
     const service = submissionService(db);
-    (service as unknown as { mutate: (...args: Array<unknown>) => unknown }).mutate =
-      async (...args) => {
-        const work = args[7] as (
-          transaction: typeof db,
-          writeAudit: typeof audit,
-        ) => Promise<unknown>;
-        return work(db, audit);
-      };
+    (
+      service as unknown as { mutate: (...args: Array<unknown>) => unknown }
+    ).mutate = async (...args) => {
+      const work = args[7] as (
+        transaction: typeof db,
+        writeAudit: typeof audit,
+      ) => Promise<unknown>;
+      return work(db, audit);
+    };
 
     await expect(
       service.createAndLinkCanonicalAsset(
@@ -329,7 +372,9 @@ describe('canonicalization authority', () => {
         'request-1',
         'key-1',
       ),
-    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'ASSET_SUBMISSION_CONFLICT' }) });
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'ASSET_SUBMISSION_CONFLICT' }),
+    });
 
     expect(db.assetSubmission.update).not.toHaveBeenCalled();
   });
@@ -349,10 +394,14 @@ describe('canonicalization authority', () => {
     };
 
     await expect(
-      (submissionService(db) as unknown as {
-        claimCertification: (...args: Array<unknown>) => Promise<unknown>;
-      }).claimCertification(db, 'PSA', '00012345', 'submission-1', 'asset-1'),
-    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'CERT_DUPLICATE_BLOCKED' }) });
+      (
+        submissionService(db) as unknown as {
+          claimCertification: (...args: Array<unknown>) => Promise<unknown>;
+        }
+      ).claimCertification(db, 'PSA', '00012345', 'submission-1', 'asset-1'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'CERT_DUPLICATE_BLOCKED' }),
+    });
 
     expect(db.gradingCertificationClaim.create).not.toHaveBeenCalled();
     expect(db.gradingCertificationClaim.update).not.toHaveBeenCalled();
@@ -378,14 +427,15 @@ describe('canonicalization authority', () => {
       createAsset: jest.fn().mockImplementation(async (input) => input),
     };
     const service = new CatalogueService({} as never, repository as never);
-    (service as unknown as { mutate: (...args: Array<unknown>) => unknown }).mutate =
-      async (...args) => {
-        const work = args[7] as (
-          repo: typeof repository,
-          audit: () => Promise<void>,
-        ) => Promise<unknown>;
-        return work(repository, async () => undefined);
-      };
+    (
+      service as unknown as { mutate: (...args: Array<unknown>) => unknown }
+    ).mutate = async (...args) => {
+      const work = args[7] as (
+        repo: typeof repository,
+        audit: () => Promise<void>,
+      ) => Promise<unknown>;
+      return work(repository, async () => undefined);
+    };
 
     await service.createAsset(
       reviewer,

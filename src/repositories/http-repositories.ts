@@ -1701,6 +1701,10 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       value.notes && typeof value.notes === "object"
         ? (objectField(value.notes, "review notes") as never)
         : undefined,
+    changeRequest:
+      value.changeRequest && typeof value.changeRequest === "object"
+        ? (objectField(value.changeRequest, "change request") as never)
+        : null,
     relatedItems: Array.isArray(value.relatedItems) ? (value.relatedItems as never) : undefined,
     reviewAssignment:
       value.reviewAssignment && typeof value.reviewAssignment === "object"
@@ -1721,6 +1725,10 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
     allowedActions:
       value.allowedActions && typeof value.allowedActions === "object"
         ? (objectField(value.allowedActions, "review allowed actions") as never)
+        : undefined,
+    reviewWorkspace:
+      value.reviewWorkspace && typeof value.reviewWorkspace === "object"
+        ? (objectField(value.reviewWorkspace, "review workspace") as never)
         : undefined,
   };
 };

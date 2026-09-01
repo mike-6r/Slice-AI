@@ -319,6 +319,12 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     current: string | null;
     history: Array<{ id: string; author: string; note: string; createdAt: ISODateTime }>;
   };
+  changeRequest?: {
+    reasonCode: string | null;
+    message: string | null;
+    requestedItems: string[];
+    requestedAt: ISODateTime | null;
+  } | null;
   relatedItems?: Array<{
     id: string;
     status: string;
@@ -400,6 +406,30 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     canRequestChanges: boolean;
     canReject: boolean;
     selfReviewForbidden: boolean;
+  };
+  reviewWorkspace?: {
+    requiredItems: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
+    optionalItems: Array<{ key: string; label: string; satisfied: boolean }>;
+    requiredComplete: number;
+    requiredTotal: number;
+    optionalRecorded: number;
+    optionalTotal: number;
+    blockingIssues: string[];
+    primaryBlocker: string | null;
+    claimState: "UNCLAIMED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "RELEASED" | "COMPLETED";
+    reviewer: { id: string; displayName: string; username: string | null } | null;
+    selfReviewBlocked: boolean;
+    nextAction: NonNullable<SubmissionReviewDetail["readiness"]>["nextAction"];
+    nextActionLabel: NonNullable<SubmissionReviewDetail["readiness"]>["state"];
+    lastUpdated: ISODateTime;
+    canClaim: boolean;
+    canRelease: boolean;
+    canEdit: boolean;
+    canApprove: boolean;
+    canRequestChanges: boolean;
+    canReject: boolean;
+    canCanonicalize: boolean;
+    canOpenPhysicalIntake: boolean;
   };
 }
 

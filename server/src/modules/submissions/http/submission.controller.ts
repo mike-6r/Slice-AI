@@ -40,7 +40,10 @@ const draft = z
     declaredMetadata: metadata,
     marketResearchId: id.optional(),
     preferredIntakeLocationId: id.nullable().optional(),
-    preferredDeliveryMethod: z.enum(['SHIPMENT', 'IN_PERSON']).nullable().optional(),
+    preferredDeliveryMethod: z
+      .enum(['SHIPMENT', 'IN_PERSON'])
+      .nullable()
+      .optional(),
   })
   .strict();
 const draftPatch = draft.extend({ version: z.number().int().min(1) }).strict();
@@ -63,6 +66,7 @@ const complete = z
 const version = z.object({ version: z.coerce.number().int().min(1) }).strict();
 const decision = z
   .object({
+    version: z.coerce.number().int().min(1),
     reasonCode: z
       .string()
       .trim()
