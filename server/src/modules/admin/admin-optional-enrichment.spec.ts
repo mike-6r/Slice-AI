@@ -132,6 +132,7 @@ describe('admin optional enrichment', () => {
     const service = new AdminService(
       db as never,
       { authorize: jest.fn().mockResolvedValue(undefined) } as never,
+      { evaluate: jest.fn() } as never,
       { isBeta: false } as never,
       { createPrivateDownloadUrl: jest.fn() } as never,
       {

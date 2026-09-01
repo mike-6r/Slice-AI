@@ -335,6 +335,24 @@ export const mockRepositories: AppRepositories = {
     async revokeUserRole() {
       throw new Error("Role changes require the API service.");
     },
+    async updateUserProfile() {
+      throw new Error("Account profile changes require the API service.");
+    },
+    async revokeUserSessions() {
+      throw new Error("Session controls require the API service.");
+    },
+    async resetUserTwoFactor() {
+      throw new Error("Two-factor controls require the API service.");
+    },
+    async createUserRestriction() {
+      throw new Error("Account restriction controls require the API service.");
+    },
+    async releaseUserRestriction() {
+      throw new Error("Account restriction controls require the API service.");
+    },
+    async addUserNote() {
+      throw new Error("Account notes require the API service.");
+    },
     async setCollectorFeatured() {
       throw new Error("Collector featuring requires the API service.");
     },

@@ -58,6 +58,7 @@ describe('admin intake location authority', () => {
     const service = new AdminService(
       db as never,
       { authorize } as never,
+      { evaluate: jest.fn() } as never,
       { appEnvironment: 'beta' } as never,
       {} as never,
       {} as never,
@@ -96,6 +97,7 @@ describe('admin intake location authority', () => {
     const service = new AdminService(
       db as never,
       { authorize } as never,
+      { evaluate: jest.fn() } as never,
       { appEnvironment: 'beta' } as never,
       {} as never,
       {} as never,
@@ -141,6 +143,7 @@ describe('admin intake location authority', () => {
     const service = new AdminService(
       db as never,
       { authorize } as never,
+      { evaluate: jest.fn() } as never,
       { appEnvironment: 'beta' } as never,
       {} as never,
       {} as never,
@@ -185,6 +188,7 @@ describe('admin intake location authority', () => {
     const service = new AdminService(
       db as never,
       { authorize } as never,
+      { evaluate: jest.fn() } as never,
       { appEnvironment: 'beta' } as never,
       {} as never,
       {} as never,

@@ -412,6 +412,7 @@ export type AdminAccountsSummary = {
 };
 
 export type AdminUserDetail = AdminUserSummary & {
+  revision: string;
   semanticRoles: string[];
   profile: {
     displayName: string | null;
@@ -460,6 +461,9 @@ export type AdminUserDetail = AdminUserSummary & {
       linkedAt: string | null;
     };
     twoFactorEnabled: boolean;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+    activeSessionCount: number | null;
   };
   complianceSummary: {
     kycStatus: string;
@@ -515,6 +519,10 @@ export type AdminUserDetail = AdminUserSummary & {
     compliance: boolean;
     manageRoles: boolean;
     manageStatus: boolean;
+    manageProfile: boolean;
+    manageSecurity: boolean;
+    manageRestrictions: boolean;
+    manageNotes: boolean;
   };
   financialDetails: {
     state: string;
@@ -538,12 +546,20 @@ export type AdminUserDetail = AdminUserSummary & {
     lastSyncedAt: string | null;
   } | null;
   activeHolds: Array<{
+    id: string;
     scope: string;
     reasonCode: string;
     source: string;
     status: string;
     createdAt: string;
     releasedAt: string | null;
+  }>;
+  capabilitySummary: Array<{
+    capability: string;
+    allowed: boolean;
+    status: string;
+    reason: string | null;
+    nextAction: string | null;
   }>;
 };
 
@@ -2214,6 +2230,52 @@ export interface AdminRepository {
     id: string,
     assignmentId: string,
   ): Promise<{ assignmentId: string; userId: string; revoked: boolean }>;
+  updateUserProfile(
+    id: string,
+    input: {
+      expectedRevision: string;
+      reasonCode: string;
+      displayName?: string;
+      countryCode?: string;
+      timezone?: string;
+      preferredCurrency?: string;
+    },
+  ): Promise<{ userId: string; revision: string; changedFields: string[] }>;
+  revokeUserSessions(
+    id: string,
+    input: { expectedRevision: string; reasonCode: string },
+  ): Promise<{ userId: string; revision: string; revokedSessionCount: number }>;
+  resetUserTwoFactor(
+    id: string,
+    input: { expectedRevision: string; reasonCode: string },
+  ): Promise<{
+    userId: string;
+    revision: string;
+    removedMethods: number;
+    revokedSessionCount: number;
+  }>;
+  createUserRestriction(
+    id: string,
+    input: { expectedRevision: string; reasonCode: string; scope: string },
+  ): Promise<{
+    userId: string;
+    revision: string;
+    hold: { id: string; scope: string; status: string };
+  }>;
+  releaseUserRestriction(
+    id: string,
+    holdId: string,
+    input: { expectedRevision: string; reasonCode: string },
+  ): Promise<{ userId: string; revision: string; hold: { id: string; status: string } }>;
+  addUserNote(
+    id: string,
+    input: {
+      expectedRevision: string;
+      reasonCode: string;
+      category: string;
+      note: string;
+    },
+  ): Promise<{ userId: string; revision: string; recorded: boolean }>;
   setCollectorFeatured(
     slug: string,
     featured: boolean,

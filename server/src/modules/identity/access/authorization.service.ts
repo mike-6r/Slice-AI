@@ -100,6 +100,10 @@ function isPrivileged(permission: Permission) {
     permission === 'users.read' ||
     permission === 'users.roles.manage' ||
     permission === 'users.status.manage' ||
+    permission === 'users.profile.manage' ||
+    permission === 'users.security.manage' ||
+    permission === 'users.restrictions.manage' ||
+    permission === 'users.notes.manage' ||
     permission === 'role.assign' ||
     permission === 'role.remove' ||
     permission === 'account.status.change' ||

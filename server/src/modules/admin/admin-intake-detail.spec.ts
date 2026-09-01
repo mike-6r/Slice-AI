@@ -105,6 +105,7 @@ describe('admin intake detail projection', () => {
     const service = new AdminService(
       db as never,
       { authorize } as never,
+      { evaluate: jest.fn() } as never,
       { isBeta: true } as never,
       {} as never,
       {} as never,

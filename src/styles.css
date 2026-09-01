@@ -736,6 +736,125 @@
   background: none;
   font-size: 0.56rem;
 }
+.admin-account-control-statuses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1rem;
+  border-bottom: 1px solid rgba(39, 59, 69, 0.62);
+  padding-bottom: 0.55rem;
+}
+.admin-account-control-statuses .admin-detail-row {
+  padding-block: 0.42rem;
+}
+.admin-account-control-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  margin-top: 0.8rem;
+}
+.admin-account-control-form label {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+.admin-account-control-form label > span {
+  color: #98adb5;
+  font-size: 0.58rem;
+}
+.admin-account-control-form input,
+.admin-account-control-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #2c424c;
+  border-radius: 0.35rem;
+  padding: 0.5rem 0.55rem;
+  background: #09151c;
+  color: #dcebe7;
+  font: inherit;
+  font-size: 0.62rem;
+}
+.admin-account-control-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+.admin-account-control-form input:focus,
+.admin-account-control-form textarea:focus {
+  outline: 2px solid rgba(30, 210, 170, 0.32);
+  outline-offset: 1px;
+  border-color: #1ed2aa;
+}
+.admin-account-control-form__wide {
+  grid-column: 1 / -1;
+}
+.admin-account-control-form .admin-detail-action {
+  justify-content: center;
+  min-height: 2.1rem;
+  margin-top: 0;
+  text-align: center;
+}
+.admin-detail-action--danger {
+  border-color: rgba(198, 85, 82, 0.72);
+  color: #f0aaa3;
+}
+.admin-detail-action--danger:hover:not(:disabled),
+.admin-detail-action--danger:focus-visible {
+  border-color: #ef7771;
+  background: rgba(178, 61, 57, 0.15);
+  color: #ffd1cd;
+}
+.admin-account-restriction-list {
+  display: grid;
+  gap: 0;
+  margin-top: 0.2rem;
+}
+.admin-account-restriction-list > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid rgba(39, 59, 69, 0.62);
+  padding: 0.55rem 0;
+}
+.admin-account-restriction-list > div:last-child {
+  border-bottom: 0;
+}
+.admin-account-restriction-list span {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+.admin-account-restriction-list strong {
+  color: #e9f2ef;
+  font-size: 0.65rem;
+}
+.admin-account-restriction-list small {
+  overflow: hidden;
+  color: #9db1b7;
+  font-size: 0.56rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-account-capability-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(39, 59, 69, 0.62);
+  padding-top: 0.75rem;
+}
+.admin-account-capability-summary span {
+  border: 1px solid #344750;
+  border-radius: 999px;
+  padding: 0.25rem 0.42rem;
+  color: #afc1c3;
+  font-size: 0.52rem;
+}
+.admin-account-capability-summary span[data-available="true"] {
+  border-color: rgba(49, 170, 137, 0.55);
+  color: #5fe4c5;
+}
 @media (max-width: 1050px) {
   .admin-account-detail-state-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -794,8 +913,13 @@
     gap: 0.4rem;
   }
   .admin-account-detail-metrics,
-  .admin-account-detail-finance-grid {
+  .admin-account-detail-finance-grid,
+  .admin-account-control-statuses,
+  .admin-account-control-form {
     grid-template-columns: 1fr;
+  }
+  .admin-account-control-form__wide {
+    grid-column: auto;
   }
   .admin-account-detail-history-filters {
     overflow-x: auto;

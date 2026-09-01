@@ -6175,23 +6175,33 @@ function ConsolidatedUserDetailExperience({
     <div className="admin-account-detail-stack">
       <div className="admin-account-detail-grid admin-account-detail-grid--operations">
         <UserRoleManagement user={user} retry={retry} />
-        <section className="admin-account-detail-panel">
-          <AdminPanelHeading title="Identity & account access" />
-          <DetailRow label="Phone" value={user.identity.phone ?? "Not verified"} />
-          <DetailRow
-            label="Two-factor authentication"
-            value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}
-          />
-          <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
-          <DetailRow label="Timezone" value={user.profile?.timezone ?? "Unavailable"} />
-          <DetailRow
-            label="Discord"
-            value={user.identity.discord.connected ? "Connected" : "Not connected"}
-          />
-          <p className="admin-safe-note">
-            Sensitive identity evidence is kept in the authoritative verification workspace.
-          </p>
-        </section>
+        <AccountProfileControls
+          key={user.id}
+          user={user}
+          onChanged={() => {
+            retry();
+            void history.refetch();
+          }}
+        />
+      </div>
+
+      <div className="admin-account-detail-grid admin-account-detail-grid--operations">
+        <AccountSecurityControls
+          key={`${user.id}-security`}
+          user={user}
+          onChanged={() => {
+            retry();
+            void history.refetch();
+          }}
+        />
+        <AccountRestrictionControls
+          key={`${user.id}-restrictions`}
+          user={user}
+          onChanged={() => {
+            retry();
+            void history.refetch();
+          }}
+        />
       </div>
 
       <section className="admin-account-detail-panel">
@@ -6304,6 +6314,15 @@ function ConsolidatedUserDetailExperience({
           <CollectorDirectoryManagement user={user} retry={retry} />
         </div>
       ) : null}
+
+      <AccountNoteControls
+        key={`${user.id}-notes`}
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
 
       <section className="admin-account-detail-panel admin-account-detail-controls">
         <div>
@@ -6510,6 +6529,482 @@ const adminAssignableRoles = [
   ["FINANCE_OPERATOR", "Finance operator"],
   ["ADMIN", "Administrator"],
 ] as const;
+
+function AccountProfileControls({
+  user,
+  onChanged,
+}: {
+  user: AdminUserDetail;
+  onChanged: () => void;
+}) {
+  const services = useAppServices();
+  const [displayName, setDisplayName] = useState(user.profile?.displayName ?? user.displayName);
+  const [countryCode, setCountryCode] = useState(user.profile?.countryCode ?? "");
+  const [timezone, setTimezone] = useState(user.profile?.timezone ?? "");
+  const [currency, setCurrency] = useState(user.profile?.preferredCurrency ?? "");
+  const [reasonCode, setReasonCode] = useState("ADMIN_PROFILE_CORRECTION");
+  const current = {
+    displayName: user.profile?.displayName ?? user.displayName,
+    countryCode: user.profile?.countryCode ?? "",
+    timezone: user.profile?.timezone ?? "",
+    preferredCurrency: user.profile?.preferredCurrency ?? "",
+  };
+  const changes = {
+    ...(displayName.trim() !== current.displayName ? { displayName: displayName.trim() } : {}),
+    ...(countryCode.trim().toUpperCase() !== current.countryCode
+      ? { countryCode: countryCode.trim().toUpperCase() }
+      : {}),
+    ...(timezone.trim() !== current.timezone ? { timezone: timezone.trim() } : {}),
+    ...(currency.trim().toUpperCase() !== current.preferredCurrency
+      ? { preferredCurrency: currency.trim().toUpperCase() }
+      : {}),
+  };
+  const save = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.updateUserProfile(user.id, {
+        expectedRevision: user.revision,
+        reasonCode: reasonCode.trim(),
+        ...changes,
+      }),
+    onSuccess: onChanged,
+  });
+  const canManage = user.permissions.manageProfile;
+  const profileChanged = Object.keys(changes).length > 0;
+  const profileValid =
+    (!changes.displayName || changes.displayName.length >= 2) &&
+    (!changes.countryCode || /^[A-Z]{2}$/.test(changes.countryCode)) &&
+    (!changes.timezone || changes.timezone.length >= 3) &&
+    (!changes.preferredCurrency || /^[A-Z]{3}$/.test(changes.preferredCurrency));
+  return (
+    <section className="admin-account-detail-panel">
+      <AdminPanelHeading title="Identity & account profile" />
+      <div className="admin-account-control-statuses">
+        <DetailRow
+          label="Email"
+          value={user.identity.emailVerified ? "Verified" : "Not verified"}
+        />
+        <DetailRow
+          label="Phone"
+          value={user.identity.phoneVerified ? "Verified" : "Not verified"}
+        />
+        <DetailRow
+          label="Two-factor"
+          value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}
+        />
+        <DetailRow
+          label="Discord"
+          value={user.identity.discord.connected ? "Connected" : "Not connected"}
+        />
+      </div>
+      {canManage ? (
+        <div className="admin-account-control-form">
+          <label>
+            <span>Display name</span>
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+          </label>
+          <label>
+            <span>Country</span>
+            <input
+              value={countryCode}
+              maxLength={2}
+              onChange={(event) => setCountryCode(event.target.value.toUpperCase())}
+              placeholder="GB"
+            />
+          </label>
+          <label>
+            <span>Timezone</span>
+            <input
+              value={timezone}
+              onChange={(event) => setTimezone(event.target.value)}
+              placeholder="Europe/London"
+            />
+          </label>
+          <label>
+            <span>Currency</span>
+            <input
+              value={currency}
+              maxLength={3}
+              onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+              placeholder="GBP"
+            />
+          </label>
+          <label className="admin-account-control-form__wide">
+            <span>Audit reason code</span>
+            <input
+              value={reasonCode}
+              onChange={(event) => setReasonCode(event.target.value.toUpperCase())}
+              maxLength={80}
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={
+              !profileChanged || !profileValid || reasonCode.trim().length < 3 || save.isPending
+            }
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Save the corrected account profile for ${user.displayName}? This preserves account authority and records the change in the audit history.`,
+                )
+              ) {
+                save.mutate();
+              }
+            }}
+          >
+            {save.isPending ? "Saving…" : "Save profile"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note">Profile correction requires Administrator permission.</p>
+      )}
+      {save.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The profile was not changed. Refresh the account before retrying.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        Only operational profile fields can be corrected here. Email, phone, identity evidence, and
+        provider links remain in their respective authorities.
+      </p>
+    </section>
+  );
+}
+
+function AccountSecurityControls({
+  user,
+  onChanged,
+}: {
+  user: AdminUserDetail;
+  onChanged: () => void;
+}) {
+  const services = useAppServices();
+  const [reasonCode, setReasonCode] = useState("ADMIN_SECURITY_REVIEW");
+  const revokeSessions = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.revokeUserSessions(user.id, {
+        expectedRevision: user.revision,
+        reasonCode: reasonCode.trim(),
+      }),
+    onSuccess: onChanged,
+  });
+  const resetTwoFactor = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.resetUserTwoFactor(user.id, {
+        expectedRevision: user.revision,
+        reasonCode: reasonCode.trim(),
+      }),
+    onSuccess: onChanged,
+  });
+  const canManage = user.permissions.manageSecurity;
+  const pending = revokeSessions.isPending || resetTwoFactor.isPending;
+  return (
+    <section className="admin-account-detail-panel admin-account-security-panel">
+      <AdminPanelHeading title="Security recovery" />
+      <div className="admin-account-control-statuses">
+        <DetailRow
+          label="Active sessions"
+          value={
+            user.identity.activeSessionCount === null
+              ? "Unavailable"
+              : String(user.identity.activeSessionCount)
+          }
+        />
+        <DetailRow
+          label="Email verification"
+          value={user.identity.emailVerified ? "Verified" : "Pending"}
+        />
+        <DetailRow
+          label="Phone verification"
+          value={user.identity.phoneVerified ? "Verified" : "Pending"}
+        />
+        <DetailRow
+          label="Two-factor authentication"
+          value={user.identity.twoFactorEnabled ? "Enabled" : "Not enrolled"}
+        />
+      </div>
+      {canManage ? (
+        <div className="admin-account-control-form admin-account-control-form--security">
+          <label className="admin-account-control-form__wide">
+            <span>Audit reason code</span>
+            <input
+              value={reasonCode}
+              onChange={(event) => setReasonCode(event.target.value.toUpperCase())}
+              maxLength={80}
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={reasonCode.trim().length < 3 || pending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Revoke all active sessions for ${user.displayName}? The user will need to sign in again.`,
+                )
+              ) {
+                revokeSessions.mutate();
+              }
+            }}
+          >
+            {revokeSessions.isPending ? "Revoking…" : "Revoke sessions"}
+          </button>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--danger"
+            disabled={reasonCode.trim().length < 3 || pending || !user.identity.twoFactorEnabled}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Reset two-factor authentication for ${user.displayName}? This removes their existing methods, invalidates recovery codes, and revokes active sessions.`,
+                )
+              ) {
+                resetTwoFactor.mutate();
+              }
+            }}
+          >
+            {resetTwoFactor.isPending ? "Resetting…" : "Reset two-factor"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note">Security recovery requires Administrator permission.</p>
+      )}
+      {revokeSessions.isError || resetTwoFactor.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The security action was not completed. Nothing was changed; refresh the account before
+          retrying.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        These controls require recent authentication, cannot be used on your own account, and are
+        fully audited.
+      </p>
+    </section>
+  );
+}
+
+function AccountRestrictionControls({
+  user,
+  onChanged,
+}: {
+  user: AdminUserDetail;
+  onChanged: () => void;
+}) {
+  const services = useAppServices();
+  const [scope, setScope] = useState("ACCOUNT");
+  const [reasonCode, setReasonCode] = useState("ADMIN_COMPLIANCE_REVIEW");
+  const [releaseReasonCode, setReleaseReasonCode] = useState("ADMIN_RESTRICTION_RELEASE");
+  const create = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.createUserRestriction(user.id, {
+        expectedRevision: user.revision,
+        scope,
+        reasonCode: reasonCode.trim(),
+      }),
+    onSuccess: onChanged,
+  });
+  const release = useMutation({
+    mutationFn: (holdId: string) =>
+      services.repositories.admin.releaseUserRestriction(user.id, holdId, {
+        expectedRevision: user.revision,
+        reasonCode: releaseReasonCode.trim(),
+      }),
+    onSuccess: onChanged,
+  });
+  const canManage = user.permissions.manageRestrictions;
+  return (
+    <section className="admin-account-detail-panel">
+      <AdminPanelHeading title="Restrictions & capability" />
+      {user.activeHolds.length ? (
+        <div className="admin-account-restriction-list">
+          {user.activeHolds.map((hold) => (
+            <div key={hold.id}>
+              <span>
+                <strong>{sentence(hold.scope)}</strong>
+                <small>
+                  {sentence(hold.reasonCode)} · {date(hold.createdAt)}
+                </small>
+              </span>
+              {canManage ? (
+                <button
+                  type="button"
+                  className="admin-inline-action"
+                  disabled={release.isPending || releaseReasonCode.trim().length < 3}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Release the ${sentence(hold.scope)} restriction for ${user.displayName}? The original restriction remains in audit history.`,
+                      )
+                    ) {
+                      release.mutate(hold.id);
+                    }
+                  }}
+                >
+                  Release
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="admin-safe-note">No active account restrictions are recorded.</p>
+      )}
+      {canManage ? (
+        <div className="admin-account-control-form admin-account-control-form--restriction">
+          <AdminSelect
+            label="Restriction scope"
+            value={scope}
+            onChange={setScope}
+            options={[
+              ["ACCOUNT", "Account"],
+              ["EXTERNAL_MOVEMENT", "External movement"],
+              ["WITHDRAWAL", "Withdrawal"],
+              ["FUNDING", "Funding"],
+              ["TRADING_ELIGIBILITY", "Trading eligibility"],
+            ]}
+          />
+          <label>
+            <span>Create reason code</span>
+            <input
+              value={reasonCode}
+              onChange={(event) => setReasonCode(event.target.value.toUpperCase())}
+              maxLength={80}
+            />
+          </label>
+          <label>
+            <span>Release reason code</span>
+            <input
+              value={releaseReasonCode}
+              onChange={(event) => setReleaseReasonCode(event.target.value.toUpperCase())}
+              maxLength={80}
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--danger"
+            disabled={create.isPending || reasonCode.trim().length < 3}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Create a ${sentence(scope)} restriction for ${user.displayName}? This may block affected capabilities until it is released.`,
+                )
+              ) {
+                create.mutate();
+              }
+            }}
+          >
+            {create.isPending ? "Creating…" : "Create restriction"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note">Restriction changes require Administrator permission.</p>
+      )}
+      {create.isError || release.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The restriction change was not completed. Refresh the account before retrying.
+        </p>
+      ) : null}
+      <div className="admin-account-capability-summary">
+        {user.capabilitySummary.map((decision) => (
+          <span key={decision.capability} data-available={decision.allowed}>
+            {sentence(decision.capability)}:{" "}
+            {decision.allowed ? "Available" : sentence(decision.reason ?? decision.status)}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AccountNoteControls({
+  user,
+  onChanged,
+}: {
+  user: AdminUserDetail;
+  onChanged: () => void;
+}) {
+  const services = useAppServices();
+  const [category, setCategory] = useState("ACCOUNT");
+  const [note, setNote] = useState("");
+  const [reasonCode, setReasonCode] = useState("ADMIN_ACCOUNT_NOTE");
+  const addNote = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.addUserNote(user.id, {
+        expectedRevision: user.revision,
+        category,
+        note: note.trim(),
+        reasonCode: reasonCode.trim(),
+      }),
+    onSuccess: () => {
+      setNote("");
+      onChanged();
+    },
+  });
+  return (
+    <section className="admin-account-detail-panel">
+      <AdminPanelHeading title="Private account note" />
+      {user.permissions.manageNotes ? (
+        <div className="admin-account-control-form admin-account-control-form--note">
+          <AdminSelect
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            options={[
+              ["ACCOUNT", "Account"],
+              ["SECURITY", "Security"],
+              ["COMPLIANCE", "Compliance"],
+              ["FINANCIAL", "Financial"],
+              ["OPERATIONS", "Operations"],
+            ]}
+          />
+          <label>
+            <span>Audit reason code</span>
+            <input
+              value={reasonCode}
+              onChange={(event) => setReasonCode(event.target.value.toUpperCase())}
+              maxLength={80}
+            />
+          </label>
+          <label className="admin-account-control-form__wide">
+            <span>Note</span>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              maxLength={500}
+              rows={4}
+              placeholder="Record an internal operational note. Do not include credentials, payment details, or provider secrets."
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={addNote.isPending || note.trim().length < 3 || reasonCode.trim().length < 3}
+            onClick={() => {
+              if (
+                window.confirm(`Record this private note on ${user.displayName}'s account history?`)
+              ) {
+                addNote.mutate();
+              }
+            }}
+          >
+            {addNote.isPending ? "Recording…" : "Add private note"}
+          </button>
+        </div>
+      ) : (
+        <p className="admin-safe-note">Private notes require Administrator permission.</p>
+      )}
+      {addNote.isError ? (
+        <p className="admin-safe-note" role="alert">
+          The note was not recorded. Refresh the account before retrying.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        Notes are sanitized, immutable audit entries. Keep them factual and do not enter sensitive
+        credentials or payment data.
+      </p>
+    </section>
+  );
+}
 
 function CollectorDirectoryManagement({
   user,

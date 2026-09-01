@@ -1986,6 +1986,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     value.permissions && typeof value.permissions === "object"
       ? objectField(value.permissions, "admin user permissions")
       : {};
+  const capabilitySummary = Array.isArray(value.capabilitySummary) ? value.capabilitySummary : [];
   const financialDetails =
     value.financialDetails && typeof value.financialDetails === "object"
       ? objectField(value.financialDetails, "admin user financial details")
@@ -2000,6 +2001,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     nullableString(source[field], `admin user ${field}`);
   return {
     ...user,
+    revision: stringField(value.revision ?? user.createdAt, "admin user revision"),
     semanticRoles: Array.isArray(value.semanticRoles)
       ? value.semanticRoles
           .filter((role): role is string => typeof role === "string" && role !== "USER")
@@ -2083,6 +2085,12 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
         linkedAt: nullableString(discord.linkedAt, "admin user discord.linkedAt"),
       },
       twoFactorEnabled: Boolean(identity.twoFactorEnabled),
+      emailVerified: Boolean(identity.emailVerified),
+      phoneVerified: Boolean(identity.phoneVerified),
+      activeSessionCount:
+        identity.activeSessionCount === null || identity.activeSessionCount === undefined
+          ? null
+          : Number(identity.activeSessionCount),
     },
     complianceSummary: {
       kycStatus: stringField(
@@ -2156,6 +2164,10 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
       compliance: Boolean(permissions.compliance),
       manageRoles: Boolean(permissions.manageRoles),
       manageStatus: Boolean(permissions.manageStatus),
+      manageProfile: Boolean(permissions.manageProfile),
+      manageSecurity: Boolean(permissions.manageSecurity),
+      manageRestrictions: Boolean(permissions.manageRestrictions),
+      manageNotes: Boolean(permissions.manageNotes),
     },
     financialDetails: financialDetails
       ? {
@@ -2210,6 +2222,7 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
       ? value.activeHolds.map((rawHold) => {
           const hold = objectField(rawHold, "admin user hold");
           return {
+            id: stringField(hold.id, "admin user hold.id"),
             scope: stringField(hold.scope, "admin user hold.scope"),
             reasonCode: stringField(hold.reasonCode, "admin user hold.reasonCode"),
             source: stringField(hold.source, "admin user hold.source"),
@@ -2219,6 +2232,16 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
           };
         })
       : [],
+    capabilitySummary: capabilitySummary.map((rawDecision) => {
+      const decision = objectField(rawDecision, "admin user capability");
+      return {
+        capability: stringField(decision.capability, "admin user capability.capability"),
+        allowed: Boolean(decision.allowed),
+        status: stringField(decision.status, "admin user capability.status"),
+        reason: nullableString(decision.reason, "admin user capability.reason"),
+        nextAction: nullableString(decision.nextAction, "admin user capability.nextAction"),
+      };
+    }),
     activitySnapshot: Array.isArray(value.activitySnapshot)
       ? value.activitySnapshot.map((rawActivity) => {
           const activity = objectField(rawActivity, "admin user activity");
@@ -4725,6 +4748,113 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         assignmentId,
         userId: id,
         revoked: true,
+      };
+    },
+    async updateUserProfile(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${encodeURIComponent(id)}/profile`, {
+          method: "PATCH",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "account profile update",
+      );
+      return {
+        userId: stringField(value.userId, "account profile.userId"),
+        revision: stringField(value.revision, "account profile.revision"),
+        changedFields: Array.isArray(value.changedFields)
+          ? value.changedFields.filter((field): field is string => typeof field === "string")
+          : [],
+      };
+    },
+    async revokeUserSessions(id, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/security/revoke-sessions`,
+          {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        ),
+        "account session revocation",
+      );
+      return {
+        userId: stringField(value.userId, "account sessions.userId"),
+        revision: stringField(value.revision, "account sessions.revision"),
+        revokedSessionCount: Number(value.revokedSessionCount ?? 0),
+      };
+    },
+    async resetUserTwoFactor(id, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/security/reset-two-factor`,
+          {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        ),
+        "account two-factor reset",
+      );
+      return {
+        userId: stringField(value.userId, "account twoFactor.userId"),
+        revision: stringField(value.revision, "account twoFactor.revision"),
+        removedMethods: Number(value.removedMethods ?? 0),
+        revokedSessionCount: Number(value.revokedSessionCount ?? 0),
+      };
+    },
+    async createUserRestriction(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${encodeURIComponent(id)}/restrictions`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "account restriction",
+      );
+      const hold = objectField(value.hold, "account restriction.hold");
+      return {
+        userId: stringField(value.userId, "account restriction.userId"),
+        revision: stringField(value.revision, "account restriction.revision"),
+        hold: {
+          id: stringField(hold.id, "account restriction.hold.id"),
+          scope: stringField(hold.scope, "account restriction.hold.scope"),
+          status: stringField(hold.status, "account restriction.hold.status"),
+        },
+      };
+    },
+    async releaseUserRestriction(id, holdId, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/restrictions/${encodeURIComponent(holdId)}/release`,
+          { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
+        ),
+        "account restriction release",
+      );
+      const hold = objectField(value.hold, "account restriction release.hold");
+      return {
+        userId: stringField(value.userId, "account restriction release.userId"),
+        revision: stringField(value.revision, "account restriction release.revision"),
+        hold: {
+          id: stringField(hold.id, "account restriction release.hold.id"),
+          status: stringField(hold.status, "account restriction release.hold.status"),
+        },
+      };
+    },
+    async addUserNote(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${encodeURIComponent(id)}/notes`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "account note",
+      );
+      return {
+        userId: stringField(value.userId, "account note.userId"),
+        revision: stringField(value.revision, "account note.revision"),
+        recorded: Boolean(value.recorded),
       };
     },
     async setCollectorFeatured(slug, featured) {

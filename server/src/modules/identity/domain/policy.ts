@@ -41,7 +41,14 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     return admin ? allow(action) : deny('FORBIDDEN', action);
   if (action === 'controlled_beta.lifecycle.manage')
     return admin ? allow(action) : deny('FORBIDDEN', action);
-  if (action === 'users.roles.manage' || action === 'users.status.manage')
+  if (
+    action === 'users.roles.manage' ||
+    action === 'users.status.manage' ||
+    action === 'users.profile.manage' ||
+    action === 'users.security.manage' ||
+    action === 'users.restrictions.manage' ||
+    action === 'users.notes.manage'
+  )
     return admin ? allow(action) : deny('FORBIDDEN', action);
   if (
     action === 'role.assign' ||

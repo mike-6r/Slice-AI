@@ -10,6 +10,7 @@ import type { IntakeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
+import { AccountCapabilityService } from '../identity/access/account-capability.service';
 import { evaluatePolicy } from '../identity/domain/policy';
 import { collectorUsageForMany } from '../collector-workspace/collector-entitlements';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
@@ -129,6 +130,7 @@ export class AdminService {
   constructor(
     private readonly db: PrismaService,
     private readonly authorization: AuthorizationService,
+    private readonly accountCapabilities: AccountCapabilityService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     private readonly ownershipPolicy: OwnershipPolicyService,
@@ -6584,7 +6586,10 @@ export class AdminService {
         phoneE164: true,
         accountStatus: true,
         createdAt: true,
+        updatedAt: true,
         lastLoginAt: true,
+        emailVerifiedAt: true,
+        phoneVerifiedAt: true,
         bankWithdrawalHoldUntil: true,
         profile: {
           select: {
@@ -6656,6 +6661,7 @@ export class AdminService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 20,
           select: {
+            id: true,
             scope: true,
             reasonCode: true,
             source: true,
@@ -6706,6 +6712,7 @@ export class AdminService {
       activityRows,
       bacsHeld,
       returnedDeposits,
+      activeSessionCount,
       manualReviewDeposits,
     ] = await Promise.all([
       this.db.submissionIntake.count({
@@ -6842,6 +6849,9 @@ export class AdminService {
             where: { userId, type: 'DEPOSIT', status: 'RETURNED' },
           })
         : Promise.resolve(0),
+      this.db.session.count({
+        where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
       financeAccess
         ? this.db.moneyMovement.count({
             where: { userId, type: 'DEPOSIT', status: 'MANUAL_REVIEW' },
@@ -7033,12 +7043,39 @@ export class AdminService {
         actor: policyActor,
         action: 'users.status.manage',
       }).allowed,
+      manageProfile: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.profile.manage',
+      }).allowed,
+      manageSecurity: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.security.manage',
+      }).allowed,
+      manageRestrictions: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.restrictions.manage',
+      }).allowed,
+      manageNotes: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.notes.manage',
+      }).allowed,
     };
+    const capabilitySummary = await Promise.all(
+      [
+        'DEPOSIT_FUNDS',
+        'WITHDRAW_FUNDS',
+        'PLACE_BUY_ORDER',
+        'LIST_ASSET',
+      ].map((capability) =>
+        this.accountCapabilities.evaluate(userId, capability as never),
+      ),
+    );
     return {
       id: user.id,
       displayName: user.profile?.displayName ?? 'Unnamed user',
       username: user.profile?.publicUsername ?? null,
       email: user.email,
+      revision: user.updatedAt.toISOString(),
       primaryType,
       semanticRoles,
       accountStatus: user.accountStatus,
@@ -7106,6 +7143,9 @@ export class AdminService {
         twoFactorEnabled: Boolean(
           user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt,
         ),
+        emailVerified: Boolean(user.emailVerifiedAt),
+        phoneVerified: Boolean(user.phoneVerifiedAt),
+        activeSessionCount: permissions.manageSecurity ? activeSessionCount : null,
       },
       complianceSummary: {
         kycStatus: complianceAccess
@@ -7214,6 +7254,7 @@ export class AdminService {
         : null,
       activeHolds: complianceAccess
         ? user.complianceHolds.map((hold) => ({
+            id: hold.id,
             scope: hold.scope,
             reasonCode: hold.reasonCode,
             source: hold.source,
@@ -7222,6 +7263,13 @@ export class AdminService {
             releasedAt: hold.releasedAt?.toISOString() ?? null,
           }))
         : [],
+      capabilitySummary: capabilitySummary.map((decision) => ({
+        capability: decision.capability,
+        allowed: decision.allowed,
+        status: decision.status,
+        reason: decision.reason,
+        nextAction: decision.nextAction,
+      })),
       accountStateReason:
         user.accountStatus === 'PENDING_REVIEW'
           ? hasComplianceReview
