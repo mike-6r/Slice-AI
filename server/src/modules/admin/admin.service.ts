@@ -10,7 +10,10 @@ import type { IntakeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
-import { AccountCapabilityService } from '../identity/access/account-capability.service';
+import {
+  accountCapabilities,
+  AccountCapabilityService,
+} from '../identity/access/account-capability.service';
 import { evaluatePolicy } from '../identity/domain/policy';
 import { collectorUsageForMany } from '../collector-workspace/collector-entitlements';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config';
@@ -7061,21 +7064,252 @@ export class AdminService {
       }).allowed,
     };
     const capabilitySummary = await Promise.all(
-      [
-        'DEPOSIT_FUNDS',
-        'WITHDRAW_FUNDS',
-        'PLACE_BUY_ORDER',
-        'LIST_ASSET',
-      ].map((capability) =>
-        this.accountCapabilities.evaluate(userId, capability as never),
+      accountCapabilities.map((capability) =>
+        this.accountCapabilities.evaluate(userId, capability),
       ),
     );
+    const accountStateReason =
+      user.accountStatus === 'PENDING_REVIEW'
+        ? hasComplianceReview
+          ? 'Compliance review required'
+          : financialExceptionCount > 0
+            ? 'Financial review required'
+            : 'Account review required'
+        : user.accountStatus === 'RESTRICTED'
+          ? financialState === 'FINANCIAL_DEFICIT'
+            ? 'Financial deficit'
+            : 'Manual review'
+          : user.accountStatus === 'SUSPENDED'
+            ? 'Suspended account'
+            : null;
+    const actionCenter: Array<{
+      id: string;
+      severity: 'ATTENTION' | 'BLOCKING' | 'RESTRICTED';
+      title: string;
+      explanation: string;
+      recommendedAction: string;
+      tab: 'Overview' | 'Operations' | 'History';
+    }> = [];
+    const addAction = (item: (typeof actionCenter)[number]) => {
+      if (!actionCenter.some((existing) => existing.id === item.id)) {
+        actionCenter.push(item);
+      }
+    };
+    if (
+      user.accountStatus === 'RESTRICTED' ||
+      user.accountStatus === 'SUSPENDED'
+    ) {
+      addAction({
+        id: 'account-access-restricted',
+        severity: 'RESTRICTED',
+        title:
+          user.accountStatus === 'SUSPENDED'
+            ? 'Account is suspended'
+            : 'Account is restricted',
+        explanation:
+          accountStateReason ?? 'Account access is not fully available.',
+        recommendedAction: 'Review account access',
+        tab: 'Operations',
+      });
+    }
+    if (financeAccess && hasDeficit) {
+      addAction({
+        id: 'financial-deficit',
+        severity: 'BLOCKING',
+        title: 'Financial deficit requires review',
+        explanation: `${outstandingDeficitMinor.toString()} minor units remain unrecovered.`,
+        recommendedAction: 'Open Finance workspace',
+        tab: 'Operations',
+      });
+    }
+    if (complianceAccess && hasComplianceReview) {
+      addAction({
+        id: 'compliance-review',
+        severity: 'ATTENTION',
+        title: 'Compliance review is open',
+        explanation:
+          latestCompliance?.type ??
+          'A compliance case requires staff attention.',
+        recommendedAction: 'Review compliance state',
+        tab: 'Operations',
+      });
+    }
+    if (
+      financeAccess &&
+      ['ACTION_REQUIRED', 'UNDER_REVIEW'].includes(payoutState)
+    ) {
+      addAction({
+        id: 'payout-action-required',
+        severity: 'ATTENTION',
+        title:
+          payoutState === 'UNDER_REVIEW'
+            ? 'Payout account is under review'
+            : 'Payout setup needs action',
+        explanation:
+          payoutState === 'UNDER_REVIEW'
+            ? 'Provider review is still pending.'
+            : 'Payout readiness is not complete.',
+        recommendedAction: 'Review payout state',
+        tab: 'Operations',
+      });
+    }
+    const capabilityAction = capabilitySummary.find(
+      (decision) =>
+        !decision.allowed &&
+        [
+          'EMAIL_VERIFICATION_REQUIRED',
+          'PHONE_VERIFICATION_REQUIRED',
+          'TWO_FACTOR_REQUIRED',
+        ].includes(decision.reason ?? ''),
+    );
+    if (capabilityAction) {
+      addAction({
+        id: `capability-${capabilityAction.reason?.toLowerCase()}`,
+        severity: 'ATTENTION',
+        title: `${readable(capabilityAction.reason ?? 'Capability requirement')} blocks account capability`,
+        explanation: `${readable(capabilityAction.capability)} is currently unavailable.`,
+        recommendedAction: 'Review account access',
+        tab: 'Operations',
+      });
+    }
+    const availableCommands = [
+      {
+        id: 'EDIT_PROFILE',
+        allowed: permissions.manageProfile,
+        reason: permissions.manageProfile
+          ? null
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'MANAGE_ROLES',
+        allowed: permissions.manageRoles,
+        reason: permissions.manageRoles
+          ? null
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'SUSPEND_ACCOUNT',
+        allowed:
+          permissions.manageStatus &&
+          ['ACTIVE', 'RESTRICTED'].includes(user.accountStatus),
+        reason:
+          permissions.manageStatus &&
+          ['ACTIVE', 'RESTRICTED'].includes(user.accountStatus)
+            ? null
+            : 'This account state cannot be suspended by the current administrator.',
+      },
+      {
+        id: 'RESTORE_ACCOUNT',
+        allowed:
+          permissions.manageStatus &&
+          ['PENDING_REVIEW', 'RESTRICTED', 'SUSPENDED', 'DEACTIVATED'].includes(
+            user.accountStatus,
+          ),
+        reason:
+          permissions.manageStatus &&
+          ['PENDING_REVIEW', 'RESTRICTED', 'SUSPENDED', 'DEACTIVATED'].includes(
+            user.accountStatus,
+          )
+            ? null
+            : 'No valid restore transition is available.',
+      },
+      {
+        id: 'REVOKE_SESSIONS',
+        allowed: permissions.manageSecurity,
+        reason: permissions.manageSecurity
+          ? null
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'RESET_TWO_FACTOR',
+        allowed:
+          permissions.manageSecurity &&
+          Boolean(user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt),
+        reason: permissions.manageSecurity
+          ? user.twoFactor?.enabledAt || user.smsTwoFactor?.enabledAt
+            ? null
+            : 'Two-factor authentication is not enabled.'
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'MANAGE_RESTRICTIONS',
+        allowed: permissions.manageRestrictions,
+        reason: permissions.manageRestrictions
+          ? null
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'MANAGE_FINANCIAL_HOLDS',
+        allowed: permissions.manageRestrictions && financeAccess,
+        reason:
+          permissions.manageRestrictions && financeAccess
+            ? null
+            : 'Finance and restriction authority are required.',
+      },
+      {
+        id: 'ADD_NOTE',
+        allowed: permissions.manageNotes,
+        reason: permissions.manageNotes
+          ? null
+          : 'Administrator permission required.',
+      },
+      {
+        id: 'DISABLE_ACCOUNT',
+        allowed:
+          permissions.manageStatus &&
+          ['ACTIVE', 'RESTRICTED', 'SUSPENDED'].includes(user.accountStatus),
+        reason:
+          permissions.manageStatus &&
+          ['ACTIVE', 'RESTRICTED', 'SUSPENDED'].includes(user.accountStatus)
+            ? null
+            : 'This account state cannot be disabled by the current administrator.',
+      },
+      {
+        id: 'MANAGE_COLLECTOR',
+        allowed: false,
+        reason:
+          'Collector capability changes are owned by Collector operations and are not safely available here.',
+      },
+      {
+        id: 'MANAGE_INVESTOR',
+        allowed: false,
+        reason:
+          'Investor capability changes are owned by trading and ownership systems and are not safely available here.',
+      },
+      {
+        id: 'MANAGE_COMPLIANCE',
+        allowed: false,
+        reason:
+          'Compliance case state is owned by the Compliance workspace; account holds remain available when authorized.',
+      },
+      {
+        id: 'PROVIDER_RECOVERY',
+        allowed: false,
+        reason:
+          'Provider recovery is owned by the provider operations authority.',
+      },
+      {
+        id: 'ACCOUNT_RECOVERY',
+        allowed: false,
+        reason:
+          'No safe account recovery command is available in the current authority.',
+      },
+    ];
     return {
       id: user.id,
       displayName: user.profile?.displayName ?? 'Unnamed user',
       username: user.profile?.publicUsername ?? null,
       email: user.email,
       revision: user.updatedAt.toISOString(),
+      actionCenter,
+      recommendedAction: actionCenter[0]
+        ? {
+            title: actionCenter[0].recommendedAction,
+            explanation: actionCenter[0].explanation,
+            tab: actionCenter[0].tab,
+          }
+        : null,
+      availableCommands,
       primaryType,
       semanticRoles,
       accountStatus: user.accountStatus,
@@ -7145,7 +7379,9 @@ export class AdminService {
         ),
         emailVerified: Boolean(user.emailVerifiedAt),
         phoneVerified: Boolean(user.phoneVerifiedAt),
-        activeSessionCount: permissions.manageSecurity ? activeSessionCount : null,
+        activeSessionCount: permissions.manageSecurity
+          ? activeSessionCount
+          : null,
       },
       complianceSummary: {
         kycStatus: complianceAccess
@@ -10256,4 +10492,11 @@ function mismatchCodes(value: unknown): string[] {
 
 function maskPhoneForAdmin(phone: string) {
   return `${phone.slice(0, Math.min(3, phone.length - 4))}${'•'.repeat(Math.max(0, phone.length - 7))}${phone.slice(-4)}`;
+}
+
+function readable(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }

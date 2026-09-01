@@ -5894,38 +5894,223 @@ function ConsolidatedUserDetailExperience({
       ]
     : [];
   const finance = user.financialDetails;
+  const renderStatusStrip = () => (
+    <section className="admin-account-detail-state-grid" aria-label="Account operating state">
+      {stateCell("Account state", user.accountStatus, user.accountStateReason ?? "No restrictions")}
+      {stateCell(
+        "Access",
+        user.primaryType,
+        `${roles.length} active role${roles.length === 1 ? "" : "s"}`,
+      )}
+      {stateCell(
+        "Financial state",
+        user.financialState,
+        user.permissions.finance
+          ? finance?.bacsHeldMinor && finance.bacsHeldMinor !== "0"
+            ? `${money(finance.bacsHeldMinor)} bank clearing`
+            : "No active financial exception"
+          : "Finance access required",
+      )}
+      {stateCell(
+        "Compliance",
+        user.complianceState,
+        user.permissions.compliance
+          ? (user.complianceReason ?? "No current case context")
+          : "Compliance access required",
+      )}
+      {stateCell("Payouts", user.payoutState, user.payoutReason ?? "Payout capability ready")}
+      {stateCell("Support", "UNAVAILABLE", "Support tickets are not linked to Slice accounts")}
+    </section>
+  );
+  const renderActionCenter = () => (
+    <section className="admin-account-action-center" aria-label="Account action center">
+      <div className="admin-account-action-center-heading">
+        <div>
+          <p className="admin-console-eyebrow">Action Center</p>
+          <h3>What needs attention</h3>
+        </div>
+        <span>{user.actionCenter.length ? `${user.actionCenter.length} item(s)` : "Clear"}</span>
+      </div>
+      {user.actionCenter.length ? (
+        <div className="admin-account-action-list">
+          {user.actionCenter.map((item) => (
+            <article
+              className={`admin-account-action-item admin-account-action-item--${item.severity.toLowerCase()}`}
+              key={item.id}
+            >
+              <AlertTriangle aria-hidden="true" />
+              <div>
+                <strong>{item.title}</strong>
+                <span>{item.explanation}</span>
+                <small>{item.recommendedAction}</small>
+              </div>
+              <button type="button" onClick={() => setTab(item.tab)}>
+                Review <ArrowRight aria-hidden="true" />
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="admin-account-action-clear">
+          <CheckCircle2 aria-hidden="true" /> No backend-derived account blockers require action.
+        </div>
+      )}
+    </section>
+  );
+  const renderCommandRail = () => {
+    const commandLabels: Record<string, string> = {
+      EDIT_PROFILE: "Edit profile",
+      MANAGE_ROLES: "Manage roles",
+      SUSPEND_ACCOUNT: "Suspend account",
+      RESTORE_ACCOUNT: "Restore account",
+      REVOKE_SESSIONS: "Revoke sessions",
+      RESET_TWO_FACTOR: "Reset two-factor",
+      MANAGE_RESTRICTIONS: "Manage restrictions",
+      MANAGE_FINANCIAL_HOLDS: "Manage financial holds",
+      ADD_NOTE: "Add internal note",
+      DISABLE_ACCOUNT: "Disable account",
+      MANAGE_COLLECTOR: "Manage Collector access",
+      MANAGE_INVESTOR: "Manage Investor access",
+      MANAGE_COMPLIANCE: "Manage compliance state",
+      PROVIDER_RECOVERY: "Provider recovery",
+      ACCOUNT_RECOVERY: "Account recovery",
+    };
+    return (
+      <aside className="admin-account-detail-rail" aria-label="Account command rail">
+        <section className="admin-account-detail-rail-card">
+          <AdminPanelHeading title="Account snapshot" />
+          <DetailRow label="Status" value={accountStatusLabel(user.accountStatus)} />
+          <DetailRow label="Account age" value={date(user.createdAt)} />
+          <DetailRow
+            label="Last activity"
+            value={user.lastActivityAt ? relative(user.lastActivityAt) : "No meaningful activity"}
+          />
+          <DetailRow label="Risk state" value={user.financialState} />
+        </section>
+        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--urgent">
+          <AdminPanelHeading title="Urgent blockers" />
+          {user.actionCenter.filter((item) => item.severity !== "ATTENTION").length ? (
+            <div className="admin-account-rail-list">
+              {user.actionCenter
+                .filter((item) => item.severity !== "ATTENTION")
+                .map((item) => (
+                  <button type="button" key={item.id} onClick={() => setTab(item.tab)}>
+                    <strong>{item.title}</strong>
+                    <span>{item.explanation}</span>
+                  </button>
+                ))}
+            </div>
+          ) : (
+            <p className="admin-safe-note">No blocking state is recorded.</p>
+          )}
+        </section>
+        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--next">
+          <AdminPanelHeading title="Next recommended action" />
+          {user.recommendedAction ? (
+            <button type="button" onClick={() => setTab(user.recommendedAction!.tab)}>
+              <strong>{user.recommendedAction.title}</strong>
+              <span>{user.recommendedAction.explanation}</span>
+              <small>
+                Open account controls <ArrowRight aria-hidden="true" />
+              </small>
+            </button>
+          ) : (
+            <p className="admin-safe-note">No next action is currently recommended.</p>
+          )}
+        </section>
+        <section className="admin-account-detail-rail-card">
+          <AdminPanelHeading title="Quick actions" />
+          <div className="admin-account-rail-actions">
+            <button type="button" onClick={() => setTab("Operations")}>
+              Manage account <ArrowRight aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => setTab("History")}>
+              View audit history <ArrowRight aria-hidden="true" />
+            </button>
+            <Link to="/admin" search={{ section: "payments", tab: "accounts" }}>
+              Open Finance workspace <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link to="/admin" search={{ section: "support", tab: "compliance" }}>
+              Open Trust &amp; Support <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
+        <section className="admin-account-detail-rail-card">
+          <AdminPanelHeading title="Active restrictions / holds" />
+          {user.activeHolds.length ? (
+            <div className="admin-account-rail-list">
+              {user.activeHolds.map((hold) => (
+                <div key={hold.id}>
+                  <strong>{sentence(hold.scope)}</strong>
+                  <span>{sentence(hold.reasonCode)}</span>
+                  <small>{date(hold.createdAt)}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-safe-note">No active account holds are recorded.</p>
+          )}
+        </section>
+        <section className="admin-account-detail-rail-card">
+          <AdminPanelHeading title="Support / compliance" />
+          <DetailRow
+            label="Compliance cases"
+            value={
+              user.permissions.compliance ? String(user.complianceSummary.caseCount) : "Unavailable"
+            }
+          />
+          <DetailRow label="Compliance state" value={stateText(user.complianceState)} />
+          <DetailRow
+            label="Support linkage"
+            value={user.identity.discord.connected ? "Discord linked" : "Not linked"}
+          />
+          <p className="admin-safe-note">
+            Support tickets are not linked to Slice accounts in the current authority.
+          </p>
+        </section>
+        <section className="admin-account-detail-rail-card">
+          <AdminPanelHeading title="Financial risk snapshot" />
+          <DetailRow
+            label="Available cash"
+            value={money(user.permissions.finance ? (finance?.availableMinor ?? null) : null)}
+          />
+          <DetailRow
+            label="Reserved"
+            value={money(user.permissions.finance ? (finance?.reservedMinor ?? null) : null)}
+          />
+          <DetailRow
+            label="Deficit"
+            value={money(user.permissions.finance ? (finance?.deficitMinor ?? null) : null)}
+          />
+          <DetailRow
+            label="BACS risk hold"
+            value={money(user.permissions.finance ? (finance?.bacsHeldMinor ?? null) : null)}
+          />
+          <Link
+            to="/admin"
+            search={{ section: "payments", tab: "wallets" }}
+            className="admin-detail-link"
+          >
+            Open authoritative Finance <ArrowRight aria-hidden="true" />
+          </Link>
+        </section>
+        <section className="admin-account-detail-rail-card admin-account-detail-rail-card--commands">
+          <AdminPanelHeading title="Command availability" />
+          <div className="admin-account-command-list">
+            {user.availableCommands.map((command) => (
+              <div key={command.id} data-available={command.allowed}>
+                <span>{commandLabels[command.id] ?? sentence(command.id)}</span>
+                <strong>{command.allowed ? "Available" : "Unavailable"}</strong>
+                {!command.allowed && command.reason ? <small>{command.reason}</small> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      </aside>
+    );
+  };
   const renderOverview = () => (
     <div className="admin-account-detail-stack">
-      <section className="admin-account-detail-state-grid" aria-label="Account operating state">
-        {stateCell(
-          "Account state",
-          user.accountStatus,
-          user.accountStateReason ?? "No restrictions",
-        )}
-        {stateCell(
-          "Access",
-          user.primaryType,
-          `${roles.length} active role${roles.length === 1 ? "" : "s"}`,
-        )}
-        {stateCell(
-          "Financial state",
-          user.financialState,
-          user.permissions.finance
-            ? finance?.bacsHeldMinor && finance.bacsHeldMinor !== "0"
-              ? `${money(finance.bacsHeldMinor)} bank clearing`
-              : "No active financial exception"
-            : "Finance access required",
-        )}
-        {stateCell(
-          "Compliance",
-          user.complianceState,
-          user.permissions.compliance
-            ? (user.complianceReason ?? "No current case context")
-            : "Compliance access required",
-        )}
-        {stateCell("Payouts", user.payoutState, user.payoutReason ?? "Payout capability ready")}
-      </section>
-
       <div className="admin-account-detail-grid admin-account-detail-grid--dashboard">
         <section className="admin-account-detail-panel">
           <AdminPanelHeading
@@ -6507,14 +6692,32 @@ function ConsolidatedUserDetailExperience({
           </span>
         </div>
       </section>
-      <div className="admin-user-detail-main admin-account-detail-main">
-        <main>
-          {activeTab === "Overview"
-            ? renderOverview()
-            : activeTab === "Operations"
-              ? renderOperations()
-              : renderHistory()}
-        </main>
+      <section className="admin-account-detail-overall-strip">{renderStatusStrip()}</section>
+      <div className="admin-account-detail-layout">
+        <div className="admin-account-detail-primary">
+          {renderActionCenter()}
+          <nav className="admin-account-detail-tabs" aria-label="Account detail views">
+            {["Overview", "Operations", "History"].map((view) => (
+              <button
+                type="button"
+                className={activeTab === view ? "is-active" : ""}
+                key={view}
+                onClick={() => setTab(view)}
+                aria-current={activeTab === view ? "page" : undefined}
+              >
+                {view === "Operations" ? "Account controls" : view}
+              </button>
+            ))}
+          </nav>
+          <main className="admin-user-detail-main admin-account-detail-main">
+            {activeTab === "Overview"
+              ? renderOverview()
+              : activeTab === "Operations"
+                ? renderOperations()
+                : renderHistory()}
+          </main>
+        </div>
+        {renderCommandRail()}
       </div>
     </div>
   );
@@ -7218,11 +7421,11 @@ function AccountStatusManagement({ user, retry }: { user: AdminUserDetail; retry
   const [nextStatus, setNextStatus] = useState("");
   const [reason, setReason] = useState("");
   const transition = useMutation({
-    mutationFn: () =>
+    mutationFn: (toStatus: string) =>
       services.repositories.admin.transitionUserStatus(user.id, {
-        toStatus: nextStatus,
+        toStatus,
         reasonCode: reason.trim(),
-        restore: nextStatus === "ACTIVE",
+        restore: toStatus === "ACTIVE",
       }),
     onSuccess: () => {
       setNextStatus("");
@@ -7259,12 +7462,6 @@ function AccountStatusManagement({ user, retry }: { user: AdminUserDetail; retry
       </div>
       {options.length && canManageStatus ? (
         <div className="admin-status-form">
-          <AdminSelect
-            label="Change status"
-            value={nextStatus}
-            onChange={setNextStatus}
-            options={[["", "Choose a new status"], ...options]}
-          />
           <label>
             <span>
               Reason <em>(required)</em>
@@ -7276,21 +7473,31 @@ function AccountStatusManagement({ user, retry }: { user: AdminUserDetail; retry
               rows={3}
             />
           </label>
-          <button
-            type="button"
-            className="admin-detail-action"
-            disabled={!nextStatus || reason.trim().length < 3 || transition.isPending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  `${options.find(([value]) => value === nextStatus)?.[1] ?? "Change account status"} for ${user.displayName}? The previous state, next state, reason, actor and request ID will be audited.`,
-                )
-              )
-                transition.mutate();
-            }}
-          >
-            {transition.isPending ? "Saving…" : "Update account status"}
-          </button>
+          <div className="admin-status-actions" aria-label="Available account status actions">
+            {options.map(([value, label]) => (
+              <button
+                type="button"
+                className={
+                  value === "DEACTIVATED"
+                    ? "admin-detail-action admin-detail-action--danger"
+                    : "admin-detail-action"
+                }
+                key={value}
+                disabled={reason.trim().length < 3 || transition.isPending}
+                onClick={() => {
+                  setNextStatus(value);
+                  if (
+                    window.confirm(
+                      `${label} for ${user.displayName}? The previous state, next state, reason, actor and request ID will be audited.`,
+                    )
+                  )
+                    transition.mutate(value);
+                }}
+              >
+                {transition.isPending && nextStatus === value ? "Saving…" : label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <p className="admin-safe-note">

@@ -2005,6 +2005,12 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
     value.payoutDetails && typeof value.payoutDetails === "object"
       ? objectField(value.payoutDetails, "admin user payout details")
       : null;
+  const actionCenter = Array.isArray(value.actionCenter) ? value.actionCenter : [];
+  const recommendedAction =
+    value.recommendedAction && typeof value.recommendedAction === "object"
+      ? objectField(value.recommendedAction, "admin user recommended action")
+      : null;
+  const availableCommands = Array.isArray(value.availableCommands) ? value.availableCommands : [];
   const mapMoney = (source: Record<string, unknown>, field: string) =>
     stringField(source[field] ?? "0", `admin user ${field}`);
   const mapNullableMoney = (source: Record<string, unknown>, field: string) =>
@@ -2012,6 +2018,45 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
   return {
     ...user,
     revision: stringField(value.revision ?? user.createdAt, "admin user revision"),
+    actionCenter: actionCenter.map((rawAction) => {
+      const action = objectField(rawAction, "admin user action center item");
+      const tab = action.tab === "Operations" || action.tab === "History" ? action.tab : "Overview";
+      const severity = ["ATTENTION", "BLOCKING", "RESTRICTED"].includes(String(action.severity))
+        ? (String(action.severity) as "ATTENTION" | "BLOCKING" | "RESTRICTED")
+        : "ATTENTION";
+      return {
+        id: stringField(action.id, "admin user action center.id"),
+        severity,
+        title: stringField(action.title, "admin user action center.title"),
+        explanation: stringField(action.explanation, "admin user action center.explanation"),
+        recommendedAction: stringField(
+          action.recommendedAction,
+          "admin user action center.recommendedAction",
+        ),
+        tab,
+      };
+    }),
+    recommendedAction: recommendedAction
+      ? {
+          title: stringField(recommendedAction.title, "admin user recommended action.title"),
+          explanation: stringField(
+            recommendedAction.explanation,
+            "admin user recommended action.explanation",
+          ),
+          tab:
+            recommendedAction.tab === "Operations" || recommendedAction.tab === "History"
+              ? recommendedAction.tab
+              : "Overview",
+        }
+      : null,
+    availableCommands: availableCommands.map((rawCommand) => {
+      const command = objectField(rawCommand, "admin user available command");
+      return {
+        id: stringField(command.id, "admin user available command.id"),
+        allowed: Boolean(command.allowed),
+        reason: nullableString(command.reason, "admin user available command.reason"),
+      };
+    }),
     semanticRoles: Array.isArray(value.semanticRoles)
       ? value.semanticRoles
           .filter((role): role is string => typeof role === "string" && role !== "USER")

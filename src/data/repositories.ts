@@ -500,6 +500,24 @@ export type AdminAccountsSummary = {
 
 export type AdminUserDetail = AdminUserSummary & {
   revision: string;
+  actionCenter: Array<{
+    id: string;
+    severity: "ATTENTION" | "BLOCKING" | "RESTRICTED";
+    title: string;
+    explanation: string;
+    recommendedAction: string;
+    tab: "Overview" | "Operations" | "History";
+  }>;
+  recommendedAction: {
+    title: string;
+    explanation: string;
+    tab: "Overview" | "Operations" | "History";
+  } | null;
+  availableCommands: Array<{
+    id: string;
+    allowed: boolean;
+    reason: string | null;
+  }>;
   semanticRoles: string[];
   profile: {
     displayName: string | null;

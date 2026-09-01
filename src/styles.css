@@ -405,7 +405,247 @@
   cursor: pointer;
 }
 .admin-account-detail-tabs {
+  display: flex;
+  gap: 0.25rem;
   margin-top: 0.15rem;
+  border-bottom: 1px solid #203844;
+  overflow-x: auto;
+}
+.admin-account-detail-tabs button {
+  position: relative;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.65rem 0.8rem;
+  color: #8ea4ad;
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+.admin-account-detail-tabs button:hover,
+.admin-account-detail-tabs button:focus-visible,
+.admin-account-detail-tabs button.is-active {
+  color: #4eddbd;
+}
+.admin-account-detail-tabs button.is-active {
+  border-bottom-color: #1ed2aa;
+}
+.admin-account-detail-overall-strip {
+  margin-top: 1rem;
+}
+.admin-account-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem);
+  align-items: start;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.admin-account-detail-primary {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.admin-account-action-center,
+.admin-account-detail-rail-card {
+  min-width: 0;
+  border: 1px solid #203844;
+  border-radius: 0.65rem;
+  background: linear-gradient(150deg, rgba(10, 27, 37, 0.98), rgba(7, 19, 27, 0.97));
+}
+.admin-account-action-center {
+  padding: 1rem;
+}
+.admin-account-action-center-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+.admin-account-action-center-heading h3 {
+  margin: 0.2rem 0 0;
+  color: #edf5f2;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+.admin-account-action-center-heading > span {
+  color: #efbe56;
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+.admin-account-action-list {
+  display: grid;
+  gap: 0.4rem;
+}
+.admin-account-action-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid rgba(239, 190, 86, 0.35);
+  border-radius: 0.45rem;
+  padding: 0.7rem;
+  background: rgba(75, 55, 19, 0.2);
+}
+.admin-account-action-item > svg {
+  width: 1rem;
+  color: #efbe56;
+}
+.admin-account-action-item > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+.admin-account-action-item strong {
+  color: #f3f7f5;
+  font-size: 0.68rem;
+}
+.admin-account-action-item span,
+.admin-account-action-item small {
+  color: #a9b9bd;
+  font-size: 0.58rem;
+}
+.admin-account-action-item small {
+  color: #efbe56;
+}
+.admin-account-action-item button,
+.admin-account-detail-rail-card button,
+.admin-account-detail-rail-card a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border: 1px solid #2b4b57;
+  border-radius: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  color: #54dfc0;
+  font-size: 0.58rem;
+  text-align: left;
+}
+.admin-account-action-item button:hover,
+.admin-account-action-item button:focus-visible,
+.admin-account-detail-rail-card button:hover,
+.admin-account-detail-rail-card button:focus-visible,
+.admin-account-detail-rail-card a:hover,
+.admin-account-detail-rail-card a:focus-visible {
+  border-color: #1ed2aa;
+  background: rgba(30, 210, 170, 0.08);
+}
+.admin-account-action-item--blocking,
+.admin-account-action-item--restricted {
+  border-color: rgba(208, 91, 83, 0.55);
+  background: rgba(90, 31, 32, 0.22);
+}
+.admin-account-action-item--blocking > svg,
+.admin-account-action-item--restricted > svg {
+  color: #f28e8b;
+}
+.admin-account-action-item--blocking small,
+.admin-account-action-item--restricted small {
+  color: #f28e8b;
+}
+.admin-account-action-clear {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0;
+  color: #54dfc0;
+  font-size: 0.64rem;
+}
+.admin-account-action-clear svg {
+  width: 1rem;
+}
+.admin-account-detail-rail {
+  display: grid;
+  position: sticky;
+  top: 1rem;
+  min-width: 0;
+  gap: 1rem;
+}
+.admin-account-detail-rail-card {
+  padding: 0.9rem;
+}
+.admin-account-detail-rail-card .admin-panel-heading {
+  margin-bottom: 0.4rem;
+}
+.admin-account-detail-rail-card--urgent {
+  border-color: rgba(208, 91, 83, 0.45);
+}
+.admin-account-detail-rail-card--next {
+  border-color: rgba(30, 210, 170, 0.42);
+}
+.admin-account-rail-list,
+.admin-account-rail-actions,
+.admin-account-command-list {
+  display: grid;
+  gap: 0.4rem;
+}
+.admin-account-rail-list > div,
+.admin-account-command-list > div {
+  display: grid;
+  gap: 0.15rem;
+  border-bottom: 1px solid rgba(39, 59, 69, 0.62);
+  padding: 0.35rem 0;
+}
+.admin-account-rail-list > div:last-child,
+.admin-account-command-list > div:last-child {
+  border-bottom: 0;
+}
+.admin-account-rail-list button,
+.admin-account-detail-rail-card--next button {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+}
+.admin-account-rail-list strong,
+.admin-account-detail-rail-card--next strong,
+.admin-account-rail-list span,
+.admin-account-detail-rail-card--next span,
+.admin-account-rail-list small,
+.admin-account-detail-rail-card--next small {
+  color: #dcebe8;
+  font-size: 0.6rem;
+}
+.admin-account-rail-list span,
+.admin-account-detail-rail-card--next span,
+.admin-account-rail-list small {
+  color: #94aab2;
+}
+.admin-account-detail-rail-card--next small {
+  color: #54dfc0;
+}
+.admin-account-rail-actions a,
+.admin-account-rail-actions button,
+.admin-account-detail-rail-card .admin-detail-link {
+  width: 100%;
+}
+.admin-account-command-list > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.admin-account-command-list span {
+  color: #c7d9d7;
+  font-size: 0.58rem;
+}
+.admin-account-command-list strong {
+  color: #54dfc0;
+  font-size: 0.54rem;
+  text-transform: uppercase;
+}
+.admin-account-command-list div[data-available="false"] strong {
+  color: #a8bac0;
+}
+.admin-account-command-list small {
+  grid-column: 1 / -1;
+  color: #8ea4ad;
+  font-size: 0.53rem;
+}
+.admin-status-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.admin-status-actions .admin-detail-action {
+  justify-content: center;
+  min-height: 2.1rem;
+  text-align: center;
 }
 .admin-account-detail-main main {
   min-width: 0;
@@ -416,7 +656,7 @@
 }
 .admin-account-detail-state-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid #203844;
   border-radius: 0.65rem;
@@ -856,10 +1096,20 @@
   color: #5fe4c5;
 }
 @media (max-width: 1050px) {
+  .admin-account-detail-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-account-detail-rail {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .admin-account-detail-state-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .admin-account-detail-state-cell:nth-child(3) {
+    border-right: 0;
+  }
+  .admin-account-detail-state-cell:nth-child(6) {
     border-right: 0;
   }
   .admin-account-detail-state-cell:nth-child(n + 4) {
@@ -873,6 +1123,9 @@
   }
 }
 @media (max-width: 760px) {
+  .admin-account-detail-rail {
+    grid-template-columns: 1fr;
+  }
   .admin-account-detail-header {
     grid-template-columns: 1fr;
   }
@@ -899,6 +1152,13 @@
   }
   .admin-account-detail-history-filters {
     justify-content: flex-start;
+  }
+  .admin-account-action-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .admin-account-action-item button {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 @media (max-width: 520px) {
