@@ -2984,19 +2984,19 @@
 .admin-asset-workspace__content--controls {
   grid-template-columns: minmax(0, 1fr);
 }
-.admin-control-center {
+.admin-operations-control-center {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.36fr);
   gap: 12px;
   align-items: start;
 }
-.admin-control-center__main,
-.admin-control-center__rail {
+.admin-operations-control-center__main,
+.admin-operations-control-center__rail {
   display: grid;
   gap: 12px;
   min-width: 0;
 }
-.admin-control-center__rail {
+.admin-operations-control-center__rail {
   position: sticky;
   top: 14px;
 }
@@ -3252,24 +3252,24 @@
   line-height: 1.35;
 }
 @media (max-width: 1120px) {
-  .admin-control-center {
+  .admin-operations-control-center {
     grid-template-columns: minmax(0, 1fr);
   }
-  .admin-control-center__rail {
+  .admin-operations-control-center__rail {
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .admin-control-center__rail > :last-child {
+  .admin-operations-control-center__rail > :last-child {
     grid-column: 1 / -1;
   }
 }
 @media (max-width: 760px) {
   .admin-control-status__facts,
   .admin-control-actions,
-  .admin-control-center__rail {
+  .admin-operations-control-center__rail {
     grid-template-columns: minmax(0, 1fr);
   }
-  .admin-control-center__rail > :last-child {
+  .admin-operations-control-center__rail > :last-child {
     grid-column: auto;
   }
   .admin-control-restrictions dl {

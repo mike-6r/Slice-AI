@@ -1591,8 +1591,8 @@ function Controls({
       expectedStatus: value.expectedStatus,
     });
   return (
-    <div className="admin-control-center">
-      <div className="admin-control-center__main">
+    <div className="admin-operations-control-center">
+      <div className="admin-operations-control-center__main">
         <section className="admin-operation-card admin-control-status">
           <CardHeading
             eyebrow="Administrative control center"
@@ -1786,7 +1786,7 @@ function Controls({
         ) : null}
       </div>
 
-      <aside className="admin-control-center__rail">
+      <aside className="admin-operations-control-center__rail">
         <section
           className={`admin-operation-card admin-investor-boundary ${
             controls.investorProtection.active ? "active" : ""
