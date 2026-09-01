@@ -1741,7 +1741,17 @@ export class SubmissionService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         },
         preGrades: { orderBy: { createdAt: 'desc' }, take: 20 },
-        reviews: { orderBy: { createdAt: 'asc' } },
+        reviews: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            reviewer: {
+              select: {
+                id: true,
+                profile: { select: { displayName: true, publicUsername: true } },
+              },
+            },
+          },
+        },
         marketResearch: {
           orderBy: { collectedAt: 'desc' },
           include: { observations: { orderBy: { observedAt: 'desc' } } },
@@ -1749,13 +1759,6 @@ export class SubmissionService {
       },
     });
     if (!submission) this.notFound();
-    if (
-      !actor.roles.includes('ADMIN') &&
-      submission!.status === 'IN_REVIEW' &&
-      submission!.reviewerId !== actor.userId
-    ) {
-      this.notFound();
-    }
     const [context, reviewer, activity, related] = await Promise.all([
       this.prisma.assetSubmission.findUnique({
         where: { id },
@@ -1907,7 +1910,34 @@ export class SubmissionService {
           })),
       );
     }
-    const latestReview = submission!.reviews.at(-1) ?? null;
+    const latestConditionReview = [...submission!.reviews]
+      .reverse()
+      .find((review) => Boolean(review.staffCondition));
+    const latestValuationReview = [...submission!.reviews]
+      .reverse()
+      .find((review) => Boolean(review.valuationMinor));
+    const primaryAssignmentReview = submission!.reviewerId
+      ? [...submission!.reviews]
+          .reverse()
+          .find(
+            (review) =>
+              review.reviewerId === submission!.reviewerId &&
+              review.status === 'CLAIMED',
+          )
+      : null;
+    const contributors = Array.from(
+      new Map(
+        submission!.reviews.map((review) => [
+          review.reviewerId,
+          {
+            id: review.reviewerId,
+            displayName: review.reviewer.profile?.displayName ?? 'Reviewer',
+            username: review.reviewer.profile?.publicUsername ?? null,
+            lastContributedAt: review.updatedAt.toISOString(),
+          },
+        ]),
+      ).values(),
+    );
     const safeMediaCount = submission!.media.filter(
       (media) =>
         REQUIRED_MEDIA_SLOTS.includes(media.slot as never) &&
@@ -1937,16 +1967,9 @@ export class SubmissionService {
         : ['Certification verification requires review.']),
     ];
     const selfReviewForbidden = submission!.ownerUserId === actor.userId;
-    const claimedByActor =
-      !selfReviewForbidden &&
-      submission!.status === 'IN_REVIEW' &&
-      submission!.reviewerId === actor.userId;
-    const canManageClaim =
-      !selfReviewForbidden &&
-      submission!.status === 'IN_REVIEW' &&
-      (submission!.reviewerId === actor.userId ||
-        actor.roles.includes('ADMIN'));
-    const decisionEligible = claimedByActor && blockers.length === 0;
+    const canContribute =
+      !selfReviewForbidden && submission!.status === 'IN_REVIEW';
+    const decisionEligible = canContribute && blockers.length === 0;
     const advisoryItems = [
       {
         key: 'research',
@@ -1958,19 +1981,21 @@ export class SubmissionService {
       {
         key: 'condition',
         label: 'Staff condition recorded',
-        satisfied: Boolean(latestReview?.staffCondition),
+        satisfied: Boolean(latestConditionReview?.staffCondition),
       },
       {
         key: 'valuation',
         label: 'Staff valuation recorded',
-        satisfied: Boolean(latestReview?.valuationMinor),
+        satisfied: Boolean(latestValuationReview?.valuationMinor),
       },
     ];
     const reviewAssignmentState =
       submission!.status === 'IN_REVIEW'
         ? submission!.reviewerId === actor.userId
           ? 'CLAIMED_BY_ME'
-          : 'CLAIMED_BY_OTHER'
+          : submission!.reviewerId
+            ? 'CLAIMED_BY_OTHER'
+            : 'UNCLAIMED'
         : submission!.reviewerId
           ? 'COMPLETED'
           : 'UNCLAIMED';
@@ -1985,11 +2010,9 @@ export class SubmissionService {
               ? 'REVIEWER_REQUIRED'
               : submission!.status === 'SUBMITTED'
                 ? 'CLAIM_REVIEW'
-                : reviewAssignmentState === 'CLAIMED_BY_OTHER'
-                  ? 'REVIEWER_ASSIGNED'
-                  : blockers.length
-                    ? 'REQUIRED_ITEMS_REMAIN'
-                    : 'READY_FOR_DECISION';
+                : blockers.length
+                  ? 'REQUIRED_ITEMS_REMAIN'
+                  : 'READY_FOR_DECISION';
     const nextAction =
       submission!.status === 'APPROVED'
         ? submission!.assetId
@@ -1999,8 +2022,7 @@ export class SubmissionService {
           ? 'COMPLETE'
           : submission!.status === 'CHANGES_REQUESTED'
             ? 'WAIT_FOR_COLLECTOR'
-            : selfReviewForbidden ||
-                reviewAssignmentState === 'CLAIMED_BY_OTHER'
+            : selfReviewForbidden
               ? 'WAIT_FOR_REVIEWER'
               : submission!.status === 'SUBMITTED'
                 ? 'CLAIM_REVIEW'
@@ -2047,20 +2069,21 @@ export class SubmissionService {
               username: reviewer.profile?.publicUsername ?? null,
             }
           : null,
-        claimedAt: latestReview?.createdAt.toISOString() ?? null,
+        claimedAt: primaryAssignmentReview?.createdAt.toISOString() ?? null,
         lastActivity: submission!.updatedAt.toISOString(),
+        contributors,
       },
       staffReview: {
-        condition: latestReview?.staffCondition ?? null,
-        conditionNote: latestReview?.staffConditionNote ?? null,
-        valuation: latestReview?.valuationMinor
+        condition: latestConditionReview?.staffCondition ?? null,
+        conditionNote: latestConditionReview?.staffConditionNote ?? null,
+        valuation: latestValuationReview?.valuationMinor
           ? {
-              valueMinor: latestReview.valuationMinor.toString(),
-              currency: latestReview.valuationCurrency ?? 'GBP',
-              basis: latestReview.valuationBasis ?? null,
-              confidence: latestReview.valuationConfidence,
-              note: latestReview.valuationNote ?? null,
-              updatedAt: latestReview.updatedAt.toISOString(),
+              valueMinor: latestValuationReview.valuationMinor.toString(),
+              currency: latestValuationReview.valuationCurrency ?? 'GBP',
+              basis: latestValuationReview.valuationBasis ?? null,
+              confidence: latestValuationReview.valuationConfidence,
+              note: latestValuationReview.valuationNote ?? null,
+              updatedAt: latestValuationReview.updatedAt.toISOString(),
             }
           : null,
       },
@@ -2151,7 +2174,7 @@ export class SubmissionService {
           ...requiredChecklist,
           ...advisoryItems.map((item) => ({ ...item, required: false })),
         ],
-        currentValuation: latestReview?.valuationMinor?.toString() ?? null,
+        currentValuation: latestValuationReview?.valuationMinor?.toString() ?? null,
       },
       // A compact, server-authoritative presentation summary for the reviewer
       // workspace. It deliberately mirrors, rather than replaces, readiness
@@ -2177,13 +2200,15 @@ export class SubmissionService {
       allowedActions: {
         canClaim:
           !selfReviewForbidden &&
-          submission!.status === 'SUBMITTED' &&
-          !submission!.reviewerId,
-        canRelease: canManageClaim,
-        canEdit: claimedByActor,
+          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status),
+        canRelease:
+          !selfReviewForbidden &&
+          submission!.status === 'IN_REVIEW' &&
+          Boolean(submission!.reviewerId),
+        canEdit: canContribute,
         canAccept: decisionEligible,
-        canRequestChanges: claimedByActor,
-        canReject: claimedByActor,
+        canRequestChanges: canContribute,
+        canReject: canContribute,
         selfReviewForbidden,
       },
       reviewWorkspace: {
@@ -2209,18 +2234,21 @@ export class SubmissionService {
             }
           : null,
         selfReviewBlocked: selfReviewForbidden,
+        contributors,
         nextAction,
         nextActionLabel: readinessState,
         lastUpdated: submission!.updatedAt.toISOString(),
         canClaim:
           !selfReviewForbidden &&
-          submission!.status === 'SUBMITTED' &&
-          !submission!.reviewerId,
-        canRelease: canManageClaim,
-        canEdit: claimedByActor,
+          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status),
+        canRelease:
+          !selfReviewForbidden &&
+          submission!.status === 'IN_REVIEW' &&
+          Boolean(submission!.reviewerId),
+        canEdit: canContribute,
         canApprove: decisionEligible,
-        canRequestChanges: claimedByActor,
-        canReject: claimedByActor,
+        canRequestChanges: canContribute,
+        canReject: canContribute,
         canCanonicalize:
           submission!.status === 'APPROVED' && !submission!.assetId,
         canOpenPhysicalIntake:
@@ -2244,19 +2272,24 @@ export class SubmissionService {
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
-        const claim = await db.assetSubmission.updateMany({
-          where: { id, status: 'SUBMITTED', reviewerId: null },
+        if (!['SUBMITTED', 'IN_REVIEW'].includes(submission!.status))
+          this.stateConflict();
+        if (submission!.reviewerId === actor.userId) {
+          return {
+            submissionId: id,
+            reviewId: null,
+            status: submission!.status,
+            version: submission!.version,
+          };
+        }
+        const updated = await db.assetSubmission.update({
+          where: { id },
           data: {
             status: 'IN_REVIEW',
             reviewerId: actor.userId,
             version: { increment: 1 },
           },
         });
-        if (claim.count !== 1)
-          throw new ConflictException({
-            code: 'REVIEW_ALREADY_CLAIMED',
-            message: 'This submission has already been claimed.',
-          });
         const review = await db.verificationReview.create({
           data: {
             id: randomUUID(),
@@ -2265,10 +2298,18 @@ export class SubmissionService {
             status: 'CLAIMED',
           },
         });
-        await audit('SUBMISSION_REVIEW_CLAIMED', 'submission', id, {
+        await audit('SUBMISSION_REVIEW_PRIMARY_ASSIGNED', 'submission', id, {
           reviewId: review.id,
+          previousReviewerId: submission!.reviewerId,
+          primaryReviewerId: actor.userId,
+          version: updated.version,
         });
-        return { submissionId: id, reviewId: review.id, status: 'IN_REVIEW' };
+        return {
+          submissionId: id,
+          reviewId: review.id,
+          status: updated.status,
+          version: updated.version,
+        };
       },
     );
   }
@@ -2290,21 +2331,17 @@ export class SubmissionService {
           where: { id },
         });
         if (!submission) this.notFound();
-        if (
-          submission!.status !== 'IN_REVIEW' ||
-          (submission!.reviewerId !== actor.userId &&
-            !actor.roles.includes('ADMIN'))
-        )
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        if (submission!.status !== 'IN_REVIEW' || !submission!.reviewerId)
           this.stateConflict();
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            status: 'SUBMITTED',
             reviewerId: null,
             version: { increment: 1 },
           },
         });
-        await audit('SUBMISSION_REVIEW_RELEASED', 'submission', id, {
+        await audit('SUBMISSION_REVIEW_PRIMARY_CLEARED', 'submission', id, {
           previousReviewerId: submission!.reviewerId,
           version: updated.version,
         });
@@ -2333,7 +2370,7 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
-        const review = await this.lockClaimedReview(db, actor, id);
+        const review = await this.lockCollaborativeReview(db, actor, id);
         const updated = await db.verificationReview.update({
           where: { id: review.id },
           data: {
@@ -2378,7 +2415,7 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
-        const review = await this.lockClaimedReview(db, actor, id);
+        const review = await this.lockCollaborativeReview(db, actor, id);
         const updated = await db.verificationReview.update({
           where: { id: review.id },
           data: {
@@ -2411,7 +2448,7 @@ export class SubmissionService {
     );
   }
 
-  private async lockClaimedReview(db: Db, actor: Actor, id: string) {
+  private async lockCollaborativeReview(db: Db, actor: Actor, id: string) {
     await db.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
     `;
@@ -2419,22 +2456,21 @@ export class SubmissionService {
       where: { id },
     });
     if (!submission) this.notFound();
-    if (
-      submission!.status !== 'IN_REVIEW' ||
-      (submission!.reviewerId !== actor.userId &&
-        !actor.roles.includes('ADMIN'))
-    )
-      this.stateConflict();
+    assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+    if (submission!.status !== 'IN_REVIEW') this.stateConflict();
     const review = await db.verificationReview.findFirst({
-      where: { submissionId: id, status: 'CLAIMED' },
+      where: { submissionId: id, reviewerId: actor.userId, status: 'CLAIMED' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    if (!review)
-      throw new ConflictException({
-        code: 'REVIEW_NOT_CLAIMED',
-        message: 'Claim the submission before editing the review.',
-      });
-    return review;
+    if (review) return review;
+    return db.verificationReview.create({
+      data: {
+        id: randomUUID(),
+        submissionId: id,
+        reviewerId: actor.userId,
+        status: 'CLAIMED',
+      },
+    });
   }
 
   decide(
@@ -2481,11 +2517,7 @@ export class SubmissionService {
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
-        if (
-          submission!.status !== 'IN_REVIEW' ||
-          submission!.reviewerId !== actor.userId
-        )
-          this.stateConflict();
+        if (submission!.status !== 'IN_REVIEW') this.stateConflict();
         assertExpectedVersion(submission!.version, input.version);
         if (decision === 'APPROVED') {
           assertRequiredSafeMedia(submission!.media);
@@ -2496,7 +2528,10 @@ export class SubmissionService {
           data: {
             status: decision,
             reviewedAt: new Date(),
-            reviewerId: decision === 'CHANGES_REQUESTED' ? null : actor.userId,
+            reviewerId:
+              decision === 'CHANGES_REQUESTED'
+                ? null
+                : submission!.reviewerId,
             decisionCode: input.reasonCode,
             decisionNote:
               decision === 'CHANGES_REQUESTED'
@@ -2725,33 +2760,14 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
-        const submission = await db.assetSubmission.findUnique({
-          where: { id },
-        });
-        if (!submission) this.notFound();
-        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
-        if (
-          submission!.status !== 'IN_REVIEW' ||
-          (submission!.reviewerId !== actor.userId &&
-            !actor.roles.includes('ADMIN'))
-        )
-          this.stateConflict();
-        const latest = await db.verificationReview.findFirst({
-          where: { submissionId: id },
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        });
-        if (!latest)
-          throw new ConflictException({
-            code: 'REVIEW_NOT_CLAIMED',
-            message: 'Claim the submission before saving review notes.',
-          });
+        const review = await this.lockCollaborativeReview(db, actor, id);
         const updatedAt = new Date();
         await db.verificationReview.update({
-          where: { id: latest.id },
+          where: { id: review.id },
           data: { note: redactNote(note) },
         });
         await audit('SUBMISSION_REVIEW_NOTE_UPDATED', 'submission', id, {
-          reviewId: latest.id,
+          reviewId: review.id,
           note: redactNote(note),
         });
         return { submissionId: id, updatedAt: updatedAt.toISOString() };
@@ -3130,6 +3146,8 @@ export class SubmissionService {
           },
         });
         if (!submission) this.notFound();
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        if (submission!.status !== 'IN_REVIEW') this.stateConflict();
         const entry = await this.assertGradeReference(
           db,
           submission!.declaredMetadata,
@@ -3938,7 +3956,12 @@ type ReviewDetailRow = {
     valuationConfidence: number | null;
     valuationNote: string | null;
     createdAt: Date;
+    updatedAt: Date;
     completedAt: Date | null;
+    reviewer: {
+      id: string;
+      profile: { displayName: string; publicUsername: string | null } | null;
+    };
   }>;
   marketResearch: ResearchRow[];
   preGrades: Array<{
@@ -4021,7 +4044,12 @@ function reviewDetailProjection(submission: ReviewDetailRow) {
       valuationConfidence: review.valuationConfidence,
       valuationNote: review.valuationNote,
       createdAt: review.createdAt.toISOString(),
+      updatedAt: review.updatedAt.toISOString(),
       completedAt: review.completedAt?.toISOString() ?? null,
+      actor: {
+        displayName: review.reviewer.profile?.displayName ?? 'Reviewer',
+        username: review.reviewer.profile?.publicUsername ?? null,
+      },
     })),
   };
 }

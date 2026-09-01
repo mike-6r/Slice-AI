@@ -254,6 +254,7 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     note?: string | null;
     actor?: { displayName: string; username: string | null } | null;
     createdAt: ISODateTime;
+    updatedAt?: ISODateTime;
     completedAt: ISODateTime | null;
   }>;
   marketResearch: MarketResearchSnapshot | null;
@@ -347,6 +348,12 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     reviewer: { id: string; displayName: string; username: string | null } | null;
     claimedAt: ISODateTime | null;
     lastActivity: ISODateTime;
+    contributors: Array<{
+      id: string;
+      displayName: string;
+      username: string | null;
+      lastContributedAt: ISODateTime;
+    }>;
   };
   staffReview?: {
     condition: string | null;
@@ -419,6 +426,12 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     claimState: "UNCLAIMED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "RELEASED" | "COMPLETED";
     reviewer: { id: string; displayName: string; username: string | null } | null;
     selfReviewBlocked: boolean;
+    contributors: Array<{
+      id: string;
+      displayName: string;
+      username: string | null;
+      lastContributedAt: ISODateTime;
+    }>;
     nextAction: NonNullable<SubmissionReviewDetail["readiness"]>["nextAction"];
     nextActionLabel: NonNullable<SubmissionReviewDetail["readiness"]>["state"];
     lastUpdated: ISODateTime;

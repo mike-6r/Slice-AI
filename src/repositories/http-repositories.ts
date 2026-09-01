@@ -1654,6 +1654,7 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
               })()
             : null,
         createdAt: stringField(review.createdAt, "review history.createdAt") as ISODateTime,
+        updatedAt: stringField(review.updatedAt, "review history.updatedAt") as ISODateTime,
         completedAt: nullableString(
           review.completedAt,
           "review history.completedAt",

@@ -392,7 +392,8 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
           Collector<strong>{detail.collectorSummary?.displayName ?? "Collector"}</strong>
         </span>
         <span>
-          Reviewer<strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unclaimed"}</strong>
+          Primary reviewer
+          <strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unassigned"}</strong>
         </span>
       </div>
     </header>
@@ -403,25 +404,25 @@ function ReviewerBanner({ detail }: { detail: SubmissionReviewDetail }) {
   const assignment = detail.reviewAssignment;
   const self = detail.reviewWorkspace?.selfReviewBlocked;
   const copy = self
-    ? "You submitted this collectible and cannot review it. Another authorized reviewer must claim this submission."
+    ? "You submitted this collectible and cannot review it. Another authorized reviewer must contribute before a decision can be recorded."
     : assignment?.state === "CLAIMED_BY_ME"
-      ? "You are reviewing this submission. Complete required checks, then choose a decision."
+      ? "You are the primary reviewer. Other authorized staff may also add review contributions."
       : assignment?.state === "CLAIMED_BY_OTHER"
-        ? "Assigned to " +
+        ? "Primary reviewer: " +
           (assignment.reviewer?.displayName ?? "another reviewer") +
-          ". This view is read-only."
+          ". You may still contribute to this review."
         : detail.status === "CHANGES_REQUESTED"
           ? "Changes have been requested. Review resumes after the collector updates the submission."
-          : "This submission has not been assigned. Claim review to begin.";
+          : "No primary reviewer is assigned. Assign yourself to coordinate the review; this does not lock other authorized staff out.";
   const title = self
     ? "Reviewer required"
     : assignment?.state === "CLAIMED_BY_ME"
-      ? "You are reviewing this submission"
+      ? "You are the primary reviewer"
       : assignment?.state === "CLAIMED_BY_OTHER"
-        ? "Assigned to another reviewer"
+        ? "Primary reviewer assigned"
         : detail.status === "CHANGES_REQUESTED"
           ? "Waiting for collector"
-          : "This submission has not been assigned";
+          : "Primary reviewer unassigned";
   return (
     <section className={"admin-review-reviewer-banner " + (self ? "is-restricted" : "")}>
       <div>
@@ -849,6 +850,7 @@ function DecisionRail({
 }) {
   const workspace = detail.reviewWorkspace;
   if (!workspace) return null;
+  const contributors = workspace.contributors ?? [];
   return (
     <aside className="admin-review-decision-rail">
       <section className="admin-panel-card admin-review-status-card">
@@ -857,9 +859,18 @@ function DecisionRail({
           {workspace.selfReviewBlocked ? <StatusPill value="Self-review blocked" /> : null}
         </div>
         <div className="admin-review-status-line">
-          <span>Claim status</span>
-          <strong>{claimLabel(workspace.claimState)}</strong>
+          <span>Primary reviewer</span>
+          <strong>{primaryReviewerLabel(workspace.claimState)}</strong>
           <small>{claimDetail(detail)}</small>
+        </div>
+        <div className="admin-review-status-line">
+          <span>Contributors</span>
+          <strong>{contributors.length || "None yet"}</strong>
+          <small>
+            {contributors.length
+              ? contributors.map((contributor) => contributor.displayName).join(", ")
+              : "Contributions are attributed to each authorized staff member."}
+          </small>
         </div>
         <div className="admin-review-next-action">
           <span>Next action</span>
@@ -871,8 +882,8 @@ function DecisionRail({
         </small>
         {workspace.selfReviewBlocked ? (
           <div className="admin-review-info-callout">
-            You submitted this collectible. Another authorized reviewer must claim this submission
-            before review can begin.
+            You submitted this collectible. Another authorized reviewer must contribute before a
+            decision can be recorded.
           </div>
         ) : null}
       </section>
@@ -920,8 +931,16 @@ function DecisionRail({
                 onClick={onClaim}
                 disabled={claiming}
               >
-                {claiming ? "Claiming…" : "Claim review"}
-                <small>Start the authorized review</small>
+                {claiming
+                  ? "Assigning…"
+                  : workspace.reviewer
+                    ? "Assign to me"
+                    : "Assign to me as primary"}
+                <small>
+                  {workspace.reviewer
+                    ? "Reassigns coordination; it does not lock other reviewers out"
+                    : "Start the collaborative review and set a primary reviewer"}
+                </small>
               </button>
             ) : null}
             {workspace.canRelease ? (
@@ -931,8 +950,8 @@ function DecisionRail({
                 onClick={onRelease}
                 disabled={releasing}
               >
-                {releasing ? "Releasing…" : "Release claim"}
-                <small>Return this review to the queue</small>
+                {releasing ? "Clearing…" : "Clear primary assignment"}
+                <small>Keep the review in progress and allow unassigned collaboration</small>
               </button>
             ) : null}
             {workspace.canApprove || workspace.canRequestChanges || workspace.canReject ? (
@@ -1018,15 +1037,15 @@ function ReadinessLine({
   );
 }
 
-function claimLabel(
+function primaryReviewerLabel(
   state: NonNullable<SubmissionReviewDetail["reviewAssignment"]>["state"] | undefined,
 ) {
   return (
     (
       {
-        CLAIMED_BY_ME: "Claimed by you",
-        CLAIMED_BY_OTHER: "Claimed",
-        UNCLAIMED: "Unclaimed",
+        CLAIMED_BY_ME: "You",
+        CLAIMED_BY_OTHER: "Assigned",
+        UNCLAIMED: "Unassigned",
         COMPLETED: "Completed",
       } as Record<string, string>
     )[state ?? "UNCLAIMED"] ?? "Unclaimed"
@@ -1036,9 +1055,10 @@ function claimLabel(
 function claimDetail(detail: SubmissionReviewDetail) {
   if (detail.reviewWorkspace?.selfReviewBlocked) return "You cannot review your own submission.";
   if (detail.reviewWorkspace?.claimState === "CLAIMED_BY_OTHER")
-    return `Assigned to ${detail.reviewWorkspace.reviewer?.displayName ?? "an authorized reviewer"}.`;
-  if (detail.reviewWorkspace?.claimState === "CLAIMED_BY_ME") return "You are the active reviewer.";
-  return "This submission has not been claimed.";
+    return `${detail.reviewWorkspace.reviewer?.displayName ?? "An authorized reviewer"} coordinates this review; you may still contribute.`;
+  if (detail.reviewWorkspace?.claimState === "CLAIMED_BY_ME")
+    return "You coordinate this review; other authorized staff can contribute.";
+  return "No primary reviewer is assigned yet. Authorized staff can assign themselves to coordinate.";
 }
 function DecisionDialog({
   decision,
@@ -1252,6 +1272,7 @@ function ReviewHistory({ detail }: { detail: SubmissionReviewDetail }) {
             <li key={item.id ?? item.createdAt}>
               <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
               <span>{formatDate(item.createdAt)}</span>
+              {item.actor ? <small>By {item.actor.displayName}</small> : null}
               {item.note ? <p>{item.note}</p> : null}
             </li>
           ))
@@ -1455,9 +1476,9 @@ function readinessTitle(detail: SubmissionReviewDetail) {
   return (
     {
       READY_FOR_DECISION: "Ready for decision",
-      CLAIM_REVIEW: "Claim review to continue",
+      CLAIM_REVIEW: "Start collaborative review",
       REVIEWER_REQUIRED: "Another reviewer required",
-      REVIEWER_ASSIGNED: "Assigned to another reviewer",
+      REVIEWER_ASSIGNED: "Review in progress",
       REQUIRED_ITEMS_REMAIN: "Required items remain",
       WAITING_FOR_COLLECTOR: "Waiting for collector",
       APPROVED: "Submission approved",
@@ -1468,7 +1489,7 @@ function readinessTitle(detail: SubmissionReviewDetail) {
 function nextActionCopy(value: string | undefined) {
   return (
     {
-      CLAIM_REVIEW: "Claim this review to begin.",
+      CLAIM_REVIEW: "Assign a primary reviewer to begin collaborative review.",
       WAIT_FOR_REVIEWER: "Another authorized reviewer must act.",
       COMPLETE_REQUIRED_REVIEW: "Resolve the required items shown below.",
       READY_FOR_DECISION: "Required review is complete; choose a decision.",
@@ -1490,6 +1511,8 @@ function humanReviewEvent(value: string) {
         CLAIMED: "Review claimed",
         SUBMISSION_REVIEW_CLAIMED: "Review claimed",
         SUBMISSION_REVIEW_RELEASED: "Review released",
+        SUBMISSION_REVIEW_PRIMARY_ASSIGNED: "Primary reviewer assigned",
+        SUBMISSION_REVIEW_PRIMARY_CLEARED: "Primary reviewer cleared",
         SUBMISSION_APPROVED: "Submission approved",
         SUBMISSION_REJECTED: "Submission rejected",
         SUBMISSION_CHANGES_REQUESTED: "Changes requested",
