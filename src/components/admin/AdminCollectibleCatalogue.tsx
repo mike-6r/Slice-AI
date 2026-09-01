@@ -44,8 +44,8 @@ const initialFilters: CatalogueFilters = {
   market: "",
   grading: "",
   collector: "",
-  fixture: "NORMAL",
-  workType: "PRODUCTION",
+  fixture: "ALL",
+  workType: "ALL",
   sort: "updated",
 };
 
@@ -172,8 +172,7 @@ function CatalogueContent({
   const activeFilterCount =
     Object.entries(filters).filter(([key, value]) => {
       if (key === "sort") return false;
-      if (key === "fixture") return false;
-      if (key === "workType") return value !== "PRODUCTION";
+      if (key === "fixture" || key === "workType") return value !== "ALL";
       return Boolean(value);
     }).length + (status ? 1 : 0);
   const hasFilters = Boolean(search.trim()) || activeFilterCount > 0;
@@ -362,8 +361,8 @@ function CatalogueContent({
                     market: undefined,
                     grading: undefined,
                     collector: undefined,
-                    fixture: "NORMAL",
-                    workType: "PRODUCTION",
+                    fixture: "ALL",
+                    workType: "ALL",
                     sort: undefined,
                     page: "1",
                   });

@@ -1072,9 +1072,9 @@ function AdminConsole() {
               market: catalogueMarket ?? "",
               grading: catalogueGrading ?? "",
               collector: catalogueCollector ?? "",
-              fixture: (intakeFixture as "NORMAL" | "TEST" | "ALL" | undefined) ?? "NORMAL",
+              fixture: (intakeFixture as "NORMAL" | "TEST" | "ALL" | undefined) ?? "ALL",
               workType:
-                (catalogueWorkType as "ALL" | "PRODUCTION" | "DEMO_QA" | undefined) ?? "PRODUCTION",
+                (catalogueWorkType as "ALL" | "PRODUCTION" | "DEMO_QA" | undefined) ?? "ALL",
               sort: reviewSort ?? "updated",
             }}
             update={(patch) =>

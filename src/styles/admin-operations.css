@@ -901,6 +901,26 @@
   margin: 0 auto;
   color: var(--text-primary);
 }
+
+/*
+ * Asset Operations is a primary admin workspace, just like Physical Intake.
+ * Keep the queue anchored to the shared list-page canvas instead of allowing
+ * the older centred page cap above to reappear when CSS chunks are reordered.
+ */
+.asset-operations-page.asset-operations-page--reference.admin-list-workspace {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 1.7rem 2rem 2.5rem;
+}
+
+@media (max-width: 920px) {
+  .asset-operations-page.asset-operations-page--reference.admin-list-workspace {
+    padding: 1.3rem 1rem 2rem;
+  }
+}
+
 .asset-operations-header {
   display: flex;
   justify-content: space-between;
