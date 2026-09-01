@@ -31,6 +31,17 @@ export function SubmissionOperationsPage() {
   const [basis, setBasis] = useState("External reference and staff assessment");
   const [confidence, setConfidence] = useState("80");
   const [note, setNote] = useState("");
+  const [identityNote, setIdentityNote] = useState("");
+  const [reviewIdentity, setReviewIdentity] = useState({
+    name: "",
+    year: "",
+    set: "",
+    cardNumber: "",
+    variant: "",
+  });
+  const [findingTitle, setFindingTitle] = useState("");
+  const [findingDetail, setFindingDetail] = useState("");
+  const [findingSeverity, setFindingSeverity] = useState<"ADVISORY" | "BLOCKING">("ADVISORY");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
   const [requestedItems, setRequestedItems] = useState<string[]>(["Front image"]);
@@ -49,17 +60,29 @@ export function SubmissionOperationsPage() {
     queryFn: () => services.repositories.reviews.getDetail(selected!),
     enabled: Boolean(selected) && session.isAuthenticated,
   });
+  useEffect(() => {
+    const collectible = detail.data?.collectible;
+    if (!collectible) return;
+    setReviewIdentity({
+      name: collectible.title ?? "",
+      year: collectible.year ?? "",
+      set: collectible.set ?? "",
+      cardNumber: collectible.cardNumber ?? "",
+      variant: collectible.variant ?? "",
+    });
+  }, [detail.data?.version, selected]);
   const claim = useMutation({
-    mutationFn: (id: string) => services.repositories.reviews.claim(id),
+    mutationFn: (id: string) => services.repositories.reviews.claim(id, detail.data?.version ?? 0),
     onSuccess: refresh,
   });
   const release = useMutation({
-    mutationFn: (id: string) => services.repositories.reviews.release(id),
+    mutationFn: (id: string) => services.repositories.reviews.release(id, detail.data?.version ?? 0),
     onSuccess: refresh,
   });
   const saveCondition = useMutation({
     mutationFn: () =>
       services.repositories.reviews.saveCondition(selected!, {
+        version: detail.data?.version ?? 0,
         condition: condition.trim(),
         ...(conditionNote.trim() ? { note: conditionNote.trim() } : {}),
       }),
@@ -68,6 +91,7 @@ export function SubmissionOperationsPage() {
   const saveValuation = useMutation({
     mutationFn: () =>
       services.repositories.reviews.saveValuation(selected!, {
+        version: detail.data?.version ?? 0,
         valueMinor: String(Math.round(Number(valuation) * 100)),
         currency: "GBP",
         basis: basis.trim(),
@@ -76,8 +100,62 @@ export function SubmissionOperationsPage() {
     onSuccess: refresh,
   });
   const saveNote = useMutation({
-    mutationFn: () => services.repositories.reviews.saveNote(selected!, note),
+    mutationFn: () =>
+      services.repositories.reviews.saveNote(selected!, {
+        version: detail.data?.version ?? 0,
+        note,
+      }),
     onSuccess: refresh,
+  });
+  const saveIdentity = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.saveIdentity(selected!, {
+        version: detail.data?.version ?? 0,
+        name: reviewIdentity.name.trim(),
+        ...(reviewIdentity.year.trim() ? { year: reviewIdentity.year.trim() } : {}),
+        ...(reviewIdentity.set.trim() ? { set: reviewIdentity.set.trim() } : {}),
+        ...(reviewIdentity.cardNumber.trim()
+          ? { cardNumber: reviewIdentity.cardNumber.trim() }
+          : {}),
+        ...(reviewIdentity.variant.trim() ? { variant: reviewIdentity.variant.trim() } : {}),
+        note: identityNote.trim(),
+      }),
+    onSuccess: () => {
+      setIdentityNote("");
+      refresh();
+    },
+    onError: (error) => {
+      if (isStaleReviewError(error)) setStaleReview(true);
+    },
+  });
+  const createFinding = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.createFinding(selected!, {
+        version: detail.data?.version ?? 0,
+        section: "assessment",
+        title: findingTitle.trim(),
+        ...(findingDetail.trim() ? { detail: findingDetail.trim() } : {}),
+        severity: findingSeverity,
+      }),
+    onSuccess: () => {
+      setFindingTitle("");
+      setFindingDetail("");
+      refresh();
+    },
+    onError: (error) => {
+      if (isStaleReviewError(error)) setStaleReview(true);
+    },
+  });
+  const updateFinding = useMutation({
+    mutationFn: ({ findingId, status }: { findingId: string; status: "OPEN" | "RESOLVED" | "DISMISSED" }) =>
+      services.repositories.reviews.updateFinding(selected!, findingId, {
+        version: detail.data?.version ?? 0,
+        status,
+      }),
+    onSuccess: refresh,
+    onError: (error) => {
+      if (isStaleReviewError(error)) setStaleReview(true);
+    },
   });
   const decide = useMutation({
     mutationFn: (value: Decision) =>
@@ -171,7 +249,6 @@ export function SubmissionOperationsPage() {
           <main className="admin-review-workspace-main">
             <ReviewHeader detail={review} />
             <ReviewerBanner detail={review} />
-            {review.status === "CHANGES_REQUESTED" ? <ChangeRequestNotice detail={review} /> : null}
             {review.status === "APPROVED" ? (
               <PostApproval
                 detail={review}
@@ -181,47 +258,79 @@ export function SubmissionOperationsPage() {
               />
             ) : null}
             <Progress detail={review} />
-            <ReviewSection title="Identity" detail={review} step="identity" number={1}>
-              <Identity detail={review} />
-            </ReviewSection>
-            <ReviewSection title="Evidence" detail={review} step="evidence" number={2} open>
-              <Evidence detail={review} onFocus={setFocusedMedia} />
-            </ReviewSection>
-            <ReviewSection
-              title="Grade & Certification"
-              detail={review}
-              step="certification"
-              number={3}
-            >
-              <Certification detail={review} />
-            </ReviewSection>
-            <ReviewSection title="Research" detail={review} step="research" number={4}>
-              <Research detail={review} />
-            </ReviewSection>
-            <ReviewSection title="Staff Assessment" detail={review} step="assessment" number={5}>
-              <Assessment
+            <ReviewOverview detail={review} />
+            <section className="admin-panel-card admin-review-workflow" aria-labelledby="review-workflow-title">
+              <header className="admin-review-workflow-heading">
+                <div>
+                  <p className="page-kicker">Review workflow</p>
+                  <h2 id="review-workflow-title">Review every authority before the decision</h2>
+                </div>
+                <span>Complete, optional, and blocking steps are kept together.</span>
+              </header>
+              <ReviewSection title="Identity" detail={review} step="identity" number={1}>
+                <Identity
+                  detail={review}
+                  canEdit={canEdit}
+                  reviewIdentity={reviewIdentity}
+                  setReviewIdentity={setReviewIdentity}
+                  identityNote={identityNote}
+                  setIdentityNote={setIdentityNote}
+                  onSaveIdentity={() => saveIdentity.mutate()}
+                  savingIdentity={saveIdentity.isPending}
+                />
+              </ReviewSection>
+              <ReviewSection title="Evidence" detail={review} step="evidence" number={2} open>
+                <Evidence detail={review} onFocus={setFocusedMedia} />
+              </ReviewSection>
+              <ReviewSection
+                title="Grade & Certification"
                 detail={review}
-                canEdit={canEdit}
-                condition={condition}
-                setCondition={setCondition}
-                conditionNote={conditionNote}
-                setConditionNote={setConditionNote}
-                valuation={valuation}
-                setValuation={setValuation}
-                basis={basis}
-                setBasis={setBasis}
-                confidence={confidence}
-                setConfidence={setConfidence}
-                note={note}
-                setNote={setNote}
-                onSaveCondition={() => saveCondition.mutate()}
-                savingCondition={saveCondition.isPending}
-                onSaveValuation={() => saveValuation.mutate()}
-                savingValuation={saveValuation.isPending}
-                onSaveNote={() => saveNote.mutate()}
-                savingNote={saveNote.isPending}
-              />
-            </ReviewSection>
+                step="certification"
+                number={3}
+              >
+                <Certification detail={review} />
+              </ReviewSection>
+              <ReviewSection title="Research" detail={review} step="research" number={4}>
+                <Research detail={review} />
+              </ReviewSection>
+              <ReviewSection title="Staff Assessment" detail={review} step="assessment" number={5}>
+                <Assessment
+                  detail={review}
+                  canEdit={canEdit}
+                  condition={condition}
+                  setCondition={setCondition}
+                  conditionNote={conditionNote}
+                  setConditionNote={setConditionNote}
+                  valuation={valuation}
+                  setValuation={setValuation}
+                  basis={basis}
+                  setBasis={setBasis}
+                  confidence={confidence}
+                  setConfidence={setConfidence}
+                  note={note}
+                  setNote={setNote}
+                  onSaveCondition={() => saveCondition.mutate()}
+                  savingCondition={saveCondition.isPending}
+                  onSaveValuation={() => saveValuation.mutate()}
+                  savingValuation={saveValuation.isPending}
+                  onSaveNote={() => saveNote.mutate()}
+                  savingNote={saveNote.isPending}
+                  findingTitle={findingTitle}
+                  setFindingTitle={setFindingTitle}
+                  findingDetail={findingDetail}
+                  setFindingDetail={setFindingDetail}
+                  findingSeverity={findingSeverity}
+                  setFindingSeverity={setFindingSeverity}
+                  onCreateFinding={() => createFinding.mutate()}
+                  creatingFinding={createFinding.isPending}
+                  onUpdateFinding={(findingId, status) => updateFinding.mutate({ findingId, status })}
+                  updatingFinding={updateFinding.isPending}
+                />
+              </ReviewSection>
+              <ReviewSection title="Decision" detail={review} step="decision" number={6}>
+                <DecisionWorkspace detail={review} />
+              </ReviewSection>
+            </section>
             <ReviewHistory detail={review} />
           </main>
           <DecisionRail
@@ -377,6 +486,7 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
             {[item?.year, item?.set, item?.cardNumber, item?.variant].filter(Boolean).join(" · ") ||
               "Collector-supplied identity"}
           </p>
+          <p className="admin-review-goal">Review goal: decide whether Slice should accept this collectible.</p>
           <div className="admin-review-chip-row">
             <span>{item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / ungraded"}</span>
             {item?.certificationNumber ? <span>Cert {item.certificationNumber}</span> : null}
@@ -394,6 +504,10 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
         <span>
           Primary reviewer
           <strong>{detail.reviewAssignment?.reviewer?.displayName ?? "Unassigned"}</strong>
+        </span>
+        <span>
+          Contributors
+          <strong>{detail.reviewAssignment?.contributors.length ?? 0}</strong>
         </span>
       </div>
     </header>
@@ -476,6 +590,106 @@ function Progress({ detail }: { detail: SubmissionReviewDetail }) {
     </section>
   );
 }
+
+function ReviewOverview({ detail }: { detail: SubmissionReviewDetail }) {
+  const workspace = detail.reviewWorkspace;
+  if (!workspace) return null;
+  const findings = detail.reviewFindings ?? [];
+  const openFindings = findings.filter((finding) => finding.status === "OPEN");
+  const blocking = openFindings.filter((finding) => finding.severity === "BLOCKING");
+  const contributors = workspace.contributors ?? [];
+  return (
+    <section className="admin-review-overview-grid" aria-label="Review overview">
+      <article className="admin-panel-card admin-review-overview-card">
+        <div className="admin-review-card-heading">
+          <h2>Review readiness</h2>
+          <span>{detail.readiness?.decisionEligible ? "Ready" : "View details"}</span>
+        </div>
+        <dl className="admin-review-overview-facts">
+          <div>
+            <dt>Required items</dt>
+            <dd>{workspace.requiredComplete} of {workspace.requiredTotal} complete</dd>
+          </div>
+          <div>
+            <dt>Optional items</dt>
+            <dd>{workspace.optionalRecorded} of {workspace.optionalTotal} recorded</dd>
+          </div>
+          <div>
+            <dt>Blocking issues</dt>
+            <dd className={workspace.blockingIssues.length ? "is-warning" : "is-ready"}>{workspace.blockingIssues.length}</dd>
+          </div>
+        </dl>
+        <div className={`admin-review-readiness-answer ${detail.readiness?.decisionEligible ? "is-ready" : ""}`}>
+          <span>Ready for decision?</span>
+          <strong>{detail.readiness?.decisionEligible ? "Yes" : "No"}</strong>
+          <small>{workspace.primaryBlocker ?? "An eligible reviewer can record a decision."}</small>
+        </div>
+      </article>
+      <article className="admin-panel-card admin-review-overview-card">
+        <div className="admin-review-card-heading">
+          <h2>Reviewer team</h2>
+          <span>{workspace.reviewer ? "Assigned" : "Unassigned"}</span>
+        </div>
+        <div className="admin-review-team-primary">
+          <span>Primary reviewer</span>
+          <strong>{workspace.reviewer?.displayName ?? "Unassigned"}</strong>
+        </div>
+        <ul className="admin-review-contributors">
+          {contributors.length ? contributors.slice(0, 3).map((contributor) => (
+            <li key={contributor.id}>
+              <strong>{contributor.displayName}</strong>
+              <span>Contributed {formatDate(contributor.lastContributedAt)}</span>
+            </li>
+          )) : <li><span>No staff contribution has been recorded yet.</span></li>}
+        </ul>
+      </article>
+      <article className="admin-panel-card admin-review-overview-card">
+        <div className="admin-review-card-heading">
+          <h2>Open findings</h2>
+          <span>{openFindings.length ? `${openFindings.length} open` : "Clear"}</span>
+        </div>
+        {blocking.length ? (
+          <div className="admin-review-finding-summary is-blocking">
+            <strong>{blocking.length} blocking finding{blocking.length === 1 ? "" : "s"}</strong>
+            <span>{blocking[0]?.title}</span>
+          </div>
+        ) : (
+          <div className="admin-review-finding-summary is-clear">
+            <strong>No blocking findings</strong>
+            <span>{openFindings.length ? `${openFindings.length} advisory finding${openFindings.length === 1 ? "" : "s"} remains.` : "Nothing is blocking this submission."}</span>
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}
+
+function DecisionWorkspace({ detail }: { detail: SubmissionReviewDetail }) {
+  const workspace = detail.reviewWorkspace;
+  if (!workspace) return null;
+  const steps = detail.readiness?.progress ?? [];
+  return (
+    <div className="admin-review-decision-workspace">
+      <div>
+        <p className="page-kicker">Decision gate</p>
+        <h4>Confirm the review record before deciding</h4>
+        <p>Decision actions remain in the command rail so this checklist stays read-only and authoritative.</p>
+      </div>
+      <dl>
+        {steps.filter((step) => ["identity", "evidence", "certification"].includes(step.key)).map((step) => (
+          <div key={step.key}>
+            <dt>{step.label}</dt>
+            <dd className={step.status === "COMPLETE" || step.status === "NOT_APPLICABLE" ? "is-ready" : "is-warning"}>{label(step.status)}</dd>
+          </div>
+        ))}
+        <div><dt>Blocking findings</dt><dd className={workspace.blockingIssues.length ? "is-negative" : "is-ready"}>{workspace.blockingIssues.length}</dd></div>
+        <div><dt>Eligible reviewer</dt><dd className={workspace.selfReviewBlocked ? "is-negative" : "is-ready"}>{workspace.selfReviewBlocked ? "No" : "Yes"}</dd></div>
+        <div><dt>Current revision</dt><dd className="is-ready">Valid · v{detail.version}</dd></div>
+      </dl>
+    </div>
+  );
+}
+
 function ReviewSection({
   title,
   detail,
@@ -514,7 +728,25 @@ function ReviewSection({
     </details>
   );
 }
-function Identity({ detail }: { detail: SubmissionReviewDetail }) {
+function Identity({
+  detail,
+  canEdit,
+  reviewIdentity,
+  setReviewIdentity,
+  identityNote,
+  setIdentityNote,
+  onSaveIdentity,
+  savingIdentity,
+}: {
+  detail: SubmissionReviewDetail;
+  canEdit: boolean;
+  reviewIdentity: { name: string; year: string; set: string; cardNumber: string; variant: string };
+  setReviewIdentity: (value: { name: string; year: string; set: string; cardNumber: string; variant: string }) => void;
+  identityNote: string;
+  setIdentityNote: (value: string) => void;
+  onSaveIdentity: () => void;
+  savingIdentity: boolean;
+}) {
   const item = detail.collectible;
   const source = detail.marketResearch?.observations[0];
   return (
@@ -529,15 +761,30 @@ function Identity({ detail }: { detail: SubmissionReviewDetail }) {
           {fact("Year", item?.year)}
         </dl>
       </Info>
-      <Info title="Grade / certification">
-        <dl className="admin-review-facts">
-          {fact("Grade", item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / Ungraded")}
-          {fact("Certification", item?.certificationNumber ?? "Not required")}
-          {fact("Grading company", item?.grader ?? "Not required")}
-        </dl>
+      <Info title="Slice review identity">
+        <div className="admin-review-identity-form">
+          {([
+            ["name", "Title"],
+            ["year", "Year"],
+            ["set", "Set"],
+            ["cardNumber", "Card number"],
+            ["variant", "Variant"],
+          ] as const).map(([field, fieldLabel]) => (
+            <label key={field}>
+              {fieldLabel}
+              <input
+                value={reviewIdentity[field]}
+                onChange={(event) => setReviewIdentity({ ...reviewIdentity, [field]: event.target.value })}
+                disabled={!canEdit}
+              />
+            </label>
+          ))}
+        </div>
       </Info>
       <Info title="Authority signals">
         <dl className="admin-review-facts">
+          {fact("Grade", item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / Ungraded")}
+          {fact("Certification", item?.certificationNumber ?? "Not required")}
           {fact(
             "Certification status",
             detail.certificationVerification
@@ -567,6 +814,26 @@ function Identity({ detail }: { detail: SubmissionReviewDetail }) {
         Submitted information is preserved alongside any normalized or provider-verified authority.
         Exact certificate conflicts are surfaced when verification detects them.
       </p>
+      <div className="admin-review-inline-command">
+        <label>
+          Review note for identity confirmation
+          <textarea
+            rows={2}
+            value={identityNote}
+            onChange={(event) => setIdentityNote(event.target.value)}
+            placeholder="Record the authority used to confirm this identity."
+            disabled={!canEdit}
+          />
+        </label>
+        <button
+          type="button"
+          className="button-secondary"
+          disabled={!canEdit || !identityNote.trim() || savingIdentity}
+          onClick={onSaveIdentity}
+        >
+          {savingIdentity ? "Confirming…" : "Confirm reviewed identity"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -702,6 +969,16 @@ type AssessmentProps = {
   savingValuation: boolean;
   onSaveNote: () => void;
   savingNote: boolean;
+  findingTitle: string;
+  setFindingTitle: (value: string) => void;
+  findingDetail: string;
+  setFindingDetail: (value: string) => void;
+  findingSeverity: "ADVISORY" | "BLOCKING";
+  setFindingSeverity: (value: "ADVISORY" | "BLOCKING") => void;
+  onCreateFinding: () => void;
+  creatingFinding: boolean;
+  onUpdateFinding: (findingId: string, status: "OPEN" | "RESOLVED" | "DISMISSED") => void;
+  updatingFinding: boolean;
 };
 function Assessment(props: AssessmentProps) {
   const stored = props.detail.staffReview?.valuation?.valueMinor;
@@ -803,7 +1080,7 @@ function Assessment(props: AssessmentProps) {
           <span>Stored staff valuation: {storedValue ? "£" + storedValue : "Not recorded"}</span>
         </Info>
       </div>
-      <details className="admin-review-notes">
+      <details id="review-notes" className="admin-review-notes">
         <summary>Internal notes</summary>
         <p>Staff-only notes are never sent to the collector.</p>
         <textarea
@@ -822,6 +1099,89 @@ function Assessment(props: AssessmentProps) {
           {props.savingNote ? "Saving…" : "Save note"}
         </button>
       </details>
+      <section className="admin-review-findings" aria-label="Review findings">
+        <div className="admin-review-findings-heading">
+          <div>
+            <p className="page-kicker">Findings</p>
+            <h4>Open review findings</h4>
+          </div>
+          <span>{props.detail.reviewFindings?.filter((finding) => finding.status === "OPEN").length ?? 0} open</span>
+        </div>
+        <div className="admin-review-finding-list">
+          {props.detail.reviewFindings?.length ? (
+            props.detail.reviewFindings.map((finding) => (
+              <article key={finding.id} className={`admin-review-finding is-${finding.severity.toLowerCase()} is-${finding.status.toLowerCase()}`}>
+                <div>
+                  <strong>{finding.title}</strong>
+                  <small>{label(finding.section)} · {label(finding.severity)} · {label(finding.status)}</small>
+                  {finding.detail ? <p>{finding.detail}</p> : null}
+                </div>
+                {finding.status === "OPEN" ? (
+                  <div className="admin-review-finding-actions">
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      disabled={!props.canEdit || props.updatingFinding}
+                      onClick={() => props.onUpdateFinding(finding.id, "RESOLVED")}
+                    >
+                      Resolve
+                    </button>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      disabled={!props.canEdit || props.updatingFinding}
+                      onClick={() => props.onUpdateFinding(finding.id, "DISMISSED")}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-subtle">No findings have been recorded.</p>
+          )}
+        </div>
+        <div className="admin-review-finding-create">
+          <label>
+            Finding
+            <input
+              value={props.findingTitle}
+              onChange={(event) => props.setFindingTitle(event.target.value)}
+              disabled={!props.canEdit}
+              placeholder="Describe the issue or advisory"
+            />
+          </label>
+          <label>
+            Severity
+            <select
+              value={props.findingSeverity}
+              onChange={(event) => props.setFindingSeverity(event.target.value as "ADVISORY" | "BLOCKING")}
+              disabled={!props.canEdit}
+            >
+              <option value="ADVISORY">Advisory</option>
+              <option value="BLOCKING">Blocking</option>
+            </select>
+          </label>
+          <label>
+            Detail (optional)
+            <input
+              value={props.findingDetail}
+              onChange={(event) => props.setFindingDetail(event.target.value)}
+              disabled={!props.canEdit}
+              placeholder="Context for other reviewers"
+            />
+          </label>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={props.onCreateFinding}
+            disabled={!props.canEdit || !props.findingTitle.trim() || props.creatingFinding}
+          >
+            {props.creatingFinding ? "Recording…" : "Add finding"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -855,27 +1215,30 @@ function DecisionRail({
     <aside className="admin-review-decision-rail">
       <section className="admin-panel-card admin-review-status-card">
         <div className="admin-review-status-card-heading">
-          <h2>Review status</h2>
+          <h2>Current state</h2>
           {workspace.selfReviewBlocked ? <StatusPill value="Self-review blocked" /> : null}
         </div>
         <div className="admin-review-status-line">
-          <span>Primary reviewer</span>
-          <strong>{primaryReviewerLabel(workspace.claimState)}</strong>
+          <span>State</span>
+          <strong>{label(detail.status)}</strong>
           <small>{claimDetail(detail)}</small>
         </div>
         <div className="admin-review-status-line">
-          <span>Contributors</span>
-          <strong>{contributors.length || "None yet"}</strong>
+          <span>Why</span>
+          <strong>{workspace.primaryBlocker ?? "Required review authority is complete"}</strong>
           <small>
-            {contributors.length
-              ? contributors.map((contributor) => contributor.displayName).join(", ")
-              : "Contributions are attributed to each authorized staff member."}
+            {contributors.length ? `${contributors.length} contributor${contributors.length === 1 ? "" : "s"} recorded.` : "Contributions are attributed to each authorized staff member."}
           </small>
         </div>
         <div className="admin-review-next-action">
           <span>Next action</span>
           <strong>{readinessTitle(detail)}</strong>
           <p>{nextActionCopy(workspace.nextAction)}</p>
+        </div>
+        <div className="admin-review-status-line">
+          <span>After approval</span>
+          <strong>{detail.assetId ? "Open Physical Intake" : "Create canonical collectible"}</strong>
+          <small>Physical receipt, custody, valuation, ownership, and market work remain separate workflows.</small>
         </div>
         <small className="admin-review-updated">
           Last updated {formatDate(workspace.lastUpdated)}
@@ -914,7 +1277,7 @@ function DecisionRail({
         ) : null}
       </section>
       <section className="admin-panel-card admin-review-actions-card">
-        <h2>Review actions</h2>
+        <h2>Quick actions</h2>
         {staleReview ? (
           <div className="admin-review-decision-actions">
             <p className="text-negative">This review changed while you were working.</p>
@@ -924,6 +1287,9 @@ function DecisionRail({
           </div>
         ) : (
           <div className="admin-review-decision-actions">
+            <a className="admin-review-action is-claim" href="#review-notes">
+              Add internal note<small>Record staff-only context for this review</small>
+            </a>
             {workspace.canClaim ? (
               <button
                 type="button"
@@ -943,6 +1309,9 @@ function DecisionRail({
                 </small>
               </button>
             ) : null}
+            <button type="button" className="admin-review-action is-claim" onClick={onRefresh}>
+              Recalculate readiness<small>Refresh the authoritative review projection</small>
+            </button>
             {workspace.canRelease ? (
               <button
                 type="button"
@@ -1015,6 +1384,25 @@ function DecisionRail({
             ) : null}
           </div>
         )}
+      </section>
+      <section className="admin-panel-card admin-review-links-card">
+        <h2>Quick links</h2>
+        <Link to="/admin" search={{ section: "users" }}>Collector account <span>↗</span></Link>
+        {detail.assetId ? <Link to="/admin" search={{ section: "collectibles", asset: detail.assetId }}>Canonical collectible <span>↗</span></Link> : null}
+        {detail.assetId ? <Link to="/admin" search={{ section: "intake" }}>Physical Intake <span>↗</span></Link> : null}
+        <Link to="/admin" search={{ section: "moderation" }}>Review queue <span>↗</span></Link>
+        <a href="#review-history">Review history <span>↓</span></a>
+      </section>
+      <section className="admin-panel-card admin-review-summary-card">
+        <h2>Submission summary</h2>
+        <dl>
+          {fact("Category", detail.collectible?.category)}
+          {fact("Card number", detail.collectible?.cardNumber)}
+          {fact("Year", detail.collectible?.year)}
+          {fact("Set", detail.collectible?.set)}
+          {fact("Variant", detail.collectible?.variant)}
+          {fact("Grade", detail.collectible?.grader ? `${detail.collectible.grader} ${detail.collectible.grade ?? ""}` : "Raw / Ungraded")}
+        </dl>
       </section>
     </aside>
   );
@@ -1263,17 +1651,33 @@ function PostApproval({
   );
 }
 function ReviewHistory({ detail }: { detail: SubmissionReviewDetail }) {
+  const events = [
+    ...detail.reviews.map((item) => ({
+      id: item.id ?? item.createdAt,
+      action: humanReviewEvent(item.decision ?? item.status),
+      actor: item.actor?.displayName ?? null,
+      detail: item.note ?? null,
+      occurredAt: item.createdAt,
+    })),
+    ...(detail.activity ?? []).map((item) => ({
+      id: item.id,
+      action: humanReviewEvent(item.action),
+      actor: item.actor,
+      detail: item.detail,
+      occurredAt: item.occurredAt,
+    })),
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
   return (
-    <section className="admin-panel-card">
+    <section id="review-history" className="admin-panel-card">
       <h3>Review history</h3>
       <ul className="admin-review-history mt-4">
-        {detail.reviews.length ? (
-          detail.reviews.map((item) => (
-            <li key={item.id ?? item.createdAt}>
-              <strong>{humanReviewEvent(item.decision ?? item.status)}</strong>
-              <span>{formatDate(item.createdAt)}</span>
-              {item.actor ? <small>By {item.actor.displayName}</small> : null}
-              {item.note ? <p>{item.note}</p> : null}
+        {events.length ? (
+          events.map((item) => (
+            <li key={item.id}>
+              <strong>{item.action}</strong>
+              <span>{formatDate(item.occurredAt)}</span>
+              {item.actor ? <small>By {item.actor}</small> : null}
+              {item.detail ? <p>{item.detail}</p> : null}
             </li>
           ))
         ) : (

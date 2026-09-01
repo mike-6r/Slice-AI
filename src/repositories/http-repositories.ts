@@ -1628,6 +1628,10 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
     ...mapReviewSummary(value),
     version: Number(value.version),
     declaredMetadata: value.declaredMetadata as Record<string, unknown> | null,
+    reviewMetadata:
+      value.reviewMetadata && typeof value.reviewMetadata === "object"
+        ? (value.reviewMetadata as Record<string, unknown>)
+        : null,
     media: value.media.map(mapSubmissionMedia),
     reviews: value.reviews.map((rawReview) => {
       const review = objectField(rawReview, "review history");
@@ -1711,6 +1715,9 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       value.reviewAssignment && typeof value.reviewAssignment === "object"
         ? (objectField(value.reviewAssignment, "review assignment") as never)
         : undefined,
+    reviewFindings: Array.isArray(value.reviewFindings)
+      ? (value.reviewFindings as never)
+      : undefined,
     staffReview:
       value.staffReview && typeof value.staffReview === "object"
         ? (objectField(value.staffReview, "staff review") as never)
@@ -5383,10 +5390,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
       async getDetail(id) {
         return mapReviewDetail(await client.get<unknown>(`/reviews/submissions/${id}`));
       },
-      async claim(id) {
+      async claim(id, version) {
         const response = objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/claim`, {
             method: "POST",
+            body: { version },
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "review claim",
@@ -5396,10 +5404,11 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           status: stringField(response.status, "claim.status"),
         };
       },
-      async release(id) {
+      async release(id, version) {
         const response = objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/release`, {
             method: "POST",
+            body: { version },
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "review release",
@@ -5462,7 +5471,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const response = objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/notes`, {
             method: "POST",
-            body: { note },
+            body: note,
             headers: { "Idempotency-Key": idempotencyKey() },
           }),
           "review note",
@@ -5470,6 +5479,51 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         return {
           submissionId: stringField(response.submissionId, "review note.submissionId"),
           updatedAt: stringField(response.updatedAt, "review note.updatedAt"),
+        };
+      },
+      async saveIdentity(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/identity`, {
+            method: "PATCH",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review identity",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "review identity.submissionId"),
+          version: Number(response.version),
+        };
+      },
+      async createFinding(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/findings`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review finding",
+        );
+        return {
+          findingId: stringField(response.findingId, "review finding.findingId"),
+          submissionId: stringField(response.submissionId, "review finding.submissionId"),
+          version: Number(response.version),
+        };
+      },
+      async updateFinding(id, findingId, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/findings/${findingId}`, {
+            method: "PATCH",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review finding update",
+        );
+        return {
+          findingId: stringField(response.findingId, "review finding update.findingId"),
+          submissionId: stringField(response.submissionId, "review finding update.submissionId"),
+          status: stringField(response.status, "review finding update.status"),
+          version: Number(response.version),
         };
       },
       async manualVerifyCertification(id, input) {

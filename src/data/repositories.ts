@@ -141,15 +141,16 @@ export interface SubmissionReviewRepository {
     pageSize?: number;
   }): Promise<SubmissionReviewQueueResponse>;
   getDetail(id: string): Promise<SubmissionReviewDetail>;
-  claim(id: string): Promise<{ submissionId: string; status: string }>;
-  release(id: string): Promise<{ submissionId: string; status: string; version: number }>;
+  claim(id: string, version: number): Promise<{ submissionId: string; status: string }>;
+  release(id: string, version: number): Promise<{ submissionId: string; status: string; version: number }>;
   saveCondition(
     id: string,
-    input: { condition: string; note?: string },
+    input: { version: number; condition: string; note?: string },
   ): Promise<{ submissionId: string; staffCondition: string; updatedAt: string }>;
   saveValuation(
     id: string,
     input: {
+      version: number;
       valueMinor: string;
       currency: "GBP";
       basis: string;
@@ -168,7 +169,38 @@ export interface SubmissionReviewRepository {
       customerMessage?: string;
     },
   ): Promise<AssetSubmission>;
-  saveNote(id: string, note: string): Promise<{ submissionId: string; updatedAt: string }>;
+  saveNote(
+    id: string,
+    input: { version: number; note: string },
+  ): Promise<{ submissionId: string; updatedAt: string }>;
+  saveIdentity(
+    id: string,
+    input: {
+      version: number;
+      name: string;
+      year?: string;
+      set?: string;
+      cardNumber?: string;
+      variant?: string;
+      note: string;
+    },
+  ): Promise<{ submissionId: string; version: number }>;
+  createFinding(
+    id: string,
+    input: {
+      version: number;
+      section: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision";
+      title: string;
+      detail?: string;
+      severity: "ADVISORY" | "BLOCKING";
+      customerAction?: boolean;
+    },
+  ): Promise<{ findingId: string; submissionId: string; version: number }>;
+  updateFinding(
+    id: string,
+    findingId: string,
+    input: { version: number; status: "OPEN" | "RESOLVED" | "DISMISSED"; resolutionNote?: string },
+  ): Promise<{ findingId: string; submissionId: string; status: string; version: number }>;
   manualVerifyCertification(
     id: string,
     input: {

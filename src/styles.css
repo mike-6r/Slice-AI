@@ -2229,6 +2229,11 @@
   color: #91a7ae;
   font-size: 0.76rem;
 }
+.admin-review-workspace-header .admin-review-goal {
+  margin-top: 0.45rem;
+  color: #b4c7c5;
+  font-size: 0.63rem;
+}
 .admin-review-eyebrow-row,
 .admin-review-chip-row,
 .admin-review-workspace-header-meta {
@@ -2838,7 +2843,303 @@
 .admin-review-workspace-notes {
   min-width: 0;
 }
+
+/* Control-centre additions: these controls share the same compact card rhythm
+ * as Physical Intake rather than introducing a second visual language. */
+.admin-review-inline-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #203d47;
+}
+.admin-review-inline-command label,
+.admin-review-finding-create label {
+  display: grid;
+  gap: 0.32rem;
+  color: #9bb0b1;
+  font-size: 0.62rem;
+}
+.admin-review-inline-command textarea,
+.admin-review-finding-create input,
+.admin-review-finding-create select {
+  width: 100%;
+  border: 1px solid #2b4853;
+  border-radius: 0.32rem;
+  padding: 0.48rem 0.55rem;
+  background: #08171e;
+  color: #e5f1ee;
+  font: inherit;
+}
+.admin-review-findings {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #203d47;
+}
+.admin-review-findings-heading,
+.admin-review-finding {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.admin-review-findings-heading h4 {
+  margin: 0.12rem 0 0;
+  color: #e5f1ee;
+  font-size: 0.82rem;
+}
+.admin-review-findings-heading > span {
+  border-radius: 999px;
+  padding: 0.22rem 0.46rem;
+  background: rgba(64, 151, 205, 0.15);
+  color: #8dd3eb;
+  font-size: 0.57rem;
+  font-weight: 750;
+}
+.admin-review-finding-list {
+  display: grid;
+  gap: 0.45rem;
+}
+.admin-review-finding {
+  padding: 0.65rem 0.7rem;
+  border: 1px solid #294752;
+  border-radius: 0.38rem;
+  background: rgba(8, 22, 29, 0.7);
+}
+.admin-review-finding.is-blocking {
+  border-color: rgba(224, 131, 80, 0.7);
+}
+.admin-review-finding.is-resolved,
+.admin-review-finding.is-dismissed {
+  opacity: 0.62;
+}
+.admin-review-finding strong,
+.admin-review-finding small,
+.admin-review-finding p {
+  display: block;
+  margin: 0;
+}
+.admin-review-finding strong { color: #e5f1ee; font-size: 0.7rem; }
+.admin-review-finding small { margin-top: 0.15rem; color: #7e99a1; font-size: 0.55rem; }
+.admin-review-finding p { margin-top: 0.35rem; color: #a9bdbe; font-size: 0.63rem; }
+.admin-review-finding-actions { display: flex; gap: 0.38rem; }
+.admin-review-finding-actions button { font-size: 0.6rem; }
+.admin-review-finding-create {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(7rem, 0.5fr) minmax(12rem, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  padding: 0.65rem;
+  border: 1px dashed #294752;
+  border-radius: 0.38rem;
+}
+.admin-review-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.admin-review-overview-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  min-height: 12.1rem;
+  border-color: #25414c;
+  border-radius: 0.45rem;
+  padding: 0.9rem 1rem;
+}
+.admin-review-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.admin-review-card-heading h2 {
+  margin: 0;
+  color: #edf7f4;
+  font-size: 0.84rem;
+}
+.admin-review-card-heading > span {
+  color: #49ddb9;
+  font-size: 0.59rem;
+  font-weight: 700;
+}
+.admin-review-overview-facts {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0;
+}
+.admin-review-overview-facts > div,
+.admin-review-team-primary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+.admin-review-overview-facts dt,
+.admin-review-team-primary > span {
+  color: #839ba5;
+  font-size: 0.6rem;
+}
+.admin-review-overview-facts dd,
+.admin-review-team-primary strong {
+  margin: 0;
+  color: #e8f4f1;
+  font-size: 0.63rem;
+  text-align: right;
+}
+.admin-review-overview-facts dd.is-ready,
+.admin-review-readiness-answer.is-ready strong,
+.admin-review-finding-summary.is-clear strong,
+.admin-review-decision-workspace .is-ready { color: #47deb9; }
+.admin-review-overview-facts dd.is-warning,
+.admin-review-decision-workspace .is-warning { color: #f2ba49; }
+.admin-review-decision-workspace .is-negative { color: #ff7d86; }
+.admin-review-readiness-answer {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: auto;
+  padding: 0.62rem 0.7rem;
+  border: 1px solid #674d1d;
+  border-radius: 0.35rem;
+  background: rgba(94, 67, 10, 0.12);
+}
+.admin-review-readiness-answer.is-ready {
+  border-color: #237866;
+  background: rgba(23, 142, 113, 0.1);
+}
+.admin-review-readiness-answer span,
+.admin-review-readiness-answer small,
+.admin-review-finding-summary span {
+  color: #9bb0b3;
+  font-size: 0.58rem;
+  line-height: 1.4;
+}
+.admin-review-readiness-answer strong,
+.admin-review-finding-summary strong { color: #f0bd57; font-size: 0.78rem; }
+.admin-review-contributors {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-review-contributors li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.38rem;
+  border-top: 1px solid rgba(37, 65, 76, 0.6);
+}
+.admin-review-contributors strong { color: #e7f3f0; font-size: 0.62rem; }
+.admin-review-contributors span { color: #8299a2; font-size: 0.56rem; text-align: right; }
+.admin-review-finding-summary { display: grid; gap: 0.35rem; margin: auto 0; }
+.admin-review-finding-summary.is-blocking strong { color: #ff8b90; }
+.admin-review-workflow {
+  display: grid;
+  gap: 0.65rem;
+  border-color: #25414c;
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+}
+.admin-review-workflow-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.1rem 0.2rem 0.35rem;
+}
+.admin-review-workflow-heading h2 {
+  margin: 0.18rem 0 0;
+  color: #edf7f4;
+  font-size: 0.88rem;
+}
+.admin-review-workflow-heading > span {
+  max-width: 18rem;
+  color: #8da4ab;
+  font-size: 0.58rem;
+  line-height: 1.45;
+  text-align: right;
+}
+.admin-review-workflow .admin-review-workspace-section { box-shadow: none; }
+.admin-review-identity-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+.admin-review-identity-form label {
+  display: grid;
+  gap: 0.22rem;
+  color: #8fa5ad;
+  font-size: 0.56rem;
+}
+.admin-review-identity-form label:first-child { grid-column: 1 / -1; }
+.admin-review-identity-form input {
+  min-width: 0;
+  border: 1px solid #2b4853;
+  border-radius: 0.28rem;
+  padding: 0.4rem 0.45rem;
+  background: #08171e;
+  color: #e6f2ef;
+  font: inherit;
+  font-size: 0.62rem;
+}
+.admin-review-decision-workspace {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.85fr) minmax(18rem, 1.15fr);
+  gap: 1rem;
+}
+.admin-review-decision-workspace h4,
+.admin-review-decision-workspace p { margin: 0; }
+.admin-review-decision-workspace h4 { margin-top: 0.24rem; color: #edf7f4; font-size: 0.82rem; }
+.admin-review-decision-workspace p { margin-top: 0.4rem; color: #92a8ae; font-size: 0.62rem; line-height: 1.45; }
+.admin-review-decision-workspace dl { display: grid; gap: 0.38rem; margin: 0; }
+.admin-review-decision-workspace dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding-bottom: 0.32rem;
+  border-bottom: 1px solid rgba(37, 65, 76, 0.55);
+}
+.admin-review-decision-workspace dt,
+.admin-review-decision-workspace dd { margin: 0; color: #9bb0b5; font-size: 0.61rem; }
+.admin-review-decision-workspace dd { color: #e3f0ed; text-align: right; }
+.admin-review-links-card,
+.admin-review-summary-card { display: grid; gap: 0.5rem; border-color: #25414c; border-radius: 0.45rem; padding: 0.9rem 1rem; }
+.admin-review-links-card h2,
+.admin-review-summary-card h2 { margin: 0 0 0.15rem; color: #edf7f4; font-size: 0.8rem; }
+.admin-review-links-card a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.42rem;
+  border-bottom: 1px solid rgba(37, 65, 76, 0.55);
+  color: #b7cdcf;
+  font-size: 0.62rem;
+  text-decoration: none;
+}
+.admin-review-links-card a:last-child { border-bottom: 0; padding-bottom: 0; }
+.admin-review-links-card a span { color: #49ddb9; }
+.admin-review-summary-card dl { display: grid; gap: 0.42rem; margin: 0; }
+.admin-review-summary-card .admin-review-identity-field { grid-template-columns: minmax(0, 1fr) auto; }
+.admin-review-summary-card .admin-review-identity-field span { color: #8da4ab; font-size: 0.58rem; }
+.admin-review-summary-card .admin-review-identity-field strong { color: #e7f3f0; font-size: 0.61rem; text-align: right; }
+@media (max-width: 700px) {
+  .admin-review-inline-command,
+  .admin-review-finding-create,
+  .admin-review-identity-form,
+  .admin-review-decision-workspace { grid-template-columns: 1fr; }
+  .admin-review-finding { flex-direction: column; }
+  .admin-review-workflow-heading { align-items: start; flex-direction: column; }
+  .admin-review-workflow-heading > span { text-align: left; }
+}
 @media (max-width: 1050px) {
+  .admin-review-overview-grid { grid-template-columns: 1fr 1fr; }
   .admin-review-workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -2854,6 +3155,9 @@
   .admin-review-sticky-rail > .admin-review-confirmation {
     grid-column: 1 / -1;
   }
+}
+@media (max-width: 620px) {
+  .admin-review-overview-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
   .admin-review-workspace-header,

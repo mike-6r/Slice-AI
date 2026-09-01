@@ -1531,6 +1531,10 @@ model AssetSubmission {
   setId                         String?
   gradeScaleEntryId             String?
   declaredMetadata              Json?
+  /// Staff-reviewed identity. Collector-supplied declaredMetadata is never
+  /// overwritten during review; this overlay becomes the explicit authority
+  /// used by canonicalization only after a reviewed decision.
+  reviewMetadata                Json?
   normalizedCertificationNumber String?
   preferredIntakeLocationId     String?
   preferredDeliveryMethod       IntakeDeliveryMethod?
@@ -1557,11 +1561,47 @@ model AssetSubmission {
   stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
   certificationVerifications    GradingCertificationVerification[]
   certificationClaims           GradingCertificationClaim[]
+  reviewFindings                SubmissionReviewFinding[]
 
   @@index([ownerUserId, status, createdAt, id])
   @@index([status, submittedAt, id])
   @@index([reviewerId, status, updatedAt, id])
   @@index([preferredIntakeLocationId])
+}
+
+enum SubmissionReviewFindingSeverity {
+  ADVISORY
+  BLOCKING
+}
+
+enum SubmissionReviewFindingStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+/// A staff-authored review finding. Findings are deliberately separate from
+/// evidence-upload safety and decision notes so readiness can expose only
+/// unresolved blocking findings without losing the complete audit trail.
+model SubmissionReviewFinding {
+  id                String                          @id @default(cuid())
+  submissionId      String
+  section           String
+  title             String
+  detail            String?
+  severity          SubmissionReviewFindingSeverity @default(ADVISORY)
+  status            SubmissionReviewFindingStatus   @default(OPEN)
+  customerAction    Boolean                         @default(false)
+  createdByUserId   String
+  resolvedByUserId  String?
+  resolutionNote    String?
+  resolvedAt        DateTime?
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+  submission        AssetSubmission                 @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, status, severity, createdAt, id])
+  @@index([createdByUserId, createdAt, id])
 }
 
 /// A provider-backed or staff-confirmed certification lookup. Provider data is

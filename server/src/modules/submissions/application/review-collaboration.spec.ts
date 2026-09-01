@@ -41,6 +41,7 @@ describe('submission review collaboration', () => {
           ownerUserId: 'collector-1',
           reviewerId: primaryReviewerId,
           status: 'IN_REVIEW',
+          version: 1,
         }),
       },
       verificationReview: {
@@ -59,7 +60,7 @@ describe('submission review collaboration', () => {
       reviewService(db).saveStaffCondition(
         contributor,
         'submission-1',
-        { condition: 'Near Mint', note: 'Clean surfaces' },
+        { version: 1, condition: 'Near Mint', note: 'Clean surfaces' },
         'request-1',
         'key-1',
       ),
@@ -91,6 +92,7 @@ describe('submission review collaboration', () => {
           ownerUserId: 'collector-1',
           reviewerId: primaryReviewerId,
           status: 'IN_REVIEW',
+          version: 4,
         }),
         update: jest.fn().mockResolvedValue({
           id: 'submission-1',
@@ -105,6 +107,7 @@ describe('submission review collaboration', () => {
       reviewService(db).releaseClaim(
         contributor,
         'submission-1',
+        { version: 4 },
         'request-2',
         'key-2',
       ),
@@ -183,6 +186,109 @@ describe('submission review collaboration', () => {
     expect(db.verificationReview.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ reviewerId: contributorId, status: 'COMPLETED' }),
+      }),
+    );
+  });
+
+  it('persists a reviewed identity separately from the collector submission', async () => {
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      assetSubmission: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'submission-1',
+          ownerUserId: 'collector-1',
+          status: 'IN_REVIEW',
+          version: 4,
+        }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ reviewMetadata: null }),
+        update: jest.fn().mockResolvedValue({
+          id: 'submission-1',
+          version: 5,
+          reviewMetadata: {
+            name: 'Reviewed Pikachu ex',
+            cardNumber: '238',
+            reviewIdentityNote: 'Matched evidence and source reference.',
+          },
+        }),
+      },
+      verificationReview: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'contribution-1' }),
+      },
+    };
+
+    await expect(
+      reviewService(db).saveReviewIdentity(
+        contributor,
+        'submission-1',
+        {
+          version: 4,
+          name: 'Reviewed Pikachu ex',
+          cardNumber: '238',
+          note: 'Matched evidence and source reference.',
+        },
+        'request-4',
+        'key-4',
+      ),
+    ).resolves.toMatchObject({ submissionId: 'submission-1', version: 5 });
+
+    expect(db.assetSubmission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          version: { increment: 1 },
+          reviewMetadata: expect.objectContaining({ name: 'Reviewed Pikachu ex' }),
+        }),
+      }),
+    );
+  });
+
+  it('attributes a finding and advances the review revision', async () => {
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      assetSubmission: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'submission-1',
+          ownerUserId: 'collector-1',
+          status: 'IN_REVIEW',
+          version: 6,
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'submission-1', version: 7 }),
+      },
+      verificationReview: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'contribution-1' }),
+      },
+      submissionReviewFinding: {
+        create: jest.fn().mockResolvedValue({
+          id: 'finding-1',
+          section: 'evidence',
+          severity: 'BLOCKING',
+          customerAction: true,
+        }),
+      },
+    };
+
+    await expect(
+      reviewService(db).createReviewFinding(
+        contributor,
+        'submission-1',
+        {
+          version: 6,
+          section: 'evidence',
+          title: 'Front image is unreadable',
+          severity: 'BLOCKING',
+          customerAction: true,
+        },
+        'request-5',
+        'key-5',
+      ),
+    ).resolves.toMatchObject({ findingId: 'finding-1', version: 7 });
+
+    expect(db.submissionReviewFinding.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          submissionId: 'submission-1',
+          createdByUserId: contributorId,
+          severity: 'BLOCKING',
+        }),
       }),
     );
   });

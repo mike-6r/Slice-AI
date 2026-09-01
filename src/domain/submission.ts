@@ -245,6 +245,7 @@ export interface SubmissionReviewQueueResponse {
 export interface SubmissionReviewDetail extends SubmissionReviewSummary {
   version: number;
   declaredMetadata: Record<string, unknown> | null;
+  reviewMetadata?: Record<string, unknown> | null;
   media: SubmissionMedia[];
   reviews: Array<{
     id?: string;
@@ -355,6 +356,21 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
       lastContributedAt: ISODateTime;
     }>;
   };
+  reviewFindings?: Array<{
+    id: string;
+    section: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision" | string;
+    title: string;
+    detail: string | null;
+    severity: "ADVISORY" | "BLOCKING";
+    status: "OPEN" | "RESOLVED" | "DISMISSED";
+    customerAction: boolean;
+    createdByUserId: string;
+    resolvedByUserId: string | null;
+    resolutionNote: string | null;
+    createdAt: ISODateTime;
+    updatedAt: ISODateTime;
+    resolvedAt: ISODateTime | null;
+  }>;
   staffReview?: {
     condition: string | null;
     conditionNote: string | null;

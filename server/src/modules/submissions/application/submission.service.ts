@@ -71,6 +71,28 @@ type IdentityCorrectionInput = {
   year: string;
   note: string;
 };
+type ReviewIdentityInput = {
+  version: number;
+  name: string;
+  year?: string;
+  set?: string;
+  cardNumber?: string;
+  variant?: string;
+  note: string;
+};
+type ReviewFindingInput = {
+  version: number;
+  section: string;
+  title: string;
+  detail?: string;
+  severity: 'ADVISORY' | 'BLOCKING';
+  customerAction?: boolean;
+};
+type ReviewFindingStatusInput = {
+  version: number;
+  status: 'RESOLVED' | 'DISMISSED' | 'OPEN';
+  resolutionNote?: string;
+};
 
 const metadataAllowedKeys = new Set([
   'name',
@@ -332,6 +354,7 @@ export class SubmissionService {
           orderBy: { collectedAt: 'desc' },
           include: { observations: { orderBy: { observedAt: 'desc' } } },
         },
+        reviewFindings: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
       },
     });
     if (!submission) this.notFound();
@@ -507,6 +530,7 @@ export class SubmissionService {
             setId: true,
             gradeScaleEntryId: true,
             declaredMetadata: true,
+            reviewMetadata: true,
             normalizedCertificationNumber: true,
           },
         });
@@ -539,9 +563,7 @@ export class SubmissionService {
             replayed: true,
           };
         }
-        const metadata = isRecord(submission!.declaredMetadata)
-          ? submission!.declaredMetadata
-          : {};
+        const metadata = reviewedMetadata(submission!);
         const title =
           stringMetadata(metadata.name) ??
           stringMetadata(metadata.playerOrCharacter);
@@ -1756,6 +1778,7 @@ export class SubmissionService {
           orderBy: { collectedAt: 'desc' },
           include: { observations: { orderBy: { observedAt: 'desc' } } },
         },
+        reviewFindings: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
       },
     });
     if (!submission) this.notFound();
@@ -1955,6 +1978,12 @@ export class SubmissionService {
       !response.collectible.certificationNumber ||
       certification?.status === 'VERIFIED' ||
       certification?.status === 'MANUAL_REVIEW';
+    const openFindings = submission!.reviewFindings.filter(
+      (finding) => finding.status === 'OPEN',
+    );
+    const blockingFindings = openFindings.filter(
+      (finding) => finding.severity === 'BLOCKING',
+    );
     const blockers = [
       ...(identityConfirmed ? [] : ['Collectible identity is incomplete.']),
       ...(evidenceComplete
@@ -1965,6 +1994,7 @@ export class SubmissionService {
       ...(certificationResolved
         ? []
         : ['Certification verification requires review.']),
+      ...blockingFindings.map((finding) => finding.title),
     ];
     const selfReviewForbidden = submission!.ownerUserId === actor.userId;
     const canContribute =
@@ -2073,6 +2103,21 @@ export class SubmissionService {
         lastActivity: submission!.updatedAt.toISOString(),
         contributors,
       },
+      reviewFindings: submission!.reviewFindings.map((finding) => ({
+        id: finding.id,
+        section: finding.section,
+        title: finding.title,
+        detail: finding.detail,
+        severity: finding.severity,
+        status: finding.status,
+        customerAction: finding.customerAction,
+        createdByUserId: finding.createdByUserId,
+        resolvedByUserId: finding.resolvedByUserId,
+        resolutionNote: finding.resolutionNote,
+        createdAt: finding.createdAt.toISOString(),
+        updatedAt: finding.updatedAt.toISOString(),
+        resolvedAt: finding.resolvedAt?.toISOString() ?? null,
+      })),
       staffReview: {
         condition: latestConditionReview?.staffCondition ?? null,
         conditionNote: latestConditionReview?.staffConditionNote ?? null,
@@ -2257,21 +2302,31 @@ export class SubmissionService {
     };
   }
 
-  claim(actor: Actor, id: string, requestId: string, key: string) {
+  claim(
+    actor: Actor,
+    id: string,
+    input: { version: number },
+    requestId: string,
+    key: string,
+  ) {
     return this.mutate(
       actor,
       `review.claim:${id}`,
       'POST',
       `/v1/reviews/submissions/${id}/claim`,
-      {},
+      input,
       requestId,
       key,
       async (db, audit) => {
+        await db.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+        `;
         const submission = await db.assetSubmission.findUnique({
           where: { id },
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        assertExpectedVersion(submission!.version, input.version);
         if (!['SUBMITTED', 'IN_REVIEW'].includes(submission!.status))
           this.stateConflict();
         if (submission!.reviewerId === actor.userId) {
@@ -2314,13 +2369,19 @@ export class SubmissionService {
     );
   }
 
-  releaseClaim(actor: Actor, id: string, requestId: string, key: string) {
+  releaseClaim(
+    actor: Actor,
+    id: string,
+    input: { version: number },
+    requestId: string,
+    key: string,
+  ) {
     return this.mutate(
       actor,
       `review.release:${id}`,
       'POST',
       `/v1/reviews/submissions/${id}/release`,
-      {},
+      input,
       requestId,
       key,
       async (db, audit) => {
@@ -2332,6 +2393,7 @@ export class SubmissionService {
         });
         if (!submission) this.notFound();
         assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        assertExpectedVersion(submission!.version, input.version);
         if (submission!.status !== 'IN_REVIEW' || !submission!.reviewerId)
           this.stateConflict();
         const updated = await db.assetSubmission.update({
@@ -2357,7 +2419,7 @@ export class SubmissionService {
   saveStaffCondition(
     actor: Actor,
     id: string,
-    input: { condition: string; note?: string },
+    input: { version: number; condition: string; note?: string },
     requestId: string,
     key: string,
   ) {
@@ -2370,7 +2432,12 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
-        const review = await this.lockCollaborativeReview(db, actor, id);
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
         const updated = await db.verificationReview.update({
           where: { id: review.id },
           data: {
@@ -2398,6 +2465,7 @@ export class SubmissionService {
     id: string,
     input: {
       valueMinor: string;
+      version: number;
       currency: 'GBP';
       basis: string;
       confidence?: number;
@@ -2415,7 +2483,12 @@ export class SubmissionService {
       requestId,
       key,
       async (db, audit) => {
-        const review = await this.lockCollaborativeReview(db, actor, id);
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
         const updated = await db.verificationReview.update({
           where: { id: review.id },
           data: {
@@ -2448,7 +2521,12 @@ export class SubmissionService {
     );
   }
 
-  private async lockCollaborativeReview(db: Db, actor: Actor, id: string) {
+  private async lockCollaborativeReview(
+    db: Db,
+    actor: Actor,
+    id: string,
+    expectedVersion?: number,
+  ) {
     await db.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
     `;
@@ -2458,6 +2536,8 @@ export class SubmissionService {
     if (!submission) this.notFound();
     assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
     if (submission!.status !== 'IN_REVIEW') this.stateConflict();
+    if (expectedVersion !== undefined)
+      assertExpectedVersion(submission!.version, expectedVersion);
     const review = await db.verificationReview.findFirst({
       where: { submissionId: id, reviewerId: actor.userId, status: 'CLAIMED' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -2747,7 +2827,7 @@ export class SubmissionService {
   saveReviewNote(
     actor: Actor,
     id: string,
-    note: string,
+    input: { version: number; note: string },
     requestId: string,
     key: string,
   ) {
@@ -2756,21 +2836,176 @@ export class SubmissionService {
       `review.note:${id}`,
       'POST',
       `/v1/reviews/submissions/${id}/notes`,
-      { note },
+      input,
       requestId,
       key,
       async (db, audit) => {
-        const review = await this.lockCollaborativeReview(db, actor, id);
+        const review = await this.lockCollaborativeReview(
+          db,
+          actor,
+          id,
+          input.version,
+        );
         const updatedAt = new Date();
         await db.verificationReview.update({
           where: { id: review.id },
-          data: { note: redactNote(note) },
+          data: { note: redactNote(input.note) },
         });
         await audit('SUBMISSION_REVIEW_NOTE_UPDATED', 'submission', id, {
           reviewId: review.id,
-          note: redactNote(note),
+          note: redactNote(input.note),
         });
         return { submissionId: id, updatedAt: updatedAt.toISOString() };
+      },
+    );
+  }
+
+  saveReviewIdentity(
+    actor: Actor,
+    id: string,
+    input: ReviewIdentityInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.identity:${id}`,
+      'PATCH',
+      `/v1/reviews/submissions/${id}/identity`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await this.lockCollaborativeReview(db, actor, id, input.version);
+        const submission = await db.assetSubmission.findUniqueOrThrow({
+          where: { id },
+          select: { reviewMetadata: true },
+        });
+        const previous = isRecord(submission.reviewMetadata)
+          ? submission.reviewMetadata
+          : {};
+        const reviewMetadata = {
+          ...previous,
+          name: input.name,
+          ...(input.year ? { year: input.year } : {}),
+          ...(input.set ? { set: input.set } : {}),
+          ...(input.cardNumber ? { cardNumber: input.cardNumber } : {}),
+          ...(input.variant ? { variant: input.variant } : {}),
+        };
+        const updated = await db.assetSubmission.update({
+          where: { id },
+          data: {
+            reviewMetadata: jsonMetadata(reviewMetadata),
+            version: { increment: 1 },
+          },
+          select: { version: true, reviewMetadata: true },
+        });
+        await audit('SUBMISSION_REVIEW_IDENTITY_CONFIRMED', 'submission', id, {
+          fields: Object.keys(reviewMetadata),
+          note: redactNote(input.note),
+          version: updated.version,
+        });
+        return {
+          submissionId: id,
+          version: updated.version,
+          reviewMetadata: updated.reviewMetadata,
+        };
+      },
+    );
+  }
+
+  createReviewFinding(
+    actor: Actor,
+    id: string,
+    input: ReviewFindingInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.finding.create:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/findings`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await this.lockCollaborativeReview(db, actor, id, input.version);
+        const finding = await db.submissionReviewFinding.create({
+          data: {
+            id: randomUUID(),
+            submissionId: id,
+            section: input.section,
+            title: redactNote(input.title).slice(0, 180),
+            detail: input.detail ? redactNote(input.detail) : null,
+            severity: input.severity,
+            customerAction: input.customerAction ?? false,
+            createdByUserId: actor.userId,
+          },
+        });
+        const submission = await db.assetSubmission.update({
+          where: { id },
+          data: { version: { increment: 1 } },
+          select: { version: true },
+        });
+        await audit('SUBMISSION_REVIEW_FINDING_CREATED', 'submission', id, {
+          findingId: finding.id,
+          section: finding.section,
+          severity: finding.severity,
+          customerAction: finding.customerAction,
+          version: submission.version,
+        });
+        return { findingId: finding.id, submissionId: id, version: submission.version };
+      },
+    );
+  }
+
+  setReviewFindingStatus(
+    actor: Actor,
+    id: string,
+    findingId: string,
+    input: ReviewFindingStatusInput,
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.finding.status:${id}:${findingId}`,
+      'PATCH',
+      `/v1/reviews/submissions/${id}/findings/${findingId}`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await this.lockCollaborativeReview(db, actor, id, input.version);
+        const finding = await db.submissionReviewFinding.findFirst({
+          where: { id: findingId, submissionId: id },
+        });
+        if (!finding) this.notFound();
+        const isOpen = input.status === 'OPEN';
+        const updatedFinding = await db.submissionReviewFinding.update({
+          where: { id: findingId },
+          data: {
+            status: input.status,
+            resolvedByUserId: isOpen ? null : actor.userId,
+            resolvedAt: isOpen ? null : new Date(),
+            resolutionNote: input.resolutionNote
+              ? redactNote(input.resolutionNote)
+              : null,
+          },
+        });
+        const submission = await db.assetSubmission.update({
+          where: { id },
+          data: { version: { increment: 1 } },
+          select: { version: true },
+        });
+        await audit('SUBMISSION_REVIEW_FINDING_UPDATED', 'submission', id, {
+          findingId,
+          previousStatus: finding!.status,
+          status: updatedFinding.status,
+          version: submission.version,
+        });
+        return { findingId, submissionId: id, status: updatedFinding.status, version: submission.version };
       },
     );
   }
@@ -3878,17 +4113,29 @@ function parseDateBoundary(value: string | undefined, end: boolean) {
   return parsed;
 }
 
+function reviewedMetadata(submission: {
+  declaredMetadata: Prisma.JsonValue | null;
+  reviewMetadata?: Prisma.JsonValue | null;
+}) {
+  const declared = isRecord(submission.declaredMetadata)
+    ? submission.declaredMetadata
+    : {};
+  const reviewed = isRecord(submission.reviewMetadata)
+    ? submission.reviewMetadata
+    : {};
+  return { ...declared, ...reviewed };
+}
+
 function assertReviewDecisionReady(submission: {
   declaredMetadata: Prisma.JsonValue | null;
+  reviewMetadata?: Prisma.JsonValue | null;
   asset: { title: string } | null;
   gradeScaleEntryId: string | null;
   normalizedCertificationNumber: string | null;
   certificationVerifications: Array<{ status: string }>;
   owner: { accountStatus: string };
 }) {
-  const metadata = isRecord(submission.declaredMetadata)
-    ? submission.declaredMetadata
-    : {};
+  const metadata = reviewedMetadata(submission);
   const hasIdentity = Boolean(
     stringMetadata(metadata.name) ?? submission.asset?.title,
   );
@@ -3930,6 +4177,7 @@ type ReviewDetailRow = {
   gradeScaleEntryId: string | null;
   version: number;
   declaredMetadata: Prisma.JsonValue | null;
+  reviewMetadata: Prisma.JsonValue | null;
   media: Array<{
     id: string;
     slot: string;
@@ -4010,12 +4258,28 @@ type ReviewDetailRow = {
     verifiedAt: Date | null;
     createdAt: Date;
   }>;
+  reviewFindings: Array<{
+    id: string;
+    section: string;
+    title: string;
+    detail: string | null;
+    severity: 'ADVISORY' | 'BLOCKING';
+    status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+    customerAction: boolean;
+    createdByUserId: string;
+    resolvedByUserId: string | null;
+    resolutionNote: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    resolvedAt: Date | null;
+  }>;
 };
 function reviewDetailProjection(submission: ReviewDetailRow) {
   return {
     ...reviewProjection(submission),
     version: submission.version,
     declaredMetadata: submission.declaredMetadata,
+    reviewMetadata: submission.reviewMetadata,
     media: submission.media.map(mediaProjection),
     marketResearch: submission.marketResearch[0]
       ? marketResearchProjection(submission.marketResearch[0])
@@ -4113,9 +4377,7 @@ function reviewDetailContextProjection(
     declaredMetadata: Prisma.JsonValue | null;
   }>,
 ) {
-  const metadata = isRecord(submission.declaredMetadata)
-    ? submission.declaredMetadata
-    : {};
+  const metadata = reviewedMetadata(submission);
   const title =
     stringMetadata(metadata.name) ??
     context?.asset?.title ??
@@ -4201,6 +4463,7 @@ function reviewDetailContextProjection(
       title,
       category: context?.category.name ?? 'Collectible',
       set:
+        stringMetadata(metadata.set) ??
         context?.asset?.collectibleSet?.name ??
         context?.collectibleSet?.name ??
         null,

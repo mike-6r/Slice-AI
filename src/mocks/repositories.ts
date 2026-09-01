@@ -648,6 +648,15 @@ export const mockRepositories: AppRepositories = {
     async saveNote() {
       throw new Error("Review requires the API service.");
     },
+    async saveIdentity() {
+      throw new Error("Review requires the API service.");
+    },
+    async createFinding() {
+      throw new Error("Review requires the API service.");
+    },
+    async updateFinding() {
+      throw new Error("Review requires the API service.");
+    },
     async manualVerifyCertification() {
       throw new Error("Certification verification requires the API service.");
     },

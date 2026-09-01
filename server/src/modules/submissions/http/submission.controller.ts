@@ -91,20 +91,55 @@ const identityCorrection = z
     note: z.string().trim().min(1).max(2000),
   })
   .strict();
-const reviewNote = z.object({ note: z.string().trim().max(2000) }).strict();
+const reviewNote = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    note: z.string().trim().min(1).max(2000),
+  })
+  .strict();
 const reviewCondition = z
   .object({
+    version: z.coerce.number().int().min(1),
     condition: z.string().trim().min(1).max(80),
     note: z.string().trim().max(2000).optional(),
   })
   .strict();
 const reviewValuation = z
   .object({
+    version: z.coerce.number().int().min(1),
     valueMinor: z.string().regex(/^\d+$/).max(18),
     currency: z.literal('GBP'),
     basis: z.string().trim().min(1).max(120),
     confidence: z.number().int().min(0).max(100).optional(),
     note: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+const reviewIdentity = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    name: z.string().trim().min(1).max(255),
+    year: z.string().trim().regex(/^\d{4}$/).optional(),
+    set: z.string().trim().max(255).optional(),
+    cardNumber: z.string().trim().max(80).optional(),
+    variant: z.string().trim().max(255).optional(),
+    note: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+const reviewFinding = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    section: z.enum(['identity', 'evidence', 'certification', 'research', 'assessment', 'decision']),
+    title: z.string().trim().min(1).max(180),
+    detail: z.string().trim().max(2000).optional(),
+    severity: z.enum(['ADVISORY', 'BLOCKING']),
+    customerAction: z.boolean().optional(),
+  })
+  .strict();
+const reviewFindingStatus = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    status: z.enum(['OPEN', 'RESOLVED', 'DISMISSED']),
+    resolutionNote: z.string().trim().max(2000).optional(),
   })
   .strict();
 const queueQuery = z
@@ -528,6 +563,7 @@ export class SubmissionController {
   @RequirePermission('submission.review')
   claim(
     @Param('id') submissionId: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
@@ -535,6 +571,7 @@ export class SubmissionController {
       this.submissions.claim(
         req.actor!,
         submissionId,
+        parse(version, body),
         req.requestId ?? 'unknown',
         key!,
       ),
@@ -545,6 +582,7 @@ export class SubmissionController {
   @RequirePermission('submission.review')
   release(
     @Param('id') submissionId: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
@@ -552,6 +590,7 @@ export class SubmissionController {
       this.submissions.releaseClaim(
         req.actor!,
         submissionId,
+        parse(version, body),
         req.requestId ?? 'unknown',
         key!,
       ),
@@ -571,6 +610,65 @@ export class SubmissionController {
         req.actor!,
         submissionId,
         parse(reviewCondition, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Patch('reviews/submissions/:id/identity')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  reviewIdentity(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.saveReviewIdentity(
+        req.actor!,
+        submissionId,
+        parse(reviewIdentity, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/findings')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  createFinding(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.createReviewFinding(
+        req.actor!,
+        submissionId,
+        parse(reviewFinding, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Patch('reviews/submissions/:id/findings/:findingId')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  updateFinding(
+    @Param('id') submissionId: string,
+    @Param('findingId') findingId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.setReviewFindingStatus(
+        req.actor!,
+        submissionId,
+        findingId,
+        parse(reviewFindingStatus, body),
         req.requestId ?? 'unknown',
         key!,
       ),
@@ -706,7 +804,7 @@ export class SubmissionController {
       this.submissions.saveReviewNote(
         req.actor!,
         submissionId,
-        parse(reviewNote, body).note,
+        parse(reviewNote, body),
         req.requestId ?? 'unknown',
         key!,
       ),
