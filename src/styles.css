@@ -7060,8 +7060,9 @@
 
 /* Admin control center: operational density without turning the page into a card wall. */
 .admin-control-center {
-  max-width: 1520px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   gap: 0.8rem;
 }
 .admin-control-summary-grid {

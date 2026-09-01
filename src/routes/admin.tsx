@@ -3275,8 +3275,8 @@ function ControlCenterRevamp({
     },
   ] as const;
   return (
-    <div className="admin-console-content admin-control-center">
-      <section className="admin-console-heading admin-console-heading--overview">
+    <div className="admin-console-content admin-list-workspace admin-control-center">
+      <section className="admin-console-heading admin-list-workspace__heading admin-console-heading--overview">
         <div>
           <p className="admin-console-eyebrow">Control Center</p>
           <h2>Operate Slice with clarity.</h2>
