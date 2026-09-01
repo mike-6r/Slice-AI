@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { STAGING_DEMO_PIKACHU_SUBMISSION_ID } from '../lifecycle/domain/staging-demo-physical.policy';
 
 export type AdminAttention = {
@@ -59,6 +59,29 @@ export function betaIntakeFixtureWhere(): Prisma.AssetSubmissionWhereInput {
           string_starts_with: 'STG-',
         },
       },
+    ],
+  };
+}
+
+/**
+ * Retired synthetic records retain their immutable lineage but must not return
+ * to an operational intake board, even when a staff member selects the broad
+ * ALL work-type view. JSON paths that are absent evaluate as SQL NULL, so the
+ * missing-marker branch is explicit rather than relying on a bare NOT.
+ */
+export function activeIntakeRecordWhere(): Prisma.AssetSubmissionWhereInput {
+  const retired: Prisma.AssetSubmissionWhereInput = {
+    declaredMetadata: { path: ['betaFixtureRetired'], equals: true },
+  };
+  return {
+    OR: [
+      {
+        declaredMetadata: {
+          path: ['betaFixtureRetired'],
+          equals: Prisma.AnyNull,
+        },
+      },
+      { NOT: retired },
     ],
   };
 }

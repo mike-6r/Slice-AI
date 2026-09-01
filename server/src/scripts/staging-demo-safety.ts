@@ -1,6 +1,7 @@
 /**
- * Hard boundary for the permanent, human-operated staging showcase fixtures.
- * These scripts must never be used as a general seed or reset mechanism.
+ * Hard boundary for explicitly configured staging-only accounts and tools.
+ * Synthetic catalogue/market fixtures have been retired; these scripts must
+ * never be used as a general seed or reset mechanism.
  */
 export function assertStagingDemoSafety() {
   if (process.env.SLICE_ENV !== 'staging') {

@@ -15,13 +15,12 @@ import {
 type DemoDefinition = (typeof demoAccounts)[keyof typeof demoAccounts];
 
 /**
- * Creates only the two durable demo identities and their public presentation
- * records. It deliberately does not alter passwords of an existing account,
+ * Creates only the two durable staging identities and their account records.
+ * It deliberately does not create collectible, intake, ownership, offering,
+ * or market fixtures, alter passwords of an existing account,
  * grant privileged financial, vault, or compliance roles, directly credit
- * balances, or create external-provider records. The collector showcase may
- * additionally receive COLLECTOR through its own bounded setup script. Staff
- * review fixtures are provisioned separately and never share the Collector
- * identity.
+ * balances, or create external-provider records. Staff review and catalogue
+ * fixtures are not provisioned by this setup.
  */
 export async function runStagingDemoSetup() {
   assertStagingDemoSafety();
@@ -94,10 +93,7 @@ export async function runStagingDemoSetup() {
         collectorPublicProfile: 'slice-demo-collector',
         roles: {
           investor: ['USER'],
-          collector: [
-            'USER',
-            'COLLECTOR (only when collector fixture is enabled)',
-          ],
+          collector: ['USER', 'COLLECTOR'],
         },
         note: 'Funding is an idempotent, internal D13 DEMO_FUNDING journal only. No passwords, privileged financial/vault/compliance roles, or external-provider records were written.',
       }) + '\n',
@@ -368,9 +364,7 @@ async function assertDemoRoleBoundary(
   const invalid = roles.find(
     (entry) =>
       entry.role !== 'USER' &&
-      !(
-        entry.userId === collectorUserId && entry.role === 'COLLECTOR'
-      ),
+      !(entry.userId === collectorUserId && entry.role === 'COLLECTOR'),
   );
   if (invalid) {
     throw new Error(

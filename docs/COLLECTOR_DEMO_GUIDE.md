@@ -1,54 +1,54 @@
-# Staging Collector Demo Guide
+# Staging Collector Demo Guide (retired fixture workflow)
 
-## Scope and safety
+> The synthetic collector catalogue, review queue, intake, ownership, offering,
+> and market generator was retired on 31 August 2026. Do not recreate those
+> records. `staging:demo:refresh` now refreshes configured staging identities
+> only. Use records created through the real collector workflow for demos.
 
-This is a **staging-only**, idempotent showcase fixture. It refuses to run unless both `SLICE_ENV=staging` and `ALLOW_DEMO_DATA_SETUP=true` are set. It never resets the database, truncates data, changes existing passwords, creates provider-success records, or mutates finance balances directly.
+## Current boundary
 
-Run from `server` with the normal staging environment loaded. Start with the
-read-only preflight: it confirms that the configured setup account exists,
-is `ACTIVE`, and has the existing `ADMIN` role. It deliberately never checks
-or prints a password.
+The configured demo accounts may still be used for an owner-led walkthrough,
+but staging refresh no longer creates catalogue, submission, intake, custody,
+ownership, offering, order, execution, or market records. Those records must be
+created through the same product workflows used by any other account.
+
+The owner-created Pikachu is preserved explicitly:
+
+- submission `07dbf13f-f712-4d4a-adcf-96c45c7e641b`;
+- canonical asset `8403a76f-c92c-4206-a7e7-7546b2098919`;
+- PSA certification `107760843`.
+
+## Safe account refresh
+
+Run from `server` with the protected staging environment loaded:
 
 ```bash
 npm run staging:demo:preflight
 npm run staging:demo:refresh
-npm run staging:demo:market:check
-npm run staging:demo:market:verify
 ```
 
-The command requires the existing `DEMO_SETUP_ADMIN_EMAIL` / `DEMO_SETUP_ADMIN_PASSWORD` plus the demo passwords already configured in the VPS-only demo environment. Passwords are intentionally not documented here.
+The refresh is staging-only and identity-scoped. It does not restore retired
+catalogue or market fixtures.
 
-`staging:demo:refresh` is the canonical idempotent restoration command. It
-only restores explicitly named staging-demo records and never resets or
-truncates the database. `staging:demo:market:check` evaluates the exact
-public-market projection and reports any missing publication, safe media,
-public collector profile, or catalogue count before the browser is used.
+## Synthetic-record retirement
 
-## Accounts
+Inventory is read-only by default:
 
-- **Slice Demo Collector** — `demo-collector@slicecollectable.com`
-  - normal `USER` investor authority
-  - `ASSET_REVIEWER` solely for the existing collector/review workspace
-  - public handle: `@slice-demo-collector`
-- **Slice Demo Collector B** — private counterpart used for review-isolation fixtures
-- **Slice Demo Investor** — existing investor demo identity funded only through the D13 balanced journal fixture
+```bash
+npm run staging:demo:retire-synthetic
+```
 
-## What the collector fixture creates
+Execution requires the staging environment, the explicit operator flag, and
+the exact confirmation token:
 
-- public profile and concise professional bio specialising in Pokémon, Sports Cards, Yu-Gi-Oh!, Magic: The Gathering and One Piece;
-- ten branded, staging-safe collectible catalogue records;
-- D10 submissions with legitimate front/back evidence state, including drafts, submitted review work, changes-requested evidence follow-up, custody-ready, and published examples;
-- eight D11-published marketplace listings backed by custody, valuation, coverage and publication services (five from Slice Demo Collector and three from Slice Demo Specialist);
-- D12 issuance of 1,000 fractional units per published asset and a 300-unit collector position via the authoritative ownership transfer service;
-- 45 days of clearly labelled `STAGING_DEMO_MARKET` history and current public market snapshots for published listings;
-- five Collector B private submissions, with three claimed by Demo Collector to make the real review workspace meaningful.
+```bash
+ALLOW_SYNTHETIC_DEMO_RETIREMENT=true \
+  npm run staging:demo:retire-synthetic -- \
+  --execute --confirm=RETIRE_SYNTHETIC_DEMO_RECORDS
+```
 
-## Public vs private boundaries
-
-`/collectors` and `/collector/:id` expose only the public profile, category/title listing catalogue, safe market amount/status and count. They do not expose user IDs, ownership positions, reservations, journal data, D10 evidence, review status, private notes, or provider/compliance data.
-
-The current D10 local object storage adapter is process-local, not a durable public object store. The fixture deliberately does **not** generate broken thumbnail URLs. A real object-storage/CDN provider is the required external gate for durable public image thumbnails.
-
-## Trading and provider gates
-
-The fixture does not manufacture D14 eligibility, provider verification, cash reservations, orders, executions, or settlement. If current staging configuration grants normal D14 capability, its APIs can be exercised against the published fractional inventory. Otherwise the capability response is the correct, safe outcome. D16 providers remain sandbox/certification dependent.
+The operation is narrowly scoped and recoverable: matching submissions are
+cancelled and marked retired; matching assets are archived; publications are
+unpublished; and trading markets are halted. Immutable ownership, execution,
+financial, and audit history is retained. The preserved Pikachu is checked
+against its exact IDs and certification before any mutation begins.

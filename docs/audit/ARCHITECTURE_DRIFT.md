@@ -25,4 +25,4 @@ Candidates requiring follow-up: presentation-only portfolio valuation helpers an
 
 ## Backend decomposition candidates
 
-`admin.service.ts`, `submission.service.ts`, `trading.service.ts`, `market.service.ts`, and `setup-demo-collector.ts` combine orchestration, projection and policy concerns. This is a maintainability finding, not evidence of duplicate authority. Decompose only behind characterization tests and domain ownership decisions.
+`admin.service.ts`, `submission.service.ts`, `trading.service.ts`, and `market.service.ts` combine orchestration, projection and policy concerns. The former synthetic Collector fixture generator was removed on 2026-09-01. This is a maintainability finding, not evidence of duplicate authority. Decompose only behind characterization tests and domain ownership decisions.

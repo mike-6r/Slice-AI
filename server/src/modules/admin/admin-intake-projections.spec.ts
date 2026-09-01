@@ -1,4 +1,5 @@
 import {
+  activeIntakeRecordWhere,
   betaIntakeFixtureWhere,
   intakeAllowedActions,
   intakeCounts,
@@ -176,6 +177,27 @@ describe('Physical Intake fixture boundary', () => {
           },
         },
       ]),
+    });
+  });
+
+  it('keeps retired synthetic records out of every active intake view', () => {
+    expect(activeIntakeRecordWhere()).toEqual({
+      OR: [
+        {
+          declaredMetadata: {
+            path: ['betaFixtureRetired'],
+            equals: expect.anything(),
+          },
+        },
+        {
+          NOT: {
+            declaredMetadata: {
+              path: ['betaFixtureRetired'],
+              equals: true,
+            },
+          },
+        },
+      ],
     });
   });
 });

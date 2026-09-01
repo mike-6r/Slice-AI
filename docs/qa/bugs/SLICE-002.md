@@ -40,7 +40,7 @@ Screenshot / Video / Evidence:
 Additional Notes:
 
 - Root cause: the Collector demo setup explicitly granted `ASSET_REVIEWER`; historical scoped assignments were not removed by the prior setup. The role schema already has a partial active uniqueness constraint on `(userId, role, scopeType, scopeId)`, and supported Admin grants are global-only.
-- Fix: `setup-demo-collector.ts` now provisions only `COLLECTOR`; staging safety validation now rejects reviewer authority on the Collector fixture. Revokes preserve rows and audit history.
+- Historical fix: the former Collector fixture setup provisioned only `COLLECTOR`; staging safety validation rejected reviewer authority on the Collector fixture. That synthetic record generator was removed on 2026-09-01. Revokes preserve rows and audit history.
 - Supported staging cleanup: three unwanted assignments on Collector A and one reviewer assignment on the separate Collector B baseline returned HTTP 204. Collector A has three `ROLE_REVOKED` audit events and revoked history rows.
 - Focused API/session checks remained green: fresh Collector A login and workspace returned 200; Admin overview/users, review queue, finance admin, and audit admin returned 403; Collector A cannot read Collector B submission detail or workspace detail (both 404), and its owned-submission list does not contain B’s ID.
 - Focused tests pass for the Collector fixture role boundary. No lifecycle, ownership, trading, ledger, Stripe, Umbreon, or Charizard data was changed.

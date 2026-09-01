@@ -1,13 +1,12 @@
 import { assertStagingDemoSafety } from './staging-demo-safety';
-import { runCollectorDemoSetup } from './setup-demo-collector';
+import { runStagingDemoSetup } from './setup-staging-demo';
 
-// This rehydrates only stable, explicitly-tagged staging demo records through
-// the existing D10/D11/D12/D13 service boundaries. It never deletes general
-// staging data, resets the database, changes existing passwords or alters
-// untagged customer/account history.
+// Refresh only the explicitly configured staging identities. Synthetic
+// collectible, review, intake, ownership, offering, and market records were
+// retired and must not be recreated by an environment refresh.
 void (async () => {
   assertStagingDemoSafety();
-  await runCollectorDemoSetup();
+  await runStagingDemoSetup();
 })().catch((error: unknown) => {
   process.stderr.write(
     `${error instanceof Error ? error.message : 'Staging demo refresh failed.'}\n`,

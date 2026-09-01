@@ -37,6 +37,7 @@ import {
   type CatalogueLifecycleInput,
 } from './admin-catalogue-projections';
 import {
+  activeIntakeRecordWhere,
   ageLabel,
   attention,
   intakeAllowedActions,
@@ -3052,6 +3053,7 @@ export class AdminService {
     const intakeWhere: Prisma.AssetSubmissionWhereInput = {
       AND: [
         { OR: [{ status: 'APPROVED' }, { intake: { isNot: null } }] },
+        activeIntakeRecordWhere(),
         ...(this.config.isBeta && workType !== 'ALL'
           ? [workType === 'DEMO_QA' ? demoOrQaWhere : { NOT: [demoOrQaWhere] }]
           : []),

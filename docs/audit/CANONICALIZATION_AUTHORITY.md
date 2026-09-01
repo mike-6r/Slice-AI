@@ -29,8 +29,9 @@ creates `VerificationReview`, records `SUBMISSION_APPROVED`, and appends the
 event to notifications; no handler calls `CatalogueService.createAsset` or
 `SubmissionService.linkApprovedAsset`.
 
-The only repository call sites for canonical creation/linking are the
-respective controllers/services and `server/src/scripts/setup-demo-collector.ts`.
+The only active repository call sites for canonical creation/linking are the
+respective controllers/services. The former synthetic Collector fixture
+generator was retired on 2026-09-01 and no longer creates catalogue records.
 There is no frontend mutation, Discord consumer, background worker, or outbox
 consumer that invokes either transition. The controller comment describing the
 link as "service-only" is stale: the protected staff endpoint is active, but
