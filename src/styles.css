@@ -7580,8 +7580,11 @@
 /* Accounts directory: dense operational hierarchy with safe responsive collapse. */
 .admin-accounts-revamp {
   gap: 1.1rem;
-  max-width: 1520px;
-  margin-inline: auto;
+  /* Keep Accounts on the same full-width list workspace contract as Review
+   * Queue and Physical Intake. A page-local maximum width made the directory
+   * look artificially narrow on wide admin viewports. */
+  max-width: none;
+  margin-inline: 0;
 }
 .admin-accounts-heading {
   margin-bottom: 0;
