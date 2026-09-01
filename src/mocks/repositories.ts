@@ -636,6 +636,9 @@ export const mockRepositories: AppRepositories = {
     async release() {
       throw new Error("Review requires the API service.");
     },
+    async recalculateReadiness() {
+      throw new Error("Review recovery requires the API service.");
+    },
     async saveCondition() {
       throw new Error("Review requires the API service.");
     },

@@ -142,6 +142,12 @@ const reviewFindingStatus = z
     resolutionNote: z.string().trim().max(2000).optional(),
   })
   .strict();
+const reviewRecovery = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();
 const queueQuery = z
   .object({
     cursor: z.string().min(1).max(512).optional(),
@@ -591,6 +597,25 @@ export class SubmissionController {
         req.actor!,
         submissionId,
         parse(version, body),
+        req.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+  @Post('reviews/submissions/:id/recovery/recalculate-readiness')
+  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @RequirePermission('submission.review')
+  recalculateReadiness(
+    @Param('id') submissionId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.write(req, key, () =>
+      this.submissions.recalculateReadiness(
+        req.actor!,
+        submissionId,
+        parse(reviewRecovery, body),
         req.requestId ?? 'unknown',
         key!,
       ),

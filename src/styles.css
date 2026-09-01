@@ -2937,6 +2937,76 @@
   border: 1px dashed #294752;
   border-radius: 0.38rem;
 }
+.admin-review-evidence-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.admin-review-evidence-actions > span {
+  color: #49ddb9;
+  font-size: 0.56rem;
+}
+.admin-review-evidence-actions button {
+  padding: 0.28rem 0.4rem;
+  font-size: 0.56rem;
+}
+.admin-review-certification-workspace {
+  display: grid;
+  gap: 0.75rem;
+}
+.admin-review-certification-form {
+  height: auto;
+}
+.admin-review-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.admin-review-certification-form > label,
+.admin-review-form-grid label {
+  display: grid;
+  gap: 0.28rem;
+  color: #9bb0b1;
+  font-size: 0.62rem;
+}
+.admin-review-certification-form input {
+  width: 100%;
+  border: 1px solid #2b4853;
+  border-radius: 0.32rem;
+  padding: 0.48rem 0.55rem;
+  background: #08171e;
+  color: #e5f1ee;
+  font: inherit;
+}
+.admin-review-certification-form > button {
+  width: fit-content;
+  margin-top: 0.15rem;
+}
+.admin-review-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.4rem !important;
+  align-self: end;
+  padding-bottom: 0.52rem;
+}
+.admin-review-checkbox-label input { accent-color: #1ed2aa; }
+.admin-review-resolution-note {
+  display: grid;
+  gap: 0.32rem;
+  color: #9bb0b1;
+  font-size: 0.62rem;
+}
+.admin-review-resolution-note input {
+  width: 100%;
+  border: 1px solid #2b4853;
+  border-radius: 0.32rem;
+  padding: 0.48rem 0.55rem;
+  background: #08171e;
+  color: #e5f1ee;
+  font: inherit;
+}
 .admin-review-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3137,6 +3207,7 @@
   .admin-review-finding { flex-direction: column; }
   .admin-review-workflow-heading { align-items: start; flex-direction: column; }
   .admin-review-workflow-heading > span { text-align: left; }
+  .admin-review-form-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1050px) {
   .admin-review-overview-grid { grid-template-columns: 1fr 1fr; }

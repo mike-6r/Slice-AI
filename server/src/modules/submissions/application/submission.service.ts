@@ -2416,6 +2416,48 @@ export class SubmissionService {
     );
   }
 
+  recalculateReadiness(
+    actor: Actor,
+    id: string,
+    input: { version: number; reason: string },
+    requestId: string,
+    key: string,
+  ) {
+    return this.mutate(
+      actor,
+      `review.recalculate-readiness:${id}`,
+      'POST',
+      `/v1/reviews/submissions/${id}/recovery/recalculate-readiness`,
+      input,
+      requestId,
+      key,
+      async (db, audit) => {
+        await db.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM "AssetSubmission" WHERE id = ${id} FOR UPDATE
+        `;
+        const submission = await db.assetSubmission.findUnique({
+          where: { id },
+          select: { ownerUserId: true, status: true, version: true },
+        });
+        if (!submission) this.notFound();
+        assertReviewerIsNotOwner(submission!.ownerUserId, actor.userId);
+        assertExpectedVersion(submission!.version, input.version);
+        const recalculatedAt = new Date();
+        await audit('SUBMISSION_REVIEW_READINESS_RECALCULATED', 'submission', id, {
+          reason: redactNote(input.reason),
+          before: { status: submission!.status, version: submission!.version },
+          after: { status: submission!.status, version: submission!.version },
+        });
+        return {
+          submissionId: id,
+          status: submission!.status,
+          version: submission!.version,
+          recalculatedAt: recalculatedAt.toISOString(),
+        };
+      },
+    );
+  }
+
   saveStaffCondition(
     actor: Actor,
     id: string,

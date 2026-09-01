@@ -143,6 +143,10 @@ export interface SubmissionReviewRepository {
   getDetail(id: string): Promise<SubmissionReviewDetail>;
   claim(id: string, version: number): Promise<{ submissionId: string; status: string }>;
   release(id: string, version: number): Promise<{ submissionId: string; status: string; version: number }>;
+  recalculateReadiness(
+    id: string,
+    input: { version: number; reason: string },
+  ): Promise<{ submissionId: string; status: string; version: number; recalculatedAt: string }>;
   saveCondition(
     id: string,
     input: { version: number; condition: string; note?: string },

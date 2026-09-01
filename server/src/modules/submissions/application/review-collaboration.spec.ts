@@ -292,4 +292,52 @@ describe('submission review collaboration', () => {
       }),
     );
   });
+
+  it('records an audited readiness recovery without changing workflow state', async () => {
+    const audit = jest.fn();
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      assetSubmission: {
+        findUnique: jest.fn().mockResolvedValue({
+          ownerUserId: 'collector-1',
+          status: 'IN_REVIEW',
+          version: 8,
+        }),
+      },
+    };
+    const service = reviewService(db);
+    (
+      service as unknown as { mutate: (...args: Array<unknown>) => unknown }
+    ).mutate = async (...args) => {
+      const work = args[7] as (
+        transaction: Record<string, unknown>,
+        audit: (...auditArgs: Array<unknown>) => Promise<void>,
+      ) => Promise<unknown>;
+      return work(db, audit);
+    };
+
+    await expect(
+      service.recalculateReadiness(
+        contributor,
+        'submission-1',
+        { version: 8, reason: 'Review projection appeared stale.' },
+        'request-recovery',
+        'key-recovery',
+      ),
+    ).resolves.toMatchObject({
+      submissionId: 'submission-1',
+      status: 'IN_REVIEW',
+      version: 8,
+    });
+    expect(audit).toHaveBeenCalledWith(
+      'SUBMISSION_REVIEW_READINESS_RECALCULATED',
+      'submission',
+      'submission-1',
+      expect.objectContaining({
+        reason: 'Review projection appeared stale.',
+        before: { status: 'IN_REVIEW', version: 8 },
+        after: { status: 'IN_REVIEW', version: 8 },
+      }),
+    );
+  });
 });

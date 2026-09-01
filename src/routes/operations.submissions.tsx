@@ -41,7 +41,17 @@ export function SubmissionOperationsPage() {
   });
   const [findingTitle, setFindingTitle] = useState("");
   const [findingDetail, setFindingDetail] = useState("");
+  const [findingSection, setFindingSection] = useState<"identity" | "evidence" | "certification" | "research" | "assessment" | "decision">("assessment");
   const [findingSeverity, setFindingSeverity] = useState<"ADVISORY" | "BLOCKING">("ADVISORY");
+  const [findingCustomerAction, setFindingCustomerAction] = useState(false);
+  const [findingResolutionNote, setFindingResolutionNote] = useState("");
+  const [certVerifiedGrade, setCertVerifiedGrade] = useState("");
+  const [certVerifiedName, setCertVerifiedName] = useState("");
+  const [certVerifiedYear, setCertVerifiedYear] = useState("");
+  const [certVerifiedSet, setCertVerifiedSet] = useState("");
+  const [certVerifiedCardNumber, setCertVerifiedCardNumber] = useState("");
+  const [certDesignation, setCertDesignation] = useState("");
+  const [certProviderReference, setCertProviderReference] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
   const [requestedItems, setRequestedItems] = useState<string[]>(["Front image"]);
@@ -49,6 +59,8 @@ export function SubmissionOperationsPage() {
   const [internalDecisionNote, setInternalDecisionNote] = useState("");
   const [focusedMedia, setFocusedMedia] = useState<string | null>(null);
   const [staleReview, setStaleReview] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryReason, setRecoveryReason] = useState("");
   const refresh = () => void client.invalidateQueries({ queryKey: ["review"] });
   const queue = useQuery({
     queryKey: ["review", "queue", "detail-navigation"],
@@ -70,6 +82,11 @@ export function SubmissionOperationsPage() {
       cardNumber: collectible.cardNumber ?? "",
       variant: collectible.variant ?? "",
     });
+    setCertVerifiedGrade(collectible.grade ?? "");
+    setCertVerifiedName(collectible.title ?? "");
+    setCertVerifiedYear(collectible.year ?? "");
+    setCertVerifiedSet(collectible.set ?? "");
+    setCertVerifiedCardNumber(collectible.cardNumber ?? "");
   }, [detail.data?.version, selected]);
   const claim = useMutation({
     mutationFn: (id: string) => services.repositories.reviews.claim(id, detail.data?.version ?? 0),
@@ -129,17 +146,21 @@ export function SubmissionOperationsPage() {
     },
   });
   const createFinding = useMutation({
-    mutationFn: () =>
+    mutationFn: (input: {
+      section: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision";
+      title: string;
+      detail?: string;
+      severity: "ADVISORY" | "BLOCKING";
+      customerAction?: boolean;
+    }) =>
       services.repositories.reviews.createFinding(selected!, {
         version: detail.data?.version ?? 0,
-        section: "assessment",
-        title: findingTitle.trim(),
-        ...(findingDetail.trim() ? { detail: findingDetail.trim() } : {}),
-        severity: findingSeverity,
+        ...input,
       }),
     onSuccess: () => {
       setFindingTitle("");
       setFindingDetail("");
+      setFindingCustomerAction(false);
       refresh();
     },
     onError: (error) => {
@@ -151,8 +172,46 @@ export function SubmissionOperationsPage() {
       services.repositories.reviews.updateFinding(selected!, findingId, {
         version: detail.data?.version ?? 0,
         status,
+        ...(findingResolutionNote.trim() ? { resolutionNote: findingResolutionNote.trim() } : {}),
+      }),
+    onSuccess: () => {
+      setFindingResolutionNote("");
+      refresh();
+    },
+    onError: (error) => {
+      if (isStaleReviewError(error)) setStaleReview(true);
+    },
+  });
+  const verifyCertification = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.manualVerifyCertification(selected!, {
+        verifiedIdentity: {
+          name: certVerifiedName.trim(),
+          year: certVerifiedYear.trim(),
+          set: certVerifiedSet.trim(),
+          cardNumber: certVerifiedCardNumber.trim(),
+          companyCode: detail.data?.collectible?.grader ?? "",
+        },
+        verifiedGrade: certVerifiedGrade.trim(),
+        ...(certDesignation.trim() ? { designation: certDesignation.trim() } : {}),
+        ...(certProviderReference.trim() ? { providerReference: certProviderReference.trim() } : {}),
       }),
     onSuccess: refresh,
+    onError: (error) => {
+      if (isStaleReviewError(error)) setStaleReview(true);
+    },
+  });
+  const recalculateReadiness = useMutation({
+    mutationFn: () =>
+      services.repositories.reviews.recalculateReadiness(selected!, {
+        version: detail.data?.version ?? 0,
+        reason: recoveryReason.trim(),
+      }),
+    onSuccess: () => {
+      setRecoveryOpen(false);
+      setRecoveryReason("");
+      refresh();
+    },
     onError: (error) => {
       if (isStaleReviewError(error)) setStaleReview(true);
     },
@@ -258,7 +317,11 @@ export function SubmissionOperationsPage() {
               />
             ) : null}
             <Progress detail={review} />
-            <ReviewOverview detail={review} />
+            <ReviewOverview
+              detail={review}
+              onAssign={() => claim.mutate(selected)}
+              assigning={claim.isPending}
+            />
             <section className="admin-panel-card admin-review-workflow" aria-labelledby="review-workflow-title">
               <header className="admin-review-workflow-heading">
                 <div>
@@ -280,7 +343,21 @@ export function SubmissionOperationsPage() {
                 />
               </ReviewSection>
               <ReviewSection title="Evidence" detail={review} step="evidence" number={2} open>
-                <Evidence detail={review} onFocus={setFocusedMedia} />
+                <Evidence
+                  detail={review}
+                  canEdit={canEdit}
+                  onFocus={setFocusedMedia}
+                  onFlag={(item) =>
+                    createFinding.mutate({
+                      section: "evidence",
+                      title: `${label(item.slot)} evidence needs review`,
+                      detail: "Evidence was flagged from the review workspace.",
+                      severity: "BLOCKING",
+                      customerAction: true,
+                    })
+                  }
+                  flagging={createFinding.isPending}
+                />
               </ReviewSection>
               <ReviewSection
                 title="Grade & Certification"
@@ -288,7 +365,26 @@ export function SubmissionOperationsPage() {
                 step="certification"
                 number={3}
               >
-                <Certification detail={review} />
+                <Certification
+                  detail={review}
+                  canEdit={canEdit}
+                  verifiedGrade={certVerifiedGrade}
+                  setVerifiedGrade={setCertVerifiedGrade}
+                  verifiedName={certVerifiedName}
+                  setVerifiedName={setCertVerifiedName}
+                  verifiedYear={certVerifiedYear}
+                  setVerifiedYear={setCertVerifiedYear}
+                  verifiedSet={certVerifiedSet}
+                  setVerifiedSet={setCertVerifiedSet}
+                  verifiedCardNumber={certVerifiedCardNumber}
+                  setVerifiedCardNumber={setCertVerifiedCardNumber}
+                  designation={certDesignation}
+                  setDesignation={setCertDesignation}
+                  providerReference={certProviderReference}
+                  setProviderReference={setCertProviderReference}
+                  onVerify={() => verifyCertification.mutate()}
+                  verifying={verifyCertification.isPending}
+                />
               </ReviewSection>
               <ReviewSection title="Research" detail={review} step="research" number={4}>
                 <Research detail={review} />
@@ -319,9 +415,23 @@ export function SubmissionOperationsPage() {
                   setFindingTitle={setFindingTitle}
                   findingDetail={findingDetail}
                   setFindingDetail={setFindingDetail}
+                  findingSection={findingSection}
+                  setFindingSection={setFindingSection}
                   findingSeverity={findingSeverity}
                   setFindingSeverity={setFindingSeverity}
-                  onCreateFinding={() => createFinding.mutate()}
+                  findingCustomerAction={findingCustomerAction}
+                  setFindingCustomerAction={setFindingCustomerAction}
+                  findingResolutionNote={findingResolutionNote}
+                  setFindingResolutionNote={setFindingResolutionNote}
+                  onCreateFinding={() =>
+                    createFinding.mutate({
+                      section: findingSection,
+                      title: findingTitle.trim(),
+                      detail: findingDetail.trim(),
+                      severity: findingSeverity,
+                      customerAction: findingCustomerAction,
+                    })
+                  }
                   creatingFinding={createFinding.isPending}
                   onUpdateFinding={(findingId, status) => updateFinding.mutate({ findingId, status })}
                   updatingFinding={updateFinding.isPending}
@@ -344,6 +454,7 @@ export function SubmissionOperationsPage() {
             claiming={claim.isPending}
             onRelease={() => release.mutate(selected)}
             releasing={release.isPending}
+            onRecovery={() => setRecoveryOpen(true)}
             onCanonicalize={() => canonicalize.mutate()}
             canonicalizing={canonicalize.isPending}
             onDecision={setDecision}
@@ -364,6 +475,16 @@ export function SubmissionOperationsPage() {
             onConfirm={() => decide.mutate(decision)}
             pending={decide.isPending}
             error={decide.error}
+          />
+        ) : null}
+        {recoveryOpen ? (
+          <RecoveryDialog
+            reason={recoveryReason}
+            setReason={setRecoveryReason}
+            onCancel={() => setRecoveryOpen(false)}
+            onConfirm={() => recalculateReadiness.mutate()}
+            pending={recalculateReadiness.isPending}
+            error={recalculateReadiness.error}
           />
         ) : null}
         <MediaDialog
@@ -591,7 +712,15 @@ function Progress({ detail }: { detail: SubmissionReviewDetail }) {
   );
 }
 
-function ReviewOverview({ detail }: { detail: SubmissionReviewDetail }) {
+function ReviewOverview({
+  detail,
+  onAssign,
+  assigning,
+}: {
+  detail: SubmissionReviewDetail;
+  onAssign: () => void;
+  assigning: boolean;
+}) {
   const workspace = detail.reviewWorkspace;
   if (!workspace) return null;
   const findings = detail.reviewFindings ?? [];
@@ -633,6 +762,11 @@ function ReviewOverview({ detail }: { detail: SubmissionReviewDetail }) {
         <div className="admin-review-team-primary">
           <span>Primary reviewer</span>
           <strong>{workspace.reviewer?.displayName ?? "Unassigned"}</strong>
+          {workspace.canClaim ? (
+            <button type="button" className="button-secondary" onClick={onAssign} disabled={assigning}>
+              {assigning ? "Assigning…" : workspace.reviewer ? "Assign me" : "Assign primary"}
+            </button>
+          ) : null}
         </div>
         <ul className="admin-review-contributors">
           {contributors.length ? contributors.slice(0, 3).map((contributor) => (
@@ -754,11 +888,13 @@ function Identity({
       <Info title="Submitted identity">
         <dl className="admin-review-facts">
           {fact("Category", item?.category)}
-          {fact("Title", item?.title)}
-          {fact("Set", item?.set)}
-          {fact("Card number", item?.cardNumber)}
-          {fact("Variant", item?.variant)}
-          {fact("Year", item?.year)}
+          {fact("Title", metadataValue(detail, "name"))}
+          {fact("Set", metadataValue(detail, "set"))}
+          {fact("Card number", metadataValue(detail, "cardNumber"))}
+          {fact("Variant", metadataValue(detail, "variant"))}
+          {fact("Year", metadataValue(detail, "year"))}
+          {fact("Grader", metadataValue(detail, "grader"))}
+          {fact("Certification", metadataValue(detail, "certificationNumber"))}
         </dl>
       </Info>
       <Info title="Slice review identity">
@@ -839,10 +975,16 @@ function Identity({
 }
 function Evidence({
   detail,
+  canEdit,
   onFocus,
+  onFlag,
+  flagging,
 }: {
   detail: SubmissionReviewDetail;
+  canEdit: boolean;
   onFocus: (id: string) => void;
+  onFlag: (item: NonNullable<SubmissionReviewDetail["evidenceSummary"]>["items"][number]) => void;
+  flagging: boolean;
 }) {
   const summary = detail.evidenceSummary;
   return (
@@ -860,11 +1002,15 @@ function Evidence({
       </div>
       <div className="admin-review-workspace-gallery">
         {summary?.items.map((item) => (
-          <button
-            type="button"
+          <article
             key={item.id}
             className="admin-review-workspace-media"
             onClick={() => onFocus(item.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") onFocus(item.id);
+            }}
+            role="button"
+            tabIndex={0}
           >
             <AdminReviewMedia
               src={item.thumbnailUrl}
@@ -876,13 +1022,65 @@ function Evidence({
             </strong>
             <small>Source: collector · {formatDate(item.uploadedAt)}</small>
             <small>{item.status === "SAFE" ? "Usable for review" : label(item.status)}</small>
-          </button>
+            <span className="admin-review-evidence-actions">
+              <span>Open viewer</span>
+              <button
+                type="button"
+                className="button-secondary"
+                disabled={!canEdit || flagging}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onFlag(item);
+                }}
+              >
+                Flag issue
+              </button>
+            </span>
+          </article>
         ))}
       </div>
     </div>
   );
 }
-function Certification({ detail }: { detail: SubmissionReviewDetail }) {
+function Certification({
+  detail,
+  canEdit,
+  verifiedGrade,
+  setVerifiedGrade,
+  verifiedName,
+  setVerifiedName,
+  verifiedYear,
+  setVerifiedYear,
+  verifiedSet,
+  setVerifiedSet,
+  verifiedCardNumber,
+  setVerifiedCardNumber,
+  designation,
+  setDesignation,
+  providerReference,
+  setProviderReference,
+  onVerify,
+  verifying,
+}: {
+  detail: SubmissionReviewDetail;
+  canEdit: boolean;
+  verifiedGrade: string;
+  setVerifiedGrade: (value: string) => void;
+  verifiedName: string;
+  setVerifiedName: (value: string) => void;
+  verifiedYear: string;
+  setVerifiedYear: (value: string) => void;
+  verifiedSet: string;
+  setVerifiedSet: (value: string) => void;
+  verifiedCardNumber: string;
+  setVerifiedCardNumber: (value: string) => void;
+  designation: string;
+  setDesignation: (value: string) => void;
+  providerReference: string;
+  setProviderReference: (value: string) => void;
+  onVerify: () => void;
+  verifying: boolean;
+}) {
   const item = detail.collectible;
   const certification = detail.certificationVerification;
   if (!item?.grader)
@@ -893,7 +1091,8 @@ function Certification({ detail }: { detail: SubmissionReviewDetail }) {
       </div>
     );
   return (
-    <div className="admin-review-two-panel">
+    <div className="admin-review-certification-workspace">
+      <div className="admin-review-two-panel">
       <Info title="Grade">
         <strong>
           {item.grader} {item.grade}
@@ -912,6 +1111,31 @@ function Certification({ detail }: { detail: SubmissionReviewDetail }) {
           </a>
         ) : null}
       </Info>
+      </div>
+      <div className="admin-review-edit-card admin-review-certification-form">
+        <p className="page-kicker">Manual review control</p>
+        <p className="text-sm text-subtle">
+          Compare the official reference with the submitted identity. This records verification
+          evidence; it is not an authenticity guarantee.
+        </p>
+        <div className="admin-review-form-grid">
+          <label>Verified name<input value={verifiedName} onChange={(event) => setVerifiedName(event.target.value)} disabled={!canEdit} /></label>
+          <label>Verified year<input value={verifiedYear} onChange={(event) => setVerifiedYear(event.target.value)} disabled={!canEdit} /></label>
+          <label>Verified set<input value={verifiedSet} onChange={(event) => setVerifiedSet(event.target.value)} disabled={!canEdit} /></label>
+          <label>Verified card number<input value={verifiedCardNumber} onChange={(event) => setVerifiedCardNumber(event.target.value)} disabled={!canEdit} /></label>
+          <label>Verified grade<input value={verifiedGrade} onChange={(event) => setVerifiedGrade(event.target.value)} disabled={!canEdit} /></label>
+          <label>Designation (optional)<input value={designation} onChange={(event) => setDesignation(event.target.value)} disabled={!canEdit} /></label>
+        </div>
+        <label>Official reference (optional)<input value={providerReference} onChange={(event) => setProviderReference(event.target.value)} disabled={!canEdit} placeholder="URL or provider reference" /></label>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={onVerify}
+          disabled={!canEdit || !verifiedGrade.trim() || !verifiedName.trim() || verifying}
+        >
+          {verifying ? "Verifying…" : "Record manual verification"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -973,8 +1197,14 @@ type AssessmentProps = {
   setFindingTitle: (value: string) => void;
   findingDetail: string;
   setFindingDetail: (value: string) => void;
+  findingSection: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision";
+  setFindingSection: (value: "identity" | "evidence" | "certification" | "research" | "assessment" | "decision") => void;
   findingSeverity: "ADVISORY" | "BLOCKING";
   setFindingSeverity: (value: "ADVISORY" | "BLOCKING") => void;
+  findingCustomerAction: boolean;
+  setFindingCustomerAction: (value: boolean) => void;
+  findingResolutionNote: string;
+  setFindingResolutionNote: (value: string) => void;
   onCreateFinding: () => void;
   creatingFinding: boolean;
   onUpdateFinding: (findingId: string, status: "OPEN" | "RESOLVED" | "DISMISSED") => void;
@@ -1144,6 +1374,21 @@ function Assessment(props: AssessmentProps) {
         </div>
         <div className="admin-review-finding-create">
           <label>
+            Section
+            <select
+              value={props.findingSection}
+              onChange={(event) => props.setFindingSection(event.target.value as AssessmentProps["findingSection"])}
+              disabled={!props.canEdit}
+            >
+              <option value="identity">Identity</option>
+              <option value="evidence">Evidence</option>
+              <option value="certification">Grade & Certification</option>
+              <option value="research">Research</option>
+              <option value="assessment">Staff Assessment</option>
+              <option value="decision">Decision</option>
+            </select>
+          </label>
+          <label>
             Finding
             <input
               value={props.findingTitle}
@@ -1172,6 +1417,15 @@ function Assessment(props: AssessmentProps) {
               placeholder="Context for other reviewers"
             />
           </label>
+          <label className="admin-review-checkbox-label">
+            <input
+              type="checkbox"
+              checked={props.findingCustomerAction}
+              onChange={(event) => props.setFindingCustomerAction(event.target.checked)}
+              disabled={!props.canEdit}
+            />
+            Collector action required
+          </label>
           <button
             type="button"
             className="button-secondary"
@@ -1181,6 +1435,15 @@ function Assessment(props: AssessmentProps) {
             {props.creatingFinding ? "Recording…" : "Add finding"}
           </button>
         </div>
+        <label className="admin-review-resolution-note">
+          Resolution note (used when resolving or dismissing)
+          <input
+            value={props.findingResolutionNote}
+            onChange={(event) => props.setFindingResolutionNote(event.target.value)}
+            disabled={!props.canEdit}
+            placeholder="Explain how the finding was handled"
+          />
+        </label>
       </section>
     </div>
   );
@@ -1193,6 +1456,7 @@ function DecisionRail({
   claiming,
   onRelease,
   releasing,
+  onRecovery,
   onCanonicalize,
   canonicalizing,
   onDecision,
@@ -1204,6 +1468,7 @@ function DecisionRail({
   claiming: boolean;
   onRelease: () => void;
   releasing: boolean;
+  onRecovery: () => void;
   onCanonicalize: () => void;
   canonicalizing: boolean;
   onDecision: (value: Decision) => void;
@@ -1309,8 +1574,8 @@ function DecisionRail({
                 </small>
               </button>
             ) : null}
-            <button type="button" className="admin-review-action is-claim" onClick={onRefresh}>
-              Recalculate readiness<small>Refresh the authoritative review projection</small>
+            <button type="button" className="admin-review-action is-claim" onClick={onRecovery}>
+              Submission recovery<small>Recalculate readiness with an audited reason</small>
             </button>
             {workspace.canRelease ? (
               <button
@@ -1590,6 +1855,54 @@ function DecisionDialog({
           <button type="button" className="button-secondary" onClick={onCancel}>
             Cancel
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function RecoveryDialog({
+  reason,
+  setReason,
+  onCancel,
+  onConfirm,
+  pending,
+  error,
+}: {
+  reason: string;
+  setReason: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+  error: Error | null;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+  return (
+    <div className="admin-review-lightbox" role="dialog" aria-modal="true" aria-label="Submission recovery">
+      <div className="admin-panel-card admin-review-lightbox-card" ref={dialogRef} tabIndex={-1}>
+        <p className="page-kicker">Submission recovery</p>
+        <h3>Recalculate review readiness</h3>
+        <p className="text-sm text-subtle">
+          Re-reads the authoritative submission state and records an audit event. It does not force
+          approval, canonicalization, or any workflow transition.
+        </p>
+        <label>
+          Reason
+          <textarea
+            rows={3}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Explain why the review projection needs to be recalculated"
+          />
+        </label>
+        {error ? <p role="alert" className="text-negative">{friendlyError(error)}</p> : null}
+        <div className="mt-4 flex gap-2">
+          <button type="button" className="button-primary" onClick={onConfirm} disabled={pending || !reason.trim()}>
+            {pending ? "Recalculating…" : "Confirm recovery"}
+          </button>
+          <button type="button" className="button-secondary" onClick={onCancel}>Cancel</button>
         </div>
       </div>
     </div>

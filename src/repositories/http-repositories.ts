@@ -5419,6 +5419,22 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
           version: Number(response.version),
         };
       },
+      async recalculateReadiness(id, input) {
+        const response = objectField(
+          await client.request<unknown>(`/reviews/submissions/${id}/recovery/recalculate-readiness`, {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          }),
+          "review readiness recovery",
+        );
+        return {
+          submissionId: stringField(response.submissionId, "readiness recovery.submissionId"),
+          status: stringField(response.status, "readiness recovery.status"),
+          version: Number(response.version),
+          recalculatedAt: stringField(response.recalculatedAt, "readiness recovery.recalculatedAt"),
+        };
+      },
       async saveCondition(id, input) {
         const response = objectField(
           await client.request<unknown>(`/reviews/submissions/${id}/condition`, {
