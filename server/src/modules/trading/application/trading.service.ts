@@ -2711,15 +2711,21 @@ export class TradingService {
   ) {
     if (marketStatus !== 'OPEN')
       throw conflict('MARKET_NOT_OPEN', 'Trading market is not open.');
-    const [user, asset, supply] = await Promise.all([
+    const [user, asset, supply, preSale] = await Promise.all([
       db.user.findUnique({ where: { id: userId } }),
       db.asset.findUnique({ where: { id: assetId } }),
       db.ownershipAssetSupply.findUnique({ where: { assetId } }),
+      db.preSale.findUnique({ where: { assetId }, select: { status: true } }),
     ]);
     if (user?.accountStatus !== 'ACTIVE')
       throw conflict(
         'COMPLIANCE_REQUIRED',
         'Trading is unavailable for this account.',
+      );
+    if (preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(preSale.status))
+      throw conflict(
+        'SECONDARY_TRADING_DISABLED_DURING_PRESALE',
+        'Secondary trading is disabled while this asset is in Pre-Sale.',
       );
     if (asset?.status !== 'PUBLISHED' || supply?.status !== 'ACTIVE')
       throw conflict('ASSET_NOT_TRADABLE', 'Asset is not tradable.');
