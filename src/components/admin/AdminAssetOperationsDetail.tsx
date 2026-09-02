@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import type {
   AdminCollectibleDetail as Detail,
   AssetOperationDetailProjection,
+  PreSaleDetail,
 } from "@/data/repositories";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import {
@@ -73,6 +74,11 @@ export function AdminAssetOperationsDetail({
     queryFn: () => services.repositories.lifecycle.getOperationDetail(assetId),
     staleTime: 10_000,
   });
+  const preSaleDetail = useQuery({
+    queryKey: ["admin", "pre-sale", assetId],
+    queryFn: () => services.repositories.admin.getPreSale(assetId),
+    staleTime: 10_000,
+  });
   const [valuePounds, setValuePounds] = useState("");
   const [confidence, setConfidence] = useState("80");
   const [policyCode, setPolicyCode] = useState("");
@@ -82,9 +88,26 @@ export function AdminAssetOperationsDetail({
   const [pendingControl, setPendingControl] = useState<PendingControl | null>(null);
   const [controlReason, setControlReason] = useState("");
   const [controlConfirmation, setControlConfirmation] = useState("");
+  const [preSaleReason, setPreSaleReason] = useState("");
+  const [preSaleDeadline, setPreSaleDeadline] = useState("");
+  const preSaleCommand = useMutation({
+    mutationFn: (input: { action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize" }) => {
+      if (input.action === "open") return services.repositories.admin.openPreSale(assetId);
+      if (input.action === "pause") return services.repositories.admin.pausePreSale(assetId, preSaleReason);
+      if (input.action === "resume") return services.repositories.admin.resumePreSale(assetId, preSaleReason);
+      if (input.action === "extend") return services.repositories.admin.extendPreSale(assetId, { deadlineAt: new Date(preSaleDeadline).toISOString(), reason: preSaleReason });
+      if (input.action === "cancel") return services.repositories.admin.cancelPreSale(assetId, preSaleReason);
+      return services.repositories.admin.finalizePreSale(assetId);
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
+      void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
+    },
+  });
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
+    void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations"] });
   };
   const valuation = useMutation({
@@ -221,6 +244,7 @@ export function AdminAssetOperationsDetail({
     openOffering,
     publish,
     assetControl,
+    preSaleCommand,
   ].find((mutation) => mutation.isError);
   return (
     <main className="admin-asset-workspace">
@@ -313,6 +337,16 @@ export function AdminAssetOperationsDetail({
         loading={operations.isLoading}
         error={operations.isError}
         retry={() => void operations.refetch()}
+      />
+      <AdminPreSalePanel
+        detail={preSaleDetail.data}
+        missing={preSaleDetail.isError}
+        reason={preSaleReason}
+        deadline={preSaleDeadline}
+        setReason={setPreSaleReason}
+        setDeadline={setPreSaleDeadline}
+        execute={(action) => preSaleCommand.mutate({ action })}
+        pending={preSaleCommand.isPending}
       />
       <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
         {tabs.map((value) => (
@@ -2154,4 +2188,54 @@ function money(minor: string, currency: string) {
   } catch {
     return `${currency} ${minor}`;
   }
+}
+
+function AdminPreSalePanel({
+  detail,
+  missing,
+  reason,
+  deadline,
+  setReason,
+  setDeadline,
+  execute,
+  pending,
+}: {
+  detail?: PreSaleDetail;
+  missing: boolean;
+  reason: string;
+  deadline: string;
+  setReason: (value: string) => void;
+  setDeadline: (value: string) => void;
+  execute: (action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize") => void;
+  pending: boolean;
+}) {
+  const status = detail?.status ?? "NOT_CONFIGURED";
+  return (
+    <section className="admin-presale-panel" aria-label="Pre-Sale controls">
+      <div className="admin-presale-panel__heading">
+        <div><span className="admin-operations-eyebrow">Conditional market access</span><h2>Pre-Sale</h2></div>
+        <span className={`admin-presale-status is-${status.toLowerCase()}`}>{sentence(status)}</span>
+      </div>
+      {detail ? (
+        <div className="admin-presale-panel__facts">
+          <Field label="Physical state" value={sentence(detail.physicalStatus)} />
+          <Field label="Reserved" value={`${detail.reservedUnits} / ${detail.offeredUnits} Slices`} />
+          <Field label="Deadline" value={detail.deadlineAt ? dateTime(detail.deadlineAt) : "Not set"} />
+          <Field label="Next step" value={detail.nextStep} />
+        </div>
+      ) : <p className="admin-detail-muted">{missing ? "No Pre-Sale record exists yet. Opening will validate the approved offering, issued supply, market, and intake path." : "Loading Pre-Sale state…"}</p>}
+      <label className="admin-form-field">Command reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record the operational reason (8–500 characters)" /></label>
+      {detail && (status === "ACTIVE" || status === "PAUSED") ? (
+        <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+      ) : null}
+      <div className="admin-presale-panel__actions">
+        {!detail ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Open Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
+        {status === "ACTIVE" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("pause")}><PauseCircle aria-hidden="true" /> Pause</button> : null}
+        {status === "PAUSED" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("resume")}><PlayCircle aria-hidden="true" /> Resume</button> : null}
+        {detail && (status === "ACTIVE" || status === "PAUSED") ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8 || !deadline} onClick={() => execute("extend")}>Extend deadline</button> : null}
+        {detail && status !== "CONVERTED" && status !== "CANCELLED" ? <button type="button" className="admin-ops-button danger" disabled={pending || reason.trim().length < 8} onClick={() => execute("cancel")}>Cancel</button> : null}
+        {detail && detail.physicalStatus === "CUSTODY_ESTABLISHED" && status !== "CONVERTED" && status !== "CANCELLED" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("finalize")}>Finalize conversion <CheckCircle2 aria-hidden="true" /></button> : null}
+      </div>
+    </section>
+  );
 }

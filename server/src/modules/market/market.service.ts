@@ -137,6 +137,12 @@ export class MarketService {
         initialOffering: {
           include: { inventory: true },
         },
+        preSale: {
+          include: {
+            initialOffering: { select: { offeredUnits: true, pricePerUnitMinor: true, currency: true } },
+            reservations: { where: { status: 'ACTIVE' }, select: { units: true } },
+          },
+        },
         tradingMarket: {
           select: { status: true, tradingEnabled: true },
         },
@@ -1068,6 +1074,12 @@ export class MarketService {
         initialOffering: {
           include: { inventory: true },
         },
+        preSale: {
+          include: {
+            initialOffering: { select: { offeredUnits: true, pricePerUnitMinor: true, currency: true } },
+            reservations: { where: { status: 'ACTIVE' }, select: { units: true } },
+          },
+        },
         publication: { select: { status: true, publishedAt: true } },
         custodyRecord: { select: { status: true, updatedAt: true } },
         insuranceCoverage: {
@@ -1292,6 +1304,14 @@ type PublicAssetRow = {
       reservedUnits: bigint;
       settledUnits: bigint;
     } | null;
+  } | null;
+  preSale?: {
+    status: string;
+    openedAt: Date | null;
+    deadlineAt: Date | null;
+    physicalStatus: string;
+    initialOffering: { offeredUnits: bigint; pricePerUnitMinor: bigint; currency: string };
+    reservations: Array<{ units: bigint }>;
   } | null;
   tradingMarket: { status: string; tradingEnabled: boolean } | null;
   tradingOrders?: Array<{ remainingUnits: bigint }>;
@@ -1560,6 +1580,25 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
                 }
               : null,
           }
+        : null,
+    preSale:
+      asset.preSale && ['ACTIVE', 'PAUSED', 'FINALIZING'].includes(asset.preSale.status)
+        ? (() => {
+            const reservedUnits = asset.preSale.reservations.reduce((sum, row) => sum + row.units, 0n);
+            const offeredUnits = asset.preSale.initialOffering.offeredUnits;
+            return {
+              status: asset.preSale.status,
+              openedAt: asset.preSale.openedAt?.toISOString() ?? null,
+              deadlineAt: asset.preSale.deadlineAt?.toISOString() ?? null,
+              physicalStatus: asset.preSale.physicalStatus,
+              pricePerUnitMinor: asset.preSale.initialOffering.pricePerUnitMinor.toString(),
+              currency: asset.preSale.initialOffering.currency,
+              offeredUnits: offeredUnits.toString(),
+              reservedUnits: reservedUnits.toString(),
+              availableUnits: (offeredUnits - reservedUnits).toString(),
+              reservedPercentageBps: offeredUnits ? Number((reservedUnits * 10_000n) / offeredUnits) : 0,
+            };
+          })()
         : null,
     trading: asset.tradingMarket
       ? {

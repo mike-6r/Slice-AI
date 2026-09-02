@@ -8,6 +8,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marketplace-layout";
+import { PreSaleDisclosure } from "./PreSaleDisclosure";
 
 function marketStatusPresentation(asset: MarketplaceAsset) {
   if (asset.marketLifecycle) {
@@ -297,6 +298,7 @@ export function MarketAssetCard({
           ) : null}
         </div>
         <ValuationBlock asset={asset} />
+        {asset.preSale ? <PreSaleDisclosure preSale={asset.preSale} compact={compact} /> : null}
         {!compact ? <MarketAvailability asset={asset} /> : null}
         {!compact ? <OwnershipPrompt asset={asset} /> : null}
         <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">

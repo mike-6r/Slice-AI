@@ -66372,3 +66372,23 @@ body:has(.portfolio-page)
     min-height: 12rem;
   }
 }
+/* Pre-Sale customer journey */
+.portfolio-presale-section { display: grid; gap: 14px; margin: 24px 0 8px; padding: 18px; border: 1px solid rgba(221,174,72,.28); border-radius: 16px; background: rgba(221,174,72,.06); }
+.portfolio-presale-section__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.portfolio-presale-section__heading h2 { margin: 4px 0 0; font-size: 1rem; }
+.portfolio-presale-section__heading a { display: inline-flex; align-items: center; gap: 6px; color: #e2b84e; font-size: .8rem; }
+.portfolio-presale-section__heading svg { width: 14px; }
+.portfolio-eyebrow { color: #e2b84e; font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.portfolio-presale-list { display: grid; gap: 8px; }
+.portfolio-presale-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid rgba(255,255,255,.08); color: inherit; }
+.portfolio-presale-row span:last-child { text-align: right; }
+.portfolio-presale-row strong, .portfolio-presale-row small { display: block; }
+.portfolio-presale-row small { margin-top: 4px; color: var(--text-muted, #8b929d); font-size: .75rem; text-transform: capitalize; }
+.asset-presale-section { display: grid; gap: 18px; margin: 28px 0; }
+.asset-presale-section .asset-section-heading { align-items: center; }
+.asset-presale-countdown { color: #e2b84e; font-size: .9rem; }
+.asset-presale-action { display: flex; align-items: end; gap: 14px; }
+.asset-presale-action label { display: grid; gap: 7px; color: var(--text-muted, #8b929d); font-size: .78rem; font-weight: 700; }
+.asset-presale-action input { width: 150px; border: 1px solid rgba(255,255,255,.15); border-radius: 10px; background: rgba(255,255,255,.05); color: inherit; padding: 12px; }
+.asset-presale-message { margin: 0; color: #b9dfc0; font-size: .84rem; }
+@media (max-width: 640px) { .asset-presale-action { align-items: stretch; flex-direction: column; } .asset-presale-action input { width: 100%; } }

@@ -83,6 +83,13 @@ const total = (money: Money, units: number) => gbp((money.amount / 100) * units)
 
 export const mockRepositories: AppRepositories = {
   admin: {
+    async getPreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async openPreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async pausePreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async resumePreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async extendPreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async cancelPreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async finalizePreSale() { throw new Error("Pre-Sale requires the API service."); },
     async getOverview() {
       return {
         users: { active: 0 },
@@ -842,6 +849,12 @@ export const mockRepositories: AppRepositories = {
         updatedAt: now(),
       };
     },
+  },
+  preSale: {
+    async getPublicDetail() { throw new Error("Pre-Sale requires the API service."); },
+    async reserve() { throw new Error("Pre-Sale requires the API service."); },
+    async listReservations() { return []; },
+    async getReservation() { throw new Error("Pre-Sale requires the API service."); },
   },
   portfolio: {
     async getPortfolio() {

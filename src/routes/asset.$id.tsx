@@ -35,6 +35,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
+import { PreSaleDisclosure, formatPreSaleCountdown } from "@/components/marketplace/PreSaleDisclosure";
 import type { MarketLifecycleProjection, SliceGrade } from "@/domain";
 
 export const Route = createFileRoute("/asset/$id")({
@@ -193,6 +194,8 @@ function AssetPage() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useSession();
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>("30D");
+  const [reservationUnits, setReservationUnits] = useState("1");
+  const [reservationMessage, setReservationMessage] = useState<string | null>(null);
   const assetQuery = useQuery({
     queryKey: queryKeys.assets.detail(id),
     queryFn: () => services.assets.get(id as never),
@@ -245,6 +248,15 @@ function AssetPage() {
     mutationFn: (assetId: string) =>
       services.ownership.toggleWatchlist(currentUser, assetId as never),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["watchlist", "current"] }),
+  });
+  const preSale = useMutation({
+    mutationFn: (units: string) => services.preSale.reserve(id, units),
+    onSuccess: (reservation) => {
+      setReservationMessage(`Reservation ${reservation.id.slice(0, 8)} confirmed. Your funds remain reserved until physical completion.`);
+      setReservationUnits("1");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.assets.detail(id) });
+    },
+    onError: () => setReservationMessage("The reservation could not be created. Please check availability and try again."),
   });
 
   if (assetQuery.isLoading)
@@ -444,6 +456,29 @@ function AssetPage() {
             </div>
           </section>
         </section>
+
+        {asset.preSale ? (
+          <section className="asset-presale-section" aria-labelledby="pre-sale-title">
+            <div className="asset-section-heading">
+              <div>
+                <p className="asset-section-label">Conditional access</p>
+                <h2 id="pre-sale-title">Pre-Sale reservation</h2>
+              </div>
+              <strong className="asset-presale-countdown">{formatPreSaleCountdown(asset.preSale.deadlineAt)}</strong>
+            </div>
+            <PreSaleDisclosure preSale={asset.preSale} formatMoney={(minor, currency) => formatMoney(minor, currency as "GBP" | "USD" | "EUR" | "CAD")} />
+            <div className="asset-presale-action">
+              <label>
+                Slices to reserve
+                <input value={reservationUnits} inputMode="numeric" min="1" max={asset.preSale.availableUnits} onChange={(event) => setReservationUnits(event.target.value.replace(/[^0-9]/g, ""))} />
+              </label>
+              <button type="button" className="primary-action" disabled={preSale.isPending || asset.preSale.status !== "ACTIVE" || !/^\d+$/.test(reservationUnits) || Number(reservationUnits) < 1 || Number(reservationUnits) > Number(asset.preSale.availableUnits)} onClick={() => { if (!isAuthenticated) { window.location.assign(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`); return; } setReservationMessage(null); preSale.mutate(reservationUnits); }}>
+                {preSale.isPending ? "Reserving…" : isAuthenticated ? "Reserve Slices" : "Sign in to reserve"}
+              </button>
+            </div>
+            {reservationMessage ? <p className="asset-presale-message" role="status">{reservationMessage}</p> : null}
+          </section>
+        ) : null}
 
         <AssetTrustStrip asset={asset} lifecycle={lifecycle} />
 

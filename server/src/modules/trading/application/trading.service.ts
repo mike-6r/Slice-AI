@@ -1714,6 +1714,25 @@ export class TradingService {
     });
   }
 
+  /** Finalization seam for the Pre-Sale module. It deliberately reuses the
+   * same atomic Initial Offering settlement path as ordinary purchases. */
+  async settlePreSaleExecution(
+    db: Db,
+    buyOrderId: string,
+    sellOrderId: string,
+    actor: Actor,
+    requestId: string,
+  ) {
+    const market = await db.tradingMarket.findUnique({ where: { assetId: (await db.tradingOrder.findUniqueOrThrow({ where: { id: sellOrderId }, select: { assetId: true } })).assetId } });
+    if (!market) throw conflict('MARKET_NOT_OPEN', 'Trading market is unavailable.');
+    const [buy, sell] = await Promise.all([
+      db.tradingOrder.findUnique({ where: { id: buyOrderId } }),
+      db.tradingOrder.findUnique({ where: { id: sellOrderId } }),
+    ]);
+    if (!buy || !sell) throw conflict('ORDER_NOT_FOUND', 'Settlement order is unavailable.');
+    return this.settleExecution(db, market, buy, sell, actor, requestId);
+  }
+
   private async settleExecution(
     db: Db,
     market: {

@@ -20,6 +20,7 @@ const configSchema = z.object({
     .string()
     .default('http://127.0.0.1:4173,http://localhost:4173'),
   SERVICE_VERSION: z.string().min(1).max(64).default('0.1.0'),
+  PRESALE_DEADLINE_DAYS: z.coerce.number().int().min(1).max(90).default(14),
   HTTP_BODY_LIMIT: z.string().default('1mb'),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   DATABASE_URL: z.string().url().optional(),
@@ -371,6 +372,7 @@ export type AppConfig = {
   port: number;
   corsOrigins: string[];
   serviceVersion: string;
+  preSaleDeadlineDays?: number;
   bodyLimit: string;
   trustProxyHops: number;
   databaseUrl?: string;
@@ -807,6 +809,7 @@ export function loadAppConfig(environment: NodeJS.ProcessEnv): AppConfig {
     port: parsed.PORT,
     corsOrigins: origins,
     serviceVersion: parsed.SERVICE_VERSION,
+    preSaleDeadlineDays: parsed.PRESALE_DEADLINE_DAYS,
     bodyLimit,
     trustProxyHops: parsed.TRUST_PROXY_HOPS,
     databaseUrl,

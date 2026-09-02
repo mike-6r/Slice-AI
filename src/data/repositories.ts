@@ -2252,6 +2252,13 @@ export type InitialOfferingPreview = Omit<
 > & { valuationMinor: string; feePolicyStatus: string };
 
 export interface AdminRepository {
+  getPreSale(assetId: string): Promise<PreSaleDetail>;
+  openPreSale(assetId: string): Promise<PreSaleDetail>;
+  pausePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
+  resumePreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
+  extendPreSale(assetId: string, input: { deadlineAt: string; reason: string; incidentReference?: string }): Promise<PreSaleDetail>;
+  cancelPreSale(assetId: string, reason: string): Promise<PreSaleDetail>;
+  finalizePreSale(assetId: string): Promise<PreSaleDetail>;
   getOverview(): Promise<AdminOverview>;
   getRiskOperations(): Promise<AdminRiskOperations>;
   getPlatformDashboard(): Promise<AdminPlatformDashboard>;
@@ -2672,6 +2679,42 @@ export interface MarketRepository {
   getMarketMovers(): Promise<Asset[]>;
   getRecentTrades(assetId: AssetId): Promise<import("@/domain").Trade[]>;
   getOrderBook(assetId: AssetId): Promise<OrderBook>;
+}
+
+export type PreSaleReservationView = {
+  id: string;
+  asset: { slug: string; title: string };
+  units: string;
+  pricePerUnitMinor: string;
+  grossMinor: string;
+  status: string;
+  createdAt: string;
+  deadlineAt: string | null;
+  physicalStatus: string;
+  disclosure: string;
+};
+export type PreSaleDetail = {
+  id: string;
+  asset: { id: string; slug: string; title: string };
+  status: string;
+  openedAt: string | null;
+  deadlineAt: string | null;
+  physicalStatus: string;
+  reservedUnits: string;
+  reservedPercentageBps: number;
+  availableUnits: string;
+  offeredUnits: string;
+  pricePerUnitMinor: string;
+  currency: SupportedCurrency;
+  reservationCount: number;
+  disclosure: string;
+  nextStep: string;
+};
+export interface PreSaleRepository {
+  getPublicDetail(slug: string): Promise<PreSaleDetail>;
+  reserve(slug: string, units: string): Promise<PreSaleReservationView>;
+  listReservations(): Promise<PreSaleReservationView[]>;
+  getReservation(id: string): Promise<PreSaleReservationView>;
 }
 
 export interface PortfolioRepository {
@@ -3306,6 +3349,7 @@ export interface AppRepositories {
   lifecycle: AssetLifecycleRepository;
   admin: AdminRepository;
   market: MarketRepository;
+  preSale: PreSaleRepository;
   portfolio: PortfolioRepository;
   collectors: CollectorRepository;
   collectorWorkspace: CollectorWorkspaceRepository;

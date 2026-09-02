@@ -179,6 +179,7 @@ export interface AppServices {
   repositories: AppRepositories;
   assets: AssetService;
   market: MarketService;
+  preSale: AppRepositories["preSale"];
   portfolio: PortfolioService;
   trading: TradingService;
   ownership: OwnershipService;
@@ -193,6 +194,7 @@ export const createAppServices = (repositories: AppRepositories): AppServices =>
   repositories,
   assets: new AssetService(repositories),
   market: new MarketService(repositories),
+  preSale: repositories.preSale,
   portfolio: new PortfolioService(repositories),
   trading: new TradingService(repositories),
   ownership: new OwnershipService(repositories),

@@ -794,6 +794,18 @@ export class InitialOfferingService {
    * point to allocate the issued units into retained collector ownership and
    * Initial Offering inventory.
    */
+  /** Prepare the offering inventory without opening a final market order.
+   * Pre-Sale uses this boundary so the inventory exists before physical
+   * custody, while no customer ownership or proceeds are created. */
+  async prepareInventoryForPreSale(db: Db, offeringId: string) {
+    const offering = await db.initialOffering.findUnique({
+      where: { id: offeringId },
+      include: { asset: { select: { ownershipSupply: true } }, inventory: { include: { account: true } } },
+    });
+    if (!offering) fail('INITIAL_OFFERING_NOT_FOUND', 'Offering not found.');
+    return this.allocateIssuedOwnershipForOffering(db, offering, `presale:${offeringId}`);
+  }
+
   private async allocateIssuedOwnershipForOffering(
     db: Db,
     offering: {

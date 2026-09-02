@@ -116,6 +116,25 @@ enum InitialOfferingStatus {
   EXPIRED
 }
 
+enum PreSaleStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  FINALIZING
+  CONVERTED
+  CANCELLED
+}
+
+enum PreSaleReservationStatus {
+  ACTIVE
+  CONVERTING
+  CONVERTED
+  CANCELLED
+  RELEASED
+  REFUNDED
+  FAILED
+}
+
 enum OwnershipAccountStatus {
   ACTIVE
   FROZEN
@@ -956,6 +975,8 @@ model User {
   stagingDemoPhysicalIntakes          StagingDemoPhysicalIntake[]        @relation("StagingDemoPhysicalIntakeActor")
   initialOfferingsOriginated          InitialOffering[]                  @relation("InitialOfferingOriginator")
   initialOfferingsBeneficiary         InitialOffering[]                  @relation("InitialOfferingBeneficiary")
+  preSaleReservations                 PreSaleReservation[]               @relation("PreSaleReservationBuyer")
+  preSaleAuditEvents                  PreSaleAuditEvent[]                @relation("PreSaleAuditActor")
   initialOfferingInventories          InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
   platformRevenueSettlementsRequested PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementRequester")
   platformRevenueSettlementsApproved  PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementApprover")
@@ -1460,6 +1481,8 @@ model Asset {
   controlledBetaBypass          ControlledBetaPhysicalBypass?
   stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
   initialOffering               InitialOffering?
+  preSale                       PreSale?
+  preSaleReservations            PreSaleReservation[]
   initialOfferingInventory      InitialOfferingInventory[]
   featuredCollectorAssets       PublicCollectorFeaturedAsset[]
   certificationClaims           GradingCertificationClaim[]
@@ -2490,10 +2513,86 @@ model InitialOffering {
   inventory                  InitialOfferingInventory?
   orders                     TradingOrder[]
   executions                 TradingExecution[]
+  preSale                    PreSale?
 
   @@index([originatingCollectorUserId, status, updatedAt, id])
   @@index([beneficiaryUserId, status, updatedAt, id])
   @@index([status, updatedAt, assetId])
+}
+
+/// Conditional customer demand for an Initial Offering before Slice has
+/// physically received, verified, and secured the asset. This record never
+/// creates ownership or collector proceeds by itself.
+model PreSale {
+  id                  String       @id @default(cuid())
+  assetId             String       @unique
+  initialOfferingId   String       @unique
+  status              PreSaleStatus @default(DRAFT)
+  openedAt            DateTime?
+  deadlineAt          DateTime?
+  physicalStatus      String       @default("AWAITING_INTAKE")
+  pauseReason         String?
+  cancellationReason  String?
+  cancellationAt      DateTime?
+  completedAt         DateTime?
+  openedByUserId      String?
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  asset               Asset        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  initialOffering     InitialOffering @relation(fields: [initialOfferingId], references: [id], onDelete: Restrict)
+  reservations        PreSaleReservation[]
+  auditEvents         PreSaleAuditEvent[]
+
+  @@index([status, deadlineAt, id])
+  @@index([physicalStatus, status, updatedAt, id])
+}
+
+/// Customer cash and offering inventory remain reserved until this record is
+/// converted or released. Cash authority is the existing CashReservation;
+/// ownership authority is created only by final Initial Offering settlement.
+model PreSaleReservation {
+  id                 String                @id @default(cuid())
+  preSaleId          String
+  buyerUserId        String
+  assetId            String
+  units              BigInt
+  pricePerUnitMinor  BigInt
+  grossMinor         BigInt
+  cashReservationId  String?               @unique
+  status             PreSaleReservationStatus @default(ACTIVE)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  convertedAt        DateTime?
+  releasedAt         DateTime?
+  releaseReason      String?
+  idempotencyKey     String                @unique
+  version            Int                   @default(1)
+  preSale            PreSale               @relation(fields: [preSaleId], references: [id], onDelete: Restrict)
+  buyer              User                  @relation("PreSaleReservationBuyer", fields: [buyerUserId], references: [id], onDelete: Restrict)
+  asset              Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([preSaleId, status, createdAt, id])
+  @@index([buyerUserId, status, createdAt, id])
+  @@index([assetId, status, createdAt, id])
+}
+
+model PreSaleAuditEvent {
+  id          String   @id @default(cuid())
+  preSaleId   String
+  action      String
+  source      String
+  actorUserId String?
+  reason      String?
+  beforeState Json
+  afterState  Json
+  reference   String?
+  createdAt   DateTime @default(now())
+  preSale     PreSale  @relation(fields: [preSaleId], references: [id], onDelete: Restrict)
+  actor       User?    @relation("PreSaleAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([preSaleId, createdAt, id])
+  @@index([action, createdAt, id])
 }
 
 model InitialOfferingInventory {

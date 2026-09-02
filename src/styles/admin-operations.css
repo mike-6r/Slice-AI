@@ -3296,3 +3296,13 @@
     grid-template-columns: auto minmax(0, 1fr);
   }
 }
+.admin-presale-panel { display: grid; gap: 16px; margin: 20px 0; padding: 20px; border: 1px solid rgba(218,174,74,.35); border-radius: 16px; background: rgba(218,174,74,.06); }
+.admin-presale-panel__heading, .admin-presale-panel__actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-presale-panel__heading h2 { margin: 4px 0 0; }
+.admin-operations-eyebrow { color: #dcae45; font-size: .7rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.admin-presale-status { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: .75rem; }
+.admin-presale-status.is-active { color: #b9dfc0; background: rgba(81,159,98,.16); }
+.admin-presale-status.is-paused, .admin-presale-status.is-finalizing { color: #e2b84e; }
+.admin-presale-panel__facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-presale-panel__actions { justify-content: flex-start; }
+@media (max-width: 900px) { .admin-presale-panel__facts { grid-template-columns: repeat(2, minmax(0,1fr)); } }

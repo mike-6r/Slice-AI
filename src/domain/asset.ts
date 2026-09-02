@@ -65,6 +65,22 @@ export interface InitialOfferingProjection {
     settledUnits: string;
   } | null;
 }
+export interface PreSaleProjection {
+  id?: string;
+  status: "DRAFT" | "ACTIVE" | "PAUSED" | "FINALIZING" | "CONVERTED" | "CANCELLED";
+  openedAt?: ISODateTime | null;
+  deadlineAt?: ISODateTime | null;
+  physicalStatus: string;
+  pricePerUnitMinor: string;
+  currency: "GBP" | "USD" | "EUR" | "CAD";
+  offeredUnits: string;
+  reservedUnits: string;
+  availableUnits: string;
+  reservedPercentageBps: number;
+  reservationCount?: number;
+  disclosure?: string;
+  nextStep?: string;
+}
 
 export interface Grade {
   company: GradingCompany;
@@ -199,6 +215,7 @@ export interface Asset {
   };
   marketLifecycle?: MarketLifecycleProjection;
   initialOffering?: InitialOfferingProjection;
+  preSale?: PreSaleProjection;
   market?: {
     estimatedMarketValue?: Money;
     source?: string;

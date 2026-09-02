@@ -286,6 +286,7 @@ export function movementSettledEvent(
 }
 
 export const financialNotificationKind = {
+  preSaleUpdate: 'PRE_SALE_UPDATE',
   depositClearing: 'DEPOSIT_CLEARING',
   depositReleased: 'DEPOSIT_RELEASED',
   depositReturned: 'DEPOSIT_RETURNED',

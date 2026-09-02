@@ -26,6 +26,7 @@ import { CollectorWorkspaceModule } from './modules/collector-workspace/collecto
 import { CurrencyModule } from './modules/currency/currency.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { InitialOfferingModule } from './modules/initial-offering/initial-offering.module';
+import { PreSaleModule } from './modules/pre-sale/pre-sale.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { InitialOfferingModule } from './modules/initial-offering/initial-offeri
     LifecycleModule,
     AdminModule,
     InitialOfferingModule,
+    PreSaleModule,
     MarketResearchModule,
     CollectorWorkspaceModule,
     ReadsModule,

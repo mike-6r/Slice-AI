@@ -1,0 +1,21 @@
+.pre-sale-panel { border: 1px solid rgba(221, 174, 72, .45); background: linear-gradient(135deg, rgba(221, 174, 72, .11), rgba(15, 22, 31, .72)); border-radius: 18px; padding: 20px; color: var(--text-primary, #f8f5ed); }
+.pre-sale-panel__heading, .pre-sale-panel__facts, .pre-sale-panel__status { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.pre-sale-panel__heading h3 { margin: 5px 0 0; font-size: 1.1rem; }
+.pre-sale-panel__heading > svg { color: #e2b84e; }
+.pre-sale-eyebrow { color: #e2b84e; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.pre-sale-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #e2b84e; box-shadow: 0 0 0 4px rgba(226,184,78,.15); }
+.pre-sale-panel__facts { margin: 20px 0 13px; align-items: flex-start; }
+.pre-sale-panel__facts > div { display: grid; gap: 4px; }
+.pre-sale-panel__facts span { color: rgba(248,245,237,.62); font-size: .72rem; }
+.pre-sale-panel__facts strong { font-size: .93rem; }
+.pre-sale-panel__progress { height: 5px; overflow: hidden; background: rgba(255,255,255,.12); border-radius: 99px; }
+.pre-sale-panel__progress span { display: block; height: 100%; background: #e2b84e; border-radius: inherit; }
+.pre-sale-panel__status { justify-content: flex-start; margin-top: 14px; color: #b9dfc0; font-size: .82rem; }
+.pre-sale-panel__status svg { width: 16px; }
+.pre-sale-panel__disclosure, .pre-sale-panel__lock { display: flex; gap: 8px; margin: 15px 0 0; color: rgba(248,245,237,.72); font-size: .78rem; line-height: 1.5; }
+.pre-sale-panel__disclosure svg { flex: none; color: #e2b84e; width: 16px; }
+.pre-sale-panel__lock { color: rgba(248,245,237,.52); }
+.pre-sale-panel__lock svg { flex: none; width: 15px; }
+.pre-sale-panel--compact { padding: 14px; }
+.pre-sale-panel--compact .pre-sale-panel__facts { margin-top: 14px; }
+@media (max-width: 640px) { .pre-sale-panel__facts { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); } .pre-sale-panel__facts > div:last-child { grid-column: 1 / -1; } }

@@ -164,6 +164,7 @@ type MarketAssetDto = {
     issuedUnits: string;
   } | null;
   initialOffering?: import("@/domain").InitialOfferingProjection | null;
+  preSale?: import("@/domain").PreSaleProjection | null;
   marketLifecycle?: import("@/domain").MarketLifecycleProjection;
   trading?: {
     status: string;
@@ -502,6 +503,7 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
     : undefined,
   ownership: value.ownership ?? undefined,
   initialOffering: value.initialOffering ?? undefined,
+  preSale: value.preSale ?? undefined,
   trading: value.trading ?? undefined,
   marketLifecycle: value.marketLifecycle,
 });
@@ -4128,9 +4130,40 @@ const mapAdminComplianceDetail = (raw: unknown): AdminComplianceDetail => {
   };
 };
 
+const preSaleRepository = (client: ApiClient): import("@/data/repositories").PreSaleRepository => {
+  const key = () => crypto.randomUUID();
+  return {
+    getPublicDetail: (slug) => client.get(`/market/assets/${encodeURIComponent(slug)}/pre-sale`),
+    reserve: (slug, units) => client.request(`/market/assets/${encodeURIComponent(slug)}/pre-sale/reservations`, { method: "POST", body: { units }, headers: { "Idempotency-Key": key() } }),
+    listReservations: () => client.get("/me/pre-sale-reservations"),
+    getReservation: (id) => client.get(`/me/pre-sale-reservations/${encodeURIComponent(id)}`),
+  };
+};
+
 const adminRepository = (client: ApiClient): AdminRepository => {
   const idempotencyKey = () => crypto.randomUUID();
   return {
+    async getPreSale(assetId) {
+      return client.get(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale`);
+    },
+    async openPreSale(assetId) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/open`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } });
+    },
+    async pausePreSale(assetId, reason) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/pause`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+    },
+    async resumePreSale(assetId, reason) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/resume`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+    },
+    async extendPreSale(assetId, input) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/extend`, { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } });
+    },
+    async cancelPreSale(assetId, reason) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/cancel`, { method: "POST", body: { reason }, headers: { "Idempotency-Key": idempotencyKey() } });
+    },
+    async finalizePreSale(assetId) {
+      return client.request(`/admin/assets/${encodeURIComponent(assetId)}/pre-sale/finalize`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey() } });
+    },
     async getOverview() {
       const value = objectField(await client.get<unknown>("/admin/overview"), "admin overview");
       const users = objectField(value.users, "admin overview.users");
@@ -5566,6 +5599,7 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
 
   return {
     admin: adminRepository(client),
+    preSale: preSaleRepository(client),
     assets,
     catalogue: {
       async listSubmissionCategories() {

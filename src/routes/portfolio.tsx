@@ -138,7 +138,7 @@ function activityQueryRetry(failureCount: number, error: unknown) {
 }
 
 export function Portfolio() {
-  useCurrency();
+  const { currency: displayCurrency, rates } = useCurrency();
   const services = useAppServices();
   const { isAuthenticated } = useSession();
   const queryClient = useQueryClient();
@@ -229,6 +229,12 @@ export function Portfolio() {
     queryFn: () => services.portfolio.performance(performanceRange),
     enabled: isAuthenticated,
   });
+  const preSaleReservations = useQuery({
+    queryKey: ["portfolio", "pre-sale-reservations"],
+    queryFn: services.preSale.listReservations,
+    enabled: isAuthenticated,
+    staleTime: 15_000,
+  });
   // Portfolio rows are a backend-owned projection. Do not hide or rewrite
   // published positions in the browser based on fixture slugs or media.
   const displayHoldings = useMemo(() => holdings.data ?? [], [holdings.data]);
@@ -276,7 +282,20 @@ export function Portfolio() {
               onHoldingFilterChange={() => undefined}
               onHoldingSortChange={() => undefined}
             />
-            <PortfolioKpis query={displaySummaryQuery} performance={performance} />
+              <PortfolioKpis query={displaySummaryQuery} performance={performance} />
+            {preSaleReservations.data?.length ? (
+              <section className="portfolio-presale-section" aria-labelledby="portfolio-presale-title">
+                <div className="portfolio-presale-section__heading"><div><span className="portfolio-eyebrow">Conditional positions</span><h2 id="portfolio-presale-title">Pre-Sale reservations</h2></div><Link to="/marketplace">Explore markets <ArrowRight aria-hidden="true" /></Link></div>
+                <div className="portfolio-presale-list">
+                  {preSaleReservations.data.map((reservation) => (
+                    <Link key={reservation.id} to="/asset/$id" params={{ id: reservation.asset.slug }} className="portfolio-presale-row">
+                      <span><strong>{reservation.asset.title}</strong><small>{reservation.units} Slices · {reservation.physicalStatus.replaceAll("_", " ")}</small></span>
+                      <span><strong>{formatDisplayMoney(reservation.grossMinor, "GBP", displayCurrency, rates)}</strong><small>{reservation.status.replaceAll("_", " ")}</small></span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </section>
         ) : (
           <>

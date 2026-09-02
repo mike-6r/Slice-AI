@@ -4069,7 +4069,7 @@ export class AdminService {
                   : row.deliveryMethod === 'IN_PERSON'
                     ? 'With Collector'
                     : 'Awaiting Shipment';
-    const primaryBlocker = row.issues[0]
+    const primaryBlocker = row.issues?.[0]
       ? {
           label:
             row.issues[0].code === 'DESTINATION_REQUIRED'
@@ -4085,23 +4085,23 @@ export class AdminService {
     });
     const availableCommands = {
       assignDestination: command(
-        row.allowedActions.includes('ASSIGN_DESTINATION'),
+        row.allowedActions?.includes('ASSIGN_DESTINATION') ?? false,
         'Destination selection is owned by the collector or destination management workspace.',
       ),
       manageTracking: command(
-        row.allowedActions.includes('MANAGE_TRACKING'),
+        row.allowedActions?.includes('MANAGE_TRACKING') ?? false,
         'No shipment mutation command is available in the current authority.',
       ),
       confirmReceipt: command(
-        row.allowedActions.includes('CONFIRM_RECEIPT'),
+        row.allowedActions?.includes('CONFIRM_RECEIPT') ?? false,
         row.receipt ? 'Physical receipt is already confirmed.' : 'Receipt requires the current delivery state.',
       ),
       startVerification: command(
-        row.allowedActions.includes('START_VERIFICATION'),
+        row.allowedActions?.includes('START_VERIFICATION') ?? false,
         'Physical receipt and resolved exceptions are required first.',
       ),
       completeVerification: command(
-        row.allowedActions.includes('COMPLETE_VERIFICATION'),
+        row.allowedActions?.includes('COMPLETE_VERIFICATION') ?? false,
         'Verification must be started and remain free of blocking exceptions.',
       ),
       addException: command(true),
@@ -4128,7 +4128,9 @@ export class AdminService {
         revision: submission.intake?.updatedAt.toISOString() ?? row.updatedAt,
         deepLinks: {
           submissionReview: `/operations/submissions?submission=${encodeURIComponent(submissionId)}&tab=Overview`,
-          collectorAccount: `/admin?section=users&user=${encodeURIComponent(row.collector.id)}`,
+          collectorAccount: row.collector?.id
+            ? `/admin?section=users&user=${encodeURIComponent(row.collector.id)}`
+            : null,
           assetOperations: row.assetId
             ? `/admin?section=assetOperations&asset=${encodeURIComponent(row.assetId)}&tab=overview`
             : null,

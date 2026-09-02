@@ -54,6 +54,7 @@ export type MarketplaceAsset = {
   tradingHasExecutionHistory?: boolean;
   marketLifecycle?: MarketLifecycleProjection;
   initialOffering?: import("@/domain").InitialOfferingProjection;
+  preSale?: import("@/domain").PreSaleProjection;
 };
 
 export type MarketplaceSimilarAsset = SimilarAsset;
@@ -142,6 +143,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   tradingHasExecutionHistory: asset.trading?.hasExecutionHistory,
   marketLifecycle: asset.marketLifecycle,
   initialOffering: asset.initialOffering,
+  preSale: asset.preSale,
 });
 
 export const toMarketplaceSimilarAsset = (asset: SimilarAsset): MarketplaceSimilarAsset => asset;

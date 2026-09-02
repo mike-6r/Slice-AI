@@ -1130,6 +1130,39 @@ export class FinancialLedgerService {
     );
   }
 
+  /** Reserve customer cash inside a caller-owned transaction. Used by
+   * conditional Pre-Sale reservations so cash and inventory are one atomic
+   * decision. */
+  async reserveCashInTransaction(
+    db: Db,
+    actor: Actor,
+    input: { accountId: string; purposeType: string; purposeId: string; amountMinor: bigint },
+    requestId: string,
+  ) {
+    this.recentAuth.require(actor);
+    if (input.amountMinor <= 0n)
+      throw new NotFoundException({ code: 'CASH_AMOUNT_INVALID', message: 'Cash amount must be positive.' });
+    await this.lockAccounts(db, [input.accountId]);
+    const account = await this.userCashAccount(db, input.accountId, actor.userId);
+    const balance = await this.lockBalance(db, account.id);
+    const total = accountAuthority(account.normalSide, balance?.postedDebitMinor ?? 0n, balance?.postedCreditMinor ?? 0n);
+    if (total - (balance?.reservedMinor ?? 0n) < input.amountMinor)
+      throw new NotFoundException({ code: 'INSUFFICIENT_AVAILABLE_FUNDS', message: 'Insufficient available funds.' });
+    const reservation = await db.cashReservation.create({
+      data: { id: randomUUID(), accountId: account.id, purposeType: input.purposeType, purposeId: input.purposeId, amountMinor: input.amountMinor },
+    });
+    await db.accountBalance.upsert({
+      where: { accountId: account.id },
+      create: { accountId: account.id, reservedMinor: input.amountMinor },
+      update: { reservedMinor: { increment: input.amountMinor }, version: { increment: 1 } },
+    });
+    await createIdentityTransaction(db).audit.append({
+      id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action: 'FINANCE_CASH_RESERVED', resourceType: 'cash-reservation', resourceId: reservation.id,
+      requestId, sessionId: actor.sessionId as never, result: 'SUCCESS', metadata: { purposeType: input.purposeType, purposeId: input.purposeId, amountMinor: input.amountMinor.toString() }, createdAt: new Date(),
+    });
+    return reservation;
+  }
+
   async releaseCash(
     actor: Actor,
     reservationId: string,
@@ -1304,6 +1337,29 @@ export class FinancialLedgerService {
       createdAt: new Date(),
     });
     return { reservationId, status: 'RELEASED' as const };
+  }
+
+  /** Release a reservation while settling a system-owned lifecycle. The
+   * caller has already authorised the surrounding domain action; the account
+   * owner is taken from the reservation rather than from an admin actor. */
+  async releaseCashReservationInTransaction(
+    db: Db,
+    reservationId: string,
+    requestId: string,
+    reason = 'PRE_SALE_CANCELLED',
+  ) {
+    await db.$queryRaw`SELECT id FROM "CashReservation" WHERE id = ${reservationId} FOR UPDATE`;
+    const reservation = await db.cashReservation.findUnique({ where: { id: reservationId } });
+    if (!reservation || reservation.status !== 'ACTIVE') return false;
+    await this.lockAccounts(db, [reservation.accountId]);
+    await this.lockBalance(db, reservation.accountId);
+    await db.cashReservation.update({ where: { id: reservation.id }, data: { status: 'RELEASED' } });
+    await db.accountBalance.update({ where: { accountId: reservation.accountId }, data: { reservedMinor: { decrement: reservation.amountMinor }, version: { increment: 1 } } });
+    await createIdentityTransaction(db).audit.append({
+      id: randomUUID(), actorUserId: null, actorType: 'SYSTEM', action: 'FINANCE_CASH_RELEASED', resourceType: 'cash-reservation', resourceId: reservation.id,
+      requestId, sessionId: null, result: 'SUCCESS', metadata: { amountMinor: reservation.amountMinor.toString(), reason }, createdAt: new Date(),
+    });
+    return true;
   }
 
   /** Consume a reservation without opening a nested transaction. */
