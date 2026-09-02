@@ -156,6 +156,11 @@ const metadataAllowedKeys = new Set([
   'aiReviewStatus',
   'customerReference',
 ]);
+const reviewMetadataAllowedKeys = new Set([
+  'evidenceReviews',
+  'researchReferences',
+  'researchNotes',
+]);
 
 @Injectable()
 export class SubmissionService {
@@ -982,7 +987,7 @@ export class SubmissionService {
         const updatedSubmission = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata(
+            reviewMetadata: jsonReviewMetadata(
               resetEvidenceReview(
                 reviewMetadata(submission.reviewMetadata),
                 media.id,
@@ -3029,7 +3034,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata(
+            reviewMetadata: jsonReviewMetadata(
               withEvidenceReview(metadata, mediaId, {
                 state: 'ACCEPTED',
                 reviewedBy: {
@@ -3137,7 +3142,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata(
+            reviewMetadata: jsonReviewMetadata(
               withEvidenceReview(metadata, mediaId, {
                 state: 'FLAGGED',
                 reviewedBy: {
@@ -3241,7 +3246,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata({
+            reviewMetadata: jsonReviewMetadata({
               ...metadata,
               researchReferences: [
                 ...(metadata.researchReferences ?? []),
@@ -3317,7 +3322,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata({
+            reviewMetadata: jsonReviewMetadata({
               ...metadata,
               researchReferences: references,
             }),
@@ -3377,7 +3382,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata({
+            reviewMetadata: jsonReviewMetadata({
               ...metadata,
               researchNotes: [...(metadata.researchNotes ?? []), note],
             }),
@@ -3904,7 +3909,7 @@ export class SubmissionService {
         const updated = await db.assetSubmission.update({
           where: { id },
           data: {
-            reviewMetadata: jsonMetadata(reviewMetadata),
+            reviewMetadata: jsonReviewMetadata(reviewMetadata),
             version: { increment: 1 },
           },
           select: { version: true, reviewMetadata: true },
@@ -4666,6 +4671,30 @@ function jsonMetadata(
   }
   return value as Prisma.InputJsonValue;
 }
+
+function jsonReviewMetadata(
+  value: Record<string, unknown> | null | undefined,
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.JsonNull;
+  for (const [key, item] of Object.entries(value)) {
+    const validCollectorField = metadataAllowedKeys.has(key)
+      ? key === 'customerReference'
+        ? isSafeCustomerReference(item)
+        : isSafeMetadata(item)
+      : false;
+    const validReviewField = reviewMetadataAllowedKeys.has(key)
+      ? isSafeReviewMetadata(item)
+      : false;
+    if (!validCollectorField && !validReviewField)
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_FAILED',
+        message: 'Submission review metadata is invalid.',
+      });
+  }
+  return value as Prisma.InputJsonValue;
+}
+
 function isAiReviewSkipped(value: Prisma.JsonValue | null) {
   return Boolean(
     value &&
@@ -4724,6 +4753,18 @@ function isSafeMetadata(value: unknown): boolean {
   if (value && typeof value === 'object' && !Array.isArray(value))
     return Object.values(value as Record<string, unknown>).every(
       isSafeMetadata,
+    );
+  return false;
+}
+function isSafeReviewMetadata(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value === 'string') return value.length <= 500;
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isSafeReviewMetadata);
+  if (value && typeof value === 'object')
+    return Object.values(value as Record<string, unknown>).every(
+      isSafeReviewMetadata,
     );
   return false;
 }
