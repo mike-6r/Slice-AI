@@ -353,6 +353,18 @@ export const mockRepositories: AppRepositories = {
     async addUserNote() {
       throw new Error("Account notes require the API service.");
     },
+    async runUserRecoveryCommand() {
+      throw new Error("Account recovery requires the API service.");
+    },
+    async forceSetUserState() {
+      throw new Error("Forced account state changes require the API service.");
+    },
+    async forceClearUserRestriction() {
+      throw new Error("Forced restriction recovery requires the API service.");
+    },
+    async overrideUserCapability() {
+      throw new Error("Capability overrides require the API service.");
+    },
     async setCollectorFeatured() {
       throw new Error("Collector featuring requires the API service.");
     },

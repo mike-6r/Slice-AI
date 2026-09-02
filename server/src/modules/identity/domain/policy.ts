@@ -47,7 +47,8 @@ export function evaluatePolicy(input: PolicyRequest): PolicyDecision {
     action === 'users.profile.manage' ||
     action === 'users.security.manage' ||
     action === 'users.restrictions.manage' ||
-    action === 'users.notes.manage'
+    action === 'users.notes.manage' ||
+    action === 'users.recovery.manage'
   )
     return admin ? allow(action) : deny('FORBIDDEN', action);
   if (

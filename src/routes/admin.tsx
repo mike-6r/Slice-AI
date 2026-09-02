@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Clock3,
   ClipboardCheck,
+  CircleDollarSign,
   Crown,
   Database,
   Download,
@@ -26,6 +27,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
+  LockKeyhole,
   LogOut,
   Menu,
   PackageCheck,
@@ -33,12 +35,15 @@ import {
   Search,
   Tag,
   RefreshCw,
+  RotateCcw,
   Settings,
   ShieldCheck,
+  ShieldAlert,
   SlidersHorizontal,
   Users,
   UserRound,
   WalletCards,
+  Wrench,
   X,
 } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
@@ -5713,21 +5718,32 @@ function ConsolidatedUserDetailExperience({
   const [historyPage, setHistoryPage] = useState(1);
   const services = useAppServices();
   const legacyTabMap: Record<string, string> = {
-    Access: "Operations",
-    "Roles & Access": "Operations",
-    Investor: "Overview",
-    Collector: "Overview",
-    Finance: "Operations",
-    Wallet: "Operations",
-    Orders: "Operations",
-    Compliance: "Operations",
-    Activity: "History",
-    Audit: "History",
+    Access: "General",
+    "Roles & Access": "General",
+    Investor: "Collector / Investor",
+    Collector: "Collector / Investor",
+    Finance: "Financial",
+    Wallet: "Financial",
+    Orders: "Financial",
+    Compliance: "Compliance",
+    Activity: "Recovery",
+    Audit: "Recovery",
+    Overview: "General",
+    Operations: "General",
+    History: "Recovery",
   };
   const requestedTab = tab ? (legacyTabMap[tab] ?? tab) : "Overview";
-  const activeTab = ["Overview", "Operations", "History"].includes(requestedTab)
+  const activeTab = [
+    "General",
+    "Security",
+    "Restrictions",
+    "Financial",
+    "Compliance",
+    "Collector / Investor",
+    "Recovery",
+  ].includes(requestedTab)
     ? requestedTab
-    : "Overview";
+    : "General";
   const history = useQuery({
     queryKey: ["admin", "user", user?.id, "history", historyFilter, historyPage],
     queryFn: () =>
@@ -5746,7 +5762,7 @@ function ConsolidatedUserDetailExperience({
         page: historyPage,
         pageSize: 20,
       }),
-    enabled: Boolean(user) && (activeTab === "Overview" || activeTab === "History"),
+    enabled: Boolean(user) && activeTab === "Recovery",
     staleTime: 30_000,
   });
   useEffect(() => {
@@ -6125,6 +6141,19 @@ function ConsolidatedUserDetailExperience({
   };
   const renderOverview = () => (
     <div className="admin-account-detail-stack">
+      <div className="admin-account-detail-grid admin-account-detail-grid--operations admin-account-general-command-grid">
+        <AccountStatusManagement user={user} retry={retry} />
+        <AccountProfileControls
+          key={`${user.id}-general-profile`}
+          user={user}
+          onChanged={() => {
+            retry();
+            void history.refetch();
+          }}
+        />
+        <UserRoleManagement user={user} retry={retry} />
+      </div>
+      <FeatureAccessMatrix user={user} />
       <section className="admin-account-admin-controls">
         <div className="admin-account-section-heading">
           <div>
@@ -6154,11 +6183,7 @@ function ConsolidatedUserDetailExperience({
               <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
               <DetailRow label="Timezone" value={user.profile?.timezone ?? "Unavailable"} />
             </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
+            <button type="button" className="admin-detail-link" onClick={() => setTab("General")}>
               Edit profile <ArrowRight aria-hidden="true" />
             </button>
           </section>
@@ -6182,11 +6207,7 @@ function ConsolidatedUserDetailExperience({
                 value={`${user.capabilitySummary.filter((item) => item.allowed).length} of ${user.capabilitySummary.length}`}
               />
             </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
+            <button type="button" className="admin-detail-link" onClick={() => setTab("General")}>
               Manage roles <ArrowRight aria-hidden="true" />
             </button>
           </section>
@@ -6220,11 +6241,7 @@ function ConsolidatedUserDetailExperience({
                 value={user.lastActivityAt ? relative(user.lastActivityAt) : "Not recorded"}
               />
             </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
+            <button type="button" className="admin-detail-link" onClick={() => setTab("Security")}>
               Open security <ArrowRight aria-hidden="true" />
             </button>
           </section>
@@ -6259,7 +6276,7 @@ function ConsolidatedUserDetailExperience({
             <button
               type="button"
               className="admin-detail-link"
-              onClick={() => setTab("Operations")}
+              onClick={() => setTab("Restrictions")}
             >
               Manage restrictions <ArrowRight aria-hidden="true" />
             </button>
@@ -6290,11 +6307,7 @@ function ConsolidatedUserDetailExperience({
                 value={money(user.permissions.finance ? (finance?.reservedMinor ?? null) : null)}
               />
             </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
+            <button type="button" className="admin-detail-link" onClick={() => setTab("Financial")}>
               Open Finance <ArrowRight aria-hidden="true" />
             </button>
           </section>
@@ -6329,7 +6342,7 @@ function ConsolidatedUserDetailExperience({
             <button
               type="button"
               className="admin-detail-link"
-              onClick={() => setTab("Operations")}
+              onClick={() => setTab("Compliance")}
             >
               Open compliance <ArrowRight aria-hidden="true" />
             </button>
@@ -6351,7 +6364,7 @@ function ConsolidatedUserDetailExperience({
             <button
               type="button"
               className="admin-detail-link"
-              onClick={() => setTab("Operations")}
+              onClick={() => setTab("Collector / Investor")}
             >
               Manage capabilities <ArrowRight aria-hidden="true" />
             </button>
@@ -6370,11 +6383,7 @@ function ConsolidatedUserDetailExperience({
               <DetailRow label="Session recovery" value={commandText("REVOKE_SESSIONS")} />
               <DetailRow label="Profile correction" value={commandText("EDIT_PROFILE")} />
             </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Operations")}
-            >
+            <button type="button" className="admin-detail-link" onClick={() => setTab("Recovery")}>
               Open recovery tools <ArrowRight aria-hidden="true" />
             </button>
           </section>
@@ -6442,16 +6451,7 @@ function ConsolidatedUserDetailExperience({
             </div>
           </div>
         </section>
-        <AccountNoteControls
-          key={`${user.id}-overview-notes`}
-          user={user}
-          onChanged={() => {
-            retry();
-            void history.refetch();
-          }}
-        />
       </div>
-      {renderHistory()}
     </div>
   );
 
@@ -6615,6 +6615,254 @@ function ConsolidatedUserDetailExperience({
         </div>
         <AccountStatusManagement user={user} retry={retry} />
       </section>
+    </div>
+  );
+
+  const renderSecurity = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-control-intro">
+        <p className="admin-console-eyebrow">Security</p>
+        <h3>Protect account access</h3>
+        <span>Review verification, session freshness, and Slice-owned MFA state.</span>
+      </section>
+      <AccountSecurityControls
+        key={`${user.id}-security-tab`}
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
+    </div>
+  );
+
+  const renderRestrictions = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-control-intro">
+        <p className="admin-console-eyebrow">Restrictions</p>
+        <h3>Account-level restrictions</h3>
+        <span>
+          Use clear human reasons. Provider and legal authority remain outside this surface.
+        </span>
+      </section>
+      <AccountRestrictionControls
+        key={`${user.id}-restriction-tab`}
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
+    </div>
+  );
+
+  const renderFinancial = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-control-intro">
+        <p className="admin-console-eyebrow">Financial access</p>
+        <h3>Access and risk projection</h3>
+        <span>
+          Account Controls can explain access. Balances and corrections belong to Finance.
+        </span>
+      </section>
+      <section className="admin-account-detail-panel admin-account-financial-access-panel">
+        <AdminPanelHeading title="Financial access snapshot" />
+        {user.permissions.finance && finance ? (
+          <div className="admin-account-detail-finance-grid">
+            <DetailRow label="Available cash" value={money(finance.availableMinor)} />
+            <DetailRow label="Reserved" value={money(finance.reservedMinor)} />
+            <DetailRow label="Pending" value={money(finance.pendingMinor)} />
+            <DetailRow label="Deficit" value={money(finance.deficitMinor)} />
+            <DetailRow label="BACS risk hold" value={money(finance.bacsHeldMinor)} />
+            <DetailRow label="Withdrawal state" value={capabilityText("WITHDRAW_FUNDS")} />
+            <DetailRow label="Trading state" value={capabilityText("PLACE_BUY_ORDER")} />
+            <DetailRow label="Payout readiness" value={payoutStateLabel(user.payoutState)} />
+          </div>
+        ) : (
+          <AdminEmpty
+            detail="Financial enrichment is unavailable to this workspace."
+            icon={CircleDollarSign}
+          />
+        )}
+        <div className="admin-account-control-links">
+          <Link
+            to="/admin"
+            search={{ section: "payments", tab: "wallets" }}
+            className="admin-detail-link"
+          >
+            Open Finance workspace <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link
+            to="/admin"
+            search={{ section: "payments", tab: "movements" }}
+            className="admin-detail-link"
+          >
+            Review money movements <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <p className="admin-safe-note">
+          No balance setter, wallet adjustment, ownership, order, or settlement control is available
+          here.
+        </p>
+      </section>
+      <section className="admin-account-detail-panel">
+        <AdminPanelHeading title="Funding and payout connections" />
+        <DetailRow
+          label="Funding bank"
+          value={
+            user.permissions.finance && user.identity.phone
+              ? "Protected connection details"
+              : "Unavailable"
+          }
+        />
+        <DetailRow
+          label="Payout account"
+          value={
+            user.permissions.finance
+              ? (user.payoutDetails?.status ?? "Not connected")
+              : "Unavailable"
+          }
+        />
+        <p className="admin-safe-note">
+          Identifiers are masked. Refresh and onboarding recovery remain provider-owned operations.
+        </p>
+      </section>
+    </div>
+  );
+
+  const renderCompliance = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-control-intro">
+        <p className="admin-console-eyebrow">Compliance</p>
+        <h3>Internal review and provider truth</h3>
+        <span>
+          Slice review state is visible here; KYC and sanctions provider results cannot be
+          fabricated.
+        </span>
+      </section>
+      <section className="admin-account-detail-panel">
+        <AdminPanelHeading title="Compliance status" />
+        {user.permissions.compliance ? (
+          <div className="admin-account-detail-finance-grid">
+            <DetailRow label="Slice internal state" value={stateText(user.complianceState)} />
+            <DetailRow
+              label="KYC provider state"
+              value={stateText(user.complianceSummary.kycStatus)}
+            />
+            <DetailRow
+              label="Transaction monitoring"
+              value={stateText(user.complianceSummary.kytStatus)}
+            />
+            <DetailRow label="Open cases" value={String(user.complianceSummary.caseCount)} />
+            <DetailRow label="Active holds" value={String(user.activeHolds.length)} />
+            <DetailRow label="Review owner" value="Not linked in current authority" />
+            <DetailRow
+              label="Last review"
+              value={
+                user.complianceSummary.lastReviewAt
+                  ? relative(user.complianceSummary.lastReviewAt)
+                  : "Not recorded"
+              }
+            />
+            <DetailRow
+              label="Provider"
+              value={user.complianceSummary.provider ?? "Not configured"}
+            />
+          </div>
+        ) : (
+          <AdminEmpty
+            detail="Compliance enrichment is unavailable to this workspace."
+            icon={ShieldAlert}
+          />
+        )}
+        <p className="admin-safe-note">
+          Internal review corrections, cases, and provider diagnostics must stay separated. No
+          “Force Verified” action exists.
+        </p>
+      </section>
+      <AccountNoteControls
+        key={`${user.id}-compliance-note`}
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
+    </div>
+  );
+
+  const renderCollectorInvestor = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-control-intro">
+        <p className="admin-console-eyebrow">Collector / Investor</p>
+        <h3>Role-derived participation access</h3>
+        <span>
+          Reconcile access state without editing submissions, holdings, orders, or executions.
+        </span>
+      </section>
+      <section className="admin-account-detail-panel">
+        <AdminPanelHeading title="Collector access" />
+        <DetailRow label="Collector enabled" value={user.collector ? "Enabled" : "Not enabled"} />
+        <DetailRow label="Submissions" value={capabilityText("LIST_ASSET")} />
+        <DetailRow
+          label="Current submissions"
+          value={String(user.collectorOverview?.submissions ?? 0)}
+        />
+        <DetailRow
+          label="Physical intake"
+          value={String(user.collectorOverview?.activeIntakes ?? 0)}
+        />
+        <DetailRow
+          label="Canonical collectibles"
+          value={String(user.collectorOverview?.assets.length ?? 0)}
+        />
+        <DetailRow
+          label="Directory"
+          value={user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"}
+        />
+        {user.collector ? <CollectorDirectoryManagement user={user} retry={retry} /> : null}
+      </section>
+      <section className="admin-account-detail-panel">
+        <AdminPanelHeading title="Investor access" />
+        <DetailRow label="Buying" value={capabilityText("PLACE_BUY_ORDER")} />
+        <DetailRow label="Selling" value={capabilityText("PLACE_SELL_ORDER")} />
+        <DetailRow label="Portfolio holdings" value={String(user.portfolioSummary.totalAssets)} />
+        <DetailRow label="Open orders" value={String(user.portfolioSummary.openOrders)} />
+        <DetailRow label="Withdrawals" value={capabilityText("WITHDRAW_FUNDS")} />
+        <p className="admin-safe-note">
+          Ownership positions, orders, executions, and economic records are intentionally read-only
+          here.
+        </p>
+      </section>
+    </div>
+  );
+
+  const renderRecovery = () => (
+    <div className="admin-account-detail-stack admin-account-control-tab-panel">
+      <section className="admin-account-recovery-intro">
+        <p className="admin-console-eyebrow">Break-glass workspace</p>
+        <h3>Recovery &amp; overrides</h3>
+        <span>
+          Use these tools when normal account workflows cannot correct an incorrect or stuck Slice
+          account state.
+        </span>
+      </section>
+      <AccountRecoveryControls
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
+      <AccountNoteControls
+        key={`${user.id}-recovery-note`}
+        user={user}
+        onChanged={() => {
+          retry();
+          void history.refetch();
+        }}
+      />
+      {renderHistory()}
     </div>
   );
 
@@ -6807,8 +7055,19 @@ function ConsolidatedUserDetailExperience({
       <div className="admin-account-detail-layout">
         <div className="admin-account-detail-primary">
           {renderActionCenter()}
-          <nav className="admin-account-detail-tabs" aria-label="Account detail views">
-            {["Overview", "Operations", "History"].map((view) => (
+          <nav
+            className="admin-account-detail-tabs admin-account-control-tabs"
+            aria-label="Account controls"
+          >
+            {[
+              "General",
+              "Security",
+              "Restrictions",
+              "Financial",
+              "Compliance",
+              "Collector / Investor",
+              "Recovery",
+            ].map((view) => (
               <button
                 type="button"
                 className={activeTab === view ? "is-active" : ""}
@@ -6816,16 +7075,24 @@ function ConsolidatedUserDetailExperience({
                 onClick={() => setTab(view)}
                 aria-current={activeTab === view ? "page" : undefined}
               >
-                {view === "Operations" ? "Account controls" : view}
+                {view}
               </button>
             ))}
           </nav>
           <main className="admin-user-detail-main admin-account-detail-main">
-            {activeTab === "Overview"
+            {activeTab === "General"
               ? renderOverview()
-              : activeTab === "Operations"
-                ? renderOperations()
-                : renderHistory()}
+              : activeTab === "Security"
+                ? renderSecurity()
+                : activeTab === "Restrictions"
+                  ? renderRestrictions()
+                  : activeTab === "Financial"
+                    ? renderFinancial()
+                    : activeTab === "Compliance"
+                      ? renderCompliance()
+                      : activeTab === "Collector / Investor"
+                        ? renderCollectorInvestor()
+                        : renderRecovery()}
           </main>
         </div>
         {renderCommandRail()}
@@ -7315,6 +7582,344 @@ function AccountNoteControls({
       <p className="admin-safe-note">
         Notes are sanitized, immutable audit entries. Keep them factual and do not enter sensitive
         credentials or payment data.
+      </p>
+    </section>
+  );
+}
+
+function FeatureAccessMatrix({ user }: { user: AdminUserDetail }) {
+  const groups: Array<[string, string[]]> = [
+    ["Account", ["BROWSE_MARKETS", "VIEW_PUBLIC_ASSETS", "VIEW_COLLECTORS", "MANAGE_PROFILE"]],
+    ["Investing", ["PLACE_BUY_ORDER", "PLACE_SELL_ORDER", "VIEW_PORTFOLIO"]],
+    ["Money", ["DEPOSIT_FUNDS", "WITHDRAW_FUNDS"]],
+    ["Collector", ["LIST_ASSET"]],
+  ];
+  const decisions = new Map(user.capabilitySummary.map((item) => [item.capability, item]));
+  const label = (value: string) =>
+    value
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (character) => character.toUpperCase());
+  return (
+    <section className="admin-account-detail-panel admin-account-feature-matrix">
+      <div className="admin-panel-heading">
+        <div>
+          <h3>Feature access matrix</h3>
+          <span>
+            Derived from roles, restrictions, verification, feature policy, and visible Admin
+            overrides.
+          </span>
+        </div>
+      </div>
+      <div className="admin-account-feature-groups">
+        {groups.map(([group, capabilities]) => (
+          <div key={group}>
+            <strong>{group}</strong>
+            {capabilities.map((name) => {
+              const decision = decisions.get(name);
+              const override = user.adminOverrides.find((item) => item.targetKey === name);
+              const status = decision?.allowed ? "AVAILABLE" : (decision?.status ?? "UNAVAILABLE");
+              return (
+                <div className="admin-account-feature-row" key={name}>
+                  <span>{label(name)}</span>
+                  <span
+                    className={`admin-account-feature-state admin-account-feature-state--${status.toLowerCase()}`}
+                  >
+                    {status === "AVAILABLE"
+                      ? "Available"
+                      : status === "BLOCKED"
+                        ? "Restricted"
+                        : "Unavailable"}
+                  </span>
+                  <small>
+                    {override
+                      ? "Admin override active"
+                      : decision?.reason
+                        ? label(decision.reason)
+                        : "Policy permits access"}
+                  </small>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AccountRecoveryControls({
+  user,
+  onChanged,
+}: {
+  user: AdminUserDetail;
+  onChanged: () => void;
+}) {
+  const services = useAppServices();
+  const [command, setCommand] = useState("REFRESH_DERIVED_ACCESS");
+  const [reason, setReason] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [targetState, setTargetState] = useState("ACTIVE");
+  const [capability, setCapability] = useState("LIST_ASSET");
+  const [forcedState, setForcedState] = useState<"ENABLED" | "DISABLED">("ENABLED");
+  const [expiresAt, setExpiresAt] = useState("");
+  const recovery = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.runUserRecoveryCommand(user.id, {
+        expectedRevision: user.revision,
+        command,
+        reason: reason.trim(),
+        confirmation: "RUN RECOVERY",
+      }),
+    onSuccess: onChanged,
+  });
+  const forceState = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.forceSetUserState(user.id, {
+        expectedRevision: user.revision,
+        targetState,
+        reason: reason.trim(),
+        confirmation: "FORCE OVERRIDE",
+      }),
+    onSuccess: onChanged,
+  });
+  const override = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.overrideUserCapability(user.id, {
+        expectedRevision: user.revision,
+        capability,
+        forcedState,
+        reason: reason.trim(),
+        confirmation: "FORCE OVERRIDE",
+        ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+      }),
+    onSuccess: onChanged,
+  });
+  const forceClear = useMutation({
+    mutationFn: (holdId: string) =>
+      services.repositories.admin.forceClearUserRestriction(user.id, holdId, {
+        expectedRevision: user.revision,
+        reason: reason.trim(),
+        confirmation: "FORCE OVERRIDE",
+      }),
+    onSuccess: onChanged,
+  });
+  const canUse = user.permissions.canUseRecovery;
+  const validReason = reason.trim().length >= 3;
+  const pending =
+    recovery.isPending || forceState.isPending || override.isPending || forceClear.isPending;
+  const actionError =
+    recovery.isError || forceState.isError || override.isError || forceClear.isError;
+  if (!canUse) {
+    return (
+      <section className="admin-account-detail-panel admin-account-recovery-panel">
+        <AdminPanelHeading title="Recovery & overrides" />
+        <p className="admin-safe-note">
+          Recovery tools are unavailable. Elevated account-management permission is required.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="admin-account-detail-panel admin-account-recovery-panel">
+      <div className="admin-account-recovery-panel-heading">
+        <div>
+          <AdminPanelHeading title="Recovery commands" />
+          <p>
+            Commands are explicit, revision-checked, recent-authenticated, idempotent, and audited.
+          </p>
+        </div>
+        <span className="admin-account-recovery-badge">Slice internal state only</span>
+      </div>
+      <div className="admin-account-recovery-grid">
+        <div className="admin-account-recovery-command-card">
+          <div className="admin-account-control-card-heading">
+            <Wrench aria-hidden="true" />
+            <div>
+              <strong>Run recovery</strong>
+              <small>Repair or re-read a supported projection.</small>
+            </div>
+          </div>
+          <AdminSelect
+            label="Command"
+            value={command}
+            onChange={setCommand}
+            options={[
+              ["REPAIR_ACCOUNT_STATE", "Repair account state"],
+              ["REFRESH_DERIVED_ACCESS", "Refresh derived access"],
+              ["RECONCILE_ROLES_CAPABILITIES", "Reconcile roles & capabilities"],
+              ["REVOKE_BROKEN_SESSIONS", "Revoke broken sessions"],
+            ]}
+          />
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={!validReason || confirmation !== "RUN RECOVERY" || pending}
+            onClick={() => recovery.mutate()}
+          >
+            {recovery.isPending ? "Running…" : "Run recovery command"}
+          </button>
+        </div>
+        <div className="admin-account-recovery-command-card admin-account-recovery-command-card--danger">
+          <div className="admin-account-control-card-heading">
+            <LockKeyhole aria-hidden="true" />
+            <div>
+              <strong>Force internal account state</strong>
+              <small>Use only when normal transition is stale or unavailable.</small>
+            </div>
+          </div>
+          <AdminSelect
+            label="Target state"
+            value={targetState}
+            onChange={setTargetState}
+            options={[
+              ["ACTIVE", "Active"],
+              ["RESTRICTED", "Restricted"],
+              ["SUSPENDED", "Suspended"],
+              ["DISABLED", "Disabled"],
+            ]}
+          />
+          <button
+            type="button"
+            className="admin-detail-action admin-detail-action--danger"
+            disabled={
+              !validReason ||
+              confirmation !== "FORCE OVERRIDE" ||
+              pending ||
+              targetState === user.accountStatus
+            }
+            onClick={() => forceState.mutate()}
+          >
+            {forceState.isPending ? "Applying…" : "Force state correction"}
+          </button>
+        </div>
+        <div className="admin-account-recovery-command-card">
+          <div className="admin-account-control-card-heading">
+            <ShieldCheck aria-hidden="true" />
+            <div>
+              <strong>Capability override</strong>
+              <small>Add a visible temporary or standing internal exception.</small>
+            </div>
+          </div>
+          <AdminSelect
+            label="Capability"
+            value={capability}
+            onChange={setCapability}
+            options={[
+              ["LIST_ASSET", "List asset"],
+              ["MANAGE_PROFILE", "Manage profile"],
+              ["MANAGE_ACCOUNT_SECURITY", "Manage account security"],
+            ]}
+          />
+          <AdminSelect
+            label="Forced state"
+            value={forcedState}
+            onChange={(value) => setForcedState(value as "ENABLED" | "DISABLED")}
+            options={[
+              ["ENABLED", "Force enable"],
+              ["DISABLED", "Force disable"],
+            ]}
+          />
+          <label>
+            <span>Expires at (optional)</span>
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(event) => setExpiresAt(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="admin-detail-action"
+            disabled={!validReason || confirmation !== "FORCE OVERRIDE" || pending}
+            onClick={() => override.mutate()}
+          >
+            {override.isPending ? "Saving…" : "Apply capability override"}
+          </button>
+        </div>
+      </div>
+      <div className="admin-account-recovery-form">
+        <label>
+          <span>
+            Reason <em>(required)</em>
+          </span>
+          <textarea
+            rows={2}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Explain the stale or broken internal state and expected consequence."
+            maxLength={500}
+          />
+        </label>
+        <label>
+          <span>Typed confirmation</span>
+          <input
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            placeholder="RUN RECOVERY or FORCE OVERRIDE"
+          />
+        </label>
+      </div>
+      {user.activeHolds.length ? (
+        <div className="admin-account-recovery-holds">
+          <div className="admin-panel-heading">
+            <div>
+              <h3>Force clear stale restriction</h3>
+              <span>Only Slice-owned admin restrictions can be cleared here.</span>
+            </div>
+          </div>
+          {user.activeHolds.map((hold) => (
+            <div className="admin-account-recovery-hold" key={hold.id}>
+              <div>
+                <strong>{sentence(hold.scope)}</strong>
+                <span>
+                  {sentence(hold.reasonCode)} · {sentence(hold.source)}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="admin-inline-action"
+                disabled={!validReason || confirmation !== "FORCE OVERRIDE" || pending}
+                onClick={() => forceClear.mutate(hold.id)}
+              >
+                Force clear
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {user.adminOverrides.length ? (
+        <div className="admin-account-recovery-overrides">
+          <div className="admin-panel-heading">
+            <div>
+              <h3>Active Admin overrides</h3>
+              <span>Each record shows why the exception exists and when it expires.</span>
+            </div>
+          </div>
+          {user.adminOverrides.map((item) => (
+            <div className="admin-account-recovery-override" key={item.id}>
+              <strong>{item.targetKey ? sentence(item.targetKey) : sentence(item.command)}</strong>
+              <span>
+                {item.forcedState ?? item.source} · {item.reason}
+              </span>
+              <small>
+                {item.expiresAt
+                  ? `Expires ${date(item.expiresAt)}`
+                  : `Created ${date(item.createdAt)}`}
+              </small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {actionError ? (
+        <p className="admin-safe-note" role="alert">
+          The recovery command was refused. No partial override was saved; refresh the account and
+          confirm the internal reason.
+        </p>
+      ) : null}
+      <p className="admin-safe-note">
+        Break-glass never bypasses RBAC, last-admin protection, database constraints, ledger
+        integrity, ownership integrity, provider truth, or legal hard blocks.
       </p>
     </section>
   );

@@ -232,6 +232,29 @@ export class AccountCapabilityService {
         requirements,
       );
     }
+    const override = this.db.accountAdminOverride
+      ? await this.db.accountAdminOverride.findFirst({
+          where: {
+            userId,
+            targetType: 'CAPABILITY',
+            targetKey: capability,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { forcedState: true },
+        })
+      : null;
+    if (override?.forcedState === 'DISABLED') {
+      needs('FEATURE_AVAILABILITY', false);
+      return this.denied(capability, 'FEATURE_DISABLED', requirements);
+    }
+    if (
+      override?.forcedState === 'ENABLED' &&
+      ['LIST_ASSET', 'MANAGE_PROFILE', 'MANAGE_ACCOUNT_SECURITY'].includes(capability)
+    ) {
+      needs('FEATURE_AVAILABILITY', true);
+      return this.allowed(capability, requirements);
+    }
     if (basic.has(capability)) return this.allowed(capability, requirements);
 
     if (user.deletionRequests.length > 0) {

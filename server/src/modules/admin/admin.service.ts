@@ -6693,6 +6693,29 @@ export class AdminService {
             lastSyncedAt: true,
           },
         },
+        adminOverrides: {
+          where: {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 30,
+          select: {
+            id: true,
+            command: true,
+            targetType: true,
+            targetKey: true,
+            forcedState: true,
+            normalBlocker: true,
+            reason: true,
+            beforeState: true,
+            afterState: true,
+            affectedCapabilities: true,
+            source: true,
+            incidentReference: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        },
       },
     });
     if (!user)
@@ -7062,6 +7085,34 @@ export class AdminService {
         actor: policyActor,
         action: 'users.notes.manage',
       }).allowed,
+      canUseRecovery: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.recovery.manage',
+      }).allowed,
+      canUseBreakGlassOverride: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.recovery.manage',
+      }).allowed,
+      canManageFinancialAccess: evaluatePolicy({
+        actor: policyActor,
+        action: 'finance.manage',
+      }).allowed,
+      canManageCompliance: evaluatePolicy({
+        actor: policyActor,
+        action: 'compliance.manage',
+      }).allowed,
+      canManageCollector: evaluatePolicy({
+        actor: policyActor,
+        action: 'users.roles.manage',
+      }).allowed,
+      canManageInvestor: evaluatePolicy({
+        actor: policyActor,
+        action: 'trading.manage',
+      }).allowed,
+      canManageProvider: evaluatePolicy({
+        actor: policyActor,
+        action: 'provider.manage',
+      }).allowed,
     };
     const capabilitySummary = await Promise.all(
       accountCapabilities.map((capability) =>
@@ -7290,9 +7341,38 @@ export class AdminService {
       },
       {
         id: 'ACCOUNT_RECOVERY',
-        allowed: false,
-        reason:
-          'No safe account recovery command is available in the current authority.',
+        allowed: permissions.canUseRecovery,
+        reason: permissions.canUseRecovery
+          ? null
+          : 'Elevated recovery permission required.',
+      },
+      {
+        id: 'RECOVERY_COMMANDS',
+        allowed: permissions.canUseRecovery,
+        reason: permissions.canUseRecovery
+          ? null
+          : 'Elevated recovery permission required.',
+      },
+      {
+        id: 'BREAK_GLASS_STATE',
+        allowed: permissions.canUseBreakGlassOverride,
+        reason: permissions.canUseBreakGlassOverride
+          ? null
+          : 'Break-glass permission required.',
+      },
+      {
+        id: 'CAPABILITY_OVERRIDE',
+        allowed: permissions.canUseBreakGlassOverride,
+        reason: permissions.canUseBreakGlassOverride
+          ? null
+          : 'Break-glass permission required.',
+      },
+      {
+        id: 'FORCE_CLEAR_RESTRICTION',
+        allowed: permissions.canUseBreakGlassOverride,
+        reason: permissions.canUseBreakGlassOverride
+          ? null
+          : 'Break-glass permission required.',
       },
     ];
     return {
@@ -7310,6 +7390,13 @@ export class AdminService {
           }
         : null,
       availableCommands,
+      adminOverrides: user.adminOverrides.map((override) => ({
+        ...override,
+        beforeState: override.beforeState as Record<string, unknown>,
+        afterState: override.afterState as Record<string, unknown>,
+        expiresAt: override.expiresAt?.toISOString() ?? null,
+        createdAt: override.createdAt.toISOString(),
+      })),
       primaryType,
       semanticRoles,
       accountStatus: user.accountStatus,

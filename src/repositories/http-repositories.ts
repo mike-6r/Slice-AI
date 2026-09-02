@@ -2061,6 +2061,45 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
         reason: nullableString(command.reason, "admin user available command.reason"),
       };
     }),
+    adminOverrides: Array.isArray(value.adminOverrides)
+      ? value.adminOverrides.map((rawOverride) => {
+          const override = objectField(rawOverride, "admin user override");
+          const beforeState =
+            override.beforeState && typeof override.beforeState === "object"
+              ? (override.beforeState as Record<string, unknown>)
+              : {};
+          const afterState =
+            override.afterState && typeof override.afterState === "object"
+              ? (override.afterState as Record<string, unknown>)
+              : {};
+          return {
+            id: stringField(override.id, "admin user override.id"),
+            command: stringField(override.command, "admin user override.command"),
+            targetType: stringField(override.targetType, "admin user override.targetType"),
+            targetKey: nullableString(override.targetKey, "admin user override.targetKey"),
+            forcedState: nullableString(override.forcedState, "admin user override.forcedState"),
+            normalBlocker: nullableString(
+              override.normalBlocker,
+              "admin user override.normalBlocker",
+            ),
+            reason: stringField(override.reason, "admin user override.reason"),
+            beforeState,
+            afterState,
+            affectedCapabilities: Array.isArray(override.affectedCapabilities)
+              ? override.affectedCapabilities.filter(
+                  (item): item is string => typeof item === "string",
+                )
+              : [],
+            source: stringField(override.source, "admin user override.source"),
+            incidentReference: nullableString(
+              override.incidentReference,
+              "admin user override.incidentReference",
+            ),
+            expiresAt: nullableString(override.expiresAt, "admin user override.expiresAt"),
+            createdAt: stringField(override.createdAt, "admin user override.createdAt"),
+          };
+        })
+      : [],
     support: {
       state: ["UNAVAILABLE", "CLEAR", "OPEN", "ESCALATED"].includes(String(support.state))
         ? (String(support.state) as "UNAVAILABLE" | "CLEAR" | "OPEN" | "ESCALATED")
@@ -2233,6 +2272,13 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
       manageSecurity: Boolean(permissions.manageSecurity),
       manageRestrictions: Boolean(permissions.manageRestrictions),
       manageNotes: Boolean(permissions.manageNotes),
+      canUseRecovery: Boolean(permissions.canUseRecovery),
+      canUseBreakGlassOverride: Boolean(permissions.canUseBreakGlassOverride),
+      canManageFinancialAccess: Boolean(permissions.canManageFinancialAccess),
+      canManageCompliance: Boolean(permissions.canManageCompliance),
+      canManageCollector: Boolean(permissions.canManageCollector),
+      canManageInvestor: Boolean(permissions.canManageInvestor),
+      canManageProvider: Boolean(permissions.canManageProvider),
     },
     financialDetails: financialDetails
       ? {
@@ -4920,6 +4966,80 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         userId: stringField(value.userId, "account note.userId"),
         revision: stringField(value.revision, "account note.revision"),
         recorded: Boolean(value.recorded),
+      };
+    },
+    async runUserRecoveryCommand(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/users/${encodeURIComponent(id)}/recovery/commands`, {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "account recovery command",
+      );
+      return {
+        userId: stringField(value.userId, "account recovery.userId"),
+        revision: stringField(value.revision, "account recovery.revision"),
+        command: stringField(value.command, "account recovery.command"),
+        affected: Array.isArray(value.affected)
+          ? value.affected.filter((item): item is string => typeof item === "string")
+          : [],
+      };
+    },
+    async forceSetUserState(id, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/recovery/force-state`,
+          {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        ),
+        "forced account state",
+      );
+      return {
+        userId: stringField(value.userId, "forced account state.userId"),
+        revision: stringField(value.revision, "forced account state.revision"),
+        accountStatus: stringField(value.accountStatus, "forced account state.accountStatus"),
+      };
+    },
+    async forceClearUserRestriction(id, holdId, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/restrictions/${encodeURIComponent(holdId)}/force-clear`,
+          { method: "POST", body: input, headers: { "Idempotency-Key": idempotencyKey() } },
+        ),
+        "forced restriction clear",
+      );
+      const hold = objectField(value.hold, "forced restriction clear.hold");
+      return {
+        userId: stringField(value.userId, "forced restriction clear.userId"),
+        revision: stringField(value.revision, "forced restriction clear.revision"),
+        hold: {
+          id: stringField(hold.id, "forced restriction clear.hold.id"),
+          status: stringField(hold.status, "forced restriction clear.hold.status"),
+        },
+      };
+    },
+    async overrideUserCapability(id, input) {
+      const value = objectField(
+        await client.request<unknown>(
+          `/admin/users/${encodeURIComponent(id)}/capability-overrides`,
+          {
+            method: "POST",
+            body: input,
+            headers: { "Idempotency-Key": idempotencyKey() },
+          },
+        ),
+        "capability override",
+      );
+      return {
+        userId: stringField(value.userId, "capability override.userId"),
+        revision: stringField(value.revision, "capability override.revision"),
+        overrideId: stringField(value.overrideId, "capability override.overrideId"),
+        capability: stringField(value.capability, "capability override.capability"),
+        forcedState: stringField(value.forcedState, "capability override.forcedState"),
       };
     },
     async setCollectorFeatured(slug, featured) {

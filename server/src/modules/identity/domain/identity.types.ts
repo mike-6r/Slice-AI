@@ -42,6 +42,7 @@ export type Permission =
   | 'users.security.manage'
   | 'users.restrictions.manage'
   | 'users.notes.manage'
+  | 'users.recovery.manage'
   | 'catalogue.manage'
   | 'submission.review'
   | 'valuation.manage'

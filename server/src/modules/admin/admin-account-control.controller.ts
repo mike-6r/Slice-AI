@@ -68,6 +68,44 @@ const note = mutation
     note: z.string().trim().min(3).max(500),
   })
   .strict();
+const recoveryCommand = z
+  .object({
+    expectedRevision: revision,
+    command: z.enum([
+      'REPAIR_ACCOUNT_STATE',
+      'REFRESH_DERIVED_ACCESS',
+      'RECONCILE_ROLES_CAPABILITIES',
+      'REVOKE_BROKEN_SESSIONS',
+    ]),
+    reason: z.string().trim().min(3).max(500),
+    confirmation: z.literal('RUN RECOVERY'),
+    incidentReference: z.string().trim().max(120).optional(),
+  })
+  .strict();
+const forceState = z
+  .object({
+    expectedRevision: revision,
+    targetState: z.enum(['ACTIVE', 'RESTRICTED', 'SUSPENDED', 'LOCKED', 'DISABLED']),
+    reason: z.string().trim().min(3).max(500),
+    confirmation: z.literal('FORCE OVERRIDE'),
+    incidentReference: z.string().trim().max(120).optional(),
+  })
+  .strict();
+const capabilityOverride = z
+  .object({
+    expectedRevision: revision,
+    capability: z.enum([
+      'LIST_ASSET',
+      'MANAGE_PROFILE',
+      'MANAGE_ACCOUNT_SECURITY',
+    ]),
+    forcedState: z.enum(['ENABLED', 'DISABLED']),
+    reason: z.string().trim().min(3).max(500),
+    confirmation: z.literal('FORCE OVERRIDE'),
+    expiresAt: z.string().datetime({ offset: true }).optional(),
+    incidentReference: z.string().trim().max(120).optional(),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -187,6 +225,84 @@ export class AdminAccountControlController {
         request.actor!,
         id,
         parse(note, body),
+        request.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  @Post('users/:id/recovery/commands')
+  @RequirePermission('users.recovery.manage')
+  runRecoveryCommand(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.run(request, key, () =>
+      this.controls.runRecoveryCommand(
+        request.actor!,
+        id,
+        parse(recoveryCommand, body),
+        request.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  @Post('users/:id/recovery/force-state')
+  @RequirePermission('users.recovery.manage')
+  forceSetState(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.run(request, key, () =>
+      this.controls.forceSetState(
+        request.actor!,
+        id,
+        parse(forceState, body),
+        request.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  @Post('users/:id/restrictions/:holdId/force-clear')
+  @RequirePermission('users.recovery.manage')
+  forceClearRestriction(
+    @Param('id') id: string,
+    @Param('holdId') holdId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.run(request, key, () =>
+      this.controls.forceClearRestriction(
+        request.actor!,
+        id,
+        holdId,
+        parse(forceState.pick({ expectedRevision: true, reason: true, confirmation: true, incidentReference: true }), body),
+        request.requestId ?? 'unknown',
+        key!,
+      ),
+    );
+  }
+
+  @Post('users/:id/capability-overrides')
+  @RequirePermission('users.recovery.manage')
+  overrideCapability(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.run(request, key, () =>
+      this.controls.overrideCapability(
+        request.actor!,
+        id,
+        parse(capabilityOverride, body),
         request.requestId ?? 'unknown',
         key!,
       ),

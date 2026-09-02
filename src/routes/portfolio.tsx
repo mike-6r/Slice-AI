@@ -1912,11 +1912,14 @@ function PerformanceChart({
   const chartPoints = points.map((point, index) => ({
     point,
     index,
-    x: (index / (points.length - 1)) * 100,
-    y: 90 - ((Number(point.valueMinor) - domainMin) / domainSpan) * 80,
+    x: 2.5 + (index / (points.length - 1)) * 95,
+    y: 12 + (1 - (Number(point.valueMinor) - domainMin) / domainSpan) * 72,
   }));
   const line = chartPoints.map(({ x, y }) => `${x},${y}`).join(" ");
-  const area = `${line} 100,100 0,100`;
+  const area = `${line} 97.5,90 2.5,90`;
+  const dateIndexes = Array.from(
+    new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
+  );
   const activePoint = activeIndex === null ? null : (chartPoints[activeIndex] ?? null);
   const direction = query.data?.direction ?? "NEUTRAL";
   const chartTone = hasExternalCashFlow ? "neutral" : direction.toLowerCase();
@@ -1956,6 +1959,17 @@ function PerformanceChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          {[2.5, 50, 97.5].map((x) => (
+            <line
+              key={`vertical-${x}`}
+              x1={x}
+              x2={x}
+              y1="12"
+              y2="90"
+              className="portfolio-performance-chart__vertical-grid-line"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
           <polygon points={area} className="portfolio-performance-chart__area" />
           <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
           {chartPoints.map(({ point, index, x, y }) => (
@@ -1975,6 +1989,16 @@ function PerformanceChart({
             />
           ))}
         </svg>
+        <div className="portfolio-performance-chart__x-axis" aria-hidden="true">
+          {dateIndexes.map((index) => (
+            <span
+              key={`${points[index]?.timestamp}-${index}`}
+              style={{ left: `${chartPoints[index]?.x ?? 0}%` }}
+            >
+              {formatPerformancePointDate(points[index]?.timestamp ?? "")}
+            </span>
+          ))}
+        </div>
         {activePoint ? (
           <div
             className={`portfolio-performance-tooltip${activePoint.x > 82 ? " is-left" : ""}${activePoint.x < 18 ? " is-right" : ""}${activePoint.y < 28 ? " is-below" : ""}${activePoint.y > 76 ? " is-above" : ""}`}

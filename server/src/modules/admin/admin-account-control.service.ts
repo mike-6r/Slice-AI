@@ -10,6 +10,10 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
 import { AuthorizationService } from '../identity/access/authorization.service';
 import { RecentAuthService } from '../identity/access/recent-auth.service';
+import {
+  accountCapabilities,
+  AccountCapabilityService,
+} from '../identity/access/account-capability.service';
 import { sanitizeAuditMetadata } from '../identity/domain/audit';
 
 type RevisionInput = {
@@ -24,13 +28,351 @@ type ProfileInput = RevisionInput & {
   preferredCurrency?: string;
 };
 
+type RecoveryCommandInput = {
+  expectedRevision: string;
+  command: 'REPAIR_ACCOUNT_STATE' | 'REFRESH_DERIVED_ACCESS' | 'RECONCILE_ROLES_CAPABILITIES' | 'REVOKE_BROKEN_SESSIONS';
+  reason: string;
+  confirmation: 'RUN RECOVERY';
+  incidentReference?: string;
+};
+
+type ForceStateInput = {
+  expectedRevision: string;
+  targetState: 'ACTIVE' | 'RESTRICTED' | 'SUSPENDED' | 'LOCKED' | 'DISABLED';
+  reason: string;
+  confirmation: 'FORCE OVERRIDE';
+  incidentReference?: string;
+};
+
+type CapabilityOverrideInput = {
+  expectedRevision: string;
+  capability: 'LIST_ASSET' | 'MANAGE_PROFILE' | 'MANAGE_ACCOUNT_SECURITY';
+  forcedState: 'ENABLED' | 'DISABLED';
+  reason: string;
+  confirmation: 'FORCE OVERRIDE';
+  expiresAt?: string;
+  incidentReference?: string;
+};
+
 @Injectable()
 export class AdminAccountControlService {
   constructor(
     private readonly db: PrismaService,
     private readonly authorization: AuthorizationService,
     private readonly recentAuth: RecentAuthService,
+    private readonly capabilities: AccountCapabilityService,
   ) {}
+
+  async runRecoveryCommand(
+    actor: Actor,
+    userId: string,
+    input: RecoveryCommandInput,
+    requestId: string,
+    key: string,
+  ) {
+    await this.authorize(actor, 'users.recovery.manage', userId, requestId);
+    return this.idempotent(
+      actor,
+      `admin.account.recovery.${input.command.toLowerCase()}`,
+      key,
+      input,
+      async (tx) => {
+        const revision = await this.assertTarget(
+          tx,
+          actor,
+          userId,
+          input.expectedRevision,
+        );
+        let affected: string[] = [];
+        if (input.command === 'REVOKE_BROKEN_SESSIONS') {
+          const revoked = await tx.session.updateMany({
+            where: { userId, revokedAt: null, expiresAt: { lte: new Date() } },
+            data: { revokedAt: new Date(), revocationReason: 'EXPIRED' },
+          });
+          affected = [`${revoked.count} expired session(s) revoked`];
+        } else if (
+          input.command === 'REFRESH_DERIVED_ACCESS' ||
+          input.command === 'RECONCILE_ROLES_CAPABILITIES'
+        ) {
+          const decisions = await Promise.all(
+            accountCapabilities.map((capability) =>
+              this.capabilities.evaluate(userId, capability),
+            ),
+          );
+          affected = decisions.map(
+            (decision) => `${decision.capability}: ${decision.status}`,
+          );
+        } else {
+          affected = ['No mutable projection was eligible for repair.'];
+        }
+        await this.audit(
+          tx,
+          actor,
+          `ADMIN_ACCOUNT_${input.command}`,
+          userId,
+          requestId,
+          {
+            source: 'RECOVERY',
+            reason: input.reason,
+            incidentReference: input.incidentReference ?? null,
+            affected,
+          },
+        );
+        return { userId, revision, command: input.command, affected };
+      },
+    );
+  }
+
+  async forceSetState(
+    actor: Actor,
+    userId: string,
+    input: ForceStateInput,
+    requestId: string,
+    key: string,
+  ) {
+    await this.authorize(actor, 'users.recovery.manage', userId, requestId);
+    return this.idempotent(
+      actor,
+      'admin.account.recovery.force-state',
+      key,
+      input,
+      async (tx) => {
+        if (input.targetState === 'LOCKED') {
+          throw new ConflictException({
+            code: 'ACCOUNT_STATE_UNSUPPORTED',
+            message: 'Login lock is not a separate account state in the current authority.',
+          });
+        }
+        const target = await tx.user.findUnique({
+          where: { id: userId },
+          select: { accountStatus: true },
+        });
+        if (!target) {
+          throw new NotFoundException({ code: 'NOT_FOUND', message: 'Account was not found.' });
+        }
+        const nextStatus = input.targetState === 'DISABLED' ? 'DEACTIVATED' : input.targetState;
+        if (
+          target.accountStatus === 'ACTIVE' &&
+          nextStatus === 'ACTIVE'
+        ) {
+          throw new ConflictException({
+            code: 'ACCOUNT_STATE_ALREADY_SET',
+            message: 'The account is already active.',
+          });
+        }
+        const adminAssignment = await tx.roleAssignment.findFirst({
+          where: {
+            userId,
+            role: 'ADMIN',
+            scopeType: 'GLOBAL',
+            scopeId: '*',
+            revokedAt: null,
+          },
+          select: { id: true },
+        });
+        if (adminAssignment && nextStatus !== 'ACTIVE') {
+          const adminCount = await tx.roleAssignment.count({
+            where: {
+              role: 'ADMIN',
+              scopeType: 'GLOBAL',
+              scopeId: '*',
+              revokedAt: null,
+              user: { accountStatus: 'ACTIVE' },
+            },
+          });
+          if (adminCount <= 1) {
+            throw new ConflictException({
+              code: 'LAST_ADMIN_REQUIRED',
+              message: 'At least one active administrator is required.',
+            });
+          }
+        }
+        const revision = await this.assertTarget(
+          tx,
+          actor,
+          userId,
+          input.expectedRevision,
+        );
+        const now = new Date();
+        await tx.user.update({ where: { id: userId }, data: { accountStatus: nextStatus } });
+        await tx.accountStatusHistory.create({
+          data: {
+            id: randomUUID(),
+            userId,
+            fromStatus: target.accountStatus,
+            toStatus: nextStatus,
+            reason: `BREAK_GLASS:${input.reason}`,
+            actorUserId: actor.userId,
+            createdAt: now,
+          },
+        });
+        if (nextStatus !== 'ACTIVE') {
+          await tx.session.updateMany({
+            where: { userId, revokedAt: null },
+            data: { revokedAt: now, revocationReason: 'ADMIN_ACTION' },
+          });
+        }
+        await this.audit(
+          tx,
+          actor,
+          'ADMIN_ACCOUNT_STATE_FORCE_CORRECTED',
+          userId,
+          requestId,
+          {
+            source: 'BREAK_GLASS',
+            normalBlocker: 'Normal account transition unavailable or stale.',
+            reason: input.reason,
+            incidentReference: input.incidentReference ?? null,
+            beforeState: { accountStatus: target.accountStatus },
+            afterState: { accountStatus: nextStatus },
+            requestedState: input.targetState,
+          },
+        );
+        return { userId, revision, accountStatus: nextStatus };
+      },
+    );
+  }
+
+  async forceClearRestriction(
+    actor: Actor,
+    userId: string,
+    holdId: string,
+    input: Omit<ForceStateInput, 'targetState'>,
+    requestId: string,
+    key: string,
+  ) {
+    await this.authorize(actor, 'users.recovery.manage', userId, requestId);
+    return this.idempotent(
+      actor,
+      'admin.account.recovery.force-clear-restriction',
+      key,
+      input,
+      async (tx) => {
+        const revision = await this.assertTarget(
+          tx,
+          actor,
+          userId,
+          input.expectedRevision,
+        );
+        const hold = await tx.complianceHold.findFirst({
+          where: { id: holdId, userId, status: 'ACTIVE' },
+        });
+        if (!hold) {
+          throw new NotFoundException({
+            code: 'COMPLIANCE_HOLD_NOT_FOUND',
+            message: 'Active restriction was not found.',
+          });
+        }
+        if (!hold.source.startsWith('ADMIN_')) {
+          throw new ForbiddenException({
+            code: 'EXTERNAL_RESTRICTION_NOT_OVERRIDABLE',
+            message: 'Provider and legal restrictions must be released by their authority.',
+          });
+        }
+        const released = await tx.complianceHold.update({
+          where: { id: hold.id },
+          data: { status: 'RELEASED', releasedAt: new Date() },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'BREAK_GLASS_RESTRICTION_CLEAR',
+          userId,
+          requestId,
+          {
+            source: 'BREAK_GLASS',
+            normalBlocker: 'Normal restriction release unavailable or stale.',
+            reason: input.reason,
+            incidentReference: input.incidentReference ?? null,
+            beforeState: { holdId: hold.id, status: hold.status, source: hold.source },
+            afterState: { holdId: released.id, status: released.status },
+          },
+        );
+        return { userId, revision, hold: { id: released.id, status: released.status } };
+      },
+    );
+  }
+
+  async overrideCapability(
+    actor: Actor,
+    userId: string,
+    input: CapabilityOverrideInput,
+    requestId: string,
+    key: string,
+  ) {
+    await this.authorize(actor, 'users.recovery.manage', userId, requestId);
+    return this.idempotent(
+      actor,
+      'admin.account.capability.override',
+      key,
+      input,
+      async (tx) => {
+        if (
+          input.forcedState === 'ENABLED' &&
+          !['LIST_ASSET', 'MANAGE_PROFILE', 'MANAGE_ACCOUNT_SECURITY'].includes(input.capability)
+        ) {
+          throw new ForbiddenException({
+            code: 'CAPABILITY_OVERRIDE_NOT_SAFE',
+            message: 'This capability depends on financial or provider authority and cannot be force-enabled here.',
+          });
+        }
+        const before = await this.capabilities.evaluate(userId, input.capability);
+        const revision = await this.assertTarget(
+          tx,
+          actor,
+          userId,
+          input.expectedRevision,
+        );
+        const override = await tx.accountAdminOverride.create({
+          data: {
+            id: randomUUID(),
+            userId,
+            actorUserId: actor.userId,
+            command: 'FORCE_CAPABILITY_OVERRIDE',
+            targetType: 'CAPABILITY',
+            targetKey: input.capability,
+            forcedState: input.forcedState,
+            normalBlocker: before.reason,
+            reason: input.reason,
+            beforeState: {
+              allowed: before.allowed,
+              status: before.status,
+              reason: before.reason,
+            },
+            afterState: { forcedState: input.forcedState },
+            affectedCapabilities: [input.capability],
+            source: 'ADMIN_OVERRIDE',
+            incidentReference: input.incidentReference ?? null,
+            expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'ADMIN_OVERRIDE_APPLIED',
+          userId,
+          requestId,
+          {
+            source: 'ADMIN_OVERRIDE',
+            command: 'FORCE_CAPABILITY_OVERRIDE',
+            capability: input.capability,
+            forcedState: input.forcedState,
+            normalBlocker: before.reason,
+            reason: input.reason,
+            incidentReference: input.incidentReference ?? null,
+            expiresAt: input.expiresAt ?? null,
+          },
+        );
+        return {
+          userId,
+          revision,
+          overrideId: override.id,
+          capability: input.capability,
+          forcedState: input.forcedState,
+        };
+      },
+    );
+  }
 
   async updateProfile(
     actor: Actor,
@@ -348,7 +690,8 @@ export class AdminAccountControlService {
       | 'users.profile.manage'
       | 'users.security.manage'
       | 'users.restrictions.manage'
-      | 'users.notes.manage',
+      | 'users.notes.manage'
+      | 'users.recovery.manage',
     userId: string,
     requestId: string,
   ) {

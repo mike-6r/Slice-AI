@@ -959,6 +959,8 @@ model User {
   initialOfferingInventories          InitialOfferingInventory[]         @relation("InitialOfferingInventoryBeneficiary")
   platformRevenueSettlementsRequested PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementRequester")
   platformRevenueSettlementsApproved  PlatformRevenueSettlement[]        @relation("PlatformRevenueSettlementApprover")
+  adminOverrides                       AccountAdminOverride[]            @relation("AccountAdminOverrideTarget")
+  authoredAdminOverrides               AccountAdminOverride[]            @relation("AccountAdminOverrideActor")
 
   @@index([accountStatus])
 }
@@ -1289,6 +1291,32 @@ model AuditEvent {
   actor        User?          @relation("ActorAuditEvents", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([resourceType, resourceId])
+  @@index([actorUserId, createdAt])
+}
+
+/// Immutable, explicit account-level overrides. These records never replace
+/// provider truth or ledger authority; they document a Slice-owned exception.
+model AccountAdminOverride {
+  id                 String   @id @default(cuid())
+  userId             String
+  actorUserId        String
+  command            String
+  targetType         String
+  targetKey          String?
+  forcedState        String?
+  normalBlocker      String?
+  reason             String
+  beforeState        Json
+  afterState         Json
+  affectedCapabilities String[]
+  source             String
+  incidentReference  String?
+  expiresAt          DateTime?
+  createdAt          DateTime @default(now())
+  user               User     @relation("AccountAdminOverrideTarget", fields: [userId], references: [id], onDelete: Restrict)
+  actor              User     @relation("AccountAdminOverrideActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId, targetType, targetKey, expiresAt])
   @@index([actorUserId, createdAt])
 }
 

@@ -519,6 +519,22 @@ export type AdminUserDetail = AdminUserSummary & {
     allowed: boolean;
     reason: string | null;
   }>;
+  adminOverrides: Array<{
+    id: string;
+    command: string;
+    targetType: string;
+    targetKey: string | null;
+    forcedState: string | null;
+    normalBlocker: string | null;
+    reason: string;
+    beforeState: Record<string, unknown>;
+    afterState: Record<string, unknown>;
+    affectedCapabilities: string[];
+    source: string;
+    incidentReference: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+  }>;
   semanticRoles: string[];
   profile: {
     displayName: string | null;
@@ -633,6 +649,13 @@ export type AdminUserDetail = AdminUserSummary & {
     manageSecurity: boolean;
     manageRestrictions: boolean;
     manageNotes: boolean;
+    canUseRecovery: boolean;
+    canUseBreakGlassOverride: boolean;
+    canManageFinancialAccess: boolean;
+    canManageCompliance: boolean;
+    canManageCollector: boolean;
+    canManageInvestor: boolean;
+    canManageProvider: boolean;
   };
   financialDetails: {
     state: string;
@@ -2386,6 +2409,54 @@ export interface AdminRepository {
       note: string;
     },
   ): Promise<{ userId: string; revision: string; recorded: boolean }>;
+  runUserRecoveryCommand(
+    id: string,
+    input: {
+      expectedRevision: string;
+      command: string;
+      reason: string;
+      confirmation: string;
+      incidentReference?: string;
+    },
+  ): Promise<{ userId: string; revision: string; command: string; affected: string[] }>;
+  forceSetUserState(
+    id: string,
+    input: {
+      expectedRevision: string;
+      targetState: string;
+      reason: string;
+      confirmation: string;
+      incidentReference?: string;
+    },
+  ): Promise<{ userId: string; revision: string; accountStatus: string }>;
+  forceClearUserRestriction(
+    id: string,
+    holdId: string,
+    input: {
+      expectedRevision: string;
+      reason: string;
+      confirmation: string;
+      incidentReference?: string;
+    },
+  ): Promise<{ userId: string; revision: string; hold: { id: string; status: string } }>;
+  overrideUserCapability(
+    id: string,
+    input: {
+      expectedRevision: string;
+      capability: string;
+      forcedState: "ENABLED" | "DISABLED";
+      reason: string;
+      confirmation: string;
+      expiresAt?: string;
+      incidentReference?: string;
+    },
+  ): Promise<{
+    userId: string;
+    revision: string;
+    overrideId: string;
+    capability: string;
+    forcedState: string;
+  }>;
   setCollectorFeatured(
     slug: string,
     featured: boolean,
