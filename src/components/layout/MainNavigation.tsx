@@ -295,7 +295,11 @@ export function MainNavigation() {
                 </Link>
                 <Link
                   to={canAccessCollectorWorkspace(roles) ? "/list" : "/onboarding"}
-                  search={canAccessCollectorWorkspace(roles) ? undefined : { returnTo: "/list" }}
+                  search={
+                    canAccessCollectorWorkspace(roles)
+                      ? { draft: undefined }
+                      : { returnTo: "/list" }
+                  }
                   onClick={() => setMobileOpen(false)}
                   className="primary-action mt-2 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold text-background"
                 >
@@ -416,7 +420,7 @@ function HeaderActions({
       </div>
       <Link
         to={canAccessCollectorWorkspace(roles) ? "/list" : "/onboarding"}
-        search={canAccessCollectorWorkspace(roles) ? undefined : { returnTo: "/list" }}
+        search={canAccessCollectorWorkspace(roles) ? { draft: undefined } : { returnTo: "/list" }}
         className="primary-action ml-1 inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-xs font-semibold text-background"
       >
         <Plus className="size-4" aria-hidden="true" />

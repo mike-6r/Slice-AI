@@ -194,7 +194,7 @@ function OnboardingPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.user.current }),
         queryClient.invalidateQueries({ queryKey: queryKeys.account.capabilities }),
       ]);
-      await navigate({ to: "/list" });
+      await navigate({ to: "/list", search: { draft: undefined } });
     },
   });
 
@@ -381,7 +381,7 @@ function OnboardingPage() {
               capability={compliance.data?.capability}
               loading={compliance.isLoading || startCompliance.isPending}
               onVerify={() => startCompliance.mutate()}
-              onStartListing={() => void navigate({ to: "/list" })}
+              onStartListing={() => void navigate({ to: "/list", search: { draft: undefined } })}
             />
           ) : (
             <FinishStep

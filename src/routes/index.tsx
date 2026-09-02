@@ -781,7 +781,7 @@ function ListAssetLink({
   children: ReactNode;
 }) {
   return authenticated ? (
-    <Link to="/list" className={className}>
+    <Link to="/list" search={{ draft: undefined }} className={className}>
       {children}
     </Link>
   ) : (

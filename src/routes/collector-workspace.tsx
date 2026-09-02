@@ -428,7 +428,11 @@ function Overview({
   return (
     <div className="collector-workspace-content">
       <div className="collector-workspace-overview-actions">
-        <Link className="collector-button collector-button--primary" to="/list">
+        <Link
+          className="collector-button collector-button--primary"
+          to="/list"
+          search={{ draft: undefined }}
+        >
           List an Asset <ArrowRight aria-hidden="true" />
         </Link>
       </div>
@@ -2161,7 +2165,7 @@ function AssetManagement({
                   : "No uploaded evidence"
               }
             />
-            <Link to="/list" className="collector-button">
+            <Link to="/list" search={{ draft: undefined }} className="collector-button">
               Open submission flow <ArrowRight aria-hidden="true" />
             </Link>
           </DetailPanel>
@@ -2270,7 +2274,7 @@ function SettingsCards({ open }: { open: Open }) {
           </span>
           <strong>Submission support</strong>
           <p>Continue saved submissions and add requested evidence from the submission flow.</p>
-          <Link to="/list" className="collector-button">
+          <Link to="/list" search={{ draft: undefined }} className="collector-button">
             Open submissions <ArrowRight aria-hidden="true" />
           </Link>
         </article>
@@ -2827,14 +2831,18 @@ function SubmissionDetail({ asset }: { asset: CollectorWorkspaceAsset }) {
         }
       />
       <Detail label="Allowed action" value={submissionNextStep(asset)} />
-      <Link to="/submissions/$id" params={{ id: asset.id }} className="collector-button">
-        {asset.submissionStatus === "CHANGES_REQUESTED"
-          ? "Review requested changes"
-          : asset.stage === "DRAFT"
-            ? "Continue submission"
+      {asset.submissionStatus === "DRAFT" ? (
+        <Link to="/list" search={{ draft: asset.id }} className="collector-button">
+          Continue listing <ArrowRight aria-hidden="true" />
+        </Link>
+      ) : (
+        <Link to="/submissions/$id" params={{ id: asset.id }} className="collector-button">
+          {asset.submissionStatus === "CHANGES_REQUESTED"
+            ? "Review requested changes"
             : "View submission"}{" "}
-        <ArrowRight aria-hidden="true" />
-      </Link>
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      )}
       {canSelectVault ? (
         <div className="collector-intake-action">
           <strong>Choose where you&apos;ll send your collectible</strong>
@@ -3313,17 +3321,23 @@ function detailAction(asset: CollectorWorkspaceAsset) {
         View market <ArrowRight aria-hidden="true" />
       </Link>
     );
+  if (asset.submissionStatus === "DRAFT")
+    return (
+      <Link
+        to="/list"
+        search={{ draft: asset.id }}
+        className="collector-button collector-button--primary"
+      >
+        Continue listing <ArrowRight aria-hidden="true" />
+      </Link>
+    );
   return (
     <Link
       to="/submissions/$id"
       params={{ id: asset.id }}
       className="collector-button collector-button--primary"
     >
-      {asset.submissionStatus === "CHANGES_REQUESTED"
-        ? "Review request"
-        : asset.stage === "DRAFT"
-          ? "Continue submission"
-          : "View submission"}{" "}
+      {asset.submissionStatus === "CHANGES_REQUESTED" ? "Review request" : "View submission"}{" "}
       <ArrowRight aria-hidden="true" />
     </Link>
   );

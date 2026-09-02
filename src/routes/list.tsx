@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Camera,
   Check,
@@ -54,6 +54,12 @@ import { isValidPercent } from "./-list-validation";
 import type { CollectorVaultProjection } from "@/data/repositories";
 
 export const Route = createFileRoute("/list")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    draft:
+      typeof search.draft === "string" && search.draft.trim().length > 0
+        ? search.draft.trim().slice(0, 128)
+        : undefined,
+  }),
   head: () => ({ meta: [{ title: "List an asset | Slice" }] }),
   component: SubmissionPage,
 });
@@ -144,6 +150,9 @@ export function SubmissionPage() {
   useCurrency();
   const services = useAppServices();
   const session = useSession();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const routeSearch = Route.useSearch?.() ?? {};
+  const requestedDraftId = routeSearch.draft;
   const client = useQueryClient();
   const [form, setForm] = useState<ListingForm>(blank);
   const [step, setStep] = useState(1);
@@ -197,9 +206,9 @@ export function SubmissionPage() {
   });
   const draftStorageKey = currentUser.data ? `slice:list-draft:${currentUser.data.id}` : null;
   const detail = useQuery({
-    queryKey: ["submissions", draft?.id],
-    queryFn: () => services.repositories.submissions.getOwn(draft!.id),
-    enabled: Boolean(draft?.id),
+    queryKey: ["submissions", draft?.id ?? requestedDraftId],
+    queryFn: () => services.repositories.submissions.getOwn(draft?.id ?? requestedDraftId!),
+    enabled: Boolean(draft?.id ?? requestedDraftId),
   });
   const preGrade = useQuery({
     queryKey: ["submissions", draft?.id, "pre-grade"],
@@ -439,7 +448,14 @@ export function SubmissionPage() {
     return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
   }, []);
   useEffect(() => {
-    if (!drafts.data || draft || !draftStorageKey || typeof window === "undefined") return;
+    if (
+      requestedDraftId ||
+      !drafts.data ||
+      draft ||
+      !draftStorageKey ||
+      typeof window === "undefined"
+    )
+      return;
     const savedId = window.sessionStorage.getItem(draftStorageKey);
     const saved = drafts.data.items.find(
       (item) =>
@@ -449,10 +465,29 @@ export function SubmissionPage() {
     setDraft(saved);
     version.current = saved.version;
     setStep(Math.min(Math.max(saved.currentStep || 1, 1), 7));
-  }, [draft, draftStorageKey, drafts.data]);
+  }, [draft, draftStorageKey, drafts.data, requestedDraftId]);
+  useEffect(() => {
+    if (!requestedDraftId || !detail.data || detail.data.id !== requestedDraftId) return;
+    if (detail.data.status !== "DRAFT") {
+      void navigate({
+        to: "/submissions/$id",
+        params: { id: detail.data.id },
+        replace: true,
+      });
+      return;
+    }
+    setDraft((current) => current ?? detail.data!);
+    version.current = detail.data.version;
+    setStep(restoreWizardStep(detail.data));
+  }, [detail.data, navigate, requestedDraftId]);
   const hydratedDraftId = useRef<string | null>(null);
   useEffect(() => {
-    if (!detail.data || hydratedDraftId.current === detail.data.id) return;
+    if (
+      !detail.data ||
+      !["DRAFT", "CHANGES_REQUESTED"].includes(detail.data.status) ||
+      hydratedDraftId.current === detail.data.id
+    )
+      return;
     const saved = detail.data.declaredMetadata ?? {};
     const text = (key: string) => (typeof saved[key] === "string" ? saved[key] : "");
     const customerReference = customerReferenceFromMetadata(saved.customerReference);
@@ -760,6 +795,25 @@ export function SubmissionPage() {
         }}
       />
     );
+  if (requestedDraftId && detail.isLoading)
+    return (
+      <ListState
+        title="Opening your saved listing"
+        detail="Retrieving the latest draft so you can continue where you left off."
+      />
+    );
+  if (requestedDraftId && (detail.isError || !detail.data))
+    return (
+      <ListState
+        title="Draft unavailable"
+        detail="This draft could not be loaded, or it does not belong to your account."
+        retry={() => void detail.refetch()}
+      />
+    );
+  if (requestedDraftId && detail.data?.status !== "DRAFT")
+    return (
+      <ListState title="Opening submission" detail="This record is no longer an editable draft." />
+    );
 
   const selectedCategory = categories.data?.find((category) => category.id === form.categoryId);
   const submission = detail.data;
@@ -804,9 +858,16 @@ export function SubmissionPage() {
       <div className="list-guided-shell">
         <header className="list-guided-heading">
           <div>
-            <p className="page-kicker">List a collectible</p>
+            <p className="page-kicker">
+              {requestedDraftId ? "Continuing a saved draft" : "List a collectible"}
+            </p>
             <h1>List your card in a few simple steps.</h1>
-            <p>We’ll guide you through each step so you can list with confidence.</p>
+            <p>
+              We’ll guide you through each step so you can list with confidence.
+              {requestedDraftId && detail.data
+                ? ` Last saved ${formatDate(detail.data.updatedAt)}.`
+                : ""}
+            </p>
           </div>
           <Link
             to="/submissions/$id"
@@ -1096,8 +1157,8 @@ function IdentityStep({
             <p className="list-start-faster__eyebrow">Fastest option</p>
             <h3>Paste a PriceCharting link</h3>
             <p>
-              Paste a PriceCharting or SportsCardsPro link and Slice will try to identify the
-              exact card for you.
+              Paste a PriceCharting or SportsCardsPro link and Slice will try to identify the exact
+              card for you.
             </p>
           </div>
         </div>
@@ -4187,6 +4248,43 @@ function ReviewRows({ rows }: { rows: Array<[string, string]> }) {
     </dl>
   );
 }
+export function restoreWizardStep(submission: SubmissionDetail): number {
+  if (
+    Number.isSafeInteger(submission.currentStep) &&
+    submission.currentStep >= 1 &&
+    submission.currentStep <= 7
+  )
+    return submission.currentStep;
+
+  const metadata = submission.declaredMetadata ?? {};
+  const text = (key: string) =>
+    typeof metadata[key] === "string" ? String(metadata[key]).trim() : "";
+  if (!submission.categoryId || !text("name")) return 1;
+  if (!text("year") || !text("set") || !text("cardNumber")) return 2;
+  const marketStatus = text("marketCheckStatus");
+  if (
+    !metadata.marketCheckAcknowledged ||
+    !["FOUND", "LIMITED", "NO_MATCHES", "UNAVAILABLE"].includes(marketStatus)
+  )
+    return 3;
+  const graded = Boolean(text("grader") && text("grader") !== "Ungraded");
+  if (
+    !requiredSlotsForGrading(graded).every(
+      (slot) => activeMedia(submission, slot)?.status === "SAFE",
+    )
+  )
+    return 4;
+  if (
+    !graded &&
+    metadata.aiReviewStatus !== "AI_REVIEW_SKIPPED" &&
+    submission.preGrade?.status !== "SUCCEEDED"
+  )
+    return 5;
+  if (!submission.preferredIntakeLocationId || !submission.preferredDeliveryMethod) return 6;
+  if (metadata.termsAcknowledged !== true) return 7;
+  return 7;
+}
+
 function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
   return (
     <section className="list-my-submissions">
@@ -4198,18 +4296,33 @@ function MySubmissions({ submissions }: { submissions: AssetSubmission[] }) {
       </header>
       {submissions.length ? (
         <div>
-          {submissions.slice(0, 6).map((item) => (
-            <Link key={item.id} to="/submissions/$id" params={{ id: item.id }}>
-              <FileImage />
-              <span>
-                <strong>{submissionName(item.declaredMetadata)}</strong>
-                <small>
-                  {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
-                </small>
-              </span>
-              <ChevronRight />
-            </Link>
-          ))}
+          {submissions.slice(0, 6).map((item) =>
+            item.status === "DRAFT" ? (
+              <Link key={item.id} to="/list" search={{ draft: item.id }}>
+                <FileImage />
+                <span>
+                  <strong>{submissionName(item.declaredMetadata)}</strong>
+                  <small>
+                    {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
+                  </small>
+                  <b>Continue listing</b>
+                </span>
+                <ChevronRight />
+              </Link>
+            ) : (
+              <Link key={item.id} to="/submissions/$id" params={{ id: item.id }}>
+                <FileImage />
+                <span>
+                  <strong>{submissionName(item.declaredMetadata)}</strong>
+                  <small>
+                    {submissionStatusLabel(item.status)} · Updated {formatDate(item.updatedAt)}
+                  </small>
+                  <b>View submission</b>
+                </span>
+                <ChevronRight />
+              </Link>
+            ),
+          )}
         </div>
       ) : (
         <p>Save your first listing to keep it private and continue whenever you’re ready.</p>
@@ -4240,7 +4353,7 @@ function SubmissionReceived({ submission }: { submission: SubmissionDetail }) {
             <Link to="/submissions/$id" params={{ id: submission.id }} className="button-primary">
               View submission
             </Link>
-            <Link to="/list" className="button-secondary">
+            <Link to="/list" search={{ draft: undefined }} className="button-secondary">
               List another card
             </Link>
             <Link to="/portfolio" className="button-secondary">
@@ -4500,9 +4613,7 @@ function isPriceChartingUrl(value: string) {
         "sportscardspro.com",
         "www.sportscardspro.com",
         "m.sportscardspro.com",
-      ].includes(
-        url.hostname.toLowerCase(),
-      ) &&
+      ].includes(url.hostname.toLowerCase()) &&
       url.pathname.startsWith("/game/")
     );
   } catch {

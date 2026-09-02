@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, CircleAlert, FileUp, ImagePlus, Trash2, UploadCloud } from "lucide-react";
 import {
   useEffect,
@@ -49,6 +49,7 @@ const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 
 function SubmissionDetailPage() {
   const { id } = Route.useParams();
+  const navigate = useNavigate({ from: Route.fullPath });
   const services = useAppServices();
   const session = useSession();
   const client = useQueryClient();
@@ -68,6 +69,15 @@ function SubmissionDetailPage() {
     queryFn: () => services.repositories.catalogue.listSubmissionCategories(),
     enabled: session.isAuthenticated,
   });
+
+  useEffect(() => {
+    if (detail.data?.status !== "DRAFT") return;
+    void navigate({
+      to: "/list",
+      search: { draft: detail.data.id },
+      replace: true,
+    });
+  }, [detail.data, navigate]);
 
   useEffect(
     () => () => {
@@ -176,6 +186,13 @@ function SubmissionDetailPage() {
     );
 
   const item = detail.data;
+  if (item.status === "DRAFT")
+    return (
+      <State
+        title="Opening your saved listing"
+        detail="Taking you back to the List an Asset workflow."
+      />
+    );
   const editable = item.status === "DRAFT" || item.status === "CHANGES_REQUESTED";
   const cancellable = editable || item.status === "SUBMITTED";
   const actionError = update.error ?? submit.error ?? cancel.error ?? media.error ?? remove.error;
@@ -207,7 +224,11 @@ function SubmissionDetailPage() {
             {item.status === "SUBMITTED" ? " — awaiting review" : ""}
           </p>
         </div>
-        <Link to="/list" className="text-sm font-semibold text-accent">
+        <Link
+          to="/list"
+          search={{ draft: undefined }}
+          className="text-sm font-semibold text-accent"
+        >
           Back to submissions
         </Link>
       </header>
@@ -227,7 +248,7 @@ function SubmissionDetailPage() {
             <Link to="/submissions/$id" params={{ id }} className="button-primary">
               View submission
             </Link>
-            <Link to="/list" className="button-secondary">
+            <Link to="/list" search={{ draft: undefined }} className="button-secondary">
               Submit another asset
             </Link>
             <Link to="/portfolio" className="button-secondary">

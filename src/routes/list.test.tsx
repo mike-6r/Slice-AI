@@ -4,7 +4,12 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AppRepositories } from "@/data/repositories";
-import type { ISODateTime, MarketResearchSnapshot, RawCardPreGrade } from "@/domain";
+import type {
+  ISODateTime,
+  MarketResearchSnapshot,
+  RawCardPreGrade,
+  SubmissionDetail,
+} from "@/domain";
 import { mockRepositories } from "@/mocks/repositories";
 import { AppServicesProvider } from "@/providers/AppServicesProvider";
 
@@ -22,6 +27,7 @@ import {
   PhotosStep,
   ReviewStep,
   SubmissionPage,
+  restoreWizardStep,
 } from "./list";
 import { isValidPercent } from "./-list-validation";
 
@@ -55,6 +61,34 @@ const detailsForm = {
 
 const aiForm = { ...detailsForm };
 
+const draftDetail = (currentStep: number): SubmissionDetail =>
+  ({
+    id: "draft-1",
+    status: "DRAFT",
+    version: 3,
+    currentStep,
+    categoryId: "cards",
+    setId: null,
+    gradeScaleEntryId: null,
+    declaredMetadata: {
+      name: "Umbreon VMAX",
+      year: "2021",
+      set: "Evolving Skies",
+      cardNumber: "215/203",
+      marketCheckStatus: "FOUND",
+      marketCheckAcknowledged: true,
+    },
+    preferredIntakeLocationId: null,
+    preferredDeliveryMethod: null,
+    submittedAt: null,
+    reviewedAt: null,
+    decisionCode: null,
+    createdAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+    updatedAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+    media: [],
+    marketResearch: null,
+  }) as SubmissionDetail;
+
 function renderList() {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(
@@ -84,6 +118,16 @@ function renderList() {
     </QueryClientProvider>,
   );
 }
+
+describe("resumed listing drafts", () => {
+  it("uses the saved wizard step when it is valid", () => {
+    expect(restoreWizardStep(draftDetail(4))).toBe(4);
+  });
+
+  it("derives the next incomplete step when no valid step is stored", () => {
+    expect(restoreWizardStep(draftDetail(0))).toBe(4);
+  });
+});
 
 describe("Document 010 list asset UI", () => {
   it("renders the Step 5 raw-card start state without inventing a score or pass result", () => {
