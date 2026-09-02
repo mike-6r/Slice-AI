@@ -117,6 +117,13 @@ const metadataKeys: Record<string, readonly string[]> = {
     'verificationMode',
     'status',
   ],
+  CERT_SLICE_DUPLICATE_CHECKED: [
+    'verificationId',
+    'companyCode',
+    'verificationMode',
+    'status',
+  ],
+  CERT_DUPLICATE_FOUND: ['verificationId', 'companyCode'],
   CERT_MANUAL_REVIEW_REQUIRED: ['verificationId'],
   CERT_VERIFICATION_MISMATCH: ['verificationId', 'mismatches'],
   CERT_VERIFIED: ['verificationId', 'companyCode', 'grade'],

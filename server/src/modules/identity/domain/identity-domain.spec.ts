@@ -105,6 +105,23 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+
+  it('allows Slice certification duplicate-check audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('CERT_SLICE_DUPLICATE_CHECKED', {
+        verificationId: 'verification-1',
+        companyCode: 'PSA',
+        verificationMode: 'SLICE_DUPLICATE_CHECK',
+        status: 'CLEAR',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('CERT_DUPLICATE_FOUND', {
+        verificationId: 'verification-1',
+        companyCode: 'PSA',
+      }),
+    ).not.toThrow();
+  });
   it('allows provider identity refresh audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('IDENTITY_VERIFICATION_UPDATED', {
