@@ -18764,19 +18764,6 @@ body:has(.collectors-page) .site-shell {
 /* Portfolio reference pass: the overview uses the same wide, four-column
    composition as the approved customer mockup. Dedicated tabs keep their
    existing layouts and controls. */
-body:has(.portfolio-page) .market-tape {
-  display: none;
-}
-body:has(.portfolio-page) .main-navigation .site-shell {
-  width: 90%;
-  max-width: none;
-}
-body:has(.portfolio-page) .main-navigation > .site-shell {
-  height: 60px;
-}
-body:has(.portfolio-page) .main-navigation .site-shell > .rounded-full {
-  display: none;
-}
 .portfolio-page.portfolio-page--approved .portfolio-shell {
   width: 90%;
   max-width: none;
@@ -18980,9 +18967,6 @@ body:has(.portfolio-page) .main-navigation .site-shell > .rounded-full {
 }
 @media (max-width: 760px) {
   .portfolio-page.portfolio-page--approved .portfolio-shell {
-    width: calc(100% - 1.25rem);
-  }
-  body:has(.portfolio-page) .main-navigation .site-shell {
     width: calc(100% - 1.25rem);
   }
   .portfolio-page.portfolio-page--approved .portfolio-kpis,
@@ -51885,19 +51869,6 @@ body:has(.collectors-page) .main-navigation > .site-shell {
 
 /* Wallet reference pass: route-scoped chrome and layout follow the customer
    wallet mockup while preserving the shared navigation and responsive system. */
-body:has(.wallet-page) .market-tape {
-  display: none;
-}
-body:has(.wallet-page) .main-navigation .site-shell {
-  width: 90%;
-  max-width: none;
-}
-body:has(.wallet-page) .main-navigation > .site-shell {
-  height: 60px;
-}
-body:has(.wallet-page) .main-navigation .site-shell > .rounded-full {
-  display: none;
-}
 .wallet-page .wallet-shell {
   width: 90%;
   max-width: none;
@@ -52065,9 +52036,6 @@ body:has(.wallet-page) .main-navigation .site-shell > .rounded-full {
   .wallet-page .wallet-shell {
     width: calc(100% - 1.25rem);
     padding-top: 1.25rem;
-  }
-  body:has(.wallet-page) .main-navigation .site-shell {
-    width: calc(100% - 1.25rem);
   }
   .wallet-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -63734,19 +63702,6 @@ select[multiple] {
 
 /* Portfolio overview final precedence. This is intentionally last so the
    reference composition wins over the older portfolio dashboard cascades. */
-body:has(.portfolio-page) .market-tape {
-  display: none;
-}
-body:has(.portfolio-page) .main-navigation .site-shell {
-  width: 90%;
-  max-width: none;
-}
-body:has(.portfolio-page) .main-navigation > .site-shell {
-  height: 60px;
-}
-body:has(.portfolio-page) .main-navigation .site-shell > .rounded-full {
-  display: none;
-}
 .portfolio-page.portfolio-page--approved .portfolio-shell {
   width: 90%;
   max-width: none;
@@ -63920,9 +63875,6 @@ body:has(.portfolio-page) .main-navigation .site-shell > .rounded-full {
 }
 @media (max-width: 760px) {
   .portfolio-page.portfolio-page--approved .portfolio-shell {
-    width: calc(100% - 1.25rem);
-  }
-  body:has(.portfolio-page) .main-navigation .site-shell {
     width: calc(100% - 1.25rem);
   }
   .portfolio-page.portfolio-page--approved .portfolio-kpis,
