@@ -17,11 +17,14 @@ import {
   Lightbulb,
   LoaderCircle,
   LockKeyhole,
+  MapPin,
+  PackageCheck,
   ScanLine,
   ScanSearch,
   ShieldCheck,
   Sparkles,
   Trash2,
+  Truck,
   Upload,
   X,
 } from "lucide-react";
@@ -3104,15 +3107,32 @@ function RawPreGradeResult({
   if (!preGrade || status !== "SUCCEEDED") {
     return (
       <section className="list-ai-ready">
-        <div className="list-ai-ready__icon">
-          <Sparkles aria-hidden="true" />
+        <div className="list-ai-ready__intro">
+          <div className="list-ai-ready__icon">
+            <Sparkles aria-hidden="true" />
+          </div>
+          <div>
+            <span className="list-ai-eyebrow">Raw / ungraded card</span>
+            <h3>Get a preliminary condition estimate</h3>
+            <p>
+              We’ll analyze the Front and Back photos only. The result is supporting evidence, not
+              an official grade.
+            </p>
+          </div>
         </div>
-        <div>
-          <h3>Get a preliminary condition estimate</h3>
-          <p>
-            We’ll analyze the Front and Back photos only. The result is supporting evidence, not an
-            official grade.
-          </p>
+        <div className="list-ai-readiness" aria-label="AI photo readiness">
+          <div className={frontReady ? "is-ready" : "is-missing"}>
+            {frontReady ? <Check aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+            <span>Front photo</span>
+            <small>{frontReady ? "Ready" : "Add photo"}</small>
+          </div>
+          <div className={backReady ? "is-ready" : "is-missing"}>
+            {backReady ? <Check aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+            <span>Back photo</span>
+            <small>{backReady ? "Ready" : "Add photo"}</small>
+          </div>
+        </div>
+        <div className="list-ai-ready__actions">
           <AiReviewActions
             ready={ready}
             pending={false}
@@ -3121,6 +3141,17 @@ function RawPreGradeResult({
             label="Analyze my card"
           />
           {!ready ? <small>Add safe Front and Back photos to enable the analysis.</small> : null}
+        </div>
+        <div className="list-ai-process" aria-label="AI review process">
+          <span>
+            <b>01</b> Analyze photos
+          </span>
+          <span>
+            <b>02</b> Review estimate
+          </span>
+          <span>
+            <b>03</b> Staff review
+          </span>
         </div>
       </section>
     );
@@ -3332,14 +3363,22 @@ function AnalysisVisualCard({
 function GradedReviewPanel({ form }: { form: ListingForm }) {
   return (
     <section className="list-ai-graded-panel">
-      <div className="list-ai-ready__icon">
-        <ShieldCheck aria-hidden="true" />
+      <div className="list-ai-graded-panel__header">
+        <div className="list-ai-graded-panel__identity">
+          <div className="list-ai-ready__icon">
+            <ShieldCheck aria-hidden="true" />
+          </div>
+          <div>
+            <span className="list-ai-eyebrow">Existing grade verification</span>
+            <h3>
+              {form.grader} {form.grade || "Grade recorded"}
+            </h3>
+            <p>Slab details are captured for staff verification.</p>
+          </div>
+        </div>
+        <span className="list-ai-review-status is-complete">Ready for review</span>
       </div>
-      <div>
-        <span className="list-ai-eyebrow">Existing grade verification</span>
-        <h3>
-          {form.grader} {form.grade || "Grade recorded"}
-        </h3>
+      <div className="list-ai-graded-panel__details">
         <dl>
           <div>
             <dt>Card</dt>
@@ -3354,6 +3393,9 @@ function GradedReviewPanel({ form }: { form: ListingForm }) {
             <dd>{form.certificationNumber || "Not provided"}</dd>
           </div>
         </dl>
+      </div>
+      <div className="list-ai-graded-panel__notice">
+        <Info aria-hidden="true" />
         <p>
           This AI review reads visible slab and card information only. It does not replace
           verification with the grading company.
@@ -3697,13 +3739,21 @@ function DeliveryLocationStep({
       ] as const)
     : [];
   return (
-    <div className="list-step">
-      <p className="page-kicker">Step 6</p>
-      <h2>Choose where you&apos;ll send your collectible.</h2>
-      <p>
-        Your choice is saved with this private submission. Shipping instructions are issued only if
-        Slice accepts it.
-      </p>
+    <div className="list-step list-step--delivery-location">
+      <header className="list-delivery-header">
+        <div>
+          <p className="page-kicker">Step 6</p>
+          <h2>Choose where you&apos;ll send your collectible.</h2>
+          <p>
+            Your choice is saved with this private submission. Shipping instructions are issued only
+            if Slice accepts it.
+          </p>
+        </div>
+        <div className="list-delivery-private">
+          <LockKeyhole aria-hidden="true" />
+          <span>Saved privately</span>
+        </div>
+      </header>
       {loading ? <p className="list-step-hint">Loading approved Slice intake locations…</p> : null}
       {!loading && !locations.length ? (
         <div className="list-review-fallback">
@@ -3714,57 +3764,109 @@ function DeliveryLocationStep({
           </p>
         </div>
       ) : null}
-      <div className="list-review-main">
-        {locations.map((location) => {
-          const selectedLocation = location.id === form.preferredIntakeLocationId;
-          return (
-            <button
-              type="button"
-              key={location.id}
-              className={`list-review-summary ${selectedLocation ? "is-selected" : ""}`}
-              onClick={() => {
-                onChange("preferredIntakeLocationId", location.id);
-                const onlyMethod =
-                  location.acceptingShipments && !location.acceptingInPerson
-                    ? "SHIPMENT"
-                    : location.acceptingInPerson && !location.acceptingShipments
-                      ? "IN_PERSON"
-                      : "";
-                onChange("preferredDeliveryMethod", onlyMethod);
-              }}
-            >
-              <strong>{location.displayName}</strong>
-              <span>
-                {location.region}, {location.countryCode} ·{" "}
-                {location.locationType.replaceAll("_", " ")}
-              </span>
-              <small>
-                {location.acceptingShipments ? "Shipping available" : ""}
-                {location.acceptingShipments && location.acceptingInPerson ? " · " : ""}
-                {location.acceptingInPerson ? "In-person drop-off available" : ""}
-              </small>
-            </button>
-          );
-        })}
+      <div className="list-delivery-content">
+        <section
+          className="list-delivery-location-section"
+          aria-labelledby="delivery-location-title"
+        >
+          <div className="list-delivery-section-heading">
+            <div>
+              <span className="list-ai-eyebrow">Approved network</span>
+              <h3 id="delivery-location-title">Select an intake location</h3>
+            </div>
+            <span>{locations.length} available</span>
+          </div>
+          <div className="list-delivery-location-grid">
+            {locations.map((location) => {
+              const selectedLocation = location.id === form.preferredIntakeLocationId;
+              return (
+                <button
+                  type="button"
+                  key={location.id}
+                  className={`list-delivery-location-card ${selectedLocation ? "is-selected" : ""}`}
+                  onClick={() => {
+                    onChange("preferredIntakeLocationId", location.id);
+                    const onlyMethod =
+                      location.acceptingShipments && !location.acceptingInPerson
+                        ? "SHIPMENT"
+                        : location.acceptingInPerson && !location.acceptingShipments
+                          ? "IN_PERSON"
+                          : "";
+                    onChange("preferredDeliveryMethod", onlyMethod);
+                  }}
+                >
+                  <span className="list-delivery-location-card__icon">
+                    <MapPin aria-hidden="true" />
+                  </span>
+                  <span className="list-delivery-location-card__copy">
+                    <strong>{location.displayName}</strong>
+                    <span>
+                      {location.region}, {location.countryCode} ·{" "}
+                      {location.locationType.replaceAll("_", " ")}
+                    </span>
+                    <small>
+                      {location.acceptingShipments ? "Shipping available" : ""}
+                      {location.acceptingShipments && location.acceptingInPerson ? " · " : ""}
+                      {location.acceptingInPerson ? "In-person drop-off available" : ""}
+                    </small>
+                  </span>
+                  <span className="list-delivery-location-card__state">
+                    {selectedLocation ? (
+                      <Check aria-hidden="true" />
+                    ) : (
+                      <ChevronRight aria-hidden="true" />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </div>
       {selected ? (
-        <section className="list-review-summary">
-          <h3>How will you deliver your collectible?</h3>
-          <div className="list-guided-actions">
+        <section className="list-delivery-methods" aria-labelledby="delivery-method-title">
+          <div className="list-delivery-methods__heading">
+            <span className="list-delivery-methods__icon">
+              <PackageCheck aria-hidden="true" />
+            </span>
+            <div>
+              <span className="list-ai-eyebrow">Next step</span>
+              <h3 id="delivery-method-title">How will you deliver your collectible?</h3>
+              <p>{selected.displayName}</p>
+            </div>
+          </div>
+          <div className="list-delivery-methods__options">
             {methods.map((method) => (
               <button
                 key={method}
                 type="button"
-                className={
-                  form.preferredDeliveryMethod === method ? "button-primary" : "button-secondary"
-                }
+                className={`list-delivery-method ${form.preferredDeliveryMethod === method ? "is-selected" : ""}`}
                 onClick={() => onChange("preferredDeliveryMethod", method)}
               >
-                {method === "SHIPMENT" ? "Ship to this location" : "Deliver in person"}
+                <span className="list-delivery-method__icon">
+                  {method === "SHIPMENT" ? (
+                    <Truck aria-hidden="true" />
+                  ) : (
+                    <MapPin aria-hidden="true" />
+                  )}
+                </span>
+                <span>
+                  <strong>
+                    {method === "SHIPMENT" ? "Ship to this location" : "Deliver in person"}
+                  </strong>
+                  <small>
+                    {method === "SHIPMENT"
+                      ? "Receive shipping instructions after acceptance."
+                      : "Bring the collectible directly to the location."}
+                  </small>
+                </span>
+                <span className="list-delivery-method__check">
+                  {form.preferredDeliveryMethod === method ? <Check aria-hidden="true" /> : null}
+                </span>
               </button>
             ))}
           </div>
-          <p className="list-step-hint">
+          <p className="list-delivery-methods__hint">
             {form.preferredDeliveryMethod === "IN_PERSON"
               ? "If accepted, you can bring the collectible directly to this approved Slice intake location. No tracking number is needed."
               : "If accepted, we’ll provide shipping instructions for this location."}
