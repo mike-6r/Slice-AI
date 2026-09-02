@@ -819,15 +819,22 @@ export class FinancialLedgerService {
     };
   }
 
-  async walletInsightsForUser(userId: string, now = new Date()) {
-    const currentStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const previousStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  async walletInsightsForUser(userId: string, period: '30d' | 'month' = '30d', now = new Date()) {
+    const currentStart = period === '30d'
+      ? new Date(now.getTime() - 30 * 86_400_000)
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const previousStart = period === '30d'
+      ? new Date(now.getTime() - 60 * 86_400_000)
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const currentEnd = period === '30d'
+      ? now
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const rows = await this.db.moneyMovement.findMany({
       where: {
         userId,
         status: 'SETTLED',
         currency: 'GBP',
-        settledAt: { gte: previousStart, lt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)) },
+        settledAt: { gte: previousStart, lt: currentEnd },
       },
       select: { type: true, amountMinor: true, settledAt: true },
     });
@@ -840,12 +847,13 @@ export class FinancialLedgerService {
         totalDepositsMinor: deposits.toString(),
         totalWithdrawalsMinor: withdrawals.toString(),
         netMovementMinor: (deposits - withdrawals).toString(),
+        settledMovementCount: rows.filter((row) => row.settledAt && row.settledAt >= from && row.settledAt < to).length,
       };
     };
-    const current = summarize(currentStart, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)));
+    const current = summarize(currentStart, currentEnd);
     const previous = summarize(previousStart, currentStart);
-    const previousHasData = previous.totalDepositsMinor !== '0' || previous.totalWithdrawalsMinor !== '0';
-    return { period: 'month' as const, currency: 'GBP' as const, ...current, previousPeriod: previousHasData ? previous : null };
+    const previousHasData = previous.settledMovementCount > 0;
+    return { period, currency: 'GBP' as const, ...current, previousPeriod: previousHasData ? previous : null };
   }
 
   async transactionsForUser(userId: string, cursor?: string, limit = 20) {

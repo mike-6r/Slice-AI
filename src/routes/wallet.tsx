@@ -38,6 +38,7 @@ import type {
   FeePolicy,
   PortfolioSummary,
   WalletInsights,
+  WalletInsightsPeriod,
   WalletMovementPage,
   WalletMovementType,
   WalletMovementView,
@@ -360,7 +361,6 @@ function PayoutSetupPanel({
 function WalletHeading() {
   return (
     <header className="wallet-heading">
-      <p className="page-kicker">Wallet</p>
       <h1>Wallet</h1>
       <p>Cash, funding, verification, and money movement infrastructure.</p>
     </header>
@@ -401,7 +401,7 @@ function WalletKpis({
       />
       <WalletKpi
         icon={Clock3}
-        label="Bank deposit clearing"
+        label="Pending deposits"
         value={formatWalletMoney(cash.riskHeldMinor ?? "0")}
         detail={
           cash.riskHeldDeposits?.find((deposit) => deposit.expectedReleaseAt)?.expectedReleaseAt
@@ -421,16 +421,6 @@ function WalletKpis({
           withdrawal.data?.providerLiquidityStatus === "AVAILABLE"
             ? "Eligible for bank payout"
             : "Provider liquidity check required"
-        }
-      />
-      <WalletKpi
-        icon={Clock3}
-        label="Settling for withdrawal"
-        value={formatWalletMoney(withdrawal.data?.settlingMinor ?? "0")}
-        detail={
-          withdrawal.data?.nextAvailabilityAt
-            ? "Expected after " + formatShortDate(withdrawal.data.nextAvailabilityAt)
-            : "Provider maturity and liquidity"
         }
       />
       <WalletKpi
@@ -482,7 +472,7 @@ function countDetail(count: number | undefined, singular: string, fallback: stri
 function WalletKpiSkeletons() {
   return (
     <section className="wallet-kpis" aria-label="Loading cash summary">
-      {[0, 1, 2, 3].map((item) => (
+      {[0, 1, 2, 3, 4].map((item) => (
         <article key={item} className="wallet-kpi wallet-kpi--loading">
           <div className="customer-skeleton size-10" />
           <div className="min-w-0 flex-1">
@@ -708,6 +698,24 @@ function BankConnectionRow({
           </span>
           <span>Funding via Bacs Direct Debit · Managed securely by Stripe</span>
         </div>
+        <dl className="wallet-bank-card__facts">
+          <div>
+            <dt>Bank</dt>
+            <dd>{label}</dd>
+          </div>
+          <div>
+            <dt>Account type</dt>
+            <dd>
+              {connection.accountType === "bacs_debit"
+                ? "Personal Current Account"
+                : connection.accountType}
+            </dd>
+          </div>
+          <div>
+            <dt>Connected on</dt>
+            <dd>{formatShortDate(connection.updatedAt)}</dd>
+          </div>
+        </dl>
       </li>
       {disconnectOpen ? (
         <BankDisconnectDialog
@@ -974,12 +982,6 @@ function MoveMoneyPanel({
         : action === "DEPOSIT" && !bankAvailable
           ? "Set up a UK bank mandate before requesting a deposit."
           : null;
-  const fundingBank =
-    banks.data?.find((bank) => bank.status === "CONNECTED" && bank.isDefault) ??
-    banks.data?.find((bank) => bank.status === "CONNECTED");
-  const fundingBankLabel = fundingBank
-    ? `${fundingBank.institutionName ?? fundingBank.accountName ?? "Connected bank"}${fundingBank.accountMask ? ` · •••• ${fundingBank.accountMask}` : ""}`
-    : "Connect a UK bank first";
   const requestedAmountMinor = parseWalletGbp(amount);
   const withdrawalBlocked =
     action === "WITHDRAWAL" &&
@@ -1045,16 +1047,6 @@ function MoveMoneyPanel({
             movement.mutate({ action: "DEPOSIT", amount });
           }}
         >
-          {action === "DEPOSIT" ? (
-            <div className={`wallet-funding-selector${fundingBank ? " is-ready" : ""}`}>
-              <span className="wallet-funding-selector__label">From</span>
-              <span className="wallet-funding-selector__value">
-                <Landmark aria-hidden="true" />
-                {fundingBankLabel}
-              </span>
-              {fundingBank ? <ArrowRight aria-hidden="true" /> : null}
-            </div>
-          ) : null}
           <label>
             Amount (GBP)
             <input
@@ -1064,10 +1056,26 @@ function MoveMoneyPanel({
               placeholder="£0.00"
             />
           </label>
-          <p className="wallet-move-currency-note">
-            Deposits and withdrawals settle in GBP. Any converted value shown below is for display
-            only.
-          </p>
+          {action === "DEPOSIT" ? (
+            <dl className="wallet-move-terms">
+              <div>
+                <dt>Est. arrival</dt>
+                <dd>1–2 business days</dd>
+              </div>
+              <div>
+                <dt>Fee</dt>
+                <dd>FREE</dd>
+              </div>
+              <div>
+                <dt>Min. deposit</dt>
+                <dd>£1.00</dd>
+              </div>
+              <div>
+                <dt>Max. deposit</dt>
+                <dd>£25,000.00</dd>
+              </div>
+            </dl>
+          ) : null}
           {action === "WITHDRAWAL" ? (
             <p>
               Withdrawals use your verified payout account. Slice does not collect bank details in
@@ -1102,15 +1110,21 @@ function MoveMoneyPanel({
             {movement.isPending
               ? "Submitting…"
               : action === "DEPOSIT"
-                ? "Request deposit"
+                ? amount
+                  ? `Deposit ${formatWalletMoney(parseWalletGbp(amount) ?? "0")}`
+                  : "Deposit"
                 : "Request withdrawal"}
             <ArrowRight aria-hidden="true" />
           </button>
         </form>
-        <p className={disabledReason ? "wallet-move-note is-locked" : "wallet-move-note"}>
+        <p
+          className={`${disabledReason ? "wallet-move-note is-locked" : "wallet-move-note"} wallet-move-security-note`}
+        >
           {disabledReason ??
             withdrawalBlockReason ??
-            "Your request will appear in wallet history once it is accepted."}
+            (action === "DEPOSIT"
+              ? "Deposits are protected by Stripe and our bank partners."
+              : "Your request will appear in wallet history once it is accepted.")}
         </p>
         {movement.error ? <InlineError error={movement.error} /> : null}
         {movement.data ? (
@@ -1662,12 +1676,29 @@ function MovementRow({
 
 function WalletInsightsPanel() {
   const services = useAppServices();
+  const [period, setPeriod] = useState<WalletInsightsPeriod>("30d");
   const insights = useQuery({
-    queryKey: queryKeys.portfolio.insights,
-    queryFn: services.portfolio.walletInsights,
+    queryKey: [...queryKeys.portfolio.insights, period],
+    queryFn: () => services.portfolio.walletInsights({ period }),
   });
   return (
-    <WalletPanel title="Wallet insights" icon={<Layers3 />} className="wallet-panel--insights">
+    <WalletPanel
+      title="Wallet insights"
+      icon={<Layers3 />}
+      className="wallet-panel--insights"
+      action={
+        <label className="wallet-insights-period">
+          <span className="sr-only">Insight period</span>
+          <select
+            value={period}
+            onChange={(event) => setPeriod(event.target.value as WalletInsightsPeriod)}
+          >
+            <option value="30d">Last 30 days</option>
+            <option value="month">This month</option>
+          </select>
+        </label>
+      }
+    >
       {" "}
       <div className="wallet-panel__body">
         {insights.isLoading ? <RowsSkeleton rows={2} /> : null}
@@ -1685,14 +1716,24 @@ function WalletInsightsPanel() {
             <Insight
               label="Total deposits"
               value={formatWalletMoney(insights.data.totalDepositsMinor)}
+              change={insightChange(insights.data, "totalDepositsMinor", period)}
             />
             <Insight
               label="Total withdrawals"
               value={formatWalletMoney(insights.data.totalWithdrawalsMinor)}
+              change={insightChange(insights.data, "totalWithdrawalsMinor", period)}
             />
             <Insight
               label="Net movement"
               value={formatWalletMoney(insights.data.netMovementMinor)}
+              change={insightChange(insights.data, "netMovementMinor", period)}
+            />
+            <Insight
+              label="Settled movements"
+              value={String(insights.data.settledMovementCount ?? 0)}
+              change={
+                insights.data.settledMovementCount ? "100% completed" : "No settled movements"
+              }
             />
           </dl>
         ) : null}
@@ -1703,7 +1744,7 @@ function WalletInsightsPanel() {
           <PanelEmpty
             icon={<Layers3 />}
             title="No settled movement data yet"
-            detail="Settled deposits and withdrawals will appear here month by month."
+            detail="Settled deposits and withdrawals will appear here for the selected period."
           />
         ) : null}
       </div>
@@ -1786,11 +1827,11 @@ function SettlementTimelinePanel({
     BigInt(portfolio.data.cash.availableMinor) > 0n;
   const steps = [
     {
-      label: "Setup bank",
+      label: "Bank linked",
       state: banks.data?.some((bank) => bank.status === "CONNECTED") ? "complete" : "next",
     },
     {
-      label: "Verify identity",
+      label: "Identity verified",
       state:
         compliance.data?.status === "APPROVED"
           ? "complete"
@@ -1812,8 +1853,8 @@ function SettlementTimelinePanel({
     },
     { label: "Funds available", state: cashAvailable ? "complete" : "next" },
     {
-      label: "Invest / withdraw",
-      state: cashAvailable && compliance.data?.status === "APPROVED" ? "next" : "next",
+      label: "Withdraw enabled",
+      state: cashAvailable && compliance.data?.status === "APPROVED" ? "complete" : "next",
     },
   ] as const;
   return (
@@ -1841,14 +1882,34 @@ function SettlementTimelinePanel({
   );
 }
 
-function Insight({ label, value }: { label: string; value: string }) {
+function Insight({ label, value, change }: { label: string; value: string; change: string }) {
   return (
     <div>
       <dt>{label}</dt>
       <dd>{value}</dd>
-      <small>Settled movements</small>
+      <small className="wallet-insight-change">{change}</small>
     </div>
   );
+}
+
+function insightChange(
+  insights: WalletInsights,
+  field: "totalDepositsMinor" | "totalWithdrawalsMinor" | "netMovementMinor",
+  period: WalletInsightsPeriod,
+) {
+  const previous = insights.previousPeriod?.[field];
+  if (previous === undefined || previous === "0") return "New in period";
+  const current = BigInt(insights[field]);
+  const prior = BigInt(previous);
+  const delta = current - prior;
+  const basisPoints = (delta * 10_000n) / (prior < 0n ? -prior : prior);
+  const sign = basisPoints >= 0n ? "↑" : "↓";
+  const absolute = basisPoints < 0n ? -basisPoints : basisPoints;
+  const whole = absolute / 100n;
+  const decimal = absolute % 100n;
+  const rounded =
+    decimal % 10n >= 5n ? `${whole}.${decimal / 10n + 1n}` : `${whole}.${decimal / 10n}`;
+  return `${sign} ${rounded}% vs prev. ${period === "30d" ? "30 days" : "month"}`;
 }
 
 function hasSettledWalletData(insights: WalletInsights) {
@@ -1931,13 +1992,19 @@ function BankConnectionControl({ hasConnected }: { hasConnected: boolean }) {
     <div className="wallet-bank-connect">
       <button type="button" onClick={() => void connect()} disabled={isConnecting}>
         <Landmark aria-hidden="true" />
-        {isConnecting
-          ? "Opening secure UK bank setup…"
-          : hasConnected
-            ? "Add another bank"
-            : "Set up a UK bank"}
+        {isConnecting ? "Opening secure UK bank setup…" : "Add bank"}
         <ArrowRight aria-hidden="true" />
       </button>
+      {hasConnected ? (
+        <button
+          type="button"
+          className="wallet-bank-connect__secondary"
+          onClick={() => void connect()}
+          disabled={isConnecting}
+        >
+          Replace bank
+        </button>
+      ) : null}
       <p className="wallet-bank-connect__note">
         {hasConnected
           ? "Bank details are securely managed by Stripe."

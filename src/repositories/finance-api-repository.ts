@@ -12,6 +12,7 @@ import type {
   PortfolioTransaction,
   PortfolioValuationStatus,
   WalletInsights,
+  WalletInsightsPeriod,
 } from "@/domain";
 import type { ApiClient } from "@/api/http-client";
 
@@ -56,7 +57,7 @@ const sumMinor = (values: string[]) =>
 const mapWalletInsights = (raw: unknown): WalletInsights => {
   const body = object(raw);
   const previous = body.previousPeriod;
-  if (body.period !== "month" || body.currency !== "GBP")
+  if ((body.period !== "month" && body.period !== "30d") || body.currency !== "GBP")
     throw new Error("Invalid wallet insights response.");
   const mapPeriod = (value: unknown, field: string) => {
     const period = object(value);
@@ -67,11 +68,15 @@ const mapWalletInsights = (raw: unknown): WalletInsights => {
     };
   };
   return {
-    period: "month",
+    period: body.period,
     currency: "GBP",
     totalDepositsMinor: minor(body.totalDepositsMinor, "insights.totalDepositsMinor"),
     totalWithdrawalsMinor: minor(body.totalWithdrawalsMinor, "insights.totalWithdrawalsMinor"),
     netMovementMinor: minor(body.netMovementMinor, "insights.netMovementMinor"),
+    settledMovementCount:
+      body.settledMovementCount === undefined
+        ? undefined
+        : count(body.settledMovementCount, "insights.settledMovementCount"),
     previousPeriod: previous === null ? null : mapPeriod(previous, "insights.previousPeriod"),
   };
 };
@@ -432,7 +437,8 @@ export const createFinanceApiRepository = (client: ApiClient): PortfolioReposito
   async getPerformance(range = "1M") {
     return mapPerformance(await client.get<unknown>("/me/portfolio/performance", { range }));
   },
-  async getWalletInsights() {
-    return mapWalletInsights(await client.get<unknown>("/me/wallet/insights", { period: "month" }));
+  async getWalletInsights(input?: { period?: WalletInsightsPeriod }) {
+    const period = input?.period ?? "30d";
+    return mapWalletInsights(await client.get<unknown>("/me/wallet/insights", { period }));
   },
 });

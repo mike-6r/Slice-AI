@@ -27,6 +27,7 @@ import type {
   PortfolioPerformance,
   PortfolioPerformanceRange,
   WalletInsights,
+  WalletInsightsPeriod,
   PortfolioTransactionPage,
   ComplianceSession,
   ComplianceSummary,
@@ -569,6 +570,10 @@ export type AdminUserDetail = AdminUserSummary & {
     emailVerified: boolean;
     phoneVerified: boolean;
     activeSessionCount: number | null;
+  };
+  support: {
+    state: "UNAVAILABLE" | "CLEAR" | "OPEN" | "ESCALATED";
+    reason: string;
   };
   complianceSummary: {
     kycStatus: string;
@@ -2497,7 +2502,7 @@ export interface PortfolioRepository {
   getLots(): Promise<PortfolioLot[]>;
   getTransactions(input?: { cursor?: string; limit?: number }): Promise<PortfolioTransactionPage>;
   getPerformance(range?: PortfolioPerformanceRange): Promise<PortfolioPerformance>;
-  getWalletInsights(): Promise<WalletInsights>;
+  getWalletInsights(input?: { period?: WalletInsightsPeriod }): Promise<WalletInsights>;
 }
 
 export interface CollectorRepository {

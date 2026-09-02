@@ -863,11 +863,12 @@ export const mockRepositories: AppRepositories = {
     },
     async getWalletInsights() {
       return {
-        period: "month" as const,
+        period: "30d" as const,
         currency: "GBP" as const,
         totalDepositsMinor: "0",
         totalWithdrawalsMinor: "0",
         netMovementMinor: "0",
+        settledMovementCount: 0,
         previousPeriod: null,
       };
     },

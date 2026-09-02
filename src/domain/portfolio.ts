@@ -47,12 +47,15 @@ export interface PortfolioAssetSummary {
   thumbnailUrl?: string | null;
 }
 
+export type WalletInsightsPeriod = "30d" | "month";
+
 export interface WalletInsights {
-  period: "month";
+  period: WalletInsightsPeriod;
   currency: "GBP";
   totalDepositsMinor: GbpMinorUnits;
   totalWithdrawalsMinor: GbpMinorUnits;
   netMovementMinor: GbpMinorUnits;
+  settledMovementCount?: number;
   previousPeriod: {
     totalDepositsMinor: GbpMinorUnits;
     totalWithdrawalsMinor: GbpMinorUnits;

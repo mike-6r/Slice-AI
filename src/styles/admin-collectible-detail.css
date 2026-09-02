@@ -1,5 +1,16 @@
 .collectible-dossier {
+  --accent: #35d7b1;
+  --surface: #07161e;
+  --surface-elevated: #0b2029;
+  --border: #203c47;
+  --text-primary: #e7f2f0;
+  --text-muted: #94a9b0;
+  --text-subtle: #718b94;
+  background:
+    radial-gradient(circle at 84% 0%, rgba(33, 126, 126, 0.1), transparent 28rem),
+    linear-gradient(180deg, #07151d 0%, #061118 100%);
   max-width: 1580px;
+  min-height: calc(100vh - 4.8rem);
   margin: 0 auto;
   padding: 20px 24px 34px;
   color: var(--text-primary);
@@ -28,11 +39,8 @@
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: linear-gradient(
-    115deg,
-    color-mix(in srgb, var(--surface-elevated) 95%, #062e34),
-    var(--surface-elevated)
-  );
+  background: linear-gradient(115deg, #0c2530, var(--surface-elevated));
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
 }
 .dossier-image {
   min-height: 230px;
@@ -180,6 +188,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-elevated);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
   overflow: hidden;
 }
 .dossier-snapshot__title {
@@ -304,6 +313,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-elevated);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.13);
 }
 .dossier-card h2 {
   display: flex;

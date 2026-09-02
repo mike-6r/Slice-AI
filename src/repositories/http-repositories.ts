@@ -2011,6 +2011,10 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
       ? objectField(value.recommendedAction, "admin user recommended action")
       : null;
   const availableCommands = Array.isArray(value.availableCommands) ? value.availableCommands : [];
+  const support =
+    value.support && typeof value.support === "object"
+      ? objectField(value.support, "admin user support state")
+      : { state: "UNAVAILABLE", reason: "Support tickets are not linked to Slice accounts" };
   const mapMoney = (source: Record<string, unknown>, field: string) =>
     stringField(source[field] ?? "0", `admin user ${field}`);
   const mapNullableMoney = (source: Record<string, unknown>, field: string) =>
@@ -2057,6 +2061,12 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
         reason: nullableString(command.reason, "admin user available command.reason"),
       };
     }),
+    support: {
+      state: ["UNAVAILABLE", "CLEAR", "OPEN", "ESCALATED"].includes(String(support.state))
+        ? (String(support.state) as "UNAVAILABLE" | "CLEAR" | "OPEN" | "ESCALATED")
+        : "UNAVAILABLE",
+      reason: stringField(support.reason, "admin user support.reason"),
+    },
     semanticRoles: Array.isArray(value.semanticRoles)
       ? value.semanticRoles
           .filter((role): role is string => typeof role === "string" && role !== "USER")

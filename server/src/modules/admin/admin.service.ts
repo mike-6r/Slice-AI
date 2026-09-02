@@ -7383,6 +7383,10 @@ export class AdminService {
           ? activeSessionCount
           : null,
       },
+      support: {
+        state: 'UNAVAILABLE' as const,
+        reason: 'Support tickets are not linked to Slice accounts',
+      },
       complianceSummary: {
         kycStatus: complianceAccess
           ? (kycCase?.status ?? 'NOT_REQUIRED')

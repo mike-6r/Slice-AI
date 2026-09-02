@@ -108,6 +108,7 @@ function renderPortfolio() {
         totalDepositsMinor: "0",
         totalWithdrawalsMinor: "0",
         netMovementMinor: "0",
+        settledMovementCount: 0,
         previousPeriod: null,
       }),
     },
@@ -138,10 +139,10 @@ describe("approved portfolio workspace", () => {
     expect(html).toContain("No portfolio performance history is available for this period.");
     expect(html).toContain("Recent orders");
     expect(html).toContain("View all holdings");
-    expect(html.match(/class="portfolio-summary-kpi/g)).toHaveLength(3);
+    expect(html.match(/class="portfolio-summary-kpi/g)).toHaveLength(4);
     expect(html).not.toContain('class="portfolio-kpi"');
     expect(html).toContain("portfolio-kpi__content");
-    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(3);
+    expect(html.match(/class="kpi-icon-tile"/g)).toHaveLength(4);
     expect(html).not.toContain("Demo Funding");
     expect(html).not.toContain("account-safe-id");
     expect(html).not.toContain("24h change");

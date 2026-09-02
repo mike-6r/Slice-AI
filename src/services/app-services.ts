@@ -58,7 +58,8 @@ export class PortfolioService {
     this.repositories.portfolio.getTransactions(input);
   performance = (range?: import("@/domain").PortfolioPerformanceRange) =>
     this.repositories.portfolio.getPerformance(range);
-  walletInsights = () => this.repositories.portfolio.getWalletInsights();
+  walletInsights = (input?: { period?: import("@/domain").WalletInsightsPeriod }) =>
+    this.repositories.portfolio.getWalletInsights(input);
 }
 
 export class TradingService {

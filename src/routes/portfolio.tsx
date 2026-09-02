@@ -4,6 +4,7 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  BadgeCheck,
   CalendarDays,
   ChartNoAxesCombined,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   PieChart,
   RefreshCw,
   ShoppingCart,
+  ShieldCheck,
   Wallet,
   WalletCards,
   X,
@@ -149,7 +151,7 @@ export function Portfolio() {
   const [holdingView, setHoldingView] = useState<"list" | "grid">("list");
   const holdingPage = routeSearch.holdingsPage ?? 1;
   const holdingPageSize = routeSearch.holdingsPageSize ?? 10;
-  const [performanceRange, setPerformanceRange] = useState<PortfolioPerformanceRange>("1M");
+  const [performanceRange, setPerformanceRange] = useState<PortfolioPerformanceRange>("ALL");
   const summary = useQuery({
     queryKey: queryKeys.portfolio.summary,
     queryFn: services.portfolio.portfolio,
@@ -322,46 +324,36 @@ export function Portfolio() {
         {tab === "overview" ? (
           <>
             <section className="portfolio-overview-content" aria-label="Portfolio overview">
-              <div className="portfolio-overview-column portfolio-overview-column--left">
-                <HoldingsPanel
-                  summary={displaySummaryQuery}
-                  query={displayHoldingsQuery}
-                  categories={categories}
-                  filter={holdingFilter}
-                  onFilterChange={(value) =>
-                    void navigate({
-                      search: (current) => ({
-                        ...current,
-                        tab: "overview",
-                        holdingsCategory: value === "ALL" ? undefined : value,
-                      }),
-                      replace: true,
-                    })
-                  }
-                  visibleHoldings={visibleHoldings?.slice(0, 5)}
-                  compact
-                />
-                <section
-                  className="portfolio-overview-bottom"
-                  aria-label="Your Slice activity and discovery"
-                >
-                  <ActivityPanel query={transactions} compact />
-                  <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
-                </section>
-              </div>
-              <div className="portfolio-overview-column portfolio-overview-column--right">
-                <PortfolioPerformancePanel
-                  query={displaySummaryQuery}
-                  performance={performance}
-                  range={performanceRange}
-                  onRangeChange={setPerformanceRange}
-                />
-                <AllocationPanel query={displaySummaryQuery} />
-              </div>
-            </section>
-            <section className="portfolio-overview-discovery" aria-label="Explore the market">
+              <PortfolioPerformancePanel
+                query={displaySummaryQuery}
+                performance={performance}
+                range={performanceRange}
+                onRangeChange={setPerformanceRange}
+              />
+              <HoldingsPanel
+                summary={displaySummaryQuery}
+                query={displayHoldingsQuery}
+                categories={categories}
+                filter={holdingFilter}
+                onFilterChange={(value) =>
+                  void navigate({
+                    search: (current) => ({
+                      ...current,
+                      tab: "overview",
+                      holdingsCategory: value === "ALL" ? undefined : value,
+                    }),
+                    replace: true,
+                  })
+                }
+                visibleHoldings={visibleHoldings?.slice(0, 5)}
+                compact
+              />
+              <AllocationPanel query={displaySummaryQuery} />
+              <ActivityPanel query={transactions} compact />
+              <RecentOrdersPanel query={orders} holdings={holdingsForOrders} />
               <MarketWatchPanel query={market} />
             </section>
+            <PortfolioTrustStrip />
           </>
         ) : tab === "holdings" ? (
           <HoldingsExperience
@@ -1596,6 +1588,12 @@ function PortfolioKpis({
         detail={`Across ${summary.holdings.length} asset${summary.holdings.length === 1 ? "" : "s"}`}
       />
       <PortfolioKpi
+        label="Available cash"
+        value={formatPortfolioMoney(availableCash)}
+        icon={Wallet}
+        detail="Ready to invest"
+      />
+      <PortfolioKpi
         label="Unrealised P/L"
         value={
           valuation ? formatSignedPortfolioMoney(valuation.unrealisedValueMinor) : "Unavailable"
@@ -1620,7 +1618,7 @@ function PortfolioKpis({
 function KpiSkeletons() {
   return (
     <section className="portfolio-kpis" aria-label="Loading portfolio summary">
-      {[0, 1, 2].map((item) => (
+      {[0, 1, 2, 3].map((item) => (
         <article key={item} className="portfolio-summary-kpi portfolio-summary-kpi--loading">
           <div className="customer-skeleton size-11" />
           <div className="min-w-0 flex-1">
@@ -2554,12 +2552,12 @@ function CompactHoldingsList({
         className="portfolio-empty-state--table"
         icon={<Landmark aria-hidden="true" />}
         message={
-          hasAnyHoldings ? "No holdings match this filter." : "You don't own any Slices yet."
+          hasAnyHoldings ? "No holdings match this filter." : "You don't own any assets yet."
         }
         detail={
           hasAnyHoldings
             ? "Try another category."
-            : "Explore the market to find a collectible to own."
+            : "Start building your portfolio by exploring the marketplace for great opportunities."
         }
         action={
           !hasAnyHoldings ? (
@@ -3402,7 +3400,7 @@ function ActivityPanel({
         />
       ) : query.data?.items.length ? (
         <ul className="portfolio-activity">
-          {query.data.items.slice(0, compact ? 3 : undefined).map((item, index) => (
+          {query.data.items.slice(0, compact ? 4 : undefined).map((item, index) => (
             <li key={`${item.reference ?? item.type}-${item.effectiveAt}-${index}`}>
               <span
                 className={item.side === "CREDIT" ? "is-credit" : "is-debit"}
@@ -3433,11 +3431,11 @@ function ActivityPanel({
 function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
   return (
     <PortfolioPanel
-      title="Explore the market"
+      title="Market opportunities"
       className="portfolio-panel--market-watch"
       header={
         <Link to="/marketplace" className="portfolio-panel__link">
-          Browse market <ArrowRight aria-hidden="true" />
+          View all <ArrowRight aria-hidden="true" />
         </Link>
       }
     >
@@ -3492,6 +3490,34 @@ function MarketWatchPanel({ query }: { query: UseQueryResult<Asset[]> }) {
         />
       )}
     </PortfolioPanel>
+  );
+}
+
+function PortfolioTrustStrip() {
+  return (
+    <section className="portfolio-trust-strip" aria-label="Slice commitments">
+      <div>
+        <ShieldCheck aria-hidden="true" />
+        <span>
+          <strong>Secure &amp; insured</strong>
+          <small>Your assets are protected with industry-leading security.</small>
+        </span>
+      </div>
+      <div>
+        <BadgeCheck aria-hidden="true" />
+        <span>
+          <strong>Transparent pricing</strong>
+          <small>Real-time market data and fair pricing you can trust.</small>
+        </span>
+      </div>
+      <div>
+        <Layers3 aria-hidden="true" />
+        <span>
+          <strong>Built for collectors</strong>
+          <small>Tools designed to help your collection grow.</small>
+        </span>
+      </div>
+    </section>
   );
 }
 
