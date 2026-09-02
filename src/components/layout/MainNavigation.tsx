@@ -25,6 +25,8 @@ import { queryKeys } from "@/queries/keys";
 import { canAccessAdmin, canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { primaryNavigationFor, SLICE_LOGO_ASSET } from "./navigation-model";
 import { isBetaEnvironment } from "@/config/environment";
+import { formatWalletMoney } from "@/routes/-wallet-presentation";
+import type { PortfolioSummary } from "@/domain";
 
 export function Wordmark({ className }: { className?: string }) {
   return (
@@ -65,6 +67,12 @@ export function MainNavigation() {
     queryFn: () => services.repositories.users.getCurrentUser(),
     enabled: isAuthenticated,
     staleTime: 60_000,
+  });
+  const portfolio = useQuery<PortfolioSummary>({
+    queryKey: queryKeys.portfolio.summary,
+    queryFn: () => services.repositories.portfolio.getPortfolio(),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -180,6 +188,7 @@ export function MainNavigation() {
             name={currentUser.data?.profile.displayName}
             email={currentUser.data?.email}
             roles={roles}
+            portfolio={portfolio}
             menuRef={menuRef}
           />
         </div>
@@ -187,6 +196,7 @@ export function MainNavigation() {
           {isAuthenticated ? (
             <>
               <NotificationButton unread={unread.data ?? 0} />
+              <AvailableBalanceLink portfolio={portfolio} compact />
               <ProfileButton initials={initials} open={accountOpen} setOpen={setAccountOpen} />
             </>
           ) : (
@@ -353,6 +363,7 @@ function HeaderActions({
   name,
   email,
   roles,
+  portfolio,
   menuRef,
 }: {
   authenticated: boolean;
@@ -365,6 +376,7 @@ function HeaderActions({
   name?: string;
   email?: string;
   roles: readonly string[];
+  portfolio: { data?: PortfolioSummary; isLoading: boolean; isError: boolean };
   menuRef: React.RefObject<HTMLDivElement | null>;
 }) {
   if (!authenticated)
@@ -387,6 +399,7 @@ function HeaderActions({
   return (
     <>
       <NotificationButton unread={unread} />
+      <AvailableBalanceLink portfolio={portfolio} />
       <div ref={menuRef} className="relative ml-1">
         <ProfileButton initials={initials} open={accountOpen} setOpen={setAccountOpen} />
         {accountOpen && (
@@ -410,6 +423,37 @@ function HeaderActions({
         {canAccessCollectorWorkspace(roles) ? "List an Asset" : "Become a Collector"}
       </Link>
     </>
+  );
+}
+
+function AvailableBalanceLink({
+  portfolio,
+  compact = false,
+}: {
+  portfolio: { data?: PortfolioSummary; isLoading: boolean; isError: boolean };
+  compact?: boolean;
+}) {
+  const availableMinor =
+    portfolio.data?.availableCashMinor ?? portfolio.data?.cash.availableMinor ?? null;
+  const value =
+    availableMinor === null ? (portfolio.isLoading ? "…" : "—") : formatWalletMoney(availableMinor);
+  const state = portfolio.isError ? "Available balance unavailable" : `Available balance ${value}`;
+
+  return (
+    <Link
+      to="/wallet"
+      aria-label={`${state}. Open wallet`}
+      title={`${state}. Open wallet`}
+      className={`header-balance${compact ? " header-balance--compact" : ""}`}
+    >
+      <span className="header-balance__icon" aria-hidden="true">
+        <WalletCards className="size-4" />
+      </span>
+      <span className="header-balance__copy">
+        <span className="header-balance__label">Available</span>
+        <strong>{value}</strong>
+      </span>
+    </Link>
   );
 }
 

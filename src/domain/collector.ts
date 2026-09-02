@@ -19,10 +19,17 @@ export interface CollectorPublishedListing {
   slug: string;
   title: string;
   category: string;
+  variant?: string | null;
+  grade?: string | null;
+  listedAt?: string | null;
   media?: Array<{ id: string; slot: string; url: string; alt: string }>;
   estimatedMarketValue?: Money;
   asOf?: string;
   dataStatus?: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
+}
+export interface CollectorSpecialtyOption {
+  name: string;
+  count?: number;
 }
 export interface CollectorProfile {
   userId: UserId;
@@ -33,20 +40,37 @@ export interface CollectorProfile {
   category: CollectorCategory;
   publicSince?: string;
   isFeatured?: boolean;
+  featurePriority?: number;
+  featuredCaption?: string | null;
+  latestPublicListingAt?: string | null;
   followers?: number;
   performance?: CollectorPerformance;
   publishedListingCount?: number;
   publishedListings?: CollectorPublishedListing[];
+  featuredPreviewAssets?: CollectorPublishedListing[];
+  assetPagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
   /** Public holdings are unavailable until authoritative ownership exists. */
   holdings?: CollectorHolding[];
 }
 
-export type CollectorDirectorySort = "featured" | "recent" | "name";
+export type CollectorDirectorySort = "featured" | "assets" | "recent" | "name";
 
 export interface CollectorDirectoryPage {
   items: CollectorProfile[];
   featured: CollectorProfile[];
-  specialties: string[];
+  specialties: CollectorSpecialtyOption[];
+  stats: {
+    eligibleCollectorCount: number;
+    publishedAssetCount: number;
+    featuredCollectorCount: number;
+  };
   nextCursor: string | null;
   pagination: {
     page: number;

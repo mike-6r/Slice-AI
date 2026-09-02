@@ -1,20 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Archive, ChevronLeft } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Archive, ArrowLeft, ArrowRight, ChevronLeft } from "lucide-react";
 import { PublicCollectorAssetCard } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
 
 export const Route = createFileRoute("/collector/$id/assets")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(search.page !== undefined
+      ? { page: Math.max(1, Math.min(10_000, Number(search.page) || 1)) }
+      : {}),
+  }),
   head: () => ({ meta: [{ title: "Collector listings | Slice" }] }),
   component: CollectorAssets,
 });
 
 function CollectorAssets() {
   const { id } = Route.useParams();
+  const { page = 1 } = Route.useSearch();
+  const navigate = useNavigate({ from: "/collector/$id/assets" });
   const services = useAppServices();
   const profile = useQuery({
-    queryKey: ["collector", id],
-    queryFn: () => services.collectors.get(id as never),
+    queryKey: ["collector", id, "assets", page],
+    queryFn: () => services.collectors.get(id as never, { page, pageSize: 12 }),
   });
   if (profile.isLoading)
     return <PageState title="Loading public profile" description="Fetching collector details." />;
@@ -34,6 +41,7 @@ function CollectorAssets() {
       />
     );
   const listings = profile.data.publishedListings ?? [];
+  const pagination = profile.data.assetPagination;
   return (
     <div className="public-collector-page">
       <section className="public-collector-hero is-listings">
@@ -59,6 +67,27 @@ function CollectorAssets() {
             <h2 className="mt-4 text-xl font-semibold">No public listings yet</h2>
           </div>
         )}
+        {pagination && pagination.totalPages > 1 ? (
+          <nav className="collectors-pagination" aria-label="Collector listings pagination">
+            <button
+              type="button"
+              disabled={!pagination.hasPreviousPage}
+              onClick={() => void navigate({ search: { page: Math.max(1, page - 1) } })}
+            >
+              <ArrowLeft aria-hidden="true" /> Previous
+            </button>
+            <span>
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={!pagination.hasNextPage}
+              onClick={() => void navigate({ search: { page: page + 1 } })}
+            >
+              Next <ArrowRight aria-hidden="true" />
+            </button>
+          </nav>
+        ) : null}
       </section>
     </div>
   );

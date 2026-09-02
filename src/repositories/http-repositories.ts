@@ -235,18 +235,41 @@ type SimilarAssetDto = {
 };
 type CollectorDto = {
   slug: string;
+  username?: string | null;
   headline: string | null;
   specialism: string | null;
   displayName: string | null;
   avatarReference?: string | null;
   publicSince?: string | null;
   isFeatured?: boolean;
+  featurePriority?: number;
+  featuredCaption?: string | null;
+  latestPublicListingAt?: string | null;
+  featuredPreviewAssets?: Array<{
+    publicId: string;
+    slug: string;
+    title: string;
+    category: string;
+    variant?: string | null;
+    grade?: string | null;
+    listedAt?: string | null;
+    media?: Array<{ id: string; slot: string; url: string; alt: string }>;
+    market: {
+      estimatedValueMinor: string;
+      currency: "GBP" | "USD" | "EUR" | "CAD";
+      asOf: string;
+      dataStatus: "DEMO" | "DELAYED" | "LIVE" | "UNAVAILABLE";
+    } | null;
+  }>;
   publishedListingCount?: number;
   publishedListings?: Array<{
     publicId: string;
     slug: string;
     title: string;
     category: string;
+    variant?: string | null;
+    grade?: string | null;
+    listedAt?: string | null;
     media?: Array<{ id: string; slot: string; url: string; alt: string }>;
     market: {
       estimatedValueMinor: string;
@@ -258,19 +281,40 @@ type CollectorDto = {
 };
 const mapCollector = (value: CollectorDto): CollectorProfile => ({
   userId: value.slug as UserId,
-  handle: value.slug,
+  handle: value.username ?? value.slug,
   displayName: value.displayName ?? value.slug,
   avatarUrl: value.avatarReference ?? null,
   focus: value.specialism ?? value.headline ?? "Collector profile",
   category: "mixed",
   publicSince: value.publicSince ?? undefined,
   isFeatured: value.isFeatured === true,
+  featurePriority: value.featurePriority ?? 0,
+  featuredCaption: value.featuredCaption ?? null,
+  latestPublicListingAt: value.latestPublicListingAt ?? null,
+  featuredPreviewAssets: (value.featuredPreviewAssets ?? []).map((listing) => ({
+    assetId: listing.publicId as AssetId,
+    slug: listing.slug,
+    title: listing.title,
+    category: listing.category,
+    variant: listing.variant,
+    grade: listing.grade,
+    listedAt: listing.listedAt,
+    media: listing.media,
+    estimatedMarketValue: listing.market
+      ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
+      : undefined,
+    asOf: listing.market?.asOf,
+    dataStatus: listing.market?.dataStatus,
+  })),
   publishedListingCount: value.publishedListingCount ?? 0,
   publishedListings: (value.publishedListings ?? []).map((listing) => ({
     assetId: listing.publicId as AssetId,
     slug: listing.slug,
     title: listing.title,
     category: listing.category,
+    variant: listing.variant,
+    grade: listing.grade,
+    listedAt: listing.listedAt,
     media: listing.media,
     estimatedMarketValue: listing.market
       ? { amount: safeMinor(listing.market.estimatedValueMinor), currency: listing.market.currency }
@@ -283,13 +327,24 @@ const mapCollector = (value: CollectorDto): CollectorProfile => ({
 const mapCollectorPage = (value: {
   items: CollectorDto[];
   featured?: CollectorDto[];
-  specialties?: string[];
+  specialties?: Array<string | { name: string; count?: number }>;
+  stats?: CollectorDirectoryPage["stats"];
   nextCursor: string | null;
   pagination?: CollectorDirectoryPage["pagination"];
 }): CollectorDirectoryPage => ({
   items: value.items.map(mapCollector),
   featured: (value.featured ?? []).map(mapCollector),
-  specialties: value.specialties ?? [],
+  specialties: (value.specialties ?? []).map((specialty) =>
+    typeof specialty === "string" ? { name: specialty } : specialty,
+  ),
+  stats: value.stats ?? {
+    eligibleCollectorCount: value.pagination?.total ?? value.items.length,
+    publishedAssetCount: value.items.reduce(
+      (sum, collector) => sum + (collector.publishedListingCount ?? 0),
+      0,
+    ),
+    featuredCollectorCount: value.featured?.length ?? 0,
+  },
   nextCursor: value.nextCursor,
   pagination: value.pagination ?? {
     page: 1,
@@ -2154,6 +2209,11 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
                   slug: stringField(publicDirectory.slug, "admin user collector directory.slug"),
                   isPublic: Boolean(publicDirectory.isPublic),
                   isFeatured: Boolean(publicDirectory.isFeatured),
+                  featurePriority: Number(publicDirectory.featurePriority ?? 0),
+                  featuredCaption: nullableString(
+                    publicDirectory.featuredCaption,
+                    "admin user collector directory.featuredCaption",
+                  ),
                   featuredAt: nullableString(
                     publicDirectory.featuredAt,
                     "admin user collector directory.featuredAt",
@@ -2162,6 +2222,12 @@ const mapAdminUserDetail = (raw: unknown): AdminUserDetail => {
                     publicDirectory.publishedAt,
                     "admin user collector directory.publishedAt",
                   ),
+                  eligible: Boolean(publicDirectory.eligible),
+                  eligibilityReason:
+                    typeof publicDirectory.eligibilityReason === "string"
+                      ? publicDirectory.eligibilityReason
+                      : "Eligibility unavailable",
+                  publicAssetCount: Number(publicDirectory.publicAssetCount ?? 0),
                 }
               : null,
             subscription: subscription
@@ -5057,6 +5123,33 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         featuredAt: nullableString(value.featuredAt, "collector featured.featuredAt"),
       };
     },
+    async updateCollectorDirectory(slug, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/collectors/${encodeURIComponent(slug)}/directory`, {
+          method: "PATCH",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+        "collector directory controls",
+      );
+      return {
+        slug: stringField(value.slug, "collector directory.slug"),
+        isPublic: Boolean(value.isPublic),
+        isFeatured: Boolean(value.isFeatured),
+        featurePriority: Number(value.featurePriority ?? 0),
+        featuredCaption: nullableString(
+          value.featuredCaption,
+          "collector directory.featuredCaption",
+        ),
+        featuredAt: nullableString(value.featuredAt, "collector directory.featuredAt"),
+        eligible: Boolean(value.eligible),
+        eligibilityReason: stringField(
+          value.eligibilityReason,
+          "collector directory.eligibilityReason",
+        ),
+        publicAssetCount: Number(value.publicAssetCount ?? 0),
+      };
+    },
     async listComplianceCases(input) {
       const value = objectField(
         await client.get<unknown>("/admin/compliance/cases", input),
@@ -6157,14 +6250,18 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
         const body = await client.get<{
           items: CollectorDto[];
           featured?: CollectorDto[];
-          specialties?: string[];
+          specialties?: Array<string | { name: string; count?: number }>;
+          stats?: CollectorDirectoryPage["stats"];
           nextCursor: string | null;
           pagination?: CollectorDirectoryPage["pagination"];
         }>("/collectors", query, signal);
         return mapCollectorPage(body);
       },
-      async getCollector(id) {
-        const value = await client.get<CollectorDto | { error: string }>(`/collectors/${id}`);
+      async getCollector(id, input) {
+        const value = await client.get<CollectorDto | { error: string }>(
+          `/collectors/${id}`,
+          input,
+        );
         return "error" in value ? null : mapCollector(value);
       },
       async followCollector(id) {

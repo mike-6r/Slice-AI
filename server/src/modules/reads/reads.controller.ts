@@ -48,6 +48,13 @@ export class ReadsController {
     const publicWhere: Prisma.UserWhereInput = {
       accountStatus: 'ACTIVE',
       roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
+      publicCollectorProfile: { is: { isPublic: true } },
+      submissions: {
+        some: {
+          status: 'APPROVED',
+          asset: { is: { status: 'PUBLISHED' } },
+        },
+      },
     };
     const nonDemoWhere: Prisma.UserWhereInput = this.config.isBeta
       ? {
@@ -76,8 +83,18 @@ export class ReadsController {
                   is: {
                     OR: [
                       { slug: { contains: query.trim(), mode: 'insensitive' } },
-                      { headline: { contains: query.trim(), mode: 'insensitive' } },
-                      { specialism: { contains: query.trim(), mode: 'insensitive' } },
+                      {
+                        headline: {
+                          contains: query.trim(),
+                          mode: 'insensitive',
+                        },
+                      },
+                      {
+                        specialism: {
+                          contains: query.trim(),
+                          mode: 'insensitive',
+                        },
+                      },
                     ],
                   },
                 },
@@ -86,49 +103,133 @@ export class ReadsController {
                 profile: {
                   is: {
                     OR: [
-                      { displayName: { contains: query.trim(), mode: 'insensitive' } },
-                      { publicUsername: { contains: query.trim(), mode: 'insensitive' } },
+                      {
+                        displayName: {
+                          contains: query.trim(),
+                          mode: 'insensitive',
+                        },
+                      },
+                      {
+                        publicUsername: {
+                          contains: query.trim(),
+                          mode: 'insensitive',
+                        },
+                      },
                     ],
                   },
                 },
               },
-              { id: { contains: query.trim(), mode: 'insensitive' } },
+              {
+                submissions: {
+                  some: {
+                    status: 'APPROVED',
+                    asset: {
+                      is: {
+                        status: 'PUBLISHED',
+                        OR: [
+                          {
+                            title: {
+                              contains: query.trim(),
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            category: {
+                              name: {
+                                contains: query.trim(),
+                                mode: 'insensitive',
+                              },
+                            },
+                          },
+                          {
+                            collectibleSet: {
+                              name: {
+                                contains: query.trim(),
+                                mode: 'insensitive',
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
             ],
           }
         : {}),
       ...(specialty && specialty.trim() && specialty !== 'All specialties'
         ? {
-            publicCollectorProfile: {
-              is: {
-                specialism: {
-                  contains: specialty.trim(),
-                  mode: 'insensitive',
+            OR: [
+              {
+                publicCollectorProfile: {
+                  is: {
+                    specialism: {
+                      contains: specialty.trim(),
+                      mode: 'insensitive',
+                    },
+                  },
                 },
               },
-            },
+              {
+                submissions: {
+                  some: {
+                    status: 'APPROVED',
+                    asset: {
+                      is: {
+                        status: 'PUBLISHED',
+                        category: {
+                          name: {
+                            contains: specialty.trim(),
+                            mode: 'insensitive',
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
           }
         : {}),
     };
     const orderBy: Prisma.UserOrderByWithRelationInput[] =
       order === 'name'
         ? [{ profile: { displayName: 'asc' } }, { id: 'asc' }]
-        : order === 'recent'
+        : order === 'assets'
           ? [
-              { publicCollectorProfile: { publishedAt: 'desc' } },
+              { submissions: { _count: 'desc' } },
               { createdAt: 'desc' },
               { id: 'desc' },
             ]
-          : [
-              { publicCollectorProfile: { isFeatured: 'desc' } },
-              { publicCollectorProfile: { featuredAt: 'desc' } },
-              { createdAt: 'desc' },
-              { id: 'desc' },
-            ];
-    const [total, rows, featuredRows, specialtyRows] = await Promise.all([
+          : order === 'recent'
+            ? [
+                { publicCollectorProfile: { publishedAt: 'desc' } },
+                { createdAt: 'desc' },
+                { id: 'desc' },
+              ]
+            : [
+                { publicCollectorProfile: { isFeatured: 'desc' } },
+                { publicCollectorProfile: { featurePriority: 'asc' } },
+                { publicCollectorProfile: { featuredAt: 'asc' } },
+                { createdAt: 'desc' },
+                { id: 'desc' },
+              ];
+    const [
+      total,
+      eligibleCollectorCount,
+      rows,
+      featuredRows,
+      specialtyRows,
+      categoryRows,
+      publishedAssetCount,
+      featuredCollectorCount,
+    ] = await Promise.all([
       this.db.user.count({ where: baseWhere }),
+      this.db.user.count({ where: { ...publicWhere, ...nonDemoWhere } }),
       this.db.user.findMany({
         where: baseWhere,
-        include: publicCollectorUserInclude,
+        include: publicCollectorUserInclude(),
         orderBy,
         skip: (currentPage - 1) * size,
         take: size,
@@ -139,18 +240,49 @@ export class ReadsController {
           ...nonDemoWhere,
           publicCollectorProfile: { is: { isFeatured: true } },
         },
-        include: publicCollectorUserInclude,
+        include: publicCollectorUserInclude(),
         orderBy: [
-          { publicCollectorProfile: { featuredAt: 'desc' } },
+          { publicCollectorProfile: { featurePriority: 'asc' } },
+          { publicCollectorProfile: { featuredAt: 'asc' } },
           { createdAt: 'desc' },
           { id: 'desc' },
         ],
         take: 3,
       }),
       this.db.publicCollectorProfile.findMany({
-        where: { user: { ...publicWhere, ...nonDemoWhere }, specialism: { not: null } },
+        where: {
+          user: { ...publicWhere, ...nonDemoWhere },
+          specialism: { not: null },
+        },
         select: { specialism: true },
         distinct: ['specialism'],
+      }),
+      this.db.asset.findMany({
+        where: {
+          status: 'PUBLISHED',
+          submissions: {
+            some: {
+              status: 'APPROVED',
+              owner: { ...publicWhere, ...nonDemoWhere },
+            },
+          },
+        },
+        select: { category: { select: { name: true } } },
+        distinct: ['categoryId'],
+      }),
+      this.db.assetSubmission.count({
+        where: {
+          status: 'APPROVED',
+          asset: { is: { status: 'PUBLISHED' } },
+          owner: { ...publicWhere, ...nonDemoWhere },
+        },
+      }),
+      this.db.user.count({
+        where: {
+          ...publicWhere,
+          ...nonDemoWhere,
+          publicCollectorProfile: { is: { isPublic: true, isFeatured: true } },
+        },
       }),
     ]);
     const totalPages = total === 0 ? 0 : Math.ceil(total / size);
@@ -166,15 +298,23 @@ export class ReadsController {
         ),
       ),
       specialties: [
-        ...new Set(
-          specialtyRows.flatMap((row) =>
+        ...new Set([
+          ...specialtyRows.flatMap((row) =>
             (row.specialism ?? '')
               .split('·')
               .map((value) => value.trim())
               .filter(Boolean),
           ),
-        ),
-      ].sort((left, right) => left.localeCompare(right)),
+          ...categoryRows.map((row) => row.category.name),
+        ]),
+      ]
+        .sort((left, right) => left.localeCompare(right))
+        .map((name) => ({ name })),
+      stats: {
+        eligibleCollectorCount,
+        publishedAssetCount,
+        featuredCollectorCount,
+      },
       nextCursor: null,
       pagination: {
         page: currentPage,
@@ -186,7 +326,13 @@ export class ReadsController {
       },
     };
   }
-  @Get('collectors/:slug') async collector(@Param('slug') slug: string) {
+  @Get('collectors/:slug') async collector(
+    @Param('slug') slug: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const assetPage = parseCollectorPage(page);
+    const assetPageSize = parseCollectorPageSize(pageSize ?? '8');
     const fallbackUserId = slug.startsWith('collector-')
       ? slug.slice('collector-'.length)
       : null;
@@ -194,6 +340,13 @@ export class ReadsController {
       where: {
         accountStatus: 'ACTIVE',
         roleAssignments: { some: { role: 'COLLECTOR', revokedAt: null } },
+        publicCollectorProfile: { is: { isPublic: true } },
+        submissions: {
+          some: {
+            status: 'APPROVED',
+            asset: { is: { status: 'PUBLISHED' } },
+          },
+        },
         AND: [
           {
             OR: [
@@ -217,10 +370,36 @@ export class ReadsController {
             : []),
         ],
       },
-      include: publicCollectorUserInclude,
+      include: publicCollectorUserInclude(
+        (assetPage - 1) * assetPageSize,
+        assetPageSize,
+      ),
     });
+    const publicAssetTotal = x
+      ? await this.db.assetSubmission.count({
+          where: {
+            ownerUserId: x.id,
+            status: 'APPROVED',
+            asset: { is: { status: 'PUBLISHED' } },
+          },
+        })
+      : 0;
     return x
-      ? await publicCollectorView(x, this.config.isBeta === true, this.storage)
+      ? await publicCollectorView(
+          x,
+          this.config.isBeta === true,
+          this.storage,
+          {
+            page: assetPage,
+            pageSize: assetPageSize,
+            total: publicAssetTotal,
+            totalPages: publicAssetTotal
+              ? Math.ceil(publicAssetTotal / assetPageSize)
+              : 0,
+            hasNextPage: assetPage * assetPageSize < publicAssetTotal,
+            hasPreviousPage: assetPage > 1,
+          },
+        )
       : { error: 'COLLECTOR_NOT_FOUND' };
   }
   @Get('vault/events') async vault(
@@ -562,74 +741,90 @@ export class ReadsController {
   }
 }
 
-const publicCollectorUserInclude = {
-  profile: {
-    select: {
-      displayName: true,
-      publicUsername: true,
-      avatarReference: true,
+const publicCollectorUserInclude = (submissionSkip = 0, submissionTake = 8) =>
+  ({
+    profile: {
+      select: {
+        displayName: true,
+        publicUsername: true,
+        avatarReference: true,
+      },
     },
-  },
-  publicCollectorProfile: {
-    select: {
-      slug: true,
-      headline: true,
-      specialism: true,
-      isFeatured: true,
-      featuredAt: true,
-      publishedAt: true,
-      createdAt: true,
+    publicCollectorProfile: {
+      select: {
+        slug: true,
+        headline: true,
+        specialism: true,
+        isFeatured: true,
+        featurePriority: true,
+        featuredCaption: true,
+        featuredAt: true,
+        publishedAt: true,
+        createdAt: true,
+      },
     },
-  },
-      _count: {
-        select: {
-          submissions: {
-            where: {
-              status: 'APPROVED',
-              asset: {
-                is: {
-                  status: 'PUBLISHED',
-                },
+    _count: {
+      select: {
+        submissions: {
+          where: {
+            status: 'APPROVED',
+            asset: {
+              is: {
+                status: 'PUBLISHED',
               },
             },
           },
         },
       },
-      submissions: {
-        where: {
-          status: 'APPROVED',
-          asset: {
-            is: {
-              status: 'PUBLISHED',
-            },
+    },
+    submissions: {
+      where: {
+        status: 'APPROVED',
+        asset: {
+          is: {
+            status: 'PUBLISHED',
           },
         },
-        include: {
-          asset: {
-            include: {
-              category: { select: { name: true } },
-              marketSnapshots: {
-                orderBy: { asOf: 'desc' },
-                take: 1,
-                select: {
-                  estimatedMarketValueMinor: true,
-                  currency: true,
-                  asOf: true,
-                  status: true,
-                },
+      },
+      include: {
+        asset: {
+          select: {
+            publicId: true,
+            slug: true,
+            title: true,
+            shortName: true,
+            publishedAt: true,
+            category: { select: { name: true } },
+            collectibleSet: { select: { name: true } },
+            gradeScaleEntry: {
+              select: {
+                label: true,
+                company: { select: { displayName: true, name: true } },
+              },
+            },
+            marketSnapshots: {
+              orderBy: { asOf: 'desc' },
+              take: 1,
+              select: {
+                estimatedMarketValueMinor: true,
+                currency: true,
+                asOf: true,
+                status: true,
               },
             },
           },
-          media: {
-            where: { status: 'SAFE', deletedAt: null },
-            orderBy: { slot: 'asc' },
-            select: { id: true, slot: true, objectKey: true },
-          },
         },
-        orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
-        take: 8,
+        media: {
+          where: { status: 'SAFE', deletedAt: null },
+          orderBy: { slot: 'asc' },
+          select: { id: true, slot: true, objectKey: true },
+        },
       },
-} satisfies Prisma.UserInclude;
+      orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+      skip: submissionSkip,
+      take: submissionTake,
+    },
+  }) satisfies Prisma.UserInclude;
 
 async function publicCollectorView(
   x: {
@@ -645,6 +840,8 @@ async function publicCollectorView(
       headline: string | null;
       specialism: string | null;
       isFeatured: boolean;
+      featurePriority: number;
+      featuredCaption: string | null;
       featuredAt: Date | null;
       publishedAt: Date | null;
       createdAt: Date;
@@ -656,7 +853,14 @@ async function publicCollectorView(
         publicId: string;
         slug: string;
         title: string;
+        shortName: string | null;
         category: { name: string };
+        collectibleSet: { name: string } | null;
+        publishedAt: Date | null;
+        gradeScaleEntry: {
+          label: string;
+          company: { displayName: string; name: string };
+        } | null;
         marketSnapshots: Array<{
           estimatedMarketValueMinor: bigint;
           currency: string;
@@ -668,21 +872,40 @@ async function publicCollectorView(
   },
   isBeta = false,
   storage: ObjectStoragePort,
+  assetPagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  },
 ) {
-  const listings = await Promise.all(x.submissions.flatMap((submission) => {
-    const asset = submission.asset;
-    if (!asset || (isBeta && asset.slug.startsWith('slice-demo-'))) return [];
-    const market = asset.marketSnapshots[0] ?? null;
-    return [{
-      submission,
-      asset,
-      market,
-    }];
-  }).map(async ({ submission, asset, market }) => ({
+  const listings = await Promise.all(
+    x.submissions
+      .flatMap((submission) => {
+        const asset = submission.asset;
+        if (!asset || (isBeta && asset.slug.startsWith('slice-demo-')))
+          return [];
+        const market = asset.marketSnapshots[0] ?? null;
+        return [
+          {
+            submission,
+            asset,
+            market,
+          },
+        ];
+      })
+      .map(async ({ submission, asset, market }) => ({
         publicId: asset.publicId,
         slug: asset.slug,
         title: asset.title,
         category: asset.category.name,
+        variant: asset.shortName ?? asset.collectibleSet?.name ?? null,
+        grade: asset.gradeScaleEntry
+          ? `${asset.gradeScaleEntry.company.displayName || asset.gradeScaleEntry.company.name} ${asset.gradeScaleEntry.label}`
+          : null,
+        listedAt: asset.publishedAt?.toISOString() ?? null,
         media: (
           await Promise.all(
             submission.media.map(async (media) => ({
@@ -697,7 +920,12 @@ async function publicCollectorView(
               alt: `${asset.title} ${media.slot.toLowerCase()} approved media`,
             })),
           )
-        ).filter((media): media is { id: string; slot: string; url: string; alt: string } => Boolean(media.url)),
+        ).filter(
+          (
+            media,
+          ): media is { id: string; slot: string; url: string; alt: string } =>
+            Boolean(media.url),
+        ),
         market: market
           ? {
               estimatedValueMinor: market.estimatedMarketValueMinor.toString(),
@@ -706,18 +934,29 @@ async function publicCollectorView(
               dataStatus: market.status,
             }
           : null,
-      })));
+      })),
+  );
   const profile = x.publicCollectorProfile;
   return {
     slug: profile?.slug ?? `collector-${x.id}`,
+    username: x.profile?.publicUsername ?? profile?.slug ?? `collector-${x.id}`,
     headline: profile?.headline ?? null,
     specialism: profile?.specialism ?? null,
     displayName: x.profile?.displayName ?? 'Collector',
     avatarReference: x.profile?.avatarReference ?? null,
-    publicSince: (profile?.publishedAt ?? profile?.createdAt ?? x.createdAt).toISOString(),
+    publicSince: (
+      profile?.publishedAt ??
+      profile?.createdAt ??
+      x.createdAt
+    ).toISOString(),
     isFeatured: profile?.isFeatured ?? false,
+    featurePriority: profile?.featurePriority ?? 0,
+    featuredCaption: profile?.featuredCaption ?? null,
     publishedListingCount: isBeta ? listings.length : x._count.submissions,
+    latestPublicListingAt: listings[0]?.listedAt ?? null,
+    featuredPreviewAssets: listings.slice(0, 3),
     publishedListings: listings,
+    assetPagination,
   };
 }
 
@@ -873,7 +1112,13 @@ function parseCollectorPageSize(value: string | undefined) {
 
 function parseCollectorSort(value: string | undefined) {
   if (value === undefined || value === '') return 'featured' as const;
-  if (value === 'featured' || value === 'recent' || value === 'name') return value;
+  if (
+    value === 'featured' ||
+    value === 'assets' ||
+    value === 'recent' ||
+    value === 'name'
+  )
+    return value;
   throw new BadRequestException({
     code: 'VALIDATION_FAILED',
     message: 'Request validation failed.',

@@ -9,6 +9,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -5716,12 +5717,17 @@ function ConsolidatedUserDetailExperience({
 }) {
   const [historyFilter, setHistoryFilter] = useState("All");
   const [historyPage, setHistoryPage] = useState(1);
+  const [generalControl, setGeneralControl] = useState<
+    "state" | "profile" | "roles" | "access" | "note" | null
+  >(null);
+  const [takeActionOpen, setTakeActionOpen] = useState(false);
   const services = useAppServices();
   const legacyTabMap: Record<string, string> = {
     Access: "General",
     "Roles & Access": "General",
     Investor: "Collector / Investor",
     Collector: "Collector / Investor",
+    "Financial Access": "Financial",
     Finance: "Financial",
     Wallet: "Financial",
     Orders: "Financial",
@@ -5917,6 +5923,12 @@ function ConsolidatedUserDetailExperience({
     if (!decision) return "Unavailable";
     return decision.allowed ? "Allowed" : stateText(decision.reason ?? decision.status);
   };
+  const capabilityAccessText = (name: string) => {
+    const decision = capability(name);
+    return decision?.allowed
+      ? "Available"
+      : stateText(decision?.reason ?? decision?.status ?? "UNAVAILABLE");
+  };
   const availableCommand = (name: string) =>
     user.availableCommands.find((command) => command.id === name);
   const commandText = (name: string) => {
@@ -5955,11 +5967,25 @@ function ConsolidatedUserDetailExperience({
   const renderActionCenter = () => (
     <section className="admin-account-action-center" aria-label="Account action center">
       <div className="admin-account-action-center-heading">
-        <div>
-          <p className="admin-console-eyebrow">Action Center</p>
-          <h3>What needs attention</h3>
+        <div className="admin-account-action-center-status">
+          {user.actionCenter.length ? (
+            <AlertTriangle aria-hidden="true" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" />
+          )}
+          <div>
+            <p className="admin-console-eyebrow">Action Center</p>
+            <h3>{user.actionCenter.length ? "What needs attention" : "All systems normal"}</h3>
+            <span>
+              {user.actionCenter.length
+                ? `${user.actionCenter.length} backend-derived account blocker${user.actionCenter.length === 1 ? "" : "s"} require review.`
+                : "No backend-derived account blockers require action."}
+            </span>
+          </div>
         </div>
-        <span>{user.actionCenter.length ? `${user.actionCenter.length} item(s)` : "Clear"}</span>
+        <button type="button" onClick={() => setGeneralControl("access")}>
+          View all checks <ArrowRight aria-hidden="true" />
+        </button>
       </div>
       {user.actionCenter.length ? (
         <div className="admin-account-action-list">
@@ -6051,7 +6077,13 @@ function ConsolidatedUserDetailExperience({
         <section className="admin-account-detail-rail-card">
           <AdminPanelHeading title="Quick actions" />
           <div className="admin-account-rail-actions">
-            <button type="button" onClick={() => setTab("Operations")}>
+            <button
+              type="button"
+              onClick={() => {
+                setTab("General");
+                setGeneralControl("state");
+              }}
+            >
               Manage account <ArrowRight aria-hidden="true" />
             </button>
             <button type="button" onClick={() => setTab("History")}>
@@ -6062,6 +6094,9 @@ function ConsolidatedUserDetailExperience({
             </Link>
             <Link to="/admin" search={{ section: "support", tab: "compliance" }}>
               Open Trust &amp; Support <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link to="/admin" search={{ section: "support", tab: "tickets" }}>
+              Send secure message <ArrowRight aria-hidden="true" />
             </Link>
           </div>
         </section>
@@ -6139,321 +6174,353 @@ function ConsolidatedUserDetailExperience({
       </aside>
     );
   };
-  const renderOverview = () => (
-    <div className="admin-account-detail-stack">
-      <div className="admin-account-detail-grid admin-account-detail-grid--operations admin-account-general-command-grid">
-        <AccountStatusManagement user={user} retry={retry} />
-        <AccountProfileControls
-          key={`${user.id}-general-profile`}
-          user={user}
-          onChanged={() => {
-            retry();
-            void history.refetch();
-          }}
-        />
-        <UserRoleManagement user={user} retry={retry} />
-      </div>
-      <FeatureAccessMatrix user={user} />
-      <section className="admin-account-admin-controls">
+  const renderOverview = () => {
+    const accessRows = [
+      ["Login", user.accountStatus === "ACTIVE" ? "Available" : stateText(user.accountStatus)],
+      ["Withdraw", capabilityAccessText("WITHDRAW_FUNDS")],
+      ["Buy Slices", capabilityAccessText("PLACE_BUY_ORDER")],
+      ["Deposit", capabilityAccessText("DEPOSIT_FUNDS")],
+      ["Sell Slices", capabilityAccessText("PLACE_SELL_ORDER")],
+      ["Collector", capabilityAccessText("LIST_ASSET")],
+      ["Admin", user.permissions.manageStatus ? "Available" : "Unavailable"],
+    ];
+    const accessGroups: Array<[string, Array<[string, string]>]> = [
+      [
+        "Marketplace",
+        [
+          ["Browse Markets", capabilityAccessText("BROWSE_MARKETS")],
+          ["View Assets", capabilityAccessText("VIEW_PUBLIC_ASSETS")],
+          ["View Collectors", capabilityAccessText("VIEW_COLLECTORS")],
+        ],
+      ],
+      [
+        "Trading",
+        [
+          ["Portfolio", capabilityAccessText("VIEW_PORTFOLIO")],
+          ["Buy Orders", capabilityAccessText("PLACE_BUY_ORDER")],
+          ["Sell Orders", capabilityAccessText("PLACE_SELL_ORDER")],
+        ],
+      ],
+      [
+        "Money",
+        [
+          ["Deposit", capabilityAccessText("DEPOSIT_FUNDS")],
+          ["Withdraw", capabilityAccessText("WITHDRAW_FUNDS")],
+          ["Wallet", user.walletSummary ? "Available" : "Unavailable"],
+        ],
+      ],
+      [
+        "Collector",
+        [
+          ["List Asset", capabilityAccessText("LIST_ASSET")],
+          ["Manage Profile", capabilityAccessText("MANAGE_PROFILE")],
+        ],
+      ],
+    ];
+    const recentActivity = historyEvents.slice(0, 4);
+    const activityDate = (value: string) =>
+      new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(value));
+    const summaryCard = (
+      icon: typeof ShieldCheck,
+      title: string,
+      children: ReactNode,
+      action: string,
+      onAction: () => void,
+      className = "",
+    ) => (
+      <section className={`admin-account-summary-card ${className}`}>
+        <div className="admin-account-summary-card-heading">
+          {(() => {
+            const Icon = icon;
+            return <Icon aria-hidden="true" />;
+          })()}
+          <h3>{title}</h3>
+        </div>
+        <div className="admin-account-summary-card-content">{children}</div>
+        <button type="button" className="admin-account-summary-card-action" onClick={onAction}>
+          {action} <ArrowRight aria-hidden="true" />
+        </button>
+      </section>
+    );
+    const expandedControl = generalControl ? (
+      <section className="admin-account-general-expanded admin-account-detail-panel">
         <div className="admin-account-section-heading">
           <div>
-            <p className="admin-console-eyebrow">Admin controls</p>
-            <h3>Operate, secure, and support this account</h3>
+            <p className="admin-console-eyebrow">General control</p>
+            <h3>
+              {generalControl === "state"
+                ? "Account state"
+                : generalControl === "profile"
+                  ? "Profile editor"
+                  : generalControl === "roles"
+                    ? "Role management"
+                    : generalControl === "note"
+                      ? "Private account note"
+                      : "Feature access review"}
+            </h3>
           </div>
-          <span>Authority-aware controls</span>
+          <button
+            type="button"
+            className="admin-detail-link"
+            onClick={() => setGeneralControl(null)}
+          >
+            Close <X aria-hidden="true" />
+          </button>
         </div>
-        <div className="admin-account-control-grid">
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <UserRound aria-hidden="true" />
+        {generalControl === "state" ? <AccountStatusManagement user={user} retry={retry} /> : null}
+        {generalControl === "profile" ? (
+          <AccountProfileControls
+            key={`${user.id}-general-profile`}
+            user={user}
+            onChanged={() => {
+              retry();
+              void history.refetch();
+            }}
+          />
+        ) : null}
+        {generalControl === "roles" ? <UserRoleManagement user={user} retry={retry} /> : null}
+        {generalControl === "access" ? <FeatureAccessMatrix user={user} /> : null}
+        {generalControl === "note" ? (
+          <AccountNoteControls
+            key={`${user.id}-general-note`}
+            user={user}
+            onChanged={() => {
+              retry();
+              void history.refetch();
+            }}
+          />
+        ) : null}
+      </section>
+    ) : null;
+
+    return (
+      <div className="admin-account-detail-stack">
+        <div className="admin-account-general-grid">
+          {summaryCard(
+            ShieldCheck,
+            "Account State",
+            <>
+              <strong
+                className={`admin-account-summary-value admin-account-summary-value--${accountStatusTone(user.accountStatus)}`}
+              >
+                {accountStatusLabel(user.accountStatus)}
+              </strong>
+              <span>{user.accountStateReason ?? "Account is in good standing."}</span>
+            </>,
+            "Manage state",
+            () => setGeneralControl("state"),
+          )}
+          {summaryCard(
+            UserRound,
+            "Profile",
+            <dl className="admin-account-summary-list">
               <div>
-                <strong>Profile &amp; identity</strong>
-                <small>View and correct safe profile metadata.</small>
+                <dt>Name</dt>
+                <dd>{user.profile?.displayName ?? user.displayName}</dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow
-                label="Email"
-                value={user.identity.emailVerified ? "Verified" : "Not verified"}
-              />
-              <DetailRow
-                label="Phone"
-                value={user.identity.phoneVerified ? "Verified" : "Not verified"}
-              />
-              <DetailRow label="Country" value={user.identity.country ?? "Unavailable"} />
-              <DetailRow label="Timezone" value={user.profile?.timezone ?? "Unavailable"} />
-            </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("General")}>
-              Edit profile <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <ShieldCheck aria-hidden="true" />
               <div>
-                <strong>Roles &amp; permissions</strong>
-                <small>Manage valid roles and access.</small>
+                <dt>Email</dt>
+                <dd>{user.email}</dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow label="Active roles" value={String(roles.length)} />
-              <DetailRow label="Primary role" value={sentence(user.primaryType)} />
-              <DetailRow
-                label="Elevated roles"
-                value={roles.length ? roles.map((role) => sentence(role.role)).join(", ") : "None"}
-              />
-              <DetailRow
-                label="Allowed capabilities"
-                value={`${user.capabilitySummary.filter((item) => item.allowed).length} of ${user.capabilitySummary.length}`}
-              />
-            </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("General")}>
-              Manage roles <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <Settings aria-hidden="true" />
               <div>
-                <strong>Security controls</strong>
-                <small>Sessions, 2FA, passwords, and devices.</small>
+                <dt>Country / TZ</dt>
+                <dd>
+                  {user.profile?.countryCode ?? "—"} · {user.profile?.timezone ?? "—"}
+                </dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow
-                label="2FA"
-                value={user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}
-              />
-              <DetailRow
-                label="Active sessions"
-                value={
-                  user.identity.activeSessionCount === null
-                    ? "Unavailable"
-                    : String(user.identity.activeSessionCount)
-                }
-              />
-              <DetailRow
-                label="Email verification"
-                value={user.identity.emailVerified ? "Verified" : "Pending"}
-              />
-              <DetailRow
-                label="Last login"
-                value={user.lastActivityAt ? relative(user.lastActivityAt) : "Not recorded"}
-              />
-            </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("Security")}>
-              Open security <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <SlidersHorizontal aria-hidden="true" />
+            </dl>,
+            "Edit profile",
+            () => setGeneralControl("profile"),
+          )}
+          {summaryCard(
+            Users,
+            "Roles",
+            <>
+              <div className="admin-account-summary-chips">
+                {roles.slice(0, 3).map((role) => (
+                  <span key={role.id}>{sentence(role.role)}</span>
+                ))}
+              </div>
+              <span>
+                {roles.length} active role{roles.length === 1 ? "" : "s"} assigned
+              </span>
+            </>,
+            "Manage roles",
+            () => setGeneralControl("roles"),
+          )}
+          {summaryCard(
+            SlidersHorizontal,
+            "Feature Access",
+            <div className="admin-account-feature-compact-grid">
+              {accessRows.map(([label, value]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong className={value === "Available" ? "is-available" : ""}>{value}</strong>
+                </div>
+              ))}
+            </div>,
+            "Review all access",
+            () => setGeneralControl("access"),
+          )}
+        </div>
+        {expandedControl}
+        <div className="admin-account-general-secondary-grid">
+          {summaryCard(
+            BadgeCheck,
+            "Identity & Profile",
+            <dl className="admin-account-summary-list">
               <div>
-                <strong>Restrictions &amp; holds</strong>
-                <small>Manage account-level restrictions.</small>
+                <dt>Verified email</dt>
+                <dd>{user.identity.emailVerified ? "Yes" : "No"}</dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow
-                label="Withdrawal hold"
-                value={
-                  user.permissions.finance
-                    ? finance?.withdrawalHoldUntil
-                      ? date(finance.withdrawalHoldUntil)
-                      : "Off"
-                    : "Unavailable"
-                }
-              />
-              <DetailRow
-                label="Active holds"
-                value={
-                  user.permissions.compliance ? String(user.activeHolds.length) : "Unavailable"
-                }
-              />
-              <DetailRow label="Trading access" value={capabilityText("PLACE_BUY_ORDER")} />
-              <DetailRow label="Submission access" value={capabilityText("LIST_ASSET")} />
-            </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Restrictions")}
-            >
-              Manage restrictions <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <WalletCards aria-hidden="true" />
               <div>
-                <strong>Finance &amp; payouts</strong>
-                <small>Finance state, payouts, and reserves.</small>
+                <dt>Two-factor auth</dt>
+                <dd>{user.identity.twoFactorEnabled ? "Enabled" : "Not enabled"}</dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow label="Payout readiness" value={payoutStateLabel(user.payoutState)} />
-              <DetailRow
-                label="Bank connected"
-                value={
-                  user.permissions.finance
-                    ? user.payoutDetails?.status
-                      ? "Yes"
-                      : "No"
-                    : "Unavailable"
-                }
-              />
-              <DetailRow label="Withdrawals" value={capabilityText("WITHDRAW_FUNDS")} />
-              <DetailRow
-                label="Reserved funds"
-                value={money(user.permissions.finance ? (finance?.reservedMinor ?? null) : null)}
-              />
-            </div>
-            <button type="button" className="admin-detail-link" onClick={() => setTab("Financial")}>
-              Open Finance <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <BadgeCheck aria-hidden="true" />
               <div>
-                <strong>Compliance</strong>
-                <small>Compliance status, cases, and risk.</small>
+                <dt>Discord</dt>
+                <dd>{user.identity.discord.connected ? "Connected" : "Not connected"}</dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow label="KYC status" value={stateText(user.complianceSummary.kycStatus)} />
-              <DetailRow
-                label="Open cases"
-                value={
-                  user.permissions.compliance
-                    ? String(user.complianceSummary.caseCount)
-                    : "Unavailable"
-                }
-              />
-              <DetailRow label="Risk state" value={complianceStateLabel(user.complianceState)} />
-              <DetailRow
-                label="Last review"
-                value={
-                  user.complianceSummary.lastReviewAt
-                    ? relative(user.complianceSummary.lastReviewAt)
-                    : "Not available"
-                }
-              />
-            </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Compliance")}
-            >
-              Open compliance <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <Users aria-hidden="true" />
+            </dl>,
+            "Open profile editor",
+            () => setGeneralControl("profile"),
+          )}
+          {summaryCard(
+            Users,
+            "Roles & Access",
+            <dl className="admin-account-summary-list">
               <div>
-                <strong>Collector / investor</strong>
-                <small>Control Collector and investor capabilities.</small>
+                <dt>Admin</dt>
+                <dd>
+                  {user.permissions.manageStatus ? "Full administrative access" : "Not assigned"}
+                </dd>
               </div>
-            </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow label="Collector enabled" value={user.collector ? "Yes" : "No"} />
-              <DetailRow label="Submissions" value={capabilityText("LIST_ASSET")} />
-              <DetailRow label="Buying" value={capabilityText("PLACE_BUY_ORDER")} />
-              <DetailRow label="Selling" value={capabilityText("PLACE_SELL_ORDER")} />
-            </div>
-            <button
-              type="button"
-              className="admin-detail-link"
-              onClick={() => setTab("Collector / Investor")}
-            >
-              Manage capabilities <ArrowRight aria-hidden="true" />
-            </button>
-          </section>
-          <section className="admin-account-control-card">
-            <div className="admin-account-control-card-heading">
-              <RefreshCw aria-hidden="true" />
               <div>
-                <strong>Recovery &amp; repair</strong>
-                <small>Repair tools remain explicit and authority-bound.</small>
+                <dt>Collector</dt>
+                <dd>{user.collector ? "Asset listing & management" : "Not enabled"}</dd>
               </div>
+            </dl>,
+            "Manage roles",
+            () => setGeneralControl("roles"),
+          )}
+          {summaryCard(
+            RefreshCw,
+            "Account Lifecycle",
+            <dl className="admin-account-summary-list">
+              <div>
+                <dt>Current state</dt>
+                <dd>{accountStatusLabel(user.accountStatus)}</dd>
+              </div>
+              <div>
+                <dt>Identity</dt>
+                <dd>
+                  {user.complianceSummary.kycStatus === "APPROVED"
+                    ? "Verified"
+                    : stateText(user.complianceSummary.kycStatus)}
+                </dd>
+              </div>
+              <div>
+                <dt>Payment capability</dt>
+                <dd>{payoutStateLabel(user.payoutState)}</dd>
+              </div>
+            </dl>,
+            "Manage lifecycle",
+            () => setGeneralControl("state"),
+          )}
+        </div>
+        <div className="admin-account-general-lower-grid">
+          <section className="admin-account-detail-panel admin-account-access-panel">
+            <div className="admin-account-section-heading">
+              <div>
+                <h3>Current Access (Capability Groups)</h3>
+              </div>
+              <button
+                type="button"
+                className="admin-detail-link"
+                onClick={() => setGeneralControl("note")}
+              >
+                + Add note
+              </button>
             </div>
-            <div className="admin-account-control-card-rows">
-              <DetailRow label="Account recovery" value={commandText("ACCOUNT_RECOVERY")} />
-              <DetailRow label="Provider recovery" value={commandText("PROVIDER_RECOVERY")} />
-              <DetailRow label="Session recovery" value={commandText("REVOKE_SESSIONS")} />
-              <DetailRow label="Profile correction" value={commandText("EDIT_PROFILE")} />
+            <div className="admin-account-access-groups">
+              {accessGroups.map(([group, items]) => (
+                <div className="admin-account-access-group" key={group}>
+                  <strong>{group}</strong>
+                  {items.map(([label, value]) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <em className={value === "Available" ? "is-available" : ""}>{value}</em>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
             <button type="button" className="admin-detail-link" onClick={() => setTab("Recovery")}>
-              Open recovery tools <ArrowRight aria-hidden="true" />
+              View all notes
             </button>
           </section>
+          <section className="admin-account-detail-panel admin-account-activity-panel">
+            <div className="admin-account-section-heading">
+              <div>
+                <h3>Recent Admin Activity</h3>
+              </div>
+              <button
+                type="button"
+                className="admin-detail-link"
+                onClick={() => setTab("Recovery")}
+              >
+                View all activity
+              </button>
+            </div>
+            {recentActivity.length ? (
+              <div className="admin-account-activity-feed">
+                {recentActivity.map((event) => (
+                  <div key={event.id} className="admin-account-activity-feed-item">
+                    <span className="admin-account-activity-feed-icon">
+                      <CheckCircle2 aria-hidden="true" />
+                    </span>
+                    <div>
+                      <strong>{activityTitle(event.action)}</strong>
+                      <span>{event.detail}</span>
+                    </div>
+                    <small>
+                      {activityDate(event.occurredAt)}
+                      <br />
+                      by {event.actor ?? "System"}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <AdminEmpty
+                detail="No admin activity is recorded for this account."
+                icon={FileClock}
+              />
+            )}
+          </section>
         </div>
-      </section>
-
-      <div className="admin-account-detail-lower-grid">
-        <section className="admin-account-detail-panel admin-account-participation-panel">
-          <AdminPanelHeading
-            title="Account participation"
-            action="View product usage"
-            onClick={() => setTab("Operations")}
-          />
-          <div className="admin-account-participation-grid">
-            <div>
-              <span>Collector submissions</span>
-              <strong>{user.collectorOverview?.submissions ?? 0}</strong>
-              <small>Open: {user.collectorOverview?.activeIntakes ?? 0}</small>
-            </div>
-            <div>
-              <span>Active intake</span>
-              <strong>{user.collectorOverview?.activeIntakes ?? 0}</strong>
-              <small>Current records</small>
-            </div>
-            <div>
-              <span>Active listings</span>
-              <strong>{user.portfolioSummary.activeListings}</strong>
-              <small>Live: {user.portfolioSummary.activeListings}</small>
-            </div>
-            <div>
-              <span>Portfolio assets</span>
-              <strong>{user.portfolioSummary.totalAssets}</strong>
-              <small>Holdings</small>
-            </div>
-            <div>
-              <span>Open orders</span>
-              <strong>{user.portfolioSummary.openOrders}</strong>
-              <small>Current</small>
-            </div>
-            <div>
-              <span>Invested total</span>
-              <strong>
-                {money(
-                  user.permissions.finance ? user.portfolioSummary.totalInvestedMinor : null,
-                  user.portfolioSummary.currency,
-                )}
-              </strong>
-              <small>All time</small>
-            </div>
-            <div>
-              <span>Membership</span>
-              <strong>{user.collector?.subscription?.plan ?? "None"}</strong>
-              <small>
-                {user.collector?.subscription
-                  ? sentence(user.collector.subscription.status)
-                  : "No membership"}
-              </small>
-            </div>
-            <div>
-              <span>Directory</span>
-              <strong>
-                {user.collector?.publicDirectory?.isPublic ? "Published" : "Not published"}
-              </strong>
-              <small>Visibility</small>
-            </div>
+        <section className="admin-account-authority-boundary">
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <strong>Authority Boundary</strong>
+            <span>
+              Finance remains authoritative for balances, holdings, and payouts. Account Controls
+              governs access, restrictions, recovery, and profile/security state.
+            </span>
           </div>
+          <button type="button" className="admin-detail-link" onClick={() => setTab("Financial")}>
+            Learn more <ArrowRight aria-hidden="true" />
+          </button>
         </section>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderOperations = () => (
     <div className="admin-account-detail-stack">
@@ -6982,6 +7049,8 @@ function ConsolidatedUserDetailExperience({
         </button>
         <span aria-hidden="true">›</span>
         <strong>{user.displayName}</strong>
+        <span aria-hidden="true">›</span>
+        <strong>Account Controls</strong>
       </nav>
       <section className="admin-account-detail-header">
         <div className="admin-detail-identity">
@@ -7006,18 +7075,6 @@ function ConsolidatedUserDetailExperience({
           </div>
         </div>
         <div className="admin-account-detail-header-actions">
-          <span
-            className={`admin-status-pill admin-status-pill--${user.accountStatus.toLowerCase()}`}
-          >
-            {accountStatusLabel(user.accountStatus)}
-          </span>
-          <button
-            type="button"
-            className="admin-account-detail-header-action"
-            onClick={() => setTab("Operations")}
-          >
-            <Settings aria-hidden="true" /> Manage account
-          </button>
           <button
             type="button"
             className="admin-account-detail-header-action"
@@ -7025,13 +7082,50 @@ function ConsolidatedUserDetailExperience({
           >
             <FileClock aria-hidden="true" /> View history
           </button>
-          <button
-            type="button"
-            className="admin-account-detail-header-action admin-account-detail-header-action--primary"
-            onClick={() => setTab("Operations")}
-          >
-            Take action <ArrowRight aria-hidden="true" />
-          </button>
+          <div className="admin-account-take-action">
+            <button
+              type="button"
+              className="admin-account-detail-header-action admin-account-detail-header-action--primary"
+              aria-expanded={takeActionOpen}
+              onClick={() => setTakeActionOpen((open) => !open)}
+            >
+              Take action <ChevronDown aria-hidden="true" />
+            </button>
+            {takeActionOpen ? (
+              <div className="admin-account-take-action-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setGeneralControl("state");
+                    setTakeActionOpen(false);
+                  }}
+                >
+                  <ShieldCheck aria-hidden="true" /> Manage account state
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTab("Security");
+                    setTakeActionOpen(false);
+                  }}
+                >
+                  <Settings aria-hidden="true" /> Open security controls
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTab("Recovery");
+                    setTakeActionOpen(false);
+                  }}
+                >
+                  <Wrench aria-hidden="true" /> Open recovery tools
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="admin-account-detail-header-meta">
           <span>
@@ -7050,8 +7144,8 @@ function ConsolidatedUserDetailExperience({
             </button>
           </span>
         </div>
+        {renderStatusStrip()}
       </section>
-      <section className="admin-account-detail-overall-strip">{renderStatusStrip()}</section>
       <div className="admin-account-detail-layout">
         <div className="admin-account-detail-primary">
           {renderActionCenter()}
@@ -7063,17 +7157,25 @@ function ConsolidatedUserDetailExperience({
               "General",
               "Security",
               "Restrictions",
-              "Financial",
+              "Financial Access",
               "Compliance",
               "Collector / Investor",
               "Recovery",
             ].map((view) => (
               <button
                 type="button"
-                className={activeTab === view ? "is-active" : ""}
+                className={
+                  activeTab === (view === "Financial Access" ? "Financial" : view)
+                    ? "is-active"
+                    : ""
+                }
                 key={view}
                 onClick={() => setTab(view)}
-                aria-current={activeTab === view ? "page" : undefined}
+                aria-current={
+                  activeTab === (view === "Financial Access" ? "Financial" : view)
+                    ? "page"
+                    : undefined
+                }
               >
                 {view}
               </button>
@@ -7940,10 +8042,28 @@ function CollectorDirectoryManagement({
   });
   const directory = user.collector?.publicDirectory ?? null;
   const canManage = currentUser.data?.roles.includes("ADMIN") ?? false;
-  const feature = useMutation({
-    mutationFn: (featured: boolean) =>
-      services.repositories.admin.setCollectorFeatured(directory!.slug, featured),
-    onSuccess: retry,
+  const [isPublic, setIsPublic] = useState(directory?.isPublic ?? false);
+  const [isFeatured, setIsFeatured] = useState(directory?.isFeatured ?? false);
+  const [featurePriority, setFeaturePriority] = useState(String(directory?.featurePriority ?? 0));
+  const [featuredCaption, setFeaturedCaption] = useState(directory?.featuredCaption ?? "");
+  const [reason, setReason] = useState("");
+  const update = useMutation({
+    mutationFn: () =>
+      services.repositories.admin.updateCollectorDirectory(directory!.slug, {
+        isPublic,
+        isFeatured,
+        featurePriority: Number(featurePriority) || 0,
+        featuredCaption: featuredCaption.trim() || null,
+        reason: reason.trim(),
+      }),
+    onSuccess: (result) => {
+      setIsPublic(result.isPublic);
+      setIsFeatured(result.isFeatured);
+      setFeaturePriority(String(result.featurePriority));
+      setFeaturedCaption(result.featuredCaption ?? "");
+      setReason("");
+      retry();
+    },
   });
   return (
     <section className="admin-panel">
@@ -7951,43 +8071,79 @@ function CollectorDirectoryManagement({
       {directory ? (
         <>
           <DetailRow label="Directory profile" value={directory.slug} />
-          <DetailRow
-            label="Published profile"
-            value={directory.isPublic ? "Available" : "Not marked public"}
-          />
-          <DetailRow
-            label="Featured status"
-            value={directory.isFeatured ? "Featured" : "Not featured"}
-          />
+          <DetailRow label="Eligible" value={directory.eligible ? "Yes" : "No"} />
+          <DetailRow label="Eligibility reason" value={directory.eligibilityReason} />
+          <DetailRow label="Public assets" value={String(directory.publicAssetCount)} />
           {canManage ? (
-            <button
-              type="button"
-              className="admin-detail-action"
-              disabled={feature.isPending}
-              onClick={() => {
-                const next = !directory.isFeatured;
-                if (
-                  window.confirm(
-                    `${next ? "Feature" : "Remove"} ${user.displayName} in the public Collector directory? This change is audited.`,
-                  )
-                ) {
-                  feature.mutate(next);
-                }
+            <form
+              className="admin-collector-directory-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                update.mutate();
               }}
             >
-              {feature.isPending
-                ? "Saving…"
-                : directory.isFeatured
-                  ? "Remove from featured"
-                  : "Feature Collector"}
-            </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(event) => setIsPublic(event.target.checked)}
+                />
+                <span>Directory visibility: {isPublic ? "Visible" : "Hidden"}</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={isFeatured}
+                  disabled={!directory.eligible || !isPublic}
+                  onChange={(event) => setIsFeatured(event.target.checked)}
+                />
+                <span>Featured: {isFeatured ? "Yes" : "No"}</span>
+              </label>
+              <label>
+                <span>Feature priority</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="10000"
+                  value={featurePriority}
+                  onChange={(event) => setFeaturePriority(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Featured caption</span>
+                <textarea
+                  maxLength={240}
+                  value={featuredCaption}
+                  onChange={(event) => setFeaturedCaption(event.target.value)}
+                  placeholder="Optional public caption"
+                />
+              </label>
+              <label>
+                <span>Reason (required)</span>
+                <input
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Explain this directory change"
+                  minLength={3}
+                  required
+                />
+              </label>
+              <button type="submit" className="admin-detail-action" disabled={update.isPending}>
+                {update.isPending ? "Saving…" : "Save directory controls"}
+              </button>
+            </form>
           ) : (
             <p className="admin-safe-note">Only Administrators can change featured placement.</p>
           )}
-          {feature.isError ? (
+          {update.isError ? (
             <p className="admin-safe-note" role="alert">
-              Featured placement was not saved. No directory state was changed.
+              Directory controls were not saved. No directory state was changed.
             </p>
+          ) : null}
+          {directory.isPublic ? (
+            <Link to="/collector/$id" params={{ id: directory.slug }} className="admin-detail-link">
+              Open public profile <ArrowRight aria-hidden="true" />
+            </Link>
           ) : null}
         </>
       ) : (

@@ -1461,6 +1461,7 @@ model Asset {
   stagingDemoPhysicalIntake     StagingDemoPhysicalIntake?
   initialOffering               InitialOffering?
   initialOfferingInventory      InitialOfferingInventory[]
+  featuredCollectorAssets       PublicCollectorFeaturedAsset[]
   certificationClaims           GradingCertificationClaim[]
   operationalControl            AssetOperationalControl?
 
@@ -1489,21 +1490,39 @@ model AssetOperationalControl {
 }
 
 model PublicCollectorProfile {
-  userId      String    @id
-  slug        String    @unique
-  headline    String?
-  specialism  String?
-  isPublic    Boolean   @default(false)
-  isFeatured  Boolean   @default(false)
-  featuredAt  DateTime?
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String                           @id
+  slug            String                           @unique
+  headline        String?
+  specialism      String?
+  isPublic        Boolean                          @default(false)
+  isFeatured      Boolean                          @default(false)
+  featurePriority Int                              @default(0)
+  featuredCaption String?
+  featuredAt      DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime                         @default(now())
+  updatedAt       DateTime                         @updatedAt
+  user            User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featuredAssets  PublicCollectorFeaturedAsset[]
 
   @@index([isPublic, slug])
   @@index([isPublic, createdAt, userId])
-  @@index([isPublic, isFeatured, featuredAt, createdAt, userId])
+  @@index([isPublic, isFeatured, featurePriority, featuredAt, createdAt, userId])
+}
+
+model PublicCollectorFeaturedAsset {
+  id                     String                @id @default(cuid())
+  collectorProfileUserId String
+  assetId                String
+  position               Int                   @default(0)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  collectorProfile       PublicCollectorProfile @relation(fields: [collectorProfileUserId], references: [userId], onDelete: Cascade)
+  asset                  Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([collectorProfileUserId, assetId])
+  @@unique([collectorProfileUserId, position])
+  @@index([assetId, position])
 }
 
 model WatchlistItem {

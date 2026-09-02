@@ -368,6 +368,9 @@ export const mockRepositories: AppRepositories = {
     async setCollectorFeatured() {
       throw new Error("Collector featuring requires the API service.");
     },
+    async updateCollectorDirectory() {
+      throw new Error("Collector directory controls require the API service.");
+    },
     async listComplianceCases() {
       return { items: [] };
     },
@@ -914,6 +917,14 @@ export const mockRepositories: AppRepositories = {
         items,
         featured: [],
         specialties: [],
+        stats: {
+          eligibleCollectorCount: items.length,
+          publishedAssetCount: items.reduce(
+            (total, collector) => total + (collector.publishedListingCount ?? 0),
+            0,
+          ),
+          featuredCollectorCount: 0,
+        },
         nextCursor: null,
         pagination: {
           page: 1,

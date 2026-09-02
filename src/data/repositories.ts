@@ -562,8 +562,13 @@ export type AdminUserDetail = AdminUserSummary & {
       slug: string;
       isPublic: boolean;
       isFeatured: boolean;
+      featurePriority: number;
+      featuredCaption: string | null;
       featuredAt: string | null;
       publishedAt: string | null;
+      eligible: boolean;
+      eligibilityReason: string;
+      publicAssetCount: number;
     } | null;
     subscription: {
       plan: string;
@@ -2461,6 +2466,26 @@ export interface AdminRepository {
     slug: string,
     featured: boolean,
   ): Promise<{ slug: string; isFeatured: boolean; featuredAt: string | null }>;
+  updateCollectorDirectory(
+    slug: string,
+    input: {
+      isPublic?: boolean;
+      isFeatured?: boolean;
+      featurePriority?: number;
+      featuredCaption?: string | null;
+      reason: string;
+    },
+  ): Promise<{
+    slug: string;
+    isPublic: boolean;
+    isFeatured: boolean;
+    featurePriority: number;
+    featuredCaption: string | null;
+    featuredAt: string | null;
+    eligible: boolean;
+    eligibilityReason: string;
+    publicAssetCount: number;
+  }>;
   listComplianceCases(input?: { limit?: number }): Promise<{ items: AdminComplianceCase[] }>;
   getFinanceSummary(): Promise<AdminFinanceSummary>;
   getFinanceDashboard(): Promise<AdminFinanceDashboard>;
@@ -2588,7 +2613,10 @@ export interface CollectorRepository {
     pageSize?: number;
     signal?: AbortSignal;
   }): Promise<CollectorDirectoryPage>;
-  getCollector(id: UserId): Promise<CollectorProfile | null>;
+  getCollector(
+    id: UserId,
+    input?: { page?: number; pageSize?: number },
+  ): Promise<CollectorProfile | null>;
   followCollector(id: UserId): Promise<void>;
   unfollowCollector(id: UserId): Promise<void>;
 }

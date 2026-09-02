@@ -114,6 +114,15 @@ const catalogueQuery = z
   })
   .strict();
 const collectorFeature = z.object({ featured: z.boolean() }).strict();
+const collectorDirectoryPatch = z
+  .object({
+    isPublic: z.boolean().optional(),
+    isFeatured: z.boolean().optional(),
+    featurePriority: z.coerce.number().int().min(0).max(10_000).optional(),
+    featuredCaption: z.string().trim().max(240).nullable().optional(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
 const intakeReceiptConfirmation = z
   .object({
     packageCondition: z
@@ -406,6 +415,21 @@ export class AdminController {
       request.actor!,
       slug,
       input.featured,
+      request.requestId ?? 'unknown',
+    );
+  }
+
+  @Patch('collectors/:slug/directory')
+  @RequirePermission('catalogue.manage')
+  updateCollectorDirectory(
+    @Param('slug') slug: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.updateCollectorDirectory(
+      request.actor!,
+      slug,
+      this.parse(collectorDirectoryPatch, body),
       request.requestId ?? 'unknown',
     );
   }

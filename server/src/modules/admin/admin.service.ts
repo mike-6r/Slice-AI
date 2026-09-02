@@ -153,6 +153,7 @@ export class AdminService {
       select: {
         userId: true,
         slug: true,
+        isPublic: true,
         isFeatured: true,
         featuredAt: true,
         user: {
@@ -175,6 +176,20 @@ export class AdminService {
         code: 'COLLECTOR_NOT_FOUND',
         message: 'Active Collector profile not found.',
       });
+    const publicAssetCount = await this.db.assetSubmission.count({
+      where: {
+        ownerUserId: profile.userId,
+        status: 'APPROVED',
+        asset: { is: { status: 'PUBLISHED' } },
+      },
+    });
+    if (featured && (!profile.isPublic || publicAssetCount === 0)) {
+      throw new ConflictException({
+        code: 'COLLECTOR_NOT_ELIGIBLE',
+        message:
+          'Only visible Collectors with a published asset can be featured.',
+      });
+    }
     const updated = await this.db.$transaction(async (tx) => {
       const nextFeaturedAt = featured ? new Date() : null;
       const updatedProfile = await tx.publicCollectorProfile.update({
@@ -208,6 +223,160 @@ export class AdminService {
       slug: updated.slug,
       isFeatured: updated.isFeatured,
       featuredAt: updated.featuredAt?.toISOString() ?? null,
+    };
+  }
+
+  async updateCollectorDirectory(
+    actor: Actor,
+    slug: string,
+    input: {
+      isPublic?: boolean;
+      isFeatured?: boolean;
+      featurePriority?: number;
+      featuredCaption?: string | null;
+      reason: string;
+    },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'catalogue.manage');
+    const profile = await this.db.publicCollectorProfile.findUnique({
+      where: { slug },
+      select: {
+        userId: true,
+        slug: true,
+        isPublic: true,
+        isFeatured: true,
+        featurePriority: true,
+        featuredCaption: true,
+        featuredAt: true,
+        user: {
+          select: {
+            accountStatus: true,
+            roleAssignments: {
+              where: { role: 'COLLECTOR', revokedAt: null },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+    if (!profile || profile.user.roleAssignments.length === 0) {
+      throw new NotFoundException({
+        code: 'COLLECTOR_NOT_FOUND',
+        message: 'Collector directory profile not found.',
+      });
+    }
+    const publicAssetCount = await this.db.assetSubmission.count({
+      where: {
+        ownerUserId: profile.userId,
+        status: 'APPROVED',
+        asset: { is: { status: 'PUBLISHED' } },
+      },
+    });
+    const eligible =
+      profile.user.accountStatus === 'ACTIVE' && publicAssetCount > 0;
+    const nextIsPublic = input.isPublic ?? profile.isPublic;
+    const requestedFeatured = input.isFeatured ?? profile.isFeatured;
+    if (requestedFeatured && (!eligible || !nextIsPublic)) {
+      throw new ConflictException({
+        code: 'COLLECTOR_NOT_ELIGIBLE',
+        message:
+          'Only visible, active Collectors with a published asset can be featured.',
+      });
+    }
+    const nextIsFeatured = nextIsPublic && eligible ? requestedFeatured : false;
+    const nextPriority = input.featurePriority ?? profile.featurePriority;
+    const nextCaption =
+      input.featuredCaption === undefined
+        ? profile.featuredCaption
+        : input.featuredCaption;
+    const updated = await this.db.$transaction(async (tx) => {
+      const result = await tx.publicCollectorProfile.update({
+        where: { slug },
+        data: {
+          isPublic: nextIsPublic,
+          isFeatured: nextIsFeatured,
+          featurePriority: nextPriority,
+          featuredCaption: nextCaption,
+          featuredAt:
+            nextIsFeatured && !profile.isFeatured
+              ? new Date()
+              : nextIsFeatured
+                ? profile.featuredAt
+                : null,
+        },
+        select: {
+          slug: true,
+          isPublic: true,
+          isFeatured: true,
+          featurePriority: true,
+          featuredCaption: true,
+          featuredAt: true,
+        },
+      });
+      const changes = [
+        ...(profile.isPublic !== result.isPublic
+          ? [
+              result.isPublic
+                ? 'COLLECTOR_DIRECTORY_RESTORED'
+                : 'COLLECTOR_DIRECTORY_HIDDEN',
+            ]
+          : []),
+        ...(profile.isFeatured !== result.isFeatured
+          ? [result.isFeatured ? 'COLLECTOR_FEATURED' : 'COLLECTOR_UNFEATURED']
+          : []),
+        ...(profile.featurePriority !== result.featurePriority
+          ? ['COLLECTOR_FEATURE_PRIORITY_CHANGED']
+          : []),
+        ...(profile.featuredCaption !== result.featuredCaption
+          ? ['COLLECTOR_FEATURED_CAPTION_UPDATED']
+          : []),
+      ];
+      for (const action of changes) {
+        await tx.auditEvent.create({
+          data: {
+            actorUserId: actor.userId,
+            actorType: 'USER',
+            action,
+            resourceType: 'public-collector-profile',
+            resourceId: profile.userId,
+            requestId,
+            sessionId: actor.sessionId as never,
+            result: 'SUCCESS',
+            metadata: {
+              targetUserId: profile.userId,
+              slug,
+              reason: input.reason,
+              before: {
+                isPublic: profile.isPublic,
+                isFeatured: profile.isFeatured,
+                featurePriority: profile.featurePriority,
+                featuredCaption: profile.featuredCaption,
+              },
+              after: {
+                isPublic: result.isPublic,
+                isFeatured: result.isFeatured,
+                featurePriority: result.featurePriority,
+                featuredCaption: result.featuredCaption,
+              },
+            },
+          },
+        });
+      }
+      return result;
+    });
+    return {
+      ...updated,
+      featuredAt: updated.featuredAt?.toISOString() ?? null,
+      eligible,
+      eligibilityReason: eligible
+        ? `Collector role + ${publicAssetCount} public asset${publicAssetCount === 1 ? '' : 's'}`
+        : publicAssetCount === 0
+          ? 'No currently published assets'
+          : profile.user.accountStatus !== 'ACTIVE'
+            ? 'Account is not active'
+            : 'Collector role is not present',
+      publicAssetCount,
     };
   }
 
@@ -6655,6 +6824,8 @@ export class AdminService {
             slug: true,
             isPublic: true,
             isFeatured: true,
+            featurePriority: true,
+            featuredCaption: true,
             featuredAt: true,
             publishedAt: true,
           },
@@ -6884,6 +7055,13 @@ export class AdminService {
           })
         : Promise.resolve(0),
     ]);
+    const publicAssetCount = await this.db.assetSubmission.count({
+      where: {
+        ownerUserId: userId,
+        status: 'APPROVED',
+        asset: { is: { status: 'PUBLISHED' } },
+      },
+    });
     const wallet = financialAccounts.length
       ? financialAccounts.reduce(
           (summary, account) => {
@@ -6906,6 +7084,7 @@ export class AdminService {
     const kycCase = complianceCases.find((item) => item.type.includes('KYC'));
     const kytCase = complianceCases.find((item) => item.type.includes('KYT'));
     const roleNames = user.roleAssignments.map((assignment) => assignment.role);
+    const hasCollectorRole = roleNames.includes('COLLECTOR');
     const staffRoles = [
       'SUPPORT',
       'COMPLIANCE_ANALYST',
@@ -7430,12 +7609,27 @@ export class AdminService {
                   slug: user.publicCollectorProfile.slug,
                   isPublic: user.publicCollectorProfile.isPublic,
                   isFeatured: user.publicCollectorProfile.isFeatured,
+                  featurePriority: user.publicCollectorProfile.featurePriority,
+                  featuredCaption: user.publicCollectorProfile.featuredCaption,
                   featuredAt:
                     user.publicCollectorProfile.featuredAt?.toISOString() ??
                     null,
                   publishedAt:
                     user.publicCollectorProfile.publishedAt?.toISOString() ??
                     null,
+                  eligible:
+                    user.accountStatus === 'ACTIVE' &&
+                    hasCollectorRole &&
+                    publicAssetCount > 0,
+                  eligibilityReason:
+                    user.accountStatus !== 'ACTIVE'
+                      ? 'Account is not active'
+                      : !hasCollectorRole
+                        ? 'Collector role is not present'
+                        : publicAssetCount === 0
+                          ? 'No currently published assets'
+                          : `Collector role + ${publicAssetCount} public asset${publicAssetCount === 1 ? '' : 's'}`,
+                  publicAssetCount,
                 }
               : null,
             subscription: user.collectorSubscriptions[0]

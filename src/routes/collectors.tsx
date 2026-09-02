@@ -51,7 +51,7 @@ export const Route = createFileRoute("/collectors")({
     ...(typeof search.specialty === "string" && search.specialty.trim()
       ? { specialty: search.specialty.trim().slice(0, 80) }
       : {}),
-    sort: ["featured", "recent", "name"].includes(String(search.sort))
+    sort: ["featured", "assets", "recent", "name"].includes(String(search.sort))
       ? (String(search.sort) as CollectorDirectorySort)
       : "featured",
     page: Math.max(1, Math.min(10_000, Number(search.page ?? 1) || 1)),
@@ -126,7 +126,7 @@ function CollectorsPage() {
           </p>
           <div className="collectors-hero-note">
             <UsersRound aria-hidden="true" />
-            <span>Active Collector accounts only. Private collection data stays private.</span>
+            <span>Only Collectors with at least 1 published asset appear here.</span>
           </div>
         </div>
         <div className="collectors-hero-aside" aria-label="Collector directory summary">
@@ -162,6 +162,25 @@ function CollectorsPage() {
         className="collectors-shell collectors-directory"
         aria-labelledby="directory-heading"
       >
+        {data?.stats ? (
+          <dl className="collectors-directory-stats" aria-label="Collector directory statistics">
+            <div>
+              <dt>Active Collectors</dt>
+              <dd>{data.stats.eligibleCollectorCount}</dd>
+            </div>
+            <div>
+              <dt>Published Assets</dt>
+              <dd>{data.stats.publishedAssetCount}</dd>
+            </div>
+            {data.stats.featuredCollectorCount > 0 ? (
+              <div>
+                <dt>Featured</dt>
+                <dd>{data.stats.featuredCollectorCount}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+
         <div className="collectors-directory-toolbar">
           <form className="collectors-directory-search" onSubmit={submitSearch}>
             <Search aria-hidden="true" />
@@ -187,7 +206,8 @@ function CollectorsPage() {
               }
             >
               <option value="featured">Featured first</option>
-              <option value="recent">Recently published</option>
+              <option value="assets">Most assets</option>
+              <option value="recent">Recently listed</option>
               <option value="name">Name A–Z</option>
             </select>
             <ChevronDown aria-hidden="true" />
@@ -209,14 +229,17 @@ function CollectorsPage() {
             </button>
             {specialties.map((specialty) => (
               <button
-                key={specialty}
+                key={specialty.name}
                 type="button"
-                className={search.specialty === specialty ? "is-active" : undefined}
+                className={search.specialty === specialty.name ? "is-active" : undefined}
                 onClick={() =>
-                  setSearch({ specialty: specialty === search.specialty ? undefined : specialty })
+                  setSearch({
+                    specialty: specialty.name === search.specialty ? undefined : specialty.name,
+                  })
                 }
               >
-                {specialty}
+                {specialty.name}
+                {specialty.count ? <span>{specialty.count}</span> : null}
               </button>
             ))}
           </div>
@@ -235,10 +258,18 @@ function CollectorsPage() {
         </div>
 
         {result.isPending ? (
-          <div className="collectors-empty-state collectors-loading-state" role="status">
-            <span className="collectors-loading-orb" aria-hidden="true" />
-            <h3>Loading public collectors</h3>
-            <p>Bringing together profiles that are ready to be shared.</p>
+          <div className="collectors-directory-grid collectors-loading-grid" role="status">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div className="collector-card-skeleton" key={index}>
+                <span />
+                <div>
+                  <span />
+                  <span />
+                </div>
+                <span />
+                <span />
+              </div>
+            ))}
           </div>
         ) : result.isError ? (
           <div className="collectors-empty-state" role="alert">
@@ -259,20 +290,24 @@ function CollectorsPage() {
           <div className="collectors-empty-state">
             <Search aria-hidden="true" />
             <h3>
-              {hasFilters ? "No collectors match those filters." : "No active Collectors yet."}
+              {hasFilters ? "No Collectors match these filters." : "Collectors are coming soon."}
             </h3>
             <p>
               {hasFilters
-                ? "Try a different name or specialty."
-                : "Active Collector accounts will appear here with their published collectibles."}
+                ? "Try a different name, specialty, or published collectible."
+                : "Public Collector profiles will appear as assets are published on Slice."}
             </p>
-            {hasFilters && (
+            {hasFilters ? (
               <button
                 type="button"
                 onClick={() => setSearch({ q: undefined, specialty: undefined })}
               >
                 Clear filters
               </button>
+            ) : (
+              <a className="collectors-empty-cta" href="/marketplace">
+                Explore Markets
+              </a>
             )}
           </div>
         )}
@@ -286,9 +321,28 @@ function CollectorsPage() {
             >
               <ArrowLeft aria-hidden="true" /> Previous
             </button>
-            <span>
-              Page {page.page} of {page.totalPages}
-            </span>
+            <div className="collectors-page-numbers">
+              {Array.from({ length: page.totalPages }, (_, index) => index + 1)
+                .filter(
+                  (pageNumber) =>
+                    page.totalPages <= 7 ||
+                    pageNumber === 1 ||
+                    pageNumber === page.totalPages ||
+                    Math.abs(pageNumber - page.page) <= 1,
+                )
+                .map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    className={pageNumber === page.page ? "is-active" : undefined}
+                    aria-label={`Go to page ${pageNumber}`}
+                    aria-current={pageNumber === page.page ? "page" : undefined}
+                    onClick={() => setSearch({ page: pageNumber })}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+            </div>
             <button
               type="button"
               disabled={!page.hasNextPage}

@@ -35,7 +35,15 @@ function AssetMedia({
   const media =
     listing.media?.find((item) => item.slot.toLowerCase() === "front") ?? listing.media?.[0];
   return media ? (
-    <img src={media.url} alt={media.alt} loading="lazy" />
+    <img
+      src={media.url}
+      alt={media.alt}
+      loading="lazy"
+      onError={(event) => {
+        event.currentTarget.hidden = true;
+        event.currentTarget.parentElement?.classList.add("is-missing");
+      }}
+    />
   ) : (
     <Box aria-label={compact ? "Published media unavailable" : "No published media"} />
   );
@@ -68,7 +76,7 @@ export function CollectorAssetPreview({
           </div>
           <div className="featured-holding-copy">
             <h4>{listing.title}</h4>
-            <p>{collectorCategoryLabel(listing.category)}</p>
+            <p>{listing.grade ?? listing.variant ?? collectorCategoryLabel(listing.category)}</p>
             <div>
               <strong>
                 {listing.estimatedMarketValue
@@ -88,7 +96,9 @@ export function CollectorAssetPreview({
 }
 
 export function FeaturedCollector({ collector }: { collector: CollectorProfile }) {
-  const listings = collector.publishedListings ?? [];
+  const listings = collector.featuredPreviewAssets?.length
+    ? collector.featuredPreviewAssets
+    : (collector.publishedListings ?? []);
   const specialties = collectorSpecialties(collector);
   const count = collector.publishedListingCount ?? listings.length;
   return (
@@ -106,7 +116,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
             <span>{collector.displayName}</span>
           </h2>
           <strong>@{collector.handle}</strong>
-          <p>{collector.focus || "Collector profile"}</p>
+          <p>{collector.featuredCaption || collector.focus || "Collector profile"}</p>
         </div>
       </div>
       {specialties.length > 0 && (
@@ -118,7 +128,7 @@ export function FeaturedCollector({ collector }: { collector: CollectorProfile }
       )}
       <dl className="featured-collector-stats has-3-stats">
         <div>
-          <dt>Published catalogue</dt>
+          <dt>Published assets</dt>
           <dd>{count}</dd>
         </div>
         <div>
@@ -217,6 +227,11 @@ export function CollectorCard({
         <p>
           {specialties.length > 0 ? specialties.slice(0, 3).join(" · ") : "Published catalogue"}
         </p>
+        {collector.latestPublicListingAt ? (
+          <small>
+            Latest listing {new Date(collector.latestPublicListingAt).toLocaleDateString()}
+          </small>
+        ) : null}
       </div>
       <dl className="collector-profile-stats">
         <div>
@@ -247,7 +262,7 @@ export function CollectorCard({
           )}
         </div>
       ) : (
-        <p className="collector-card-empty">No published assets yet.</p>
+        <p className="collector-card-empty">Published previews unavailable.</p>
       )}
       <Link
         to="/collector/$id"

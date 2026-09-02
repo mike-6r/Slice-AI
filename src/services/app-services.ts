@@ -162,7 +162,8 @@ export class ProviderService {
 export class CollectorService {
   constructor(private readonly repositories: AppRepositories) {}
   list = () => this.repositories.collectors.listCollectors();
-  get = (id: import("@/domain").UserId) => this.repositories.collectors.getCollector(id);
+  get = (id: import("@/domain").UserId, input?: { page?: number; pageSize?: number }) =>
+    this.repositories.collectors.getCollector(id, input);
   follow = (id: import("@/domain").UserId) => this.repositories.collectors.followCollector(id);
   unfollow = (id: import("@/domain").UserId) => this.repositories.collectors.unfollowCollector(id);
 }
