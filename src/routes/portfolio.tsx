@@ -2013,10 +2013,20 @@ function PerformanceChart({
             fill="none"
             vectorEffect="non-scaling-stroke"
           />
+          {chartPoints.map(({ x, y, index }) => (
+            <circle
+              key={`${x}-${y}-${index}`}
+              cx={x}
+              cy={y}
+              r={activeIndex === index ? "2.8" : chartPoints.length <= 24 ? "1.35" : "0.8"}
+              className="portfolio-performance-chart__observation"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
           <circle
-            cx={chartPoints.at(-1)!.x}
-            cy={chartPoints.at(-1)!.y}
-            r="1.65"
+            cx={activePoint?.x ?? chartPoints.at(-1)!.x}
+            cy={activePoint?.y ?? chartPoints.at(-1)!.y}
+            r={activePoint ? "2.25" : "1.65"}
             className="portfolio-performance-chart__endpoint"
             vectorEffect="non-scaling-stroke"
           />

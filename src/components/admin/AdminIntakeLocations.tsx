@@ -167,10 +167,12 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
       );
     const currentLocation = detail.data.location;
     return (
-      <section className="intake-locations-workspace">
+      <section className="intake-locations-workspace intake-locations-workspace--detail">
+        <div className="intake-location-detail-breadcrumb" aria-label="Location breadcrumb">
+          <span>Admin Console</span><span aria-hidden="true">/</span><span>Physical Intake</span><span aria-hidden="true">/</span><button type="button" className="intake-location-detail-breadcrumb__back" onClick={onBack}><ArrowLeft aria-hidden="true" /> Intake Locations</button><span aria-hidden="true">/</span><strong>{currentLocation.displayName}</strong>
+        </div>
         <div className="intake-location-detail-header">
           <div className="intake-location-detail-heading">
-            <button className="admin-secondary-button" type="button" onClick={onBack}><ArrowLeft aria-hidden="true" /> Intake Locations</button>
             <div>
               <p className="admin-console-eyebrow">Physical Intake / Receiving location</p>
               <h2>{currentLocation.displayName}</h2>
@@ -495,7 +497,14 @@ function EnvironmentPill({ environment }: { environment: string }) {
 }
 
 function LocationSummaryStrip({ location }: { location: AdminIntakeLocationDetail["location"] }) {
-  return <div className="intake-location-summary-strip"><div><span>Availability</span><strong><AvailabilityPill location={location} /></strong></div><div><span>Delivery methods</span><strong>{methodLabel(location)}</strong></div><div><span>Active intakes</span><strong>{location.activeIntakes}</strong></div><div><span>Capacity</span><strong>{location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured"}</strong></div><div><span>Environment</span><strong>{environmentLabel(location.environment)}</strong></div><div><span>Last activity</span><strong>{new Date(location.lastActivityAt).toLocaleDateString([], { month: "short", day: "numeric" })}</strong></div></div>;
+  const metrics = [
+    { label: "Availability", value: <AvailabilityPill location={location} />, icon: <CheckCircle2 aria-hidden="true" /> },
+    { label: "Delivery Methods", value: methodLabel(location), icon: <Truck aria-hidden="true" /> },
+    { label: "Active Intakes", value: location.activeIntakes, icon: <PackageCheck aria-hidden="true" /> },
+    { label: "Capacity", value: location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured", icon: <UsersRound aria-hidden="true" /> },
+    { label: "Last Activity", value: new Date(location.lastActivityAt).toLocaleDateString([], { month: "short", day: "numeric" }), icon: <Clock3 aria-hidden="true" /> },
+  ];
+  return <div className="intake-location-summary-strip">{metrics.map((metric) => <div className="intake-location-summary-card" key={metric.label}><span className="intake-location-summary-card__icon">{metric.icon}</span><div><span>{metric.label}</span><strong>{metric.value}</strong></div></div>)}</div>;
 }
 
 function LocationOverview({ detail, onEdit, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onEdit: () => void; onOpenIntakes: () => void }) {
@@ -525,11 +534,14 @@ function LocationOverview({ detail, onEdit, onOpenIntakes }: { detail: AdminInta
       </div>
       <div className="intake-location-detail-grid">
         <LocationIntakePreview detail={detail} onOpenIntakes={onOpenIntakes} />
-        <CapacitySummary location={location} />
       </div>
-      <NeedsAttentionCard location={location} />
+      <InternalOperationsSummary location={location} />
     </div>
   );
+}
+
+function InternalOperationsSummary({ location }: { location: AdminIntakeLocationDetail["location"] }) {
+  return <section className="admin-panel intake-location-detail-section intake-location-internal-summary"><SectionHeading eyebrow="Slice-only data" title="Internal operations" /><dl className="intake-location-internal-grid"><div><dt>Internal location ID</dt><dd>{location.id}</dd></div><div><dt>Internal contact</dt><dd>{location.internalContact || "Not configured"}</dd></div><div><dt>Supported categories</dt><dd>{location.supportedCategories.length ? location.supportedCategories.map((category) => category.name).join(", ") : "All supported collectibles"}</dd></div><div><dt>Last updated</dt><dd>{new Date(location.updatedAt).toLocaleString()}</dd></div><div><dt>Operational notes</dt><dd>{location.operationalNotes || "Not configured"}</dd></div><div><dt>Created</dt><dd>{new Date(location.createdAt).toLocaleString()}</dd></div></dl></section>;
 }
 
 function SectionHeading({ eyebrow, title, action }: { eyebrow?: string; title: string; action?: ReactNode }) {
@@ -541,7 +553,7 @@ function DeliveryCapabilities({ location, onEdit }: { location: AdminIntakeLocat
 }
 
 function CollectorPreview({ location, visibility }: { location: AdminIntakeLocationDetail["location"]; visibility: AdminIntakeLocationDetail["collectorVisibility"] }) {
-  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Collector preview" title="How Collectors see this location" /><p className="intake-location-helper">This uses the same public fields and eligibility state as destination selection.</p><div className="intake-location-collector-preview"><div className="intake-location-preview-icon"><Building2 /></div><div><strong>{location.displayName}</strong><span>{location.region}, {location.countryCode}</span><span>{methodLabel(location)}</span><p>{location.shippingInstructions || location.inPersonInstructions || "No public instructions configured."}</p></div><AvailabilityPill location={location} /></div><div className="intake-location-preview-visibility"><span>Eligible for new assignment <b className={visibility.eligibleForNewAssignment ? "is-yes" : "is-no"}>{visibility.eligibleForNewAssignment ? "Yes" : "No"}</b></span>{visibility.eligibilityReason ? <small>{visibility.eligibilityReason}</small> : null}</div></section>;
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Collector preview" title="Collector preview" /><p className="intake-location-helper">This is how collectors see this intake destination.</p><div className="intake-location-collector-preview"><div className="intake-location-preview-icon"><Building2 /></div><div><strong>{location.displayName}</strong><span>{location.region}, {location.countryCode}</span><span>{methodLabel(location)}</span><p>{location.shippingInstructions || location.inPersonInstructions || "No public instructions configured."}</p></div><AvailabilityPill location={location} /></div><div className="intake-location-preview-visibility"><span>Eligible for new assignment <b className={visibility.eligibleForNewAssignment ? "is-yes" : "is-no"}>{visibility.eligibleForNewAssignment ? "Yes" : "No"}</b></span>{visibility.eligibilityReason ? <small>{visibility.eligibilityReason}</small> : null}</div></section>;
 }
 
 function LocationIntakePreview({ detail, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onOpenIntakes: () => void }) {
@@ -561,7 +573,7 @@ function NeedsAttentionCard({ location }: { location: AdminIntakeLocationDetail[
 
 function LocationDetailRail({ detail, onEdit, onCommand, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onEdit: () => void; onCommand: (command: LocationCommandName, label: string) => void; onOpenIntakes: () => void }) {
   const { location, collectorVisibility, availableCommands } = detail;
-  return <aside className="intake-location-detail-rail"><section className="admin-panel intake-location-detail-rail-card"><SectionHeading eyebrow="Location snapshot" title="Operational state" /><dl className="intake-location-rail-definition"><dt>Status</dt><dd><StatusPill status={location.status} /></dd><dt>Availability</dt><dd><AvailabilityPill location={location} /></dd><dt>Environment</dt><dd><EnvironmentPill environment={location.environment} /></dd><dt>Active intakes</dt><dd>{location.activeIntakes}</dd><dt>Capacity</dt><dd>{location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured"}</dd><dt>Delivery</dt><dd>{methodLabel(location)}</dd></dl></section><section className="admin-panel intake-location-detail-rail-card"><SectionHeading eyebrow="Collector visibility" title="Destination eligibility" /><VisibilityRow label="Visible in Demo / QA" value={collectorVisibility.visibleInDemoQA} /><VisibilityRow label="Visible in Production" value={collectorVisibility.visibleInProduction} /><VisibilityRow label="Shipping" value={collectorVisibility.shipping} /><VisibilityRow label="In-person" value={collectorVisibility.inPerson} /><VisibilityRow label="Eligible for new assignment" value={collectorVisibility.eligibleForNewAssignment} />{collectorVisibility.eligibilityReason ? <p className="intake-location-rail-reason">{collectorVisibility.eligibilityReason}</p> : null}</section><section className="admin-panel intake-location-detail-rail-card intake-location-quick-actions"><SectionHeading eyebrow="Controls" title="Quick actions" /><button type="button" onClick={onEdit} disabled={!availableCommands.EDIT?.allowed}><Settings2 /> Edit configuration <ChevronRight /></button><button type="button" onClick={onOpenIntakes}><PackageCheck /> View active intakes <ChevronRight /></button><ContextualLocationAction location={location} commands={availableCommands} onCommand={onCommand} compact /></section></aside>;
+  return <aside className="intake-location-detail-rail"><section className="admin-panel intake-location-detail-rail-card"><SectionHeading eyebrow="Location snapshot" title="Location snapshot" /><dl className="intake-location-rail-definition"><dt>Status</dt><dd><StatusPill status={location.status} /></dd><dt>Availability</dt><dd><AvailabilityPill location={location} /></dd><dt>Environment</dt><dd><EnvironmentPill environment={location.environment} /></dd><dt>Active intakes</dt><dd>{location.activeIntakes}</dd><dt>Capacity</dt><dd>{location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured"}</dd><dt>Delivery</dt><dd>{methodLabel(location)}</dd></dl></section><NeedsAttentionCard location={location} /><section className="admin-panel intake-location-detail-rail-card intake-location-quick-actions"><SectionHeading eyebrow="Controls" title="Quick actions" /><button type="button" onClick={onEdit} disabled={!availableCommands.EDIT?.allowed}><Settings2 /> Edit configuration <ChevronRight /></button><button type="button" onClick={onOpenIntakes}><PackageCheck /> View active intakes <ChevronRight /></button><ContextualLocationAction location={location} commands={availableCommands} onCommand={onCommand} compact /></section><section className="admin-panel intake-location-detail-rail-card intake-location-visibility-card"><SectionHeading eyebrow="Collector visibility" title="Destination eligibility" /><VisibilityRow label="Visible in Demo / QA" value={collectorVisibility.visibleInDemoQA} /><VisibilityRow label="Visible in Production" value={collectorVisibility.visibleInProduction} /><VisibilityRow label="Shipping" value={collectorVisibility.shipping} /><VisibilityRow label="In-person" value={collectorVisibility.inPerson} /><VisibilityRow label="Eligible for new assignment" value={collectorVisibility.eligibleForNewAssignment} />{collectorVisibility.eligibilityReason ? <p className="intake-location-rail-reason">{collectorVisibility.eligibilityReason}</p> : null}</section></aside>;
 }
 
 function VisibilityRow({ label, value }: { label: string; value: boolean }) {

@@ -19,7 +19,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (reviewDetail)
     return (
       <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <MainNavigation />
         {children}
       </div>
     );

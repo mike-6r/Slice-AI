@@ -2141,6 +2141,530 @@ body:has(.admin-review-detail-page) .admin-review-history-filters button {
   }
 }
 
+/* Physical intake and receiving-location visual pass. */
+.admin-console-main--intake-locations > .admin-console-topbar,
+.admin-console-main--physical-intake-detail > .admin-console-topbar {
+  display: none;
+}
+
+.admin-console-main--intake-locations,
+.admin-console-main--physical-intake-detail {
+  min-width: 0;
+  background: #070f14;
+}
+
+.admin-console-main--intake-locations > .intake-locations-workspace,
+.admin-console-main--physical-intake-detail > .physical-intake-detail-page {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 1.05rem clamp(1rem, 2.2vw, 2.35rem) 3rem;
+}
+
+.admin-console-main--intake-locations > .intake-locations-workspace {
+  gap: 1rem;
+}
+
+.admin-console-main--intake-locations .intake-locations-header {
+  align-items: flex-end;
+  padding: 0.1rem 0 0.9rem;
+  border-bottom: 1px solid rgba(82, 132, 142, 0.24);
+}
+
+.admin-console-main--intake-locations .intake-locations-header h2 {
+  margin: 0.2rem 0 0.3rem;
+  color: #f2faf7;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2.3vw, 2rem);
+  letter-spacing: -0.035em;
+}
+
+.admin-console-main--intake-locations .intake-locations-header p:not(.admin-console-eyebrow) {
+  color: #9bb1b5;
+  font-size: 0.7rem;
+}
+
+.admin-console-main--intake-locations .intake-location-page-grid {
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 0.9rem;
+}
+
+.admin-console-main--intake-locations .intake-location-page-main,
+.admin-console-main--intake-locations .intake-location-summary-rail {
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-metrics {
+  gap: 0.65rem;
+}
+
+.admin-console-main--intake-locations .intake-location-metrics .admin-panel,
+.admin-console-main--intake-locations .intake-location-directory,
+.admin-console-main--intake-locations .intake-location-summary-rail .admin-panel {
+  border-color: rgba(77, 128, 138, 0.27);
+  border-radius: 0.68rem;
+  background: linear-gradient(145deg, rgba(12, 29, 38, 0.96), rgba(7, 17, 23, 0.98));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 249, 0.025), 0 0.8rem 1.8rem rgba(0, 0, 0, 0.1);
+}
+
+.admin-console-main--intake-locations .intake-location-metrics .admin-panel {
+  min-height: 5.35rem;
+}
+
+.admin-console-main--intake-locations .intake-location-directory {
+  gap: 0.85rem;
+  padding: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-filters {
+  gap: 0.5rem;
+}
+
+.admin-console-main--intake-locations .intake-location-table {
+  border-color: rgba(77, 128, 138, 0.25);
+  border-radius: 0.55rem;
+}
+
+.admin-console-main--intake-locations .intake-location-table-row {
+  min-height: 3.8rem;
+  border-bottom-color: rgba(76, 121, 130, 0.18);
+}
+
+.admin-console-main--intake-locations .intake-location-table-head {
+  min-height: 2.7rem;
+  color: #77979d;
+  background: rgba(14, 35, 43, 0.8);
+}
+
+.admin-console-main--intake-locations .intake-location-detail-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  min-height: 1.5rem;
+  color: #78949a;
+  font-size: 0.62rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-breadcrumb strong {
+  overflow: hidden;
+  max-width: min(38rem, 60vw);
+  color: #dcece9;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-breadcrumb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  padding: 0;
+  color: #56dfc1;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-breadcrumb__back:hover {
+  color: #b5fff0;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-breadcrumb__back svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.admin-console-main--intake-locations .intake-locations-workspace--detail {
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-header {
+  align-items: flex-end;
+  padding: 0.1rem 0 0.95rem;
+  border-bottom: 1px solid rgba(82, 132, 142, 0.24);
+}
+
+.admin-console-main--intake-locations .intake-location-detail-heading {
+  gap: 0;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-heading h2 {
+  margin: 0.2rem 0 0.32rem;
+  color: #f2faf7;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-heading p:not(.admin-console-eyebrow) {
+  color: #91abb0;
+  font-size: 0.72rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-badges {
+  margin-top: 0.7rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-actions .admin-primary-button,
+.admin-console-main--intake-locations .intake-location-detail-actions .admin-secondary-button,
+.admin-console-main--intake-locations .intake-location-detail-actions summary {
+  min-height: 2.2rem;
+  border-radius: 0.48rem;
+  font-size: 0.63rem;
+}
+
+.admin-console-main--intake-locations .intake-location-summary-strip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.62rem;
+  min-width: 0;
+  min-height: 4.8rem;
+  box-sizing: border-box;
+  padding: 0.82rem;
+  border: 1px solid rgba(77, 128, 138, 0.27);
+  border-radius: 0.68rem;
+  background: linear-gradient(145deg, rgba(13, 30, 39, 0.96), rgba(7, 17, 23, 0.98));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 249, 0.025);
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card__icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(38, 217, 181, 0.28);
+  border-radius: 0.5rem;
+  color: #4ae0c1;
+  background: rgba(28, 168, 143, 0.13);
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card__icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card span:not(.intake-location-availability):not(.intake-location-summary-card__icon) {
+  color: #809ba0;
+  font-size: 0.55rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.admin-console-main--intake-locations .intake-location-summary-card strong {
+  overflow: hidden;
+  color: #e7f5f1;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-console-main--intake-locations .admin-filter-tabs {
+  display: flex;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.24rem;
+  overflow-x: auto;
+  border: 1px solid rgba(77, 128, 138, 0.22);
+  border-radius: 0.62rem;
+  background: rgba(8, 18, 24, 0.7);
+}
+
+.admin-console-main--intake-locations .admin-filter-tabs button {
+  min-height: 2.15rem;
+  border: 1px solid transparent;
+  border-radius: 0.42rem;
+  padding: 0.45rem 0.75rem;
+  color: #819ba0;
+  font-size: 0.63rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.admin-console-main--intake-locations .admin-filter-tabs button.is-active {
+  border-color: rgba(38, 217, 181, 0.34);
+  color: #c8fff4;
+  background: rgba(24, 148, 129, 0.2);
+}
+
+.admin-console-main--intake-locations .intake-location-detail-layout {
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 0.9rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-main,
+.admin-console-main--intake-locations .intake-location-detail-rail {
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-overview-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-overview-stack > .intake-location-detail-grid {
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-rail {
+  position: sticky;
+  top: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-section,
+.admin-console-main--intake-locations .intake-location-detail-rail-card {
+  border-color: rgba(77, 128, 138, 0.27);
+  border-radius: 0.68rem;
+  background: linear-gradient(145deg, rgba(11, 28, 37, 0.96), rgba(7, 17, 23, 0.98));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 249, 0.025), 0 0.8rem 1.8rem rgba(0, 0, 0, 0.08);
+}
+
+.admin-console-main--intake-locations .intake-location-detail-section {
+  padding: 0.95rem;
+}
+
+.admin-console-main--intake-locations .intake-location-section-heading {
+  align-items: center;
+  margin-bottom: 0.78rem;
+  padding-bottom: 0.68rem;
+  border-bottom: 1px solid rgba(76, 121, 130, 0.2);
+}
+
+.admin-console-main--intake-locations .intake-location-section-heading h3 {
+  color: #e7f5f1;
+  font-size: 0.88rem;
+}
+
+.admin-console-main--intake-locations .intake-location-definition {
+  gap: 0.62rem 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-definition dt,
+.admin-console-main--intake-locations .intake-location-preview-fields b {
+  color: #78969c;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-console-main--intake-locations .intake-location-definition dd {
+  color: #dcece9;
+  font-size: 0.65rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-grid {
+  gap: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-capability {
+  min-height: 3.35rem;
+  border-color: rgba(77, 128, 138, 0.25);
+  background: rgba(8, 20, 27, 0.55);
+}
+
+.admin-console-main--intake-locations .intake-location-collector-preview {
+  min-height: 4.15rem;
+  border-color: rgba(38, 217, 181, 0.25);
+}
+
+.admin-console-main--intake-locations .intake-location-preview-list > a {
+  min-height: 3.25rem;
+  border-bottom-color: rgba(76, 121, 130, 0.18);
+}
+
+.admin-console-main--intake-locations .intake-location-internal-summary {
+  grid-column: 1 / -1;
+}
+
+.admin-console-main--intake-locations .intake-location-internal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.admin-console-main--intake-locations .intake-location-internal-grid > div {
+  min-width: 0;
+  padding: 0.68rem;
+  border: 1px solid rgba(77, 128, 138, 0.18);
+  border-radius: 0.5rem;
+  background: rgba(7, 18, 24, 0.55);
+}
+
+.admin-console-main--intake-locations .intake-location-internal-grid dt {
+  color: #78969c;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-console-main--intake-locations .intake-location-internal-grid dd {
+  margin: 0.32rem 0 0;
+  color: #dcece9;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.admin-console-main--intake-locations .intake-location-attention-card {
+  border-color: rgba(211, 150, 52, 0.3);
+}
+
+.admin-console-main--intake-locations .intake-location-detail-rail-card {
+  padding: 0.85rem;
+}
+
+.admin-console-main--intake-locations .intake-location-detail-rail-card .intake-location-section-heading {
+  align-items: flex-start;
+}
+
+.admin-console-main--intake-locations .intake-location-quick-actions > button {
+  min-height: 2.2rem;
+  border: 1px solid rgba(77, 128, 138, 0.22);
+  border-radius: 0.42rem;
+  padding: 0.45rem 0.52rem;
+  background: rgba(7, 20, 27, 0.55);
+}
+
+.admin-console-main--physical-intake-detail > .physical-intake-detail-page {
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+  column-gap: 0.9rem;
+  row-gap: 0.85rem;
+  padding-top: 1.05rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-detail-breadcrumb {
+  min-height: 1.35rem;
+  color: #819ca0;
+  font-size: 0.62rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-back-link {
+  margin-bottom: 0.05rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-detail-hero {
+  border-color: rgba(77, 128, 138, 0.3);
+  border-radius: 0.7rem;
+  background: linear-gradient(145deg, rgba(12, 31, 40, 0.97), rgba(7, 17, 23, 0.98));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 249, 0.025), 0 0.9rem 2rem rgba(0, 0, 0, 0.1);
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-detail-stepper-panel,
+.admin-console-main--physical-intake-detail .physical-intake-detail-tabs,
+.admin-console-main--physical-intake-detail .physical-intake-detail-footnote {
+  border-color: rgba(77, 128, 138, 0.27);
+  border-radius: 0.65rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-blocker-banner {
+  border-radius: 0.65rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-operational-cards {
+  gap: 0.8rem;
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-operational-cards > article {
+  border-color: rgba(77, 128, 138, 0.27);
+  border-radius: 0.68rem;
+  background: linear-gradient(145deg, rgba(11, 28, 37, 0.96), rgba(7, 17, 23, 0.98));
+}
+
+.admin-console-main--physical-intake-detail .physical-intake-detail-rail {
+  top: 0.85rem;
+  gap: 0.8rem;
+}
+
+@media (max-width: 1180px) {
+  .admin-console-main--intake-locations .intake-location-page-grid,
+  .admin-console-main--intake-locations .intake-location-detail-layout,
+  .admin-console-main--physical-intake-detail > .physical-intake-detail-page {
+    grid-template-columns: minmax(0, 1fr) 15.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-console-main--intake-locations .intake-location-page-grid,
+  .admin-console-main--intake-locations .intake-location-detail-layout,
+  .admin-console-main--physical-intake-detail > .physical-intake-detail-page {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-console-main--intake-locations .intake-location-detail-rail,
+  .admin-console-main--physical-intake-detail .physical-intake-detail-rail {
+    position: static;
+  }
+
+  .admin-console-main--intake-locations .intake-location-detail-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-console-main--intake-locations .intake-location-quick-actions {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-console-main--intake-locations > .intake-locations-workspace,
+  .admin-console-main--physical-intake-detail > .physical-intake-detail-page {
+    padding-inline: 0.8rem;
+  }
+
+  .admin-console-main--intake-locations .intake-location-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-console-main--intake-locations .intake-location-summary-card:nth-child(2n) {
+    border-right: 1px solid rgba(77, 128, 138, 0.27);
+  }
+
+  .admin-console-main--intake-locations .intake-location-internal-grid,
+  .admin-console-main--intake-locations .intake-location-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-console-main--intake-locations .intake-location-detail-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-console-main--intake-locations .intake-location-detail-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-console-main--intake-locations .intake-location-detail-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 /* Submission review control center: final precedence layer. */
 body:has(.admin-review-detail-page) .admin-review-workspace-main { min-width: 0; gap: 0.56rem; }
 body:has(.admin-review-detail-page) .admin-review-workspace-header { min-height: 6.85rem; padding: 0.62rem 0.78rem; }
@@ -66392,3 +66916,762 @@ body:has(.portfolio-page)
 .asset-presale-action input { width: 150px; border: 1px solid rgba(255,255,255,.15); border-radius: 10px; background: rgba(255,255,255,.05); color: inherit; padding: 12px; }
 .asset-presale-message { margin: 0; color: #b9dfc0; font-size: .84rem; }
 @media (max-width: 640px) { .asset-presale-action { align-items: stretch; flex-direction: column; } .asset-presale-action input { width: 100%; } }
+
+/* Submission review visual system: one stable admin frame, intentional
+   controls, and evidence cards that keep their hierarchy at desktop widths. */
+body:has(.admin-review-detail-page) {
+  overflow-x: hidden;
+}
+
+body:has(.admin-review-detail-page) .admin-review-console-shell {
+  grid-template-columns: 176px minmax(0, 1fr);
+  min-height: 100vh;
+  background: #071016;
+}
+
+body:has(.admin-review-detail-page) .admin-review-console-shell .admin-console-sidebar {
+  box-sizing: border-box;
+  width: 176px;
+  min-width: 176px;
+  height: 100vh;
+  padding: 1.15rem 0.8rem 0.85rem;
+  border-right-color: #1d3440;
+  background: linear-gradient(180deg, #08151c 0%, #071218 100%);
+}
+
+body:has(.admin-review-detail-page) .admin-review-console-shell .admin-console-main {
+  min-width: 0;
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 1.05rem 1.35rem 3rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-workspace-main {
+  min-width: 0;
+}
+
+/* Shared premium control treatment for every editable review action. */
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary,
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary {
+  display: inline-flex;
+  min-height: 2.05rem;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid transparent;
+  border-radius: 0.42rem;
+  padding: 0.48rem 0.72rem;
+  font: inherit;
+  font-size: 0.61rem;
+  font-weight: 750;
+  line-height: 1.1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease,
+    color 160ms ease, transform 160ms ease;
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary {
+  border-color: rgba(44, 226, 187, 0.72);
+  background: linear-gradient(135deg, #2cddaf 0%, #15bfa5 100%);
+  box-shadow: 0 0.45rem 1.1rem rgba(20, 210, 171, 0.16);
+  color: #041713;
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary {
+  border-color: rgba(63, 135, 148, 0.62);
+  background: linear-gradient(180deg, rgba(17, 39, 48, 0.96), rgba(9, 25, 32, 0.96));
+  color: #c8e1dd;
+  box-shadow: inset 0 1px 0 rgba(202, 255, 244, 0.04);
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary:hover:not(:disabled),
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary:hover:not(:disabled) {
+  border-color: #4ce8c5;
+  box-shadow: 0 0.55rem 1.35rem rgba(23, 211, 174, 0.2);
+  color: #ecfffa;
+  transform: translateY(-1px);
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary:hover:not(:disabled) {
+  color: #031610;
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary:disabled,
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary:disabled {
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.46;
+  transform: none;
+}
+
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-primary svg,
+body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  flex: 0 0 auto;
+}
+
+/* Convert compact text links into the same designed controls. */
+body:has(.admin-review-detail-page) .admin-review-card-heading > a,
+body:has(.admin-review-detail-page) .admin-review-card-link,
+body:has(.admin-review-detail-page) .admin-review-expand-all {
+  display: inline-flex;
+  min-height: 1.7rem;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(49, 183, 157, 0.5);
+  border-radius: 0.36rem;
+  padding: 0.3rem 0.52rem;
+  background: rgba(15, 54, 57, 0.55);
+  color: #5ee4c3;
+  font-size: 0.53rem;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+body:has(.admin-review-detail-page) .admin-review-card-heading > a:hover,
+body:has(.admin-review-detail-page) .admin-review-card-link:hover:not(:disabled),
+body:has(.admin-review-detail-page) .admin-review-expand-all:hover {
+  border-color: #49e6c1;
+  background: rgba(23, 121, 104, 0.32);
+  color: #e2fff8;
+}
+
+body:has(.admin-review-detail-page) .admin-review-card-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* The evidence heading owns the row; cards occupy the full available width. */
+body:has(.admin-review-detail-page) .admin-review-evidence-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-heading {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(66, 116, 125, 0.38);
+  border-radius: 0.45rem;
+  background: rgba(8, 26, 34, 0.72);
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-heading > strong {
+  color: #e9f7f3;
+  font-size: 0.66rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-heading > span {
+  border-radius: 999px;
+  padding: 0.2rem 0.42rem;
+  background: rgba(190, 129, 24, 0.15);
+  color: #f2c15d;
+  font-size: 0.53rem;
+  font-weight: 750;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-heading > a {
+  margin-left: auto;
+  color: #93b2b8;
+  font-size: 0.54rem;
+  text-decoration: none;
+}
+
+body:has(.admin-review-detail-page) .admin-review-workspace-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: none;
+  gap: 0.72rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-workspace-media {
+  display: grid;
+  grid-template-columns: minmax(7.8rem, 10.5rem) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 11rem;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  padding: 0.65rem;
+  overflow: hidden;
+  border: 1px solid #2a5260;
+  border-radius: 0.52rem;
+  background: linear-gradient(145deg, rgba(11, 34, 43, 0.98), rgba(7, 21, 28, 0.98));
+  box-shadow: inset 0 1px 0 rgba(157, 235, 221, 0.035), 0 0.55rem 1.2rem rgba(0, 0, 0, 0.12);
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail {
+  display: grid;
+  min-width: 0;
+  min-height: 9.65rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail > div,
+body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail img,
+body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail span {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 9.65rem;
+  box-sizing: border-box;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #315965;
+  border-radius: 0.38rem;
+  background: #07151c;
+  color: #57dbc0;
+  object-fit: contain;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.58rem;
+  padding: 0.15rem 0.05rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-title-row strong {
+  color: #e0f2ee;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-title-row > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.18rem 0.35rem;
+  background: rgba(190, 129, 24, 0.13);
+  color: #f3c05a;
+  font-size: 0.48rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-title-row > span.is-accepted {
+  background: rgba(22, 164, 129, 0.16);
+  color: #52e0bd;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details dl div {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details dt,
+body:has(.admin-review-detail-page) .admin-review-evidence-details dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details dt {
+  color: #72919a;
+  font-size: 0.48rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-details dd {
+  color: #d5e7e2;
+  font-size: 0.56rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.42rem;
+  margin-top: auto;
+}
+
+body:has(.admin-review-detail-page) .admin-review-evidence-actions button {
+  min-height: 1.85rem;
+  padding: 0.38rem 0.52rem;
+  font-size: 0.52rem;
+}
+
+/* Keep all workflow tiles aligned even when one section has more copy. */
+body:has(.admin-review-detail-page) .admin-review-identity-panels,
+body:has(.admin-review-detail-page) .admin-review-two-panel {
+  align-items: stretch;
+}
+
+body:has(.admin-review-detail-page) .admin-review-identity-panels .admin-review-info-panel,
+body:has(.admin-review-detail-page) .admin-review-two-panel > * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1180px) {
+  body:has(.admin-review-detail-page) .admin-review-workspace-grid {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-workspace-gallery {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  body:has(.admin-review-detail-page) .admin-review-console-shell {
+    grid-template-columns: 1fr;
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-console-shell .admin-console-sidebar {
+    display: none;
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  body:has(.admin-review-detail-page) .admin-review-detail-page {
+    padding-inline: 0.8rem;
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-workspace-media {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail,
+  body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail > div,
+  body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail img,
+body:has(.admin-review-detail-page) .admin-review-evidence-thumbnail span {
+    min-height: 8.5rem;
+  }
+}
+
+/* Portfolio premium sizing and market-style performance chart. */
+.portfolio-page.portfolio-page--approved .portfolio-shell {
+  width: min(calc(100% - clamp(2rem, 5vw, 5rem)), 76rem);
+  max-width: 76rem;
+  padding-block: 2rem 3.5rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-intro {
+  display: block;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading {
+  display: block;
+  min-height: 0;
+  padding-bottom: 1.15rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading .page-kicker,
+.portfolio-page.portfolio-page--approved .portfolio-heading__sparkline,
+.portfolio-page.portfolio-page--approved .portfolio-heading__overview-actions {
+  display: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading h1 {
+  font-size: clamp(2.2rem, 3vw, 3.5rem);
+  letter-spacing: -0.06em;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-heading > div > p:last-child {
+  max-width: 34rem;
+  margin-top: 0.55rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-summary-kpi {
+  min-height: 6.7rem;
+  box-sizing: border-box;
+  border-radius: 0.78rem;
+  padding: 0.9rem 1rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(25rem, auto) minmax(14rem, auto);
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  align-items: stretch;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--hero-performance {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  min-height: 25rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+  grid-column: 4;
+  grid-row: 1;
+  min-height: 25rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--allocation {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--activity {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--recent-orders {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--market-watch {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--allocation,
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--activity,
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--recent-orders,
+.portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--market-watch {
+  min-height: 14rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel--hero-performance,
+.portfolio-page.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-panel__body {
+  overflow: visible;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-panel--hero-performance .portfolio-panel__body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-hero {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "value" "chart" "periods";
+  gap: 0.75rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-hero__value {
+  grid-area: value;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  grid-area: chart;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__plot {
+  position: relative;
+  min-width: 0;
+  min-height: 16.5rem;
+  height: 16.5rem;
+  margin: 0;
+  overflow: visible;
+  border: 1px solid rgba(78, 151, 149, 0.27);
+  border-radius: 0.7rem;
+  background:
+    radial-gradient(circle at 48% 10%, rgba(36, 213, 177, 0.14), transparent 50%),
+    linear-gradient(180deg, rgba(12, 42, 43, 0.74), rgba(6, 16, 22, 0.95));
+  box-shadow: inset 0 1px 0 rgba(219, 255, 247, 0.045), 0 0.7rem 1.5rem rgba(0, 0, 0, 0.14);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__plot svg {
+  display: block;
+  width: 100%;
+  height: 16.5rem;
+  min-height: 16.5rem;
+  box-sizing: border-box;
+  padding: 0.8rem 4.7rem 1.9rem 0.75rem;
+  overflow: visible;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__grid-line {
+  stroke: rgba(165, 222, 216, 0.17);
+  stroke-dasharray: 1.5 4;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__vertical-grid-line {
+  stroke: rgba(165, 222, 216, 0.1);
+  stroke-dasharray: 1 5;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__area {
+  fill: url("#portfolio-performance-area");
+  opacity: 1;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__line {
+  stroke: var(--portfolio-chart-accent, #27dfb4);
+  stroke-width: 2.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 0.34rem rgba(39, 223, 180, 0.48));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__observation {
+  fill: var(--portfolio-chart-accent, #27dfb4);
+  stroke: rgba(219, 255, 247, 0.44);
+  stroke-width: 0.55;
+  opacity: 0.75;
+  transition: r 140ms ease, opacity 140ms ease;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__endpoint {
+  fill: #dffff8;
+  stroke: var(--portfolio-chart-accent, #27dfb4);
+  stroke-width: 1.15;
+  filter: drop-shadow(0 0 0.32rem rgba(39, 223, 180, 0.8));
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__crosshair line {
+  stroke: rgba(222, 255, 248, 0.62);
+  stroke-dasharray: 2 3;
+  stroke-width: 0.72;
+  vector-effect: non-scaling-stroke;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__crosshair circle:first-of-type {
+  fill: rgba(6, 19, 23, 0.92);
+  stroke: #e4fff9;
+  stroke-width: 1.35;
+  vector-effect: non-scaling-stroke;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__crosshair circle:last-of-type {
+  fill: var(--portfolio-chart-accent, #27dfb4);
+  stroke: none;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__axis {
+  top: 0.65rem;
+  right: 0.45rem;
+  bottom: 2.15rem;
+  width: 3.8rem;
+  padding: 0;
+  color: #86a3a6;
+  font-size: 0.56rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__axis span {
+  padding: 0.16rem 0.24rem;
+  border: 1px solid rgba(119, 179, 177, 0.13);
+  border-radius: 0.28rem;
+  background: rgba(5, 16, 21, 0.8);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__x-axis {
+  right: 4.35rem;
+  bottom: 0.48rem;
+  left: 0.72rem;
+  color: #789397;
+  font-size: 0.55rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-tooltip {
+  width: min(15rem, calc(100% - 1rem));
+  border: 1px solid rgba(39, 223, 180, 0.62);
+  border-radius: 0.75rem;
+  padding: 0.78rem 0.82rem 0.84rem;
+  background: rgba(6, 16, 22, 0.98);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(22, 74, 69, 0.35);
+  backdrop-filter: blur(0.65rem);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-periods {
+  display: grid;
+  grid-area: periods;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 1rem;
+  margin: 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-periods > div {
+  min-width: 0;
+  padding: 0.52rem 0;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__legend {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(7rem, auto);
+  gap: 0;
+  margin-top: 0;
+  border-color: rgba(102, 163, 164, 0.22);
+  border-radius: 0.62rem;
+  background: rgba(7, 18, 24, 0.58);
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__legend > div {
+  min-height: 3.05rem;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0.62rem 0.72rem;
+}
+
+.portfolio-page.portfolio-page--approved .portfolio-performance-chart__legend strong {
+  font-size: 0.68rem;
+}
+
+@media (max-width: 1180px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell {
+    width: min(calc(100% - 2.5rem), 72rem);
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--hero-performance,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--allocation,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--activity,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--recent-orders,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--market-watch {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--hero-performance,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content > .portfolio-panel--holdings {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .portfolio-page.portfolio-page--approved .portfolio-shell {
+    width: calc(100% - 1.25rem);
+    padding-top: 1.35rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-kpis,
+  .portfolio-page.portfolio-page--approved .portfolio-overview-content {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart__plot,
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart__plot svg {
+    min-height: 14rem;
+    height: 14rem;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart__legend {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .portfolio-page.portfolio-page--approved .portfolio-performance-chart__legend-total {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+/* =================================================
+   Customer workspace geometry contract
+
+   Home, Markets, Collectors, Portfolio, and Wallet share the same application
+   chrome. Keep their outer rails identical so route changes do not make the
+   navigation or content appear to zoom in/out. Internal page grids remain
+   route-specific; only the shared frame is governed here.
+   ================================================= */
+:root {
+  --customer-frame-max: 90rem;
+  --customer-frame-gutter: 3rem;
+}
+
+body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wallet-page)
+  .main-navigation
+  .site-shell,
+body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wallet-page)
+  .slice-footer
+  .site-shell,
+.approved-home .page-shell,
+.markets-page .markets-shell,
+.collectors-page .collectors-shell,
+.portfolio-page .portfolio-shell,
+.wallet-page .wallet-shell {
+  width: min(calc(100% - var(--customer-frame-gutter)), var(--customer-frame-max));
+  max-width: var(--customer-frame-max);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+/* The route-specific collector/tablet pass previously reduced the header to
+   50px. The header is shared chrome, so it keeps one height at every route. */
+body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wallet-page)
+  header.main-navigation
+  > .site-shell {
+  height: 66px;
+  min-height: 66px;
+  box-sizing: border-box;
+}
+
+/* Keep the desktop search control from changing the header's balance on the
+   Markets route, which previously had a wider route-only max-width. */
+body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wallet-page)
+  .main-navigation
+  form[role="search"] {
+  max-width: 17.5rem;
+}
+
+@media (min-width: 1536px) {
+  body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wallet-page)
+    .main-navigation
+    form[role="search"] {
+    max-width: 21rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --customer-frame-gutter: 2rem;
+  }
+}

@@ -802,7 +802,7 @@ function AdminConsole() {
         />
       ) : null}
       <main
-        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}${section === "assetOperations" ? " admin-console-main--asset-operations" : ""}`}
+        className={`admin-console-main${section === "users" ? " admin-console-main--accounts" : ""}${section === "assetOperations" ? " admin-console-main--asset-operations" : ""}${section === "intakeLocations" ? " admin-console-main--intake-locations" : ""}${section === "intake" && selectedIntake ? " admin-console-main--physical-intake-detail" : ""}`}
       >
         <header className="admin-console-topbar">
           <button
