@@ -581,7 +581,7 @@ export function SubmissionPage() {
     setLocalError(null);
     if (!isPriceChartingUrl(referenceUrl)) {
       setLocalError(
-        "Paste a valid PriceCharting link that starts with https://www.pricecharting.com/game/.",
+        "Paste a valid PriceCharting or SportsCardsPro link that starts with https://www.pricecharting.com/game/ or https://www.sportscardspro.com/game/.",
       );
       return;
     }
@@ -1095,12 +1095,15 @@ function IdentityStep({
           <div>
             <p className="list-start-faster__eyebrow">Fastest option</p>
             <h3>Paste a PriceCharting link</h3>
-            <p>Paste a PriceCharting link and Slice will try to identify the exact card for you.</p>
+            <p>
+              Paste a PriceCharting or SportsCardsPro link and Slice will try to identify the
+              exact card for you.
+            </p>
           </div>
         </div>
         <div className="list-start-faster__action">
           <label htmlFor="pricecharting-link" className="sr-only">
-            PriceCharting link
+            PriceCharting or SportsCardsPro link
           </label>
           <div className="list-start-faster__input-wrap">
             <Link2 aria-hidden="true" />
@@ -1109,7 +1112,7 @@ function IdentityStep({
               type="url"
               value={referenceUrl}
               onChange={(event) => onReferenceUrl(event.target.value)}
-              placeholder="https://www.pricecharting.com/..."
+              placeholder="https://www.pricecharting.com/game/..."
               maxLength={2048}
               autoComplete="url"
             />
@@ -4490,7 +4493,14 @@ function isPriceChartingUrl(value: string) {
     const url = new URL(value.trim());
     return (
       url.protocol === "https:" &&
-      ["pricecharting.com", "www.pricecharting.com", "m.pricecharting.com"].includes(
+      [
+        "pricecharting.com",
+        "www.pricecharting.com",
+        "m.pricecharting.com",
+        "sportscardspro.com",
+        "www.sportscardspro.com",
+        "m.sportscardspro.com",
+      ].includes(
         url.hostname.toLowerCase(),
       ) &&
       url.pathname.startsWith("/game/")

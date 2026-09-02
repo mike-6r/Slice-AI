@@ -49,6 +49,28 @@ describe('TrustedReferenceImportService', () => {
     });
   });
 
+  it('accepts SportsCardsPro game URLs as PriceCharting references', () => {
+    expect(
+      service.identify(
+        'https://www.sportscardspro.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+      ),
+    ).toMatchObject({
+      status: 'PARTIAL_MATCH',
+      provider: 'PriceCharting',
+      identity: {
+        name: 'Shohei Ohtani Aa',
+        set: 'Baseball Cards 2026 Topps All Aces',
+        cardNumber: '1',
+      },
+      customerReference: {
+        provider: 'PriceCharting',
+        normalizedUrl:
+          'https://www.pricecharting.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+        matchQuality: 'PARTIAL_MATCH',
+      },
+    });
+  });
+
   it('uses the retained exact product id for live confirmation', async () => {
     const getProduct = jest.fn().mockResolvedValue({
       providerProductId: '715593',

@@ -33,6 +33,11 @@ const trustedHosts = new Map<string, 'PRICECHARTING' | 'EBAY'>([
   ['pricecharting.com', 'PRICECHARTING'],
   ['www.pricecharting.com', 'PRICECHARTING'],
   ['m.pricecharting.com', 'PRICECHARTING'],
+  // SportsCardsPro is PriceCharting's sports-card catalogue under the same
+  // trusted /game/ product URL contract.
+  ['sportscardspro.com', 'PRICECHARTING'],
+  ['www.sportscardspro.com', 'PRICECHARTING'],
+  ['m.sportscardspro.com', 'PRICECHARTING'],
   ['ebay.com', 'EBAY'],
   ['www.ebay.com', 'EBAY'],
   ['ebay.co.uk', 'EBAY'],

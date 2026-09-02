@@ -67675,3 +67675,42 @@ body:has(.approved-home, .markets-page, .collectors-page, .portfolio-page, .wall
     --customer-frame-gutter: 2rem;
   }
 }
+
+/* Final route-specific specificity guard. Several legacy responsive passes
+   intentionally target individual page names; keep those rules from changing
+   the outer frame when navigating between customer pages. */
+body:has(.approved-home) .approved-home .page-shell,
+body:has(.markets-page) .markets-page .markets-shell,
+body:has(.collectors-page) .collectors-page .collectors-shell,
+body:has(.portfolio-page) .portfolio-page.portfolio-page--approved .portfolio-shell,
+body:has(.wallet-page) .wallet-page .wallet-shell {
+  width: min(calc(100% - var(--customer-frame-gutter)), var(--customer-frame-max));
+  max-width: var(--customer-frame-max);
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+/* A route root is a full-width canvas; only its inner shell controls the
+   readable content width. This prevents one page's grid from resizing the
+   application frame or introducing horizontal drift. */
+.approved-home,
+.markets-page,
+.collectors-page,
+.portfolio-page,
+.wallet-page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  body:has(.approved-home) .approved-home .page-shell,
+  body:has(.markets-page) .markets-page .markets-shell,
+  body:has(.collectors-page) .collectors-page .collectors-shell,
+  body:has(.portfolio-page) .portfolio-page.portfolio-page--approved .portfolio-shell,
+  body:has(.wallet-page) .wallet-page .wallet-shell {
+    width: min(calc(100% - 2rem), var(--customer-frame-max));
+    max-width: calc(100% - 2rem);
+  }
+}
