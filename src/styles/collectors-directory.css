@@ -723,7 +723,12 @@
   display: block;
   min-height: 0.7rem;
   border-radius: 0.3rem;
-  background: linear-gradient(90deg, rgba(39, 68, 77, 0.38), rgba(87, 130, 132, 0.22), rgba(39, 68, 77, 0.38));
+  background: linear-gradient(
+    90deg,
+    rgba(39, 68, 77, 0.38),
+    rgba(87, 130, 132, 0.22),
+    rgba(39, 68, 77, 0.38)
+  );
   background-size: 200% 100%;
   animation: collector-directory-shimmer 1.4s ease-in-out infinite;
 }
@@ -756,5 +761,427 @@
   .collector-card-skeleton > span,
   .collector-card-skeleton > div span {
     animation: none;
+  }
+}
+
+/* Mockup match: the directory is a compact, single-grid community index. */
+body:has(.collectors-page) .market-tape {
+  display: none;
+}
+
+body:has(.collectors-page) .main-navigation > .site-shell {
+  height: 54px;
+}
+
+body:has(.collectors-page) .main-navigation > .site-shell {
+  width: min(calc(100% - 2rem), 82rem);
+}
+
+.collectors-page {
+  min-height: 0;
+  padding-bottom: 2.5rem;
+}
+
+.collectors-page .collectors-shell {
+  width: min(calc(100% - 2rem), 76rem);
+  transform: translateX(1.5rem);
+}
+
+.collectors-hero--directory {
+  grid-template-columns: minmax(0, 1.3fr) minmax(19rem, 0.85fr);
+  align-items: center;
+  gap: clamp(3rem, 7vw, 7rem);
+  padding: 2.2rem 0 0.6rem;
+}
+
+.collectors-hero--directory .collectors-hero-copy h1 {
+  max-width: 32rem;
+  margin-top: 0.55rem;
+  font-size: clamp(3.7rem, 5.2vw, 4.55rem);
+  line-height: 0.91;
+}
+
+.collectors-hero--directory .collectors-hero-copy > p:not(.collectors-kicker) {
+  max-width: 29rem;
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.48;
+}
+
+.collectors-hero-note {
+  margin-top: 0.65rem;
+  font-size: 0.68rem;
+}
+
+.collectors-hero-aside {
+  max-width: 22rem;
+  padding: 0.35rem 0 0.35rem 1.35rem;
+  transform: translateY(0.95rem);
+}
+
+.collectors-hero-aside strong {
+  font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+}
+
+.collectors-hero-aside > span:last-child {
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.collectors-directory {
+  padding-top: 0;
+}
+
+.collectors-directory-toolbar {
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.45rem 0 0.55rem;
+}
+
+.collectors-directory-search {
+  flex: 0 1 26.5rem;
+  max-width: 26.5rem;
+  min-height: 2.35rem;
+}
+
+.collectors-directory-search input {
+  height: 2.25rem;
+  font-size: 0.72rem;
+}
+
+.collectors-directory-search button {
+  min-height: 1.8rem;
+  margin-right: 0.28rem;
+  padding: 0 0.65rem;
+  font-size: 0.62rem;
+}
+
+.collectors-select-control {
+  min-width: 11rem;
+  min-height: 2.35rem;
+  padding-inline: 0.7rem;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+}
+
+.collectors-specialty-control {
+  min-width: 11rem;
+}
+
+.collectors-sort-control {
+  min-width: 11rem;
+  margin-left: auto;
+}
+
+.collectors-select-control select {
+  height: 2.2rem;
+  font-size: 0.68rem;
+}
+
+.collectors-directory-results-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0 0.25rem;
+}
+
+.collectors-directory-results-bar > svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  color: #2ce0aa;
+  stroke-width: 1.5;
+}
+
+.collectors-directory-results-bar > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.collectors-directory-results-bar strong {
+  color: #eaf6f2;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.collectors-directory-results-bar span {
+  color: rgba(154, 183, 187, 0.78);
+  font-size: 0.68rem;
+}
+
+.collectors-directory-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.55rem;
+}
+
+.collectors-directory-grid > :only-child {
+  grid-column: auto;
+}
+
+.collectors-directory-grid .collector-profile-card {
+  position: relative;
+  display: flex;
+  min-height: 18.4rem;
+  flex-direction: column;
+  padding: 0.82rem;
+  border: 1px solid rgba(139, 177, 184, 0.16);
+  border-radius: 0.65rem;
+}
+
+.collectors-directory-grid .collector-profile-card.is-featured {
+  border-color: rgba(29, 221, 169, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(29, 221, 169, 0.05),
+    0 16px 34px rgba(0, 0, 0, 0.22);
+}
+
+.collector-featured-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 1.1rem;
+  margin-bottom: 0.38rem;
+  padding: 0.16rem 0.42rem;
+  border: 1px solid rgba(30, 222, 169, 0.35);
+  border-radius: 999px;
+  background: rgba(22, 207, 157, 0.09);
+  color: #2cddb0;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.collector-featured-badge svg {
+  width: 0.58rem;
+  height: 0.58rem;
+}
+
+.collectors-directory-grid .collector-profile-card > header {
+  grid-template-columns: 2.45rem minmax(0, 1fr) auto;
+  gap: 0.55rem;
+}
+
+.collectors-directory-grid .collector-profile-card .collector-avatar {
+  width: 2.45rem;
+  height: 2.45rem;
+  font-size: 0.9rem;
+}
+
+.collectors-directory-grid .collector-profile-card > header a {
+  font-size: 0.78rem;
+}
+
+.collectors-directory-grid .collector-profile-card > header small {
+  font-size: 0.58rem;
+}
+
+.collectors-directory-grid .collector-public-status {
+  font-size: 0.56rem;
+}
+
+.collectors-directory-grid .collector-public-status svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.collectors-directory-grid .collector-profile-copy {
+  min-height: 2.9rem;
+  margin-top: 0.7rem;
+}
+
+.collectors-directory-grid .collector-profile-copy strong {
+  font-size: 0.68rem;
+}
+
+.collectors-directory-grid .collector-profile-copy p {
+  min-height: 0;
+  margin-top: 0.25rem;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  -webkit-line-clamp: 1;
+}
+
+.collectors-directory-grid .collector-profile-copy small {
+  display: none;
+}
+
+.collectors-directory-grid .collector-profile-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.45rem;
+  padding: 0.55rem 0;
+}
+
+.collectors-directory-grid .collector-profile-stats dt {
+  font-size: 0.5rem;
+}
+
+.collectors-directory-grid .collector-profile-stats dd {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+}
+
+.collector-card-listings {
+  margin-top: 0.62rem;
+}
+
+.collector-card-listings__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  color: rgba(168, 194, 196, 0.78);
+  font-size: 0.55rem;
+}
+
+.collector-card-listings__heading small {
+  color: rgba(146, 178, 180, 0.62);
+  font-size: 0.5rem;
+}
+
+.collectors-directory-grid .collector-mini-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.32rem;
+  min-height: 4.45rem;
+  margin-top: 0;
+}
+
+.collectors-directory-grid .collector-mini-holding {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  width: auto;
+  height: 4.45rem;
+  overflow: hidden;
+  border-radius: 0.35rem;
+}
+
+.collector-mini-holding__media {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(18, 39, 43, 0.62);
+}
+
+.collector-mini-holding__media svg,
+.collector-mini-holding__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.collector-mini-holding__copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.13rem;
+  padding: 0.28rem;
+}
+
+.collector-mini-holding__copy strong,
+.collector-mini-holding__copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collector-mini-holding__copy strong {
+  color: #dcebe8;
+  font-size: 0.49rem;
+  font-weight: 700;
+}
+
+.collector-mini-holding__copy small {
+  color: #eaf6f2;
+  font-size: 0.48rem;
+  font-weight: 700;
+}
+
+.collector-mini-holding__copy em {
+  color: #2cddb0;
+  font-size: 0.45rem;
+  font-style: normal;
+}
+
+.collector-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.65rem;
+}
+
+.collectors-directory-grid .collector-card-profile-link,
+.collectors-directory-grid .collector-card-assets-link {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.28rem;
+  margin-top: 0;
+  color: #2cddb0;
+  font-size: 0.55rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.collectors-directory-grid .collector-card-assets-link {
+  justify-content: flex-end;
+}
+
+.collector-card-footer svg {
+  width: 0.68rem;
+  height: 0.68rem;
+}
+
+@media (max-width: 720px) {
+  body:has(.collectors-page) .main-navigation > .site-shell {
+    height: 60px;
+  }
+
+  .collectors-page .collectors-shell {
+    width: min(calc(100% - 1.25rem), 76rem);
+    transform: none;
+  }
+
+  .collectors-hero--directory {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 2.5rem;
+  }
+
+  .collectors-hero--directory .collectors-hero-copy h1 {
+    font-size: clamp(3.1rem, 14vw, 4.5rem);
+  }
+
+  .collectors-directory-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .collectors-directory-search,
+  .collectors-specialty-control,
+  .collectors-sort-control {
+    max-width: none;
+    min-width: 0;
+  }
+
+  .collectors-directory-search {
+    grid-column: 1 / -1;
+  }
+
+  .collectors-sort-control {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .collectors-directory-grid {
+    grid-template-columns: 1fr;
   }
 }

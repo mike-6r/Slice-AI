@@ -9,7 +9,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { CollectorCard, FeaturedCollector } from "@/components/collectors/public-collector-ui";
+import { CollectorCard } from "@/components/collectors/public-collector-ui";
 import { useAppServices } from "@/providers/AppServicesProvider";
 import type { CollectorDirectorySort } from "@/domain";
 
@@ -95,7 +95,6 @@ function CollectorsPage() {
   const specialties = data?.specialties ?? [];
   const page = data?.pagination;
   const hasFilters = Boolean(search.q || search.specialty);
-  const featured = data?.featured ?? [];
 
   const setSearch = (next: Partial<CollectorSearch>) => {
     void navigate({
@@ -126,7 +125,7 @@ function CollectorsPage() {
           </p>
           <div className="collectors-hero-note">
             <UsersRound aria-hidden="true" />
-            <span>Only Collectors with at least 1 published asset appear here.</span>
+            <span>Only collectors with at least one listed asset are shown.</span>
           </div>
         </div>
         <div className="collectors-hero-aside" aria-label="Collector directory summary">
@@ -138,49 +137,10 @@ function CollectorsPage() {
         </div>
       </section>
 
-      {featured.length > 0 && !hasFilters && (
-        <section
-          className="collectors-shell collectors-featured-section"
-          aria-labelledby="featured-heading"
-        >
-          <div className="collectors-section-heading">
-            <div>
-              <p className="collectors-kicker">Community highlights</p>
-              <h2 id="featured-heading">Featured collectors</h2>
-            </div>
-            <span>Selected from active Collectors</span>
-          </div>
-          <div className="collectors-featured-grid">
-            {featured.map((collector) => (
-              <FeaturedCollector key={collector.userId} collector={collector} />
-            ))}
-          </div>
-        </section>
-      )}
-
       <section
         className="collectors-shell collectors-directory"
         aria-labelledby="directory-heading"
       >
-        {data?.stats ? (
-          <dl className="collectors-directory-stats" aria-label="Collector directory statistics">
-            <div>
-              <dt>Active Collectors</dt>
-              <dd>{data.stats.eligibleCollectorCount}</dd>
-            </div>
-            <div>
-              <dt>Published Assets</dt>
-              <dd>{data.stats.publishedAssetCount}</dd>
-            </div>
-            {data.stats.featuredCollectorCount > 0 ? (
-              <div>
-                <dt>Featured</dt>
-                <dd>{data.stats.featuredCollectorCount}</dd>
-              </div>
-            ) : null}
-          </dl>
-        ) : null}
-
         <div className="collectors-directory-toolbar">
           <form className="collectors-directory-search" onSubmit={submitSearch}>
             <Search aria-hidden="true" />
@@ -196,7 +156,25 @@ function CollectorsPage() {
             />
             <button type="submit">Search</button>
           </form>
-          <label className="collectors-select-control">
+          <label className="collectors-select-control collectors-specialty-control">
+            <SlidersHorizontal aria-hidden="true" />
+            <span className="sr-only">Specialty</span>
+            <select
+              aria-label="Filter collectors by specialty"
+              value={search.specialty ?? ""}
+              onChange={(event) => setSearch({ specialty: event.target.value || undefined })}
+            >
+              <option value="">All specialties</option>
+              {specialties.map((specialty) => (
+                <option key={specialty.name} value={specialty.name}>
+                  {specialty.name}
+                  {specialty.count ? ` (${specialty.count})` : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" />
+          </label>
+          <label className="collectors-select-control collectors-sort-control">
             <span>Sort</span>
             <select
               aria-label="Sort public collectors"
@@ -214,47 +192,14 @@ function CollectorsPage() {
           </label>
         </div>
 
-        <div className="collectors-directory-filter-row">
-          <div className="collectors-filter-heading">
-            <SlidersHorizontal aria-hidden="true" />
-            <span>Specialty</span>
-          </div>
-          <div className="collectors-filter-list" aria-label="Filter collectors by specialty">
-            <button
-              type="button"
-              className={!search.specialty ? "is-active" : undefined}
-              onClick={() => setSearch({ specialty: undefined })}
-            >
-              All specialties
-            </button>
-            {specialties.map((specialty) => (
-              <button
-                key={specialty.name}
-                type="button"
-                className={search.specialty === specialty.name ? "is-active" : undefined}
-                onClick={() =>
-                  setSearch({
-                    specialty: specialty.name === search.specialty ? undefined : specialty.name,
-                  })
-                }
-              >
-                {specialty.name}
-                {specialty.count ? <span>{specialty.count}</span> : null}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="collectors-directory-heading">
+        <div className="collectors-directory-results-bar">
+          <UsersRound aria-hidden="true" />
           <div>
-            <p className="collectors-kicker">Public directory</p>
-            <h2 id="directory-heading">Meet the collectors.</h2>
+            <strong id="directory-heading">
+              {data?.stats?.eligibleCollectorCount ?? page?.total ?? 0} Active Collectors
+            </strong>
+            <span>Public directory</span>
           </div>
-          <span>
-            {page
-              ? `${page.total} active Collector${page.total === 1 ? "" : "s"}`
-              : "Loading collectors"}
-          </span>
         </div>
 
         {result.isPending ? (

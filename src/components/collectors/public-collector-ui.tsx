@@ -66,8 +66,21 @@ export function CollectorAssetPreview({
     >
       {compact ? (
         <>
-          <AssetMedia listing={listing} compact />
-          <span>{collectorCategoryLabel(listing.category)}</span>
+          <span className="collector-mini-holding__media">
+            <AssetMedia listing={listing} compact />
+          </span>
+          <span className="collector-mini-holding__copy">
+            <strong>{listing.title}</strong>
+            <small>
+              {listing.estimatedMarketValue
+                ? formatMoney(
+                    listing.estimatedMarketValue.amount,
+                    listing.estimatedMarketValue.currency,
+                  )
+                : collectorCategoryLabel(listing.category)}
+            </small>
+            <em>Listed</em>
+          </span>
         </>
       ) : (
         <>
@@ -209,7 +222,14 @@ export function CollectorCard({
   const specialties = collectorSpecialties(collector);
   const count = collector.publishedListingCount ?? listings.length;
   return (
-    <article className={`collector-profile-card is-tone-${toneIndex % 4}`}>
+    <article
+      className={`collector-profile-card is-tone-${toneIndex % 4}${collector.isFeatured ? " is-featured" : ""}`}
+    >
+      {collector.isFeatured ? (
+        <span className="collector-featured-badge">
+          <Sparkles aria-hidden="true" /> Featured
+        </span>
+      ) : null}
       <header>
         <CollectorAvatar collector={collector} />
         <div className="collector-card-identity">
@@ -245,32 +265,38 @@ export function CollectorCard({
       </dl>
       {listings.length > 0 ? (
         <div
-          className="collector-mini-strip"
+          className="collector-card-listings"
           aria-label={`${collector.displayName} published collectibles`}
         >
-          {listings.slice(0, 3).map((listing) => (
-            <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
-          ))}
-          {count > 3 && (
-            <Link
-              to="/collector/$id/assets"
-              params={{ id: collector.handle }}
-              className="collector-more-assets"
-            >
-              +{count - 3}
-            </Link>
-          )}
+          <div className="collector-card-listings__heading">
+            <span>{collector.isFeatured ? "Featured assets" : "Published assets"}</span>
+            <small>{count} listed</small>
+          </div>
+          <div className="collector-mini-strip">
+            {listings.slice(0, 3).map((listing) => (
+              <CollectorAssetPreview key={listing.assetId} listing={listing} compact />
+            ))}
+          </div>
         </div>
       ) : (
         <p className="collector-card-empty">Published previews unavailable.</p>
       )}
-      <Link
-        to="/collector/$id"
-        params={{ id: collector.handle }}
-        className="collector-card-profile-link"
-      >
-        View profile <ArrowRight aria-hidden="true" />
-      </Link>
+      <footer className="collector-card-footer">
+        <Link
+          to="/collector/$id"
+          params={{ id: collector.handle }}
+          className="collector-card-profile-link"
+        >
+          View profile <ArrowRight aria-hidden="true" />
+        </Link>
+        <Link
+          to="/collector/$id/assets"
+          params={{ id: collector.handle }}
+          className="collector-card-assets-link"
+        >
+          View all {count} assets <ArrowRight aria-hidden="true" />
+        </Link>
+      </footer>
     </article>
   );
 }
