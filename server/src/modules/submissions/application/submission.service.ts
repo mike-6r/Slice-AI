@@ -4599,7 +4599,7 @@ export class SubmissionService {
           ? { acceptingShipments: true }
           : { acceptingInPerson: true }),
       },
-      select: { id: true, acceptedCategories: true },
+      select: { id: true, acceptedCategories: true, maximumActiveIntakes: true },
     });
     if (!location)
       throw new UnprocessableEntityException({
@@ -4607,6 +4607,19 @@ export class SubmissionService {
         message:
           'That intake location is no longer available for this delivery method.',
       });
+    if (location.maximumActiveIntakes !== null) {
+      const activeIntakes = await db.submissionIntake.count({
+        where: {
+          vaultId: location.id,
+          status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED', 'RECEIVED', 'VERIFICATION'] },
+        },
+      });
+      if (activeIntakes >= location.maximumActiveIntakes)
+        throw new UnprocessableEntityException({
+          code: 'INTAKE_LOCATION_AT_CAPACITY',
+          message: 'That intake location is currently at capacity.',
+        });
+    }
     const categories = location.acceptedCategories;
     if (
       Array.isArray(categories) &&

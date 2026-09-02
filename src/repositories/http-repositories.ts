@@ -2667,6 +2667,98 @@ const mapAdminIntakeDetail = (raw: unknown): AdminIntakeDetail => {
     item[key] === null || item[key] === undefined ? null : Boolean(item[key]);
   return {
     row: mapAdminIntake(value.row),
+    projection:
+      value.projection === null || value.projection === undefined
+        ? undefined
+        : (() => {
+            const projection = objectField(value.projection, "admin intake detail.projection");
+            const blocker =
+              projection.primaryBlocker === null || projection.primaryBlocker === undefined
+                ? null
+                : objectField(
+                    projection.primaryBlocker,
+                    "admin intake detail.projection.primaryBlocker",
+                  );
+            const nextAction = objectField(
+              projection.nextAction,
+              "admin intake detail.projection.nextAction",
+            );
+            const commandRecord =
+              projection.availableCommands &&
+              typeof projection.availableCommands === "object" &&
+              !Array.isArray(projection.availableCommands)
+                ? objectField(
+                    projection.availableCommands,
+                    "admin intake detail.projection.availableCommands",
+                  )
+                : {};
+            return {
+              currentLocation: stringField(
+                projection.currentLocation,
+                "admin intake detail.projection.currentLocation",
+              ),
+              primaryBlocker: blocker
+                ? {
+                    label: stringField(blocker.label, "admin intake detail.projection.blocker.label"),
+                    reason: stringField(blocker.reason, "admin intake detail.projection.blocker.reason"),
+                    severity: stringField(
+                      blocker.severity,
+                      "admin intake detail.projection.blocker.severity",
+                    ) as "LOW" | "MEDIUM" | "HIGH",
+                  }
+                : null,
+              nextAction: {
+                label: stringField(
+                  nextAction.label,
+                  "admin intake detail.projection.nextAction.label",
+                ),
+                actor: stringField(
+                  nextAction.actor,
+                  "admin intake detail.projection.nextAction.actor",
+                ) as AdminIntakeRow["nextActor"],
+                needsStaffAction: Boolean(nextAction.needsStaffAction),
+              },
+              availableCommands: Object.fromEntries(
+                Object.entries(commandRecord).map(([key, rawCommand]) => {
+                  const command = objectField(rawCommand, `admin intake command ${key}`);
+                  return [
+                    key,
+                    {
+                      enabled: Boolean(command.enabled),
+                      ...(command.reason === undefined || command.reason === null
+                        ? {}
+                        : { reason: String(command.reason) }),
+                    },
+                  ];
+                }),
+              ),
+              revision: stringField(
+                projection.revision,
+                "admin intake detail.projection.revision",
+              ),
+              deepLinks: (() => {
+                const links = objectField(
+                  projection.deepLinks,
+                  "admin intake detail.projection.deepLinks",
+                );
+                return {
+                  submissionReview: stringField(
+                    links.submissionReview,
+                    "admin intake detail.projection.deepLinks.submissionReview",
+                  ),
+                  collectorAccount: stringField(
+                    links.collectorAccount,
+                    "admin intake detail.projection.deepLinks.collectorAccount",
+                  ),
+                  assetOperations: nullableString(
+                    links.assetOperations,
+                    "admin intake detail.projection.deepLinks.assetOperations",
+                  ),
+                  audit: stringField(links.audit, "admin intake detail.projection.deepLinks.audit"),
+                };
+              })(),
+            };
+          })(),
     intake: intake
       ? {
           id: stringField(intake.id, "admin intake detail.intake.id"),
@@ -2870,7 +2962,19 @@ const mapAdminIntakeLocation = (raw: unknown): AdminIntakeLocation => {
     region: stringField(value.region, "admin intake location.region"),
     countryCode: stringField(value.countryCode, "admin intake location.countryCode"),
     city: nullableString(value.city, "admin intake location.city"),
+    internalName: nullableString(value.internalName, "admin intake location.internalName"),
     activeIntakes: Number(value.activeIntakes ?? 0),
+    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(String(value.availability))
+      ? (String(value.availability) as AdminIntakeLocation["availability"])
+      : "UNAVAILABLE",
+    availabilityLabel: stringField(value.availabilityLabel ?? "Unavailable", "admin intake location.availabilityLabel"),
+    availabilityReason: nullableString(value.availabilityReason, "admin intake location.availabilityReason"),
+    warnings: Array.isArray(value.warnings) ? value.warnings.filter((item): item is string => typeof item === "string") : [],
+    capacity: value.capacity === null || value.capacity === undefined ? null : (() => {
+      const capacity = objectField(value.capacity, "admin intake location.capacity");
+      return { active: Number(capacity.active ?? 0), maximum: Number(capacity.maximum ?? 0), warningThreshold: capacity.warningThreshold === null || capacity.warningThreshold === undefined ? null : Number(capacity.warningThreshold) };
+    })(),
+    lastActivityAt: stringField(value.lastActivityAt ?? value.updatedAt, "admin intake location.lastActivityAt"),
     updatedAt: stringField(value.updatedAt, "admin intake location.updatedAt"),
   };
 };
@@ -2892,6 +2996,20 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
       locationRaw.inPersonInstructions,
       "intake location.inPersonInstructions",
     ),
+    internalName: nullableString(locationRaw.internalName, "intake location.internalName"),
+    operationalNotes: nullableString(locationRaw.operationalNotes, "intake location.operationalNotes"),
+    internalContact: nullableString(locationRaw.internalContact, "intake location.internalContact"),
+    openingHours: nullableString(locationRaw.openingHours, "intake location.openingHours"),
+    appointmentRequired: Boolean(locationRaw.appointmentRequired),
+    walkInsAllowed: Boolean(locationRaw.walkInsAllowed),
+    publicContactInstructions: nullableString(locationRaw.publicContactInstructions, "intake location.publicContactInstructions"),
+    packageLabelInstructions: nullableString(locationRaw.packageLabelInstructions, "intake location.packageLabelInstructions"),
+    specialHandlingInstructions: nullableString(locationRaw.specialHandlingInstructions, "intake location.specialHandlingInstructions"),
+    maximumActiveIntakes: locationRaw.maximumActiveIntakes === null || locationRaw.maximumActiveIntakes === undefined ? null : Number(locationRaw.maximumActiveIntakes),
+    warningThreshold: locationRaw.warningThreshold === null || locationRaw.warningThreshold === undefined ? null : Number(locationRaw.warningThreshold),
+    pauseReason: nullableString(locationRaw.pauseReason, "intake location.pauseReason"),
+    pauseEffectiveAt: nullableString(locationRaw.pauseEffectiveAt, "intake location.pauseEffectiveAt"),
+    expectedResumeAt: nullableString(locationRaw.expectedResumeAt, "intake location.expectedResumeAt"),
     customerSafeAddress: stringField(
       locationRaw.customerSafeAddress,
       "intake location.customerSafeAddress",
@@ -2906,6 +3024,16 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
         })
       : [],
     createdAt: stringField(locationRaw.createdAt, "intake location.createdAt"),
+    availability: ["ACCEPTING", "PAUSED", "AT_CAPACITY", "UNAVAILABLE"].includes(String(locationRaw.availability))
+      ? (String(locationRaw.availability) as AdminIntakeLocation["availability"])
+      : "UNAVAILABLE",
+    availabilityLabel: stringField(locationRaw.availabilityLabel ?? "Unavailable", "intake location.availabilityLabel"),
+    availabilityReason: nullableString(locationRaw.availabilityReason, "intake location.availabilityReason"),
+    warnings: Array.isArray(locationRaw.warnings) ? locationRaw.warnings.filter((item): item is string => typeof item === "string") : [],
+    capacity: locationRaw.capacity === null || locationRaw.capacity === undefined ? null : (() => {
+      const capacity = objectField(locationRaw.capacity, "intake location.capacity");
+      return { active: Number(capacity.active ?? 0), maximum: Number(capacity.maximum ?? 0), warningThreshold: capacity.warningThreshold === null || capacity.warningThreshold === undefined ? null : Number(capacity.warningThreshold) };
+    })(),
   };
   return {
     location,
@@ -2920,6 +3048,8 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
             collector: stringField(intake.collector, "intake location intake.collector"),
             deliveryMethod: intake.deliveryMethod === "IN_PERSON" ? "IN_PERSON" : "SHIPMENT",
             stage: stringField(intake.stage, "intake location intake.stage"),
+            assignedStaff: nullableString(intake.assignedStaff, "intake location intake.assignedStaff"),
+            nextAction: stringField(intake.nextAction, "intake location intake.nextAction"),
             updatedAt: stringField(intake.updatedAt, "intake location intake.updatedAt"),
             issue:
               intake.issue === null
@@ -2951,9 +3081,39 @@ const mapAdminIntakeLocationDetail = (raw: unknown): AdminIntakeLocationDetail =
             action: stringField(event.action, "intake location history.action"),
             actor: stringField(event.actor, "intake location history.actor"),
             occurredAt: stringField(event.occurredAt, "intake location history.occurredAt"),
+            reason: nullableString(event.reason, "intake location history.reason"),
+            before:
+              event.before && typeof event.before === "object" && !Array.isArray(event.before)
+                ? (event.before as Record<string, unknown>)
+                : null,
+            after:
+              event.after && typeof event.after === "object" && !Array.isArray(event.after)
+                ? (event.after as Record<string, unknown>)
+                : null,
           };
         })
       : [],
+    availableCommands:
+      value.availableCommands && typeof value.availableCommands === "object" && !Array.isArray(value.availableCommands)
+        ? Object.fromEntries(
+            Object.entries(value.availableCommands as Record<string, unknown>).map(([key, rawCommand]) => {
+              const command = objectField(rawCommand, `intake location command ${key}`);
+              return [key, { allowed: Boolean(command.allowed), ...(command.reason ? { reason: String(command.reason) } : {}) }];
+            }),
+          )
+        : {},
+    collectorVisibility: (() => {
+      const visibility = objectField(value.collectorVisibility ?? {}, "intake location collectorVisibility");
+      return {
+        visibleInProduction: Boolean(visibility.visibleInProduction),
+        visibleInDemoQA: Boolean(visibility.visibleInDemoQA),
+        shipping: Boolean(visibility.shipping),
+        inPerson: Boolean(visibility.inPerson),
+        eligibleForNewAssignment: Boolean(visibility.eligibleForNewAssignment),
+        eligibilityReason: nullableString(visibility.eligibilityReason, "intake location collectorVisibility.eligibilityReason"),
+      };
+    })(),
+    revision: stringField(value.revision ?? location.updatedAt, "intake location.revision"),
   };
 };
 
@@ -4685,10 +4845,28 @@ const adminRepository = (client: ApiClient): AdminRepository => {
       return {
         summary: {
           activeLocations: Number(summary.activeLocations ?? 0),
+          acceptingIntakes: Number(summary.acceptingIntakes ?? 0),
           shippingEnabled: Number(summary.shippingEnabled ?? 0),
           inPersonEnabled: Number(summary.inPersonEnabled ?? 0),
-          partnerLocations: Number(summary.partnerLocations ?? 0),
+          temporarilyUnavailable: Number(summary.temporarilyUnavailable ?? 0),
+          atCapacity: Number(summary.atCapacity ?? 0),
           unavailable: Number(summary.unavailable ?? 0),
+          health: {
+            healthy: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").healthy ?? 0),
+            degraded: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").degraded ?? 0),
+            critical: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").critical ?? 0),
+            percentage: Number(objectField(summary.health ?? {}, "admin intake locations.summary.health").percentage ?? 0),
+          },
+          exceptions: {
+            totalActive: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").totalActive ?? 0),
+            atCapacity: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").atCapacity ?? 0),
+            paused: Number(objectField(summary.exceptions ?? {}, "admin intake locations.summary.exceptions").paused ?? 0),
+          },
+          attention: {
+            requiresReview: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").requiresReview ?? 0),
+            lowCapacity: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").lowCapacity ?? 0),
+            infoUpdates: Number(objectField(summary.attention ?? {}, "admin intake locations.summary.attention").infoUpdates ?? 0),
+          },
         },
         items: Array.isArray(value.items) ? value.items.map(mapAdminIntakeLocation) : [],
         pagination: {
@@ -4723,6 +4901,17 @@ const adminRepository = (client: ApiClient): AdminRepository => {
           body: JSON.stringify(input),
         }),
         "intake location update",
+      );
+      return mapIntakeLocationMutation(value);
+    },
+    async commandIntakeLocation(id, input) {
+      const value = objectField(
+        await client.request<unknown>(`/admin/intake/locations/${encodeURIComponent(id)}/command`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey() },
+          body: JSON.stringify(input),
+        }),
+        "intake location command",
       );
       return mapIntakeLocationMutation(value);
     },

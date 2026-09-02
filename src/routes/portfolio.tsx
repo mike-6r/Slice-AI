@@ -1915,8 +1915,8 @@ function PerformanceChart({
     x: 2.5 + (index / (points.length - 1)) * 95,
     y: 12 + (1 - (Number(point.valueMinor) - domainMin) / domainSpan) * 72,
   }));
-  const line = chartPoints.map(({ x, y }) => `${x},${y}`).join(" ");
-  const area = `${line} 97.5,90 2.5,90`;
+  const line = buildSmoothPerformancePath(chartPoints);
+  const area = `${line} L 97.5,90 L 2.5,90 Z`;
   const dateIndexes = Array.from(
     new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
   );
@@ -1941,6 +1941,23 @@ function PerformanceChart({
             hasExternalCashFlow ? "; includes external cash flows" : ""
           }`}
           preserveAspectRatio="none"
+          onPointerMove={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const relativeX = Math.max(
+              0,
+              Math.min(1, (event.clientX - bounds.left) / Math.max(bounds.width, 1)),
+            );
+            const targetX = 2.5 + relativeX * 95;
+            const nearestIndex = chartPoints.reduce(
+              (nearest, candidate, index) =>
+                Math.abs(candidate.x - targetX) < Math.abs(chartPoints[nearest]!.x - targetX)
+                  ? index
+                  : nearest,
+              0,
+            );
+            setActiveIndex(nearestIndex);
+          }}
+          onPointerLeave={() => setActiveIndex(null)}
         >
           <defs>
             <linearGradient id="portfolio-performance-area" x1="0" x2="0" y1="0" y2="1">
@@ -1970,24 +1987,39 @@ function PerformanceChart({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          <polygon points={area} className="portfolio-performance-chart__area" />
-          <polyline points={line} fill="none" vectorEffect="non-scaling-stroke" />
-          {chartPoints.map(({ point, index, x, y }) => (
-            <circle
-              key={`${point.timestamp}-${index}`}
-              cx={x}
-              cy={y}
-              r={activeIndex === index ? 2.5 : 1.35}
-              tabIndex={0}
-              role="button"
-              aria-label={`Portfolio value ${formatPortfolioMoney(point.valueMinor)} on ${formatPerformancePointDate(point.timestamp)}`}
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseLeave={() => setActiveIndex(null)}
-              onFocus={() => setActiveIndex(index)}
-              onBlur={() => setActiveIndex(null)}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          <path d={area} className="portfolio-performance-chart__area" />
+          <path
+            d={line}
+            className="portfolio-performance-chart__line"
+            fill="none"
+            vectorEffect="non-scaling-stroke"
+          />
+          <circle
+            cx={chartPoints.at(-1)!.x}
+            cy={chartPoints.at(-1)!.y}
+            r="1.65"
+            className="portfolio-performance-chart__endpoint"
+            vectorEffect="non-scaling-stroke"
+          />
+          {activePoint ? (
+            <g className="portfolio-performance-chart__crosshair" aria-hidden="true">
+              <line x1={activePoint.x} x2={activePoint.x} y1="8" y2="90" />
+              <line x1="2.5" x2="97.5" y1={activePoint.y} y2={activePoint.y} />
+              <circle cx={activePoint.x} cy={activePoint.y} r="4.5" />
+              <circle cx={activePoint.x} cy={activePoint.y} r="2" />
+            </g>
+          ) : null}
+          <rect
+            className="portfolio-performance-chart__interaction"
+            x="0"
+            y="0"
+            width="100"
+            height="92"
+            tabIndex={0}
+            aria-label="Inspect portfolio value at each point in the selected period"
+            onFocus={() => setActiveIndex(chartPoints.length - 1)}
+            onBlur={() => setActiveIndex(null)}
+          />
         </svg>
         <div className="portfolio-performance-chart__x-axis" aria-hidden="true">
           {dateIndexes.map((index) => (
@@ -2058,7 +2090,7 @@ function PerformanceChart({
           </div>
         ) : null}
       </div>
-      <div className="portfolio-performance-chart__legend">
+      <div className="portfolio-performance-chart__legend" aria-label="Portfolio value breakdown">
         <div>
           <i className="is-holdings" aria-hidden="true" />
           <span>
@@ -2101,6 +2133,17 @@ function PerformanceChart({
       </div>
     </div>
   );
+}
+
+function buildSmoothPerformancePath(points: Array<{ x: number; y: number }>) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0]!.x},${points[0]!.y}`;
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x},${point.y}`;
+    const previous = points[index - 1]!;
+    const midpoint = (previous.x + point.x) / 2;
+    return `${path} C ${midpoint},${previous.y} ${midpoint},${point.y} ${point.x},${point.y}`;
+  }, "");
 }
 
 function formatPerformancePointDate(value: string) {

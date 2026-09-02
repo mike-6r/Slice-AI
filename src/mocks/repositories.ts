@@ -238,10 +238,15 @@ export const mockRepositories: AppRepositories = {
       return {
         summary: {
           activeLocations: 0,
+          acceptingIntakes: 0,
           shippingEnabled: 0,
           inPersonEnabled: 0,
-          partnerLocations: 0,
+          temporarilyUnavailable: 0,
+          atCapacity: 0,
           unavailable: 0,
+          health: { healthy: 0, degraded: 0, critical: 0, percentage: 0 },
+          exceptions: { totalActive: 0, atCapacity: 0, paused: 0 },
+          attention: { requiresReview: 0, lowCapacity: 0, infoUpdates: 0 },
         },
         items: [],
         pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
@@ -254,6 +259,9 @@ export const mockRepositories: AppRepositories = {
       throw new Error("Intake location management requires the API service.");
     },
     async updateIntakeLocation() {
+      throw new Error("Intake location management requires the API service.");
+    },
+    async commandIntakeLocation() {
       throw new Error("Intake location management requires the API service.");
     },
     async confirmIntakeReceipt() {

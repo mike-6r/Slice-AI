@@ -2119,6 +2119,20 @@ model VaultIntakeLocation {
   acceptedCategories     Json?
   shippingInstructions   String
   inPersonInstructions   String?
+  internalName           String?
+  operationalNotes       String?
+  internalContact        String?
+  openingHours           String?
+  appointmentRequired    Boolean                        @default(false)
+  walkInsAllowed         Boolean                        @default(false)
+  publicContactInstructions String?
+  packageLabelInstructions String?
+  specialHandlingInstructions String?
+  maximumActiveIntakes   Int?
+  warningThreshold       Int?
+  pauseReason            String?
+  pauseEffectiveAt       DateTime?
+  expectedResumeAt       DateTime?
   customerSafeAddress    String
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt

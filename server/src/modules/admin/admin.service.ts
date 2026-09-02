@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Inject,
@@ -80,9 +81,55 @@ type IntakeLocationManagementInput = {
   acceptedCategoryIds: string[];
   shippingInstructions: string;
   inPersonInstructions?: string | null;
+  internalName?: string | null;
+  operationalNotes?: string | null;
+  internalContact?: string | null;
+  openingHours?: string | null;
+  appointmentRequired?: boolean;
+  walkInsAllowed?: boolean;
+  publicContactInstructions?: string | null;
+  packageLabelInstructions?: string | null;
+  specialHandlingInstructions?: string | null;
+  maximumActiveIntakes?: number | null;
+  warningThreshold?: number | null;
+  pauseReason?: string | null;
+  pauseEffectiveAt?: string | null;
+  expectedResumeAt?: string | null;
   reason: string;
   expectedUpdatedAt?: string;
 };
+
+type IntakeLocationCommand =
+  | 'PAUSE_NEW_INTAKES'
+  | 'RESUME_NEW_INTAKES'
+  | 'DEACTIVATE'
+  | 'REACTIVATE'
+  | 'ENABLE_SHIPPING'
+  | 'DISABLE_SHIPPING'
+  | 'ENABLE_IN_PERSON'
+  | 'DISABLE_IN_PERSON'
+  | 'REPAIR_AVAILABILITY'
+  | 'REPAIR_CAPACITY_PROJECTION';
+
+function intakeLocationAvailability(location: {
+  active: boolean;
+  status: string;
+  intakeAvailable: boolean;
+  operationallyApproved: boolean;
+  acceptingShipments: boolean;
+  acceptingInPerson: boolean;
+  maximumActiveIntakes?: number | null;
+}, activeIntakes: number) {
+  if (!location.active || location.status === 'INACTIVE')
+    return { code: 'UNAVAILABLE' as const, label: 'Unavailable', reason: 'Location is inactive.' };
+  if (location.maximumActiveIntakes !== null && location.maximumActiveIntakes !== undefined && activeIntakes >= location.maximumActiveIntakes)
+    return { code: 'AT_CAPACITY' as const, label: 'At capacity', reason: 'Configured active-intake capacity has been reached.' };
+  if (location.status === 'TEMPORARILY_UNAVAILABLE' || !location.intakeAvailable)
+    return { code: 'PAUSED' as const, label: 'Temporarily paused', reason: 'Location is not accepting new intakes.' };
+  if (!location.operationallyApproved || (!location.acceptingShipments && !location.acceptingInPerson))
+    return { code: 'UNAVAILABLE' as const, label: 'Unavailable', reason: 'Location configuration is incomplete or not approved.' };
+  return { code: 'ACCEPTING' as const, label: 'Accepting intakes', reason: null };
+}
 
 const activeIntakeStatuses: IntakeStatus[] = [
   'VAULT_SELECTED',
@@ -115,6 +162,10 @@ function intakeLocationAuditState(location: {
   acceptingInPerson: boolean;
   status: string;
   updatedAt: Date;
+  internalName?: string | null;
+  maximumActiveIntakes?: number | null;
+  warningThreshold?: number | null;
+  pauseReason?: string | null;
 }) {
   return {
     status: location.status,
@@ -122,6 +173,10 @@ function intakeLocationAuditState(location: {
     acceptingNewIntakes: location.intakeAvailable,
     acceptingShipments: location.acceptingShipments,
     acceptingInPerson: location.acceptingInPerson,
+    internalName: location.internalName ?? null,
+    maximumActiveIntakes: location.maximumActiveIntakes ?? null,
+    warningThreshold: location.warningThreshold ?? null,
+    pauseReason: location.pauseReason ?? null,
     updatedAt: location.updatedAt.toISOString(),
   };
 }
@@ -3995,8 +4050,91 @@ export class AdminService {
       })),
     ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
 
+    const currentLocation = row.demoIntake
+      ? 'Demo simulation'
+      : row.exception || row.stage === 'EXCEPTION'
+        ? 'Held for Exception'
+        : row.receipt && row.verification?.status === 'IN_PROGRESS'
+          ? 'In Verification'
+          : row.custodyStatus === 'SECURED' || row.custodyStatus === 'INSPECTED'
+            ? 'In Custody'
+            : row.receipt
+              ? 'Vault Intake'
+              : row.shipment?.status === 'DELIVERED'
+                ? 'Awaiting Staff Receipt'
+                : row.shipment
+                  ? row.shipment.status === 'OUT_FOR_DELIVERY'
+                    ? 'Out for Delivery'
+                    : 'In Transit'
+                  : row.deliveryMethod === 'IN_PERSON'
+                    ? 'With Collector'
+                    : 'Awaiting Shipment';
+    const primaryBlocker = row.issues[0]
+      ? {
+          label:
+            row.issues[0].code === 'DESTINATION_REQUIRED'
+              ? 'Receiving destination required'
+              : row.issues[0].label,
+          reason: row.stageReason,
+          severity: row.issues[0].severity,
+        }
+      : null;
+    const command = (enabled: boolean, reason?: string) => ({
+      enabled,
+      ...(enabled || !reason ? {} : { reason }),
+    });
+    const availableCommands = {
+      assignDestination: command(
+        row.allowedActions.includes('ASSIGN_DESTINATION'),
+        'Destination selection is owned by the collector or destination management workspace.',
+      ),
+      manageTracking: command(
+        row.allowedActions.includes('MANAGE_TRACKING'),
+        'No shipment mutation command is available in the current authority.',
+      ),
+      confirmReceipt: command(
+        row.allowedActions.includes('CONFIRM_RECEIPT'),
+        row.receipt ? 'Physical receipt is already confirmed.' : 'Receipt requires the current delivery state.',
+      ),
+      startVerification: command(
+        row.allowedActions.includes('START_VERIFICATION'),
+        'Physical receipt and resolved exceptions are required first.',
+      ),
+      completeVerification: command(
+        row.allowedActions.includes('COMPLETE_VERIFICATION'),
+        'Verification must be started and remain free of blocking exceptions.',
+      ),
+      addException: command(true),
+      resolveException: command(
+        Boolean(submission.intake?.exceptions.some((exception) => !exception.resolvedAt)),
+        'There are no open intake exceptions.',
+      ),
+      assignStaff: command(false, 'Staff assignment authority is not configured for this intake projection.'),
+      recover: command(false, 'Break-glass recovery commands are not exposed by the current authority.'),
+      useOverride: command(false, 'Override commands are not exposed by the current authority.'),
+    };
+
     return {
       row,
+      projection: {
+        currentLocation,
+        primaryBlocker,
+        nextAction: {
+          label: row.nextAction,
+          actor: row.nextActor,
+          needsStaffAction: row.needsStaffAction,
+        },
+        availableCommands,
+        revision: submission.intake?.updatedAt.toISOString() ?? row.updatedAt,
+        deepLinks: {
+          submissionReview: `/operations/submissions?submission=${encodeURIComponent(submissionId)}&tab=Overview`,
+          collectorAccount: `/admin?section=users&user=${encodeURIComponent(row.collector.id)}`,
+          assetOperations: row.assetId
+            ? `/admin?section=assetOperations&asset=${encodeURIComponent(row.assetId)}&tab=overview`
+            : null,
+          audit: `/admin?section=audit&resource=${encodeURIComponent(submission.intake?.id ?? submissionId)}`,
+        },
+      },
       intake: submission.intake
         ? {
             id: submission.intake.id,
@@ -4102,13 +4240,14 @@ export class AdminService {
         | 'SLICE_VAULT'
         | 'SLICE_INTAKE'
         | 'PARTNER_STORE'
-        | 'PARTNER_INTAKE'
-        | 'DEMO_TEST';
-      deliveryMethod?: 'SHIPPING' | 'IN_PERSON';
+      | 'PARTNER_INTAKE'
+      | 'DEMO_TEST';
+      deliveryMethod?: 'SHIPPING' | 'IN_PERSON' | 'BOTH';
+      availability?: 'ACCEPTING' | 'PAUSED' | 'AT_CAPACITY' | 'UNAVAILABLE';
       environment?: 'beta' | 'production';
       status?: 'ACTIVE' | 'TEMPORARILY_UNAVAILABLE' | 'INACTIVE';
       acceptingNewIntakes?: boolean;
-      sort?: 'NAME' | 'UPDATED';
+      sort?: 'NAME' | 'ACTIVE_INTAKES' | 'RECENT_ACTIVITY';
       sortDirection?: 'asc' | 'desc';
       page?: number;
       pageSize?: number;
@@ -4128,7 +4267,9 @@ export class AdminService {
         ? { acceptingShipments: true }
         : input.deliveryMethod === 'IN_PERSON'
           ? { acceptingInPerson: true }
-          : {}),
+          : input.deliveryMethod === 'BOTH'
+            ? { acceptingShipments: true, acceptingInPerson: true }
+            : {}),
       ...(input.q
         ? {
             OR: [
@@ -4140,18 +4281,9 @@ export class AdminService {
           }
         : {}),
     };
-    const direction = input.sortDirection ?? 'asc';
-    const orderBy: Prisma.VaultIntakeLocationOrderByWithRelationInput[] =
-      input.sort === 'UPDATED'
-        ? [{ updatedAt: direction }, { id: 'asc' }]
-        : [{ displayName: direction }, { id: 'asc' }];
-    const [total, locations] = await this.db.$transaction([
-      this.db.vaultIntakeLocation.count({ where }),
-      this.db.vaultIntakeLocation.findMany({
+    const locations = await this.db.vaultIntakeLocation.findMany({
         where,
-        orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
         select: {
           id: true,
           displayName: true,
@@ -4166,54 +4298,154 @@ export class AdminService {
           region: true,
           countryCode: true,
           city: true,
+          addressLine1: true,
+          inPersonInstructions: true,
+          internalName: true,
+          maximumActiveIntakes: true,
+          warningThreshold: true,
           updatedAt: true,
           _count: {
             select: {
               intakes: { where: { status: { in: activeIntakeStatuses } } },
             },
           },
+          intakes: {
+            where: { status: { in: activeIntakeStatuses } },
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { updatedAt: true },
+          },
         },
-      }),
-    ]);
-    const summary = await this.db.vaultIntakeLocation.aggregate({
-      _count: { _all: true },
-      where: { status: 'ACTIVE' },
     });
-    const [shippingEnabled, inPersonEnabled, partnerLocations, unavailable] =
-      await Promise.all([
-        this.db.vaultIntakeLocation.count({
-          where: {
-            active: true,
-            intakeAvailable: true,
-            acceptingShipments: true,
-          },
-        }),
-        this.db.vaultIntakeLocation.count({
-          where: {
-            active: true,
-            intakeAvailable: true,
-            acceptingInPerson: true,
-          },
-        }),
-        this.db.vaultIntakeLocation.count({
-          where: { locationType: { in: ['PARTNER_STORE', 'PARTNER_INTAKE'] } },
-        }),
-        this.db.vaultIntakeLocation.count({
-          where: { status: { in: ['TEMPORARILY_UNAVAILABLE', 'INACTIVE'] } },
-        }),
-      ]);
+    const projected = locations
+      .map((location) => {
+        const activeIntakes = location._count.intakes;
+        const availability = intakeLocationAvailability(location, activeIntakes);
+        const warnings = [
+          availability.code === 'AT_CAPACITY' ? 'At capacity' : null,
+          availability.code === 'PAUSED' ? 'New intakes paused' : null,
+          !location.operationallyApproved ? 'Configuration incomplete' : null,
+          location.acceptingShipments && !location.addressLine1 ? 'Shipping address incomplete' : null,
+          location.acceptingInPerson && !location.inPersonInstructions ? 'Drop-off instructions missing' : null,
+        ].filter((item): item is string => Boolean(item));
+        return {
+          ...location,
+          activeIntakes,
+          availability: availability.code,
+          availabilityLabel: availability.label,
+          availabilityReason: availability.reason,
+          warnings,
+          capacity: location.maximumActiveIntakes
+            ? { active: activeIntakes, maximum: location.maximumActiveIntakes, warningThreshold: location.warningThreshold }
+            : null,
+          lastActivityAt: location.intakes[0]?.updatedAt?.toISOString() ?? location.updatedAt.toISOString(),
+        };
+      })
+      .filter((location) => !input.availability || location.availability === input.availability);
+    const direction = input.sortDirection ?? 'asc';
+    projected.sort((left, right) => {
+      if (input.sort === 'ACTIVE_INTAKES') return direction === 'desc' ? right.activeIntakes - left.activeIntakes : left.activeIntakes - right.activeIntakes;
+      if (input.sort === 'RECENT_ACTIVITY') {
+        const result = right.lastActivityAt.localeCompare(left.lastActivityAt);
+        return direction === 'desc' ? -result : result;
+      }
+      const result = left.displayName.localeCompare(right.displayName);
+      return direction === 'desc' ? -result : result;
+    });
+    const total = projected.length;
+    const paged = projected.slice((page - 1) * pageSize, page * pageSize);
+    const allLocations = await this.db.vaultIntakeLocation.findMany({
+      select: {
+        id: true,
+        active: true,
+        status: true,
+        intakeAvailable: true,
+        operationallyApproved: true,
+        acceptingShipments: true,
+        acceptingInPerson: true,
+        maximumActiveIntakes: true,
+        warningThreshold: true,
+        _count: { select: { intakes: { where: { status: { in: activeIntakeStatuses } } } } },
+      },
+    });
+    const allProjected = allLocations.map((location) => intakeLocationAvailability(location, location._count.intakes));
+    const locationIds = allLocations.map((location) => location.id);
+    const [activeExceptionCount, recentInfoUpdateCount] = locationIds.length
+      ? await Promise.all([
+          this.db.intakeException.count({
+            where: {
+              resolvedAt: null,
+              intake: { vaultId: { in: locationIds }, status: { in: activeIntakeStatuses } },
+            },
+          }),
+          this.db.auditEvent.count({
+            where: {
+              resourceType: 'vault-intake-location',
+              action: 'INTAKE_LOCATION_UPDATED',
+              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+            },
+          }),
+        ])
+      : [0, 0];
+    const healthy = allProjected.filter((item) => item.code === 'ACCEPTING').length;
+    const degraded = allProjected.filter((item) => item.code === 'PAUSED' || item.code === 'AT_CAPACITY').length;
+    const critical = allProjected.filter((item) => item.code === 'UNAVAILABLE').length;
+    const atCapacity = allProjected.filter((item) => item.code === 'AT_CAPACITY').length;
+    const paused = allProjected.filter((item) => item.code === 'PAUSED').length;
+    const lowCapacity = allLocations.filter((location) => {
+      if (!location.maximumActiveIntakes) return false;
+      const ratio = location._count.intakes / location.maximumActiveIntakes;
+      const threshold = location.warningThreshold === null ? 0.8 : location.warningThreshold / location.maximumActiveIntakes;
+      return ratio >= threshold;
+    }).length;
     return {
       summary: {
-        activeLocations: summary._count._all,
-        shippingEnabled,
-        inPersonEnabled,
-        partnerLocations,
-        unavailable,
+        activeLocations: allLocations.filter((location) => location.status === 'ACTIVE' && location.active).length,
+        acceptingIntakes: allProjected.filter((item) => item.code === 'ACCEPTING').length,
+        shippingEnabled: allLocations.filter((location) => location.active && location.status === 'ACTIVE' && location.intakeAvailable && location.acceptingShipments && intakeLocationAvailability(location, 0).code === 'ACCEPTING').length,
+        inPersonEnabled: allLocations.filter((location) => location.active && location.status === 'ACTIVE' && location.intakeAvailable && location.acceptingInPerson && intakeLocationAvailability(location, 0).code === 'ACCEPTING').length,
+        temporarilyUnavailable: allProjected.filter((item) => item.code === 'PAUSED').length,
+        atCapacity: allProjected.filter((item) => item.code === 'AT_CAPACITY').length,
+        unavailable: allProjected.filter((item) => item.code === 'UNAVAILABLE').length,
+        health: {
+          healthy,
+          degraded,
+          critical,
+          percentage: allLocations.length ? Math.round((healthy / allLocations.length) * 100) : 0,
+        },
+        exceptions: {
+          totalActive: activeExceptionCount + atCapacity + paused,
+          atCapacity,
+          paused,
+        },
+        attention: {
+          requiresReview: activeExceptionCount + atCapacity + paused,
+          lowCapacity,
+          infoUpdates: recentInfoUpdateCount,
+        },
       },
-      items: locations.map((location) => ({
-        ...location,
+      items: paged.map((location) => ({
+        id: location.id,
+        displayName: location.displayName,
+        locationType: location.locationType,
+        environment: location.environment,
+        status: location.status,
+        active: location.active,
+        intakeAvailable: location.intakeAvailable,
+        operationallyApproved: location.operationallyApproved,
+        acceptingShipments: location.acceptingShipments,
+        acceptingInPerson: location.acceptingInPerson,
+        region: location.region,
+        countryCode: location.countryCode,
+        city: location.city,
+        internalName: location.internalName,
         activeIntakes: location._count.intakes,
-        _count: undefined,
+        availability: location.availability,
+        availabilityLabel: location.availabilityLabel,
+        availabilityReason: location.availabilityReason,
+        warnings: location.warnings,
+        capacity: location.capacity,
+        lastActivityAt: location.lastActivityAt,
         updatedAt: location.updatedAt.toISOString(),
       })),
       pagination: {
@@ -4231,6 +4463,7 @@ export class AdminService {
       where: { id: locationId },
       include: {
         intakes: {
+          where: { status: { in: activeIntakeStatuses } },
           orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           take: 50,
           include: {
@@ -4268,6 +4501,12 @@ export class AdminService {
         code: 'INTAKE_LOCATION_NOT_FOUND',
         message: 'Intake location not found.',
       });
+    const locationAvailability = intakeLocationAvailability(location, location._count.intakes);
+    const canManageLocation = actor.roles.includes('ADMIN') || actor.roles.includes('VAULT_OPERATOR');
+    const command = (allowed: boolean, reason: string | undefined = undefined) => ({
+      allowed,
+      ...(reason ? { reason } : {}),
+    });
     const [categories, history] = await Promise.all([
       Array.isArray(location.acceptedCategories) &&
       location.acceptedCategories.length
@@ -4329,6 +4568,22 @@ export class AdminService {
               : intake.shipment
                 ? 'IN_TRANSIT'
                 : 'AWAITING_SHIPMENT';
+      const nextAction =
+        stage === 'EXCEPTION'
+          ? 'Resolve open exception'
+          : stage === 'AWAITING_DROP_OFF'
+            ? 'Await collector drop-off'
+            : stage === 'AWAITING_SHIPMENT'
+              ? 'Await collector shipment'
+              : stage === 'IN_TRANSIT'
+                ? 'Monitor carrier delivery'
+                : stage === 'DELIVERED_AWAITING_RECEIPT'
+                  ? 'Confirm physical receipt'
+                  : stage === 'RECEIVED'
+                    ? 'Begin verification'
+                    : stage === 'VERIFICATION'
+                      ? 'Complete verification'
+                      : 'Review intake';
       return {
         id: intake.id,
         submissionId: intake.submissionId,
@@ -4340,6 +4595,8 @@ export class AdminService {
           'Collector',
         deliveryMethod: intake.deliveryMethod,
         stage,
+        assignedStaff: null,
+        nextAction,
         updatedAt: intake.updatedAt.toISOString(),
         issue: issue ? { code: issue.code, severity: issue.severity } : null,
       };
@@ -4365,26 +4622,91 @@ export class AdminService {
         countryCode: location.countryCode,
         shippingInstructions: location.shippingInstructions,
         inPersonInstructions: location.inPersonInstructions,
+        internalName: location.internalName,
+        operationalNotes: location.operationalNotes,
+        internalContact: location.internalContact,
+        openingHours: location.openingHours,
+        appointmentRequired: location.appointmentRequired,
+        walkInsAllowed: location.walkInsAllowed,
+        publicContactInstructions: location.publicContactInstructions,
+        packageLabelInstructions: location.packageLabelInstructions,
+        specialHandlingInstructions: location.specialHandlingInstructions,
+        maximumActiveIntakes: location.maximumActiveIntakes,
+        warningThreshold: location.warningThreshold,
+        pauseReason: location.pauseReason,
+        pauseEffectiveAt: location.pauseEffectiveAt?.toISOString() ?? null,
+        expectedResumeAt: location.expectedResumeAt?.toISOString() ?? null,
         customerSafeAddress: location.customerSafeAddress,
         supportedCategories: categories,
         createdAt: location.createdAt.toISOString(),
         updatedAt: location.updatedAt.toISOString(),
+        lastActivityAt: history[0]?.createdAt.toISOString() ?? location.updatedAt.toISOString(),
         activeIntakes: location._count.intakes,
+        availability: locationAvailability.code,
+        availabilityLabel: locationAvailability.label,
+        availabilityReason: locationAvailability.reason,
+        capacity: location.maximumActiveIntakes
+          ? { active: location._count.intakes, maximum: location.maximumActiveIntakes, warningThreshold: location.warningThreshold }
+          : null,
+        warnings: [
+          locationAvailability.code === 'AT_CAPACITY' ? 'At capacity' : null,
+          locationAvailability.code === 'PAUSED' ? 'New intakes paused' : null,
+          !location.operationallyApproved ? 'Configuration incomplete' : null,
+          location.acceptingShipments && !location.addressLine1 ? 'Shipping address incomplete' : null,
+          location.acceptingInPerson && !location.inPersonInstructions ? 'Drop-off instructions missing' : null,
+        ].filter((item): item is string => Boolean(item)),
       },
       intakes: intakeRows,
       counts: intakeRows.reduce<Record<string, number>>((counts, intake) => {
         counts[intake.stage] = (counts[intake.stage] ?? 0) + 1;
         return counts;
       }, {}),
-      history: history.map((event) => ({
-        id: event.id,
-        action: event.action,
-        actor:
-          event.actor?.profile?.displayName ??
-          event.actor?.profile?.publicUsername ??
-          (event.actorType === 'SYSTEM' ? 'System' : 'Authorized staff'),
-        occurredAt: event.createdAt.toISOString(),
-      })),
+      history: history.map((event) => {
+        const metadata =
+          event.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata)
+            ? (event.metadata as Record<string, unknown>)
+            : {};
+        return {
+          id: event.id,
+          action: event.action,
+          actor:
+            event.actor?.profile?.displayName ??
+            event.actor?.profile?.publicUsername ??
+            (event.actorType === 'SYSTEM' ? 'System' : 'Authorized staff'),
+          occurredAt: event.createdAt.toISOString(),
+          reason: typeof metadata.reason === 'string' ? metadata.reason : null,
+          before:
+            metadata.previous && typeof metadata.previous === 'object' && !Array.isArray(metadata.previous)
+              ? (metadata.previous as Record<string, unknown>)
+              : null,
+          after:
+            metadata.next && typeof metadata.next === 'object' && !Array.isArray(metadata.next)
+              ? (metadata.next as Record<string, unknown>)
+              : null,
+        };
+      }),
+      availableCommands: {
+        EDIT: command(canManageLocation, 'Location management requires custody access.'),
+        PAUSE_NEW_INTAKES: command(canManageLocation && location.status === 'ACTIVE' && location.intakeAvailable, location.status !== 'ACTIVE' ? 'Only active locations can be paused.' : 'Location is already paused.'),
+        RESUME_NEW_INTAKES: command(canManageLocation && location.status === 'TEMPORARILY_UNAVAILABLE', location.status !== 'TEMPORARILY_UNAVAILABLE' ? 'Location is not temporarily paused.' : undefined),
+        DEACTIVATE: command(canManageLocation && location.status !== 'INACTIVE', location.status === 'INACTIVE' ? 'Location is already inactive.' : undefined),
+        REACTIVATE: command(canManageLocation && location.status === 'INACTIVE', location.status !== 'INACTIVE' ? 'Location is already active.' : undefined),
+        ENABLE_SHIPPING: command(canManageLocation && !location.acceptingShipments, location.acceptingShipments ? 'Shipping is already enabled.' : undefined),
+        DISABLE_SHIPPING: command(canManageLocation && location.acceptingShipments && location.acceptingInPerson, !location.acceptingShipments ? 'Shipping is already disabled.' : !location.acceptingInPerson ? 'At least one delivery method must remain enabled.' : undefined),
+        ENABLE_IN_PERSON: command(canManageLocation && !location.acceptingInPerson, location.acceptingInPerson ? 'In-person delivery is already enabled.' : undefined),
+        DISABLE_IN_PERSON: command(canManageLocation && location.acceptingInPerson && location.acceptingShipments, !location.acceptingInPerson ? 'In-person delivery is already disabled.' : !location.acceptingShipments ? 'At least one delivery method must remain enabled.' : undefined),
+        REPAIR_AVAILABILITY: command(actor.roles.includes('ADMIN'), 'Availability recovery requires Admin access.'),
+        REPAIR_CAPACITY_PROJECTION: command(actor.roles.includes('ADMIN'), 'Capacity recovery requires Admin access.'),
+      },
+      collectorVisibility: {
+        visibleInProduction: location.environment === 'production' && locationAvailability.code === 'ACCEPTING',
+        visibleInDemoQA: location.environment === 'beta' && locationAvailability.code === 'ACCEPTING',
+        shipping: location.acceptingShipments,
+        inPerson: location.acceptingInPerson,
+        eligibleForNewAssignment: locationAvailability.code === 'ACCEPTING',
+        eligibilityReason: locationAvailability.code === 'ACCEPTING' ? null : locationAvailability.reason,
+      },
+      revision: location.updatedAt.toISOString(),
     };
   }
 
@@ -4497,6 +4819,105 @@ export class AdminService {
     });
   }
 
+  async commandIntakeLocation(
+    actor: Actor,
+    locationId: string,
+    input: { command: IntakeLocationCommand; reason: string; incidentReference?: string },
+    requestId: string,
+  ) {
+    await this.authorization.authorize(actor, 'custody.manage', undefined, undefined, requestId);
+    if (
+      (input.command === 'REPAIR_AVAILABILITY' || input.command === 'REPAIR_CAPACITY_PROJECTION') &&
+      !actor.roles.includes('ADMIN')
+    )
+      throw new ForbiddenException({
+        code: 'INTAKE_LOCATION_RECOVERY_ADMIN_REQUIRED',
+        message: 'Location recovery commands require Admin access.',
+      });
+    return this.db.$transaction(async (db) => {
+      const previous = await db.vaultIntakeLocation.findUnique({ where: { id: locationId } });
+      if (!previous)
+        throw new NotFoundException({ code: 'INTAKE_LOCATION_NOT_FOUND', message: 'Intake location not found.' });
+      const activeIntakes = await db.submissionIntake.count({
+        where: { vaultId: locationId, status: { in: activeIntakeStatuses } },
+      });
+      const currentlyAvailable = intakeLocationAvailability(previous, activeIntakes);
+      const data: Prisma.VaultIntakeLocationUpdateInput = {};
+      let action = `INTAKE_LOCATION_${input.command}`;
+      if (input.command === 'PAUSE_NEW_INTAKES') {
+        if (previous.status !== 'ACTIVE' || !previous.intakeAvailable)
+          throw new ConflictException({ code: 'INTAKE_LOCATION_ALREADY_PAUSED', message: 'Location is already unavailable for new intakes.' });
+        data.status = 'TEMPORARILY_UNAVAILABLE';
+        data.active = true;
+        data.intakeAvailable = false;
+        data.pauseReason = input.reason;
+        data.pauseEffectiveAt = new Date();
+        action = 'INTAKE_LOCATION_PAUSED';
+      } else if (input.command === 'RESUME_NEW_INTAKES') {
+        if (previous.status !== 'TEMPORARILY_UNAVAILABLE')
+          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_PAUSED', message: 'Location is not temporarily paused.' });
+        if (!previous.operationallyApproved || (!previous.acceptingShipments && !previous.acceptingInPerson))
+          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_READY', message: 'Complete approval and delivery configuration before resuming new intakes.' });
+        data.status = 'ACTIVE';
+        data.active = true;
+        data.intakeAvailable = currentlyAvailable.code !== 'AT_CAPACITY';
+        data.pauseReason = null;
+        data.pauseEffectiveAt = null;
+        data.expectedResumeAt = null;
+        action = 'INTAKE_LOCATION_RESUMED';
+      } else if (input.command === 'DEACTIVATE') {
+        if (previous.status === 'INACTIVE')
+          throw new ConflictException({ code: 'INTAKE_LOCATION_ALREADY_INACTIVE', message: 'Location is already inactive.' });
+        data.status = 'INACTIVE';
+        data.active = false;
+        data.intakeAvailable = false;
+        data.pauseReason = input.reason;
+        action = 'INTAKE_LOCATION_DEACTIVATED';
+      } else if (input.command === 'REACTIVATE') {
+        if (previous.status !== 'INACTIVE')
+          throw new ConflictException({ code: 'INTAKE_LOCATION_NOT_INACTIVE', message: 'Location is not inactive.' });
+        data.status = 'ACTIVE';
+        data.active = true;
+        data.intakeAvailable = previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        data.pauseReason = null;
+        data.pauseEffectiveAt = null;
+        action = 'INTAKE_LOCATION_REACTIVATED';
+      } else if (input.command === 'ENABLE_SHIPPING') {
+        if (previous.acceptingShipments) throw new ConflictException({ code: 'SHIPPING_ALREADY_ENABLED', message: 'Shipping is already enabled.' });
+        data.acceptingShipments = true;
+        action = 'INTAKE_LOCATION_SHIPPING_ENABLED';
+      } else if (input.command === 'DISABLE_SHIPPING') {
+        if (!previous.acceptingShipments) throw new ConflictException({ code: 'SHIPPING_ALREADY_DISABLED', message: 'Shipping is already disabled.' });
+        if (!previous.acceptingInPerson) throw new ConflictException({ code: 'INTAKE_DELIVERY_METHOD_REQUIRED', message: 'At least one delivery method must remain enabled.' });
+        data.acceptingShipments = false;
+        action = 'INTAKE_LOCATION_SHIPPING_DISABLED';
+      } else if (input.command === 'ENABLE_IN_PERSON') {
+        if (previous.acceptingInPerson) throw new ConflictException({ code: 'IN_PERSON_ALREADY_ENABLED', message: 'In-person delivery is already enabled.' });
+        data.acceptingInPerson = true;
+        action = 'INTAKE_LOCATION_IN_PERSON_ENABLED';
+      } else if (input.command === 'DISABLE_IN_PERSON') {
+        if (!previous.acceptingInPerson) throw new ConflictException({ code: 'IN_PERSON_ALREADY_DISABLED', message: 'In-person delivery is already disabled.' });
+        if (!previous.acceptingShipments) throw new ConflictException({ code: 'INTAKE_DELIVERY_METHOD_REQUIRED', message: 'At least one delivery method must remain enabled.' });
+        data.acceptingInPerson = false;
+        action = 'INTAKE_LOCATION_IN_PERSON_DISABLED';
+      } else if (input.command === 'REPAIR_AVAILABILITY') {
+        data.active = previous.status !== 'INACTIVE';
+        data.intakeAvailable = previous.status === 'ACTIVE' && previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        action = 'INTAKE_LOCATION_AVAILABILITY_CORRECTED';
+      } else if (input.command === 'REPAIR_CAPACITY_PROJECTION') {
+        data.intakeAvailable = previous.status === 'ACTIVE' && previous.operationallyApproved && (previous.acceptingShipments || previous.acceptingInPerson) && currentlyAvailable.code !== 'AT_CAPACITY';
+        action = 'INTAKE_LOCATION_CAPACITY_PROJECTION_REPAIRED';
+      }
+      const location = await db.vaultIntakeLocation.update({ where: { id: locationId }, data });
+      await this.auditIntakeLocationChange(db, actor, requestId, action, locationId, input.reason, previous, location, {
+        command: input.command,
+        incidentReference: input.incidentReference ?? null,
+        activeIntakes,
+      });
+      return this.intakeLocationMutationProjection(location);
+    });
+  }
+
   private async assertIntakeLocationInput(
     input: IntakeLocationManagementInput,
   ) {
@@ -4552,6 +4973,17 @@ export class AdminService {
           message: 'One or more supported categories are unavailable.',
         });
     }
+    if (
+      input.maximumActiveIntakes !== null &&
+      input.maximumActiveIntakes !== undefined &&
+      input.warningThreshold !== null &&
+      input.warningThreshold !== undefined &&
+      input.warningThreshold > input.maximumActiveIntakes
+    )
+      throw new ConflictException({
+        code: 'INTAKE_CAPACITY_THRESHOLD_INVALID',
+        message: 'The warning threshold cannot exceed maximum active intakes.',
+      });
   }
 
   private intakeLocationData(input: IntakeLocationManagementInput) {
@@ -4576,6 +5008,20 @@ export class AdminService {
       acceptedCategories: input.acceptedCategoryIds,
       shippingInstructions: input.shippingInstructions,
       inPersonInstructions: input.inPersonInstructions ?? null,
+      internalName: input.internalName ?? null,
+      operationalNotes: input.operationalNotes ?? null,
+      internalContact: input.internalContact ?? null,
+      openingHours: input.openingHours ?? null,
+      appointmentRequired: input.appointmentRequired ?? false,
+      walkInsAllowed: input.walkInsAllowed ?? false,
+      publicContactInstructions: input.publicContactInstructions ?? null,
+      packageLabelInstructions: input.packageLabelInstructions ?? null,
+      specialHandlingInstructions: input.specialHandlingInstructions ?? null,
+      maximumActiveIntakes: input.maximumActiveIntakes ?? null,
+      warningThreshold: input.warningThreshold ?? null,
+      pauseReason: input.pauseReason ?? null,
+      pauseEffectiveAt: input.pauseEffectiveAt ? new Date(input.pauseEffectiveAt) : null,
+      expectedResumeAt: input.expectedResumeAt ? new Date(input.expectedResumeAt) : null,
       customerSafeAddress: customerSafeLocationAddress(input),
     };
   }
@@ -4603,6 +5049,7 @@ export class AdminService {
       status: string;
       updatedAt: Date;
     },
+    extra: Record<string, unknown> = {},
   ) {
     await db.auditEvent.create({
       data: {
@@ -4617,6 +5064,7 @@ export class AdminService {
           reason,
           previous: previous ? intakeLocationAuditState(previous) : null,
           next: intakeLocationAuditState(next),
+          ...extra,
         },
       },
     });

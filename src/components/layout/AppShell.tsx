@@ -6,15 +6,24 @@ import { useNotificationStream } from "@/notifications/use-notification-stream";
 import { useRouterState } from "@tanstack/react-router";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const collectorWorkspace = useRouterState({
+  const workspaceState = useRouterState({
     select: (state) =>
-      state.location.pathname === "/collector-workspace" ||
-      state.location.pathname === "/admin" ||
-      state.location.pathname.startsWith("/admin/") ||
-      state.location.pathname.startsWith("/operations/submissions"),
+      state.location.pathname,
   });
-  useNotificationStream("current", !collectorWorkspace);
-  if (collectorWorkspace)
+  const reviewDetail = workspaceState.startsWith("/operations/submissions");
+  const privateWorkspace =
+    workspaceState === "/collector-workspace" ||
+    workspaceState === "/admin" ||
+    workspaceState.startsWith("/admin/");
+  useNotificationStream("current", !privateWorkspace && !reviewDetail);
+  if (reviewDetail)
+    return (
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <MainNavigation />
+        {children}
+      </div>
+    );
+  if (privateWorkspace)
     return (
       <div className="flex min-h-screen flex-col bg-background text-foreground">{children}</div>
     );

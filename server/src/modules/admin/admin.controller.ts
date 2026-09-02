@@ -270,7 +270,8 @@ const intakeLocationsQuery = z
         'DEMO_TEST',
       ])
       .optional(),
-    deliveryMethod: z.enum(['SHIPPING', 'IN_PERSON']).optional(),
+    deliveryMethod: z.enum(['SHIPPING', 'IN_PERSON', 'BOTH']).optional(),
+    availability: z.enum(['ACCEPTING', 'PAUSED', 'AT_CAPACITY', 'UNAVAILABLE']).optional(),
     environment: z.enum(['beta', 'production']).optional(),
     status: z
       .enum(['ACTIVE', 'TEMPORARILY_UNAVAILABLE', 'INACTIVE'])
@@ -279,7 +280,7 @@ const intakeLocationsQuery = z
       (value) => (value === 'true' ? true : value === 'false' ? false : value),
       z.boolean().optional(),
     ),
-    sort: z.enum(['NAME', 'UPDATED']).default('NAME'),
+    sort: z.enum(['NAME', 'ACTIVE_INTAKES', 'RECENT_ACTIVITY']).default('NAME'),
     sortDirection: z.enum(['asc', 'desc']).default('asc'),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -317,6 +318,20 @@ const intakeLocationInput = z
       .default([]),
     shippingInstructions: z.string().trim().max(2_000).default(''),
     inPersonInstructions: z.string().trim().max(2_000).nullable().optional(),
+    internalName: z.string().trim().max(160).nullable().optional(),
+    operationalNotes: z.string().trim().max(2_000).nullable().optional(),
+    internalContact: z.string().trim().max(320).nullable().optional(),
+    openingHours: z.string().trim().max(1_000).nullable().optional(),
+    appointmentRequired: z.boolean().default(false),
+    walkInsAllowed: z.boolean().default(false),
+    publicContactInstructions: z.string().trim().max(2_000).nullable().optional(),
+    packageLabelInstructions: z.string().trim().max(2_000).nullable().optional(),
+    specialHandlingInstructions: z.string().trim().max(2_000).nullable().optional(),
+    maximumActiveIntakes: z.number().int().positive().nullable().optional(),
+    warningThreshold: z.number().int().nonnegative().nullable().optional(),
+    pauseReason: z.string().trim().max(500).nullable().optional(),
+    pauseEffectiveAt: z.string().datetime().nullable().optional(),
+    expectedResumeAt: z.string().datetime().nullable().optional(),
     reason: z.string().trim().min(3).max(500),
     expectedUpdatedAt: z.string().datetime().optional(),
   })
@@ -348,6 +363,24 @@ const intakeLocationInput = z
         message: 'Production locations require a complete shipping address.',
       });
   });
+const intakeLocationCommand = z
+  .object({
+    command: z.enum([
+      'PAUSE_NEW_INTAKES',
+      'RESUME_NEW_INTAKES',
+      'DEACTIVATE',
+      'REACTIVATE',
+      'ENABLE_SHIPPING',
+      'DISABLE_SHIPPING',
+      'ENABLE_IN_PERSON',
+      'DISABLE_IN_PERSON',
+      'REPAIR_AVAILABILITY',
+      'REPAIR_CAPACITY_PROJECTION',
+    ]),
+    reason: z.string().trim().min(3).max(500),
+    incidentReference: z.string().trim().max(160).optional(),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -493,6 +526,21 @@ export class AdminController {
       request.actor!,
       id,
       this.parse(intakeLocationInput, body),
+      request.requestId ?? 'unknown',
+    );
+  }
+  @Post('intake/locations/:id/command')
+  @RequirePermission('custody.manage')
+  commandIntakeLocation(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const input = this.parse(intakeLocationCommand, body);
+    return this.admin.commandIntakeLocation(
+      request.actor!,
+      id,
+      input,
       request.requestId ?? 'unknown',
     );
   }

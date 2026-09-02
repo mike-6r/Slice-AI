@@ -472,16 +472,17 @@ export function SubmissionOperationsPage() {
             <Progress detail={review} />
             <ReviewOverview
               detail={review}
-              onAssign={() => claim.mutate(selected)}
-              assigning={claim.isPending}
-            />
-            <ReviewFindings
-              detail={review}
-              canAdd={commandAllowed(review, "canAddFinding") && !staleReview}
-              canResolve={commandAllowed(review, "canResolveFinding") && !staleReview}
-              onAdd={() => setFindingOpen(true)}
-              onUpdate={(findingId, status) => updateFinding.mutate({ findingId, status })}
-              updating={updateFinding.isPending}
+              canAssign={
+                (commandAllowed(review, "canAssignReviewer") || Boolean(review.reviewWorkspace?.canRelease)) &&
+                !staleReview
+              }
+              onAssign={() => {
+                setAssignmentReviewerId(review.reviewAssignment?.reviewer?.id ?? "");
+                setAssignmentOpen(true);
+              }}
+              assigning={assignReviewer.isPending}
+              canAddFinding={commandAllowed(review, "canAddFinding") && !staleReview}
+              onAddFinding={() => setFindingOpen(true)}
             />
             <section
               id="review-workflow"
@@ -505,19 +506,6 @@ export function SubmissionOperationsPage() {
                     }
                   >
                     Expand all
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-review-expand-all"
-                    onClick={() =>
-                      document
-                        .querySelectorAll<HTMLDetailsElement>("#review-workflow details")
-                        .forEach((section) => {
-                          section.open = false;
-                        })
-                    }
-                  >
-                    Collapse all
                   </button>
                 </div>
               </header>
@@ -599,7 +587,13 @@ export function SubmissionOperationsPage() {
                 />
               </ReviewSection>
               <ReviewSection title="Decision" detail={review} step="decision" number={6}>
-                <DecisionWorkspace detail={review} />
+                <DecisionWorkspace
+                  detail={review}
+                  onDecision={setDecision}
+                  canApprove={commandAllowed(review, "canApprove") && !staleReview}
+                  canRequestChanges={commandAllowed(review, "canRequestChanges") && !staleReview}
+                  canReject={commandAllowed(review, "canReject") && !staleReview}
+                />
               </ReviewSection>
             </section>
             <ReviewNotes
@@ -914,7 +908,6 @@ function ReviewShell({ children, user }: { children: ReactNode; user?: ReviewShe
     <div className="admin-console-shell admin-review-console-shell">
       <aside className="admin-console-sidebar">
         <div className="admin-console-brand">
-          <Wordmark />
           <span className="admin-review-sidebar-mark">ADMIN CONSOLE</span>
         </div>
         <nav className="admin-console-nav" aria-label="Admin Console">
@@ -975,7 +968,7 @@ function ReviewWorkspaceToolbar({
         <p className="admin-review-breadcrumb">
           Review Queue <span>›</span> Submission Review
         </p>
-        <h1>Submission Review</h1>
+        <h1 className="sr-only">Submission Review</h1>
       </div>
       <div className="admin-review-toolbar-actions">
         <Link className="admin-review-back-link" to="/admin" search={{ section: "moderation" }}>
@@ -1122,7 +1115,9 @@ function Progress({ detail }: { detail: SubmissionReviewDetail }) {
       <ol>
         {detail.readiness?.progress.map((item, index) => (
           <li key={item.key} className={"is-" + item.status.toLowerCase()}>
-            <span>{index + 1}</span>
+            <span className="admin-review-progress-step-icon">
+              {item.status === "COMPLETE" || item.status === "NOT_APPLICABLE" ? "✓" : index + 1}
+            </span>
             <div>
               <strong>{progressLabel(item)}</strong>
               <small>{progressSummary(item)}</small>
@@ -1136,12 +1131,18 @@ function Progress({ detail }: { detail: SubmissionReviewDetail }) {
 
 function ReviewOverview({
   detail,
+  canAssign,
   onAssign,
   assigning,
+  canAddFinding,
+  onAddFinding,
 }: {
   detail: SubmissionReviewDetail;
+  canAssign: boolean;
   onAssign: () => void;
   assigning: boolean;
+  canAddFinding: boolean;
+  onAddFinding: () => void;
 }) {
   const workspace = detail.reviewWorkspace;
   if (!workspace) return null;
@@ -1187,13 +1188,29 @@ function ReviewOverview({
               {workspace.blockingIssues.length}
             </dd>
           </div>
+          <div>
+            <dt>Reviewer eligible</dt>
+            <dd className={workspace.selfReviewBlocked ? "is-warning" : "is-ready"}>
+              {workspace.selfReviewBlocked ? "No (self-review blocked)" : "Yes"}
+            </dd>
+          </div>
         </dl>
         <div
           className={`admin-review-readiness-answer ${detail.readiness?.decisionEligible ? "is-ready" : ""}`}
         >
-          <span>Ready for decision?</span>
-          <strong>{detail.readiness?.decisionEligible ? "Yes" : "No"}</strong>
-          <small>{workspace.primaryBlocker ?? "An eligible reviewer can record a decision."}</small>
+          <div className="admin-review-readiness-answer-heading">
+            <span>Ready for decision</span>
+            <strong>{detail.readiness?.decisionEligible ? "YES" : "NO"}</strong>
+          </div>
+          <small>Primary reasons</small>
+          {workspace.primaryBlocker || workspace.selfReviewBlocked ? (
+            <ul>
+              {workspace.primaryBlocker ? <li>{workspace.primaryBlocker}</li> : null}
+              {workspace.selfReviewBlocked ? <li>You cannot decide your own submission.</li> : null}
+            </ul>
+          ) : (
+            <p>An eligible reviewer can record a decision.</p>
+          )}
         </div>
       </article>
       <article className="admin-panel-card admin-review-overview-card">
@@ -1204,61 +1221,47 @@ function ReviewOverview({
         <div className="admin-review-team-primary">
           <span>Primary reviewer</span>
           <strong>{workspace.reviewer?.displayName ?? "Unassigned"}</strong>
-          {workspace.canClaim ? (
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={onAssign}
-              disabled={assigning}
-            >
-              {assigning ? "Assigning…" : workspace.reviewer ? "Assign me" : "Assign"}
-            </button>
-          ) : null}
+          <button type="button" className="button-secondary" onClick={onAssign} disabled={!canAssign || assigning}>
+            {assigning ? "Assigning…" : "Assign reviewer"}
+          </button>
         </div>
-        <ul className="admin-review-contributors">
+        <div className="admin-review-contributor-summary">
+          <span>Contributors</span>
           {contributors.length ? (
-            contributors.slice(0, 3).map((contributor) => (
-              <li key={contributor.id}>
-                <span className="admin-review-contributor-icon" aria-hidden="true">
-                  <Users />
-                </span>
-                <div>
+            <ul className="admin-review-contributors">
+              {contributors.slice(0, 3).map((contributor) => (
+                <li key={contributor.id}>
                   <strong>{contributor.displayName}</strong>
                   <span>{contributor.contributionLabel ?? "Review contribution"}</span>
-                </div>
-                <time dateTime={contributor.lastContributedAt}>
-                  {shortDate(contributor.lastContributedAt)}
-                </time>
-              </li>
-            ))
+                </li>
+              ))}
+            </ul>
           ) : (
-            <li>
-              <span>No staff contribution has been recorded yet.</span>
-            </li>
+            <strong>None yet</strong>
           )}
-        </ul>
+          <p>Any authorized reviewer can contribute.</p>
+          <p>The Primary Reviewer coordinates completion.</p>
+        </div>
       </article>
       <article className="admin-panel-card admin-review-overview-card">
         <div className="admin-review-card-heading">
-          <h2>Open findings</h2>
-          <a href="#review-findings">View all</a>
+          <h2>Review findings</h2>
+          <button type="button" className="admin-review-card-link" onClick={onAddFinding} disabled={!canAddFinding}>
+            + Add finding
+          </button>
         </div>
-        {blocking.length ? (
+        {openFindings.length ? (
           <div className="admin-review-finding-summary is-blocking">
             <strong>
-              {blocking.length} blocking finding{blocking.length === 1 ? "" : "s"}
+              {blocking.length ? `${blocking.length} blocking finding${blocking.length === 1 ? "" : "s"}` : `${openFindings.length} open finding${openFindings.length === 1 ? "" : "s"}`}
             </strong>
-            <span>{blocking[0]?.title}</span>
+            <span>{openFindings[0]?.title}</span>
           </div>
         ) : (
           <div className="admin-review-finding-summary is-clear">
             <CheckCircle2 aria-hidden="true" />
-            <strong>No blocking findings</strong>
-            <span>
-              {openFindings.length
-                ? `${openFindings.length} advisory finding${openFindings.length === 1 ? "" : "s"} remains.`
-                : "Nothing is blocking this submission."}
-            </span>
+            <strong>No findings</strong>
+            <span>There are no blocking or advisory findings for this review.</span>
           </div>
         )}
       </article>
@@ -1266,7 +1269,19 @@ function ReviewOverview({
   );
 }
 
-function DecisionWorkspace({ detail }: { detail: SubmissionReviewDetail }) {
+function DecisionWorkspace({
+  detail,
+  onDecision,
+  canApprove,
+  canRequestChanges,
+  canReject,
+}: {
+  detail: SubmissionReviewDetail;
+  onDecision: (value: Decision) => void;
+  canApprove: boolean;
+  canRequestChanges: boolean;
+  canReject: boolean;
+}) {
   const workspace = detail.reviewWorkspace;
   if (!workspace) return null;
   const steps = detail.readiness?.progress ?? [];
@@ -1314,6 +1329,17 @@ function DecisionWorkspace({ detail }: { detail: SubmissionReviewDetail }) {
           <dd className="is-ready">Valid · v{detail.version}</dd>
         </div>
       </dl>
+      <div className="admin-review-decision-workspace-actions">
+        <button type="button" className="button-primary" onClick={() => onDecision("APPROVED")} disabled={!canApprove}>
+          Approve submission
+        </button>
+        <button type="button" className="button-secondary" onClick={() => onDecision("CHANGES_REQUESTED")} disabled={!canRequestChanges}>
+          Request changes
+        </button>
+        <button type="button" className="button-secondary" onClick={() => onDecision("REJECTED")} disabled={!canReject}>
+          Reject submission
+        </button>
+      </div>
     </div>
   );
 }
@@ -1377,65 +1403,47 @@ function Identity({
   onEdit: () => void;
 }) {
   const item = detail.collectible;
-  const source = detail.marketResearch?.observations[0];
+  const identityConfirmed = detail.readiness?.progress.find((progress) => progress.key === "identity")?.status === "COMPLETE";
+  const confirmedBy = workflowActor(detail, "identity");
   return (
     <div className="admin-review-identity-panels">
-      <Info title="Submitted identity">
+      <Info title="Collector submitted">
         <dl className="admin-review-facts">
           {fact("Category", item?.category)}
           {fact("Title", metadataValue(detail, "name"))}
           {fact("Set", metadataValue(detail, "set"))}
           {fact("Card number", metadataValue(detail, "cardNumber"))}
-          {fact("Variant", metadataValue(detail, "variant"))}
           {fact("Year", metadataValue(detail, "year"))}
-          {fact("Grader", metadataValue(detail, "grader"))}
-          {fact("Certification", metadataValue(detail, "certificationNumber"))}
         </dl>
       </Info>
-      <Info title="Slice review identity">
+      <Info title="Slice reviewed identity">
         <dl className="admin-review-facts">
           {fact("Title", reviewIdentity.name)}
-          {fact("Year", reviewIdentity.year)}
           {fact("Set", reviewIdentity.set)}
           {fact("Card number", reviewIdentity.cardNumber)}
           {fact("Variant", reviewIdentity.variant)}
+          {fact("Year", reviewIdentity.year)}
         </dl>
         <button type="button" className="button-secondary" onClick={onEdit} disabled={!canEdit}>
           <Pencil aria-hidden="true" /> Edit review identity
         </button>
       </Info>
-      <Info title="Authority signals">
-        <dl className="admin-review-facts">
-          {fact("Grade", item?.grader ? item.grader + " " + (item.grade ?? "") : "Raw / Ungraded")}
-          {fact("Certification", item?.certificationNumber ?? "Not required")}
-          {fact(
-            "Certification status",
-            detail.certificationVerification
-              ? label(detail.certificationVerification.status)
-              : "Not applicable",
-          )}
-          {fact(
-            "Identity conflict",
-            detail.certificationVerification?.status === "MISMATCH"
-              ? "Certification mismatch requires review"
-              : "No known identity conflicts",
-          )}
-          {fact("Reference source", source?.providerCode?.replaceAll("_", " ") ?? "Not attached")}
-        </dl>
-        {source?.externalUrl ? (
-          <a
-            className="admin-review-provider-link"
-            href={source.externalUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View source ↗
-          </a>
+      <Info title="Result">
+        <div className={`admin-review-result ${identityConfirmed ? "is-confirmed" : "is-pending"}`}>
+          <strong>
+            <CheckCircle2 aria-hidden="true" />
+            {identityConfirmed ? "Identity confirmed" : "Identity needs review"}
+          </strong>
+          <span>{identityConfirmed ? "No known conflicts" : "Confirm the reviewed identity before continuing."}</span>
+        </div>
+        {confirmedBy ? (
+          <small className="admin-review-confirmed-by">
+            Confirmed by <strong>{confirmedBy}</strong> · {workflowDate(detail, "identity")}
+          </small>
         ) : null}
       </Info>
       <p className="admin-review-section-footnote">
-        Submitted information is preserved alongside any normalized or provider-verified authority.
-        Exact certificate conflicts are surfaced when verification detects them.
+        The submitted identity remains preserved alongside the reviewed identity for auditability.
       </p>
     </div>
   );
@@ -1458,52 +1466,43 @@ function Evidence({
   const summary = detail.evidenceSummary;
   return (
     <div className="admin-review-evidence-layout">
-      <div className="admin-review-evidence-overview">
-        <p>Required images</p>
-        <strong>
-          {summary ? `${summary.presentRequired} of ${summary.required}` : "Unavailable"}
-        </strong>
-        <span>
-          {summary?.missingRequired
-            ? `${summary.missingRequired} required image${summary.missingRequired === 1 ? "" : "s"} missing`
-            : "All required images provided"}
-        </span>
+      <div className="admin-review-evidence-heading">
+        <strong>Required evidence</strong>
+        <span>{summary ? `${summary.acceptedRequired} / ${summary.required} accepted` : "Unavailable"}</span>
+        <a href="#review-help">Guidelines <span aria-hidden="true">⌃</span></a>
       </div>
       <div className="admin-review-workspace-gallery">
         {summary?.items.map((item) => (
           <article
             key={item.id}
             className="admin-review-workspace-media"
-            onClick={() => onFocus(item.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") onFocus(item.id);
-            }}
-            role="button"
-            tabIndex={0}
           >
-            <AdminReviewMedia
-              src={item.thumbnailUrl}
-              alt={label(item.slot) + " evidence"}
-              fallback={<span>{label(item.slot)}</span>}
-            />
-            <strong>
-              {label(item.slot)} {item.required ? "· Required" : "· Optional"}
-            </strong>
-            <small>Source: collector · {formatDate(item.uploadedAt)}</small>
-            <small>
-              {item.status === "SAFE" ? "Usable for review" : label(item.status)} ·{" "}
-              {item.reviewState}
-            </small>
-            <small>
-              {item.reviewedBy
-                ? `Reviewed by ${item.reviewedBy.displayName} · ${formatDate(item.reviewedAt)}`
-                : "Not reviewed yet"}
-            </small>
-            <span className="admin-review-evidence-actions">
-              <span>Open viewer</span>
+            <div className="admin-review-evidence-thumbnail">
+              <AdminReviewMedia
+                src={item.thumbnailUrl}
+                alt={label(item.slot) + " evidence"}
+                fallback={<span>{label(item.slot)}</span>}
+              />
+            </div>
+            <div className="admin-review-evidence-details">
+              <div className="admin-review-evidence-title-row">
+                <strong>{label(item.slot)} {item.required ? "· Required" : "· Optional"}</strong>
+                <span className={item.reviewState === "ACCEPTED" ? "is-accepted" : "is-pending"}>
+                  {item.reviewState === "ACCEPTED" ? "Accepted" : item.reviewState === "FLAGGED" ? "Flagged" : "Pending review"}
+                </span>
+              </div>
+              <dl>
+                <div><dt>Status</dt><dd>{item.status === "SAFE" ? "Pending review" : label(item.status)}</dd></div>
+                <div><dt>Size</dt><dd>{formatBytes(item.sizeBytes)}</dd></div>
+                <div><dt>Submitted</dt><dd>{shortDate(item.uploadedAt)}</dd></div>
+              </dl>
+              <div className="admin-review-evidence-actions">
+                <button type="button" className="button-secondary" onClick={() => onFocus(item.id)}>
+                  Open image
+                </button>
               <button
                 type="button"
-                className="button-secondary"
+                className="button-primary"
                 disabled={
                   !canEdit ||
                   actingOnEvidence ||
@@ -1514,8 +1513,8 @@ function Evidence({
                   event.stopPropagation();
                   onAccept(item);
                 }}
-              >
-                {item.reviewState === "ACCEPTED" ? "Accepted" : "Accept evidence"}
+                >
+                  {item.reviewState === "ACCEPTED" ? "Accepted" : "Accept evidence"}
               </button>
               <button
                 type="button"
@@ -1525,10 +1524,11 @@ function Evidence({
                   event.stopPropagation();
                   onFlag(item);
                 }}
-              >
-                {item.reviewState === "FLAGGED" ? "Flagged" : "Flag issue"}
+                >
+                  {item.reviewState === "FLAGGED" ? "Flagged" : "Flag issue"}
               </button>
-            </span>
+              </div>
+            </div>
           </article>
         ))}
       </div>
@@ -2177,6 +2177,34 @@ function DecisionRail({
           </strong>
         </div>
       </section>
+      <section className="admin-panel-card admin-review-eligibility-card">
+        <h2>Decision eligibility</h2>
+        {detail.reviewWorkspace?.selfReviewBlocked ? (
+          <div className="admin-review-eligibility-state is-blocked">
+            <span aria-hidden="true">×</span>
+            <div>
+              <strong>Self-review blocked</strong>
+              <p>You cannot make the final decision on your own submission.</p>
+            </div>
+          </div>
+        ) : detail.readiness?.decisionEligible ? (
+          <div className="admin-review-eligibility-state is-ready">
+            <CheckCircle2 aria-hidden="true" />
+            <div>
+              <strong>Eligible to decide</strong>
+              <p>All required review gates are complete.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="admin-review-eligibility-state is-blocked">
+            <AlertTriangle aria-hidden="true" />
+            <div>
+              <strong>Not ready</strong>
+              <p>Complete the required review items before deciding.</p>
+            </div>
+          </div>
+        )}
+      </section>
       <section className="admin-panel-card admin-review-actions-card">
         <h2>Quick actions</h2>
         {staleReview ? (
@@ -2188,138 +2216,41 @@ function DecisionRail({
           </div>
         ) : (
           <div className="admin-review-decision-actions">
-            {commandAllowed(detail, "canAssignReviewer") ? (
-              <>
-                <button
-                  type="button"
-                  className="admin-review-action is-assign"
-                  onClick={onClaim}
-                  disabled={claiming}
-                >
-                  <Users aria-hidden="true" /> {claiming ? "Assigning…" : "Assign to me"}
-                </button>
-                <button
-                  type="button"
-                  className="admin-review-action is-assign"
-                  onClick={onAssignment}
-                >
-                  <Users aria-hidden="true" /> Assign reviewer
-                </button>
-              </>
-            ) : null}
-            {!workspace.canClaim && workspace.canRelease ? (
-              <button
-                type="button"
-                className="admin-review-action is-assign"
-                onClick={onAssignment}
-              >
-                <Users aria-hidden="true" /> Reassign reviewer
-              </button>
-            ) : null}
-            <button type="button" className="admin-review-action is-note" onClick={onNotes}>
+            <button
+              type="button"
+              className="admin-review-action is-note"
+              onClick={onNotes}
+              disabled={!commandAllowed(detail, "canRecordAssessment")}
+            >
               <MessageSquarePlus aria-hidden="true" /> Add internal note
             </button>
-            <button type="button" className="admin-review-action is-note" onClick={onFinding}>
+            <button
+              type="button"
+              className="admin-review-action is-note"
+              onClick={onFinding}
+              disabled={!commandAllowed(detail, "canAddFinding")}
+            >
               <Plus aria-hidden="true" /> Add finding
             </button>
-            <button type="button" className="admin-review-action is-manage" onClick={onManage}>
-              <ClipboardCheck aria-hidden="true" /> Manage submission
-            </button>
-            <button type="button" className="admin-review-action is-help" onClick={onHelp}>
-              <HelpCircle aria-hidden="true" /> How review works
-            </button>
-            {/* The review-wide note drawer is opened above; this link remains for deep links. */}
-            <a
-              className="admin-review-action is-note"
-              href="#review-notes"
-              onClick={(event) => {
-                event.preventDefault();
-                onNotes();
-              }}
+            <button
+              type="button"
+              className="admin-review-action is-changes"
+              onClick={() => onDecision("CHANGES_REQUESTED")}
+              disabled={!commandAllowed(detail, "canRequestChanges")}
             >
-              <MessageSquarePlus aria-hidden="true" /> Notes & history
-            </a>
-            <a className="admin-review-action is-history" href="#review-history">
-              <FileClock aria-hidden="true" /> View review history
-            </a>
-            {commandAllowed(detail, "canRecover") ? (
-              <button type="button" className="admin-review-action is-claim" onClick={onRecovery}>
-                <RotateCcw aria-hidden="true" /> Re-evaluate review state
-                <small>Read authoritative review facts and refresh blockers</small>
-              </button>
-            ) : null}
-            {workspace.canRelease ? (
-              <button
-                type="button"
-                className="admin-review-action is-claim"
-                onClick={onRelease}
-                disabled={releasing}
-              >
-                {releasing ? "Clearing…" : "Clear primary assignment"}
-                <small>Keep the review in progress and allow unassigned collaboration</small>
-              </button>
-            ) : null}
-            {commandAllowed(detail, "canApprove") ||
-            commandAllowed(detail, "canRequestChanges") ||
-            commandAllowed(detail, "canReject") ? (
-              <>
-                <button
-                  type="button"
-                  className="admin-review-action is-accept"
-                  onClick={() => onDecision("APPROVED")}
-                  disabled={!commandAllowed(detail, "canApprove")}
-                >
-                  Approve submission<small>Next: create canonical collectible</small>
-                </button>
-                <button
-                  type="button"
-                  className="admin-review-action is-changes"
-                  onClick={() => onDecision("CHANGES_REQUESTED")}
-                  disabled={!commandAllowed(detail, "canRequestChanges")}
-                >
-                  Request changes<small>Send a collector request</small>
-                </button>
-                <button
-                  type="button"
-                  className="admin-review-action is-reject"
-                  onClick={() => onDecision("REJECTED")}
-                  disabled={!commandAllowed(detail, "canReject")}
-                >
-                  Reject submission<small>Close this submission</small>
-                </button>
-              </>
-            ) : null}
-            {commandAllowed(detail, "canCanonicalize") ? (
-              <button
-                type="button"
-                className="admin-review-action is-accept"
-                onClick={onCanonicalize}
-                disabled={canonicalizing}
-              >
-                {canonicalizing ? "Creating collectible…" : "Create canonical collectible"}
-                <small>Creates one linked master record</small>
-              </button>
-            ) : null}
-            {workspace.canOpenPhysicalIntake && detail.assetId ? (
-              <Link
-                className="admin-review-action is-accept"
-                to="/admin"
-                search={{ section: "intake" }}
-              >
-                Open Physical Intake<small>Continue in the separate physical workflow</small>
-              </Link>
-            ) : null}
-            {!workspace.canClaim &&
-            !workspace.canRelease &&
-            !workspace.canApprove &&
-            !workspace.canRequestChanges &&
-            !workspace.canReject &&
-            !workspace.canCanonicalize &&
-            !workspace.canOpenPhysicalIntake ? (
-              <p className="text-sm text-subtle">
-                No further review command is available in the current state.
-              </p>
-            ) : null}
+              <RefreshCw aria-hidden="true" /> Request changes
+            </button>
+            <button
+              type="button"
+              className="admin-review-action is-recovery"
+              onClick={onRecovery}
+              disabled={!commandAllowed(detail, "canRecover")}
+            >
+              <RotateCcw aria-hidden="true" /> Re-evaluate review state
+            </button>
+            <button type="button" className="admin-review-action is-manage" onClick={onManage}>
+              <ClipboardCheck aria-hidden="true" /> Manage submission <ArrowRight aria-hidden="true" />
+            </button>
           </div>
         )}
       </section>
@@ -2903,33 +2834,8 @@ function ReviewNotes({
 }) {
   const history = detail.notes?.history ?? [];
   return (
-    <section id="review-notes" className="admin-panel-card admin-review-notes-card">
-      <div className="admin-review-findings-heading">
-        <div>
-          <p className="page-kicker">Review-wide context</p>
-          <h2>Internal notes</h2>
-          <p className="text-sm text-subtle">Staff-only notes are never sent to the collector.</p>
-        </div>
-        <button type="button" className="button-secondary" onClick={onOpen} disabled={!canEdit}>
-          <MessageSquarePlus aria-hidden="true" /> Add internal note
-        </button>
-      </div>
-      {history.length ? (
-        <ul className="admin-review-note-list">
-          {history
-            .slice(-3)
-            .reverse()
-            .map((item) => (
-              <li key={item.id}>
-                <strong>{item.author}</strong>
-                <span>{formatDate(item.createdAt)}</span>
-                <p>{item.note}</p>
-              </li>
-            ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-subtle">No internal notes yet.</p>
-      )}
+    <>
+      <span id="review-notes" className="admin-review-notes-anchor" aria-hidden="true" />
       {open ? (
         <div
           className="admin-review-drawer"
@@ -2948,6 +2854,11 @@ function ReviewNotes({
             </button>
             <p className="page-kicker">Review-wide context</p>
             <h3>Add internal note</h3>
+            {history.length ? (
+              <p className="text-sm text-subtle">
+                {history.length} previous staff note{history.length === 1 ? "" : "s"} remain in the audit history.
+              </p>
+            ) : null}
             <textarea
               rows={5}
               value={note}
@@ -2971,7 +2882,7 @@ function ReviewNotes({
           </div>
         </div>
       ) : null}
-    </section>
+    </>
   );
 }
 
@@ -4123,6 +4034,11 @@ function formatDate(value: string | null | undefined) {
         new Date(value),
       )
     : "Not available";
+}
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 function marketAmount(value?: string, currency?: string) {
   return value && currency

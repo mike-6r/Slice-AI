@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Building2, MapPin, PackageCheck, Plus, Truck, UsersRound } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Building2, CheckCircle2, ChevronRight, CircleAlert, Clock3, Info, Link2, MapPin, PackageCheck, Plus, RotateCcw, Settings2, Truck, UsersRound } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type {
   AdminIntakeLocation,
   AdminIntakeLocationDetail,
+  AdminIntakeLocationsResponse,
   IntakeLocationInput,
   IntakeLocationStatus,
   IntakeLocationType,
@@ -26,6 +28,7 @@ const locationTypes: Array<{ value: IntakeLocationType; label: string }> = [
   { value: "PARTNER_INTAKE", label: "Partner Intake" },
   { value: "DEMO_TEST", label: "Test / Demo Facility" },
 ];
+type LocationCommandName = "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION";
 const blankForm = (): IntakeLocationInput => ({
   displayName: "",
   locationType: "DEMO_TEST",
@@ -45,6 +48,20 @@ const blankForm = (): IntakeLocationInput => ({
   acceptedCategoryIds: [],
   shippingInstructions: "",
   inPersonInstructions: null,
+  internalName: "",
+  operationalNotes: null,
+  internalContact: null,
+  openingHours: null,
+  appointmentRequired: false,
+  walkInsAllowed: false,
+  publicContactInstructions: null,
+  packageLabelInstructions: null,
+  specialHandlingInstructions: null,
+  maximumActiveIntakes: null,
+  warningThreshold: null,
+  pauseReason: null,
+  pauseEffectiveAt: null,
+  expectedResumeAt: null,
   reason: "",
 });
 
@@ -53,13 +70,20 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
   const client = useQueryClient();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"" | IntakeLocationStatus>("");
-  const [delivery, setDelivery] = useState<"" | "SHIPPING" | "IN_PERSON">("");
+  const [delivery, setDelivery] = useState<"" | "SHIPPING" | "IN_PERSON" | "BOTH">("");
+  const [availability, setAvailability] = useState<"" | AdminIntakeLocation["availability"]>("");
   const [type, setType] = useState<"" | IntakeLocationType>("");
   const [environment, setEnvironment] = useState<"" | "beta" | "production">("");
   const [accepting, setAccepting] = useState<"" | "true" | "false">("");
-  const [sort, setSort] = useState<"NAME" | "UPDATED">("NAME");
+  const [sort, setSort] = useState<"NAME" | "ACTIVE_INTAKES" | "RECENT_ACTIVITY">("NAME");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const [form, setForm] = useState<IntakeLocationInput | null>(null);
+  const [command, setCommand] = useState<{
+    command: "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION";
+    label: string;
+  } | null>(null);
+  const [commandReason, setCommandReason] = useState("");
   const locations = useQuery({
     queryKey: [
       "admin",
@@ -71,6 +95,8 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
       environment,
       accepting,
       sort,
+      sortDirection,
+      availability,
       page,
     ],
     queryFn: () =>
@@ -78,10 +104,12 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
         q: query.trim() || undefined,
         status: status || undefined,
         deliveryMethod: delivery || undefined,
+        availability: availability || undefined,
         type: type || undefined,
         environment: environment || undefined,
         acceptingNewIntakes: accepting === "" ? undefined : accepting === "true",
         sort,
+        sortDirection,
         page,
         pageSize: 20,
       }),
@@ -104,12 +132,21 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
       onOpen(result.id, "overview");
     },
   });
+  const executeCommand = useMutation({
+    mutationFn: (input: { id: string; command: NonNullable<typeof command>["command"]; reason: string }) =>
+      repositories.admin.commandIntakeLocation(input.id, { command: input.command, reason: input.reason }),
+    onSuccess: (_result, input) => {
+      void client.invalidateQueries({ queryKey: ["admin", "intake-locations"] });
+      void client.invalidateQueries({ queryKey: ["admin", "intake-location", input.id] });
+      setCommand(null);
+      setCommandReason("");
+    },
+  });
 
   const metrics = locations.data?.summary;
   const current = detail.data?.location;
   const formValues = form ?? (current ? formFromLocation(current) : null);
-  const detailTab = ["overview", "intakes", "history"].includes(tab ?? "") ? tab! : "overview";
-  const title = current ? current.displayName : "Intake Locations";
+  const detailTab = ["overview", "configuration", "intakes", "staff", "history"].includes(tab ?? "") ? tab! : "overview";
 
   if (locationId) {
     if (detail.isLoading)
@@ -131,53 +168,44 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
     const currentLocation = detail.data.location;
     return (
       <section className="intake-locations-workspace">
-        <div className="intake-locations-header">
-          <button className="admin-secondary-button" type="button" onClick={onBack}>
-            <ArrowLeft aria-hidden="true" /> Intake Locations
-          </button>
-          <div>
-            <p className="admin-console-eyebrow">Physical Intake / Receiving location</p>
-            <h2>{currentLocation.displayName}</h2>
-            <p>
-              {locationTypeLabel(currentLocation.locationType)} ·{" "}
-              {currentLocation.city || currentLocation.region}, {currentLocation.countryCode} ·{" "}
-              {environmentLabel(currentLocation.environment)}
-            </p>
+        <div className="intake-location-detail-header">
+          <div className="intake-location-detail-heading">
+            <button className="admin-secondary-button" type="button" onClick={onBack}><ArrowLeft aria-hidden="true" /> Intake Locations</button>
+            <div>
+              <p className="admin-console-eyebrow">Physical Intake / Receiving location</p>
+              <h2>{currentLocation.displayName}</h2>
+              <p>{locationTypeLabel(currentLocation.locationType)} · {currentLocation.city || currentLocation.region}, {currentLocation.countryCode}</p>
+              <div className="intake-location-detail-badges"><StatusPill status={currentLocation.status} /><AvailabilityPill location={currentLocation} /><EnvironmentPill environment={currentLocation.environment} /></div>
+            </div>
           </div>
-          <button
-            className="admin-primary-button"
-            type="button"
-            onClick={() => setForm(formFromLocation(currentLocation))}
-          >
-            Edit location
-          </button>
+          <div className="intake-location-detail-actions">
+            <button className="admin-primary-button" type="button" disabled={!detail.data.availableCommands.EDIT?.allowed} onClick={() => setForm(formFromLocation(currentLocation))}>Edit Location</button>
+            <ContextualLocationAction location={currentLocation} commands={detail.data.availableCommands} onCommand={(nextCommand, label) => { setCommand({ command: nextCommand, label }); setCommandReason(""); }} />
+          </div>
         </div>
-        <div className="intake-location-status-row">
-          <StatusPill status={currentLocation.status} />
-          <span>
-            {currentLocation.acceptingNewIntakes ? "Accepting new intakes" : "New intakes paused"}
-          </span>
-          <span>
-            {currentLocation.operationallyApproved
-              ? "Operationally approved"
-              : "Not operationally approved"}
-          </span>
-        </div>
+        <LocationSummaryStrip location={currentLocation} />
         <nav className="admin-filter-tabs" aria-label="Intake location detail tabs">
-          {["overview", "intakes", "history"].map((value) => (
+          {["overview", "configuration", "intakes", "staff", "history"].map((value) => (
             <button
               key={value}
               type="button"
               className={detailTab === value ? "is-active" : ""}
               onClick={() => onOpen(locationId, value)}
             >
-              {value[0].toUpperCase() + value.slice(1)}
+              {value === "intakes" ? "Active Intakes" : value === "staff" ? "Staff & Access" : value[0].toUpperCase() + value.slice(1)}
             </button>
           ))}
         </nav>
-        {detailTab === "overview" ? <LocationOverview location={currentLocation} /> : null}
-        {detailTab === "intakes" ? <LocationIntakes detail={detail.data} /> : null}
-        {detailTab === "history" ? <LocationHistory detail={detail.data} /> : null}
+        <div className="intake-location-detail-layout">
+          <main className="intake-location-detail-main">
+            {detailTab === "overview" ? <LocationOverview detail={detail.data} onEdit={() => setForm(formFromLocation(currentLocation))} onOpenIntakes={() => onOpen(locationId, "intakes")} /> : null}
+            {detailTab === "configuration" ? <LocationConfiguration location={currentLocation} onEdit={() => setForm(formFromLocation(currentLocation))} /> : null}
+            {detailTab === "intakes" ? <LocationIntakes detail={detail.data} /> : null}
+            {detailTab === "staff" ? <LocationStaff detail={detail.data} /> : null}
+            {detailTab === "history" ? <LocationHistory detail={detail.data} /> : null}
+          </main>
+          <LocationDetailRail detail={detail.data} onEdit={() => setForm(formFromLocation(currentLocation))} onCommand={(nextCommand, label) => { setCommand({ command: nextCommand, label }); setCommandReason(""); }} onOpenIntakes={() => onOpen(locationId, "intakes")} />
+        </div>
         {form ? (
           <LocationForm
             values={formValues!}
@@ -204,15 +232,18 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
           <Plus aria-hidden="true" /> Add Intake Location
         </button>
       </div>
-      <div className="intake-location-metrics">
-        <Metric label="Active Locations" value={metrics?.activeLocations} icon={<Building2 />} />
-        <Metric label="Shipping Enabled" value={metrics?.shippingEnabled} icon={<Truck />} />
-        <Metric label="In-Person Enabled" value={metrics?.inPersonEnabled} icon={<MapPin />} />
-        <Metric label="Partner Locations" value={metrics?.partnerLocations} icon={<UsersRound />} />
-        <Metric label="Unavailable" value={metrics?.unavailable} icon={<PackageCheck />} />
-      </div>
-      <div className="admin-panel intake-location-directory">
-        <div className="intake-location-filters">
+      <div className="intake-location-page-grid">
+        <main className="intake-location-page-main">
+          <div className="intake-location-explanation"><Info aria-hidden="true" /><div><strong>These locations are presented to Collectors during destination selection.</strong><span>Keep location details accurate to reduce delays and improve the intake experience.</span></div></div>
+          <div className="intake-location-metrics">
+            <Metric label="Active Locations" detail="Across all environments" value={metrics?.activeLocations} icon={<Building2 />} />
+            <Metric label="Accepting Intakes" detail="Currently available" value={metrics?.acceptingIntakes} icon={<CheckCircle2 />} />
+            <Metric label="Shipping Enabled" detail="Available for shipping" value={metrics?.shippingEnabled} icon={<Truck />} />
+            <Metric label="In-Person Enabled" detail="Available for drop-off" value={metrics?.inPersonEnabled} icon={<UsersRound />} />
+            <Metric label="Temporarily Unavailable" detail="Paused or at capacity" value={metrics === undefined ? undefined : metrics.temporarilyUnavailable + metrics.atCapacity} icon={<Clock3 />} />
+          </div>
+          <div className="admin-panel intake-location-directory">
+            <div className="intake-location-filters">
           <input
             className="admin-text-input"
             value={query}
@@ -220,21 +251,20 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
               setQuery(event.target.value);
               setPage(1);
             }}
-            placeholder="Search location, city, region, or country"
+            placeholder="Search locations..."
             aria-label="Search intake locations"
           />
           <select
-            value={status}
+            value={environment}
             onChange={(event) => {
-              setStatus(event.target.value as typeof status);
+              setEnvironment(event.target.value as typeof environment);
               setPage(1);
             }}
-            aria-label="Location status"
+            aria-label="Location environment"
           >
-            <option value="">All statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="TEMPORARILY_UNAVAILABLE">Temporarily unavailable</option>
-            <option value="INACTIVE">Inactive</option>
+            <option value="">All environments</option>
+            <option value="production">Production</option>
+            <option value="beta">Demo / QA</option>
           </select>
           <select
             value={delivery}
@@ -244,9 +274,24 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
             }}
             aria-label="Delivery method"
           >
-            <option value="">All delivery methods</option>
+            <option value="">All methods</option>
             <option value="SHIPPING">Shipping</option>
             <option value="IN_PERSON">In-person</option>
+            <option value="BOTH">Both methods</option>
+          </select>
+          <select
+            value={availability}
+            onChange={(event) => {
+              setAvailability(event.target.value as typeof availability);
+              setPage(1);
+            }}
+            aria-label="Availability"
+          >
+            <option value="">All availability</option>
+            <option value="ACCEPTING">Accepting</option>
+            <option value="PAUSED">Paused</option>
+            <option value="AT_CAPACITY">At capacity</option>
+            <option value="UNAVAILABLE">Unavailable</option>
           </select>
           <select
             value={type}
@@ -257,35 +302,7 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
             aria-label="Location type"
           >
             <option value="">All types</option>
-            {locationTypes.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={environment}
-            onChange={(event) => {
-              setEnvironment(event.target.value as typeof environment);
-              setPage(1);
-            }}
-            aria-label="Location environment"
-          >
-            <option value="">All environments</option>
-            <option value="beta">Test / Beta</option>
-            <option value="production">Production</option>
-          </select>
-          <select
-            value={accepting}
-            onChange={(event) => {
-              setAccepting(event.target.value as typeof accepting);
-              setPage(1);
-            }}
-            aria-label="Accepting new intakes"
-          >
-            <option value="">Any availability</option>
-            <option value="true">Accepting new intakes</option>
-            <option value="false">Paused new intakes</option>
+            {locationTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
           <select
             value={sort}
@@ -295,10 +312,19 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
             }}
             aria-label="Sort locations"
           >
-            <option value="NAME">Name</option>
-            <option value="UPDATED">Recently updated</option>
+            <option value="NAME">Location A–Z</option>
+            <option value="ACTIVE_INTAKES">Most active intakes</option>
+            <option value="RECENT_ACTIVITY">Recent activity</option>
           </select>
-        </div>
+            </div>
+            <div className="intake-location-filter-chips" aria-label="Location filter shortcuts">
+              <button type="button" className={!environment && !delivery ? "is-active" : ""} onClick={() => { setEnvironment(""); setDelivery(""); setPage(1); }}>All</button>
+              <button type="button" className={environment === "production" ? "is-active" : ""} onClick={() => { setEnvironment("production"); setPage(1); }}>Production</button>
+              <button type="button" className={environment === "beta" ? "is-active" : ""} onClick={() => { setEnvironment("beta"); setPage(1); }}>Demo / QA</button>
+              <button type="button" className={delivery === "SHIPPING" ? "is-active" : ""} onClick={() => { setDelivery("SHIPPING"); setPage(1); }}>Shipping</button>
+              <button type="button" className={delivery === "IN_PERSON" ? "is-active" : ""} onClick={() => { setDelivery("IN_PERSON"); setPage(1); }}>In-Person</button>
+              <button type="button" className="intake-location-clear-filters" onClick={() => { setQuery(""); setStatus(""); setDelivery(""); setAvailability(""); setType(""); setEnvironment(""); setAccepting(""); setSort("NAME"); setSortDirection("asc"); setPage(1); }}><RotateCcw aria-hidden="true" /> Clear filters</button>
+            </div>
         {locations.isLoading ? (
           <p className="intake-location-state">Loading intake locations…</p>
         ) : null}
@@ -340,6 +366,10 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
             </div>
           </div>
         ) : null}
+          </div>
+          <div className="intake-location-policy"><Info aria-hidden="true" /><span>Inactive, paused, or at-capacity locations remain attached to historical intakes but are not shown as options for new destination selection.</span></div>
+        </main>
+        <LocationSummaryRail summary={metrics} onOpenPhysicalIntake={onBack} />
       </div>
       {form ? (
         <LocationForm
@@ -350,6 +380,18 @@ export function AdminIntakeLocations({ locationId, tab, onBack, onOpen }: Props)
           pending={save.isPending}
           error={save.error instanceof Error ? save.error.message : null}
         />
+      ) : null}
+      {command ? (
+        <div className="intake-location-modal" role="dialog" aria-modal="true" aria-label={`${command.label} confirmation`}>
+          <form className="admin-panel intake-location-command-dialog" onSubmit={(event) => { event.preventDefault(); if (current) executeCommand.mutate({ id: current.id, command: command.command, reason: commandReason }); }}>
+            <p className="admin-console-eyebrow">Protected location command</p>
+            <h3>{command.label}</h3>
+            <p>This changes Slice-internal availability or delivery configuration. Existing intake records remain attached.</p>
+            <label>Reason<textarea required minLength={3} value={commandReason} onChange={(event) => setCommandReason(event.target.value)} placeholder="Explain why this command is being used." /></label>
+            {executeCommand.isError ? <p className="intake-location-error">{executeCommand.error instanceof Error ? executeCommand.error.message : "The command could not be completed."}</p> : null}
+            <div className="intake-location-form-actions"><button type="button" className="admin-secondary-button" onClick={() => setCommand(null)}>Cancel</button><button type="submit" className="admin-primary-button" disabled={executeCommand.isPending}>{executeCommand.isPending ? "Applying…" : "Apply command"}</button></div>
+          </form>
+        </div>
       ) : null}
     </section>
   );
@@ -369,23 +411,30 @@ function LocationDirectory({
         <span>Type</span>
         <span>Delivery Methods</span>
         <span>Environment</span>
-        <span>Status</span>
+        <span>Availability</span>
+        <span>Capacity</span>
         <span>Active Intakes</span>
+        <span>Last Activity</span>
         <span>Action</span>
       </div>
       {items.map((location) => (
         <div className="intake-location-table-row" role="row" key={location.id}>
-          <div>
+          <div className="intake-location-name-cell">
+            <span className={`intake-location-type-icon is-${location.locationType.toLowerCase()}`} aria-hidden="true">{location.locationType === "DEMO_TEST" ? <PackageCheck /> : location.locationType.includes("PARTNER") ? <UsersRound /> : <Building2 />}</span>
+            <div>
             <strong>{location.displayName}</strong>
             <small>
               {location.city || location.region}, {location.countryCode}
             </small>
+            </div>
           </div>
           <span>{locationTypeLabel(location.locationType)}</span>
-          <span>{methodLabel(location)}</span>
-          <span>{environmentLabel(location.environment)}</span>
-          <StatusPill status={location.status} />
-          <span>{location.activeIntakes}</span>
+          <MethodPills location={location} />
+          <EnvironmentPill environment={location.environment} />
+          <AvailabilityPill location={location} />
+          <CapacityDisplay location={location} />
+          <Link className="intake-location-active-link" to="/admin" search={{ section: "intake", vault: location.id }}>{location.activeIntakes} →</Link>
+          <span className="intake-location-last-activity"><strong>{relativeTime(location.lastActivityAt)}</strong><small>{new Date(location.lastActivityAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span>
           <button
             type="button"
             className="admin-secondary-button"
@@ -399,43 +448,157 @@ function LocationDirectory({
   );
 }
 
-function LocationOverview({ location }: { location: AdminIntakeLocationDetail["location"] }) {
+function LocationSummaryRail({
+  summary,
+  onOpenPhysicalIntake,
+}: {
+  summary: AdminIntakeLocationsResponse["summary"] | undefined;
+  onOpenPhysicalIntake: () => void;
+}) {
   return (
-    <div className="intake-location-detail-grid">
-      <section className="admin-panel">
-        <h3>Overview</h3>
+    <aside className="intake-location-summary-rail">
+      <section className="admin-panel intake-location-rail-card intake-location-health-card">
+        <RailHeading icon={<Activity />} title="Location health" action="View all" />
+        <div className="intake-location-health-visual">
+          <div className="intake-location-health-gauge" style={{ "--health": `${summary?.health.percentage ?? 0}%` } as CSSProperties}><strong>{summary ? `${summary.health.percentage}%` : "—"}</strong><span>Healthy</span></div>
+          <div className="intake-location-health-legend"><span><i className="is-healthy" />Healthy <b>{summary?.health.healthy ?? "—"}</b></span><span><i className="is-degraded" />Degraded <b>{summary?.health.degraded ?? "—"}</b></span><span><i className="is-critical" />Critical <b>{summary?.health.critical ?? "—"}</b></span></div>
+        </div>
+      </section>
+      <section className="admin-panel intake-location-rail-card">
+        <RailHeading icon={<AlertTriangle />} title="Active exceptions" action="View all" />
+        <div className="intake-location-rail-stat"><strong>{summary?.exceptions.totalActive ?? "—"}</strong><span>Total active</span><div><span>At Capacity <b>{summary?.exceptions.atCapacity ?? "—"}</b></span><span>Paused <b>{summary?.exceptions.paused ?? "—"}</b></span></div></div>
+      </section>
+      <section className="admin-panel intake-location-rail-card">
+        <RailHeading icon={<CircleAlert />} title="Needs attention" action="View all" />
+        <div className="intake-location-rail-stat is-warning"><strong>{summary?.attention.requiresReview ?? "—"}</strong><span>Requires review</span><div><span>Low Capacity <b>{summary?.attention.lowCapacity ?? "—"}</b></span><span>Info Updates <b>{summary?.attention.infoUpdates ?? "—"}</b></span></div></div>
+      </section>
+      <section className="admin-panel intake-location-rail-card intake-location-quick-links">
+        <RailHeading icon={<Link2 />} title="Quick links" />
+        <button type="button" onClick={onOpenPhysicalIntake}><PackageCheck /> Open Physical Intake <ChevronRight /></button>
+        <Link to="/admin" search={{ section: "audit" }}><Clock3 /> View Audit History <ChevronRight /></Link>
+        <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><Settings2 /> Location Capacity Guide <ChevronRight /></button>
+      </section>
+    </aside>
+  );
+}
+
+function RailHeading({ icon, title, action }: { icon: ReactNode; title: string; action?: string }) {
+  return <div className="intake-location-rail-heading"><span>{icon}</span><strong>{title}</strong>{action ? <button type="button">{action}</button> : null}</div>;
+}
+
+function MethodPills({ location }: { location: Pick<AdminIntakeLocation, "acceptingShipments" | "acceptingInPerson"> }) {
+  return <div className="intake-location-method-pills">{location.acceptingShipments ? <span><Truck /> Shipping</span> : null}{location.acceptingInPerson ? <span><UsersRound /> In-Person</span> : null}</div>;
+}
+
+function EnvironmentPill({ environment }: { environment: string }) {
+  return <span className={`intake-location-environment is-${environment}`}>{environment === "production" ? "Production" : "Demo / QA"}</span>;
+}
+
+function LocationSummaryStrip({ location }: { location: AdminIntakeLocationDetail["location"] }) {
+  return <div className="intake-location-summary-strip"><div><span>Availability</span><strong><AvailabilityPill location={location} /></strong></div><div><span>Delivery methods</span><strong>{methodLabel(location)}</strong></div><div><span>Active intakes</span><strong>{location.activeIntakes}</strong></div><div><span>Capacity</span><strong>{location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured"}</strong></div><div><span>Environment</span><strong>{environmentLabel(location.environment)}</strong></div><div><span>Last activity</span><strong>{new Date(location.lastActivityAt).toLocaleDateString([], { month: "short", day: "numeric" })}</strong></div></div>;
+}
+
+function LocationOverview({ detail, onEdit, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onEdit: () => void; onOpenIntakes: () => void }) {
+  const { location } = detail;
+  return (
+    <div className="intake-location-overview-stack">
+      <section className="admin-panel intake-location-detail-section">
+        <SectionHeading eyebrow="Operational snapshot" title="Location status" action={<button type="button" className="admin-secondary-button" onClick={onEdit}>Manage availability</button>} />
         <dl className="intake-location-definition">
-          <dt>Type</dt>
-          <dd>{locationTypeLabel(location.locationType)}</dd>
+          <dt>Record status</dt><dd><StatusPill status={location.status} /></dd>
+          <dt>Availability</dt><dd><AvailabilityPill location={location} />{location.availabilityReason ? <small className="intake-location-inline-reason">{location.availabilityReason}</small> : null}</dd>
           <dt>Environment</dt>
-          <dd>{environmentLabel(location.environment)}</dd>
-          <dt>Address</dt>
-          <dd>{location.customerSafeAddress || "Not configured for this demo/test location"}</dd>
+          <dd><EnvironmentPill environment={location.environment} /></dd>
+          <dt>Facility type</dt><dd>{locationTypeLabel(location.locationType)}</dd>
+          <dt>Active intakes</dt><dd>{location.activeIntakes}</dd>
+          <dt>Capacity</dt><dd><CapacityDisplay location={location} /></dd>
+          <dt>Warning threshold</dt><dd>{location.warningThreshold ?? "Not configured"}</dd>
           <dt>Delivery methods</dt>
-          <dd>{methodLabel(location)}</dd>
-          <dt>Accepting new intakes</dt>
-          <dd>{location.acceptingNewIntakes ? "Yes" : "No"}</dd>
-          <dt>Supported collectibles</dt>
-          <dd>
-            {location.supportedCategories.length
-              ? location.supportedCategories.map((category) => category.name).join(", ")
-              : "All supported collectibles"}
-          </dd>
-          <dt>Created</dt>
-          <dd>{new Date(location.createdAt).toLocaleString()}</dd>
-          <dt>Last updated</dt>
-          <dd>{new Date(location.updatedAt).toLocaleString()}</dd>
+          <dd><MethodPills location={location} /></dd>
+          <dt>Collector visibility</dt><dd>{detail.collectorVisibility.eligibleForNewAssignment ? "Visible for new assignment" : detail.collectorVisibility.eligibilityReason || "Not visible for new assignment"}</dd>
+          <dt>Current blockers</dt><dd>{location.warnings.length ? location.warnings.join(" · ") : "None"}</dd>
         </dl>
       </section>
-      <section className="admin-panel">
-        <h3>Customer instructions</h3>
-        <h4>Shipping</h4>
-        <p>{location.shippingInstructions || "No shipping instructions configured."}</p>
-        <h4>In-person drop-off</h4>
-        <p>{location.inPersonInstructions || "No in-person instructions configured."}</p>
-      </section>
+      <div className="intake-location-detail-grid">
+        <DeliveryCapabilities location={location} onEdit={onEdit} />
+        <CollectorPreview location={location} visibility={detail.collectorVisibility} />
+      </div>
+      <div className="intake-location-detail-grid">
+        <LocationIntakePreview detail={detail} onOpenIntakes={onOpenIntakes} />
+        <CapacitySummary location={location} />
+      </div>
+      <NeedsAttentionCard location={location} />
     </div>
   );
+}
+
+function SectionHeading({ eyebrow, title, action }: { eyebrow?: string; title: string; action?: ReactNode }) {
+  return <div className="intake-location-section-heading"><div>{eyebrow ? <p className="admin-console-eyebrow">{eyebrow}</p> : null}<h3>{title}</h3></div>{action}</div>;
+}
+
+function DeliveryCapabilities({ location, onEdit }: { location: AdminIntakeLocationDetail["location"]; onEdit: () => void }) {
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Collector destination" title="Delivery capabilities" action={<button type="button" className="admin-secondary-button" onClick={onEdit}>Manage methods</button>} /><div className="intake-location-capability-grid"><div className={`intake-location-capability ${location.acceptingShipments ? "is-enabled" : "is-disabled"}`}><Truck /><div><strong>Shipping</strong><span>{location.acceptingShipments ? "Enabled" : "Not configured"}</span></div></div><div className={`intake-location-capability ${location.acceptingInPerson ? "is-enabled" : "is-disabled"}`}><UsersRound /><div><strong>In-person drop-off</strong><span>{location.acceptingInPerson ? "Enabled" : "Not configured"}</span></div></div></div>{location.acceptingShipments ? <div className="intake-location-preview-fields"><span><b>Ship to</b>{location.customerSafeAddress || "Not configured"}</span><span><b>Receiving instructions</b>{location.shippingInstructions || "Not configured"}</span><span><b>Package labels</b>{location.packageLabelInstructions || "Not configured"}</span></div> : null}{location.acceptingInPerson ? <div className="intake-location-preview-fields"><span><b>Opening hours</b>{location.openingHours || "Not configured"}</span><span><b>Drop-off instructions</b>{location.inPersonInstructions || "Not configured"}</span></div> : null}</section>;
+}
+
+function CollectorPreview({ location, visibility }: { location: AdminIntakeLocationDetail["location"]; visibility: AdminIntakeLocationDetail["collectorVisibility"] }) {
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Collector preview" title="How Collectors see this location" /><p className="intake-location-helper">This uses the same public fields and eligibility state as destination selection.</p><div className="intake-location-collector-preview"><div className="intake-location-preview-icon"><Building2 /></div><div><strong>{location.displayName}</strong><span>{location.region}, {location.countryCode}</span><span>{methodLabel(location)}</span><p>{location.shippingInstructions || location.inPersonInstructions || "No public instructions configured."}</p></div><AvailabilityPill location={location} /></div><div className="intake-location-preview-visibility"><span>Eligible for new assignment <b className={visibility.eligibleForNewAssignment ? "is-yes" : "is-no"}>{visibility.eligibleForNewAssignment ? "Yes" : "No"}</b></span>{visibility.eligibilityReason ? <small>{visibility.eligibilityReason}</small> : null}</div></section>;
+}
+
+function LocationIntakePreview({ detail, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onOpenIntakes: () => void }) {
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Current work" title="Recent active intakes" action={<button type="button" className="admin-secondary-button" onClick={onOpenIntakes}>View all active intakes</button>} />{detail.intakes.length ? <div className="intake-location-preview-list">{detail.intakes.slice(0, 4).map((intake) => <Link key={intake.id} to="/admin" search={{ section: "intake", intake: intake.submissionId, intakeTab: "overview" }}><div><strong>{intake.title}</strong><small>{intake.collector} · {intake.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</small></div><span>{intake.stage.replaceAll("_", " ")}</span><span>{intake.assignedStaff ?? "Unassigned"}</span><span>{intake.nextAction}</span></Link>)}</div> : <p className="intake-location-state">No active intakes are assigned to this location.</p>}</section>;
+}
+
+function CapacitySummary({ location }: { location: AdminIntakeLocationDetail["location"] }) {
+  if (!location.capacity) return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Operational load" title="Capacity" /><p className="intake-location-not-configured">Capacity is not configured for this location.</p></section>;
+  const percentage = Math.round((location.capacity.active / location.capacity.maximum) * 100);
+  const tone = location.availability === "AT_CAPACITY" || (location.capacity.warningThreshold !== null && location.capacity.active >= location.capacity.warningThreshold) ? "is-warning" : "";
+  return <section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Operational load" title="Capacity" /><div className={`intake-location-capacity-summary ${tone}`}><div><strong>{location.capacity.active} / {location.capacity.maximum}</strong><span>{percentage}% utilized</span></div><i><b style={{ width: `${Math.min(100, percentage)}%` }} /></i></div><dl className="intake-location-definition"><dt>Warning threshold</dt><dd>{location.capacity.warningThreshold ?? "Not configured"}</dd><dt>Availability</dt><dd><AvailabilityPill location={location} /></dd></dl></section>;
+}
+
+function NeedsAttentionCard({ location }: { location: AdminIntakeLocationDetail["location"] }) {
+  return <section className={`admin-panel intake-location-detail-section intake-location-attention-card ${location.warnings.length ? "has-issues" : ""}`}><SectionHeading eyebrow="Operational warnings" title="Needs attention" />{location.warnings.length ? <ul>{location.warnings.map((warning) => <li key={warning}><CircleAlert />{warning}</li>)}</ul> : <p className="intake-location-all-clear"><CheckCircle2 /> No active issues. All systems operational.</p>}</section>;
+}
+
+function LocationDetailRail({ detail, onEdit, onCommand, onOpenIntakes }: { detail: AdminIntakeLocationDetail; onEdit: () => void; onCommand: (command: LocationCommandName, label: string) => void; onOpenIntakes: () => void }) {
+  const { location, collectorVisibility, availableCommands } = detail;
+  return <aside className="intake-location-detail-rail"><section className="admin-panel intake-location-detail-rail-card"><SectionHeading eyebrow="Location snapshot" title="Operational state" /><dl className="intake-location-rail-definition"><dt>Status</dt><dd><StatusPill status={location.status} /></dd><dt>Availability</dt><dd><AvailabilityPill location={location} /></dd><dt>Environment</dt><dd><EnvironmentPill environment={location.environment} /></dd><dt>Active intakes</dt><dd>{location.activeIntakes}</dd><dt>Capacity</dt><dd>{location.capacity ? `${location.capacity.active} / ${location.capacity.maximum}` : "Not configured"}</dd><dt>Delivery</dt><dd>{methodLabel(location)}</dd></dl></section><section className="admin-panel intake-location-detail-rail-card"><SectionHeading eyebrow="Collector visibility" title="Destination eligibility" /><VisibilityRow label="Visible in Demo / QA" value={collectorVisibility.visibleInDemoQA} /><VisibilityRow label="Visible in Production" value={collectorVisibility.visibleInProduction} /><VisibilityRow label="Shipping" value={collectorVisibility.shipping} /><VisibilityRow label="In-person" value={collectorVisibility.inPerson} /><VisibilityRow label="Eligible for new assignment" value={collectorVisibility.eligibleForNewAssignment} />{collectorVisibility.eligibilityReason ? <p className="intake-location-rail-reason">{collectorVisibility.eligibilityReason}</p> : null}</section><section className="admin-panel intake-location-detail-rail-card intake-location-quick-actions"><SectionHeading eyebrow="Controls" title="Quick actions" /><button type="button" onClick={onEdit} disabled={!availableCommands.EDIT?.allowed}><Settings2 /> Edit configuration <ChevronRight /></button><button type="button" onClick={onOpenIntakes}><PackageCheck /> View active intakes <ChevronRight /></button><ContextualLocationAction location={location} commands={availableCommands} onCommand={onCommand} compact /></section></aside>;
+}
+
+function VisibilityRow({ label, value }: { label: string; value: boolean }) {
+  return <div className="intake-location-visibility-row"><span>{label}</span><b className={value ? "is-yes" : "is-no"}>{value ? "Yes" : "No"}</b></div>;
+}
+
+function ContextualLocationAction({ location, commands, onCommand, compact = false }: { location: AdminIntakeLocationDetail["location"]; commands: AdminIntakeLocationDetail["availableCommands"]; onCommand: (command: LocationCommandName, label: string) => void; compact?: boolean }) {
+  const primary: [LocationCommandName, string] = location.status === "TEMPORARILY_UNAVAILABLE" ? ["RESUME_NEW_INTAKES", "Resume New Intakes"] : location.status === "INACTIVE" ? ["REACTIVATE", "Reactivate Location"] : ["PAUSE_NEW_INTAKES", "Pause New Intakes"];
+  const more: Array<[LocationCommandName, string]> = location.status === "INACTIVE" ? [["REACTIVATE", "Reactivate Location"]] : [["DEACTIVATE", "Deactivate Location"], ["REPAIR_AVAILABILITY", "Repair Availability"], ["REPAIR_CAPACITY_PROJECTION", "Recalculate Capacity"]];
+  return <div className={`intake-location-context-actions ${compact ? "is-compact" : ""}`}><button type="button" className="admin-secondary-button" disabled={!commands[primary[0]]?.allowed} title={commands[primary[0]]?.reason} onClick={() => onCommand(primary[0], primary[1])}>{primary[1]}</button><details><summary>More</summary><div>{more.map(([command, label]) => <button key={command} type="button" disabled={!commands[command]?.allowed} title={commands[command]?.reason} onClick={() => onCommand(command, label)}>{label}</button>)}</div></details></div>;
+}
+
+function LocationConfiguration({ location, onEdit }: { location: AdminIntakeLocationDetail["location"]; onEdit: () => void }) {
+  return <div className="intake-location-configuration-stack"><section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Collector-facing data" title="Public information" action={<button type="button" className="admin-primary-button" onClick={onEdit}>Edit configuration</button>} /><dl className="intake-location-definition"><dt>Public name</dt><dd>{location.displayName}</dd><dt>Safe public address</dt><dd>{location.customerSafeAddress || "Not configured"}</dd><dt>Public contact</dt><dd>{location.publicContactInstructions || "Not configured"}</dd><dt>Shipping instructions</dt><dd>{location.shippingInstructions || "Not configured"}</dd><dt>In-person instructions</dt><dd>{location.inPersonInstructions || "Not configured"}</dd><dt>Opening hours</dt><dd>{location.openingHours || "Not configured"}</dd><dt>Appointment / walk-ins</dt><dd>{location.appointmentRequired ? "Appointment required" : "Appointment not required"} · {location.walkInsAllowed ? "Walk-ins allowed" : "Walk-ins not allowed"}</dd></dl></section><div className="intake-location-detail-grid"><section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Slice-only data" title="Internal information" /><dl className="intake-location-definition"><dt>Internal location ID</dt><dd><code>{location.id}</code></dd><dt>Internal name</dt><dd>{location.internalName || "Not configured"}</dd><dt>Internal contact</dt><dd>{location.internalContact || "Not configured"}</dd><dt>Facility type</dt><dd>{locationTypeLabel(location.locationType)}</dd><dt>Environment</dt><dd>{environmentLabel(location.environment)}</dd><dt>Supported categories</dt><dd>{location.supportedCategories.length ? location.supportedCategories.map((category) => category.name).join(", ") : "All supported collectibles"}</dd><dt>Operational notes</dt><dd>{location.operationalNotes || "Not configured"}</dd></dl></section><section className="admin-panel intake-location-detail-section"><SectionHeading eyebrow="Operational controls" title="Capacity & availability" /><dl className="intake-location-definition"><dt>Maximum active intakes</dt><dd>{location.maximumActiveIntakes ?? "Not configured"}</dd><dt>Warning threshold</dt><dd>{location.warningThreshold ?? "Not configured"}</dd><dt>Record status</dt><dd><StatusPill status={location.status} /></dd><dt>Receiving availability</dt><dd><AvailabilityPill location={location} /></dd><dt>Pause reason</dt><dd>{location.pauseReason || "—"}</dd><dt>Created</dt><dd>{new Date(location.createdAt).toLocaleString()}</dd><dt>Last updated</dt><dd>{new Date(location.updatedAt).toLocaleString()}</dd></dl></section></div></div>;
+}
+
+function LocationStaff({ detail }: { detail: AdminIntakeLocationDetail }) {
+  const contributors = detail.history.filter((event) => event.actor && event.actor !== "System").filter((event, index, events) => events.findIndex((candidate) => candidate.actor === event.actor) === index).slice(0, 6);
+  return <section className="intake-location-staff-stack"><section className="admin-panel intake-location-staff-empty"><Settings2 aria-hidden="true" /><h3>Global Physical Intake permissions apply</h3><p>This location currently uses global Physical Intake staff permissions. Location-specific receiving, verification, and custody RBAC is not configured.</p></section><section className="admin-panel"><SectionHeading eyebrow="Audit-derived" title="Recent contributing staff" />{contributors.length ? <div className="intake-location-contributors">{contributors.map((event) => <div key={event.actor}><span className="intake-location-contributor-avatar">{event.actor.slice(0, 1).toUpperCase()}</span><div><strong>{event.actor}</strong><small>{event.action.replaceAll("_", " ")} · {new Date(event.occurredAt).toLocaleDateString()}</small></div></div>)}</div> : <p className="intake-location-state">No contributing staff are available in the authorized history projection.</p>}</section></section>;
+}
+
+function AvailabilityPill({ location }: { location: Pick<AdminIntakeLocation, "availability" | "availabilityLabel"> }) {
+  return <span className={`intake-location-availability is-${location.availability.toLowerCase()}`}>{location.availabilityLabel}</span>;
+}
+
+function CapacityDisplay({ location }: { location: Pick<AdminIntakeLocation, "capacity" | "activeIntakes"> }) {
+  if (!location.capacity) return <span className="intake-location-unlimited">Unlimited</span>;
+  const percent = Math.min(100, Math.round((location.capacity.active / location.capacity.maximum) * 100));
+  return <span className="intake-location-capacity"><span>{location.capacity.active} / {location.capacity.maximum}</span><i><b style={{ width: `${percent}%` }} /></i></span>;
+}
+
+function LocationCommandBar({ location, commands, onCommand }: { location: AdminIntakeLocationDetail["location"]; commands: AdminIntakeLocationDetail["availableCommands"]; onCommand: (command: "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION", label: string) => void }) {
+  const actions: Array<[keyof typeof commands, string, "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION"]> = location.status === "INACTIVE" ? [["REACTIVATE", "Reactivate", "REACTIVATE"]] : location.status === "TEMPORARILY_UNAVAILABLE" ? [["RESUME_NEW_INTAKES", "Resume new intakes", "RESUME_NEW_INTAKES"], ["DEACTIVATE", "Deactivate", "DEACTIVATE"]] : [["PAUSE_NEW_INTAKES", "Pause new intakes", "PAUSE_NEW_INTAKES"], ["DEACTIVATE", "Deactivate", "DEACTIVATE"]];
+  const recoveryActions: Array<[keyof typeof commands, string, "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION"]> = [["REPAIR_AVAILABILITY", "Repair availability", "REPAIR_AVAILABILITY"], ["REPAIR_CAPACITY_PROJECTION", "Repair capacity projection", "REPAIR_CAPACITY_PROJECTION"]];
+  const shippingCommand = location.acceptingShipments ? "DISABLE_SHIPPING" : "ENABLE_SHIPPING";
+  const inPersonCommand = location.acceptingInPerson ? "DISABLE_IN_PERSON" : "ENABLE_IN_PERSON";
+  return <div className="intake-location-command-bar"><strong>Location commands</strong>{actions.map(([key, label, action]) => <button key={key} type="button" className="admin-secondary-button" disabled={!commands[key]?.allowed} title={commands[key]?.allowed ? undefined : commands[key]?.reason} onClick={() => onCommand(action, label)}>{label}</button>)}<button type="button" className="admin-secondary-button" disabled={!commands[shippingCommand]?.allowed} title={commands[shippingCommand]?.allowed ? undefined : commands[shippingCommand]?.reason} onClick={() => onCommand(shippingCommand, shippingCommand === "ENABLE_SHIPPING" ? "Enable shipping" : "Disable shipping")}>{shippingCommand === "ENABLE_SHIPPING" ? "Enable shipping" : "Disable shipping"}</button><button type="button" className="admin-secondary-button" disabled={!commands[inPersonCommand]?.allowed} title={commands[inPersonCommand]?.allowed ? undefined : commands[inPersonCommand]?.reason} onClick={() => onCommand(inPersonCommand, inPersonCommand === "ENABLE_IN_PERSON" ? "Enable in-person delivery" : "Disable in-person delivery")}>{inPersonCommand === "ENABLE_IN_PERSON" ? "Enable in-person" : "Disable in-person"}</button>{recoveryActions.map(([key, label, action]) => <button key={key} type="button" className="admin-secondary-button" disabled={!commands[key]?.allowed} title={commands[key]?.allowed ? undefined : commands[key]?.reason} onClick={() => onCommand(action, label)}>{label}</button>)}<span>Existing intakes remain attached during availability changes.</span></div>;
 }
 
 function LocationIntakes({ detail }: { detail: AdminIntakeLocationDetail }) {
@@ -449,17 +612,19 @@ function LocationIntakes({ detail }: { detail: AdminIntakeLocationDetail }) {
           </span>
         ))}
       </div>
-      <div className="intake-location-table" role="table">
+      <div className="intake-location-table intake-location-intakes-table" role="table">
         <div className="intake-location-table-row intake-location-table-head" role="row">
           <span>Collectible</span>
           <span>Collector</span>
           <span>Delivery</span>
           <span>Current stage</span>
+          <span>Assigned staff</span>
+          <span>Next action</span>
           <span>Time in stage</span>
           <span>Issue</span>
         </div>
         {detail.intakes.map((intake) => (
-          <div className="intake-location-table-row" role="row" key={intake.id}>
+          <Link className="intake-location-table-row" role="row" key={intake.id} to="/admin" search={{ section: "intake", intake: intake.submissionId, intakeTab: "overview" }}>
             <div>
               <strong>{intake.title}</strong>
               <small>{intake.reference}</small>
@@ -467,9 +632,11 @@ function LocationIntakes({ detail }: { detail: AdminIntakeLocationDetail }) {
             <span>{intake.collector}</span>
             <span>{intake.deliveryMethod === "IN_PERSON" ? "In-person" : "Shipping"}</span>
             <span>{intake.stage.replaceAll("_", " ")}</span>
+            <span>{intake.assignedStaff ?? "Unassigned"}</span>
+            <span>{intake.nextAction}</span>
             <span>{relativeTime(intake.updatedAt)}</span>
             <span>{intake.issue?.code ?? "—"}</span>
-          </div>
+          </Link>
         ))}
       </div>
       {!detail.intakes.length ? (
@@ -488,6 +655,13 @@ function LocationHistory({ detail }: { detail: AdminIntakeLocationDetail }) {
             <strong>{event.action.replaceAll("_", " ")}</strong>
             <span>{event.actor}</span>
             <small>{new Date(event.occurredAt).toLocaleString()}</small>
+            {event.reason ? <p>{event.reason}</p> : null}
+            {event.before || event.after ? (
+              <details>
+                <summary>View state transition</summary>
+                <pre>{JSON.stringify({ before: event.before, after: event.after }, null, 2)}</pre>
+              </details>
+            ) : null}
           </div>
         ))}
       </div>
@@ -541,12 +715,12 @@ function LocationForm({
         <fieldset>
           <legend>Basic Information</legend>
           <label>
-            Location name
-            <input
-              required
-              value={values.displayName}
-              onChange={(event) => set("displayName", event.target.value)}
-            />
+            Public Name
+            <input required value={values.displayName} onChange={(event) => set("displayName", event.target.value)} />
+          </label>
+          <label>
+            Internal Name
+            <input value={values.internalName ?? ""} onChange={(event) => set("internalName", event.target.value || null)} placeholder="Admin-only reference" />
           </label>
           <label>
             Location type
@@ -680,6 +854,17 @@ function LocationForm({
               onChange={(event) => set("inPersonInstructions", event.target.value || null)}
             />
           </label>
+          <div className="intake-location-form-grid">
+            <label>Opening hours<input value={values.openingHours ?? ""} onChange={(event) => set("openingHours", event.target.value || null)} placeholder="Mon–Fri, 09:00–17:00" /></label>
+            <label>Public contact instructions<textarea value={values.publicContactInstructions ?? ""} onChange={(event) => set("publicContactInstructions", event.target.value || null)} /></label>
+            <label>Package label instructions<textarea value={values.packageLabelInstructions ?? ""} onChange={(event) => set("packageLabelInstructions", event.target.value || null)} /></label>
+            <label>Special handling instructions<textarea value={values.specialHandlingInstructions ?? ""} onChange={(event) => set("specialHandlingInstructions", event.target.value || null)} /></label>
+          </div>
+          <div className="intake-location-methods"><label><input type="checkbox" checked={Boolean(values.appointmentRequired)} onChange={(event) => set("appointmentRequired", event.target.checked)} /> Appointment required</label><label><input type="checkbox" checked={Boolean(values.walkInsAllowed)} onChange={(event) => set("walkInsAllowed", event.target.checked)} /> Walk-ins allowed</label></div>
+        </fieldset>
+        <fieldset>
+          <legend>Capacity &amp; internal operations</legend>
+          <div className="intake-location-form-grid"><label>Maximum active intakes<input type="number" min="1" value={values.maximumActiveIntakes ?? ""} onChange={(event) => set("maximumActiveIntakes", event.target.value ? Number(event.target.value) : null)} placeholder="Unlimited" /></label><label>Warning threshold<input type="number" min="0" value={values.warningThreshold ?? ""} onChange={(event) => set("warningThreshold", event.target.value ? Number(event.target.value) : null)} placeholder="Optional" /></label><label>Internal contact<input value={values.internalContact ?? ""} onChange={(event) => set("internalContact", event.target.value || null)} /></label><label>Operational notes<textarea value={values.operationalNotes ?? ""} onChange={(event) => set("operationalNotes", event.target.value || null)} /></label></div>
         </fieldset>
         <fieldset>
           <legend>Availability</legend>
@@ -726,10 +911,12 @@ function LocationForm({
 
 function Metric({
   label,
+  detail,
   value,
   icon,
 }: {
   label: string;
+  detail?: string;
   value: number | undefined;
   icon: ReactNode;
 }) {
@@ -738,6 +925,7 @@ function Metric({
       <span>{icon}</span>
       <strong>{value === undefined ? "Unavailable" : value}</strong>
       <small>{label}</small>
+      {detail ? <em>{detail}</em> : null}
     </div>
   );
 }
@@ -782,6 +970,20 @@ function formFromLocation(
       postalCode: string | null;
       shippingInstructions: string;
       inPersonInstructions: string | null;
+      internalName: string | null;
+      operationalNotes: string | null;
+      internalContact: string | null;
+      openingHours: string | null;
+      appointmentRequired: boolean;
+      walkInsAllowed: boolean;
+      publicContactInstructions: string | null;
+      packageLabelInstructions: string | null;
+      specialHandlingInstructions: string | null;
+      maximumActiveIntakes: number | null;
+      warningThreshold: number | null;
+      pauseReason: string | null;
+      pauseEffectiveAt: string | null;
+      expectedResumeAt: string | null;
       supportedCategories: Array<{ id: string }>;
     }>,
 ): IntakeLocationInput {
@@ -804,6 +1006,20 @@ function formFromLocation(
     acceptedCategoryIds: location.supportedCategories?.map((category) => category.id) ?? [],
     shippingInstructions: location.shippingInstructions ?? "",
     inPersonInstructions: location.inPersonInstructions ?? null,
+    internalName: location.internalName ?? null,
+    operationalNotes: location.operationalNotes ?? null,
+    internalContact: location.internalContact ?? null,
+    openingHours: location.openingHours ?? null,
+    appointmentRequired: location.appointmentRequired ?? false,
+    walkInsAllowed: location.walkInsAllowed ?? false,
+    publicContactInstructions: location.publicContactInstructions ?? null,
+    packageLabelInstructions: location.packageLabelInstructions ?? null,
+    specialHandlingInstructions: location.specialHandlingInstructions ?? null,
+    maximumActiveIntakes: location.maximumActiveIntakes ?? null,
+    warningThreshold: location.warningThreshold ?? null,
+    pauseReason: location.pauseReason ?? null,
+    pauseEffectiveAt: location.pauseEffectiveAt ?? null,
+    expectedResumeAt: location.expectedResumeAt ?? null,
     reason: "",
     expectedUpdatedAt: "updatedAt" in location ? location.updatedAt : undefined,
   };

@@ -341,7 +341,7 @@ export class CollectorWorkspaceService {
   }
 
   async vaults() {
-    return this.db.vaultIntakeLocation.findMany({
+    const locations = await this.db.vaultIntakeLocation.findMany({
       // External collectors may only choose an operator-approved destination.
       // Existing internal test records remain available in the database but
       // are deliberately not exposed by this customer-facing projection.
@@ -363,9 +363,32 @@ export class CollectorWorkspaceService {
         acceptingInPerson: true,
         acceptedCategories: true,
         shippingInstructions: true,
+        inPersonInstructions: true,
+        openingHours: true,
+        appointmentRequired: true,
+        walkInsAllowed: true,
+        publicContactInstructions: true,
+        packageLabelInstructions: true,
+        specialHandlingInstructions: true,
         customerSafeAddress: true,
+        maximumActiveIntakes: true,
+        _count: {
+          select: {
+            intakes: {
+              where: {
+                status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED', 'RECEIVED', 'VERIFICATION'] },
+              },
+            },
+          },
+        },
       },
     });
+    return locations
+      .filter((location) => location.maximumActiveIntakes === null || location._count.intakes < location.maximumActiveIntakes)
+      .map(({ _count, maximumActiveIntakes, ...location }) => ({
+        ...location,
+        capacity: maximumActiveIntakes ? { active: _count.intakes, maximum: maximumActiveIntakes } : null,
+      }));
   }
 
   async selectVault(
@@ -416,6 +439,19 @@ export class CollectorWorkspaceService {
         code: 'VAULT_NOT_AVAILABLE',
         message: 'That intake destination is no longer available.',
       });
+    if (vault.maximumActiveIntakes !== null) {
+      const activeIntakes = await this.db.submissionIntake.count({
+        where: {
+          vaultId: vault.id,
+          status: { in: ['VAULT_SELECTED', 'SHIPPING_REQUIRED', 'IN_TRANSIT', 'DELIVERED', 'RECEIVED', 'VERIFICATION'] },
+        },
+      });
+      if (activeIntakes >= vault.maximumActiveIntakes)
+        throw new ConflictException({
+          code: 'VAULT_AT_CAPACITY',
+          message: 'That intake destination has reached its current capacity.',
+        });
+    }
     // An empty accepted-category list is the configured "all categories"
     // default for a general intake destination. Only a non-empty list should
     // restrict the destination to specific catalogue categories.

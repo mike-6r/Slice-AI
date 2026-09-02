@@ -1297,16 +1297,28 @@ export type AdminIntakeLocation = {
   region: string;
   countryCode: string;
   city: string | null;
+  internalName: string | null;
   activeIntakes: number;
+  availability: "ACCEPTING" | "PAUSED" | "AT_CAPACITY" | "UNAVAILABLE";
+  availabilityLabel: string;
+  availabilityReason: string | null;
+  warnings: string[];
+  capacity: { active: number; maximum: number; warningThreshold: number | null } | null;
+  lastActivityAt: string;
   updatedAt: string;
 };
 export type AdminIntakeLocationsResponse = {
   summary: {
     activeLocations: number;
+    acceptingIntakes: number;
     shippingEnabled: number;
     inPersonEnabled: number;
-    partnerLocations: number;
+    temporarilyUnavailable: number;
+    atCapacity: number;
     unavailable: number;
+    health: { healthy: number; degraded: number; critical: number; percentage: number };
+    exceptions: { totalActive: number; atCapacity: number; paused: number };
+    attention: { requiresReview: number; lowCapacity: number; infoUpdates: number };
   };
   items: AdminIntakeLocation[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -1320,6 +1332,20 @@ export type AdminIntakeLocationDetail = {
     postalCode: string | null;
     shippingInstructions: string;
     inPersonInstructions: string | null;
+    internalName: string | null;
+    operationalNotes: string | null;
+    internalContact: string | null;
+    openingHours: string | null;
+    appointmentRequired: boolean;
+    walkInsAllowed: boolean;
+    publicContactInstructions: string | null;
+    packageLabelInstructions: string | null;
+    specialHandlingInstructions: string | null;
+    maximumActiveIntakes: number | null;
+    warningThreshold: number | null;
+    pauseReason: string | null;
+    pauseEffectiveAt: string | null;
+    expectedResumeAt: string | null;
     customerSafeAddress: string;
     supportedCategories: Array<{ id: string; name: string }>;
     createdAt: string;
@@ -1332,11 +1358,31 @@ export type AdminIntakeLocationDetail = {
     collector: string;
     deliveryMethod: "SHIPMENT" | "IN_PERSON";
     stage: string;
+    assignedStaff: string | null;
+    nextAction: string;
     updatedAt: string;
     issue: { code: string; severity: string } | null;
   }>;
   counts: Record<string, number>;
-  history: Array<{ id: string; action: string; actor: string; occurredAt: string }>;
+  history: Array<{
+    id: string;
+    action: string;
+    actor: string;
+    occurredAt: string;
+    reason: string | null;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+  }>;
+  availableCommands: Record<string, { allowed: boolean; reason?: string }>;
+  collectorVisibility: {
+    visibleInProduction: boolean;
+    visibleInDemoQA: boolean;
+    shipping: boolean;
+    inPerson: boolean;
+    eligibleForNewAssignment: boolean;
+    eligibilityReason: string | null;
+  };
+  revision: string;
 };
 export type IntakeLocationInput = {
   displayName: string;
@@ -1357,12 +1403,39 @@ export type IntakeLocationInput = {
   acceptedCategoryIds: string[];
   shippingInstructions: string;
   inPersonInstructions?: string | null;
+  internalName?: string | null;
+  operationalNotes?: string | null;
+  internalContact?: string | null;
+  openingHours?: string | null;
+  appointmentRequired?: boolean;
+  walkInsAllowed?: boolean;
+  publicContactInstructions?: string | null;
+  packageLabelInstructions?: string | null;
+  specialHandlingInstructions?: string | null;
+  maximumActiveIntakes?: number | null;
+  warningThreshold?: number | null;
+  pauseReason?: string | null;
+  pauseEffectiveAt?: string | null;
+  expectedResumeAt?: string | null;
   reason: string;
   expectedUpdatedAt?: string;
 };
 
 export type AdminIntakeDetail = {
   row: AdminIntakeRow;
+  projection?: {
+    currentLocation: string;
+    primaryBlocker: { label: string; reason: string; severity: "LOW" | "MEDIUM" | "HIGH" } | null;
+    nextAction: { label: string; actor: AdminIntakeRow["nextActor"]; needsStaffAction: boolean };
+    availableCommands: Record<string, { enabled: boolean; reason?: string }>;
+    revision: string;
+    deepLinks: {
+      submissionReview: string;
+      collectorAccount: string;
+      assetOperations: string | null;
+      audit: string;
+    };
+  };
   intake: {
     id: string;
     reference: string;
@@ -2230,11 +2303,12 @@ export interface AdminRepository {
   listIntakeLocations(input?: {
     q?: string;
     type?: IntakeLocationType;
-    deliveryMethod?: "SHIPPING" | "IN_PERSON";
+    deliveryMethod?: "SHIPPING" | "IN_PERSON" | "BOTH";
+    availability?: "ACCEPTING" | "PAUSED" | "AT_CAPACITY" | "UNAVAILABLE";
     environment?: "beta" | "production";
     status?: IntakeLocationStatus;
     acceptingNewIntakes?: boolean;
-    sort?: "NAME" | "UPDATED";
+    sort?: "NAME" | "ACTIVE_INTAKES" | "RECENT_ACTIVITY";
     sortDirection?: "asc" | "desc";
     page?: number;
     pageSize?: number;
@@ -2262,6 +2336,21 @@ export interface AdminRepository {
     acceptingNewIntakes: boolean;
     acceptingShipments: boolean;
     acceptingInPerson: boolean;
+    updatedAt: string;
+    audited: boolean;
+  }>;
+  commandIntakeLocation(
+    id: string,
+    input: {
+      command: "PAUSE_NEW_INTAKES" | "RESUME_NEW_INTAKES" | "DEACTIVATE" | "REACTIVATE" | "ENABLE_SHIPPING" | "DISABLE_SHIPPING" | "ENABLE_IN_PERSON" | "DISABLE_IN_PERSON" | "REPAIR_AVAILABILITY" | "REPAIR_CAPACITY_PROJECTION";
+      reason: string;
+      incidentReference?: string;
+    },
+  ): Promise<{
+    id: string;
+    status: IntakeLocationStatus;
+    active: boolean;
+    acceptingNewIntakes: boolean;
     updatedAt: string;
     audited: boolean;
   }>;
@@ -2774,7 +2863,15 @@ export type CollectorVaultProjection = {
   acceptingInPerson: boolean;
   acceptedCategories: unknown;
   shippingInstructions: string;
+  inPersonInstructions: string | null;
+  openingHours: string | null;
+  appointmentRequired: boolean;
+  walkInsAllowed: boolean;
+  publicContactInstructions: string | null;
+  packageLabelInstructions: string | null;
+  specialHandlingInstructions: string | null;
   customerSafeAddress: string;
+  capacity: { active: number; maximum: number } | null;
 };
 
 export type CollectorWorkspaceRequest = {
