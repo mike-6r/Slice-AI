@@ -160,7 +160,7 @@ export class TrustedReferenceImportService {
       return {
         status: partial ? 'PARTIAL_MATCH' : 'COULD_NOT_IDENTIFY',
         message: partial
-          ? 'We found some details. Please confirm the remaining information.'
+          ? 'PriceCharting link saved. We found the product identity, but you should confirm the details before continuing.'
           : "We couldn't reliably identify this collectible from the link.",
         provider: 'PriceCharting',
         identity: partial ?? {},
@@ -169,7 +169,16 @@ export class TrustedReferenceImportService {
               provider: 'PriceCharting',
               externalReferenceId: providerProductId,
               normalizedUrl: parsed.toString(),
-              originalTitle: null,
+              originalTitle: partial
+                ? [
+                    partial.year,
+                    partial.set,
+                    partial.name,
+                    partial.cardNumber ? `#${partial.cardNumber}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                : null,
               importedAt: new Date().toISOString(),
               matchQuality: 'PARTIAL_MATCH',
               extractedIdentity: partial,

@@ -1674,11 +1674,10 @@ model SubmissionReviewFinding {
   @@index([createdByUserId, createdAt, id])
 }
 
-/// A provider-backed or staff-confirmed certification lookup. Provider data is
-/// evidence only until a staff member confirms the identity and scale entry.
-/// Current companies deliberately use the official manual lookup mode; the
-/// schema is ready for an approved machine provider without pretending one is
-/// configured.
+/// A Slice duplicate check or staff-confirmed certification review. The owner
+/// check never calls a grading company; it only protects the one-number-per-
+/// company claim. Staff confirmation remains the authority for the physical
+/// card, identity, grade and designation.
 model GradingCertificationVerification {
   id                            String          @id @default(cuid())
   submissionId                  String

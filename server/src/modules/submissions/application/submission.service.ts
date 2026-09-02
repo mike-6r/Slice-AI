@@ -1231,11 +1231,17 @@ export class SubmissionService {
               where: { submissionId: id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             });
-          if (verification?.status !== 'VERIFIED')
+          if (
+            !['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(
+              verification?.status ?? '',
+            )
+          )
             throw new UnprocessableEntityException({
               code: 'CERTIFICATION_VERIFICATION_REQUIRED',
               message:
-                'Verify the slab certification through the official lookup before submitting this graded card.',
+                verification?.status === 'ALREADY_LISTED'
+                  ? 'That certification number is already listed on Slice.'
+                  : 'Check that certification number is not already listed on Slice before submitting this graded card.',
             });
           const metadata = isRecord(submission.declaredMetadata)
             ? submission.declaredMetadata
@@ -1434,7 +1440,9 @@ export class SubmissionService {
         { gradeScaleEntryId: null, normalizedCertificationNumber: null },
         {
           certificationVerifications: {
-            some: { status: { in: ['VERIFIED', 'MANUAL_REVIEW'] } },
+            some: {
+              status: { in: ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'] },
+            },
           },
         },
       ],
@@ -2119,8 +2127,9 @@ export class SubmissionService {
       ? true
       : Boolean(
           response.collectible.certificationNumber &&
-          (certification?.status === 'VERIFIED' ||
-            certification?.status === 'MANUAL_REVIEW'),
+          ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(
+            certification?.status ?? '',
+          ),
         );
     const openFindings = submission!.reviewFindings.filter(
       (finding) => finding.status === 'OPEN',
@@ -4307,13 +4316,31 @@ export class SubmissionService {
           },
           data: { status: 'RELEASED', submissionId: null },
         });
-        await this.claimCertification(
-          db,
-          entry.company.code,
-          normalized,
-          id,
-          null,
+        const existingClaim = await db.gradingCertificationClaim.findUnique({
+          where: {
+            companyCode_normalizedCertificationNumber: {
+              companyCode: entry.company.code,
+              normalizedCertificationNumber: normalized,
+            },
+          },
+          select: { submissionId: true, status: true },
+        });
+        const alreadyListed = Boolean(
+          existingClaim &&
+            existingClaim.status !== 'RELEASED' &&
+            existingClaim.submissionId !== id,
         );
+        if (!alreadyListed) {
+          await this.claimCertification(
+            db,
+            entry.company.code,
+            normalized,
+            id,
+            null,
+          );
+        }
+        const checkStatus = alreadyListed ? 'ALREADY_LISTED' : 'CLEAR';
+        const checkMode = 'SLICE_DUPLICATE_CHECK';
         const verification = await db.gradingCertificationVerification.create({
           data: {
             id: randomUUID(),
@@ -4322,9 +4349,9 @@ export class SubmissionService {
             companyCode: entry.company.code,
             certificationNumber: input.certificationNumber.trim(),
             normalizedCertificationNumber: normalized,
-            status: 'MANUAL_REVIEW_REQUIRED',
-            verificationMode: entry.company.verificationMode,
-            officialVerificationUrl: entry.company.officialVerificationUrl,
+            status: checkStatus,
+            verificationMode: checkMode,
+            officialVerificationUrl: null,
           },
         });
         const metadata = isRecord(submission.declaredMetadata)
@@ -4337,10 +4364,9 @@ export class SubmissionService {
             declaredMetadata: jsonMetadata({
               ...metadata,
               certificationNumber: input.certificationNumber.trim(),
-              certificationVerificationStatus: 'MANUAL_REVIEW_REQUIRED',
-              certificationVerificationMode: entry.company.verificationMode,
-              officialVerificationUrl:
-                entry.company.officialVerificationUrl ?? '',
+              certificationVerificationStatus: checkStatus,
+              certificationVerificationMode: checkMode,
+              officialVerificationUrl: '',
             }),
             version: { increment: 1 },
           },
@@ -4351,20 +4377,22 @@ export class SubmissionService {
             },
           },
         });
-        await audit('CERT_VERIFICATION_REQUESTED', 'submission', id, {
+        await audit('CERT_SLICE_DUPLICATE_CHECKED', 'submission', id, {
           verificationId: verification.id,
           companyCode: entry.company.code,
-          verificationMode: entry.company.verificationMode,
+          verificationMode: checkMode,
           status: verification.status,
         });
-        await audit('CERT_MANUAL_REVIEW_REQUIRED', 'submission', id, {
-          verificationId: verification.id,
-        });
+        if (alreadyListed)
+          await audit('CERT_DUPLICATE_FOUND', 'submission', id, {
+            verificationId: verification.id,
+            companyCode: entry.company.code,
+          });
         return {
           ...ownerProjection(updated),
           certificationVerification:
             certificationVerificationProjection(verification),
-          canSubmit: false,
+          canSubmit: !alreadyListed,
         };
       },
     );
@@ -4421,7 +4449,13 @@ export class SubmissionService {
         if (!latest)
           throw new ConflictException({
             code: 'CERTIFICATION_VERIFICATION_REQUIRED',
-            message: 'Request an official certification lookup first.',
+            message: 'Run the Slice certificate check before staff confirmation.',
+          });
+        if (latest.status === 'ALREADY_LISTED')
+          throw new ConflictException({
+            code: 'CERT_DUPLICATE_BLOCKED',
+            message:
+              'That certification number is already listed on Slice and cannot be confirmed for this submission.',
           });
         const verifiedIdentity = input.verifiedIdentity;
         const metadata = isRecord(submission!.declaredMetadata)
@@ -5015,7 +5049,7 @@ function reviewQueueProjection(
   );
   const certificationResolved =
     !certificationRequired ||
-    ['VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '');
+    ['CLEAR', 'VERIFIED', 'MANUAL_REVIEW'].includes(certificationStatus ?? '');
   const title =
     submission.asset?.title ??
     stringMetadata(metadata.name) ??

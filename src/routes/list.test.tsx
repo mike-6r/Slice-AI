@@ -27,6 +27,7 @@ import {
   PhotosStep,
   ReviewStep,
   SubmissionPage,
+  formatGradeDisplay,
   restoreWizardStep,
 } from "./list";
 import { isValidPercent } from "./-list-validation";
@@ -126,6 +127,58 @@ describe("resumed listing drafts", () => {
 
   it("derives the next incomplete step when no valid step is stored", () => {
     expect(restoreWizardStep(draftDetail(0))).toBe(4);
+  });
+});
+
+describe("Step 5 media and grade display", () => {
+  it("matches saved media slots regardless of legacy casing", () => {
+    const html = renderToStaticMarkup(
+      <AIReviewStep
+        form={aiForm}
+        submission={{
+          ...draftDetail(5),
+          media: [
+            {
+              id: "front-1",
+              slot: "FRONT",
+              mimeType: "image/jpeg",
+              sizeBytes: 100,
+              status: "SAFE",
+              previewUrl: "https://private/front.jpg",
+              createdAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+              updatedAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+            },
+            {
+              id: "back-1",
+              slot: "BACK",
+              mimeType: "image/jpeg",
+              sizeBytes: 100,
+              status: "SAFE",
+              previewUrl: "https://private/back.jpg",
+              createdAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+              updatedAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+            },
+          ],
+        }}
+        preGrade={null}
+        pending={false}
+        graded={false}
+        skipped={false}
+        onAnalyze={() => undefined}
+        onSkip={() => undefined}
+        onViewDetails={() => undefined}
+      />,
+    );
+    expect(html).toContain("https://private/front.jpg");
+    expect(html).toContain("https://private/back.jpg");
+    expect(html).not.toContain("Front not added");
+    expect(html).not.toContain("Back not added");
+  });
+
+  it("keeps numeric official grades at two decimal places for display", () => {
+    expect(formatGradeDisplay("10")).toBe("10.00");
+    expect(formatGradeDisplay("9.5")).toBe("9.50");
+    expect(formatGradeDisplay("Authentic")).toBe("Authentic");
   });
 });
 
@@ -303,8 +356,48 @@ describe("Document 010 list asset UI", () => {
         gradesLoading={false}
       />,
     );
-    expect(html).toContain("10 · Gem Mint");
+    expect(html).toContain("10.00 · Gem Mint");
     expect(html).not.toContain("Not applicable for raw cards");
+  });
+
+  it("checks graded certificates against Slice listings only", () => {
+    const html = renderToStaticMarkup(
+      <DetailsStep
+        form={{
+          ...detailsForm,
+          grader: "PSA",
+          grade: "10.00",
+          gradeScaleEntryId: "psa-10",
+          certificationNumber: "163184852",
+        }}
+        onChange={() => undefined}
+        gradingCompanies={[{ code: "PSA", name: "PSA" }]}
+        grades={[{ id: "psa-10", grade: "10.00", label: "10", conditionLabel: null }]}
+        gradesLoading={false}
+        verification={{
+          id: "verification-1",
+          companyCode: "PSA",
+          certificationNumber: "163184852",
+          normalizedCertificationNumber: "163184852",
+          status: "CLEAR",
+          verificationMode: "SLICE_DUPLICATE_CHECK",
+          officialVerificationUrl: null,
+          verifiedGrade: null,
+          verifiedLabel: null,
+          designation: null,
+          gradeEra: null,
+          verifiedAt: null,
+          createdAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+        }}
+        verifyPending={false}
+        onVerifyCertification={() => undefined}
+      />,
+    );
+    expect(html).toContain("Check on Slice");
+    expect(html).toContain("Certificate number available");
+    expect(html).toContain("No matching certificate number is currently listed on Slice");
+    expect(html).not.toContain("Official lookup requested");
+    expect(html).not.toContain("Open official lookup");
   });
 
   it("renders a truthful matched market reference and offer intent without converting provider currency", () => {
@@ -413,6 +506,56 @@ describe("Document 010 list asset UI", () => {
     expect(html).toContain("Continue anyway");
     expect(html).toContain("You’d like to offer 33.5%");
     expect(html).not.toContain("£162.50");
+  });
+
+  it("keeps a PriceCharting link visible when its product has no usable value", () => {
+    const research: MarketResearchSnapshot = {
+      id: "research-without-value",
+      state: "NO_MATCHES",
+      dataQuality: null,
+      identity: {},
+      sourceCoverage: { available: 1, unavailable: 0 },
+      providerFailures: [],
+      snapshot: {
+        sales: null,
+        listings: null,
+        priceGuides: null,
+        exactCompCount: 0,
+        strongCompCount: 0,
+        rejectedCompCount: 0,
+      },
+      collectedAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+      observations: [],
+    };
+    const html = renderToStaticMarkup(
+      <MarketStep
+        ready
+        form={{
+          ...detailsForm,
+          customerReference: {
+            provider: "PriceCharting",
+            externalReferenceId: "baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1",
+            normalizedUrl:
+              "https://www.pricecharting.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1",
+            originalTitle: "Baseball Cards 2026 Topps All Aces Shohei Ohtani Aa #1",
+            importedAt: "2026-09-02T00:00:00.000Z" as ISODateTime,
+            matchQuality: "PARTIAL_MATCH",
+            extractedIdentity: {},
+          },
+        }}
+        category="Sports cards"
+        research={research}
+        pending={false}
+        onCheck={() => undefined}
+        onChange={() => undefined}
+        onContinueWithoutMarket={() => undefined}
+      />,
+    );
+    expect(html).toContain("PriceCharting product link saved");
+    expect(html).toContain("no usable market value was returned");
+    expect(html).toContain("Open saved PriceCharting reference");
+    expect(html).toContain("Add context for the missing market value");
+    expect(html).not.toContain("No exact market reference found");
   });
 
   it("renders the Step 6 review summary, truthful no-match state, offer intent, and guidance rail", () => {

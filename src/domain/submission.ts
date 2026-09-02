@@ -43,9 +43,21 @@ export interface CertificationVerification {
   companyCode: string;
   certificationNumber: string;
   normalizedCertificationNumber: string;
-  status: "MANUAL_REVIEW_REQUIRED" | "VERIFIED" | "MISMATCH" | "CERT_NOT_FOUND" | string;
+  status:
+    | "CLEAR"
+    | "ALREADY_LISTED"
+    | "MANUAL_REVIEW_REQUIRED"
+    | "VERIFIED"
+    | "MISMATCH"
+    | "CERT_NOT_FOUND"
+    | string;
   verificationMode:
-    "OFFICIAL_API" | "APPROVED_MACHINE_LOOKUP" | "MANUAL_OFFICIAL_LOOKUP" | "UNSUPPORTED" | string;
+    | "SLICE_DUPLICATE_CHECK"
+    | "OFFICIAL_API"
+    | "APPROVED_MACHINE_LOOKUP"
+    | "MANUAL_OFFICIAL_LOOKUP"
+    | "UNSUPPORTED"
+    | string;
   officialVerificationUrl: string | null;
   verifiedGrade: string | null;
   verifiedLabel: string | null;

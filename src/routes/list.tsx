@@ -425,7 +425,9 @@ export function SubmissionPage() {
       version.current = updated.version;
       client.setQueryData(["submissions", draft?.id], updated);
       setNotice(
-        "Certificate recorded. Staff must confirm it against the official grading-company lookup before final acceptance.",
+        updated.certificationVerification?.status === "ALREADY_LISTED"
+          ? "That certificate number is already listed on Slice. Use a different number."
+          : "Certificate number checked against Slice listings. Staff will confirm the physical card during review.",
       );
       await detail.refetch();
     },
@@ -444,6 +446,7 @@ export function SubmissionPage() {
         client.invalidateQueries({ queryKey: ["submissions", "mine"] }),
       ]);
     },
+    onError: (error) => setLocalError(friendlyError(error)),
   });
 
   useEffect(() => {
@@ -824,23 +827,46 @@ export function SubmissionPage() {
   const evidenceReady = requiredSlotsForGrading(gradedCard).every(
     (slot) => activeMedia(submission, slot)?.status === "SAFE",
   );
-  const certificationVerified = detail.data?.certificationVerification?.status === "VERIFIED";
-  const reviewReady = Boolean(
-    form.categoryId &&
-    form.name.trim() &&
-    form.year.trim() &&
-    form.set.trim() &&
-    form.cardNumber.trim() &&
-    form.marketCheckAcknowledged &&
-    form.marketCheckStatus &&
-    isValidPercent(form.offerIntentPercent) &&
-    evidenceReady &&
-    Boolean(form.preferredIntakeLocationId && form.preferredDeliveryMethod) &&
-    (gradedCard
-      ? certificationVerified
-      : form.aiReviewSkipped || preGrade.data?.current?.status === "SUCCEEDED") &&
-    form.termsAcknowledged,
+  const certificationCheckPassed = ["CLEAR", "VERIFIED"].includes(
+    detail.data?.certificationVerification?.status ?? "",
   );
+  const reviewBlockers = [
+    !(
+      form.categoryId &&
+      form.name.trim() &&
+      form.year.trim() &&
+      form.set.trim() &&
+      form.cardNumber.trim()
+    )
+      ? "card details"
+      : null,
+    !(form.marketCheckAcknowledged && form.marketCheckStatus) ? "market check" : null,
+    !isValidPercent(form.offerIntentPercent) ? "offer percentage" : null,
+    !evidenceReady ? "required photos" : null,
+    !form.preferredIntakeLocationId || !form.preferredDeliveryMethod
+      ? "delivery preference"
+      : null,
+    gradedCard && !certificationCheckPassed ? "certificate check" : null,
+    !gradedCard && !form.aiReviewSkipped && preGrade.data?.current?.status !== "SUCCEEDED"
+      ? "AI review"
+      : null,
+    !form.termsAcknowledged ? "submission terms" : null,
+  ].filter((item): item is string => Boolean(item));
+  const reviewReady = reviewBlockers.length === 0;
+  const submitReview = () => {
+    setLocalError(null);
+    if (!draft || !detail.data) {
+      setLocalError("Your draft is still loading. Please wait a moment and try again.");
+      return;
+    }
+    if (reviewBlockers.length) {
+      setLocalError(
+        `Complete before submitting: ${reviewBlockers.join(", ")}.`,
+      );
+      return;
+    }
+    submit.mutate();
+  };
   const submitted = submission?.status === "SUBMITTED";
   const actionError =
     create.error ??
@@ -1001,7 +1027,22 @@ export function SubmissionPage() {
               </Link>
             )}
             <span className="list-guided-save-status">
-              {create.isPending || update.isPending ? (
+              {step === 7 ? (
+                <span
+                  id="list-submit-review-status"
+                  className={`list-submit-review-status${reviewReady ? " is-ready" : " is-needs-attention"}`}
+                  role="status"
+                >
+                  {reviewReady ? <Check aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+                  {submit.isPending
+                    ? "Sending to staff review…"
+                    : update.isPending || create.isPending
+                      ? "Saving your latest changes…"
+                      : reviewReady
+                        ? "Ready to submit"
+                        : `${reviewBlockers.length} item${reviewBlockers.length === 1 ? "" : "s"} still needs attention`}
+                </span>
+              ) : create.isPending || update.isPending ? (
                 "Saving…"
               ) : draft ? (
                 <>
@@ -1035,11 +1076,16 @@ export function SubmissionPage() {
             ) : (
               <button
                 type="button"
-                className="button-primary"
-                disabled={!reviewReady || submit.isPending || update.isPending || create.isPending}
-                onClick={() => submit.mutate()}
+                className={`button-primary list-submit-review-button${reviewReady ? " is-ready" : " is-needs-attention"}`}
+                disabled={submit.isPending || update.isPending || create.isPending}
+                aria-describedby="list-submit-review-status"
+                onClick={submitReview}
               >
-                {submit.isPending ? "Submitting…" : "Submit for review"}{" "}
+                {submit.isPending
+                  ? "Submitting…"
+                  : update.isPending || create.isPending
+                    ? "Saving…"
+                    : "Submit for review"}{" "}
                 <ChevronRight aria-hidden="true" />
               </button>
             )}
@@ -1442,10 +1488,7 @@ export function DetailsStep({
                     key={grade.id ?? `${grade.grade}-${grade.designation ?? ""}`}
                     value={grade.id ?? grade.grade}
                   >
-                    {grade.label}
-                    {grade.conditionLabel ? ` · ${grade.conditionLabel}` : ""}
-                    {grade.designation ? ` · ${grade.designation}` : ""}
-                    {grade.legacy ? " · Legacy" : ""}
+                    {formatGradeOptionLabel(grade)}
                   </option>
                 ))}
               </select>
@@ -1479,14 +1522,14 @@ export function DetailsStep({
               </span>
               <div>
                 <strong>Certificate verification</strong>
-                <p>Confirm the number printed on the slab.</p>
+                <p>Check whether the number is already listed on Slice.</p>
               </div>
               <span className="list-certification-panel__badge">Required for graded cards</span>
             </div>
             <label>
               <span className="list-field-label">
                 Certification number
-                <TooltipHint label="Enter the number printed on the slab label. Slice checks it against the grading company's official lookup; it is never accepted as verified from typed text alone." />
+              <TooltipHint label="Enter the number printed on the slab label. Slice only checks whether that certificate number is already attached to a listing on this site. Staff confirms the actual card during review." />
               </span>
               <div className="list-certification-input">
                 <input
@@ -1505,13 +1548,17 @@ export function DetailsStep({
                   }
                   onClick={onVerifyCertification}
                 >
-                  {verifyPending ? "Checking…" : "Verify cert"}
+                  {verifyPending ? "Checking Slice…" : "Check on Slice"}
                 </button>
               </div>
               <small id="certification-number-help" className="list-field-help">
-                {verification?.status === "VERIFIED"
-                  ? "Verified against the official grading-company record."
-                  : "A staff reviewer completes the official lookup before a graded card can be finally accepted."}
+                {verification?.status === "CLEAR" || verification?.status === "VERIFIED"
+                  ? verification.status === "VERIFIED"
+                    ? "Slice staff confirmed the physical card and certificate."
+                    : "No matching certificate number is currently listed on Slice. Staff will confirm the physical card during review."
+                  : verification?.status === "ALREADY_LISTED"
+                    ? "This number is already attached to another Slice listing. Use a different certificate number."
+                    : "Run the Slice check again or contact staff if this number is correct."}
               </small>
             </label>
             {verification ? (
@@ -1523,21 +1570,22 @@ export function DetailsStep({
                 <div>
                   <strong>
                     {verification.status === "VERIFIED"
-                      ? "Certification verified"
-                      : verification.status === "MISMATCH"
-                        ? "Certification details need attention"
-                        : "Official lookup requested"}
+                      ? "Certificate confirmed by staff"
+                      : verification.status === "CLEAR"
+                        ? "Certificate number available"
+                        : verification.status === "ALREADY_LISTED"
+                          ? "Certificate number already listed"
+                          : "Certificate check needs attention"}
                   </strong>
                   <span>
                     {verification.status === "VERIFIED"
-                      ? `${verification.companyCode} ${verification.verifiedLabel ?? verification.verifiedGrade ?? "official grade"}`
-                      : "The typed number is recorded, but it is not treated as verified until the official record is reviewed."}
+                      ? `${verification.companyCode} ${verification.verifiedLabel ?? verification.verifiedGrade ?? "physical card confirmed"}`
+                      : verification.status === "CLEAR"
+                        ? "This is a Slice duplicate check, not a grading-company verification."
+                        : verification.status === "ALREADY_LISTED"
+                          ? "A certificate number can only be used by one active Slice listing."
+                          : "The certificate number still needs attention before this graded card can continue."}
                   </span>
-                  {verification.officialVerificationUrl ? (
-                    <a href={verification.officialVerificationUrl} target="_blank" rel="noreferrer">
-                      Open official lookup <ChevronRight aria-hidden="true" />
-                    </a>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1727,6 +1775,9 @@ export function MarketStep({
   onContinueWithoutMarket: () => void;
 }) {
   const reference = research ? marketReference(research) : null;
+  const customerReference = form.customerReference;
+  const customerReferenceUrl = customerReference?.normalizedUrl ?? null;
+  const hasCustomerReference = Boolean(customerReferenceUrl);
   const hasReference = Boolean(reference);
   const identity = [form.name, form.set, form.cardNumber].filter(Boolean).join(" · ");
   const uploadedFront = safeMediaForSlot(submission, "front")[0];
@@ -1740,7 +1791,7 @@ export function MarketStep({
       ? "PriceCharting reference image"
       : "Card image not uploaded";
   const grader = form.grader
-    ? `${form.grader}${form.grade ? ` ${form.grade}` : ""}`
+    ? `${form.grader}${form.grade ? ` ${formatGradeDisplay(form.grade)}` : ""}`
     : "Raw / Ungraded";
   const fallback = !hasReference;
 
@@ -1801,6 +1852,8 @@ export function MarketStep({
                 <h3 id="market-reference-title">
                   {hasReference
                     ? "Reference found"
+                    : hasCustomerReference
+                      ? "Reference saved — value unavailable"
                     : research?.state === "UNAVAILABLE"
                       ? "Market source unavailable"
                       : "No exact market reference found"}
@@ -1835,6 +1888,19 @@ export function MarketStep({
                   This is a provider reference, not a Slice valuation or an offer price.
                 </p>
               </>
+            ) : hasCustomerReference ? (
+              <div className="list-market-fallback-copy list-market-fallback-copy--saved-reference">
+                <strong>PriceCharting product link saved</strong>
+                <p>
+                  This link identifies the product, but no usable market value was returned for it.
+                  You can still continue; Slice staff will review the value manually.
+                </p>
+                {customerReferenceUrl ? (
+                  <a href={customerReferenceUrl} target="_blank" rel="noreferrer">
+                    Open saved PriceCharting reference <Link2 aria-hidden="true" />
+                  </a>
+                ) : null}
+              </div>
             ) : (
               <div className="list-market-fallback-copy">
                 <p>
@@ -1878,8 +1944,14 @@ export function MarketStep({
             >
               <div className="list-market-panel__heading">
                 <div>
-                  <p className="list-section-label">Fallback details</p>
-                  <h3 id="fallback-details-title">Continue without a market reference</h3>
+                  <p className="list-section-label">
+                    {hasCustomerReference ? "Manual value context" : "Fallback details"}
+                  </p>
+                  <h3 id="fallback-details-title">
+                    {hasCustomerReference
+                      ? "Add context for the missing market value"
+                      : "Continue without a market reference"}
+                  </h3>
                 </div>
                 <CircleAlert aria-hidden="true" />
               </div>
@@ -2918,7 +2990,9 @@ function AiCardSummary({
           <div>
             <dt>Condition</dt>
             <dd>
-              {form.grader ? `${form.grader} ${form.grade || "grade pending"}` : "Raw / Ungraded"}
+              {form.grader
+                ? `${form.grader} ${form.grade ? formatGradeDisplay(form.grade) : "grade pending"}`
+                : "Raw / Ungraded"}
             </dd>
           </div>
         </dl>
@@ -3371,7 +3445,7 @@ function GradedReviewPanel({ form }: { form: ListingForm }) {
           <div>
             <span className="list-ai-eyebrow">Existing grade verification</span>
             <h3>
-              {form.grader} {form.grade || "Grade recorded"}
+              {form.grader} {form.grade ? formatGradeDisplay(form.grade) : "Grade recorded"}
             </h3>
             <p>Slab details are captured for staff verification.</p>
           </div>
@@ -3900,12 +3974,17 @@ export function ReviewStep({
 }) {
   const graded = Boolean(form.grader.trim() && form.grader !== "Ungraded");
   const reference = research ? marketReference(research) : null;
+  const customerReference = form.customerReference;
+  const customerReferenceUrl = customerReference?.normalizedUrl ?? null;
+  const hasCustomerReference = Boolean(customerReferenceUrl);
   const offerPercent = Number(form.offerIntentPercent);
   const validOffer = isValidPercent(form.offerIntentPercent);
   const marketComplete = Boolean(
     form.marketCheckAcknowledged && (form.marketCheckStatus || research),
   );
-  const certificationVerified = submission?.certificationVerification?.status === "VERIFIED";
+  const certificationCheckPassed = ["CLEAR", "VERIFIED"].includes(
+    submission?.certificationVerification?.status ?? "",
+  );
   const rawReviewComplete = graded || form.aiReviewSkipped || preGrade?.status === "SUCCEEDED";
   const cardDetailsComplete = Boolean(
     form.categoryId &&
@@ -3939,10 +4018,10 @@ export function ReviewStep({
     ...(graded
       ? [
           {
-            label: certificationVerified
-              ? "Certificate verified"
-              : "Certificate verification pending",
-            complete: certificationVerified,
+            label: certificationCheckPassed
+              ? "Certificate number checked on Slice"
+              : "Certificate number check pending",
+            complete: certificationCheckPassed,
           },
         ]
       : []),
@@ -3959,7 +4038,9 @@ export function ReviewStep({
   const blockers = checklist.filter((item) => !item.complete).map((item) => item.label);
   const readyToSubmit = blockers.length === 0;
   const identity = [form.set, form.year, form.cardNumber].filter(Boolean).join(" · ");
-  const grading = graded ? [form.grader, form.grade].filter(Boolean).join(" ") : "Raw / Ungraded";
+  const grading = graded
+    ? [form.grader, form.grade ? formatGradeDisplay(form.grade) : ""].filter(Boolean).join(" ")
+    : "Raw / Ungraded";
   const estimateMinor = form.collectorExpectedValue
     ? majorToMinor(form.collectorExpectedValue)
     : null;
@@ -4037,6 +4118,19 @@ export function ReviewStep({
                   ]}
                 />
               </>
+            ) : hasCustomerReference ? (
+              <div className="list-review-fallback list-review-fallback--reference">
+                <strong>PriceCharting reference saved</strong>
+                <p>
+                  The product link is attached, but it did not provide a usable market value.
+                  Slice will review the value manually.
+                </p>
+                {customerReferenceUrl ? (
+                  <a href={customerReferenceUrl} target="_blank" rel="noreferrer">
+                    Open saved reference <Link2 aria-hidden="true" />
+                  </a>
+                ) : null}
+              </div>
             ) : research?.state === "NO_MATCHES" ? (
               <div className="list-review-fallback">
                 <strong>No exact market reference found</strong>
@@ -4652,13 +4746,26 @@ function customerReferenceFromMetadata(value: unknown): CustomerReference | unde
     : undefined;
 }
 function activeMedia(submission: SubmissionDetail | undefined, slot: string) {
-  return submission?.media.find((item) => item.slot === slot && item.status !== "DELETED");
+  return submission?.media.find(
+    (item) =>
+      normalizeMediaSlot(item.slot) === normalizeMediaSlot(slot) && item.status !== "DELETED",
+  );
 }
 function safeMediaForSlot(submission: SubmissionDetail | undefined, slot: string) {
-  return submission?.media.filter((item) => item.slot === slot && item.status === "SAFE") ?? [];
+  return (
+    submission?.media.filter(
+      (item) =>
+        normalizeMediaSlot(item.slot) === normalizeMediaSlot(slot) && item.status === "SAFE",
+    ) ?? []
+  );
 }
 function activeMediaForSlot(submission: SubmissionDetail | undefined, slot: string) {
-  return submission?.media.filter((item) => item.slot === slot && item.status !== "DELETED") ?? [];
+  return (
+    submission?.media.filter(
+      (item) =>
+        normalizeMediaSlot(item.slot) === normalizeMediaSlot(slot) && item.status !== "DELETED",
+    ) ?? []
+  );
 }
 function requiredSlotsForGrading(graded: boolean) {
   return graded ? (["front", "back", "grading-label"] as const) : REQUIRED_SLOTS;
@@ -4688,6 +4795,29 @@ function photoStateLabel(status: SubmissionMedia["status"]) {
 }
 function slotLabel(slot: string) {
   return slot.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function normalizeMediaSlot(slot: string) {
+  return slot.trim().toLowerCase();
+}
+export function formatGradeDisplay(value: string) {
+  const trimmed = value.trim();
+  if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return trimmed;
+  return Number(trimmed).toFixed(2);
+}
+function formatGradeOptionLabel(grade: GradeOption) {
+  const numericGrade = formatGradeDisplay(grade.grade);
+  const labelIsNumericGrade =
+    /^\d+(?:\.\d+)?$/.test(grade.label.trim()) &&
+    formatGradeDisplay(grade.label) === numericGrade;
+  return [
+    numericGrade,
+    labelIsNumericGrade ? null : grade.label,
+    grade.conditionLabel,
+    grade.designation,
+    grade.legacy ? "Legacy" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 function referenceStatusLabel(status: CollectibleReferenceImport["status"]) {
   switch (status) {

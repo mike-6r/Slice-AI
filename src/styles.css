@@ -5266,6 +5266,18 @@ body:has(.admin-review-detail-page) .admin-review-close { position: absolute; to
 .list-certification-status--verified > svg {
   color: #86efac;
 }
+.list-certification-status--clear {
+  background: rgba(34, 211, 165, 0.1);
+}
+.list-certification-status--clear > svg {
+  color: #68e6c4;
+}
+.list-certification-status--already_listed {
+  background: rgba(239, 68, 68, 0.1);
+}
+.list-certification-status--already_listed > svg {
+  color: #fca5a5;
+}
 .list-certification-status--mismatch {
   background: rgba(239, 68, 68, 0.1);
 }
@@ -62035,6 +62047,37 @@ html,
   font-size: 0.82rem;
   line-height: 1.5;
 }
+.list-market-fallback-copy--saved-reference {
+  border-color: rgba(34, 211, 165, 0.28);
+  background: rgba(15, 78, 70, 0.14);
+}
+.list-market-fallback-copy > strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #9bf5dc;
+  font-size: 0.78rem;
+}
+.list-market-fallback-copy > a,
+.list-review-fallback > a {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  color: #8ef3d4;
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+.list-market-fallback-copy > a:hover,
+.list-review-fallback > a:hover {
+  color: #c0ffed;
+}
+.list-market-fallback-copy > a svg,
+.list-review-fallback > a svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
 .list-market-fallback-copy .button-primary {
   margin-top: 0.85rem;
   min-height: 2.6rem;
@@ -64000,6 +64043,7 @@ html,
 /* the platform allows it.                                                     */
 /* -------------------------------------------------------------------------- */
 select:not([multiple]) {
+  box-sizing: border-box;
   min-width: 0;
   min-height: 2.75rem;
   appearance: none;
@@ -64016,6 +64060,7 @@ select:not([multiple]) {
   color: #edf9f5;
   font: inherit;
   line-height: 1.2;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition:
     border-color 160ms ease,
@@ -64037,6 +64082,14 @@ select:not([multiple]):focus-visible {
     0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
+select:not([multiple]):open {
+  border-color: rgba(67, 229, 181, 0.9);
+  background-color: rgba(11, 27, 31, 0.98);
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 165, 0.14),
+    0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
 select:not([multiple]):active:not(:disabled) {
   transform: translateY(1px);
 }
@@ -64050,14 +64103,21 @@ select:not([multiple]) option,
 select:not([multiple]) optgroup,
 select[multiple] option,
 select[multiple] optgroup {
+  box-sizing: border-box;
   color: #eaf7f3;
   background: #101b20;
+  font: inherit;
 }
 
-select:not([multiple]) option:checked,
-select[multiple] option:checked {
+select:not([multiple]) option:is(:checked, :hover, :focus-visible),
+select[multiple] option:is(:checked, :hover, :focus-visible) {
   color: #f5fffb;
   background: #155846;
+}
+
+select:not([multiple]) option:disabled,
+select[multiple] option:disabled {
+  color: #71858a;
 }
 
 select[multiple] {
@@ -64134,6 +64194,58 @@ select[multiple] {
 
   .admin-select::after {
     display: none;
+  }
+}
+
+/* Chromium's customizable-select API lets us theme the actual open menu as
+   well as the closed control. Older browsers ignore this block and retain the
+   native picker, which is still the most reliable accessible fallback. */
+@supports (appearance: base-select) {
+  select:not([multiple]) {
+    appearance: base-select;
+    -webkit-appearance: auto;
+    background-image: none;
+    padding-right: 0.86rem;
+  }
+
+  select:not([multiple])::picker-icon {
+    width: 0.95rem;
+    color: #65e6c1;
+    transition: transform 160ms ease;
+  }
+
+  select:not([multiple]):open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  ::picker(select) {
+    box-sizing: border-box;
+    min-width: 100%;
+    margin-block-start: 0.35rem;
+    overflow: hidden;
+    border: 1px solid rgba(67, 229, 181, 0.42);
+    border-radius: 0.72rem;
+    background: #101b20;
+    padding: 0.35rem;
+    color: #eaf7f3;
+    box-shadow:
+      0 1rem 2.8rem rgba(0, 0, 0, 0.42),
+      0 0 0 1px rgba(34, 211, 165, 0.08);
+  }
+
+  select:not([multiple]) option {
+    min-height: 2.3rem;
+    border-radius: 0.46rem;
+    padding: 0.6rem 0.7rem;
+  }
+
+  select:not([multiple]) option:is(:checked, :hover, :focus-visible) {
+    background: #155846;
+    color: #f5fffb;
+  }
+
+  select:not([multiple]) option::checkmark {
+    color: #65e6c1;
   }
 }
 
@@ -68060,4 +68172,70 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   .list-ai-ready__intro { gap: 0.65rem; }
   .list-ai-ready__intro .list-ai-ready__icon { width: 2.35rem; height: 2.35rem; }
   .list-ai-ready__actions .list-ai-actions { display: grid; }
+}
+
+/* Final review action: make the submit gate explicit instead of presenting a
+   silently disabled button when the checklist still has a missing item. */
+.list-submit-review-button {
+  min-width: 11.5rem;
+  justify-content: center;
+  border: 1px solid rgba(48, 223, 181, 0.62);
+  background: linear-gradient(135deg, #24cda2, #159b83);
+  box-shadow:
+    0 0.65rem 1.4rem rgba(20, 197, 157, 0.18),
+    inset 0 1px 0 rgba(233, 255, 249, 0.18);
+  color: #041914;
+  font-weight: 800;
+}
+.list-submit-review-button:hover:not(:disabled),
+.list-submit-review-button:focus-visible {
+  border-color: #78f7d4;
+  background: linear-gradient(135deg, #35dfb4, #1aaa90);
+  box-shadow:
+    0 0.8rem 1.7rem rgba(20, 197, 157, 0.26),
+    0 0 0 3px rgba(34, 211, 165, 0.15),
+    inset 0 1px 0 rgba(233, 255, 249, 0.24);
+}
+.list-submit-review-button.is-needs-attention {
+  border-color: rgba(226, 176, 91, 0.52);
+  background: linear-gradient(135deg, #8a6a39, #65502f);
+  box-shadow: 0 0.55rem 1.3rem rgba(0, 0, 0, 0.2);
+  color: #fff4d9;
+}
+.list-submit-review-button.is-needs-attention:hover:not(:disabled),
+.list-submit-review-button.is-needs-attention:focus-visible {
+  border-color: #f0c875;
+  background: linear-gradient(135deg, #a17a3e, #755b33);
+}
+.list-submit-review-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.list-submit-review-status {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.list-submit-review-status svg {
+  flex: 0 0 auto;
+  width: 0.82rem;
+  height: 0.82rem;
+}
+.list-submit-review-status.is-ready {
+  color: #76e9c7;
+}
+.list-submit-review-status.is-needs-attention {
+  color: #e6bc70;
+}
+@media (max-width: 720px) {
+  .list-guided-actions:has(.list-submit-review-button) .list-guided-save-status {
+    display: inline-flex;
+    flex: 1 1 auto;
+    font-size: 0.62rem;
+  }
+  .list-submit-review-button {
+    min-width: 0;
+  }
 }
