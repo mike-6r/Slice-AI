@@ -2232,6 +2232,21 @@ export class SubmissionService {
     const advisoryComplete = advisoryItems.filter(
       (item) => item.satisfied,
     ).length;
+    const canClaim =
+      !selfReviewForbidden &&
+      ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
+      (!submission!.reviewerId || submission!.reviewerId === actor.userId);
+    const canRelease =
+      !selfReviewForbidden &&
+      submission!.status === 'IN_REVIEW' &&
+      Boolean(submission!.reviewerId);
+    const command = (id: string, allowed: boolean, reason?: string) => ({
+      id,
+      allowed,
+      reason: allowed
+        ? null
+        : (reason ?? 'Unavailable in the current review state.'),
+    });
     return {
       ...response,
       reviewAssignment: {
@@ -2387,15 +2402,106 @@ export class SubmissionService {
           total: advisoryItems.length,
         },
       },
+      availableCommands: [
+        command(
+          'canAssignReviewer',
+          canClaim,
+          selfReviewForbidden
+            ? 'You cannot coordinate your own submission.'
+            : undefined,
+        ),
+        command(
+          'canConfirmIdentity',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canEditReviewIdentity',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canReviewEvidence',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canReviewCertification',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canAddResearch',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canRecordAssessment',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canAddFinding',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canResolveFinding',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+        command(
+          'canRequestChanges',
+          canContribute,
+          selfReviewForbidden
+            ? 'You cannot decide your own submission.'
+            : undefined,
+        ),
+        command(
+          'canApprove',
+          decisionEligible,
+          selfReviewForbidden
+            ? 'You cannot decide your own submission.'
+            : undefined,
+        ),
+        command(
+          'canReject',
+          canContribute,
+          selfReviewForbidden
+            ? 'You cannot decide your own submission.'
+            : undefined,
+        ),
+        command(
+          'canCanonicalize',
+          submission!.status === 'APPROVED' && !submission!.assetId,
+        ),
+        command(
+          'canRecover',
+          canContribute,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
+      ],
       allowedActions: {
-        canClaim:
-          !selfReviewForbidden &&
-          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
-          (!submission!.reviewerId || submission!.reviewerId === actor.userId),
-        canRelease:
-          !selfReviewForbidden &&
-          submission!.status === 'IN_REVIEW' &&
-          Boolean(submission!.reviewerId),
+        canClaim,
+        canRelease,
         canEdit: canContribute,
         canAccept: decisionEligible,
         canRequestChanges: canContribute,
@@ -2429,14 +2535,8 @@ export class SubmissionService {
         nextAction,
         nextActionLabel: readinessState,
         lastUpdated: submission!.updatedAt.toISOString(),
-        canClaim:
-          !selfReviewForbidden &&
-          ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
-          (!submission!.reviewerId || submission!.reviewerId === actor.userId),
-        canRelease:
-          !selfReviewForbidden &&
-          submission!.status === 'IN_REVIEW' &&
-          Boolean(submission!.reviewerId),
+        canClaim,
+        canRelease,
         canEdit: canContribute,
         canApprove: decisionEligible,
         canRequestChanges: canContribute,

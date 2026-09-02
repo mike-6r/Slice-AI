@@ -1792,6 +1792,16 @@ const mapReviewDetail = (raw: unknown): SubmissionReviewDetail => {
       value.allowedActions && typeof value.allowedActions === "object"
         ? (objectField(value.allowedActions, "review allowed actions") as never)
         : undefined,
+    availableCommands: Array.isArray(value.availableCommands)
+      ? value.availableCommands.map((rawCommand) => {
+          const command = objectField(rawCommand, "review available command");
+          return {
+            id: stringField(command.id, "review available command.id"),
+            allowed: Boolean(command.allowed),
+            reason: nullableString(command.reason, "review available command.reason"),
+          };
+        })
+      : undefined,
     reviewWorkspace:
       value.reviewWorkspace && typeof value.reviewWorkspace === "object"
         ? (objectField(value.reviewWorkspace, "review workspace") as never)

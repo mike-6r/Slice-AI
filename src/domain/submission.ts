@@ -452,6 +452,11 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     canReject: boolean;
     selfReviewForbidden: boolean;
   };
+  availableCommands?: Array<{
+    id: string;
+    allowed: boolean;
+    reason: string | null;
+  }>;
   reviewWorkspace?: {
     requiredItems: Array<{ key: string; label: string; required: boolean; satisfied: boolean }>;
     optionalItems: Array<{ key: string; label: string; satisfied: boolean }>;
