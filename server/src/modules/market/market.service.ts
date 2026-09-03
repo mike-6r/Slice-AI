@@ -142,6 +142,7 @@ export class MarketService {
             initialOffering: {
               select: {
                 offeredUnits: true,
+                totalUnits: true,
                 pricePerUnitMinor: true,
                 currency: true,
               },
@@ -1085,6 +1086,7 @@ export class MarketService {
             initialOffering: {
               select: {
                 offeredUnits: true,
+                totalUnits: true,
                 pricePerUnitMinor: true,
                 currency: true,
               },
@@ -1327,6 +1329,7 @@ type PublicAssetRow = {
     physicalStatus: string;
     initialOffering: {
       offeredUnits: bigint;
+      totalUnits: bigint;
       pricePerUnitMinor: bigint;
       currency: string;
     };
@@ -1626,6 +1629,10 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
               0n,
             );
             const offeredUnits = asset.preSale.initialOffering.offeredUnits;
+            const collectorEstimateMinor = metadataStringValue(
+              asset.submissions?.[0]?.declaredMetadata,
+              'collectorExpectedValueMinor',
+            );
             return {
               status: asset.preSale.status,
               openedAt: asset.preSale.openedAt?.toISOString() ?? null,
@@ -1634,6 +1641,14 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
               pricePerUnitMinor:
                 asset.preSale.initialOffering.pricePerUnitMinor.toString(),
               currency: asset.preSale.initialOffering.currency,
+              collectorEstimateMinor,
+              offeredPercentageBps: asset.preSale.initialOffering.totalUnits
+                ? Number(
+                    (offeredUnits * 10_000n) /
+                      asset.preSale.initialOffering.totalUnits,
+                  )
+                : undefined,
+              totalSupply: asset.preSale.initialOffering.totalUnits.toString(),
               offeredUnits: offeredUnits.toString(),
               reservedUnits: reservedUnits.toString(),
               availableUnits: (offeredUnits - reservedUnits).toString(),
@@ -1761,6 +1776,14 @@ function collectorConditionValue(metadata: unknown) {
     return null;
   const value = (metadata as Record<string, unknown>).condition;
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function metadataStringValue(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === 'string' && /^\d+$/.test(value) ? value : null;
 }
 
 function summarizeObservations(

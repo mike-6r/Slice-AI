@@ -209,6 +209,7 @@ function PreSaleTransactionTicket({
   onReserve: () => void;
 }) {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"RESERVE" | "SELL">("RESERVE");
   const units = /^\d+$/.test(reservationUnits) ? BigInt(reservationUnits) : 0n;
   const available = BigInt(preSale.availableUnits);
   const price = BigInt(preSale.pricePerUnitMinor);
@@ -223,13 +224,24 @@ function PreSaleTransactionTicket({
       <header className="asset-presale-ticket__header">
         <div>
           <p className="asset-section-label">Pre-Sale</p>
-          <h2 id="market-status-title">Reserve your position</h2>
+          <h2 id="market-status-title">Trade this collectible</h2>
         </div>
-        <span className="asset-status-badge asset-status-badge--pending">Conditional</span>
+        <span className="asset-status-badge asset-status-badge--pending">Pre-Sale</span>
       </header>
+      <div className="asset-transaction-tabs" role="tablist" aria-label="Transaction type">
+        <button type="button" role="tab" aria-selected={activeTab === "RESERVE"} className={activeTab === "RESERVE" ? "is-active" : undefined} onClick={() => setActiveTab("RESERVE")}>Reserve</button>
+        <button type="button" role="tab" aria-selected={activeTab === "SELL"} className={activeTab === "SELL" ? "is-active" : undefined} onClick={() => setActiveTab("SELL")}>Sell</button>
+      </div>
+      {activeTab === "SELL" ? (
+        <div className="asset-transaction-unavailable" role="status">
+          <strong>Selling isn’t available yet</strong>
+          <p>Selling becomes available after the collectible completes physical intake and your reservation becomes final ownership.</p>
+        </div>
+      ) : null}
+      {activeTab === "RESERVE" ? <>
       <p className="asset-presale-ticket__intro">
-        Reserve Slices now. Final ownership starts only after physical intake, verification, and
-        custody are complete.
+        Reserve Slices with the same simple flow as a market purchase. Your reservation remains
+        conditional until physical intake, verification, and custody are complete.
       </p>
       <div className="asset-presale-ticket__facts">
         <div>
@@ -314,7 +326,8 @@ function PreSaleTransactionTicket({
       </button>
       {message ? <p className="asset-presale-message" role="status">{message}</p> : null}
       <p className="asset-presale-ticket__fine-print">
-        {physicalLabel} · Selling is unavailable until Pre-Sale finalization.
+        Funds are reserved now. Final ownership is created after Slice receives, verifies, and
+        secures the collectible.
       </p>
       {confirmationOpen ? (
         <div className="asset-presale-modal" role="presentation" onMouseDown={(event) => {
@@ -343,6 +356,7 @@ function PreSaleTransactionTicket({
           </div>
         </div>
       ) : null}
+      </> : null}
     </section>
   );
 }

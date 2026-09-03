@@ -62,6 +62,8 @@ export type MarketplaceAsset = {
   marketLifecycle?: MarketLifecycleProjection;
   initialOffering?: import("@/domain").InitialOfferingProjection;
   preSale?: import("@/domain").PreSaleProjection;
+  preSaleBasisMinor?: number;
+  preSaleBasisCurrency?: SupportedCurrency;
 };
 
 export type MarketplaceSimilarAsset = SimilarAsset;
@@ -152,6 +154,11 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
   marketLifecycle: asset.marketLifecycle,
   initialOffering: asset.initialOffering,
   preSale: asset.preSale,
+  preSaleBasisMinor:
+    asset.preSale?.collectorEstimateMinor && /^\d+$/.test(asset.preSale.collectorEstimateMinor)
+      ? Number(asset.preSale.collectorEstimateMinor)
+      : undefined,
+  preSaleBasisCurrency: asset.preSale?.currency,
 });
 
 export const toMarketplaceSimilarAsset = (asset: SimilarAsset): MarketplaceSimilarAsset => asset;

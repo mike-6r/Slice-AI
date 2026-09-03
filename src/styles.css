@@ -68512,14 +68512,16 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
 .market-card-presale-summary {
   display: grid;
   gap: 0.55rem;
-  margin-top: 0.9rem;
-  padding-top: 0.85rem;
+  margin-top: 0.15rem;
+  padding: 0.75rem 0;
   border-top: 1px solid rgba(132, 161, 168, 0.16);
+  border-bottom: 1px solid rgba(132, 161, 168, 0.16);
 }
 
 .market-card-presale-summary__heading,
 .market-card-presale-summary__facts {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
 }
@@ -68531,6 +68533,14 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   font-size: 0.7rem;
 }
 
+.market-card-presale-summary__heading span {
+  color: #55e3b7;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .market-card-presale-summary__heading strong {
   color: #e6b839;
   font-size: 0.7rem;
@@ -68539,6 +68549,16 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
 .market-card-presale-summary__facts b {
   color: #eef6f5;
   font-size: 0.82rem;
+}
+
+.market-card-presale-summary__facts {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.market-card-presale-summary__facts span + span {
+  padding-left: 0.65rem;
+  border-left: 1px solid rgba(132, 161, 168, 0.18);
 }
 
 .market-card-presale-summary__progress {
@@ -68552,10 +68572,16 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #e6b839;
+  background: linear-gradient(90deg, #28d5a5, #78edc8);
 }
 
-.market-card-value-context { display: block; margin-top: 0.2rem; color: #b79c4c; font-size: 0.68rem; }
+.market-card-value-context {
+  display: block;
+  margin-top: 0.35rem;
+  color: rgba(182, 210, 211, 0.66);
+  font-size: 0.63rem;
+  line-height: 1.3;
+}
 
 .asset-reference-link,
 .asset-external-panel__linked a {

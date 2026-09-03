@@ -73,6 +73,10 @@ export interface PreSaleProjection {
   physicalStatus: string;
   pricePerUnitMinor: string;
   currency: "GBP" | "USD" | "EUR" | "CAD";
+  /** Collector's whole-collectible estimate; never used as a Slice quote. */
+  collectorEstimateMinor?: string | null;
+  offeredPercentageBps?: number;
+  totalSupply?: string;
   offeredUnits: string;
   reservedUnits: string;
   availableUnits: string;
