@@ -209,7 +209,6 @@ function PreSaleTransactionTicket({
   onReserve: () => void;
 }) {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"RESERVE" | "SELL">("RESERVE");
   const units = /^\d+$/.test(reservationUnits) ? BigInt(reservationUnits) : 0n;
   const available = BigInt(preSale.availableUnits);
   const price = BigInt(preSale.pricePerUnitMinor);
@@ -220,55 +219,39 @@ function PreSaleTransactionTicket({
   const physicalLabel = preSale.physicalStatus.replaceAll("_", " ");
 
   return (
-    <section className="asset-presale-ticket" aria-labelledby="market-status-title">
-      <header className="asset-presale-ticket__header">
+    <section className="asset-order-book asset-presale-ticket" aria-labelledby="market-status-title">
+      <header className="asset-trading-panel__header asset-presale-ticket__header">
         <div>
-          <p className="asset-section-label">Pre-Sale</p>
-          <h2 id="market-status-title">Trade this collectible</h2>
+          <p className="asset-section-label">Ownership &amp; trading</p>
+          <h2 id="market-status-title">Reserve your position</h2>
         </div>
-        <span className="asset-status-badge asset-status-badge--pending">Pre-Sale</span>
+        <span className="asset-market-status asset-market-status--presale">
+          <i aria-hidden="true" /> Pre-Sale open
+        </span>
       </header>
-      <div className="asset-transaction-tabs" role="tablist" aria-label="Transaction type">
-        <button type="button" role="tab" aria-selected={activeTab === "RESERVE"} className={activeTab === "RESERVE" ? "is-active" : undefined} onClick={() => setActiveTab("RESERVE")}>Reserve</button>
-        <button type="button" role="tab" aria-selected={activeTab === "SELL"} className={activeTab === "SELL" ? "is-active" : undefined} onClick={() => setActiveTab("SELL")}>Sell</button>
+
+      <div className="asset-presale-warning" role="note">
+        <span className="asset-presale-warning__badge">Pre-Sale</span>
+        <div>
+          <strong>Reserve before the market opens</strong>
+          <p>Your reservation stays conditional until Slice receives, verifies, and secures the collectible.</p>
+        </div>
       </div>
-      {activeTab === "SELL" ? (
-        <div className="asset-transaction-unavailable" role="status">
-          <strong>Selling isn’t available yet</strong>
-          <p>Selling becomes available after the collectible completes physical intake and your reservation becomes final ownership.</p>
-        </div>
-      ) : null}
-      {activeTab === "RESERVE" ? <>
-      <p className="asset-presale-ticket__intro">
-        Reserve Slices with the same simple flow as a market purchase. Your reservation remains
-        conditional until physical intake, verification, and custody are complete.
-      </p>
-      <div className="asset-presale-ticket__facts">
-        <div>
-          <span>Price per Slice</span>
-          <strong>{formatCurrency(Number(price))}</strong>
-        </div>
-        <div>
-          <span>Available</span>
-          <strong>{formatSliceCount(preSale.availableUnits)}</strong>
-        </div>
-        <div>
-          <span>Reserved</span>
-          <strong>{formatSliceCount(preSale.reservedUnits)}</strong>
-        </div>
-        <div>
-          <span>Closes</span>
-          <strong>{formatPreSaleCountdown(preSale.deadlineAt)}</strong>
-        </div>
+
+      <div className="asset-trading-summary asset-presale-ticket__facts">
+        <Stat label="Price per Slice" value={formatCurrency(Number(price))} accent />
+        <Stat label="Slices available" value={formatSliceCount(preSale.availableUnits)} />
+        <Stat label="Reservation closes" value={formatPreSaleCountdown(preSale.deadlineAt)} />
       </div>
       <div className="asset-presale-ticket__progress" aria-label="Pre-Sale reservation progress">
         <span style={{ width: `${Math.min(100, Number(preSale.reservedPercentageBps) / 100)}%` }} />
       </div>
-      <div className="asset-presale-ticket__status">
-        <span><i aria-hidden="true" />{physicalLabel}</span>
-        <span>{formatPreSaleCountdown(preSale.deadlineAt)} remaining</span>
+      <div className="asset-presale-ticket__status" role="status">
+        <span><i aria-hidden="true" /> {physicalLabel}</span>
+        <span>{formatSliceCount(preSale.reservedUnits)} reserved</span>
       </div>
-      <div className="asset-presale-ticket__quantity">
+
+      <div className="asset-presale-ticket__quantity asset-presale-ticket__quantity--standard">
         <label htmlFor="asset-presale-quantity">Slices to reserve</label>
         <div className="asset-presale-ticket__stepper">
           <button
@@ -298,7 +281,7 @@ function PreSaleTransactionTicket({
         </div>
       </div>
       <div className="asset-presale-ticket__total">
-        <span>Estimated total</span>
+        <span>Estimated reservation total</span>
         <strong>{formatCurrency(Number(totalMinor))}</strong>
       </div>
       {availableCashMinor !== undefined ? (
@@ -309,25 +292,37 @@ function PreSaleTransactionTicket({
       ) : isAuthenticated ? (
         <div className="asset-presale-ticket__cash"><span>Your available cash</span><strong>Loading…</strong></div>
       ) : null}
-      <button
-        type="button"
-        className="primary-action asset-presale-ticket__submit"
-        disabled={isPending || preSale.status !== "ACTIVE" || !valid}
-        onClick={() => {
-          if (!isAuthenticated) {
-            onReserve();
-            return;
-          }
-          setConfirmationOpen(true);
-        }}
-      >
-        {isPending ? "Reserving…" : isAuthenticated ? "Review reservation" : "Sign in to reserve"}
-        <ArrowRight aria-hidden="true" />
-      </button>
+
+      <div className="asset-order-actions asset-presale-ticket__actions">
+        <button
+          type="button"
+          className="is-buy"
+          disabled={isPending || preSale.status !== "ACTIVE" || !valid}
+          onClick={() => {
+            if (!isAuthenticated) {
+              onReserve();
+              return;
+            }
+            setConfirmationOpen(true);
+          }}
+        >
+          <span>
+            <strong>{isPending ? "Reserving…" : isAuthenticated ? "Reserve Slices" : "Sign in to reserve"}</strong>
+            <small>Review your conditional reservation</small>
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </button>
+        <div className="is-sell is-disabled" aria-disabled="true">
+          <span>
+            <strong>Sell Slices</strong>
+            <small>Available after final ownership</small>
+          </span>
+        </div>
+      </div>
       {message ? <p className="asset-presale-message" role="status">{message}</p> : null}
       <p className="asset-presale-ticket__fine-print">
-        Funds are reserved now. Final ownership is created after Slice receives, verifies, and
-        secures the collectible.
+        Funds are reserved now. Final ownership is created after physical intake, verification,
+        and custody are complete.
       </p>
       {confirmationOpen ? (
         <div className="asset-presale-modal" role="presentation" onMouseDown={(event) => {
@@ -356,7 +351,6 @@ function PreSaleTransactionTicket({
           </div>
         </div>
       ) : null}
-      </> : null}
     </section>
   );
 }

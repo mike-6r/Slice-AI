@@ -68628,6 +68628,196 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   .asset-detail-page .asset-presale-status-strip details p { left: 0; right: auto; }
 }
 
+/* Pre-Sale uses the same compact transaction rail as a live asset. The only
+   difference is the conditional warning and the Reserve action. */
+.asset-detail-page .asset-readiness-card:has(.asset-presale-ticket) {
+  align-self: start;
+  height: auto !important;
+  min-height: 0;
+  overflow: visible !important;
+  padding: 1.1rem;
+}
+.asset-detail-page .asset-presale-ticket {
+  height: auto;
+  min-width: 0;
+  gap: 1rem;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.asset-detail-page .asset-presale-ticket__header {
+  gap: 0.75rem;
+}
+.asset-detail-page .asset-presale-ticket__header h2 {
+  margin-top: 0.35rem;
+  font-size: 1.45rem;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  text-transform: none;
+}
+.asset-detail-page .asset-presale-ticket .asset-market-status--presale {
+  padding-top: 0.2rem;
+  color: #e7be51;
+  font-size: 0.72rem;
+}
+.asset-detail-page .asset-presale-ticket .asset-market-status--presale i {
+  width: 0.45rem;
+  height: 0.45rem;
+  box-shadow: 0 0 0.7rem rgb(231 190 81 / 0.75);
+}
+.asset-detail-page .asset-presale-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgb(231 190 81 / 0.28);
+  border-radius: 0.75rem;
+  background: rgb(119 84 18 / 0.13);
+}
+.asset-detail-page .asset-presale-warning__badge {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.42rem;
+  border: 1px solid rgb(231 190 81 / 0.4);
+  border-radius: 99px;
+  color: #f0c85b;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.asset-detail-page .asset-presale-warning strong {
+  display: block;
+  color: #f4f7f3;
+  font-size: 0.78rem;
+}
+.asset-detail-page .asset-presale-warning p {
+  margin: 0.25rem 0 0;
+  color: rgb(211 224 218 / 0.7);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto;
+  gap: 0.65rem;
+  margin: 0;
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dl,
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dl:first-child {
+  display: block;
+  min-height: 0;
+  grid-row: auto;
+  padding: 0.75rem;
+  border: 1px solid rgb(145 176 181 / 0.16);
+  border-radius: 0.7rem;
+  background: rgb(2 12 17 / 0.42);
+  box-shadow: none;
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dl:first-child {
+  border-color: rgb(231 190 81 / 0.35);
+  background: rgb(119 84 18 / 0.1);
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dt {
+  color: rgb(183 207 209 / 0.66);
+  font-family: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dd,
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dl:first-child dd {
+  margin-top: 0.28rem;
+  color: #eff8f5;
+  font-size: 0.9rem;
+  line-height: 1.1;
+}
+.asset-detail-page .asset-presale-ticket .asset-trading-summary dl:first-child dd {
+  color: #f1ca65;
+}
+.asset-detail-page .asset-presale-ticket__progress {
+  height: 0.35rem;
+  margin-top: -0.15rem;
+}
+.asset-detail-page .asset-presale-ticket__status {
+  margin-top: -0.35rem;
+  font-size: 0.68rem;
+}
+.asset-detail-page .asset-presale-ticket__status span:last-child {
+  color: rgb(184 207 209 / 0.65);
+}
+.asset-detail-page .asset-presale-ticket__quantity--standard {
+  gap: 0.4rem;
+}
+.asset-detail-page .asset-presale-ticket__quantity label {
+  font-size: 0.7rem;
+}
+.asset-detail-page .asset-presale-ticket__total {
+  padding-top: 0.7rem;
+}
+.asset-detail-page .asset-presale-ticket__total strong {
+  font-size: 1.15rem;
+}
+.asset-detail-page .asset-presale-ticket__actions {
+  gap: 0.65rem;
+  margin-top: 0;
+}
+.asset-detail-page .asset-presale-ticket__actions button,
+.asset-detail-page .asset-presale-ticket__actions .is-disabled {
+  display: flex;
+  min-width: 0;
+  min-height: 4.15rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgb(145 176 181 / 0.22);
+  border-radius: 0.75rem;
+  text-align: left;
+}
+.asset-detail-page .asset-presale-ticket__actions button {
+  cursor: pointer;
+  font: inherit;
+}
+.asset-detail-page .asset-presale-ticket__actions button.is-buy {
+  border-color: rgb(65 235 184 / 0.78);
+  color: #f2f9f9;
+  background: linear-gradient(135deg, #1fc596, #0d9b75);
+  box-shadow: 0 0.8rem 2rem rgb(11 181 137 / 0.16);
+}
+.asset-detail-page .asset-presale-ticket__actions button.is-buy:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+.asset-detail-page .asset-presale-ticket__actions .is-sell {
+  background: rgb(12 27 33 / 0.72);
+}
+.asset-detail-page .asset-presale-ticket__actions strong,
+.asset-detail-page .asset-presale-ticket__actions small {
+  display: block;
+}
+.asset-detail-page .asset-presale-ticket__actions strong {
+  color: #f2f9f9;
+  font-size: 0.78rem;
+}
+.asset-detail-page .asset-presale-ticket__actions small {
+  margin-top: 0.25rem;
+  color: rgb(232 245 244 / 0.7);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+.asset-detail-page .asset-presale-ticket__actions svg {
+  width: 1rem;
+  flex: 0 0 auto;
+}
+@media (max-width: 560px) {
+  .asset-detail-page .asset-presale-ticket .asset-trading-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Step 5 polish: make existing-grade verification and raw AI review feel like
    one premium workspace while keeping each path honest about its evidence. */
 .list-step--ai-review {
