@@ -125,6 +125,11 @@ const metadataKeys: Record<string, readonly string[]> = {
   ],
   CERT_DUPLICATE_FOUND: ['verificationId', 'companyCode'],
   CERT_MANUAL_REVIEW_REQUIRED: ['verificationId'],
+  CERT_MANUAL_VERIFICATION_RECORDED: [
+    'verificationId',
+    'status',
+    'providerReference',
+  ],
   CERT_VERIFICATION_MISMATCH: ['verificationId', 'mismatches'],
   CERT_VERIFIED: ['verificationId', 'companyCode', 'grade'],
   SUBMISSION_REVIEW_CLAIMED: ['reviewId'],

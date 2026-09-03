@@ -189,6 +189,13 @@ describe('offline identity rules', () => {
         verificationId: 'verification-1',
       }),
     ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('CERT_MANUAL_VERIFICATION_RECORDED', {
+        verificationId: 'verification-1',
+        status: 'VERIFIED',
+        providerReference: 'staff-confirmed',
+      }),
+    ).not.toThrow();
   });
   it('identifies idempotency conflicts', () => {
     const f = fingerprintRequest('POST', '/signup', {
