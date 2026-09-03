@@ -97,6 +97,27 @@ export function AdminAssetOperationsDetail({
   const [preSalePrice, setPreSalePrice] = useState("");
   const [marketReferenceUrl, setMarketReferenceUrl] = useState("");
   const [marketReferenceReason, setMarketReferenceReason] = useState("");
+  const [recentAuthAction, setRecentAuthAction] = useState<(() => void) | null>(null);
+  const [recentAuthPassword, setRecentAuthPassword] = useState("");
+  const recentAuth = useMutation({
+    mutationFn: () => services.repositories.account.confirmRecentAuth(recentAuthPassword),
+    onSuccess: () => {
+      const retry = recentAuthAction;
+      setRecentAuthAction(null);
+      setRecentAuthPassword("");
+      retry?.();
+    },
+  });
+  const requestRecentAuth = (retry: () => void) => {
+    recentAuth.reset();
+    setRecentAuthPassword("");
+    setRecentAuthAction(() => retry);
+  };
+  const handleRecentAuthError = (error: unknown, retry: () => void) => {
+    if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED") {
+      requestRecentAuth(retry);
+    }
+  };
   useEffect(() => {
     const setup = preSaleDetail.data;
     if (!setup || setup.status !== "NOT_CONFIGURED") return;
@@ -118,6 +139,7 @@ export function AdminAssetOperationsDetail({
       void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
       void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
     },
+    onError: (error) => handleRecentAuthError(error, () => configurePreSale.mutate()),
   });
   const preSaleCommand = useMutation({
     mutationFn: (input: { action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize" }) => {
@@ -132,6 +154,7 @@ export function AdminAssetOperationsDetail({
       void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
       void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
     },
+    onError: (error, input) => handleRecentAuthError(error, () => preSaleCommand.mutate(input)),
   });
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
@@ -390,7 +413,7 @@ export function AdminAssetOperationsDetail({
           preSaleDetail.data?.commands?.canConfigurePreSale ??
           false
         }
-        error={configurePreSale.error}
+        error={configurePreSale.error ?? preSaleCommand.error}
         reason={preSaleReason}
         deadline={preSaleDeadline}
         setReason={setPreSaleReason}
@@ -529,7 +552,97 @@ export function AdminAssetOperationsDetail({
           retrying.
         </p>
       ) : null}
+      {recentAuthAction ? (
+        <AdminRecentAuthDialog
+          password={recentAuthPassword}
+          setPassword={setRecentAuthPassword}
+          busy={recentAuth.isPending}
+          error={recentAuth.error}
+          close={() => {
+            recentAuth.reset();
+            setRecentAuthAction(null);
+            setRecentAuthPassword("");
+          }}
+          onConfirm={() => recentAuth.mutate()}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function AdminRecentAuthDialog({
+  password,
+  setPassword,
+  busy,
+  error,
+  close,
+  onConfirm,
+}: {
+  password: string;
+  setPassword: (value: string) => void;
+  busy: boolean;
+  error: unknown;
+  close: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="admin-recent-auth-backdrop" role="presentation">
+      <section
+        className="admin-recent-auth-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-recent-auth-title"
+      >
+        <header>
+          <div>
+            <span className="admin-operations-eyebrow">Security check</span>
+            <h2 id="admin-recent-auth-title">Confirm it&apos;s you</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Close dialog">
+            ×
+          </button>
+        </header>
+        <p>
+          Re-authenticate to continue this protected admin action. Your confirmation keeps this
+          session trusted for the next few minutes.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onConfirm();
+          }}
+        >
+          <label className="admin-form-field">
+            Slice password
+            <input
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          {error ? (
+            <p className="admin-presale-panel__error" role="alert">
+              {error instanceof ApiError ? error.message : "That password could not be confirmed."}
+            </p>
+          ) : null}
+          <div className="admin-recent-auth-dialog__actions">
+            <button type="button" className="admin-ops-button" onClick={close}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="admin-ops-button primary"
+              disabled={busy || !password}
+            >
+              {busy ? "Confirming…" : "Confirm and continue"} <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 
