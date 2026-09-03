@@ -2250,10 +2250,49 @@ export class SubmissionService {
       !selfReviewForbidden &&
       ['SUBMITTED', 'IN_REVIEW'].includes(submission!.status) &&
       (!submission!.reviewerId || submission!.reviewerId === actor.userId);
+    const canStartReview =
+      !selfReviewForbidden &&
+      submission!.status === 'SUBMITTED' &&
+      !submission!.reviewerId;
+    const canContinueReview =
+      !selfReviewForbidden && submission!.status === 'IN_REVIEW';
     const canRelease =
       !selfReviewForbidden &&
       submission!.status === 'IN_REVIEW' &&
       Boolean(submission!.reviewerId);
+    const primaryIncompleteRequiredCheck = !identityConfirmed
+      ? 'IDENTITY'
+      : !evidenceComplete
+        ? 'EVIDENCE'
+        : !certificationResolved
+          ? 'CERTIFICATION'
+          : null;
+    const reviewStatus =
+      submission!.status === 'APPROVED'
+        ? 'APPROVED'
+        : submission!.status === 'REJECTED'
+          ? 'REJECTED'
+          : submission!.status === 'CHANGES_REQUESTED'
+            ? 'WAITING_FOR_COLLECTOR'
+            : decisionEligible
+              ? 'READY_FOR_DECISION'
+              : submission!.status === 'IN_REVIEW'
+                ? 'IN_REVIEW'
+                : 'AWAITING_REVIEWER';
+    const nextActionReason =
+      submission!.status === 'SUBMITTED'
+        ? 'Start review to begin the required checks.'
+        : submission!.status === 'CHANGES_REQUESTED'
+          ? 'Waiting for the collector to update this submission.'
+          : primaryIncompleteRequiredCheck === 'IDENTITY'
+            ? 'Confirm the collectible identity before deciding.'
+            : primaryIncompleteRequiredCheck === 'EVIDENCE'
+              ? `${REQUIRED_MEDIA_SLOTS.length - acceptedMediaCount} required image${REQUIRED_MEDIA_SLOTS.length - acceptedMediaCount === 1 ? '' : 's'} need review.`
+              : primaryIncompleteRequiredCheck === 'CERTIFICATION'
+                ? 'Resolve the certification review before deciding.'
+                : decisionEligible
+                  ? 'All required checks are complete.'
+                  : 'Review state needs attention.';
     const command = (id: string, allowed: boolean, reason?: string) => ({
       id,
       allowed,
@@ -2325,7 +2364,7 @@ export class SubmissionService {
           {
             key: 'evidence',
             label: 'Evidence',
-            status: evidenceComplete ? 'COMPLETE' : 'BLOCKED',
+            status: evidenceComplete ? 'COMPLETE' : 'NEEDS_REVIEW',
             required: true,
             summary: evidenceComplete
               ? `${acceptedMediaCount} of ${REQUIRED_MEDIA_SLOTS.length} required images accepted`
@@ -2338,7 +2377,7 @@ export class SubmissionService {
               ? 'NOT_APPLICABLE'
               : certificationResolved
                 ? 'COMPLETE'
-                : 'BLOCKED',
+                : 'NEEDS_REVIEW',
             required: Boolean(response.collectible?.grader),
             summary: !response.collectible?.grader
               ? 'Raw / ungraded — certification not required'
@@ -2374,7 +2413,9 @@ export class SubmissionService {
               ? 'COMPLETE'
               : decisionEligible
                 ? 'NEEDS_REVIEW'
-                : 'BLOCKED',
+                : submission!.status === 'CHANGES_REQUESTED' || selfReviewForbidden
+                  ? 'BLOCKED'
+                  : 'NEEDS_REVIEW',
             required: true,
             summary:
               submission!.status === 'APPROVED'
@@ -2415,8 +2456,28 @@ export class SubmissionService {
           complete: advisoryComplete,
           total: advisoryItems.length,
         },
+        reviewStatus,
+        primaryIncompleteRequiredCheck,
+        nextAction,
+        nextActionReason,
+        readyForDecision: decisionEligible,
+        decisionBlockers: blockers,
       },
       availableCommands: [
+        command(
+          'canStartReview',
+          canStartReview,
+          selfReviewForbidden
+            ? 'You cannot review your own submission.'
+            : undefined,
+        ),
+        command(
+          'canContinueReview',
+          canContinueReview,
+          selfReviewForbidden
+            ? 'Another authorized reviewer must review this submission.'
+            : undefined,
+        ),
         command(
           'canAssignReviewer',
           canClaim,

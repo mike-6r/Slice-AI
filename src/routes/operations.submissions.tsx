@@ -57,6 +57,7 @@ export function SubmissionOperationsPage() {
     staleTime: 60_000,
   });
   const [selected, setSelected] = useState<string | null>(initial ?? null);
+  const [guidedStep, setGuidedStep] = useState<string | null>(null);
   const [condition, setCondition] = useState("");
   const [conditionNote, setConditionNote] = useState("");
   const [valuation, setValuation] = useState("");
@@ -151,7 +152,10 @@ export function SubmissionOperationsPage() {
   }, [detail.data?.version, selected]);
   const claim = useMutation({
     mutationFn: (id: string) => services.repositories.reviews.claim(id, detail.data?.version ?? 0),
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      focusReviewStep("evidence");
+    },
   });
   const release = useMutation({
     mutationFn: (id: string) =>
@@ -403,8 +407,20 @@ export function SubmissionOperationsPage() {
   }, [queue.data, selected]);
   const choose = (id: string) => {
     setSelected(id);
+    setGuidedStep(null);
     setStaleReview(false);
     void navigate({ search: { submission: id } });
+  };
+  const focusReviewStep = (step: string) => {
+    setGuidedStep(step);
+    window.setTimeout(() => {
+      const section = document.querySelector<HTMLDetailsElement>(
+        `#review-workflow details[data-review-step="${step}"]`,
+      );
+      if (!section) return;
+      section.open = true;
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   if (!session.isAuthenticated)
@@ -460,7 +476,14 @@ export function SubmissionOperationsPage() {
         <div className="admin-review-workspace-grid">
           <main className="admin-review-workspace-main">
             <ReviewHeader detail={review} />
-            <ReviewerBanner detail={review} />
+            <ReviewNextAction
+              detail={review}
+              starting={claim.isPending}
+              onStartReview={() => claim.mutate(selected)}
+              onReviewEvidence={() => focusReviewStep("evidence")}
+              onDecision={setDecision}
+              error={claim.error}
+            />
             {review.status === "APPROVED" ? (
               <PostApproval
                 detail={review}
@@ -517,7 +540,13 @@ export function SubmissionOperationsPage() {
                   onEdit={() => setIdentityOpen(true)}
                 />
               </ReviewSection>
-              <ReviewSection title="Evidence" detail={review} step="evidence" number={2}>
+              <ReviewSection
+                title="Evidence"
+                detail={review}
+                step="evidence"
+                number={2}
+                open={guidedStep === "evidence" ? true : undefined}
+              >
                 <Evidence
                   detail={review}
                   canEdit={canEdit}
@@ -1003,7 +1032,7 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
         <div className="min-w-0">
           <div className="admin-review-eyebrow-row">
             <span>Submission</span>
-            <StatusPill value={detail.status} />
+            <StatusPill value={currentStateLabel(detail)} />
           </div>
           <h2>{item?.title ?? "Untitled submission"}</h2>
           <p>
@@ -1033,6 +1062,157 @@ function ReviewHeader({ detail }: { detail: SubmissionReviewDetail }) {
         </span>
       </div>
     </header>
+  );
+}
+
+function ReviewNextAction({
+  detail,
+  starting,
+  onStartReview,
+  onReviewEvidence,
+  onDecision,
+  error,
+}: {
+  detail: SubmissionReviewDetail;
+  starting: boolean;
+  onStartReview: () => void;
+  onReviewEvidence: () => void;
+  onDecision: (value: Decision) => void;
+  error: Error | null;
+}) {
+  const workspace = detail.reviewWorkspace;
+  if (!workspace) return null;
+
+  const presentation = detail.reviewPresentation;
+  const nextAction = presentation?.nextAction ?? detail.readiness?.nextAction;
+  const required = presentation?.required ?? {
+    complete: workspace.requiredComplete,
+    total: workspace.requiredTotal,
+    blockers: workspace.blockingIssues.length,
+  };
+  const evidence = detail.evidenceSummary;
+  const selfReviewBlocked = workspace.selfReviewBlocked;
+  const waitingForCollector = detail.status === "CHANGES_REQUESTED";
+  const ready = Boolean(detail.readiness?.decisionEligible || presentation?.readyForDecision);
+  const canStart = commandAllowed(detail, "canStartReview");
+  const canReview = commandAllowed(detail, "canReviewEvidence");
+  const canApprove = commandAllowed(detail, "canApprove");
+  const isStarting = detail.status === "SUBMITTED" && !workspace.reviewer;
+  const continueReview =
+    detail.status === "IN_REVIEW" && workspace.claimState === "CLAIMED_BY_OTHER";
+  const primaryCheck = presentation?.primaryIncompleteRequiredCheck;
+  const evidenceRemaining = evidence
+    ? Math.max(0, evidence.required - evidence.acceptedRequired)
+    : 0;
+
+  let eyebrow = "NEXT ACTION";
+  let title = "Review required checks";
+  let copy = presentation?.nextActionReason ?? "Complete the required checks before deciding.";
+  let action: ReactNode = null;
+  let tone = "is-attention";
+
+  if (selfReviewBlocked) {
+    eyebrow = "REVIEWER REQUIRED";
+    title = "Another authorized reviewer must continue";
+    copy =
+      "You submitted this collectible, so protected review and decision actions stay with another reviewer.";
+    tone = "is-restricted";
+  } else if (waitingForCollector) {
+    eyebrow = "WAITING FOR COLLECTOR";
+    title = "Changes are required before review can continue";
+    copy = detail.changeRequest?.message ?? "The collector must update the requested items.";
+    tone = "is-waiting";
+  } else if (ready) {
+    eyebrow = "READY FOR DECISION";
+    title = "All required checks are complete";
+    copy = "Optional research and staff assessment can be skipped.";
+    tone = "is-ready";
+    action = (
+      <button
+        type="button"
+        className="button-primary admin-review-next-action-button"
+        onClick={() => onDecision("APPROVED")}
+        disabled={!canApprove}
+      >
+        Approve submission <ArrowRight aria-hidden="true" />
+      </button>
+    );
+  } else if (isStarting || nextAction === "CLAIM_REVIEW") {
+    eyebrow = "START REVIEW";
+    title = "Begin the required review";
+    copy =
+      "Start the review to unlock evidence and other protected checks. Assignment is optional for contributing reviewers.";
+    action = (
+      <button
+        type="button"
+        className="button-primary admin-review-next-action-button"
+        onClick={onStartReview}
+        disabled={!canStart || starting}
+      >
+        {starting ? "Starting review…" : "Start review"} <ArrowRight aria-hidden="true" />
+      </button>
+    );
+  } else if (continueReview) {
+    eyebrow = "REVIEW IN PROGRESS";
+    title = "Continue the collaborative review";
+    copy = `${workspace.reviewer?.displayName ?? "Another reviewer"} started this review. Any authorized reviewer can contribute.`;
+    action = (
+      <button
+        type="button"
+        className="button-primary admin-review-next-action-button"
+        onClick={onReviewEvidence}
+        disabled={!canReview}
+      >
+        Continue review <ArrowRight aria-hidden="true" />
+      </button>
+    );
+  } else if (primaryCheck === "EVIDENCE" || evidenceRemaining > 0) {
+    eyebrow = "ACTION REQUIRED";
+    title = "Review required evidence";
+    copy = `${evidenceRemaining || 1} required image${evidenceRemaining === 1 ? "" : "s"} need your review before this submission can be approved.`;
+    action = (
+      <button
+        type="button"
+        className="button-primary admin-review-next-action-button"
+        onClick={onReviewEvidence}
+        disabled={!canReview}
+      >
+        Review evidence <ArrowRight aria-hidden="true" />
+      </button>
+    );
+  } else if (primaryCheck === "IDENTITY") {
+    eyebrow = "ACTION REQUIRED";
+    title = "Confirm collectible identity";
+    copy = "Review the submitted identity and confirm the Slice identity before deciding.";
+    tone = "is-attention";
+  } else if (primaryCheck === "CERTIFICATION") {
+    eyebrow = "ACTION REQUIRED";
+    title = "Resolve certification review";
+    copy = "Compare the grading reference with the submitted identity before deciding.";
+  }
+
+  return (
+    <section className={`admin-review-next-action ${tone}`} aria-label="Next review action">
+      <div className="admin-review-next-action-copy">
+        <span className="admin-review-next-action-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{copy}</p>
+        {!selfReviewBlocked && !waitingForCollector ? (
+          <small>
+            Required checks: {required.complete} / {required.total} complete
+            {required.blockers
+              ? ` · ${required.blockers} finding${required.blockers === 1 ? "" : "s"}`
+              : ""}
+          </small>
+        ) : null}
+      </div>
+      {action ? <div className="admin-review-next-action-cta">{action}</div> : null}
+      {error ? (
+        <p className="admin-review-next-action-error" role="alert">
+          {friendlyError(error)}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -1361,10 +1541,17 @@ function ReviewSection({
 }) {
   const item = detail.readiness?.progress.find((progress) => progress.key === step);
   const purpose = reviewPurpose(step);
-  const defaultOpen = open ?? (item?.status === "NEEDS_REVIEW" || item?.status === "BLOCKED");
+  const primaryIncomplete =
+    detail.reviewPresentation?.primaryIncompleteRequiredCheck?.toLowerCase();
+  const defaultOpen =
+    open ??
+    (detail.readiness?.decisionEligible
+      ? step === "decision"
+      : detail.status === "IN_REVIEW" && primaryIncomplete === step);
   return (
     <details
       id={step === "decision" ? "review-decision" : undefined}
+      data-review-step={step}
       className="admin-panel-card admin-review-workspace-section"
       open={defaultOpen}
     >
@@ -2216,6 +2403,20 @@ function DecisionRail({
           </div>
         ) : (
           <div className="admin-review-decision-actions">
+            {detail.status === "SUBMITTED" &&
+            !workspace.reviewer &&
+            commandAllowed(detail, "canStartReview") ? (
+              <button
+                type="button"
+                className="admin-review-action is-claim"
+                onClick={onClaim}
+                disabled={claiming}
+              >
+                <ClipboardCheck aria-hidden="true" />
+                {claiming ? "Starting review…" : "Start review"}
+                <small>Open the required checks for contribution.</small>
+              </button>
+            ) : null}
             <button
               type="button"
               className="admin-review-action is-note"
@@ -3570,6 +3771,14 @@ function ReviewHelpDialog({ onClose }: { onClose: () => void }) {
           <strong>Optional</strong> Market research and staff assessment.
         </p>
         <p>
+          <strong>Reviewers</strong> Any authorized reviewer may contribute; primary assignment is
+          coordination only.
+        </p>
+        <p>
+          <strong>Restriction</strong> The person who submitted the collectible cannot review their
+          own submission.
+        </p>
+        <p>
           <strong>After approval</strong> Create the Canonical Collectible, then continue to
           Physical Intake.
         </p>
@@ -3857,7 +4066,10 @@ function workflowSummary(detail: SubmissionReviewDetail, step: string, status: s
   return detail.reviewWorkspace?.selfReviewBlocked ? "Awaiting reviewer" : "Not recorded";
 }
 function workflowStatusLabel(status: string) {
-  return status === "NOT_APPLICABLE" ? "Resolved" : label(status);
+  if (status === "NOT_APPLICABLE") return "Resolved";
+  if (status === "BLOCKED") return "Blocked";
+  if (status === "NEEDS_REVIEW") return "Action required";
+  return label(status);
 }
 function workflowDetail(detail: SubmissionReviewDetail, step: string) {
   const actor = workflowActor(detail, step);
@@ -3920,11 +4132,13 @@ function currentStateLabel(detail: SubmissionReviewDetail) {
   if (detail.status === "APPROVED") return "Approved";
   if (detail.status === "REJECTED") return "Rejected";
   if (detail.status === "CHANGES_REQUESTED") return "Waiting for collector";
-  if (detail.reviewAssignment?.reviewer) return "Review in progress";
-  return "Awaiting reviewer";
+  if (detail.status === "SUBMITTED") return "Ready to start";
+  if (detail.readiness?.decisionEligible) return "Ready for decision";
+  return "Review in progress";
 }
 function currentStateReason(detail: SubmissionReviewDetail) {
   if (detail.reviewWorkspace?.selfReviewBlocked) return "Self-review is blocked for the submitter.";
+  if (detail.status === "SUBMITTED") return "Start review to begin the required checks.";
   return detail.reviewWorkspace?.primaryBlocker ?? "Required review authority is complete.";
 }
 function nextActionTitle(detail: SubmissionReviewDetail) {

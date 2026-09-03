@@ -1,6 +1,6 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { SearchX } from "lucide-react";
+import { ArrowRight, SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MarketAssetGrid, MarketAssetGridSkeleton } from "@/components/marketplace/MarketAssetGrid";
 import {
@@ -25,6 +25,8 @@ import { marketCategoryPresentation } from "@/components/marketplace/marketplace
 import { useAppServices } from "@/providers/AppServicesProvider";
 import { isBetaEnvironment } from "@/config/environment";
 import { useSession } from "@/auth/use-session";
+import { canAccessCollectorWorkspace } from "@/auth/workspace-access";
+import { queryKeys } from "@/queries/keys";
 
 const MARKETPLACE_PAGE_SIZE = 12;
 
@@ -47,6 +49,15 @@ export const Route = createFileRoute("/marketplace")({
 function Marketplace() {
   const services = useAppServices();
   const { isAuthenticated } = useSession();
+  const currentUser = useQuery({
+    queryKey: queryKeys.user.current,
+    queryFn: services.repositories.users.getCurrentUser,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+  const hasCollectorAccess = Boolean(
+    currentUser.data && canAccessCollectorWorkspace(currentUser.data.roles),
+  );
   const routeSearch = Route.useSearch();
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>("trending");
   const [filters, setFilters] = useState<MarketFilters>({
@@ -188,11 +199,24 @@ function Marketplace() {
                     readiness. This controlled Beta is not showing retired showcase data.
                   </p>
                   <Link
-                    to={isAuthenticated ? "/onboarding" : "/signup"}
-                    search={isAuthenticated ? { returnTo: "/list" } : undefined}
-                    className="primary-action"
+                    to={
+                      isAuthenticated ? (hasCollectorAccess ? "/list" : "/onboarding") : "/signup"
+                    }
+                    search={
+                      isAuthenticated
+                        ? hasCollectorAccess
+                          ? { draft: undefined }
+                          : { returnTo: "/list" }
+                        : undefined
+                    }
+                    className="markets-empty-cta primary-action"
                   >
-                    {isAuthenticated ? "Become a Collector" : "Create an account"}
+                    {isAuthenticated
+                      ? hasCollectorAccess
+                        ? "List an Asset"
+                        : "Become a Collector"
+                      : "Create an account"}
+                    <ArrowRight aria-hidden="true" />
                   </Link>
                 </>
               ) : (

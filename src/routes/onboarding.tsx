@@ -21,6 +21,7 @@ import { deriveOnboardingStage } from "@/auth/onboarding-state";
 import { safeReturnIntent } from "@/auth/return-intent";
 import { session } from "@/auth/session";
 import { useSession } from "@/auth/use-session";
+import { canAccessCollectorWorkspace } from "@/auth/workspace-access";
 import { InternationalPhoneInput } from "@/components/account/InternationalPhoneInput";
 import { isBetaEnvironment } from "@/config/environment";
 import { useAppServices } from "@/providers/AppServicesProvider";
@@ -106,6 +107,10 @@ function OnboardingPage() {
     if (!restoringSession && !isAuthenticated)
       void navigate({ to: "/login", search: { returnTo } });
   }, [isAuthenticated, navigate, restoringSession, returnTo]);
+  useEffect(() => {
+    if (!collectorBetaFlow || !user.data || !canAccessCollectorWorkspace(user.data.roles)) return;
+    void navigate({ to: "/list", search: { draft: undefined }, replace: true });
+  }, [collectorBetaFlow, navigate, user.data]);
 
   useEffect(() => {
     if (!sentEmailAt && !phoneResendAt) return;
@@ -226,6 +231,15 @@ function OnboardingPage() {
       <main className="onboarding-page">
         <section className="onboarding-card premium-surface" role="status">
           Loading your secure account setup...
+        </section>
+      </main>
+    );
+
+  if (collectorBetaFlow && canAccessCollectorWorkspace(user.data!.roles))
+    return (
+      <main className="onboarding-page">
+        <section className="onboarding-card premium-surface" role="status">
+          Opening your Collector workspace...
         </section>
       </main>
     );
@@ -514,76 +528,77 @@ function CollectorBetaOnboarding({
   onContinue: () => void;
 }) {
   return (
-    <section className="onboarding-card premium-surface" aria-labelledby="collector-beta-title">
-      <div className="onboarding-brand">
+    <section
+      className="onboarding-card collector-beta-card premium-surface"
+      aria-labelledby="collector-beta-title"
+    >
+      <div className="onboarding-brand collector-beta-card__brand">
         <span className="onboarding-brand__mark">
           <img src="/favicon.png" alt="" />
         </span>
         <strong>Slice</strong>
-        <span>Collector Beta</span>
+        <span>Collector access</span>
       </div>
-      <div className="onboarding-step">
-        <span className="onboarding-step__icon">
+      <div className="collector-beta-card__content">
+        <span className="collector-beta-card__icon onboarding-step__icon" aria-hidden="true">
           <Fingerprint />
         </span>
         <p className="page-kicker">Become a Collector</p>
-        <h1 id="collector-beta-title">Turn your account into a Collector workspace.</h1>
-        <p className="onboarding-step__lead">
-          Hi {displayName || "there"}. This controlled Beta uses a clear access status instead of
-          requiring deferred external, SMS, email, or 2FA providers.
+        <h1 id="collector-beta-title">Start listing collectibles on Slice.</h1>
+        <p className="collector-beta-card__lead">
+          Hi {displayName || "there"}. Collector access lets you submit and manage your own
+          collectibles. Activation is instant and audited during the current Beta.
         </p>
         {error ? (
           <p className="form-error onboarding-error" role="alert">
             {friendlyError(error)}
           </p>
         ) : null}
-        <ol className="onboarding-checklist" aria-label="Collector Beta requirements">
+        <ol className="collector-beta-checklist" aria-label="Collector access steps">
           <li data-complete="true">
-            <CheckCircle2 />{" "}
+            <CheckCircle2 aria-hidden="true" />
             <span>
-              <strong>Collector profile</strong>
-              <small>Use your existing Slice profile.</small>
+              <strong>Your Slice profile</strong>
+              <small>Already connected to this account.</small>
             </span>
           </li>
-          <li data-complete="true">
-            <CheckCircle2 />{" "}
+          <li data-complete="false">
+            <span className="collector-beta-checklist__number" aria-hidden="true">2</span>
             <span>
-              <strong>Beta verification status</strong>
+              <strong>Collector access</strong>
               <small>
-                Deferred during the current controlled Beta; Slice remains the source of truth.
+                Grant the Collector role through Slice&apos;s audited Beta access command.
               </small>
             </span>
           </li>
           <li data-complete="false">
-            <span aria-hidden="true">3</span>
-            <span>
-              <strong>Beta access</strong>
-              <small>Grant the Collector role through the audited Beta access command.</small>
-            </span>
-          </li>
-          <li data-complete="false">
-            <span aria-hidden="true">4</span>
+            <span className="collector-beta-checklist__number" aria-hidden="true">3</span>
             <span>
               <strong>Ready to list</strong>
-              <small>Start your first submission after access is granted.</small>
+              <small>Go straight to your first asset submission.</small>
             </span>
           </li>
         </ol>
-        <aside className="onboarding-callout">
+        <aside className="collector-beta-card__note onboarding-callout">
           <ShieldCheck aria-hidden="true" />
-          <span>
-            <strong>Account security</strong> Email verification and account security are handled by
-            Slice. SMS verification is available when configured for your account.
-          </span>
+          <div>
+            <strong>What changes</strong>
+            <p>You&apos;ll be able to list physical collectibles and manage submission evidence.</p>
+          </div>
         </aside>
-        <button
-          type="button"
-          className="primary-action onboarding-cta"
-          onClick={onContinue}
-          disabled={granting}
-        >
-          {granting ? "Enabling Collector access…" : "Enable Collector Beta access"}
-        </button>
+        <div className="collector-beta-card__actions">
+          <button
+            type="button"
+            className="primary-action onboarding-cta"
+            onClick={onContinue}
+            disabled={granting}
+          >
+            {granting ? "Enabling Collector access…" : "Enable Collector access"}
+          </button>
+          <Link to="/portfolio" className="collector-beta-card__back">
+            Back to portfolio
+          </Link>
+        </div>
       </div>
     </section>
   );

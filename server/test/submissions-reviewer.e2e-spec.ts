@@ -156,6 +156,12 @@ describe('Document 010 reviewer HTTP E2E', () => {
       access: 'UNCLAIMED',
       required: { complete: 3, total: 3, blockers: 0 },
       advisory: { complete: 1, total: 3 },
+      reviewStatus: 'AWAITING_REVIEWER',
+      primaryIncompleteRequiredCheck: null,
+      nextAction: 'CLAIM_REVIEW',
+      nextActionReason: 'Start review to begin the required checks.',
+      readyForDecision: false,
+      decisionBlockers: [],
     });
     expect(readyDetail.body.readiness.progress).toEqual(
       expect.arrayContaining([

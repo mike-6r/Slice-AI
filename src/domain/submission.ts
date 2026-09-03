@@ -454,6 +454,18 @@ export interface SubmissionReviewDetail extends SubmissionReviewSummary {
     access: "SELF_REVIEW_BLOCKED" | "CLAIMED_BY_ME" | "CLAIMED_BY_OTHER" | "UNCLAIMED";
     required: { complete: number; total: number; blockers: number };
     advisory: { complete: number; total: number };
+    reviewStatus?:
+      | "AWAITING_REVIEWER"
+      | "IN_REVIEW"
+      | "READY_FOR_DECISION"
+      | "WAITING_FOR_COLLECTOR"
+      | "APPROVED"
+      | "REJECTED";
+    primaryIncompleteRequiredCheck?: "IDENTITY" | "EVIDENCE" | "CERTIFICATION" | null;
+    nextAction?: NonNullable<SubmissionReviewDetail["readiness"]>["nextAction"];
+    nextActionReason?: string;
+    readyForDecision?: boolean;
+    decisionBlockers?: string[];
   };
   allowedActions?: {
     canClaim: boolean;

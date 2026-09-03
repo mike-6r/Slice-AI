@@ -1872,6 +1872,7 @@ function PerformancePeriods({
           key={period}
           type="button"
           className={period === active ? "is-active" : undefined}
+          aria-pressed={period === active}
           onClick={() => onChange(period)}
         >
           {period}

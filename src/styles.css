@@ -26462,6 +26462,49 @@ body:has(.markets-page) .site-shell {
   color: var(--color-subtle);
   font-size: 11px;
 }
+.markets-empty-cta {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding: 0 1rem;
+  border: 1px solid rgba(88, 244, 202, 0.8);
+  border-radius: 0.55rem;
+  color: #041712;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 10px 24px rgba(7, 202, 143, 0.18),
+    0 0 26px rgba(17, 216, 154, 0.08);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms ease,
+    box-shadow 180ms ease;
+}
+.markets-empty-cta svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+.markets-empty-cta:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 30px rgba(7, 202, 143, 0.26),
+    0 0 34px rgba(17, 216, 154, 0.14);
+  transform: translateY(-2px);
+}
+.markets-empty-cta:active {
+  transform: translateY(0) scale(0.985);
+}
+.markets-empty-cta:focus-visible {
+  outline: 2px solid #8bffe0;
+  outline-offset: 3px;
+}
 .markets-filter-drawer {
   position: fixed;
   inset: 0;
@@ -67129,6 +67172,116 @@ body:has(.admin-review-detail-page) .admin-review-detail-page .button-secondary 
   flex: 0 0 auto;
 }
 
+/* Guided review entry point. Keep the required action visually dominant while
+ * retaining the established compact Admin Console card language. */
+body:has(.admin-review-detail-page) .admin-review-next-action {
+  display: flex;
+  position: relative;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.8rem;
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+  border: 1px solid rgba(51, 209, 174, 0.58);
+  border-radius: 0.55rem;
+  background: linear-gradient(120deg, rgba(13, 58, 58, 0.96), rgba(9, 28, 36, 0.98));
+  box-shadow: 0 0.65rem 1.5rem rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(181, 255, 239, 0.06);
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.2rem;
+  background: #44dfba;
+  content: "";
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action.is-ready {
+  border-color: rgba(62, 222, 181, 0.72);
+  background: linear-gradient(120deg, rgba(14, 74, 61, 0.98), rgba(8, 30, 31, 0.98));
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action.is-waiting,
+body:has(.admin-review-detail-page) .admin-review-next-action.is-restricted {
+  border-color: rgba(222, 163, 52, 0.58);
+  background: linear-gradient(120deg, rgba(67, 48, 19, 0.78), rgba(23, 27, 28, 0.98));
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action.is-waiting::before,
+body:has(.admin-review-detail-page) .admin-review-next-action.is-restricted::before {
+  background: #efbd58;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-eyebrow {
+  color: #51e0bc;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action h2 {
+  margin: 0;
+  color: #effaf7;
+  font-size: 1.03rem;
+  line-height: 1.2;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action p {
+  max-width: 42rem;
+  margin: 0;
+  color: #c1d8d4;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-copy small {
+  color: #8fb4ae;
+  font-size: 0.55rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-cta {
+  flex: 0 0 auto;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-button {
+  min-height: 2.35rem;
+  padding-inline: 0.8rem;
+  white-space: nowrap;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-button svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-left: 0.25rem;
+}
+
+body:has(.admin-review-detail-page) .admin-review-next-action-error {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.22rem;
+  color: #ff9797;
+  font-size: 0.52rem;
+}
+
+@media (max-width: 600px) {
+  body:has(.admin-review-detail-page) .admin-review-next-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body:has(.admin-review-detail-page) .admin-review-next-action-button {
+    width: 100%;
+  }
+}
+
 /* Convert compact text links into the same designed controls. */
 body:has(.admin-review-detail-page) .admin-review-card-heading > a,
 body:has(.admin-review-detail-page) .admin-review-card-link,
@@ -68235,7 +68388,949 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
     flex: 1 1 auto;
     font-size: 0.62rem;
   }
-  .list-submit-review-button {
+.list-submit-review-button {
     min-width: 0;
+  }
+}
+
+/* Customer dropdowns — one shared Slice control language across Markets,
+ * Collectors, Portfolio, Wallet, and account surfaces. Native option menus
+ * inherit the dark theme where the browser allows it; the closed controls use
+ * the same glass panel, border, and teal focus treatment everywhere. */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background: #09171e;
+  color: #e2f0ed;
+}
+
+select option:checked {
+  background: #0d6657;
+  color: #f0fffb;
+}
+
+body:has(.markets-page) select,
+body:has(.collectors-page) select,
+body:has(.portfolio-page) select,
+body:has(.wallet-page) select,
+body:has(.account-page) select {
+  min-height: 2.45rem;
+  box-sizing: border-box;
+  appearance: none;
+  border: 1px solid rgba(126, 163, 170, 0.22);
+  border-radius: 0.58rem;
+  padding: 0 2.35rem 0 0.82rem;
+  background-color: rgba(7, 18, 24, 0.86);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='m3.5 5.25 3.5 3.5 3.5-3.5' stroke='%238aa7a7' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 0.78rem center;
+  background-repeat: no-repeat;
+  background-size: 0.85rem;
+  color: #e0efec;
+  font-size: 0.7rem;
+  font-weight: 650;
+  outline: 0;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+body:has(.markets-page) select:hover,
+body:has(.collectors-page) select:hover,
+body:has(.portfolio-page) select:hover,
+body:has(.wallet-page) select:hover,
+body:has(.account-page) select:hover {
+  border-color: rgba(68, 213, 181, 0.38);
+  background-color: rgba(10, 29, 32, 0.96);
+}
+
+body:has(.markets-page) select:focus-visible,
+body:has(.collectors-page) select:focus-visible,
+body:has(.portfolio-page) select:focus-visible,
+body:has(.wallet-page) select:focus-visible,
+body:has(.account-page) select:focus-visible {
+  border-color: rgba(47, 225, 184, 0.78);
+  box-shadow: 0 0 0 3px rgba(37, 209, 169, 0.13), inset 0 1px 0 rgba(230, 255, 249, 0.035);
+}
+
+body:has(.markets-page) .markets-sort-control {
+  position: relative;
+  min-height: 2.45rem;
+  border: 1px solid rgba(126, 163, 170, 0.22);
+  border-radius: 0.58rem;
+  background: linear-gradient(145deg, rgba(14, 29, 34, 0.96), rgba(7, 17, 22, 0.96));
+  box-shadow: inset 0 1px 0 rgba(234, 255, 250, 0.035), 0 0.35rem 0.9rem rgba(0, 0, 0, 0.12);
+}
+
+body:has(.markets-page) .markets-sort-control > svg {
+  display: block;
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
+  color: #41d9b7;
+}
+
+body:has(.markets-page) .markets-sort-control > span {
+  color: #748d94;
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+
+body:has(.markets-page) .markets-sort-control select {
+  min-height: 2.35rem;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+  padding: 0 1.95rem 0 0.35rem;
+  background-color: transparent;
+  background-image: none;
+  color: #e5f3f0;
+  font-size: 0.68rem;
+}
+
+body:has(.markets-page) .markets-sort-control::after {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  width: 0.43rem;
+  height: 0.43rem;
+  border-right: 1px solid #92aaa9;
+  border-bottom: 1px solid #92aaa9;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+
+body:has(.collectors-page) .collectors-select-control {
+  min-height: 2.45rem;
+  border-color: rgba(126, 163, 170, 0.22);
+  border-radius: 0.58rem;
+  background: linear-gradient(145deg, rgba(14, 29, 34, 0.96), rgba(7, 17, 22, 0.96));
+  box-shadow: inset 0 1px 0 rgba(234, 255, 250, 0.035), 0 0.35rem 0.9rem rgba(0, 0, 0, 0.12);
+}
+
+body:has(.collectors-page) .collectors-select-control select {
+  min-height: 2.35rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0 1.55rem 0 0;
+  background-color: transparent;
+  background-image: none;
+  color: #e5f3f0;
+  font-size: 0.68rem;
+}
+
+body:has(.collectors-page) .collectors-select-control > svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  color: #8fa8a8;
+}
+
+body:has(.collectors-page) .collectors-sort-control > span {
+  color: #748d94;
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+body:has(.portfolio-page) .portfolio-holdings-filter select,
+body:has(.portfolio-page) .portfolio-orders-filters select,
+body:has(.portfolio-page) .portfolio-activity-date-filter select,
+body:has(.wallet-page) select {
+  border-color: rgba(126, 163, 170, 0.22);
+  background-color: rgba(7, 18, 24, 0.86);
+}
+
+@media (max-width: 700px) {
+  body:has(.markets-page) .markets-sort-control,
+  body:has(.collectors-page) .collectors-select-control {
+    min-height: 2.7rem;
+  }
+
+  body:has(.markets-page) .markets-sort-control select,
+  body:has(.collectors-page) .collectors-select-control select {
+    min-height: 2.6rem;
+  }
+}
+
+/* Collector access onboarding: one clear decision for investor accounts. */
+.collector-beta-card {
+  max-width: 42rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border-color: rgba(76, 145, 141, 0.32);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(34, 211, 165, 0.1), transparent 35%),
+    linear-gradient(145deg, rgba(17, 27, 33, 0.98), rgba(8, 14, 19, 0.99));
+}
+.collector-beta-card__brand {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(157, 183, 189, 0.12);
+}
+.collector-beta-card__brand > span:last-child {
+  color: #79d9c2;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+.collector-beta-card__content {
+  display: grid;
+  justify-items: center;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: clamp(1.7rem, 5vw, 2.75rem) 0 0.35rem;
+  text-align: center;
+}
+.collector-beta-card__icon {
+  width: 4.1rem;
+  height: 4.1rem;
+  margin-bottom: 1.1rem;
+  border-color: rgba(34, 211, 165, 0.58);
+  background: rgba(8, 52, 47, 0.52);
+  box-shadow:
+    0 0 0 7px rgba(34, 211, 165, 0.035),
+    0 0 34px rgba(34, 211, 165, 0.16);
+}
+.collector-beta-card__icon svg {
+  width: 1.8rem;
+  height: 1.8rem;
+  color: #2fe0b2;
+  stroke-width: 1.7;
+}
+.collector-beta-card__content h1 {
+  max-width: 28rem;
+  margin-top: 0.45rem;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 0.98;
+}
+.collector-beta-card__lead {
+  max-width: 29rem;
+  margin-top: 0.8rem;
+  color: #a9bbc0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.collector-beta-card .onboarding-error {
+  width: 100%;
+  margin: 1rem 0 0;
+}
+.collector-beta-checklist {
+  display: grid;
+  width: min(100%, 31rem);
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.collector-beta-checklist li {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+  min-height: 3.3rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(132, 165, 172, 0.16);
+  border-radius: 0.6rem;
+  background: rgba(9, 18, 23, 0.55);
+}
+.collector-beta-checklist li[data-complete="true"] {
+  border-color: rgba(34, 211, 165, 0.22);
+  background: rgba(10, 53, 46, 0.26);
+}
+.collector-beta-checklist li > svg,
+.collector-beta-checklist__number {
+  display: grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid rgba(121, 157, 164, 0.35);
+  border-radius: 50%;
+  color: #90a7ac;
+}
+.collector-beta-checklist li > svg {
+  border-color: rgba(34, 211, 165, 0.5);
+  color: #37dcae;
+}
+.collector-beta-checklist__number {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+}
+.collector-beta-checklist li > span:last-child {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.collector-beta-checklist strong {
+  color: #edf5f5;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+.collector-beta-checklist small {
+  color: #8fa6aa;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.collector-beta-card__note {
+  width: min(100%, 31rem);
+  margin-top: 0.85rem;
+  border-color: rgba(132, 165, 172, 0.17);
+  background: rgba(8, 18, 23, 0.5);
+  text-align: left;
+}
+.collector-beta-card__note p {
+  margin-top: 0.16rem;
+  color: #8fa6aa;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+.collector-beta-card__actions {
+  display: grid;
+  width: min(100%, 31rem);
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+.collector-beta-card__actions .onboarding-cta {
+  width: 100%;
+  min-height: 2.85rem;
+  margin-top: 0;
+  font-size: 0.78rem;
+}
+.collector-beta-card__back {
+  justify-self: center;
+  padding: 0.3rem 0.5rem;
+  color: #91a9ae;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+.collector-beta-card__back:hover {
+  color: #52dfba;
+}
+@media (max-width: 520px) {
+  .collector-beta-card {
+    padding: 1rem;
+  }
+  .collector-beta-card__content {
+    padding-top: 1.5rem;
+  }
+  .collector-beta-card__content h1 {
+    font-size: clamp(1.85rem, 10vw, 2.45rem);
+  }
+}
+
+/* Collectors uses the same centered customer frame as Home, Markets, Portfolio,
+ * and Wallet. A legacy mockup pass translated its inner shell to the right,
+ * which made the page visibly jump when navigating between routes. */
+body:has(.collectors-page) .collectors-page .collectors-shell {
+  width: min(calc(100% - var(--customer-frame-gutter)), var(--customer-frame-max));
+  max-width: var(--customer-frame-max);
+  margin-inline: auto;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  body:has(.collectors-page) .collectors-page .collectors-shell {
+    width: min(calc(100% - 2rem), var(--customer-frame-max));
+    max-width: calc(100% - 2rem);
+  }
+}
+
+/* Portfolio performance — final premium chart surface. Keep this block last:
+ * the portfolio page has several historical visual passes, and the chart
+ * needs one predictable geometry contract at every supported viewport. */
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-panel--hero-performance {
+  overflow: visible;
+  border-color: rgba(104, 151, 158, 0.24);
+  background:
+    radial-gradient(circle at 22% 0%, rgba(24, 133, 111, 0.11), transparent 38%),
+    linear-gradient(145deg, rgba(18, 28, 36, 0.98), rgba(8, 16, 22, 0.98));
+  box-shadow:
+    0 1rem 2.8rem rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(231, 255, 249, 0.035);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-panel--hero-performance
+  .portfolio-panel__head {
+  min-height: 4.1rem;
+  align-items: center;
+  border-bottom: 1px solid rgba(126, 161, 168, 0.14);
+  padding: 0.8rem 1.2rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-panel--hero-performance
+  .portfolio-panel__head
+  h2 {
+  color: #eef8f6;
+  font-size: 0.88rem;
+  font-weight: 720;
+  letter-spacing: -0.015em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-header {
+  align-items: center;
+  gap: 0.8rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hint {
+  color: #80979d;
+  font-size: 0.62rem;
+  letter-spacing: 0.025em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods {
+  display: inline-flex;
+  height: 2.3rem;
+  overflow: hidden;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid rgba(127, 162, 171, 0.2);
+  border-radius: 0.62rem;
+  background: rgba(5, 13, 18, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button {
+  min-width: 2.75rem;
+  height: 100%;
+  border-left: 1px solid rgba(127, 162, 171, 0.13);
+  color: #778c93;
+  font-family: var(--font-mono);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button:first-child {
+  border-left: 0;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button:hover,
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button:focus-visible {
+  color: #d9f8f1;
+  background: rgba(32, 163, 137, 0.14);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button.is-active,
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-periods
+  button[aria-pressed="true"] {
+  color: #52e7c2;
+  background: linear-gradient(180deg, rgba(23, 157, 130, 0.25), rgba(13, 88, 77, 0.2));
+  box-shadow: inset 0 0 0 1px rgba(53, 221, 181, 0.18);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-panel--hero-performance
+  .portfolio-panel__body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hero {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "value" "chart" "periods";
+  gap: 1rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hero__value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.1rem 1rem;
+  padding: 0.15rem 0.1rem 0;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hero__value
+  > span {
+  grid-column: 1 / -1;
+  color: #7f969d;
+  font-size: 0.62rem;
+  letter-spacing: 0.095em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hero__value
+  > strong {
+  margin-top: 0.2rem;
+  color: #f2fbf9;
+  font-size: clamp(2rem, 3.1vw, 2.85rem);
+  font-weight: 760;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-hero__value
+  > p {
+  align-self: end;
+  margin: 0 0 0.12rem;
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__plot {
+  position: relative;
+  min-width: 0;
+  min-height: 19rem;
+  height: 19rem;
+  margin: 0;
+  overflow: visible;
+  border: 1px solid rgba(91, 171, 159, 0.28);
+  border-radius: 0.88rem;
+  background:
+    radial-gradient(circle at 45% 12%, rgba(31, 189, 158, 0.14), transparent 39%),
+    linear-gradient(180deg, rgba(10, 40, 42, 0.82), rgba(5, 16, 22, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(221, 255, 248, 0.055),
+    inset 0 -2.5rem 3.5rem rgba(2, 10, 15, 0.24),
+    0 0.8rem 1.7rem rgba(0, 0, 0, 0.16);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__plot
+  svg {
+  display: block;
+  width: 100%;
+  height: 19rem;
+  min-height: 19rem;
+  box-sizing: border-box;
+  padding: 0.9rem 5rem 2rem 0.9rem;
+  overflow: visible;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__grid-line {
+  stroke: rgba(168, 225, 216, 0.16);
+  stroke-dasharray: 1.5 4.5;
+  vector-effect: non-scaling-stroke;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__vertical-grid-line {
+  stroke: rgba(168, 225, 216, 0.075);
+  stroke-dasharray: 1 5;
+  vector-effect: non-scaling-stroke;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__area {
+  fill: url("#portfolio-performance-area");
+  opacity: 1;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__line {
+  stroke: var(--portfolio-chart-accent, #2be0b7);
+  stroke-width: 2.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 0.42rem rgba(43, 224, 183, 0.52));
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__observation {
+  fill: var(--portfolio-chart-accent, #2be0b7);
+  stroke: rgba(225, 255, 249, 0.62);
+  stroke-width: 0.55;
+  opacity: 0.5;
+  transition:
+    r 140ms ease,
+    opacity 140ms ease;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__endpoint {
+  fill: #e2fff8;
+  stroke: var(--portfolio-chart-accent, #2be0b7);
+  stroke-width: 1.25;
+  filter: drop-shadow(0 0 0.42rem rgba(43, 224, 183, 0.88));
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__axis {
+  top: 0.75rem;
+  right: 0.55rem;
+  bottom: 2.3rem;
+  width: 4.2rem;
+  color: #86a8a7;
+  font-size: 0.56rem;
+  font-variant-numeric: tabular-nums;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__axis
+  span {
+  padding: 0.18rem 0.26rem;
+  border: 1px solid rgba(109, 190, 178, 0.16);
+  border-radius: 0.32rem;
+  background: rgba(4, 17, 22, 0.82);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__x-axis {
+  right: 4.8rem;
+  bottom: 0.55rem;
+  left: 0.9rem;
+  color: #78989a;
+  font-size: 0.56rem;
+  font-variant-numeric: tabular-nums;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-tooltip {
+  width: min(16rem, calc(100% - 1rem));
+  border: 1px solid rgba(55, 224, 185, 0.68);
+  border-radius: 0.88rem;
+  padding: 0.85rem 0.9rem 0.92rem;
+  background: rgba(5, 18, 23, 0.985);
+  box-shadow:
+    0 1.2rem 2.8rem rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(18, 86, 76, 0.38),
+    inset 0 1px 0 rgba(232, 255, 249, 0.045);
+  backdrop-filter: blur(0.75rem);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-tooltip
+  strong {
+  margin: 0.3rem 0 0.12rem;
+  color: #f2fffc;
+  font-size: 1.28rem;
+  letter-spacing: -0.035em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-tooltip
+  dl {
+  gap: 0.42rem;
+  margin-top: 0.78rem;
+  padding-top: 0.68rem;
+  border-top-color: rgba(132, 190, 183, 0.2);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(8.5rem, auto);
+  gap: 0;
+  margin: 0;
+  border: 1px solid rgba(111, 161, 163, 0.22);
+  border-radius: 0.76rem;
+  background: rgba(6, 18, 24, 0.7);
+  box-shadow: inset 0 1px 0 rgba(222, 255, 248, 0.025);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend
+  > div {
+  min-height: 3.4rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend
+  > div
+  + div {
+  border-left: 1px solid rgba(111, 161, 163, 0.16);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend
+  span {
+  gap: 0.18rem;
+  color: #91a9ad;
+  font-size: 0.58rem;
+  letter-spacing: 0.07em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend
+  strong {
+  color: #e7f3f0;
+  font-size: 0.72rem;
+  letter-spacing: -0.01em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-chart__legend-total {
+  justify-content: flex-end;
+  border-left: 1px solid rgba(111, 161, 163, 0.18);
+  padding-right: 1rem;
+  text-align: right;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-periods {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid rgba(124, 157, 164, 0.12);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-periods
+  > div {
+  min-width: 0;
+  padding: 0.7rem 0.85rem 0.15rem;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-periods
+  > div
+  + div {
+  border-left: 1px solid rgba(124, 157, 164, 0.12);
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-periods
+  dt {
+  color: #748c93;
+  font-size: 0.57rem;
+  letter-spacing: 0.06em;
+}
+
+body:has(.portfolio-page)
+  .portfolio-page.portfolio-page--approved
+  .portfolio-performance-periods
+  dd {
+  margin-top: 0.22rem;
+  color: #dcebe8;
+  font-size: 0.7rem;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-panel--hero-performance
+    .portfolio-panel__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-header {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-hint {
+    display: inline;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-periods {
+    flex: 1 1 auto;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-periods
+    button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__plot,
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__plot
+    svg {
+    min-height: 16rem;
+    height: 16rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__legend {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__legend-total {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    border-top: 1px solid rgba(111, 161, 163, 0.16);
+    border-left: 0;
+    text-align: left;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__legend-total
+    span {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 520px) {
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-panel--hero-performance
+    .portfolio-panel__body {
+    padding-inline: 0.85rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-periods {
+    width: 100%;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-hero__value {
+    grid-template-columns: 1fr;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-hero__value
+    > p {
+    justify-self: start;
+    text-align: left;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__plot,
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__plot
+    svg {
+    min-height: 13.5rem;
+    height: 13.5rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__plot
+    svg {
+    padding-right: 4.3rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__axis {
+    width: 3.7rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-chart__x-axis {
+    right: 4.1rem;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-periods {
+    grid-template-columns: 1fr;
+  }
+
+  body:has(.portfolio-page)
+    .portfolio-page.portfolio-page--approved
+    .portfolio-performance-periods
+    > div
+    + div {
+    border-top: 1px solid rgba(124, 157, 164, 0.12);
+    border-left: 0;
   }
 }
