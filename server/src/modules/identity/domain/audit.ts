@@ -205,6 +205,11 @@ const metadataKeys: Record<string, readonly string[]> = {
     'customerMessageRecorded',
     'version',
   ],
+  INTAKE_PREFERENCE_CARRIED_FORWARD: [
+    'submissionId',
+    'locationId',
+    'deliveryMethod',
+  ],
   VALUATION_EVIDENCE_RECORDED: ['assetId', 'sourceType', 'currency'],
   VALUATION_DECIDED: ['assetId', 'currency', 'confidence', 'methodologyCode'],
   CUSTODY_STATUS_CHANGED: [

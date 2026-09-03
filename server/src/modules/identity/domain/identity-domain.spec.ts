@@ -184,6 +184,13 @@ describe('offline identity rules', () => {
     expect(() =>
       sanitizeAuditMetadata('SUBMISSION_CHANGES_REQUESTED', decisionMetadata),
     ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('INTAKE_PREFERENCE_CARRIED_FORWARD', {
+        submissionId: 'submission-1',
+        locationId: 'location-1',
+        deliveryMethod: 'SHIPMENT',
+      }),
+    ).not.toThrow();
   });
   it('allows provider identity refresh audit metadata', () => {
     expect(() =>
