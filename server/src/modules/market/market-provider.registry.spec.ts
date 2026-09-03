@@ -65,6 +65,31 @@ describe('PriceChartingProvider', () => {
     );
   });
 
+  it('resolves a SportsCardsPro game URL before generic identity discovery', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          products: [
+            {
+              id: 918273,
+              'product-name': 'Shohei Ohtani Aa #1',
+              'console-name': '2026 Topps All Aces',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const provider = new PriceChartingProvider(config());
+
+    await expect(
+      provider.resolveReferenceUrl(
+        'https://www.sportscardspro.com/game/baseball-cards-2026-topps-all-aces/shohei-ohtani-aa-1',
+      ),
+    ).resolves.toBe('918273');
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/api/products');
+  });
+
   it('maps documented card condition fields without inventing grader specificity', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(

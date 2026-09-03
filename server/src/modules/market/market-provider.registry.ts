@@ -88,6 +88,24 @@ export class PriceChartingProvider implements MarketDataProvider {
       .slice(0, 20);
   }
 
+  async resolveReferenceUrl(url: string) {
+    const parsed = new URL(url);
+    if (!['https:'].includes(parsed.protocol)) return null;
+    if (!['www.pricecharting.com', 'pricecharting.com', 'sportscardspro.com', 'www.sportscardspro.com'].includes(parsed.hostname.toLowerCase())) return null;
+    const gamePath = parsed.pathname.match(/^\/game\/(.+?)\/?$/i)?.[1];
+    if (!gamePath) return parsed.searchParams.get('id')?.match(/^\d+$/)?.[0] ?? null;
+    const [setSlug, cardSlug] = decodeURIComponent(gamePath).split('/');
+    const cardNumber = cardSlug?.match(/-(\d+(?:-\d+)?)$/)?.[1] ?? null;
+    const cardTitle = (cardSlug ?? '').replace(/-\d+(?:-\d+)?$/, '').replace(/[-_]+/g, ' ').trim();
+    const directQuery = `${setSlug ?? ''} ${cardTitle}`.replace(/[\/_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const payload = await this.request('products', { q: directQuery });
+    const rows = objectArray(payload, 'products')
+      .map((row) => parseCandidate(row, { title: cardTitle || directQuery, set: setSlug?.replace(/[-_]+/g, ' ') ?? null, year: null, manufacturer: null, cardNumber, edition: null, variant: null, grader: null, grade: null, category: 'sports-cards' }))
+      .filter((row): row is MarketProductCandidate => Boolean(row));
+    const exact = rows.filter((row) => row.matchQuality === 'EXACT');
+    return exact.length === 1 ? exact[0]!.providerProductId : null;
+  }
+
   async getProduct(providerExternalId: string): Promise<PriceChartingProduct> {
     const payload = await this.request('product', { id: providerExternalId });
     return parseProduct(payload, providerExternalId);
@@ -306,7 +324,7 @@ function parseCandidate(
   identity: MarketIdentity,
 ): MarketProductCandidate | undefined {
   const providerProductId =
-    stringValue(row.id) ?? stringValue(row['product-id']);
+    providerIdentifier(row.id) ?? providerIdentifier(row['product-id']);
   const title = stringValue(row['product-name']) ?? stringValue(row.title);
   if (!providerProductId || !title) return undefined;
   const candidate: MarketProductCandidate = {
@@ -369,6 +387,12 @@ function integerAmount(value: unknown): bigint | null {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function providerIdentifier(value: unknown) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+    return String(value);
+  return stringValue(value);
 }
 
 function firstImageUrl(row: Record<string, unknown>) {

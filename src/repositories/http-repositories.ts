@@ -5490,6 +5490,40 @@ const adminRepository = (client: ApiClient): AdminRepository => {
         method: "POST",
       });
     },
+    async linkMarketReference(id, input) {
+      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references`, {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
+    async forceLinkMarketReference(id, input) {
+      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/force-link`, {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
+    async rerunMarketReference(id) {
+      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/rerun`, {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
+    async removePreferredMarketReference(id, reason) {
+      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/remove-preferred`, {
+        method: "POST",
+        body: { reason },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
+    async markMarketReferenceReview(id, reason) {
+      return client.request(`/admin/assets/${encodeURIComponent(id)}/market-references/mark-review`, {
+        method: "POST",
+        body: { reason },
+        headers: { "Idempotency-Key": idempotencyKey() },
+      });
+    },
     async proposeOwnershipSupply(id, input) {
       return client.request<{
         assetId: string;
@@ -5729,6 +5763,10 @@ export function createHttpRepositories(client = new ApiClient()): AppRepositorie
                     reference.externalReferenceId,
                     "referenceImport.externalReferenceId",
                   ),
+                  originalUrl:
+                    typeof reference.originalUrl === "string"
+                      ? reference.originalUrl
+                      : stringField(reference.normalizedUrl, "referenceImport.normalizedUrl"),
                   normalizedUrl: stringField(
                     reference.normalizedUrl,
                     "referenceImport.normalizedUrl",

@@ -67,6 +67,12 @@ type MatchedObservation = Observation & {
 type ProviderCollectionResult = {
   observations: Observation[] | null;
   reason?: string;
+  reference?: {
+    provider: string;
+    providerReferenceId: string | null;
+    originalUrl: string;
+    canonicalUrl: string;
+  };
 };
 
 /** Provider-neutral whole-collectible market research. It intentionally does
@@ -110,6 +116,7 @@ export class CollectibleMarketResearchService {
           requestId,
           collected.reason ??
             'The approved external market provider is unavailable.',
+          collected.reference,
         );
       }
       // Development/test-only references remain available for deterministic
@@ -122,6 +129,7 @@ export class CollectibleMarketResearchService {
         stagingReferenceObservations(identity).map((item) =>
           classifyObservation(identity, item),
         ),
+        collected.reference,
       );
     }
     const observations = collected.observations.map((item) =>
@@ -133,6 +141,7 @@ export class CollectibleMarketResearchService {
       identityHash,
       requestId,
       observations,
+      collected.reference,
     );
   }
 
@@ -142,9 +151,10 @@ export class CollectibleMarketResearchService {
     identityHash: string,
     requestId: string,
     observations: MatchedObservation[],
+    reference?: ProviderCollectionResult['reference'],
   ) {
     const now = new Date();
-    const aggregate = aggregateSnapshot(observations, now);
+    const aggregate = aggregateSnapshot(observations, now, undefined, reference);
     const created = await this.db.submissionMarketResearch.create({
       data: {
         id: randomUUID(),
@@ -246,23 +256,46 @@ export class CollectibleMarketResearchService {
     try {
       let selectedId =
         providerId && /^\d+$/.test(providerId) ? providerId : null;
+      if (!selectedId && reference?.normalizedUrl && provider.resolveReferenceUrl) {
+        selectedId = await provider.resolveReferenceUrl(reference.normalizedUrl);
+      }
       if (!selectedId) {
         const candidates = await provider.searchProducts(marketIdentity);
         const exact = candidates.filter(
           (candidate) => candidate.matchQuality === 'EXACT',
         );
-        if (exact.length !== 1) return { observations: [] };
+        if (exact.length !== 1)
+          return {
+            observations: [],
+            reference: referenceProjection(reference),
+          };
         selectedId = exact[0]!.providerProductId;
       }
       const providerRows = await provider.fetchObservations(
         marketIdentity,
         selectedId,
       );
-      return { observations: providerRows.map(providerObservationToResearch) };
+      return {
+        observations: providerRows.map((item) => ({
+          ...providerObservationToResearch(item),
+          ...(reference?.normalizedUrl
+            ? { externalUrl: reference.normalizedUrl }
+            : {}),
+        })),
+        reference: reference
+          ? (() => {
+              const projection = referenceProjection(reference);
+              return projection
+                ? { ...projection, providerReferenceId: selectedId }
+                : undefined;
+            })()
+          : undefined,
+      };
     } catch (error) {
       return {
         observations: null,
         reason: providerFailureReason(error),
+        reference: referenceProjection(reference),
       };
     }
   }
@@ -678,6 +711,7 @@ export class CollectibleMarketResearchService {
               submissionResearchId: research.id,
               submissionObservationId: observation.id,
               identityHash: research.identityHash,
+              originalUrl: customerReferenceFromMetadata(submission.declaredMetadata)?.originalUrl ?? null,
             } as Prisma.InputJsonValue,
           },
         }));
@@ -722,6 +756,7 @@ export class CollectibleMarketResearchService {
     identityHash: string,
     requestId: string,
     reason: string,
+    reference?: ProviderCollectionResult['reference'],
   ) {
     const now = new Date();
     const created = await this.db.submissionMarketResearch.create({
@@ -745,6 +780,14 @@ export class CollectibleMarketResearchService {
           exactCompCount: 0,
           strongCompCount: 0,
           rejectedCompCount: 0,
+          ...(reference
+            ? {
+                reference: {
+                  ...reference,
+                  matchStatus: 'PROVIDER_UNAVAILABLE',
+                },
+              }
+            : {}),
         } as Prisma.InputJsonValue,
         collectedAt: now,
         expiresAt: new Date(now.getTime() + 5 * 60_000),
@@ -845,7 +888,33 @@ function customerReference(metadata: Record<string, unknown>) {
       typeof reference.externalReferenceId === 'string'
         ? reference.externalReferenceId
         : null,
+    originalUrl:
+      typeof reference.originalUrl === 'string' ? reference.originalUrl : '',
+    normalizedUrl:
+      typeof reference.normalizedUrl === 'string' ? reference.normalizedUrl : '',
   };
+}
+
+function customerReferenceFromMetadata(value: Prisma.JsonValue | null | undefined) {
+  if (!isRecord(value)) return null;
+  const reference = value.customerReference;
+  if (!isRecord(reference)) return null;
+  return {
+    originalUrl: typeof reference.originalUrl === 'string' ? reference.originalUrl : null,
+  };
+}
+
+function referenceProjection(
+  reference: ReturnType<typeof customerReference>,
+) {
+  return reference
+    ? {
+        provider: 'PriceCharting',
+        providerReferenceId: reference.externalReferenceId,
+        originalUrl: reference.originalUrl || reference.normalizedUrl,
+        canonicalUrl: reference.normalizedUrl,
+      }
+    : undefined;
 }
 
 function providerFailureReason(error: unknown) {
@@ -1008,6 +1077,7 @@ function aggregateSnapshot(
   observations: MatchedObservation[],
   now: Date,
   fallbackReferenceImageUrl?: string,
+  reference?: ProviderCollectionResult['reference'],
 ) {
   const exactSales = observations.filter(
     (o) =>
@@ -1088,8 +1158,28 @@ function aggregateSnapshot(
         fallbackReferenceImageUrl ??
         null,
       updatedAt: now.toISOString(),
+      ...(reference
+        ? {
+            reference: {
+              provider: reference.provider,
+              providerReferenceId: reference.providerReferenceId,
+              originalUrl: reference.originalUrl,
+              canonicalUrl: reference.canonicalUrl,
+              matchStatus: referenceMatchStatus(observations),
+            },
+          }
+        : {}),
     },
   };
+}
+
+function referenceMatchStatus(observations: MatchedObservation[]) {
+  if (observations.some((item) => item.matchQuality === 'EXACT'))
+    return 'VERIFIED_MATCH';
+  if (observations.some((item) => item.matchQuality === 'STRONG'))
+    return 'NEEDS_REVIEW';
+  if (observations.length) return 'MISMATCH';
+  return 'UNABLE_TO_VERIFY';
 }
 function stagingReferenceObservations(identity: Identity): Observation[] {
   const key = normalize(`${identity.name} ${identity.cardNumber ?? ''}`);

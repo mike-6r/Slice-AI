@@ -91,6 +91,11 @@ export const mockRepositories: AppRepositories = {
     async extendPreSale() { throw new Error("Pre-Sale requires the API service."); },
     async cancelPreSale() { throw new Error("Pre-Sale requires the API service."); },
     async finalizePreSale() { throw new Error("Pre-Sale requires the API service."); },
+    async linkMarketReference() { throw new Error("Market references require the API service."); },
+    async forceLinkMarketReference() { throw new Error("Market references require the API service."); },
+    async rerunMarketReference() { throw new Error("Market references require the API service."); },
+    async removePreferredMarketReference() { throw new Error("Market references require the API service."); },
+    async markMarketReferenceReview() { throw new Error("Market references require the API service."); },
     async getOverview() {
       return {
         users: { active: 0 },

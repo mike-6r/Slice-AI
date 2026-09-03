@@ -622,6 +622,7 @@ export interface CreateSubmissionDraft {
 export interface CustomerReference {
   provider: string;
   externalReferenceId: string | null;
+  originalUrl?: string;
   normalizedUrl: string;
   originalTitle: string | null;
   imageUrl?: string | null;

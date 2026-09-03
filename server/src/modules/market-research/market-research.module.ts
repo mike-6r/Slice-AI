@@ -11,6 +11,6 @@ import { ProvidersModule } from '../providers/providers.module';
   imports: [AuthModule, AccessControlModule, MarketModule, ProvidersModule],
   controllers: [TrustedReferenceImportController],
   providers: [CollectibleMarketResearchService, TrustedReferenceImportService],
-  exports: [CollectibleMarketResearchService],
+  exports: [CollectibleMarketResearchService, TrustedReferenceImportService],
 })
 export class MarketResearchModule {}

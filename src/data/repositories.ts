@@ -1837,6 +1837,33 @@ export type AssetOperationsBoardResponse = {
   };
 };
 
+export type AdminMarketReference = {
+  id: string;
+  provider: string;
+  providerReferenceId: string;
+  originalUrl: string | null;
+  canonicalUrl: string | null;
+  matchStatus: "LINKED" | "VERIFIED MATCH" | "NEEDS REVIEW" | "MISMATCH" | "PROVIDER UNAVAILABLE" | "STALE" | "NOT LINKED";
+  matchReasons: string[];
+  fetchStatus: "AVAILABLE" | "UNAVAILABLE" | "NOT_CHECKED";
+  currentObservation: { valueMinor: string; currency: string; observedAt: string } | null;
+  sourceCurrency: string | null;
+  lastCheckedAt: string | null;
+  freshness: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE";
+  historicalObservationCount: number;
+  graphSeries: Array<{ observedAt: string; valueMinor: string; currency: string }>;
+  availableCommands: {
+    openSource: boolean;
+    replaceReference: boolean;
+    rerunMarketCheck: boolean;
+    refreshMarketData: boolean;
+    removePreferredReference: boolean;
+    markNeedsReview: boolean;
+    setPreferredReference: boolean;
+    forceLinkReference: boolean;
+  };
+};
+
 export type AdminCollectibleDetail = {
   id: string;
   publicId: string;
@@ -1900,6 +1927,19 @@ export type AdminCollectibleDetail = {
         imageUrl?: string;
         observedAt: string;
       } | null;
+    };
+    marketData: {
+      preferredReference: AdminMarketReference | null;
+      references: AdminMarketReference[];
+      availableCommands: {
+        linkReference: boolean;
+        replaceReference: boolean;
+        rerunMarketCheck: boolean;
+        refreshMarketData: boolean;
+        removePreferredReference: boolean;
+        markNeedsReview: boolean;
+        forceLinkReference: boolean;
+      };
     };
   };
   ownership: {
@@ -2659,6 +2699,11 @@ export interface AdminRepository {
     queued: number;
     cooldownUntil: string | null;
   }>;
+  linkMarketReference(id: string, input: { url: string; reason?: string }): Promise<unknown>;
+  forceLinkMarketReference(id: string, input: { url: string; reason: string; confirmation: "FORCE_LINK_MARKET_REFERENCE"; assetId: string }): Promise<unknown>;
+  rerunMarketReference(id: string): Promise<unknown>;
+  removePreferredMarketReference(id: string, reason: string): Promise<unknown>;
+  markMarketReferenceReview(id: string, reason: string): Promise<unknown>;
   proposeOwnershipSupply(
     id: string,
     input: { policyCode: string; totalUnits: string; reason: string },

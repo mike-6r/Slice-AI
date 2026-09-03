@@ -381,6 +381,14 @@ const intakeLocationCommand = z
     incidentReference: z.string().trim().max(160).optional(),
   })
   .strict();
+const marketReferenceInput = z
+  .object({
+    url: z.string().trim().url().max(2048),
+    reason: z.string().trim().min(3).max(500).optional(),
+    confirmation: z.string().trim().max(120).optional(),
+    assetId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
 
 @Controller('admin')
 @UseGuards(AccessTokenGuard, PermissionGuard)
@@ -777,6 +785,77 @@ export class AdminController {
   @RequirePermission('integrations.manage')
   refreshMarketData(@Param('assetId') assetId: string) {
     return this.marketRefresh.refreshAsset(assetId);
+  }
+
+  @Post('assets/:id/market-references')
+  @RequirePermission('integrations.manage')
+  linkMarketReference(
+    @Param('id') assetId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.linkMarketReference(
+      request.actor!,
+      assetId,
+      this.parse(marketReferenceInput, body),
+      request.requestId ?? 'unknown',
+      false,
+    );
+  }
+
+  @Post('assets/:id/market-references/force-link')
+  @RequirePermission('integrations.manage')
+  forceLinkMarketReference(
+    @Param('id') assetId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.linkMarketReference(
+      request.actor!,
+      assetId,
+      this.parse(marketReferenceInput, body),
+      request.requestId ?? 'unknown',
+      true,
+    );
+  }
+
+  @Post('assets/:id/market-references/rerun')
+  @RequirePermission('integrations.manage')
+  rerunMarketReference(
+    @Param('id') assetId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.rerunMarketReference(request.actor!, assetId, request.requestId ?? 'unknown');
+  }
+
+  @Post('assets/:id/market-references/remove-preferred')
+  @RequirePermission('integrations.manage')
+  removePreferredMarketReference(
+    @Param('id') assetId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.removePreferredMarketReference(
+      request.actor!,
+      assetId,
+      this.parse(z.object({ reason: z.string().trim().min(3).max(500) }).strict(), body).reason,
+      request.requestId ?? 'unknown',
+    );
+  }
+
+  @Post('assets/:id/market-references/mark-review')
+  @RequirePermission('integrations.manage')
+  markMarketReferenceReview(
+    @Param('id') assetId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.admin.markMarketReferenceReview(
+      request.actor!,
+      assetId,
+      this.parse(z.object({ reason: z.string().trim().min(3).max(500) }).strict(), body).reason,
+      request.requestId ?? 'unknown',
+    );
   }
 
   @Get('search')

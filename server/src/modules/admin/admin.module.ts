@@ -12,9 +12,10 @@ import { OwnershipModule } from '../ownership/ownership.module';
 import { MarketModule } from '../market/market.module';
 import { FinanceModule } from '../finance/finance.module';
 import { ProvidersModule } from '../providers/providers.module';
+import { MarketResearchModule } from '../market-research/market-research.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, FinanceModule, ProvidersModule],
+  imports: [DatabaseModule, AuthModule, AccessControlModule, ConfigModule, SubmissionsModule, OwnershipModule, MarketModule, MarketResearchModule, FinanceModule, ProvidersModule],
   controllers: [AdminController, AdminAccountControlController],
   providers: [AdminService, AdminAccountControlService],
   exports: [AdminService],

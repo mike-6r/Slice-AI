@@ -120,6 +120,15 @@ export class MarketRefreshService {
     return { assetId, queued, cooldownUntil: queued ? cooldownUntil.toISOString() : null };
   }
 
+  /** Manual admin checks are synchronous from the operator's point of view:
+   * enqueue the durable job, then drain the due batch once so a successful
+   * provider response is visible without waiting for the background heartbeat. */
+  async refreshAssetNow(assetId: string, now = new Date()) {
+    const queued = await this.refreshAsset(assetId, now);
+    if (queued.queued) await this.runOnce(now, `market-admin-${process.pid}`);
+    return queued;
+  }
+
   private async claimJobs(now: Date, workerId: string) {
     const candidates = await this.db.marketRefreshJob.findMany({
       where: {

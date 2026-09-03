@@ -95,6 +95,8 @@ export function AdminAssetOperationsDetail({
   const [preSalePercent, setPreSalePercent] = useState("100");
   const [preSaleUnits, setPreSaleUnits] = useState("1000");
   const [preSalePrice, setPreSalePrice] = useState("");
+  const [marketReferenceUrl, setMarketReferenceUrl] = useState("");
+  const [marketReferenceReason, setMarketReferenceReason] = useState("");
   useEffect(() => {
     const setup = preSaleDetail.data;
     if (!setup || setup.status !== "NOT_CONFIGURED") return;
@@ -149,6 +151,18 @@ export function AdminAssetOperationsDetail({
       setValuePounds("");
       refresh();
     },
+  });
+  const linkMarketReference = useMutation({
+    mutationFn: () => services.repositories.admin.linkMarketReference(assetId, { url: marketReferenceUrl, reason: marketReferenceReason || undefined }),
+    onSuccess: () => { setMarketReferenceUrl(""); setMarketReferenceReason(""); refresh(); },
+  });
+  const forceLinkMarketReference = useMutation({
+    mutationFn: () => services.repositories.admin.forceLinkMarketReference(assetId, { url: marketReferenceUrl, reason: marketReferenceReason, confirmation: "FORCE_LINK_MARKET_REFERENCE", assetId }),
+    onSuccess: () => { setMarketReferenceUrl(""); setMarketReferenceReason(""); refresh(); },
+  });
+  const rerunMarketReference = useMutation({
+    mutationFn: () => services.repositories.admin.rerunMarketReference(assetId),
+    onSuccess: refresh,
   });
   const proposeSupply = useMutation({
     mutationFn: () =>
@@ -273,6 +287,9 @@ export function AdminAssetOperationsDetail({
     assetControl,
     preSaleCommand,
     configurePreSale,
+    linkMarketReference,
+    forceLinkMarketReference,
+    rerunMarketReference,
   ].find((mutation) => mutation.isError);
   return (
     <main className="admin-asset-workspace">
@@ -418,6 +435,14 @@ export function AdminAssetOperationsDetail({
               setConfidence={setConfidence}
               submit={() => valuation.mutate()}
               pending={valuation.isPending}
+              marketReferenceUrl={marketReferenceUrl}
+              marketReferenceReason={marketReferenceReason}
+              setMarketReferenceUrl={setMarketReferenceUrl}
+              setMarketReferenceReason={setMarketReferenceReason}
+              linkReference={() => linkMarketReference.mutate()}
+              forceLinkReference={() => forceLinkMarketReference.mutate()}
+              rerunReference={() => rerunMarketReference.mutate()}
+              marketPending={linkMarketReference.isPending || forceLinkMarketReference.isPending || rerunMarketReference.isPending}
             />
           ) : null}
           {selected === "ownership" ? (
@@ -986,6 +1011,14 @@ function Valuation({
   setConfidence,
   submit,
   pending,
+  marketReferenceUrl,
+  marketReferenceReason,
+  setMarketReferenceUrl,
+  setMarketReferenceReason,
+  linkReference,
+  forceLinkReference,
+  rerunReference,
+  marketPending,
 }: {
   item: Detail;
   valuePounds: string;
@@ -994,6 +1027,14 @@ function Valuation({
   setConfidence: (value: string) => void;
   submit: () => void;
   pending: boolean;
+  marketReferenceUrl: string;
+  marketReferenceReason: string;
+  setMarketReferenceUrl: (value: string) => void;
+  setMarketReferenceReason: (value: string) => void;
+  linkReference: () => void;
+  forceLinkReference: () => void;
+  rerunReference: () => void;
+  marketPending: boolean;
 }) {
   return (
     <div className="admin-asset-workspace__grid">
@@ -1088,6 +1129,59 @@ function Valuation({
           }
         />
       </Info>
+      <section className="admin-operation-card admin-operation-card--wide admin-market-reference-card">
+        <CardHeading eyebrow="External reference data" title="Market Data & References" />
+        <p className="admin-detail-muted">
+          Provider data is research context. It never changes the authoritative Slice valuation,
+          offering economics, ownership, or market listing automatically.
+        </p>
+        {item.valuation.marketData.preferredReference ? (
+          <div className="admin-market-reference-card__current">
+            <div>
+              <span className="admin-operations-eyebrow">Preferred reference</span>
+              <strong>{item.valuation.marketData.preferredReference.provider}</strong>
+              <span>{item.valuation.marketData.preferredReference.providerReferenceId}</span>
+            </div>
+            <div>
+              <span className="admin-operations-eyebrow">Status</span>
+              <strong>{item.valuation.marketData.preferredReference.matchStatus}</strong>
+              <span>
+                {item.valuation.marketData.preferredReference.currentObservation
+                  ? `${money(item.valuation.marketData.preferredReference.currentObservation.valueMinor, item.valuation.marketData.preferredReference.currentObservation.currency)} · ${item.valuation.marketData.preferredReference.sourceCurrency}`
+                  : "No provider value yet"}
+              </span>
+            </div>
+            <div>
+              <span className="admin-operations-eyebrow">History</span>
+              <strong>{item.valuation.marketData.preferredReference.historicalObservationCount} observations</strong>
+              <span>{item.valuation.marketData.preferredReference.freshness}</span>
+            </div>
+            {item.valuation.marketData.preferredReference.originalUrl ? (
+              <a href={item.valuation.marketData.preferredReference.originalUrl} target="_blank" rel="noreferrer">
+                Open source <ExternalLink aria-hidden="true" />
+              </a>
+            ) : null}
+          </div>
+        ) : (
+          <div className="admin-market-reference-card__empty">No preferred market reference is linked.</div>
+        )}
+        <div className="admin-custody-fields">
+          <label>
+            Reference URL
+            <input value={marketReferenceUrl} onChange={(event) => setMarketReferenceUrl(event.target.value)} placeholder="https://www.pricecharting.com/game/..." />
+          </label>
+          <label>
+            Reason / review note
+            <input value={marketReferenceReason} onChange={(event) => setMarketReferenceReason(event.target.value)} placeholder="Why this reference belongs to the asset" />
+          </label>
+        </div>
+        <div className="admin-operations-button-row">
+          <button type="button" className="admin-ops-button primary" disabled={!marketReferenceUrl.trim() || marketPending} onClick={linkReference}>Link reference <ArrowRight aria-hidden="true" /></button>
+          <button type="button" className="admin-ops-button" disabled={!marketReferenceUrl.trim() || marketReferenceReason.trim().length < 12 || marketPending} onClick={forceLinkReference}>Force link</button>
+          {item.valuation.marketData.preferredReference ? <button type="button" className="admin-ops-button" disabled={marketPending} onClick={rerunReference}><RefreshCw aria-hidden="true" /> Run market check</button> : null}
+        </div>
+        <p className="admin-detail-muted">Force link requires staff confirmation and only confirms the external record identity; it does not force a valuation.</p>
+      </section>
       <section className="admin-operation-card admin-operation-card--wide">
         <CardHeading eyebrow="Audit trail" title="Valuation history" />
         <HistoryRows

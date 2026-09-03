@@ -70,5 +70,7 @@ export interface MarketDataProvider {
     providerExternalId: string,
   ): Promise<ProviderObservation[]>;
   searchProducts?(identity: MarketIdentity): Promise<MarketProductCandidate[]>;
+  /** Resolve a trusted provider URL before discovery/search is attempted. */
+  resolveReferenceUrl?(url: string): Promise<string | null>;
   getProduct?(providerExternalId: string): Promise<PriceChartingProduct>;
 }

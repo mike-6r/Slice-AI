@@ -1,12 +1,14 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   Inject,
   Logger,
+  Optional,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IntakeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import type { Actor } from '../identity/auth/auth.service';
@@ -56,6 +58,8 @@ import {
   stageLabel,
 } from './admin-intake-projections';
 import { isExplicitPikachuOwnerDemoSubmission } from '../lifecycle/domain/staging-demo-physical.policy';
+import { MarketRefreshService } from '../market/market-refresh.service';
+import { TrustedReferenceImportService } from '../market-research/trusted-reference-import.service';
 
 type IntakeLocationManagementInput = {
   displayName: string;
@@ -97,6 +101,13 @@ type IntakeLocationManagementInput = {
   expectedResumeAt?: string | null;
   reason: string;
   expectedUpdatedAt?: string;
+};
+
+type MarketReferenceCommandInput = {
+  url: string;
+  reason?: string;
+  confirmation?: string;
+  assetId?: string;
 };
 
 type IntakeLocationCommand =
@@ -194,7 +205,164 @@ export class AdminService {
     private readonly ownershipPolicy: OwnershipPolicyService,
     private readonly platformRevenue: PlatformRevenueSettlementService,
     private readonly withdrawalPreflight: WithdrawalPreflightService,
+    @Optional() private readonly marketRefresh?: MarketRefreshService,
+    @Optional() private readonly referenceImports?: TrustedReferenceImportService,
   ) {}
+
+  async linkMarketReference(
+    actor: Actor,
+    assetId: string,
+    input: MarketReferenceCommandInput,
+    requestId: string,
+    force: boolean,
+  ) {
+    await this.authorization.authorize(actor, 'integrations.manage');
+    if (input.assetId && input.assetId !== assetId)
+      throw new BadRequestException({ code: 'ASSET_ID_MISMATCH' });
+    if (force && (!input.reason || input.reason.length < 12 || input.confirmation !== 'FORCE_LINK_MARKET_REFERENCE'))
+      throw new BadRequestException({
+        code: 'FORCE_LINK_CONFIRMATION_REQUIRED',
+        message: 'Force linking requires a reason and the exact confirmation text.',
+      });
+    const asset = await this.db.asset.findUnique({
+      where: { id: assetId },
+      include: { category: true, collectibleSet: true, gradeScaleEntry: { include: { company: true } } },
+    });
+    if (!asset) throw new NotFoundException({ code: 'ASSET_NOT_FOUND' });
+    if (!this.referenceImports || !this.marketRefresh)
+      throw new ConflictException({ code: 'MARKET_REFERENCE_UNAVAILABLE' });
+    const imported = await this.referenceImports.identifyLive(input.url);
+    const reference = imported.customerReference;
+    if (!reference)
+      throw new BadRequestException({
+        code: 'MARKET_REFERENCE_UNSUPPORTED',
+        message: imported.message,
+      });
+    const providerCode = reference.provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    const providerExternalId = reference.externalReferenceId ?? reference.normalizedUrl;
+    const identityHash = marketAssetIdentityHash(asset);
+    const previous = await this.db.marketProviderMapping.findUnique({
+      where: { assetId_providerCode: { assetId, providerCode } },
+    });
+    const collision = await this.db.marketProviderMapping.findUnique({
+      where: { providerCode_providerExternalId: { providerCode, providerExternalId } },
+    });
+    if (collision && collision.assetId !== assetId)
+      throw new ConflictException({
+        code: 'MARKET_REFERENCE_ALREADY_LINKED',
+        message: 'That provider reference is already linked to another canonical asset.',
+      });
+    const status = force
+      ? 'STAFF_CONFIRMED'
+      : imported.status === 'MATCH_FOUND'
+        ? 'VERIFIED'
+        : 'NEEDS_REVIEW';
+    const now = new Date();
+    const mapping = await this.db.marketProviderMapping.upsert({
+      where: { assetId_providerCode: { assetId, providerCode } },
+      create: {
+        id: randomUUID(),
+        assetId,
+        providerCode,
+        providerExternalId,
+        providerUrl: reference.normalizedUrl,
+        identityHash,
+        status,
+        matchQuality: imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
+        lastVerifiedAt: imported.status === 'MATCH_FOUND' || force ? now : null,
+        nextRefreshAt: now,
+      },
+      update: {
+        providerExternalId,
+        providerUrl: reference.normalizedUrl,
+        identityHash,
+        status,
+        matchQuality: imported.status === 'MATCH_FOUND' || force ? 'EXACT' : 'STRONG',
+        lastVerifiedAt: imported.status === 'MATCH_FOUND' || force ? now : null,
+        nextRefreshAt: now,
+        lastFailureAt: null,
+        lastFailureCode: null,
+      },
+    });
+    await this.db.auditEvent.create({
+      data: {
+        id: randomUUID(),
+        actorUserId: actor.userId,
+        actorType: 'USER',
+        action: force ? 'ADMIN_MARKET_REFERENCE_FORCE_LINKED' : previous ? 'ADMIN_MARKET_REFERENCE_REPLACED' : 'ADMIN_MARKET_REFERENCE_LINKED',
+        resourceType: 'asset',
+        resourceId: assetId,
+        requestId,
+        sessionId: actor.sessionId,
+        result: 'SUCCESS',
+        metadata: {
+          provider: providerCode,
+          providerReferenceId: providerExternalId,
+          originalUrl: reference.originalUrl,
+          canonicalUrl: reference.normalizedUrl,
+          reason: input.reason ?? 'Reference linked after provider identity check.',
+          forced: force,
+          before: previous ? { provider: previous.providerCode, providerReferenceId: previous.providerExternalId, status: previous.status } : null,
+          after: { provider: mapping.providerCode, providerReferenceId: mapping.providerExternalId, status: mapping.status },
+        } as Prisma.InputJsonValue,
+        createdAt: now,
+      },
+    });
+    const refresh = asset.status === 'PUBLISHED'
+      ? await this.marketRefresh.refreshAssetNow(assetId, now)
+      : { assetId, queued: 0, cooldownUntil: null };
+    return {
+      assetId,
+      mappingId: mapping.id,
+      provider: providerCode,
+      providerReferenceId: providerExternalId,
+      originalUrl: reference.originalUrl,
+      canonicalUrl: reference.normalizedUrl,
+      matchStatus: force ? 'VERIFIED MATCH' : status === 'VERIFIED' ? 'VERIFIED MATCH' : 'NEEDS REVIEW',
+      fetchStatus: 'QUEUED',
+      refresh,
+      authoritativeValuationChanged: false,
+    };
+  }
+
+  async rerunMarketReference(actor: Actor, assetId: string, requestId: string) {
+    await this.authorization.authorize(actor, 'integrations.manage');
+    if (!this.marketRefresh) throw new ConflictException({ code: 'MARKET_REFRESH_UNAVAILABLE' });
+    const refresh = await this.marketRefresh.refreshAssetNow(assetId);
+    await this.db.auditEvent.create({
+      data: {
+        id: randomUUID(), actorUserId: actor.userId, actorType: 'USER',
+        action: 'MARKET_CHECK_STARTED', resourceType: 'asset', resourceId: assetId,
+        requestId, sessionId: actor.sessionId, result: 'SUCCESS',
+        metadata: refresh as unknown as Prisma.InputJsonValue, createdAt: new Date(),
+      },
+    });
+    return { assetId, status: refresh.queued ? 'QUEUED' : 'ALREADY_QUEUED', refresh };
+  }
+
+  async removePreferredMarketReference(actor: Actor, assetId: string, reason: string, requestId: string) {
+    await this.authorization.authorize(actor, 'integrations.manage');
+    const mapping = await this.db.marketProviderMapping.findFirst({ where: { assetId, status: { not: 'REMOVED' } }, orderBy: { updatedAt: 'desc' } });
+    if (!mapping) throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
+    await this.db.marketProviderMapping.update({ where: { id: mapping.id }, data: { status: 'REMOVED', nextRefreshAt: null } });
+    await this.auditMarketCommand(actor, assetId, 'MARKET_REFERENCE_REMOVED_FROM_PREFERRED_USE', requestId, { reason, mappingId: mapping.id });
+    return { assetId, status: 'NOT_LINKED', authoritativeValuationChanged: false };
+  }
+
+  async markMarketReferenceReview(actor: Actor, assetId: string, reason: string, requestId: string) {
+    await this.authorization.authorize(actor, 'integrations.manage');
+    const mapping = await this.db.marketProviderMapping.findFirst({ where: { assetId, status: { not: 'REMOVED' } }, orderBy: { updatedAt: 'desc' } });
+    if (!mapping) throw new NotFoundException({ code: 'MARKET_REFERENCE_NOT_FOUND' });
+    await this.db.marketProviderMapping.update({ where: { id: mapping.id }, data: { status: 'NEEDS_REVIEW', matchQuality: 'STRONG' } });
+    await this.auditMarketCommand(actor, assetId, 'MARKET_REFERENCE_REQUIRES_REVIEW', requestId, { reason, mappingId: mapping.id });
+    return { assetId, status: 'NEEDS REVIEW', authoritativeValuationChanged: false };
+  }
+
+  private auditMarketCommand(actor: Actor, assetId: string, action: string, requestId: string, metadata: Record<string, unknown>) {
+    return this.db.auditEvent.create({
+      data: { id: randomUUID(), actorUserId: actor.userId, actorType: 'USER', action, resourceType: 'asset', resourceId: assetId, requestId, sessionId: actor.sessionId, result: 'SUCCESS', metadata: metadata as Prisma.InputJsonValue, createdAt: new Date() },
+    });
+  }
 
   async setCollectorFeatured(
     actor: Actor,
@@ -10178,18 +10346,15 @@ export class AdminService {
         valuationEvidence: { orderBy: { observedAt: 'desc' }, take: 100 },
         marketSnapshots: { orderBy: { asOf: 'desc' }, take: 50 },
         marketProviderMappings: {
-          where: { providerCode: 'PRICECHARTING' },
           orderBy: { updatedAt: 'desc' },
-          take: 1,
+          take: 50,
         },
         marketObservations: {
           where: {
-            providerCode: 'PRICECHARTING',
-            observationType: 'PRICE_GUIDE',
             included: true,
           },
           orderBy: { observedAt: 'desc' },
-          take: 50,
+          take: 500,
         },
         custodyRecord: {
           include: { events: { orderBy: { occurredAt: 'asc' } } },
@@ -10300,6 +10465,10 @@ export class AdminService {
     const snapshot = asset.marketSnapshots[0] ?? null;
     const mapping = asset.marketProviderMappings[0] ?? null;
     const marketObservation = asset.marketObservations[0] ?? null;
+    const marketData = buildAdminMarketData(
+      asset.marketProviderMappings,
+      asset.marketObservations,
+    );
     const activeDecision =
       asset.valuationDecisions.find((item) => item.status === 'ACTIVE') ?? null;
     const owner = approved?.owner ?? null;
@@ -10678,6 +10847,7 @@ export class AdminService {
           status: item.status,
         })),
         marketReference: { currentListing: listing, recentSale: sale },
+        marketData,
       },
       ownership: {
         totalUnits: asset.ownershipSupply?.totalUnits.toString() ?? null,
@@ -11076,6 +11246,141 @@ function parseSourceRef(sourceRef: string | null) {
   }
 }
 
+type AdminMarketMapping = {
+  id: string;
+  providerCode: string;
+  providerExternalId: string;
+  providerUrl: string | null;
+  status: string;
+  matchQuality: string;
+  lastVerifiedAt: Date | null;
+  lastSuccessAt: Date | null;
+  lastFailureAt: Date | null;
+  lastFailureCode: string | null;
+  nextRefreshAt: Date | null;
+  currentPriceMinor: bigint | null;
+  currentCurrency: string | null;
+  currentObservedAt: Date | null;
+  referenceHistoryStartedAt: Date | null;
+  referenceMovement24hBps: number | null;
+  referenceMovement7dBps: number | null;
+  referenceMovement30dBps: number | null;
+  referenceMovement90dBps: number | null;
+  referenceMovement1yBps: number | null;
+};
+type AdminMarketObservation = {
+  id: string;
+  mappingId: string | null;
+  providerCode: string;
+  providerExternalId: string;
+  observationType: string;
+  priceMinor: bigint;
+  currency: string;
+  grader: string | null;
+  grade: string | null;
+  title: string;
+  externalUrl: string | null;
+  occurredAt: Date | null;
+  observedAt: Date;
+  matchQuality: string;
+  included: boolean;
+  provenance: Prisma.JsonValue | null;
+};
+
+function buildAdminMarketData(
+  mappings: AdminMarketMapping[],
+  observations: AdminMarketObservation[],
+) {
+  const now = Date.now();
+  const activeMappings = mappings.filter((mapping) => mapping.status !== 'REMOVED');
+  const preferred =
+    activeMappings.find((mapping) => mapping.status === 'STAFF_CONFIRMED') ??
+    activeMappings.find((mapping) => mapping.status === 'VERIFIED') ??
+    activeMappings[0] ??
+    null;
+  const statusFor = (mapping: AdminMarketMapping) => {
+    if (mapping.status === 'REMOVED') return 'NOT LINKED';
+    if (mapping.lastFailureAt && (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt))
+      return 'PROVIDER UNAVAILABLE';
+    if (mapping.lastSuccessAt && now - mapping.lastSuccessAt.getTime() > 7 * 86_400_000)
+      return 'STALE';
+    if (mapping.status === 'NEEDS_REVIEW' || mapping.matchQuality === 'STRONG')
+      return 'NEEDS REVIEW';
+    if (mapping.status === 'VERIFIED' || mapping.status === 'STAFF_CONFIRMED' || mapping.matchQuality === 'EXACT')
+      return 'VERIFIED MATCH';
+    return 'LINKED';
+  };
+  const toReference = (mapping: AdminMarketMapping) => {
+    const related = observations
+      .filter((item) => item.mappingId === mapping.id || (item.providerCode === mapping.providerCode && item.providerExternalId === mapping.providerExternalId))
+      .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime());
+    const originalUrl = related
+      .map((item) => isRecord(item.provenance) && typeof item.provenance.originalUrl === 'string' ? item.provenance.originalUrl : null)
+      .find((value): value is string => Boolean(value)) ?? mapping.providerUrl;
+    const seriesCurrency = mapping.currentCurrency ?? related[0]?.currency ?? null;
+    const graphSeries = related
+      .filter((item) => item.observationType === 'PRICE_GUIDE' && item.currency === seriesCurrency)
+      .sort((left, right) => left.observedAt.getTime() - right.observedAt.getTime())
+      .map((item) => ({ observedAt: item.observedAt.toISOString(), valueMinor: item.priceMinor.toString(), currency: item.currency }));
+    const currentObservation = mapping.currentPriceMinor !== null && mapping.currentCurrency && mapping.currentObservedAt
+      ? { valueMinor: mapping.currentPriceMinor.toString(), currency: mapping.currentCurrency, observedAt: mapping.currentObservedAt.toISOString() }
+      : related[0]
+        ? { valueMinor: related[0].priceMinor.toString(), currency: related[0].currency, observedAt: related[0].observedAt.toISOString() }
+        : null;
+    return {
+      id: mapping.id,
+      provider: mapping.providerCode,
+      providerReferenceId: mapping.providerExternalId,
+      originalUrl,
+      canonicalUrl: mapping.providerUrl,
+      matchStatus: statusFor(mapping),
+      matchReasons: mapping.status === 'NEEDS_REVIEW' ? ['Provider identity needs staff confirmation.'] : [],
+      fetchStatus: mapping.lastFailureAt && (!mapping.lastSuccessAt || mapping.lastFailureAt > mapping.lastSuccessAt) ? 'UNAVAILABLE' : currentObservation ? 'AVAILABLE' : 'NOT_CHECKED',
+      currentObservation,
+      sourceCurrency: mapping.currentCurrency ?? related[0]?.currency ?? null,
+      lastCheckedAt: mapping.lastSuccessAt?.toISOString() ?? mapping.lastFailureAt?.toISOString() ?? null,
+      freshness: mapping.lastSuccessAt ? freshnessLabel(now, mapping.lastSuccessAt) : 'UNAVAILABLE',
+      historicalObservationCount: graphSeries.length,
+      graphSeries,
+      availableCommands: {
+        openSource: Boolean(mapping.providerUrl),
+        replaceReference: true,
+        rerunMarketCheck: true,
+        refreshMarketData: true,
+        removePreferredReference: preferred?.id === mapping.id,
+        markNeedsReview: true,
+        setPreferredReference: preferred?.id !== mapping.id,
+        forceLinkReference: true,
+      },
+    };
+  };
+  return {
+    preferredReference: preferred ? toReference(preferred) : null,
+    references: mappings.map(toReference),
+    availableCommands: {
+      linkReference: true,
+      replaceReference: Boolean(preferred),
+      rerunMarketCheck: Boolean(preferred),
+      refreshMarketData: Boolean(preferred),
+      removePreferredReference: Boolean(preferred),
+      markNeedsReview: Boolean(preferred),
+      forceLinkReference: true,
+    },
+  };
+}
+
+function freshnessLabel(now: number, lastSuccessAt: Date) {
+  const age = now - lastSuccessAt.getTime();
+  if (age <= 24 * 60 * 60 * 1000) return 'FRESH';
+  if (age <= 72 * 60 * 60 * 1000) return 'AGING';
+  if (age <= 7 * 24 * 60 * 60 * 1000) return 'STALE';
+  return 'UNAVAILABLE';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 function readinessCodes(value: unknown): string[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   const codes = (value as { blockingCodes?: unknown }).blockingCodes;
@@ -11245,4 +11550,31 @@ function readable(value: string) {
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function marketAssetIdentityHash(asset: {
+  category: { slug: string };
+  year: number | null;
+  manufacturer: string | null;
+  collectibleSet: { slug: string } | null;
+  cardNumber: string | null;
+  title: string;
+  edition: string | null;
+  gradeScaleEntry: { company: { code: string }; grade: unknown } | null;
+}) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        category: asset.category.slug,
+        year: asset.year,
+        manufacturer: asset.manufacturer,
+        set: asset.collectibleSet?.slug ?? null,
+        cardNumber: asset.cardNumber,
+        title: asset.title,
+        variant: asset.edition,
+        grader: asset.gradeScaleEntry?.company.code ?? null,
+        grade: asset.gradeScaleEntry?.grade?.toString?.() ?? null,
+      }),
+    )
+    .digest('hex');
 }

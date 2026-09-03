@@ -13,6 +13,7 @@ type ImportedIdentity = Record<string, string>;
 type CustomerReference = {
   provider: string;
   externalReferenceId: string | null;
+  originalUrl: string;
   normalizedUrl: string;
   originalTitle: string | null;
   imageUrl?: string | null;
@@ -125,6 +126,7 @@ export class TrustedReferenceImportService {
   ) {}
 
   identify(rawUrl: string): ReferenceImport {
+    const originalUrl = rawUrl.trim();
     const parsed = parseTrustedUrl(rawUrl);
     if (!parsed) {
       return {
@@ -168,6 +170,7 @@ export class TrustedReferenceImportService {
           ? {
               provider: 'PriceCharting',
               externalReferenceId: providerProductId,
+              originalUrl,
               normalizedUrl: parsed.toString(),
               originalTitle: partial
                 ? [
@@ -197,6 +200,7 @@ export class TrustedReferenceImportService {
       customerReference: {
         provider: 'PriceCharting',
         externalReferenceId: providerProductId,
+        originalUrl,
         normalizedUrl,
         originalTitle,
         importedAt: new Date().toISOString(),
@@ -208,18 +212,21 @@ export class TrustedReferenceImportService {
 
   async identifyLive(rawUrl: string): Promise<ReferenceImport> {
     const imported = this.identify(rawUrl);
-    if (
-      imported.provider !== 'PriceCharting' ||
-      !imported.customerReference ||
-      !/^\d+$/.test(imported.customerReference.externalReferenceId ?? '')
-    )
+    if (imported.provider !== 'PriceCharting' || !imported.customerReference)
       return imported;
     const provider = this.providers?.get('PRICECHARTING');
     if (!provider?.getProduct || !(await provider.health()).configured)
       return imported;
     try {
+      const importedId = imported.customerReference.externalReferenceId;
+      const resolvedId =
+        (importedId && /^\d+$/.test(importedId) ? importedId : null) ??
+        (provider.resolveReferenceUrl
+          ? await provider.resolveReferenceUrl(imported.customerReference.normalizedUrl)
+          : null);
+      if (!resolvedId) return imported;
       const product = await provider.getProduct(
-        imported.customerReference.externalReferenceId!,
+        resolvedId,
       );
       const identity = {
         ...imported.identity,
@@ -235,6 +242,7 @@ export class TrustedReferenceImportService {
         identity,
         customerReference: {
           ...imported.customerReference,
+          externalReferenceId: resolvedId,
           originalTitle:
             product.title || imported.customerReference.originalTitle,
           ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
