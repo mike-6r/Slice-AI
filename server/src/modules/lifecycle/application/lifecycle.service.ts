@@ -1354,7 +1354,7 @@ export class LifecycleService {
     actor: Actor,
     input: {
       submissionId: string;
-      assetId: string;
+      assetId?: string;
       fixtureKey: string;
       reason: string;
       confirmation: string;
@@ -1392,7 +1392,6 @@ export class LifecycleService {
       requestId,
       key,
       async (db, audit) => {
-        await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${input.assetId} FOR UPDATE`;
         const submission = await db.assetSubmission.findUnique({
           where: { id: input.submissionId },
           include: {
@@ -1416,7 +1415,7 @@ export class LifecycleService {
         if (
           !submission ||
           !asset ||
-          submission.assetId !== input.assetId ||
+          (input.assetId && submission.assetId !== input.assetId) ||
           submission.status !== 'APPROVED'
         )
           throw new ConflictException({
@@ -1424,6 +1423,9 @@ export class LifecycleService {
             message:
               'Demo intake requires the existing approved canonical asset.',
           });
+        // Lock the canonical asset selected by the approved submission. The
+        // client may omit assetId because table projections can be stale.
+        await db.$queryRaw`SELECT id FROM "Asset" WHERE id = ${asset.id} FOR UPDATE`;
         if (isProtectedControlledAsset(asset))
           throw new ForbiddenException({
             code: 'STAGING_DEMO_CONTROLLED_ASSET_FORBIDDEN',

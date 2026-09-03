@@ -89,7 +89,7 @@ export function AdminAssetOperationsDetail({
   const [pendingControl, setPendingControl] = useState<PendingControl | null>(null);
   const [controlReason, setControlReason] = useState("");
   const [controlConfirmation, setControlConfirmation] = useState("");
-  const [preSaleReason, setPreSaleReason] = useState("");
+  const [preSaleReason, setPreSaleReason] = useState("Confirming provisional Pre-Sale terms from Collector submission.");
   const [preSaleDeadline, setPreSaleDeadline] = useState("");
   const [preSaleEstimate, setPreSaleEstimate] = useState("");
   const [preSalePercent, setPreSalePercent] = useState("100");
@@ -2382,6 +2382,7 @@ function AdminPreSalePanel({
   pending: boolean;
 }) {
   const status = detail?.status ?? "NOT_CONFIGURED";
+  const reasonTooShort = reason.trim().length > 0 && reason.trim().length < 8;
   const estimateMinor = detail?.collectorEstimateMinor ?? (isValidPounds(estimate) ? poundsToMinor(estimate) : null);
   const unitCount = Number(units || detail?.totalSupply || 0);
   const percentage = Number(percent || (detail?.offeredPercentageBps ? detail.offeredPercentageBps / 100 : 0));
@@ -2431,12 +2432,15 @@ function AdminPreSalePanel({
         </>
       )}
       {error ? <p className="admin-presale-panel__error" role="alert">{mutationErrorMessage(error)}</p> : null}
-      <label className="admin-form-field">Reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Confirming provisional Pre-Sale terms from Collector submission." /></label>
+      <label className="admin-form-field">Reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Confirming provisional Pre-Sale terms from Collector submission." aria-describedby="admin-presale-reason-help" /></label>
+      <p id="admin-presale-reason-help" className={reasonTooShort ? "admin-presale-panel__field-hint is-error" : "admin-presale-panel__field-hint"}>
+        {reasonTooShort ? "Add at least 8 characters so the audit record explains this change." : "Use a short audit note explaining why these provisional terms are being saved."}
+      </p>
       {detail && (status === "ACTIVE" || status === "PAUSED") ? (
         <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
       ) : null}
       <div className="admin-presale-panel__actions">
-        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={!isPreSaleConfigureButtonEnabled({ canConfigure, pending, estimate, percent, units, price, reason })} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
+        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={!isPreSaleConfigureButtonEnabled({ canConfigure, pending, estimate, percent, units, price, reason })} title={reasonTooShort ? "Enter an audit reason of at least 8 characters." : !canConfigure ? "This asset is not currently in the Pre-Sale setup stage." : undefined} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
         {detail?.id && status === "DRAFT" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Launch Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
         {status === "ACTIVE" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("pause")}><PauseCircle aria-hidden="true" /> Pause</button> : null}
         {status === "PAUSED" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("resume")}><PlayCircle aria-hidden="true" /> Resume</button> : null}

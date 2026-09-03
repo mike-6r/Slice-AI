@@ -4994,7 +4994,6 @@ const adminRepository = (client: ApiClient): AdminRepository => {
             method: "POST",
             headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
             body: JSON.stringify({
-              assetId: input.assetId,
               fixtureKey: "PIKACHU_OWNER_DEMO_2026",
               confirmation: "COMPLETE_STAGING_DEMO_INTAKE",
               reason: input.reason,

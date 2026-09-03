@@ -2417,7 +2417,7 @@ export interface AdminRepository {
   ): Promise<{ intakeId: string; status: string; confirmedAt: string }>;
   completeStagingDemoPhysicalIntake(
     submissionId: string,
-    input: { assetId: string; reason: string },
+    input: { assetId?: string; reason: string },
   ): Promise<{ demoIntakeId: string; status: string; replayed: boolean }>;
   startIntakeVerification(
     id: string,

@@ -108,7 +108,9 @@ const controlledBetaPhysicalBypass = z
   .strict();
 const stagingDemoPhysicalIntake = z
   .object({
-    assetId: z.string().trim().min(1).max(128),
+    // The approved submission is authoritative for its canonical asset.
+    // Older admin projections may not include the joined asset id.
+    assetId: z.string().trim().min(1).max(128).optional(),
     fixtureKey: z.literal(STAGING_DEMO_PIKACHU_FIXTURE_KEY),
     reason: z.string().trim().min(12).max(280),
     confirmation: z.literal(STAGING_DEMO_PHYSICAL_CONFIRMATION),
