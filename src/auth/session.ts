@@ -96,6 +96,23 @@ async function acquireRefreshLease() {
   return () => undefined;
 }
 
+/**
+ * Serialize refresh-token rotation across tabs. Web Locks provides an atomic
+ * same-origin lock in supported browsers; the local-storage lease remains the
+ * compatibility fallback for older browsers and restricted environments.
+ */
+async function withRefreshLease<T>(work: () => Promise<T>) {
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    return navigator.locks.request(refreshLockKey, { mode: "exclusive" }, () => work());
+  }
+  const release = await acquireRefreshLease();
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
+
 function retryAfterSeconds(response: Response) {
   const value = response.headers.get("Retry-After");
   const seconds = value ? Number(value) : NaN;
@@ -141,17 +158,14 @@ export const session = {
     recordQaRefresh();
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), 8000);
-    let releaseLease: (() => void) | undefined;
-    refreshPromise = acquireRefreshLease()
-      .then((release) => {
-        releaseLease = release;
-        return fetch(new URL("/api/v1/auth/refresh", origin), {
-          method: "POST",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-          signal: controller.signal,
-        });
-      })
+    refreshPromise = withRefreshLease(() =>
+      fetch(new URL("/api/v1/auth/refresh", origin), {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      }),
+    )
       .then(async (response) => {
         if (response.ok) return response.json() as Promise<{ accessToken: string }>;
         if (response.status === 429) {
@@ -190,7 +204,6 @@ export const session = {
       })
       .finally(() => {
         globalThis.clearTimeout(timeout);
-        releaseLease?.();
         broadcastRefreshEvent("complete");
         refreshPromise = null;
       });

@@ -44,6 +44,39 @@ export const Route = createFileRoute("/operations/submissions")({
 
 type Decision = "CHANGES_REQUESTED" | "APPROVED" | "REJECTED";
 
+const DECISION_REASON_OPTIONS: Record<Decision, Array<{ value: string; label: string }>> = {
+  APPROVED: [
+    { value: "REVIEW_COMPLETE", label: "All required checks complete" },
+    { value: "IDENTITY_CONFIRMED", label: "Identity confirmed" },
+    { value: "EVIDENCE_CONFIRMED", label: "Evidence confirmed" },
+    { value: "READY_FOR_NEXT_STEP", label: "Ready for the next workflow step" },
+    { value: "OTHER", label: "Other approval basis" },
+  ],
+  CHANGES_REQUESTED: [
+    { value: "INCOMPLETE_EVIDENCE", label: "Incomplete evidence" },
+    { value: "IDENTITY_UNCLEAR", label: "Identity needs attention" },
+    { value: "UNSUPPORTED_COLLECTIBLE", label: "Unsupported collectible" },
+    { value: "DUPLICATE_SUBMISSION", label: "Possible duplicate" },
+    { value: "OTHER", label: "Other" },
+  ],
+  REJECTED: [
+    { value: "INCOMPLETE_EVIDENCE", label: "Incomplete evidence" },
+    { value: "IDENTITY_UNCLEAR", label: "Identity needs attention" },
+    { value: "UNSUPPORTED_COLLECTIBLE", label: "Unsupported collectible" },
+    { value: "DUPLICATE_SUBMISSION", label: "Possible duplicate" },
+    { value: "OTHER", label: "Other" },
+  ],
+};
+
+function openDecisionDialog(
+  value: Decision,
+  setReason: (reason: string) => void,
+  setDecision: (decision: Decision) => void,
+) {
+  setReason(DECISION_REASON_OPTIONS[value][0].value);
+  setDecision(value);
+}
+
 export function SubmissionOperationsPage() {
   const services = useAppServices();
   const session = useSession();
@@ -88,7 +121,7 @@ export function SubmissionOperationsPage() {
   const [certDesignation, setCertDesignation] = useState("");
   const [certProviderReference, setCertProviderReference] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [reason, setReason] = useState("INCOMPLETE_EVIDENCE");
+  const [reason, setReason] = useState("REVIEW_COMPLETE");
   const [requestedItems, setRequestedItems] = useState<string[]>(["Front image"]);
   const [message, setMessage] = useState("");
   const [internalDecisionNote, setInternalDecisionNote] = useState("");
@@ -481,7 +514,7 @@ export function SubmissionOperationsPage() {
               starting={claim.isPending}
               onStartReview={() => claim.mutate(selected)}
               onReviewEvidence={() => focusReviewStep("evidence")}
-              onDecision={setDecision}
+              onDecision={(value) => openDecisionDialog(value, setReason, setDecision)}
               error={claim.error}
             />
             {review.status === "APPROVED" ? (
@@ -496,7 +529,8 @@ export function SubmissionOperationsPage() {
             <ReviewOverview
               detail={review}
               canAssign={
-                (commandAllowed(review, "canAssignReviewer") || Boolean(review.reviewWorkspace?.canRelease)) &&
+                (commandAllowed(review, "canAssignReviewer") ||
+                  Boolean(review.reviewWorkspace?.canRelease)) &&
                 !staleReview
               }
               onAssign={() => {
@@ -618,7 +652,7 @@ export function SubmissionOperationsPage() {
               <ReviewSection title="Decision" detail={review} step="decision" number={6}>
                 <DecisionWorkspace
                   detail={review}
-                  onDecision={setDecision}
+                  onDecision={(value) => openDecisionDialog(value, setReason, setDecision)}
                   canApprove={commandAllowed(review, "canApprove") && !staleReview}
                   canRequestChanges={commandAllowed(review, "canRequestChanges") && !staleReview}
                   canReject={commandAllowed(review, "canReject") && !staleReview}
@@ -660,7 +694,7 @@ export function SubmissionOperationsPage() {
             }}
             onCanonicalize={() => canonicalize.mutate()}
             canonicalizing={canonicalize.isPending}
-            onDecision={setDecision}
+            onDecision={(value) => openDecisionDialog(value, setReason, setDecision)}
           />
         </div>
         {decision ? (
@@ -1401,7 +1435,12 @@ function ReviewOverview({
         <div className="admin-review-team-primary">
           <span>Primary reviewer</span>
           <strong>{workspace.reviewer?.displayName ?? "Unassigned"}</strong>
-          <button type="button" className="button-secondary" onClick={onAssign} disabled={!canAssign || assigning}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={onAssign}
+            disabled={!canAssign || assigning}
+          >
             {assigning ? "Assigning…" : "Assign reviewer"}
           </button>
         </div>
@@ -1426,14 +1465,21 @@ function ReviewOverview({
       <article className="admin-panel-card admin-review-overview-card">
         <div className="admin-review-card-heading">
           <h2>Review findings</h2>
-          <button type="button" className="admin-review-card-link" onClick={onAddFinding} disabled={!canAddFinding}>
+          <button
+            type="button"
+            className="admin-review-card-link"
+            onClick={onAddFinding}
+            disabled={!canAddFinding}
+          >
             + Add finding
           </button>
         </div>
         {openFindings.length ? (
           <div className="admin-review-finding-summary is-blocking">
             <strong>
-              {blocking.length ? `${blocking.length} blocking finding${blocking.length === 1 ? "" : "s"}` : `${openFindings.length} open finding${openFindings.length === 1 ? "" : "s"}`}
+              {blocking.length
+                ? `${blocking.length} blocking finding${blocking.length === 1 ? "" : "s"}`
+                : `${openFindings.length} open finding${openFindings.length === 1 ? "" : "s"}`}
             </strong>
             <span>{openFindings[0]?.title}</span>
           </div>
@@ -1510,13 +1556,28 @@ function DecisionWorkspace({
         </div>
       </dl>
       <div className="admin-review-decision-workspace-actions">
-        <button type="button" className="button-primary" onClick={() => onDecision("APPROVED")} disabled={!canApprove}>
+        <button
+          type="button"
+          className="button-primary"
+          onClick={() => onDecision("APPROVED")}
+          disabled={!canApprove}
+        >
           Approve submission
         </button>
-        <button type="button" className="button-secondary" onClick={() => onDecision("CHANGES_REQUESTED")} disabled={!canRequestChanges}>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => onDecision("CHANGES_REQUESTED")}
+          disabled={!canRequestChanges}
+        >
           Request changes
         </button>
-        <button type="button" className="button-secondary" onClick={() => onDecision("REJECTED")} disabled={!canReject}>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => onDecision("REJECTED")}
+          disabled={!canReject}
+        >
           Reject submission
         </button>
       </div>
@@ -1590,7 +1651,9 @@ function Identity({
   onEdit: () => void;
 }) {
   const item = detail.collectible;
-  const identityConfirmed = detail.readiness?.progress.find((progress) => progress.key === "identity")?.status === "COMPLETE";
+  const identityConfirmed =
+    detail.readiness?.progress.find((progress) => progress.key === "identity")?.status ===
+    "COMPLETE";
   const confirmedBy = workflowActor(detail, "identity");
   return (
     <div className="admin-review-identity-panels">
@@ -1621,7 +1684,11 @@ function Identity({
             <CheckCircle2 aria-hidden="true" />
             {identityConfirmed ? "Identity confirmed" : "Identity needs review"}
           </strong>
-          <span>{identityConfirmed ? "No known conflicts" : "Confirm the reviewed identity before continuing."}</span>
+          <span>
+            {identityConfirmed
+              ? "No known conflicts"
+              : "Confirm the reviewed identity before continuing."}
+          </span>
         </div>
         {confirmedBy ? (
           <small className="admin-review-confirmed-by">
@@ -1655,15 +1722,16 @@ function Evidence({
     <div className="admin-review-evidence-layout">
       <div className="admin-review-evidence-heading">
         <strong>Required evidence</strong>
-        <span>{summary ? `${summary.acceptedRequired} / ${summary.required} accepted` : "Unavailable"}</span>
-        <a href="#review-help">Guidelines <span aria-hidden="true">⌃</span></a>
+        <span>
+          {summary ? `${summary.acceptedRequired} / ${summary.required} accepted` : "Unavailable"}
+        </span>
+        <a href="#review-help">
+          Guidelines <span aria-hidden="true">⌃</span>
+        </a>
       </div>
       <div className="admin-review-workspace-gallery">
         {summary?.items.map((item) => (
-          <article
-            key={item.id}
-            className="admin-review-workspace-media"
-          >
+          <article key={item.id} className="admin-review-workspace-media">
             <div className="admin-review-evidence-thumbnail">
               <AdminReviewMedia
                 src={item.thumbnailUrl}
@@ -1673,47 +1741,62 @@ function Evidence({
             </div>
             <div className="admin-review-evidence-details">
               <div className="admin-review-evidence-title-row">
-                <strong>{label(item.slot)} {item.required ? "· Required" : "· Optional"}</strong>
+                <strong>
+                  {label(item.slot)} {item.required ? "· Required" : "· Optional"}
+                </strong>
                 <span className={item.reviewState === "ACCEPTED" ? "is-accepted" : "is-pending"}>
-                  {item.reviewState === "ACCEPTED" ? "Accepted" : item.reviewState === "FLAGGED" ? "Flagged" : "Pending review"}
+                  {item.reviewState === "ACCEPTED"
+                    ? "Accepted"
+                    : item.reviewState === "FLAGGED"
+                      ? "Flagged"
+                      : "Pending review"}
                 </span>
               </div>
               <dl>
-                <div><dt>Status</dt><dd>{item.status === "SAFE" ? "Pending review" : label(item.status)}</dd></div>
-                <div><dt>Size</dt><dd>{formatBytes(item.sizeBytes)}</dd></div>
-                <div><dt>Submitted</dt><dd>{shortDate(item.uploadedAt)}</dd></div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{item.status === "SAFE" ? "Pending review" : label(item.status)}</dd>
+                </div>
+                <div>
+                  <dt>Size</dt>
+                  <dd>{formatBytes(item.sizeBytes)}</dd>
+                </div>
+                <div>
+                  <dt>Submitted</dt>
+                  <dd>{shortDate(item.uploadedAt)}</dd>
+                </div>
               </dl>
               <div className="admin-review-evidence-actions">
                 <button type="button" className="button-secondary" onClick={() => onFocus(item.id)}>
                   Open image
                 </button>
-              <button
-                type="button"
-                className="button-primary"
-                disabled={
-                  !canEdit ||
-                  actingOnEvidence ||
-                  item.status !== "SAFE" ||
-                  item.reviewState === "ACCEPTED"
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onAccept(item);
-                }}
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={
+                    !canEdit ||
+                    actingOnEvidence ||
+                    item.status !== "SAFE" ||
+                    item.reviewState === "ACCEPTED"
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onAccept(item);
+                  }}
                 >
                   {item.reviewState === "ACCEPTED" ? "Accepted" : "Accept evidence"}
-              </button>
-              <button
-                type="button"
-                className="button-secondary"
-                disabled={!canEdit || actingOnEvidence || item.reviewState === "FLAGGED"}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onFlag(item);
-                }}
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={!canEdit || actingOnEvidence || item.reviewState === "FLAGGED"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onFlag(item);
+                  }}
                 >
                   {item.reviewState === "FLAGGED" ? "Flagged" : "Flag issue"}
-              </button>
+                </button>
               </div>
             </div>
           </article>
@@ -2450,7 +2533,8 @@ function DecisionRail({
               <RotateCcw aria-hidden="true" /> Re-evaluate review state
             </button>
             <button type="button" className="admin-review-action is-manage" onClick={onManage}>
-              <ClipboardCheck aria-hidden="true" /> Manage submission <ArrowRight aria-hidden="true" />
+              <ClipboardCheck aria-hidden="true" /> Manage submission{" "}
+              <ArrowRight aria-hidden="true" />
             </button>
           </div>
         )}
@@ -2673,13 +2757,13 @@ function DecisionDialog({
               : "The collector will receive this request and may update the submission."}
         </p>
         <label>
-          Reason
+          {decision === "APPROVED" ? "Approval basis" : "Reason"}
           <select value={reason} onChange={(event) => setReason(event.target.value)}>
-            <option value="INCOMPLETE_EVIDENCE">Incomplete evidence</option>
-            <option value="IDENTITY_UNCLEAR">Identity needs attention</option>
-            <option value="UNSUPPORTED_COLLECTIBLE">Unsupported collectible</option>
-            <option value="DUPLICATE_SUBMISSION">Possible duplicate</option>
-            <option value="OTHER">Other</option>
+            {DECISION_REASON_OPTIONS[decision].map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
         {changes ? (
@@ -2762,7 +2846,17 @@ function DecisionDialog({
               placeholder="Record the staff reason for this rejection."
             />
           </label>
-        ) : null}
+        ) : (
+          <label>
+            Internal note (optional)
+            <textarea
+              rows={2}
+              value={internalNote}
+              onChange={(event) => setInternalNote(event.target.value)}
+              placeholder="Add context for the approval record, if needed."
+            />
+          </label>
+        )}
         {rejected ? (
           <label className="admin-review-confirm-check">
             <input
@@ -3057,7 +3151,8 @@ function ReviewNotes({
             <h3>Add internal note</h3>
             {history.length ? (
               <p className="text-sm text-subtle">
-                {history.length} previous staff note{history.length === 1 ? "" : "s"} remain in the audit history.
+                {history.length} previous staff note{history.length === 1 ? "" : "s"} remain in the
+                audit history.
               </p>
             ) : null}
             <textarea
