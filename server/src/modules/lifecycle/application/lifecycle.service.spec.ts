@@ -65,6 +65,9 @@ describe('Asset Operations queue authority', () => {
   });
 
   it('keeps a live Pre-Sale workflow independent from final-market gates', () => {
+    expect(operationsQueueTestUtils.canConfigurePreSale('PRE_SALE_SETUP', false)).toBe(true);
+    expect(operationsQueueTestUtils.canConfigurePreSale('PRE_SALE_SETUP', true)).toBe(false);
+    expect(operationsQueueTestUtils.canConfigurePreSale('READY_FOR_LAUNCH', false)).toBe(false);
     expect(
       operationsQueueTestUtils.operationsNextAction('PRE_SALE_LIVE', [], {
         physical: 'AWAITING_INTAKE',
