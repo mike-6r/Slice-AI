@@ -35,10 +35,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import { queryKeys } from "@/queries/keys";
 import { customerTerms } from "@/lib/customer-terminology";
-import {
-  PreSaleDisclosure,
-  formatPreSaleCountdown,
-} from "@/components/marketplace/PreSaleDisclosure";
+import { formatPreSaleCountdown } from "@/components/marketplace/PreSaleDisclosure";
 import type { Asset, MarketLifecycleProjection, SliceGrade } from "@/domain";
 
 export const Route = createFileRoute("/asset/$id")({
@@ -190,24 +187,163 @@ function LifecycleReadinessPanel({ lifecycle }: { lifecycle?: MarketLifecyclePro
   );
 }
 
-function PreSaleReadinessPanel({ preSale }: { preSale: NonNullable<Asset["preSale"]> }) {
+function PreSaleTransactionTicket({
+  assetTitle,
+  preSale,
+  reservationUnits,
+  setReservationUnits,
+  availableCashMinor,
+  isAuthenticated,
+  isPending,
+  message,
+  onReserve,
+}: {
+  assetTitle: string;
+  preSale: NonNullable<Asset["preSale"]>;
+  reservationUnits: string;
+  setReservationUnits: (value: string) => void;
+  availableCashMinor?: string;
+  isAuthenticated: boolean;
+  isPending: boolean;
+  message: string | null;
+  onReserve: () => void;
+}) {
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const units = /^\d+$/.test(reservationUnits) ? BigInt(reservationUnits) : 0n;
+  const available = BigInt(preSale.availableUnits);
+  const price = BigInt(preSale.pricePerUnitMinor);
+  const totalMinor = units * price;
+  const valid = units > 0n && units <= available;
+  const cashAfterMinor =
+    availableCashMinor === undefined ? undefined : BigInt(availableCashMinor) - totalMinor;
+  const physicalLabel = preSale.physicalStatus.replaceAll("_", " ");
+
   return (
-    <div className="asset-presale-readiness">
-      <div className="asset-readiness-heading">
+    <section className="asset-presale-ticket" aria-labelledby="market-status-title">
+      <header className="asset-presale-ticket__header">
         <div>
-          <h2 id="market-status-title">Pre-Sale reservations are open</h2>
-          <p>
-            Reserve a conditional position now. Slice will receive, verify, and secure the
-            collectible before any reservation becomes final ownership.
-          </p>
+          <p className="asset-section-label">Pre-Sale</p>
+          <h2 id="market-status-title">Reserve your position</h2>
         </div>
-        <span className="asset-status-badge asset-status-badge--pending">Pre-Sale</span>
+        <span className="asset-status-badge asset-status-badge--pending">Conditional</span>
+      </header>
+      <p className="asset-presale-ticket__intro">
+        Reserve Slices now. Final ownership starts only after physical intake, verification, and
+        custody are complete.
+      </p>
+      <div className="asset-presale-ticket__facts">
+        <div>
+          <span>Price per Slice</span>
+          <strong>{formatCurrency(Number(price))}</strong>
+        </div>
+        <div>
+          <span>Available</span>
+          <strong>{formatSliceCount(preSale.availableUnits)}</strong>
+        </div>
+        <div>
+          <span>Reserved</span>
+          <strong>{formatSliceCount(preSale.reservedUnits)}</strong>
+        </div>
+        <div>
+          <span>Closes</span>
+          <strong>{formatPreSaleCountdown(preSale.deadlineAt)}</strong>
+        </div>
       </div>
-      <div className="asset-readiness-callout">
-        <strong>{preSale.physicalStatus.replaceAll("_", " ")}</strong>
-        <p>Physical intake and final verification are still outstanding.</p>
+      <div className="asset-presale-ticket__progress" aria-label="Pre-Sale reservation progress">
+        <span style={{ width: `${Math.min(100, Number(preSale.reservedPercentageBps) / 100)}%` }} />
       </div>
-    </div>
+      <div className="asset-presale-ticket__status">
+        <span><i aria-hidden="true" />{physicalLabel}</span>
+        <span>{formatPreSaleCountdown(preSale.deadlineAt)} remaining</span>
+      </div>
+      <div className="asset-presale-ticket__quantity">
+        <label htmlFor="asset-presale-quantity">Slices to reserve</label>
+        <div className="asset-presale-ticket__stepper">
+          <button
+            type="button"
+            aria-label="Remove one Slice"
+            disabled={units <= 1n}
+            onClick={() => setReservationUnits(String(units - 1n))}
+          >
+            −
+          </button>
+          <input
+            id="asset-presale-quantity"
+            value={reservationUnits}
+            inputMode="numeric"
+            min="1"
+            max={preSale.availableUnits}
+            onChange={(event) => setReservationUnits(event.target.value.replace(/[^0-9]/g, ""))}
+          />
+          <button
+            type="button"
+            aria-label="Add one Slice"
+            disabled={units >= available}
+            onClick={() => setReservationUnits(String(units + 1n))}
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <div className="asset-presale-ticket__total">
+        <span>Estimated total</span>
+        <strong>{formatCurrency(Number(totalMinor))}</strong>
+      </div>
+      {availableCashMinor !== undefined ? (
+        <div className="asset-presale-ticket__cash">
+          <span>Your available cash</span>
+          <strong>{formatCurrency(Number(availableCashMinor))}</strong>
+        </div>
+      ) : isAuthenticated ? (
+        <div className="asset-presale-ticket__cash"><span>Your available cash</span><strong>Loading…</strong></div>
+      ) : null}
+      <button
+        type="button"
+        className="primary-action asset-presale-ticket__submit"
+        disabled={isPending || preSale.status !== "ACTIVE" || !valid}
+        onClick={() => {
+          if (!isAuthenticated) {
+            onReserve();
+            return;
+          }
+          setConfirmationOpen(true);
+        }}
+      >
+        {isPending ? "Reserving…" : isAuthenticated ? "Review reservation" : "Sign in to reserve"}
+        <ArrowRight aria-hidden="true" />
+      </button>
+      {message ? <p className="asset-presale-message" role="status">{message}</p> : null}
+      <p className="asset-presale-ticket__fine-print">
+        {physicalLabel} · Selling is unavailable until Pre-Sale finalization.
+      </p>
+      {confirmationOpen ? (
+        <div className="asset-presale-modal" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setConfirmationOpen(false);
+        }}>
+          <div className="asset-presale-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reserve-dialog-title">
+            <div className="asset-presale-modal__eyebrow">Pre-Sale reservation</div>
+            <h3 id="reserve-dialog-title">Reserve Slices</h3>
+            <p className="asset-presale-modal__asset">{assetTitle}</p>
+            <dl>
+              <div><dt>Quantity</dt><dd>{formatSliceCount(reservationUnits)}</dd></div>
+              <div><dt>Price / Slice</dt><dd>{formatCurrency(Number(price))}</dd></div>
+              <div><dt>Reservation total</dt><dd>{formatCurrency(Number(totalMinor))}</dd></div>
+              {cashAfterMinor !== undefined ? <div><dt>Cash after reservation</dt><dd>{formatCurrency(Number(cashAfterMinor))}</dd></div> : null}
+            </dl>
+            <div className="asset-presale-modal__notice">
+              <strong>Conditional reservation</strong>
+              <p>Your funds will be reserved. Final ownership is created only after Slice receives, verifies, and secures the collectible.</p>
+            </div>
+            <div className="asset-presale-modal__actions">
+              <button type="button" className="secondary-action" onClick={() => setConfirmationOpen(false)}>Cancel</button>
+              <button type="button" className="primary-action" disabled={isPending} onClick={() => { setConfirmationOpen(false); onReserve(); }}>
+                {isPending ? "Reserving…" : "Confirm reservation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -267,6 +403,12 @@ function AssetPage() {
     queryKey: ["watchlist", "current"],
     enabled: isAuthenticated,
     queryFn: () => services.ownership.watchlist(currentUser),
+  });
+  const portfolioQuery = useQuery({
+    queryKey: queryKeys.portfolio.summary,
+    enabled: isAuthenticated,
+    queryFn: () => services.portfolio.portfolio(),
+    staleTime: 30_000,
   });
   const toggleWatchlist = useMutation({
     mutationFn: (assetId: string) =>
@@ -447,6 +589,17 @@ function AssetPage() {
                 text="Slice keeps the physical collectible, valuation, ownership supply, and trading state as separate records so each part remains clear."
               />
             </div>
+            {asset.preSale ? (
+              <div className="asset-presale-status-strip" aria-label="Pre-Sale status">
+                <span><i aria-hidden="true" /> Pre-Sale</span>
+                <span>{asset.preSale.physicalStatus.replaceAll("_", " ")}</span>
+                <span>{formatPreSaleCountdown(asset.preSale.deadlineAt)} remaining</span>
+                <details>
+                  <summary>How Pre-Sale works</summary>
+                  <p>{asset.preSale.disclosure ?? "Your reservation remains conditional until physical intake, verification, and custody are complete."}</p>
+                </details>
+              </div>
+            ) : null}
             <div className="asset-reference-identity__valuation">
               <div>
                 <span className="asset-section-label">Slice valuation</span>
@@ -462,9 +615,26 @@ function AssetPage() {
                 <strong>
                   {asset.marketReference
                     ? formatMoney(asset.marketReference.amountMinor, asset.marketReference.currency)
-                    : "Unavailable"}
+                    : asset.marketReferenceLink
+                      ? "Linked · check pending"
+                      : "Not linked"}
                 </strong>
-                <small>{asset.marketReference?.source ?? "No external reference"}</small>
+                <small>
+                  {asset.marketReference?.source ??
+                    (asset.marketReferenceLink
+                      ? `${asset.marketReferenceLink.provider} · ${asset.marketReferenceLink.status.replaceAll("_", " ")}`
+                      : "No external reference")}
+                </small>
+                {asset.marketReferenceLink?.url ? (
+                  <a
+                    className="asset-reference-link"
+                    href={asset.marketReferenceLink.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open source <ArrowRight aria-hidden="true" />
+                  </a>
+                ) : null}
                 {asset.marketReference && selectedCurrency !== asset.marketReference.currency ? (
                   <small>
                     Source:{" "}
@@ -485,49 +655,18 @@ function AssetPage() {
               </div>
             </div>
           </section>
-        </section>
-
-        {asset.preSale ? (
-          <section className="asset-presale-section" aria-labelledby="pre-sale-title">
-            <div className="asset-section-heading">
-              <div>
-                <p className="asset-section-label">Conditional access</p>
-                <h2 id="pre-sale-title">Pre-Sale reservation</h2>
-              </div>
-              <strong className="asset-presale-countdown">
-                {formatPreSaleCountdown(asset.preSale.deadlineAt)}
-              </strong>
-            </div>
-            <PreSaleDisclosure
-              preSale={asset.preSale}
-              formatMoney={(minor, currency) =>
-                formatMoney(minor, currency as "GBP" | "USD" | "EUR" | "CAD")
-              }
-            />
-            <div className="asset-presale-action">
-              <label>
-                Slices to reserve
-                <input
-                  value={reservationUnits}
-                  inputMode="numeric"
-                  min="1"
-                  max={asset.preSale.availableUnits}
-                  onChange={(event) =>
-                    setReservationUnits(event.target.value.replace(/[^0-9]/g, ""))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="primary-action"
-                disabled={
-                  preSale.isPending ||
-                  asset.preSale.status !== "ACTIVE" ||
-                  !/^\d+$/.test(reservationUnits) ||
-                  Number(reservationUnits) < 1 ||
-                  Number(reservationUnits) > Number(asset.preSale.availableUnits)
-                }
-                onClick={() => {
+          <section className="asset-readiness-card" aria-labelledby="market-status-title">
+            {asset.preSale ? (
+              <PreSaleTransactionTicket
+                assetTitle={asset.title}
+                preSale={asset.preSale}
+                reservationUnits={reservationUnits}
+                setReservationUnits={setReservationUnits}
+                availableCashMinor={portfolioQuery.data?.availableCashMinor ?? portfolioQuery.data?.cash.availableMinor}
+                isAuthenticated={isAuthenticated}
+                isPending={preSale.isPending}
+                message={reservationMessage}
+                onReserve={() => {
                   if (!isAuthenticated) {
                     window.location.assign(`/login?returnTo=${encodeURIComponent(`/asset/${id}`)}`);
                     return;
@@ -535,52 +674,33 @@ function AssetPage() {
                   setReservationMessage(null);
                   preSale.mutate(reservationUnits);
                 }}
-              >
-                {preSale.isPending
-                  ? "Reserving…"
-                  : isAuthenticated
-                    ? "Reserve Slices"
-                    : "Sign in to reserve"}
-              </button>
-            </div>
-            {reservationMessage ? (
-              <p className="asset-presale-message" role="status">
-                {reservationMessage}
-              </p>
-            ) : null}
+              />
+            ) : notYetTradeable ? (
+              <LifecycleReadinessPanel lifecycle={lifecycle} />
+            ) : (
+              <TradingPanel
+                book={orderBookQuery.data}
+                isLoading={orderBookQuery.isLoading}
+                isError={orderBookQuery.isError}
+                retry={() => void orderBookQuery.refetch()}
+                id={id}
+                sharePriceMinor={slicePriceMinor}
+                issuedShares={issuedSlices}
+                availableShares={availableSlices}
+                ownPosition={ownPositionQuery.data}
+                positionLoading={ownPositionQuery.isLoading}
+                isAuthenticated={isAuthenticated}
+                ownershipSummary={ownershipSummaryQuery.data}
+                trades={tradesQuery.data ?? []}
+                tradesLoading={tradesQuery.isLoading}
+                tradesError={tradesQuery.isError}
+                retryTrades={() => void tradesQuery.refetch()}
+              />
+            )}
           </section>
-        ) : null}
+        </section>
 
         <AssetTrustStrip asset={asset} lifecycle={lifecycle} />
-
-        <section className="asset-readiness-card" aria-labelledby="market-status-title">
-          {notYetTradeable ? (
-            asset.preSale ? (
-              <PreSaleReadinessPanel preSale={asset.preSale} />
-            ) : (
-              <LifecycleReadinessPanel lifecycle={lifecycle} />
-            )
-          ) : (
-            <TradingPanel
-              book={orderBookQuery.data}
-              isLoading={orderBookQuery.isLoading}
-              isError={orderBookQuery.isError}
-              retry={() => void orderBookQuery.refetch()}
-              id={id}
-              sharePriceMinor={slicePriceMinor}
-              issuedShares={issuedSlices}
-              availableShares={availableSlices}
-              ownPosition={ownPositionQuery.data}
-              positionLoading={ownPositionQuery.isLoading}
-              isAuthenticated={isAuthenticated}
-              ownershipSummary={ownershipSummaryQuery.data}
-              trades={tradesQuery.data ?? []}
-              tradesLoading={tradesQuery.isLoading}
-              tradesError={tradesQuery.isError}
-              retryTrades={() => void tradesQuery.refetch()}
-            />
-          )}
-        </section>
 
         <section className="asset-how-it-works" aria-labelledby="how-it-works-title">
           <div className="asset-section-heading">
@@ -624,7 +744,9 @@ function AssetPage() {
                   <span>Reference value</span>
                   <h2 id="history-title">Value history</h2>
                 </div>
-                <small>PriceCharting reference history</small>
+                <small>
+                  {asset.marketReference?.source ?? asset.marketReferenceLink?.provider ?? "External reference"} history
+                </small>
               </div>
               <div aria-label="History range">
                 {PERIODS.map((value) => (
@@ -878,6 +1000,19 @@ function AssetPage() {
                   ) : null}
                 </strong>
                 <small>{asset.marketReference.context ?? "Observed reference"}</small>
+              </div>
+            ) : asset.marketReferenceLink ? (
+              <div className="asset-external-panel__empty asset-external-panel__linked">
+                <strong>Reference linked</strong>
+                <span>
+                  {asset.marketReferenceLink.provider} · {asset.marketReferenceLink.status.replaceAll("_", " ")}
+                </span>
+                {asset.marketReferenceLink.url ? (
+                  <a href={asset.marketReferenceLink.url} target="_blank" rel="noreferrer">
+                    Open source <ArrowRight aria-hidden="true" />
+                  </a>
+                ) : null}
+                <small>Current market data will appear after the next successful provider check.</small>
               </div>
             ) : (
               <div className="asset-external-panel__empty">

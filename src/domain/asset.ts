@@ -247,6 +247,14 @@ export interface Asset {
       historyStartedAt?: ISODateTime | null;
       freshness?: "FRESH" | "AGING" | "STALE" | "UNAVAILABLE" | string;
     };
+    /** A staff/provider link can exist before the first successful market check. */
+    referenceLink?: {
+      provider: string;
+      externalReference: string;
+      url: string | null;
+      status: string;
+      lastCheckedAt: ISODateTime | null;
+    };
   };
 }
 

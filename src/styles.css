@@ -68152,6 +68152,456 @@ body:has(.wallet-page) .wallet-page .wallet-shell {
   .list-delivery-methods__heading { gap: 0.6rem; }
 }
 
+/* Asset detail: keep the public collectible page on one predictable workspace grid. */
+.asset-detail-page .asset-redesign {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.asset-detail-page .asset-redesign > * {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.asset-detail-page .asset-redesign-hero {
+  display: grid;
+  grid-template-columns: minmax(16rem, 0.82fr) minmax(24rem, 1.15fr) minmax(22rem, 0.96fr);
+  grid-template-rows: auto;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.asset-detail-page .asset-redesign-hero > .asset-redesign-media {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.asset-detail-page .asset-redesign-hero > .asset-reference-identity {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.asset-detail-page .asset-redesign-media .asset-showcase,
+.asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+  height: 100%;
+}
+
+.asset-detail-page .asset-reference-identity {
+  min-height: 0;
+}
+
+.asset-detail-page .asset-presale-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  margin-top: 1.1rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(44, 218, 178, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(12, 50, 48, 0.46);
+  color: #b7c9cf;
+  font-size: 0.74rem;
+}
+
+.asset-detail-page .asset-presale-status-strip > span:first-child {
+  color: #35e0b0;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.asset-detail-page .asset-presale-status-strip > span + span::before {
+  content: "·";
+  margin-right: 0.7rem;
+  color: rgba(183, 201, 207, 0.45);
+}
+
+.asset-detail-page .asset-presale-status-strip i,
+.asset-detail-page .asset-presale-ticket__status i {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: #f1bd42;
+  box-shadow: 0 0 0 0.2rem rgba(241, 189, 66, 0.12);
+}
+
+.asset-detail-page .asset-presale-status-strip details {
+  position: relative;
+  margin-left: auto;
+}
+
+.asset-detail-page .asset-presale-status-strip summary {
+  cursor: pointer;
+  color: #62e8c3;
+  font-weight: 700;
+  list-style: none;
+}
+
+.asset-detail-page .asset-presale-status-strip summary::-webkit-details-marker {
+  display: none;
+}
+
+.asset-detail-page .asset-presale-status-strip details p {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  width: min(20rem, 75vw);
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid rgba(75, 219, 183, 0.32);
+  border-radius: 0.7rem;
+  background: #08181d;
+  box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.35);
+  color: #b7c9cf;
+  line-height: 1.45;
+}
+
+.asset-detail-page .asset-presale-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.25rem;
+  border: 1px solid rgba(232, 181, 62, 0.5);
+  border-radius: 1rem;
+  background: linear-gradient(160deg, rgba(30, 31, 25, 0.98), rgba(9, 24, 28, 0.98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.asset-detail-page .asset-presale-ticket__header,
+.asset-detail-page .asset-presale-ticket__status,
+.asset-detail-page .asset-presale-ticket__total,
+.asset-detail-page .asset-presale-ticket__cash {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.asset-detail-page .asset-presale-ticket__header h2 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.25rem, 1.6vw, 1.65rem);
+}
+
+.asset-detail-page .asset-presale-ticket__intro,
+.asset-detail-page .asset-presale-ticket__fine-print {
+  margin: 0;
+  color: #a5bbc1;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.asset-detail-page .asset-presale-ticket__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.asset-detail-page .asset-presale-ticket__facts > div {
+  padding: 0.7rem;
+  border: 1px solid rgba(132, 161, 168, 0.16);
+  border-radius: 0.65rem;
+  background: rgba(4, 14, 18, 0.38);
+}
+
+.asset-detail-page .asset-presale-ticket__facts span,
+.asset-detail-page .asset-presale-ticket__total span,
+.asset-detail-page .asset-presale-ticket__cash span {
+  display: block;
+  color: #89a4ab;
+  font-size: 0.68rem;
+}
+
+.asset-detail-page .asset-presale-ticket__facts strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: #eef6f5;
+  font-size: 0.88rem;
+}
+
+.asset-detail-page .asset-presale-ticket__progress {
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(164, 183, 180, 0.17);
+}
+
+.asset-detail-page .asset-presale-ticket__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #e6b839;
+}
+
+.asset-detail-page .asset-presale-ticket__status {
+  color: #b9d4bf;
+  font-size: 0.74rem;
+}
+
+.asset-detail-page .asset-presale-ticket__status span:last-child {
+  color: #f1bd42;
+}
+
+.asset-detail-page .asset-presale-ticket__quantity {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.asset-detail-page .asset-presale-ticket__quantity label {
+  color: #b8cbd0;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.asset-detail-page .asset-presale-ticket__stepper {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(123, 159, 165, 0.28);
+  border-radius: 0.65rem;
+  background: rgba(3, 12, 16, 0.65);
+}
+
+.asset-detail-page .asset-presale-ticket__stepper button,
+.asset-detail-page .asset-presale-ticket__stepper input {
+  min-height: 2.5rem;
+  border: 0;
+  background: transparent;
+  color: #eef6f5;
+  text-align: center;
+}
+
+.asset-detail-page .asset-presale-ticket__stepper button {
+  cursor: pointer;
+  color: #54dfba;
+  font-size: 1.15rem;
+}
+
+.asset-detail-page .asset-presale-ticket__stepper button:disabled {
+  cursor: not-allowed;
+  color: #52676d;
+}
+
+.asset-detail-page .asset-presale-ticket__stepper input {
+  width: 100%;
+  border-inline: 1px solid rgba(123, 159, 165, 0.18);
+  outline: 0;
+  font-weight: 700;
+}
+
+.asset-detail-page .asset-presale-ticket__total {
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(132, 161, 168, 0.16);
+}
+
+.asset-detail-page .asset-presale-ticket__total strong {
+  color: #f4c74a;
+  font-size: 1.35rem;
+}
+
+.asset-detail-page .asset-presale-ticket__cash {
+  margin-top: -0.5rem;
+}
+
+.asset-detail-page .asset-presale-ticket__cash strong {
+  color: #bfe8d6;
+  font-size: 0.82rem;
+}
+
+.asset-detail-page .asset-presale-ticket__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: auto;
+}
+
+.asset-detail-page .asset-presale-ticket__submit svg {
+  width: 1rem;
+}
+
+.asset-detail-page .asset-presale-message {
+  margin: -0.35rem 0 0;
+  color: #62e8c3;
+  font-size: 0.74rem;
+}
+
+.asset-detail-page .asset-presale-modal {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(1, 7, 10, 0.78);
+}
+
+.asset-detail-page .asset-presale-modal__dialog {
+  width: min(31rem, 100%);
+  padding: 1.4rem;
+  border: 1px solid rgba(75, 219, 183, 0.38);
+  border-radius: 1rem;
+  background: #08181d;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.5);
+}
+
+.asset-detail-page .asset-presale-modal__eyebrow {
+  color: #54dfba;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.asset-detail-page .asset-presale-modal h3 {
+  margin: 0.35rem 0 0;
+  color: #f1f7f6;
+  font-size: 1.5rem;
+}
+
+.asset-detail-page .asset-presale-modal__asset {
+  margin: 0.35rem 0 1.1rem;
+  color: #9bb4ba;
+}
+
+.asset-detail-page .asset-presale-modal dl {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.asset-detail-page .asset-presale-modal dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #a9c0c5;
+}
+
+.asset-detail-page .asset-presale-modal dt,
+.asset-detail-page .asset-presale-modal dd { margin: 0; }
+.asset-detail-page .asset-presale-modal dd { color: #f1f7f6; font-weight: 700; }
+
+.asset-detail-page .asset-presale-modal__notice {
+  margin-top: 1.1rem;
+  padding: 0.9rem;
+  border-left: 2px solid #e6b839;
+  background: rgba(100, 72, 15, 0.2);
+}
+
+.asset-detail-page .asset-presale-modal__notice strong { color: #f1c44a; }
+.asset-detail-page .asset-presale-modal__notice p { margin: 0.35rem 0 0; color: #c2ced0; font-size: 0.78rem; line-height: 1.45; }
+
+.asset-detail-page .asset-presale-modal__actions { display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1.2rem; }
+
+.market-card-presale-summary {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(132, 161, 168, 0.16);
+}
+
+.market-card-presale-summary__heading,
+.market-card-presale-summary__facts {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.market-card-presale-summary__heading span,
+.market-card-presale-summary__facts span,
+.market-card-presale-summary small {
+  color: #8fa8ae;
+  font-size: 0.7rem;
+}
+
+.market-card-presale-summary__heading strong {
+  color: #e6b839;
+  font-size: 0.7rem;
+}
+
+.market-card-presale-summary__facts b {
+  color: #eef6f5;
+  font-size: 0.82rem;
+}
+
+.market-card-presale-summary__progress {
+  height: 0.3rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(164, 183, 180, 0.17);
+}
+
+.market-card-presale-summary__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #e6b839;
+}
+
+.market-card-value-context { display: block; margin-top: 0.2rem; color: #b79c4c; font-size: 0.68rem; }
+
+.asset-reference-link,
+.asset-external-panel__linked a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #58dfbc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.asset-reference-link svg,
+.asset-external-panel__linked a svg { width: 0.85rem; }
+
+.asset-external-panel__linked { display: grid; gap: 0.45rem; }
+.asset-external-panel__linked strong { color: #62e8c3; }
+
+@media (max-width: 1240px) {
+  .asset-detail-page .asset-redesign-hero {
+    grid-template-columns: minmax(15rem, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .asset-detail-page .asset-redesign-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asset-detail-page .asset-redesign-hero > .asset-redesign-media,
+  .asset-detail-page .asset-redesign-hero > .asset-reference-identity,
+  .asset-detail-page .asset-redesign-hero > .asset-readiness-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .asset-detail-page .asset-presale-ticket { padding: 1rem; }
+  .asset-detail-page .asset-presale-status-strip details { margin-left: 0; }
+  .asset-detail-page .asset-presale-status-strip details p { left: 0; right: auto; }
+}
+
 /* Step 5 polish: make existing-grade verification and raw AI review feel like
    one premium workspace while keeping each path honest about its evidence. */
 .list-step--ai-review {

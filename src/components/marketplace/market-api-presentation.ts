@@ -46,6 +46,13 @@ export type MarketplaceAsset = {
     lastRefreshedAt?: string;
     freshness?: string;
   };
+  marketReferenceLink?: {
+    provider: string;
+    externalReference: string;
+    url: string | null;
+    status: string;
+    lastCheckedAt: string | null;
+  };
   media?: Array<{ url: string; alt: string }>;
   sliceGrade?: SliceGrade;
   ownershipStatus?: string;
@@ -134,6 +141,7 @@ export const toMarketplaceAsset = (asset: Asset): MarketplaceAsset => ({
       context: "Price guide",
     };
   })(),
+  marketReferenceLink: asset.market?.referenceLink,
   media: asset.media
     .filter((item) => item.kind === "image")
     .map((item) => ({ url: item.url, alt: item.alt })),

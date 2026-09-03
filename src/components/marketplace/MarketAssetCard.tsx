@@ -8,7 +8,7 @@ import { useAppServices } from "@/providers/AppServicesProvider";
 import { useCurrency } from "@/currency/CurrencyProvider";
 import type { MarketplaceAsset } from "./market-api-presentation";
 import { resolveMarketplaceMedia, resolveMarketplaceMediaGallery } from "./marketplace-layout";
-import { PreSaleDisclosure } from "./PreSaleDisclosure";
+import { formatPreSaleCountdown } from "./PreSaleDisclosure";
 
 function marketStatusPresentation(asset: MarketplaceAsset) {
   if (asset.preSale) {
@@ -107,10 +107,18 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
     formatMoney,
     formatSourceMoney,
   } = useCurrency();
-  const valuation = asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor;
-  const valuationCurrency = asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency;
+  const valuation = asset.preSale
+    ? Number(asset.preSale.pricePerUnitMinor)
+    : (asset.sliceValuationAmountMinor ?? asset.estimatedMarketValueMinor);
+  const valuationCurrency = asset.preSale
+    ? asset.preSale.currency
+    : (asset.sliceValuationCurrency ?? asset.estimatedMarketValueCurrency);
   const valuationLabel =
-    asset.sliceValuationAmountMinor !== undefined ? "Slice valuation" : "Estimated value";
+    asset.preSale
+      ? "Price per Slice"
+      : asset.sliceValuationAmountMinor !== undefined
+        ? "Slice valuation"
+        : "Estimated value";
 
   return (
     <section className="market-card-valuation" aria-label="Valuation">
@@ -121,6 +129,7 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
             ? formatMoney(valuation, valuationCurrency)
             : "Unavailable"}
         </strong>
+        {asset.preSale ? <small className="market-card-value-context">Conditional Pre-Sale price</small> : null}
       </div>
       <div className="market-card-reference">
         <span className="market-card-label">Market reference</span>
@@ -155,6 +164,30 @@ function ValuationBlock({ asset }: { asset: MarketplaceAsset }) {
           <strong className="market-card-reference-unavailable">Unavailable</strong>
         )}
       </div>
+    </section>
+  );
+}
+
+function PreSaleCardSummary({ asset }: { asset: MarketplaceAsset }) {
+  const preSale = asset.preSale;
+  if (!preSale) return null;
+  const offered = BigInt(preSale.offeredUnits);
+  const reserved = BigInt(preSale.reservedUnits);
+  const progress = offered > 0n ? Math.min(100, Number((reserved * 10_000n) / offered) / 100) : 0;
+  return (
+    <section className="market-card-presale-summary" aria-label="Pre-Sale availability">
+      <div className="market-card-presale-summary__heading">
+        <span>Pre-Sale availability</span>
+        <strong>{formatPreSaleCountdown(preSale.deadlineAt)} left</strong>
+      </div>
+      <div className="market-card-presale-summary__facts">
+        <span><b>{preSale.availableUnits}</b> available</span>
+        <span><b>{preSale.reservedUnits}</b> reserved</span>
+      </div>
+      <div className="market-card-presale-summary__progress" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <small>Awaiting physical intake · conditional reservation</small>
     </section>
   );
 }
@@ -305,7 +338,7 @@ export function MarketAssetCard({
           ) : null}
         </div>
         <ValuationBlock asset={asset} />
-        {asset.preSale ? <PreSaleDisclosure preSale={asset.preSale} compact={compact} /> : null}
+        <PreSaleCardSummary asset={asset} />
         {!compact ? <MarketAvailability asset={asset} /> : null}
         {!compact ? <OwnershipPrompt asset={asset} /> : null}
         <Link to="/asset/$id" params={{ id: asset.slug }} className="market-card-cta">

@@ -1446,6 +1446,13 @@ type PublicExternalMarketReference = {
   historyStartedAt?: string | null;
   freshness?: string | null;
 };
+type PublicMarketReferenceLink = {
+  provider: string;
+  externalReference: string;
+  url: string | null;
+  status: string;
+  lastCheckedAt: string | null;
+};
 async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
   const market = asset.marketSnapshots[0];
   const priceChartingMapping = asset.marketProviderMappings?.[0] ?? null;
@@ -1556,6 +1563,16 @@ async function assetView(asset: PublicAssetRow, storage: ObjectStoragePort) {
       ) ??
       externalMarketReferenceFromObservations(asset.marketObservations ?? []) ??
       externalMarketReference(asset.valuationEvidence ?? []),
+    marketReferenceLink: priceChartingMapping
+      ? ({
+          provider: priceChartingMapping.providerCode,
+          externalReference: priceChartingMapping.providerExternalId,
+          url: priceChartingMapping.providerUrl,
+          status: priceChartingMapping.status,
+          lastCheckedAt:
+            priceChartingMapping.lastSuccessAt?.toISOString() ?? null,
+        } satisfies PublicMarketReferenceLink)
+      : null,
     sliceGrade: await publicSliceGrade(
       asset.submissions?.[0]?.preGrades?.[0],
       storage,

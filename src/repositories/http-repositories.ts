@@ -154,6 +154,13 @@ type MarketAssetDto = {
     historyStartedAt?: string | null;
     freshness?: string | null;
   } | null;
+  marketReferenceLink?: {
+    provider: string;
+    externalReference: string;
+    url: string | null;
+    status: string;
+    lastCheckedAt: string | null;
+  } | null;
   marketSummary?: {
     completedSales: MarketObservationSummaryDto | null;
     activeListings: MarketObservationSummaryDto | null;
@@ -496,6 +503,15 @@ export const mapMarketAsset = (value: MarketAssetDto): Asset => ({
           lastRefreshedAt: value.marketReference.lastRefreshedAt as ISODateTime | null,
           historyStartedAt: value.marketReference.historyStartedAt as ISODateTime | null,
           freshness: value.marketReference.freshness ?? undefined,
+        }
+      : undefined,
+    referenceLink: value.marketReferenceLink
+      ? {
+          provider: value.marketReferenceLink.provider,
+          externalReference: value.marketReferenceLink.externalReference,
+          url: value.marketReferenceLink.url,
+          status: value.marketReferenceLink.status,
+          lastCheckedAt: value.marketReferenceLink.lastCheckedAt as ISODateTime | null,
         }
       : undefined,
   },
