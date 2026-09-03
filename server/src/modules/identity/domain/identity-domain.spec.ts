@@ -106,6 +106,23 @@ describe('offline identity rules', () => {
     ).not.toThrow();
   });
 
+  it('allows pre-sale lifecycle audit metadata', () => {
+    for (const action of [
+      'PRE_SALE_OPENED',
+      'RESERVATION_CREATED',
+      'PRE_SALE_CONFIGURED',
+      'DEADLINE_EXTENDED',
+      'FINALIZATION_COMPLETED',
+      'PRE_SALE_PAUSED',
+      'PRE_SALE_RESUMED',
+      'PRE_SALE_CANCELLED',
+    ]) {
+      expect(() =>
+        sanitizeAuditMetadata(action, { reason: 'Controlled QA action' }),
+      ).not.toThrow();
+    }
+  });
+
   it('allows Slice certification duplicate-check audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('CERT_SLICE_DUPLICATE_CHECKED', {
