@@ -7,16 +7,26 @@ describe('public asset visibility', () => {
   it('allows active Pre-Sales before final publication', () => {
     const where = publicDiscoverableAssetWhere(false);
     expect(where).toMatchObject({
-      status: 'PUBLISHED',
       AND: expect.arrayContaining([
         {
           OR: [
             { preSale: { is: { status: 'ACTIVE' } } },
-            { publication: { is: { status: 'PUBLISHED' } } },
+            { status: 'PUBLISHED' },
           ],
         },
       ]),
     });
+  });
+
+  it('does not require the underlying asset to be published when its Pre-Sale is active', () => {
+    const where = publicDiscoverableAssetWhere(false);
+    expect(where.AND).toEqual(
+      expect.arrayContaining([
+        {
+          OR: [{ preSale: { is: { status: 'ACTIVE' } } }, { status: 'PUBLISHED' }],
+        },
+      ]),
+    );
   });
 
   it('keeps beta fixtures and frozen assets outside the public catalogue', () => {
@@ -36,7 +46,6 @@ describe('public asset visibility', () => {
 
   it('provides a narrow active Pre-Sale predicate for shared nested collector queries', () => {
     expect(publicPreSaleAssetWhere(false)).toMatchObject({
-      status: 'PUBLISHED',
       preSale: { is: { status: 'ACTIVE' } },
     });
   });

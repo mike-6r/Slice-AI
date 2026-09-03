@@ -98,12 +98,11 @@ describe('ReadsController public collectors', () => {
             status: 'APPROVED',
             asset: {
               is: expect.objectContaining({
-                status: 'PUBLISHED',
                 AND: expect.arrayContaining([
                   expect.objectContaining({
                     OR: expect.arrayContaining([
                       { preSale: { is: { status: 'ACTIVE' } } },
-                      { publication: { is: { status: 'PUBLISHED' } } },
+                      { status: 'PUBLISHED' },
                     ]),
                   }),
                 ]),
