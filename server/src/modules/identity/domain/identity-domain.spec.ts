@@ -166,6 +166,25 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows submission decision audit metadata', () => {
+    const decisionMetadata = {
+      reviewId: 'review-1',
+      reasonCode: 'REVIEW_COMPLETE',
+      requestedItems: [],
+      requestedFindingIds: [],
+      customerMessageRecorded: false,
+      version: 5,
+    };
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_APPROVED', decisionMetadata),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REJECTED', decisionMetadata),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_CHANGES_REQUESTED', decisionMetadata),
+    ).not.toThrow();
+  });
   it('allows provider identity refresh audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('IDENTITY_VERIFICATION_UPDATED', {
