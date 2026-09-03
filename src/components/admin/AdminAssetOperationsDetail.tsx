@@ -15,7 +15,7 @@ import {
   Snowflake,
   TrendingUp,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ApiError } from "@/api/http-client";
 import type {
@@ -89,7 +89,9 @@ export function AdminAssetOperationsDetail({
   const [pendingControl, setPendingControl] = useState<PendingControl | null>(null);
   const [controlReason, setControlReason] = useState("");
   const [controlConfirmation, setControlConfirmation] = useState("");
-  const [preSaleReason, setPreSaleReason] = useState("Confirming provisional Pre-Sale terms from Collector submission.");
+  const [preSaleReason, setPreSaleReason] = useState(
+    "Confirming provisional Pre-Sale terms from Collector submission.",
+  );
   const [preSaleDeadline, setPreSaleDeadline] = useState("");
   const [preSaleEstimate, setPreSaleEstimate] = useState("");
   const [preSalePercent, setPreSalePercent] = useState("100");
@@ -98,59 +100,95 @@ export function AdminAssetOperationsDetail({
   const [marketReferenceUrl, setMarketReferenceUrl] = useState("");
   const [marketReferenceReason, setMarketReferenceReason] = useState("");
   const [recentAuthAction, setRecentAuthAction] = useState<(() => void) | null>(null);
+  const recentAuthActionRef = useRef<(() => void) | null>(null);
   const [recentAuthPassword, setRecentAuthPassword] = useState("");
+  const [preSaleNotice, setPreSaleNotice] = useState<string | null>(null);
   const recentAuth = useMutation({
     mutationFn: () => services.repositories.account.confirmRecentAuth(recentAuthPassword),
-    onSuccess: () => {
-      const retry = recentAuthAction;
-      setRecentAuthAction(null);
-      setRecentAuthPassword("");
-      retry?.();
-    },
   });
   const requestRecentAuth = (retry: () => void) => {
     recentAuth.reset();
     setRecentAuthPassword("");
+    recentAuthActionRef.current = retry;
     setRecentAuthAction(() => retry);
+  };
+  const confirmRecentAuth = async () => {
+    try {
+      await recentAuth.mutateAsync();
+      const retry = recentAuthActionRef.current;
+      recentAuthActionRef.current = null;
+      setRecentAuthAction(null);
+      setRecentAuthPassword("");
+      retry?.();
+    } catch {
+      // The dialog renders the mutation error and stays open for correction.
+    }
+  };
+  const clearRecentAuth = () => {
+    recentAuthActionRef.current = null;
+    recentAuth.reset();
+    setRecentAuthAction(null);
+    setRecentAuthPassword("");
   };
   const handleRecentAuthError = (error: unknown, retry: () => void) => {
     if (error instanceof ApiError && error.code === "RECENT_AUTH_REQUIRED") {
+      setPreSaleNotice(null);
       requestRecentAuth(retry);
     }
   };
   useEffect(() => {
     const setup = preSaleDetail.data;
     if (!setup || setup.status !== "NOT_CONFIGURED") return;
-    if (setup.collectorEstimateMinor) setPreSaleEstimate(minorToPounds(setup.collectorEstimateMinor));
-    if (setup.offeredPercentageBps) setPreSalePercent((setup.offeredPercentageBps / 100).toString());
+    if (setup.collectorEstimateMinor)
+      setPreSaleEstimate(minorToPounds(setup.collectorEstimateMinor));
+    if (setup.offeredPercentageBps)
+      setPreSalePercent((setup.offeredPercentageBps / 100).toString());
     if (setup.totalSupply) setPreSaleUnits(setup.totalSupply);
     if (setup.pricePerUnitMinor) setPreSalePrice(minorToPounds(setup.pricePerUnitMinor));
   }, [preSaleDetail.data]);
   const configurePreSale = useMutation({
-    mutationFn: () => services.repositories.admin.configurePreSale(assetId, {
-      estimatedValueMinor: preSaleEstimate.trim() ? poundsToMinor(preSaleEstimate) : undefined,
-      offeredPercentageBps: Math.round(Number(preSalePercent) * 100),
-      totalUnits: preSaleUnits.trim() || undefined,
-      pricePerUnitMinor: preSalePrice.trim() ? poundsToMinor(preSalePrice) : undefined,
-      reason: preSaleReason,
-    }),
+    mutationFn: () =>
+      services.repositories.admin.configurePreSale(assetId, {
+        estimatedValueMinor: preSaleEstimate.trim() ? poundsToMinor(preSaleEstimate) : undefined,
+        offeredPercentageBps: Math.round(Number(preSalePercent) * 100),
+        totalUnits: preSaleUnits.trim() || undefined,
+        pricePerUnitMinor: preSalePrice.trim() ? poundsToMinor(preSalePrice) : undefined,
+        reason: preSaleReason,
+      }),
     onSuccess: () => {
+      setPreSaleNotice("Pre-Sale terms saved. You can launch the Pre-Sale when ready.");
       void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
       void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
-      void client.invalidateQueries({ queryKey: ["admin", "asset-operations-projection", assetId] });
+      void client.invalidateQueries({
+        queryKey: ["admin", "asset-operations-projection", assetId],
+      });
     },
     onError: (error) => handleRecentAuthError(error, () => configurePreSale.mutate()),
   });
   const preSaleCommand = useMutation({
-    mutationFn: (input: { action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize" }) => {
+    mutationFn: (input: {
+      action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize";
+    }) => {
       if (input.action === "open") return services.repositories.admin.openPreSale(assetId);
-      if (input.action === "pause") return services.repositories.admin.pausePreSale(assetId, preSaleReason);
-      if (input.action === "resume") return services.repositories.admin.resumePreSale(assetId, preSaleReason);
-      if (input.action === "extend") return services.repositories.admin.extendPreSale(assetId, { deadlineAt: new Date(preSaleDeadline).toISOString(), reason: preSaleReason });
-      if (input.action === "cancel") return services.repositories.admin.cancelPreSale(assetId, preSaleReason);
+      if (input.action === "pause")
+        return services.repositories.admin.pausePreSale(assetId, preSaleReason);
+      if (input.action === "resume")
+        return services.repositories.admin.resumePreSale(assetId, preSaleReason);
+      if (input.action === "extend")
+        return services.repositories.admin.extendPreSale(assetId, {
+          deadlineAt: new Date(preSaleDeadline).toISOString(),
+          reason: preSaleReason,
+        });
+      if (input.action === "cancel")
+        return services.repositories.admin.cancelPreSale(assetId, preSaleReason);
       return services.repositories.admin.finalizePreSale(assetId);
     },
-    onSuccess: () => {
+    onSuccess: (_result, input) => {
+      setPreSaleNotice(
+        input.action === "open"
+          ? "Pre-Sale launched successfully. The panel now shows the active reservation window."
+          : `Pre-Sale ${input.action} command completed successfully.`,
+      );
       void client.invalidateQueries({ queryKey: ["admin", "pre-sale", assetId] });
       void client.invalidateQueries({ queryKey: ["admin", "asset-operations-detail", assetId] });
     },
@@ -176,12 +214,30 @@ export function AdminAssetOperationsDetail({
     },
   });
   const linkMarketReference = useMutation({
-    mutationFn: () => services.repositories.admin.linkMarketReference(assetId, { url: marketReferenceUrl, reason: marketReferenceReason || undefined }),
-    onSuccess: () => { setMarketReferenceUrl(""); setMarketReferenceReason(""); refresh(); },
+    mutationFn: () =>
+      services.repositories.admin.linkMarketReference(assetId, {
+        url: marketReferenceUrl,
+        reason: marketReferenceReason || undefined,
+      }),
+    onSuccess: () => {
+      setMarketReferenceUrl("");
+      setMarketReferenceReason("");
+      refresh();
+    },
   });
   const forceLinkMarketReference = useMutation({
-    mutationFn: () => services.repositories.admin.forceLinkMarketReference(assetId, { url: marketReferenceUrl, reason: marketReferenceReason, confirmation: "FORCE_LINK_MARKET_REFERENCE", assetId }),
-    onSuccess: () => { setMarketReferenceUrl(""); setMarketReferenceReason(""); refresh(); },
+    mutationFn: () =>
+      services.repositories.admin.forceLinkMarketReference(assetId, {
+        url: marketReferenceUrl,
+        reason: marketReferenceReason,
+        confirmation: "FORCE_LINK_MARKET_REFERENCE",
+        assetId,
+      }),
+    onSuccess: () => {
+      setMarketReferenceUrl("");
+      setMarketReferenceReason("");
+      refresh();
+    },
   });
   const rerunMarketReference = useMutation({
     mutationFn: () => services.repositories.admin.rerunMarketReference(assetId),
@@ -428,6 +484,7 @@ export function AdminAssetOperationsDetail({
         setPrice={setPreSalePrice}
         configure={() => configurePreSale.mutate()}
         execute={(action) => preSaleCommand.mutate({ action })}
+        notice={preSaleNotice}
         pending={preSaleCommand.isPending || configurePreSale.isPending}
       />
       <nav className="admin-operation-detail__tabs" aria-label="Economic operation sections">
@@ -465,7 +522,11 @@ export function AdminAssetOperationsDetail({
               linkReference={() => linkMarketReference.mutate()}
               forceLinkReference={() => forceLinkMarketReference.mutate()}
               rerunReference={() => rerunMarketReference.mutate()}
-              marketPending={linkMarketReference.isPending || forceLinkMarketReference.isPending || rerunMarketReference.isPending}
+              marketPending={
+                linkMarketReference.isPending ||
+                forceLinkMarketReference.isPending ||
+                rerunMarketReference.isPending
+              }
             />
           ) : null}
           {selected === "ownership" ? (
@@ -558,12 +619,8 @@ export function AdminAssetOperationsDetail({
           setPassword={setRecentAuthPassword}
           busy={recentAuth.isPending}
           error={recentAuth.error}
-          close={() => {
-            recentAuth.reset();
-            setRecentAuthAction(null);
-            setRecentAuthPassword("");
-          }}
-          onConfirm={() => recentAuth.mutate()}
+          close={clearRecentAuth}
+          onConfirm={() => void confirmRecentAuth()}
         />
       ) : null}
     </main>
@@ -632,11 +689,7 @@ function AdminRecentAuthDialog({
             <button type="button" className="admin-ops-button" onClick={close}>
               Cancel
             </button>
-            <button
-              type="submit"
-              className="admin-ops-button primary"
-              disabled={busy || !password}
-            >
+            <button type="submit" className="admin-ops-button primary" disabled={busy || !password}>
               {busy ? "Confirming…" : "Confirm and continue"} <ArrowRight aria-hidden="true" />
             </button>
           </div>
@@ -832,7 +885,11 @@ function ReadinessCard({
       <div className="admin-launch-gates">
         {readiness.gates.map((gate) => (
           <div key={gate.blockerCode} className={`admin-launch-gate ${gate.state.toLowerCase()}`}>
-            {gate.state === "SATISFIED" ? <CheckCircle2 aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+            {gate.state === "SATISFIED" ? (
+              <CheckCircle2 aria-hidden="true" />
+            ) : (
+              <CircleAlert aria-hidden="true" />
+            )}
             <span>{readinessLabel(gate.blockerCode, gate.label)}</span>
             <strong>{gate.state === "SATISFIED" ? "Ready" : "Required"}</strong>
           </div>
@@ -1060,7 +1117,9 @@ function OperationsRail({
       </Rail>
       {operations ? (
         <Rail title="Final Market">
-          <strong>{operations.finalMarketReadiness.state === "READY" ? "Ready" : "Not ready"}</strong>
+          <strong>
+            {operations.finalMarketReadiness.state === "READY" ? "Ready" : "Not ready"}
+          </strong>
           <p>Final valuation, ownership, and market launch follow physical completion.</p>
           {operations.finalMarketReadiness.blockers.length ? (
             <ul className="admin-operations-rail__list">
@@ -1266,34 +1325,81 @@ function Valuation({
             </div>
             <div>
               <span className="admin-operations-eyebrow">History</span>
-              <strong>{item.valuation.marketData.preferredReference.historicalObservationCount} observations</strong>
+              <strong>
+                {item.valuation.marketData.preferredReference.historicalObservationCount}{" "}
+                observations
+              </strong>
               <span>{item.valuation.marketData.preferredReference.freshness}</span>
             </div>
             {item.valuation.marketData.preferredReference.originalUrl ? (
-              <a href={item.valuation.marketData.preferredReference.originalUrl} target="_blank" rel="noreferrer">
+              <a
+                href={item.valuation.marketData.preferredReference.originalUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open source <ExternalLink aria-hidden="true" />
               </a>
             ) : null}
           </div>
         ) : (
-          <div className="admin-market-reference-card__empty">No preferred market reference is linked.</div>
+          <div className="admin-market-reference-card__empty">
+            No preferred market reference is linked.
+          </div>
         )}
         <div className="admin-custody-fields">
           <label>
             Reference URL
-            <input value={marketReferenceUrl} onChange={(event) => setMarketReferenceUrl(event.target.value)} placeholder="https://www.pricecharting.com/game/..." />
+            <input
+              value={marketReferenceUrl}
+              onChange={(event) => setMarketReferenceUrl(event.target.value)}
+              placeholder="https://www.pricecharting.com/game/..."
+            />
           </label>
           <label>
             Reason / review note
-            <input value={marketReferenceReason} onChange={(event) => setMarketReferenceReason(event.target.value)} placeholder="Why this reference belongs to the asset" />
+            <input
+              value={marketReferenceReason}
+              onChange={(event) => setMarketReferenceReason(event.target.value)}
+              placeholder="Why this reference belongs to the asset"
+            />
           </label>
         </div>
         <div className="admin-operations-button-row">
-          <button type="button" className="admin-ops-button primary" disabled={!marketReferenceUrl.trim() || marketPending} onClick={linkReference}>Link reference <ArrowRight aria-hidden="true" /></button>
-          <button type="button" className="admin-ops-button" disabled={!marketReferenceUrl.trim() || marketReferenceReason.trim().length < 12 || marketPending} onClick={forceLinkReference}>Force link</button>
-          {item.valuation.marketData.preferredReference ? <button type="button" className="admin-ops-button" disabled={marketPending} onClick={rerunReference}><RefreshCw aria-hidden="true" /> Run market check</button> : null}
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            disabled={!marketReferenceUrl.trim() || marketPending}
+            onClick={linkReference}
+          >
+            Link reference <ArrowRight aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="admin-ops-button"
+            disabled={
+              !marketReferenceUrl.trim() ||
+              marketReferenceReason.trim().length < 12 ||
+              marketPending
+            }
+            onClick={forceLinkReference}
+          >
+            Force link
+          </button>
+          {item.valuation.marketData.preferredReference ? (
+            <button
+              type="button"
+              className="admin-ops-button"
+              disabled={marketPending}
+              onClick={rerunReference}
+            >
+              <RefreshCw aria-hidden="true" /> Run market check
+            </button>
+          ) : null}
         </div>
-        <p className="admin-detail-muted">Force link requires staff confirmation and only confirms the external record identity; it does not force a valuation.</p>
+        <p className="admin-detail-muted">
+          Force link requires staff confirmation and only confirms the external record identity; it
+          does not force a valuation.
+        </p>
       </section>
       <section className="admin-operation-card admin-operation-card--wide">
         <CardHeading eyebrow="Audit trail" title="Valuation history" />
@@ -2567,6 +2673,7 @@ function AdminPreSalePanel({
   setPrice,
   configure,
   execute,
+  notice,
   pending,
 }: {
   detail?: PreSaleDetail;
@@ -2586,74 +2693,317 @@ function AdminPreSalePanel({
   setPrice: (value: string) => void;
   configure: () => void;
   execute: (action: "open" | "pause" | "resume" | "extend" | "cancel" | "finalize") => void;
+  notice: string | null;
   pending: boolean;
 }) {
   const status = detail?.status ?? "NOT_CONFIGURED";
   const reasonTooShort = reason.trim().length > 0 && reason.trim().length < 8;
-  const estimateMinor = detail?.collectorEstimateMinor ?? (isValidPounds(estimate) ? poundsToMinor(estimate) : null);
+  const estimateMinor =
+    detail?.collectorEstimateMinor ?? (isValidPounds(estimate) ? poundsToMinor(estimate) : null);
   const unitCount = Number(units || detail?.totalSupply || 0);
-  const percentage = Number(percent || (detail?.offeredPercentageBps ? detail.offeredPercentageBps / 100 : 0));
-  const suggestedMinor = estimateMinor && unitCount > 0
-    ? (BigInt(estimateMinor) / BigInt(unitCount)).toString()
-    : null;
-  const priceMinor = detail?.pricePerUnitMinor ?? (isValidPounds(price) ? poundsToMinor(price) : suggestedMinor);
-  const offeredUnits = unitCount > 0 && percentage > 0
-    ? Math.floor((unitCount * percentage) / 100)
-    : 0;
+  const percentage = Number(
+    percent || (detail?.offeredPercentageBps ? detail.offeredPercentageBps / 100 : 0),
+  );
+  const suggestedMinor =
+    estimateMinor && unitCount > 0 ? (BigInt(estimateMinor) / BigInt(unitCount)).toString() : null;
+  const priceMinor =
+    detail?.pricePerUnitMinor ?? (isValidPounds(price) ? poundsToMinor(price) : suggestedMinor);
+  const offeredUnits =
+    unitCount > 0 && percentage > 0 ? Math.floor((unitCount * percentage) / 100) : 0;
   const retainedUnits = Math.max(0, unitCount - offeredUnits);
-  const impliedMinor = priceMinor && unitCount > 0 ? (BigInt(priceMinor) * BigInt(unitCount)).toString() : null;
+  const impliedMinor =
+    priceMinor && unitCount > 0 ? (BigInt(priceMinor) * BigInt(unitCount)).toString() : null;
   const estimateMismatch = estimateMinor && impliedMinor && estimateMinor !== impliedMinor;
   return (
     <section className="admin-presale-panel" aria-label="Pre-Sale controls">
       <div className="admin-presale-panel__heading">
-        <div><span className="admin-operations-eyebrow">Conditional market access</span><h2>Pre-Sale</h2></div>
-        <span className={`admin-presale-status is-${status.toLowerCase()}`}>{sentence(status)}</span>
+        <div>
+          <span className="admin-operations-eyebrow">Conditional market access</span>
+          <h2>Pre-Sale</h2>
+        </div>
+        <span className={`admin-presale-status is-${status.toLowerCase()}`}>
+          {sentence(status)}
+        </span>
       </div>
       {detail && status !== "NOT_CONFIGURED" ? (
         <div className="admin-presale-panel__facts">
-          <Field label="Provisional estimate" value={detail.collectorEstimateMinor ? money(detail.collectorEstimateMinor, detail.currency) : "Not supplied"} />
-          <Field label="Price per Slice" value={detail.pricePerUnitMinor ? money(detail.pricePerUnitMinor, detail.currency) : "Not set"} />
-          <Field label="Offered / retained" value={`${detail.offeredUnits} / ${Math.max(0, Number(detail.totalSupply ?? detail.offeredUnits) - Number(detail.offeredUnits))} Slices`} />
-          <Field label="Maximum raise" value={detail.pricePerUnitMinor ? money((BigInt(detail.pricePerUnitMinor) * BigInt(detail.offeredUnits)).toString(), detail.currency) : "Not set"} />
+          <Field
+            label="Provisional estimate"
+            value={
+              detail.collectorEstimateMinor
+                ? money(detail.collectorEstimateMinor, detail.currency)
+                : "Not supplied"
+            }
+          />
+          <Field
+            label="Price per Slice"
+            value={
+              detail.pricePerUnitMinor
+                ? money(detail.pricePerUnitMinor, detail.currency)
+                : "Not set"
+            }
+          />
+          <Field
+            label="Offered / retained"
+            value={`${detail.offeredUnits} / ${Math.max(0, Number(detail.totalSupply ?? detail.offeredUnits) - Number(detail.offeredUnits))} Slices`}
+          />
+          <Field
+            label="Maximum raise"
+            value={
+              detail.pricePerUnitMinor
+                ? money(
+                    (BigInt(detail.pricePerUnitMinor) * BigInt(detail.offeredUnits)).toString(),
+                    detail.currency,
+                  )
+                : "Not set"
+            }
+          />
           <Field label="Physical state" value={sentence(detail.physicalStatus)} />
-          <Field label="Reserved" value={`${detail.reservedUnits} / ${detail.offeredUnits} Slices`} />
-          <Field label="Deadline" value={detail.deadlineAt ? dateTime(detail.deadlineAt) : "Not set"} />
+          <Field
+            label="Reserved"
+            value={`${detail.reservedUnits} / ${detail.offeredUnits} Slices`}
+          />
+          <Field
+            label="Deadline"
+            value={detail.deadlineAt ? dateTime(detail.deadlineAt) : "Not set"}
+          />
           <Field label="Next step" value={detail.nextStep} />
         </div>
       ) : (
         <>
-          <p className="admin-detail-muted">Set the provisional terms used for conditional reservations. Receipt, verification, custody, final valuation, and final market launch are completed later.</p>
+          <p className="admin-detail-muted">
+            Set the provisional terms used for conditional reservations. Receipt, verification,
+            custody, final valuation, and final market launch are completed later.
+          </p>
           <div className="admin-presale-panel__setup-grid">
-            <label className="admin-form-field">Collector estimate (GBP)<input type="number" min="0.01" step="0.01" value={estimate} onChange={(event) => setEstimate(event.target.value)} placeholder="e.g. 2500.00" /></label>
-            <label className="admin-form-field">Offer percentage<input type="number" min="0.01" max="100" step="0.01" value={percent} onChange={(event) => setPercent(event.target.value)} /></label>
-            <label className="admin-form-field">Total supply<input type="number" min="1" step="1" value={units} onChange={(event) => setUnits(event.target.value)} /></label>
-            <label className="admin-form-field">Price per Slice (optional)<input type="number" min="0.01" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="Uses estimate ÷ supply" />{suggestedMinor ? <button type="button" className="admin-ops-inline-action" onClick={() => setPrice(minorToPounds(suggestedMinor))}>Use suggested price · {money(suggestedMinor, detail?.currency ?? "GBP")}</button> : null}</label>
+            <label className="admin-form-field">
+              Collector estimate (GBP)
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={estimate}
+                onChange={(event) => setEstimate(event.target.value)}
+                placeholder="e.g. 2500.00"
+              />
+            </label>
+            <label className="admin-form-field">
+              Offer percentage
+              <input
+                type="number"
+                min="0.01"
+                max="100"
+                step="0.01"
+                value={percent}
+                onChange={(event) => setPercent(event.target.value)}
+              />
+            </label>
+            <label className="admin-form-field">
+              Total supply
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={units}
+                onChange={(event) => setUnits(event.target.value)}
+              />
+            </label>
+            <label className="admin-form-field">
+              Price per Slice (optional)
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                placeholder="Uses estimate ÷ supply"
+              />
+              {suggestedMinor ? (
+                <button
+                  type="button"
+                  className="admin-ops-inline-action"
+                  onClick={() => setPrice(minorToPounds(suggestedMinor))}
+                >
+                  Use suggested price · {money(suggestedMinor, detail?.currency ?? "GBP")}
+                </button>
+              ) : null}
+            </label>
           </div>
           <div className="admin-presale-panel__summary" aria-label="Pre-Sale calculation summary">
-            <div><span>Implied total</span><strong>{impliedMinor ? money(impliedMinor, detail?.currency ?? "GBP") : "—"}</strong></div>
-            <div><span>Collector retains</span><strong>{retainedUnits.toLocaleString()} Slices · {Math.max(0, 100 - percentage).toFixed(2).replace(/\.00$/, "")} %</strong></div>
-            <div><span>Offered to buyers</span><strong>{offeredUnits.toLocaleString()} Slices · {percentage.toFixed(2).replace(/\.00$/, "")} %</strong></div>
-            <div><span>Maximum raise</span><strong>{priceMinor ? money((BigInt(priceMinor) * BigInt(offeredUnits)).toString(), detail?.currency ?? "GBP") : "—"}</strong></div>
+            <div>
+              <span>Implied total</span>
+              <strong>{impliedMinor ? money(impliedMinor, detail?.currency ?? "GBP") : "—"}</strong>
+            </div>
+            <div>
+              <span>Collector retains</span>
+              <strong>
+                {retainedUnits.toLocaleString()} Slices ·{" "}
+                {Math.max(0, 100 - percentage)
+                  .toFixed(2)
+                  .replace(/\.00$/, "")}{" "}
+                %
+              </strong>
+            </div>
+            <div>
+              <span>Offered to buyers</span>
+              <strong>
+                {offeredUnits.toLocaleString()} Slices ·{" "}
+                {percentage.toFixed(2).replace(/\.00$/, "")} %
+              </strong>
+            </div>
+            <div>
+              <span>Maximum raise</span>
+              <strong>
+                {priceMinor
+                  ? money(
+                      (BigInt(priceMinor) * BigInt(offeredUnits)).toString(),
+                      detail?.currency ?? "GBP",
+                    )
+                  : "—"}
+              </strong>
+            </div>
           </div>
-          {estimateMismatch ? <p className="admin-presale-panel__warning">The selected price implies {money(impliedMinor!, detail?.currency ?? "GBP")} across supply versus the estimate of {money(estimateMinor!, detail?.currency ?? "GBP")}. Confirm this provisional basis before saving.</p> : null}
+          {estimateMismatch ? (
+            <p className="admin-presale-panel__warning">
+              The selected price implies {money(impliedMinor!, detail?.currency ?? "GBP")} across
+              supply versus the estimate of {money(estimateMinor!, detail?.currency ?? "GBP")}.
+              Confirm this provisional basis before saving.
+            </p>
+          ) : null}
         </>
       )}
-      {error ? <p className="admin-presale-panel__error" role="alert">{mutationErrorMessage(error)}</p> : null}
-      <label className="admin-form-field">Reason <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Confirming provisional Pre-Sale terms from Collector submission." aria-describedby="admin-presale-reason-help" /></label>
-      <p id="admin-presale-reason-help" className={reasonTooShort ? "admin-presale-panel__field-hint is-error" : "admin-presale-panel__field-hint"}>
-        {reasonTooShort ? "Add at least 8 characters so the audit record explains this change." : "Use a short audit note explaining why these provisional terms are being saved."}
+      {notice ? (
+        <p className="admin-presale-panel__success" role="status">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="admin-presale-panel__error" role="alert">
+          {mutationErrorMessage(error)}
+        </p>
+      ) : null}
+      <label className="admin-form-field">
+        Reason{" "}
+        <textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Confirming provisional Pre-Sale terms from Collector submission."
+          aria-describedby="admin-presale-reason-help"
+        />
+      </label>
+      <p
+        id="admin-presale-reason-help"
+        className={
+          reasonTooShort
+            ? "admin-presale-panel__field-hint is-error"
+            : "admin-presale-panel__field-hint"
+        }
+      >
+        {reasonTooShort
+          ? "Add at least 8 characters so the audit record explains this change."
+          : "Use a short audit note explaining why these provisional terms are being saved."}
       </p>
       {detail && (status === "ACTIVE" || status === "PAUSED") ? (
-        <label className="admin-form-field">Extend deadline <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+        <label className="admin-form-field">
+          Extend deadline{" "}
+          <input
+            type="datetime-local"
+            value={deadline}
+            onChange={(event) => setDeadline(event.target.value)}
+          />
+        </label>
       ) : null}
       <div className="admin-presale-panel__actions">
-        {status === "NOT_CONFIGURED" ? <button type="button" className="admin-ops-button primary" disabled={!isPreSaleConfigureButtonEnabled({ canConfigure, pending, estimate, percent, units, price, reason })} title={reasonTooShort ? "Enter an audit reason of at least 8 characters." : !canConfigure ? "This asset is not currently in the Pre-Sale setup stage." : undefined} onClick={configure}>Configure Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
-        {detail?.id && status === "DRAFT" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("open")}>Launch Pre-Sale <ArrowRight aria-hidden="true" /></button> : null}
-        {status === "ACTIVE" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("pause")}><PauseCircle aria-hidden="true" /> Pause</button> : null}
-        {status === "PAUSED" ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8} onClick={() => execute("resume")}><PlayCircle aria-hidden="true" /> Resume</button> : null}
-        {detail && (status === "ACTIVE" || status === "PAUSED") ? <button type="button" className="admin-ops-button" disabled={pending || reason.trim().length < 8 || !deadline} onClick={() => execute("extend")}>Extend deadline</button> : null}
-        {detail && status !== "CONVERTED" && status !== "CANCELLED" ? <button type="button" className="admin-ops-button danger" disabled={pending || reason.trim().length < 8} onClick={() => execute("cancel")}>Cancel</button> : null}
-        {detail && detail.physicalStatus === "CUSTODY_ESTABLISHED" && status !== "CONVERTED" && status !== "CANCELLED" ? <button type="button" className="admin-ops-button primary" disabled={pending} onClick={() => execute("finalize")}>Finalize conversion <CheckCircle2 aria-hidden="true" /></button> : null}
+        {status === "NOT_CONFIGURED" ? (
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            disabled={
+              !isPreSaleConfigureButtonEnabled({
+                canConfigure,
+                pending,
+                estimate,
+                percent,
+                units,
+                price,
+                reason,
+              })
+            }
+            title={
+              reasonTooShort
+                ? "Enter an audit reason of at least 8 characters."
+                : !canConfigure
+                  ? "This asset is not currently in the Pre-Sale setup stage."
+                  : undefined
+            }
+            onClick={configure}
+          >
+            Configure Pre-Sale <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
+        {detail?.id && status === "DRAFT" ? (
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            disabled={pending}
+            onClick={() => execute("open")}
+          >
+            Launch Pre-Sale <ArrowRight aria-hidden="true" />
+          </button>
+        ) : null}
+        {status === "ACTIVE" ? (
+          <button
+            type="button"
+            className="admin-ops-button"
+            disabled={pending || reason.trim().length < 8}
+            onClick={() => execute("pause")}
+          >
+            <PauseCircle aria-hidden="true" /> Pause
+          </button>
+        ) : null}
+        {status === "PAUSED" ? (
+          <button
+            type="button"
+            className="admin-ops-button"
+            disabled={pending || reason.trim().length < 8}
+            onClick={() => execute("resume")}
+          >
+            <PlayCircle aria-hidden="true" /> Resume
+          </button>
+        ) : null}
+        {detail && (status === "ACTIVE" || status === "PAUSED") ? (
+          <button
+            type="button"
+            className="admin-ops-button"
+            disabled={pending || reason.trim().length < 8 || !deadline}
+            onClick={() => execute("extend")}
+          >
+            Extend deadline
+          </button>
+        ) : null}
+        {detail && status !== "CONVERTED" && status !== "CANCELLED" ? (
+          <button
+            type="button"
+            className="admin-ops-button danger"
+            disabled={pending || reason.trim().length < 8}
+            onClick={() => execute("cancel")}
+          >
+            Cancel
+          </button>
+        ) : null}
+        {detail &&
+        detail.physicalStatus === "CUSTODY_ESTABLISHED" &&
+        status !== "CONVERTED" &&
+        status !== "CANCELLED" ? (
+          <button
+            type="button"
+            className="admin-ops-button primary"
+            disabled={pending}
+            onClick={() => execute("finalize")}
+          >
+            Finalize conversion <CheckCircle2 aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </section>
   );
