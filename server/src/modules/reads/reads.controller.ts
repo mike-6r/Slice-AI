@@ -58,22 +58,9 @@ export class ReadsController {
         },
       },
     };
-    const nonDemoWhere: Prisma.UserWhereInput = this.config.isBeta
-      ? {
-          AND: [
-            {
-              OR: [
-                { publicCollectorProfile: null },
-                {
-                  publicCollectorProfile: {
-                    is: { slug: { not: { startsWith: 'slice-demo-' } } },
-                  },
-                },
-              ],
-            },
-          ],
-        }
-      : {};
+    // Demo isolation belongs to the asset predicate above. Do not exclude an
+    // entire collector profile when it owns a legitimate non-demo asset.
+    const nonDemoWhere: Prisma.UserWhereInput = {};
     const baseWhere: Prisma.UserWhereInput = {
       ...publicWhere,
       ...nonDemoWhere,
@@ -357,20 +344,6 @@ export class ReadsController {
               ...(fallbackUserId ? [{ id: fallbackUserId }] : []),
             ],
           },
-          ...(this.config.isBeta
-            ? [
-                {
-                  OR: [
-                    { publicCollectorProfile: null },
-                    {
-                      publicCollectorProfile: {
-                        is: { slug: { not: { startsWith: 'slice-demo-' } } },
-                      },
-                    },
-                  ],
-                },
-              ]
-            : []),
         ],
       },
       include: publicCollectorUserInclude(
