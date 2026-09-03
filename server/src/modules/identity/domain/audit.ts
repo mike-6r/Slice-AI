@@ -128,6 +128,23 @@ const metadataKeys: Record<string, readonly string[]> = {
   CERT_VERIFICATION_MISMATCH: ['verificationId', 'mismatches'],
   CERT_VERIFIED: ['verificationId', 'companyCode', 'grade'],
   SUBMISSION_REVIEW_CLAIMED: ['reviewId'],
+  SUBMISSION_REVIEW_PRIMARY_ASSIGNED: [
+    'previousReviewerId',
+    'newReviewerId',
+    'primaryReviewerId',
+    'reviewId',
+    'reason',
+    'version',
+  ],
+  SUBMISSION_REVIEW_PRIMARY_REASSIGNED: [
+    'previousReviewerId',
+    'newReviewerId',
+    'primaryReviewerId',
+    'reviewId',
+    'reason',
+    'version',
+  ],
+  SUBMISSION_REVIEW_PRIMARY_CLEARED: ['previousReviewerId', 'version'],
   SUBMISSION_STAFF_CONDITION_UPDATED: ['reviewId', 'condition', 'note'],
   SUBMISSION_STAFF_VALUATION_UPDATED: [
     'reviewId',

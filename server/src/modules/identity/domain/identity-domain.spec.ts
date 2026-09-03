@@ -122,6 +122,30 @@ describe('offline identity rules', () => {
       }),
     ).not.toThrow();
   });
+  it('allows reviewer assignment lifecycle audit metadata', () => {
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REVIEW_PRIMARY_ASSIGNED', {
+        reviewId: 'review-1',
+        previousReviewerId: null,
+        primaryReviewerId: 'reviewer-1',
+        version: 2,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REVIEW_PRIMARY_REASSIGNED', {
+        previousReviewerId: 'reviewer-1',
+        newReviewerId: 'reviewer-2',
+        reason: 'Coverage change',
+        version: 3,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      sanitizeAuditMetadata('SUBMISSION_REVIEW_PRIMARY_CLEARED', {
+        previousReviewerId: 'reviewer-2',
+        version: 4,
+      }),
+    ).not.toThrow();
+  });
   it('allows provider identity refresh audit metadata', () => {
     expect(() =>
       sanitizeAuditMetadata('IDENTITY_VERIFICATION_UPDATED', {

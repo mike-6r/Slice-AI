@@ -1185,3 +1185,46 @@ body:has(.collectors-page) .main-navigation > .site-shell {
     grid-template-columns: 1fr;
   }
 }
+
+/* Final shared-shell authority. This file is loaded after the application
+ * stylesheet, so the old directory mockup rules above must be neutralized
+ * here as well or they resize the chrome and hide the market snapshot. */
+body:has(.collectors-page) .market-tape {
+  display: block;
+}
+
+body:has(.collectors-page) .main-navigation > .site-shell,
+body:has(.collectors-page) .market-tape__shell,
+body:has(.collectors-page) .slice-footer .site-shell {
+  width: min(calc(100% - var(--customer-frame-gutter)), var(--customer-frame-max));
+  max-width: var(--customer-frame-max);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+body:has(.collectors-page) .main-navigation > .site-shell {
+  height: 66px;
+  min-height: 66px;
+}
+
+body:has(.collectors-page) .collectors-page .collectors-shell {
+  width: min(calc(100% - var(--customer-frame-gutter)), var(--customer-frame-max));
+  max-width: var(--customer-frame-max);
+  margin-inline: auto;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  body:has(.collectors-page) .main-navigation > .site-shell,
+  body:has(.collectors-page) .market-tape__shell,
+  body:has(.collectors-page) .slice-footer .site-shell,
+  body:has(.collectors-page) .collectors-page .collectors-shell {
+    width: min(calc(100% - 2rem), var(--customer-frame-max));
+    max-width: calc(100% - 2rem);
+  }
+
+  body:has(.collectors-page) .main-navigation > .site-shell {
+    height: 66px;
+    min-height: 66px;
+  }
+}
